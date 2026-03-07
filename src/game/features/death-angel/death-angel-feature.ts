@@ -8,6 +8,8 @@
 
 import type { FeatureDefinition } from '../feature';
 import { UnitType } from '../../entity';
+import { xmlKey } from '../../animation';
+import { UNIT_XML_PREFIX } from '../../renderer/sprite-metadata';
 import { DeathAngelSystem } from './death-angel-system';
 import { createLogger } from '@/utilities/logger';
 
@@ -39,11 +41,13 @@ export const DeathAngelFeature: FeatureDefinition = {
                 occupancy: false,
             });
 
-            // Start one-shot idle animation (rising angel)
-            ctx.visualService.play(angel.id, 'idle', { loop: false, direction: 0 });
+            // Start one-shot rising animation using the angel's idle XML sequence
+            const prefix = UNIT_XML_PREFIX[UnitType.Angel];
+            if (!prefix) throw new Error('No XML prefix for UnitType.Angel');
+            ctx.visualService.play(angel.id, xmlKey(prefix, 'WALK'), { loop: false, direction: 0 });
 
             // Register for timed removal
-            system.register(angel.id);
+            system.register(angel.id, UnitType.Angel);
 
             log.debug(`Spawned death angel ${angel.id} at (${entity.x}, ${entity.y}) for unit ${entityId}`);
         });

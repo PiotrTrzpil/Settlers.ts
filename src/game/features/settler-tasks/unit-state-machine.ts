@@ -57,6 +57,8 @@ export interface UnitStateMachineConfig {
     animController: IdleAnimationController;
     workerExecutor: WorkerTaskExecutor;
     buildingOccupants: Map<number, number>;
+    /** Returns true if the entity is actively in combat (fighting or pursuing). */
+    isInCombat: (entityId: number) => boolean;
     claimBuilding: (runtime: UnitRuntime, buildingId: number) => void;
     releaseBuilding: (runtime: UnitRuntime) => void;
     /** Ticks to wait between idle work searches (0 = every tick). */
@@ -70,6 +72,7 @@ export class UnitStateMachine {
     private readonly animController: IdleAnimationController;
     private readonly workerExecutor: WorkerTaskExecutor;
     private readonly buildingOccupants: Map<number, number>;
+    private readonly isInCombat: (entityId: number) => boolean;
     private readonly claimBuilding: (runtime: UnitRuntime, buildingId: number) => void;
     private readonly releaseBuilding: (runtime: UnitRuntime) => void;
     private readonly idleSearchCooldown: number;
@@ -85,6 +88,7 @@ export class UnitStateMachine {
         this.animController = cfg.animController;
         this.workerExecutor = cfg.workerExecutor;
         this.buildingOccupants = cfg.buildingOccupants;
+        this.isInCombat = cfg.isInCombat;
         this.claimBuilding = cfg.claimBuilding;
         this.releaseBuilding = cfg.releaseBuilding;
         this.idleSearchCooldown = cfg.idleSearchCooldown;
@@ -115,6 +119,9 @@ export class UnitStateMachine {
             this.updateSettler(unit, config, runtime, dt);
             return;
         }
+
+        // Skip idle updates for units actively in combat (combat system manages their animation)
+        if (this.isInCombat(unit.id)) return;
 
         // Handle idle state for non-configured units
         const controller = this.gameState.movement.getController(unit.id);

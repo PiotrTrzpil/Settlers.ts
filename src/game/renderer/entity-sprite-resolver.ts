@@ -124,7 +124,12 @@ export class EntitySpriteResolver {
             if (vs?.animation) {
                 const animEntry = this.sprites.getAnimatedEntity(entity.type, entity.subType, entity.race);
                 if (animEntry) {
-                    const frame = resolveAnimationFrame(vs.animation, animEntry.animationData);
+                    const frame = resolveAnimationFrame(
+                        vs.animation,
+                        animEntry.animationData,
+                        entity.type,
+                        entity.subType
+                    );
                     if (frame) {
                         sprite = frame;
                     } else {
@@ -155,7 +160,7 @@ export class EntitySpriteResolver {
         if (vs?.animation) {
             const entry = this.sprites.getAnimatedEntity(entity.type, entity.subType, entity.race);
             if (entry) {
-                const frame = resolveAnimationFrame(vs.animation, entry.animationData);
+                const frame = resolveAnimationFrame(vs.animation, entry.animationData, entity.type, entity.subType);
                 if (frame) return frame;
             }
         }
@@ -220,7 +225,7 @@ export class EntitySpriteResolver {
         if (vs.animation) {
             const entry = this.sprites.getAnimatedEntity(entity.type, entity.subType, entity.race);
             if (entry) {
-                const frame = resolveAnimationFrame(vs.animation, entry.animationData);
+                const frame = resolveAnimationFrame(vs.animation, entry.animationData, entity.type, entity.subType);
                 if (frame) {
                     return { skip: false, transitioning: false, sprite: frame, progress: 1, transitionData: null };
                 }
@@ -243,7 +248,14 @@ export class EntitySpriteResolver {
         const animatedEntry = this.sprites.getAnimatedEntity(EntityType.Unit, unitType, race);
         if (!animatedEntry) return fallback;
 
-        return getAnimatedSpriteForDirection(playback, animatedEntry.animationData, direction, fallback);
+        return getAnimatedSpriteForDirection(
+            playback,
+            animatedEntry.animationData,
+            direction,
+            fallback,
+            EntityType.Unit,
+            unitType
+        );
     }
 
     // ── Query helpers ───────────────────────────────────────────

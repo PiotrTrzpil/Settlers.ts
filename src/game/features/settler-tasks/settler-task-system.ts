@@ -78,6 +78,8 @@ export interface SettlerTaskSystemConfig extends CoreDeps {
     executeCommand: (cmd: Command) => CommandResult;
     /** Material transfer service — unified material movement & conservation. */
     materialTransfer: MaterialTransfer;
+    /** Returns true if the entity is actively in combat (fighting or pursuing). */
+    isInCombat?: (entityId: number) => boolean;
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -196,6 +198,7 @@ export class SettlerTaskSystem implements TickSystem, Persistable<SerializedUnit
             animController: this.animController,
             workerExecutor: this.workerExecutor,
             buildingOccupants: this.buildingOccupants,
+            isInCombat: config.isInCombat ?? (() => false),
             claimBuilding: this.claimBuilding.bind(this),
             releaseBuilding: this.releaseBuilding.bind(this),
             idleSearchCooldown: IDLE_SEARCH_COOLDOWN,

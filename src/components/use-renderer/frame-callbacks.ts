@@ -49,9 +49,11 @@ function syncEntityRendererState(
     viewPoint: IViewPoint
 ): void {
     // Collect territory boundary dots (only when territory display is enabled)
-    const territoryDots: readonly TerritoryDotRenderData[] = ctx.layerVisibility.showTerritory
-        ? g.services.territoryManager.getBoundaryDots()
-        : [];
+    const getTerritoryDots = g.services
+        .getRenderDataRegistry()
+        .get<readonly TerritoryDotRenderData[]>('territory', 'territoryDots');
+    const territoryDots: readonly TerritoryDotRenderData[] =
+        ctx.layerVisibility.showTerritory && getTerritoryDots ? getTerritoryDots() : [];
 
     // Collect work area visualization (dots for gameplay mode, circles for debug mode)
     // Isolated: getRadius() throws if BuildingInfo is missing, which must not kill the whole frame.

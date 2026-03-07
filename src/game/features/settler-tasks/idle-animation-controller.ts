@@ -7,7 +7,10 @@
  */
 
 import type { Entity } from '../../entity';
-import { ANIMATION_SEQUENCES, carrySequenceKey } from '../../animation';
+import { UnitType } from '../../entity';
+import { EMaterialType } from '../../economy';
+import { xmlKey } from '../../animation';
+import { UNIT_XML_PREFIX } from '../../renderer/sprite-metadata';
 import type { EntityVisualService } from '../../animation/entity-visual-service';
 import type { JobPartResolution } from './choreo-types';
 
@@ -24,6 +27,12 @@ export interface IdleAnimationState {
 export interface RngSource {
     next(): number;
     nextBool(): boolean;
+}
+
+function getPrefix(unit: Entity): string {
+    const prefix = UNIT_XML_PREFIX[unit.subType as UnitType];
+    if (!prefix) throw new Error(`No XML prefix for UnitType ${UnitType[unit.subType] ?? unit.subType}`);
+    return prefix;
 }
 
 export class IdleAnimationController {
@@ -56,23 +65,19 @@ export class IdleAnimationController {
         // If unit is moving (e.g., pushed), play walk animation
         if (movementState === 'moving') {
             const vs = this.visualService.getState(unit.id);
-            if (!vs?.animation?.playing || vs.animation.sequenceKey !== ANIMATION_SEQUENCES.WALK) {
+            const walkKey = xmlKey(getPrefix(unit), 'WALK');
+            if (!vs?.animation?.playing || vs.animation.sequenceKey !== walkKey) {
                 this.startWalkAnimation(unit, movementDirection);
             }
             idleState.idleTime = 0;
             return;
         }
 
-        // Ensure idle animation state exists (units that never moved won't have one),
-        // and reset walk animations — but don't override fight animations (managed by combat system)
+        // Ensure idle animation — reset any playing animation to idle pose
         const vs = this.visualService.getState(unit.id);
-        if (
-            !vs?.animation ||
-            (vs.animation.playing && !vs.animation.sequenceKey.startsWith(ANIMATION_SEQUENCES.FIGHT_PREFIX))
-        ) {
+        if (!vs?.animation || vs.animation.playing) {
             this.setIdleAnimation(unit);
         }
-
         this.updateIdleTurning(unit, idleState, dt);
     }
 
@@ -110,17 +115,25 @@ export class IdleAnimationController {
      * Start walk animation for a unit (used for move tasks and external movement).
      */
     startWalkAnimation(unit: Entity, direction: number): void {
-        const sequence = unit.carrying ? carrySequenceKey(unit.carrying.material) : ANIMATION_SEQUENCES.WALK;
+        const prefix = getPrefix(unit);
+        let sequence: string;
+        if (unit.carrying) {
+            const materialName = EMaterialType[unit.carrying.material];
+            if (!materialName) throw new Error(`Unknown EMaterialType: ${unit.carrying.material}`);
+            sequence = xmlKey(prefix, `WALK_${materialName}`);
+        } else {
+            sequence = xmlKey(prefix, 'WALK');
+        }
         this.visualService.applyIntent(unit.id, { sequence, loop: true, stopped: false });
         this.visualService.setDirection(unit.id, direction);
     }
 
     /**
-     * Set idle animation (stopped, default pose).
+     * Set idle animation (stopped on frame 0 of WALK).
      */
     setIdleAnimation(settler: Entity): void {
         this.visualService.applyIntent(settler.id, {
-            sequence: ANIMATION_SEQUENCES.DEFAULT,
+            sequence: xmlKey(getPrefix(settler), 'WALK'),
             loop: false,
             stopped: true,
         });

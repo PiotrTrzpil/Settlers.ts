@@ -30,6 +30,9 @@ if (import.meta.hot) {
             '/src/game/game-loop.ts',
             '/src/game/game-services.ts',
             '/src/game/game.ts',
+            '/src/game/features/',
+            '/src/game/animation/',
+            '/src/game/systems/',
         ];
         const needsReload = payload.updates.some((update: { path: string }) =>
             reloadPaths.some(p => update.path.includes(p))

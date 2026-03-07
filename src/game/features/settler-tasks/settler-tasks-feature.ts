@@ -13,6 +13,7 @@ import type { BuildingConstructionExports } from '../building-construction/build
 import type { WorkAreaExports } from '../work-areas/work-areas-feature';
 import type { ProductionControlExports } from '../production-control/production-control-feature';
 import type { MaterialTransferExports } from '../material-transfer/material-transfer-feature';
+import type { CombatExports } from '../combat';
 import type { TreeFeatureExports } from '../trees';
 import type { StoneFeatureExports } from '../stones';
 import type { CropFeatureExports } from '../crops';
@@ -56,6 +57,7 @@ export const SettlerTaskFeature: FeatureDefinition = {
         'stones',
         'crops',
         'ore-signs',
+        'combat',
     ],
 
     create(ctx: FeatureContext) {
@@ -65,6 +67,7 @@ export const SettlerTaskFeature: FeatureDefinition = {
         const { workAreaStore } = ctx.getFeature<WorkAreaExports>('work-areas');
         const { productionControlManager } = ctx.getFeature<ProductionControlExports>('production-control');
         const { materialTransfer } = ctx.getFeature<MaterialTransferExports>('material-transfer');
+        const { combatSystem } = ctx.getFeature<CombatExports>('combat');
         const { treeSystem } = ctx.getFeature<TreeFeatureExports>('trees');
         const { stoneSystem } = ctx.getFeature<StoneFeatureExports>('stones');
         const { cropSystem } = ctx.getFeature<CropFeatureExports>('crops');
@@ -92,6 +95,7 @@ export const SettlerTaskFeature: FeatureDefinition = {
             constructionSiteManager,
             executeCommand: ctx.executeCommand,
             materialTransfer,
+            isInCombat: combatSystem.isInCombat.bind(combatSystem),
         });
 
         // --- Non-terrain work handlers ---

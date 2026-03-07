@@ -23,11 +23,8 @@ export {
     TREE_JOBS_PER_TYPE,
     TREE_JOB_INDICES,
     type SettlerAnimData,
-    collectFieldsByPrefix,
-    collectFieldsWithSuffix,
-    type SuffixedField,
-    parseMaterialSuffix,
-    getFirstFieldByPrefix,
+    stripXmlPrefix,
+    UNIT_XML_PREFIX,
 } from './jil-indices';
 
 // Import for local use by functions in this file
@@ -506,9 +503,10 @@ export class SpriteMetadataRegistry {
         directionFrames: Map<number, SpriteEntry[]>,
         frameDurationMs: number = ANIMATION_DEFAULTS.FRAME_DURATION_MS,
         loop: boolean = true,
-        race?: number
+        race?: number,
+        walkSequenceKey?: string
     ): void {
-        this.animated.register(entityType, subType, directionFrames, frameDurationMs, loop, race);
+        this.animated.register(entityType, subType, directionFrames, frameDurationMs, loop, race, walkSequenceKey);
     }
 
     /**

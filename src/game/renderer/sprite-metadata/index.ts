@@ -52,11 +52,8 @@ export {
     SETTLER_KEY_TO_UNIT_TYPE,
     UNIT_BASE_JOB_INDICES,
     type SettlerAnimData,
-    collectFieldsByPrefix,
-    collectFieldsWithSuffix,
-    type SuffixedField,
-    parseMaterialSuffix,
-    getFirstFieldByPrefix,
+    stripXmlPrefix,
+    UNIT_XML_PREFIX,
     type UnitSpriteInfo,
     getUnitSpriteMap,
 

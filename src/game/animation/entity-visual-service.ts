@@ -16,7 +16,7 @@
  * ## Usage
  *
  * Preferred (declarative):
- *   visualService.applyIntent(entityId, resolveTaskAnimation('walk', entity));
+ *   visualService.applyIntent(entityId, { sequence: 'WC_WALK', loop: true, stopped: false });
  *
  * Atomic combined operations (most common for state changes):
  *   visualService.setAnimated(entityId, variation, 'walk', { loop: true, direction: dir });
@@ -38,7 +38,15 @@
  */
 
 import { ANIMATION_DEFAULTS } from '../animation';
-import type { AnimationIntent } from './animation-resolver';
+/** What animation should play on an entity */
+export interface AnimationIntent {
+    /** Sequence key (XML name, e.g., 'WC_WALK', 'SML01_FIGHT') */
+    sequence: string;
+    /** Whether the animation should loop */
+    loop: boolean;
+    /** If true, freeze on frame 0 (idle pose) */
+    stopped: boolean;
+}
 
 // ---------------------------------------------------------------------------
 // Public types

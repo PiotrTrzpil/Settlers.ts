@@ -119,6 +119,9 @@ export class StoneSystem implements Persistable<SerializedStone[]> {
      * Overwrites the fresh state created by register().
      */
     restoreStoneState(entityId: number, data: { stage: StoneStage; variant: number; level: number }): void {
+        // Skip stale entries — entity may have been removed between snapshot capture and restore
+        if (!this.visualService.getState(entityId)) return;
+
         const state: StoneState = {
             stage: data.stage,
             variant: data.variant,

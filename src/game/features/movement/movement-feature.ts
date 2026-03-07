@@ -1,6 +1,7 @@
 import type { FeatureDefinition, FeatureContext } from '../feature';
 import { MovementSystem } from '../../systems/movement';
 import { EntityType, UnitType, getUnitTypeSpeed } from '../../entity';
+import { isAngelUnitType } from '../../unit-types';
 import { BuildingType } from '../../buildings/building-type';
 import { setEntityDescriber } from '../../systems/pathfinding/astar';
 import type { TerrainData } from '../../terrain';
@@ -36,9 +37,9 @@ export const MovementFeature: FeatureDefinition = {
             return EntityType[e.type] || 'Entity';
         });
 
-        // Create movement controllers for units on spawn
+        // Create movement controllers for units on spawn (skip ephemeral angels)
         ctx.on('entity:created', ({ entityId, type, subType, x, y }) => {
-            if (type === EntityType.Unit) {
+            if (type === EntityType.Unit && !isAngelUnitType(subType as UnitType)) {
                 const speed = getUnitTypeSpeed(subType as UnitType);
                 movement.createController(entityId, x, y, speed);
             }

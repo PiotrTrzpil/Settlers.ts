@@ -6,85 +6,19 @@
  * - AnimationResolver (derives intent from entity state)
  * - SpriteRenderManager (registers animation data)
  * - EntityRenderer (looks up sprites per frame)
+ *
+ * Sequence keys are XML jobPart names (e.g., WC_WALK, WC_CUT_TREE, BA_WALK_FLOUR).
+ * The XML prefix identifies the unit type, the suffix identifies the action.
  */
 
 import type { SpriteEntry } from './renderer/sprite-metadata';
-import { EMaterialType } from './economy';
 
 /**
- * Well-known animation sequence keys.
- * Shared between producers (AnimationResolver) and registrars (SpriteRenderManager).
+ * Build an XML sequence key from a unit's XML prefix and an action suffix.
+ * E.g., xmlKey('WC', 'WALK') → 'WC_WALK', xmlKey('BML01', 'FIGHT') → 'BML01_FIGHT'.
  */
-export const ANIMATION_SEQUENCES = {
-    /** Default/idle animation */
-    DEFAULT: 'default',
-    /** Walking/movement animation */
-    WALK: 'walk',
-    /** Prefix for carry-walk animations, suffixed with material name (e.g., 'carry.coal') */
-    CARRY_PREFIX: 'carry.',
-    /** Prefix for work animations, suffixed with index (e.g., 'work.0', 'work.1') */
-    WORK_PREFIX: 'work.',
-    /** Prefix for pickup animations, suffixed with index (e.g., 'pickup.0') */
-    PICKUP_PREFIX: 'pickup.',
-    /** Prefix for fight animations, suffixed with index (e.g., 'fight.0') */
-    FIGHT_PREFIX: 'fight.',
-} as const;
-
-/**
- * Get the animation sequence key for a carrier carrying a specific material.
- *
- * From EMaterialType:  `carrySequenceKey(EMaterialType.COAL)` → `'carry.coal'`
- * From suffix string:  `carrySequenceKey('coal')` → `'carry.coal'`
- */
-export function carrySequenceKey(material: number | string): string {
-    if (typeof material === 'string') {
-        return `${ANIMATION_SEQUENCES.CARRY_PREFIX}${material}`;
-    }
-    const name = EMaterialType[material];
-    if (!name) throw new Error(`Unknown EMaterialType: ${material}`);
-    return `${ANIMATION_SEQUENCES.CARRY_PREFIX}${name.toLowerCase()}`;
-}
-
-/**
- * Get the animation sequence key for a work animation variant.
- * Returns a key like 'work.0', 'work.1', etc.
- */
-export function workSequenceKey(index: number): string {
-    return `${ANIMATION_SEQUENCES.WORK_PREFIX}${index}`;
-}
-
-/**
- * Get the animation sequence key for a pickup animation variant.
- *
- * Material-specific: `pickupSequenceKey('coal')` → `'pickup.coal'`
- * Generic fallback:  `pickupSequenceKey(0)` → `'pickup.0'`
- */
-export function pickupSequenceKey(variant: string | number): string {
-    return `${ANIMATION_SEQUENCES.PICKUP_PREFIX}${variant}`;
-}
-
-/**
- * Get the animation sequence key for a fight animation variant.
- * Returns a key like 'fight.0'.
- */
-export function fightSequenceKey(index: number): string {
-    return `${ANIMATION_SEQUENCES.FIGHT_PREFIX}${index}`;
-}
-
-/**
- * Get the level-specific idle sequence key.
- * Level 1 uses 'default' (the base idle); levels 2-3 use 'default.2', 'default.3'.
- */
-export function levelIdleSequenceKey(level: number): string {
-    return level <= 1 ? ANIMATION_SEQUENCES.DEFAULT : `${ANIMATION_SEQUENCES.DEFAULT}.${level}`;
-}
-
-/**
- * Get the level-specific walk sequence key.
- * Level 1 uses 'walk' (the base walk); levels 2-3 use 'walk.2', 'walk.3'.
- */
-export function levelWalkSequenceKey(level: number): string {
-    return level <= 1 ? ANIMATION_SEQUENCES.WALK : `${ANIMATION_SEQUENCES.WALK}.${level}`;
+export function xmlKey(prefix: string, action: string): string {
+    return `${prefix}_${action}`;
 }
 
 /**

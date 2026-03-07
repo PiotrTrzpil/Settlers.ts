@@ -20,459 +20,470 @@ import { EMaterialType } from '../../economy';
  * Settler job indices for various professions and their animation states.
  * These are in settler files (20-24.jil).
  *
- * All values are plain numbers (JIL job indices). Field naming uses balanced specificity:
- * - Single value → generic name (walk, carry, work, fight, pickup, idle)
- * - Multiple values of same type → numbered (work_1, work_2, carry_1, carry_2)
- * - Semantically distinct actions → named (work_chop, work_cut, work_shoot_1)
+ * Field names are the actual XML jobPart names from jobInfo.xml (e.g., WC_WALK, WC_CUT_TREE).
+ * This enables direct lookup: when the choreo system receives jobPart 'WC_CUT_TREE',
+ * it finds the JIL index at SETTLER_JOB_INDICES.woodcutter.WC_CUT_TREE.
  *
- * Consumers use prefix matching to collect related fields:
- * e.g. all fields starting with "work" are work animations.
+ * The XML prefix encodes the unit type (WC_ = woodcutter, BA_ = baker, etc.).
+ * The suffix encodes the action (WALK, WALK_LOG, CUT_TREE, PICKUP_LOG, FIGHT, etc.).
  */
 export const SETTLER_JOB_INDICES = {
     carrier: {
-        walk: 1,
-        pickup: 44, // Bend-down animation for picking up / dropping off goods (same anim for both)
-        idle_1: 45,
-        idle_2: 46,
-        idle_3: 47,
-        work_strike: 48,
-        work_strik_walk: 49,
+        C_WALK: 1,
+        C_DOWN_NONE: 44, // bend-down for picking up / dropping off goods
+        C_IDLE1: 45,
+        C_IDLE2: 46,
+        C_IDLE3: 47,
+        C_STRIKE1: 48,
+        C_STRIKE2: 49,
     },
     digger: {
-        walk: 50,
-        work: 51,
+        D_WALK: 50,
+        D_WORK: 51,
     },
     builder: {
-        walk: 52, // Walk cycle (same animation also at job 53)
-        work: 53,
+        B_WALK: 52,
+        B_WORK: 53,
     },
     woodcutter: {
-        walk: 54,
-        carry: 55, // carrying log
-        work_chop: 56, // chopping standing tree
-        work_cut: 57, // cutting fallen log
+        WC_WALK: 54,
+        WC_WALK_LOG: 55, // carrying log
+        WC_CUT_TREE: 56, // chopping standing tree
+        WC_PICKUP_LOG: 57, // picking up fallen log
     },
     stonecutter: {
-        walk: 58,
-        work: 59,
-        pickup: 60,
-        carry: 61,
+        ST_WALK: 58,
+        ST_HACK: 59,
+        ST_PICKUP: 60,
+        ST_WALK_STONE: 61,
     },
     forester: {
-        walk: 62,
-        carry: 63,
-        work: 64,
+        F_WALK: 62,
+        F_WALK_TREE: 63,
+        F_PLANT_SMALLTREE: 64,
     },
-    // Farmer (grain, agave farmer, beekeeper share same sprites)
+    // FG_ = SETTLER_FARMERGRAIN (grain farmer; agave farmer, beekeeper are separate)
     farmer: {
-        walk: 65,
-        carry: 66,
-        work_walk_with_seed: 67,
-        work_seed: 68,
-        work_scythe: 69,
-        pickup: 70,
+        FG_WALK: 65,
+        FG_WALK_GRAIN: 66,
+        FG_WALK_SEED: 67,
+        FG_SEED_PLANTS: 68,
+        FG_CUT_GRAIN: 69,
+        FG_PICKUP_GRAIN: 70,
     },
-    // FA_ = FarmerAnimals (SETTLER_FARMERANIMALS) — animal rancher (AnimalRanch + DonkeyRanch)
+    // FA_ = SETTLER_FARMERANIMALS — animal rancher (AnimalRanch + DonkeyRanch)
     animal_farmer: {
-        walk: 72,
-        carry_water: 73,
-        carry_grain: 74,
-        pickup_water: 75,
-        pickup_grain: 76,
-        carry_empty: 78,
-        work: 79,
+        FA_WALK: 72,
+        FA_WALK_WATER: 73,
+        FA_WALK_GRAIN: 74,
+        FA_PICKUP_WATER: 75,
+        FA_PICKUP_GRAIN: 76,
+        FA_WALK_EMPTY_FOOD: 78,
+        FA_FEED: 79,
     },
     fisher: {
-        walk: 80,
-        carry_fish: 81,
-        work_1: 82,
-        pickup_fish: 83,
-        work_3: 84,
-        work_4: 85,
+        FI_WALK: 80,
+        FI_WALK_FISH: 81,
+        FI_CATCH_FISH: 82,
+        FI_PICKUP_FISH: 83,
+        FI_THROW_ROD: 84,
+        FI_WORK: 85,
     },
     water_worker: {
-        walk: 86,
-        carry_empty: 87,
-        carry_water: 88,
-        pickup_water: 89,
-        work: 90,
+        W_WALK: 86,
+        W_WALK_EMPTY_WATER: 87,
+        W_WALK_FULL_WATER: 88,
+        W_PICKUP_WATER: 89,
+        W_GET_WATER: 90,
     },
     hunter: {
-        walk: 91,
-        carry: 92,
-        pickup_meat: 93,
-        pickup_animal: 94,
-        work: 95,
+        H_WALK: 91,
+        H_WALK_MEAT: 92,
+        H_PICKUP_MEAT: 93,
+        H_PICKUP_ANIMAL: 94, // (no XML match — unused in standard jobs)
+        H_SHOOT: 95,
     },
     sawmill_worker: {
-        walk: 96,
-        carry_log: 97,
-        carry_board: 98,
-        work: 99,
-        pickup_log: 100,
-        pickup_board: 101,
+        SW_WALK: 96,
+        SW_WALK_LOG: 97,
+        SW_WALK_BOARD: 98,
+        SW_WORK: 99,
+        SW_PICKUP_LOG: 100,
+        SW_PICKUP_BOARD: 101,
     },
     smelter: {
-        walk: 102,
-        carry_coal: 103,
-        carry_goldbar: 104,
-        carry_goldore: 105,
-        carry_ironbar: 106,
-        carry_ironore: 107,
-        work_iron: 108,
-        pickup_goldbar: 109,
-        work_gold: 110,
-        pickup_ironbar: 111,
-        pickup_coal: 112,
-        pickup_ironore: 113,
+        SME_WALK: 102,
+        SME_WALK_COAL: 103,
+        SME_WALK_GOLDBAR: 104,
+        SME_WALK_GOLDORE: 105,
+        SME_WALK_IRONBAR: 106,
+        SME_WALK_IRONORE: 107,
+        SME_WORK: 108,
+        SME_PICKUP_GOLDBAR: 109,
+        SME_WORK_GOLD: 110, // (second work variant — no separate XML name)
+        SME_PICKUP_IRONBAR: 111,
+        SME_PICKUP_COAL: 112,
+        SME_PICKUP_IRONORE: 113,
     },
     miner: {
-        walk: 114, // M_WALK
-        walk_1: 115, // M_PUSHIN — empty cart back (coal)
-        walk_2: 116, // M_PUSHIN — empty cart back (ironore)
-        walk_3: 117, // M_PUSHIN — empty cart back (goldore)
-        walk_4: 118, // M_PUSHIN — empty cart back (stone)
-        walk_5: 119, // M_PUSHIN — empty cart back (sulfur)
-        carry_coal: 120, // M_PUSHOUT_COAL — full cart out
-        carry_ironore: 121, // M_PUSHOUT_IRONORE
-        carry_goldore: 122, // M_PUSHOUT_GOLDORE
-        carry_stone: 123, // M_PUSHOUT_STONE
-        carry_sulfur: 124, // M_PUSHOUT_SULFUR
-        work_coal: 125, // M_TIP_COAL — dump cart
-        work_ironore: 126, // M_TIP_IRONORE
-        work_goldore: 127, // M_TIP_GOLDORE
-        work_stone: 128, // M_TIP_STONE
-        work_sulfur: 129, // M_TIP_SULFUR
+        M_WALK: 114,
+        M_PUSHIN_COAL: 115, // empty cart back
+        M_PUSHIN_IRONORE: 116,
+        M_PUSHIN_GOLDORE: 117,
+        M_PUSHIN_STONE: 118,
+        M_PUSHIN_SULFUR: 119,
+        M_PUSHOUT_COAL: 120, // full cart out
+        M_PUSHOUT_IRONORE: 121,
+        M_PUSHOUT_GOLDORE: 122,
+        M_PUSHOUT_STONE: 123,
+        M_PUSHOUT_SULFUR: 124,
+        M_TIP_COAL: 125, // dump cart
+        M_TIP_IRONORE: 126,
+        M_TIP_GOLDORE: 127,
+        M_TIP_STONE: 128,
+        M_TIP_SULFUR: 129,
     },
     smith: {
-        walk: 130,
-        work_1: 130,
-        work_2: 131,
-        work_3: 132,
-        work_4: 133,
-        work_5: 134,
-        work_6: 135,
-        work_7: 136,
-        pickup_1: 137,
-        pickup_2: 138,
-        pickup_3: 139,
+        S_WALK: 130,
+        S_WALK_COAL: 131,
+        S_WALK_GLOWSTEEL: 132,
+        S_WALK_IRONBAR: 133,
+        S_WALK_STEEL: 134,
+        S_WORK: 135,
+        S_COOL_STEEL: 136,
+        S_PICKUP_COAL: 137,
+        S_PICKUP_IRONBAR: 138,
+        S_PICKUP_STEEL: 139,
     },
     miller: {
-        walk: 140,
-        carry_grain: 141,
-        carry_flour: 142,
-        pickup_grain: 143,
-        pickup_flour: 144,
+        MI_WALK: 140,
+        MI_WALK_GRAIN: 141,
+        MI_WALK_FLOUR: 142,
+        MI_PICKUP_GRAIN: 143,
+        MI_PICKUP_FLOUR: 144,
     },
     baker: {
-        walk: 145,
-        carry_flour: 146,
-        carry_bread: 147,
-        carry_empty: 148,
-        carry_unbaked_bread: 149,
-        carry_water: 150,
-        work_bread: 151,
-        work_unbaked_bread: 152,
-        work_empty: 153,
-        pickup_water: 154,
-        pickup_flour: 155,
+        BA_WALK: 145,
+        BA_WALK_FLOUR: 146,
+        BA_WALK_BREAD: 147,
+        BA_WALK_SHOVEL: 148,
+        BA_WALK_DOUGH: 149,
+        BA_WALK_WATER: 150,
+        BA_WORK_BREAD: 151,
+        BA_WORK_DOUGH: 152,
+        BA_SHOVEL_UP: 153,
+        BA_PICKUP_WATER: 154,
+        BA_PICKUP_FLOUR: 155,
     },
     butcher: {
-        walk: 156,
-        carry_meat: 157,
-        carry_animal: 158,
-        pickup_meat: 159,
-        pickup_animal: 160,
+        BU_WALK: 156,
+        BU_WALK_MEAT: 157,
+        BU_WALK_ANIMAL: 158,
+        BU_PICKUP_MEAT: 159,
+        BU_PICKUP_ANIMAL: 160,
     },
+    // VM_ = SETTLER_VEHICLEHALLWORKER (siege workshop)
     unknown_worker: {
-        walk: 161,
-        carry_board: 162,
-        carry_stone: 163,
-        pickup_board: 164,
-        pickup_stone: 165,
-        work: 166,
+        VM_WALK: 161,
+        VM_WALK_BOARD: 162,
+        VM_WALK_IRONBAR: 163,
+        VM_PICKUP_BOARD: 164,
+        VM_PICKUP_IRONBAR: 165,
+        VM_WORK: 166,
     },
     healer: {
-        walk: 167,
-        work: 168,
+        HE_WALK: 167,
+        HE_CONJURE: 168,
     },
+    // AM_ = SETTLER_AMMOMAKERHUTWORKER
     ammunition_maker: {
-        walk: 174,
-        carry_coal: 175,
-        carry_sulfur: 176,
-        carry_ammo: 178,
-        pickup_coal: 179,
-        pickup_sulfur: 180,
-        pickup_ammo: 182,
-        work: 166,
+        AM_WALK: 174,
+        AM_WALK_FIRSTGOOD: 175, // coal
+        AM_WALK_SECONDGOOD: 176, // sulfur
+        AM_WALK_AMMO: 178,
+        AM_PICKUP_FIRSTGOOD: 179, // coal
+        AM_PICKUP_SECONDGOOD: 180, // sulfur
+        AM_PICKUP_AMMO: 182,
+        AM_WORK: 166, // (shares VM_WORK animation)
     },
+    // SYW_ = SETTLER_SHIPYARDWORKER
     shipyard_worker: {
-        walk: 183,
-        carry_stone: 184,
-        carry_stone2: 185,
-        carry_board: 186,
-        work: 187,
-        pickup_stone: 188,
-        pickup_stone2: 190,
-        pickup_board: 189,
+        SYW_WALK: 183,
+        SYW_WALK_BOARD: 186,
+        SYW_WALK_IRONBAR: 184,
+        SYW_WALK_IRONBAR2: 185, // (second ironbar carry variant)
+        SYW_WORK: 187,
+        SYW_PICKUP_BOARD: 189,
+        SYW_PICKUP_IRONBAR: 188,
+        SYW_PICKUP_IRONBAR2: 190, // (second ironbar pickup variant)
     },
+    // V_ = SETTLER_VINTNER (wine maker)
     wine_maker: {
-        walk: 191,
-        carry_1: 192,
-        carry_2: 193,
-        carry_3: 194,
-        carry_4: 195,
-        work_1: 196,
-        work_2: 197,
-        pickup: 198,
+        V_WALK: 191,
+        V_WALK_GRAPE: 192,
+        V_WALK_EMPTYGRAPE: 193,
+        V_WALK_WINE: 194,
+        V_WALK_PLANT: 195,
+        V_FILL_GRAPE: 196,
+        V_WORK_PLANT: 197,
+        V_PICKUP_WINE: 198,
     },
+    // BK_ = SETTLER_BEEKEEPER
     beekeeper: {
-        walk: 199,
-        carry_1: 200,
-        carry_2: 201,
-        work_1: 202,
-        work_2: 203,
-        work_3: 204,
-        work_4: 205,
+        BK_WALK: 199,
+        BK_WALK_BEEHIVE: 200,
+        BK_WALK_HONEY: 201,
+        BK_PICKUP_BEEHIVE: 202,
+        BK_PICKUP_HONEY: 203,
+        BK_WORK_1: 204, // (extra animation — no XML match)
+        BK_WORK_2: 205, // (extra animation — no XML match)
     },
+    // MM_ = SETTLER_MEADMAKER
     mead_maker: {
-        walk: 206,
-        carry_1: 207,
-        carry_2: 208,
-        carry_3: 209,
-        pickup_1: 210,
-        pickup_2: 211,
-        pickup_3: 212,
+        MM_WALK: 206,
+        MM_WALK_HONEY: 207, // or water — first carry
+        MM_WALK_WATER: 208,
+        MM_WALK_MEAD: 209, // (mead carry)
+        MM_PICKUP_HONEY: 210,
+        MM_PICKUP_MEAD: 211,
+        MM_PICKUP_WATER: 212,
     },
+    // AF_ = SETTLER_AGAVEFARMER
     agave_farmer: {
-        walk: 213,
-        carry: 214,
-        work_1: 215,
-        work_2: 216,
-        work_3: 217,
-        work_4: 218,
-        work_5: 219,
+        AF_WALK: 213,
+        AF_WALK_AGAVE: 214,
+        AF_WALK_MACHETE: 215,
+        AF_WALK_SMALLAGAVE: 216,
+        AF_PLANT_SMALLAGAVE: 217,
+        AF_WORK_MACHETE: 218,
+        AF_PICKUP_AGAVE: 219,
     },
+    // TM_ = SETTLER_TEQUILAMAKER
     tequila_maker: {
-        walk: 220,
-        carry_1: 221,
-        carry_2: 222,
-        carry_3: 223,
-        pickup_1: 224,
-        pickup_2: 225,
-        pickup_3: 226,
+        TM_WALK: 220,
+        TM_WALK_AGAVE: 221,
+        TM_WALK_TEQUILA: 222,
+        TM_WALK_WATER: 223,
+        TM_PICKUP_AGAVE: 224,
+        TM_PICKUP_TEQUILA: 225,
+        TM_PICKUP_WATER: 226,
     },
     swordsman_1: {
-        walk: 227,
-        fight: 228,
+        SML01_WALK: 227,
+        SML01_FIGHT: 228,
     },
     swordsman_2: {
-        walk: 230,
-        fight: 231,
+        SML02_WALK: 230,
+        SML02_FIGHT: 231,
     },
     swordsman_3: {
-        walk: 233,
-        fight: 234,
+        SML03_WALK: 233,
+        SML03_FIGHT: 234,
     },
-    // Bowman levels (work entries are shooting animations; fight reuses shooting)
     bowman_1: {
-        walk: 236,
-        work_shoot_1: 237,
-        work_shoot_2: 238,
-        work_shoot_3: 239,
-        work_shoot_4: 240,
-        fight: 237, // shooting = fighting
+        BML01_WALK: 236,
+        BML01_SHOOT: 237,
+        BML01_THROW_STONE: 238,
+        BML01_FIGHT: 239,
+        BML01_SHOOT_2: 240, // (extra shoot variant)
     },
     bowman_2: {
-        walk: 242,
-        work_shoot_1: 243,
-        work_shoot_2: 244,
-        work_shoot_3: 245,
-        work_shoot_4: 246,
-        fight: 243,
+        BML02_WALK: 242,
+        BML02_SHOOT: 243,
+        BML02_THROW_STONE: 244,
+        BML02_FIGHT: 245,
+        BML02_SHOOT_2: 246,
     },
     bowman_3: {
-        walk: 248,
-        work_shoot_1: 249,
-        work_shoot_2: 250,
-        work_shoot_3: 251,
-        work_shoot_4: 252,
-        fight: 249,
+        BML03_WALK: 248,
+        BML03_SHOOT: 249,
+        BML03_THROW_STONE: 250,
+        BML03_FIGHT: 251,
+        BML03_SHOOT_2: 252,
     },
-    // Roman specialist (Medic)
-    // Other races have their own specialist keys below
+    // MEL_ = Roman specialist (Medic)
     specialist_1: {
-        walk: 254,
-        work: 255,
-        fight: 256,
+        MEL01_WALK: 254,
+        MEL01_HEAL: 255,
+        MEL01_FIGHT: 256,
     },
     specialist_2: {
-        walk: 258,
-        work: 259,
-        fight: 260,
+        MEL02_WALK: 258,
+        MEL02_HEAL: 259,
+        MEL02_FIGHT: 260,
     },
     specialist_3: {
-        walk: 262,
-        work: 263,
-        fight: 264,
+        MEL03_WALK: 262,
+        MEL03_HEAL: 263,
+        MEL03_FIGHT: 264,
     },
 
-    // Viking specialist
+    // AWL_ = Viking specialist (Axe Warrior)
     axe_warrior_1: {
-        walk: 266,
-        fight: 267,
+        AWL01_WALK: 266,
+        AWL01_FIGHT: 267,
     },
     axe_warrior_2: {
-        walk: 269,
-        fight: 270,
+        AWL02_WALK: 269,
+        AWL02_FIGHT: 270,
     },
     axe_warrior_3: {
-        walk: 272,
-        fight: 273,
+        AWL03_WALK: 272,
+        AWL03_FIGHT: 273,
     },
 
-    // Mayan specialist
+    // BGWL_ = Mayan specialist (Blowgun Warrior)
     blowgun_warrior_1: {
-        walk: 275,
-        fight: 276,
+        BGWL01_WALK: 275,
+        BGWL01_FIGHT: 276,
     },
     blowgun_warrior_2: {
-        walk: 278,
-        fight: 279,
+        BGWL02_WALK: 278,
+        BGWL02_FIGHT: 279,
     },
     blowgun_warrior_3: {
-        walk: 281,
-        fight: 282,
+        BGWL03_WALK: 281,
+        BGWL03_FIGHT: 282,
     },
 
-    // Trojan specialist
+    // BCL_ = Trojan specialist (Backpack Catapultist)
     catapultist_1: {
-        walk: 341,
-        fight: 342,
+        BCL01_WALK: 341,
+        BCL01_FIGHT: 342,
     },
     catapultist_2: {
-        walk: 344,
-        fight: 345,
+        BCL02_WALK: 344,
+        BCL02_FIGHT: 345,
     },
     catapultist_3: {
-        walk: 347,
-        fight: 348,
+        BCL03_WALK: 347,
+        BCL03_FIGHT: 348,
     },
 
+    // SQL_ = Squad Leader
     squad_leader: {
-        walk: 284,
-        fight: 285,
+        SQL_WALK: 284,
+        SQL_FIGHT: 285,
     },
+    // PR_ = Priest
     priest: {
-        walk: 287,
-        work: 288,
+        PR_WALK: 287,
+        PR_CASTSPELL: 288,
     },
 
+    // SA_ = Saboteur
     saboteur: {
-        walk: 290,
-        work_1: 291,
-        work_2: 292,
-        work_3: 293,
-        work_4: 294,
-        work_5: 295,
-        work_6: 296,
-        work_7: 297,
+        SA_WALK: 290,
+        SA_WORK_PICKAXE: 291,
+        SA_WORK_2: 292,
+        SA_WORK_3: 293,
+        SA_WORK_4: 294,
+        SA_WORK_5: 295,
+        SA_WORK_6: 296,
+        SA_WORK_7: 297,
     },
+    // P_ = Pioneer
     pioneer: {
-        walk: 298,
-        work_1: 299,
-        work_2: 300,
+        P_WALK: 298,
+        P_SHOVEL: 299,
+        P_WORK: 300,
     },
+    // TH_ = Thief
     thief: {
-        walk: 301,
-        carry: 302,
-        work_1: 303,
-        work_2: 304,
+        TH_WALK: 301,
+        TH_WALK_GOOD: 302,
+        TH_STEAL: 303,
+        TH_DROP_GOOD: 304,
     },
+    // G_ = Geologist
     geologist: {
-        walk: 305,
-        work_1: 306,
-        work_2: 307,
+        G_WALK: 305,
+        G_SEARCH: 306, // walking search — treated as walk
+        G_WORK: 307,
     },
+    // DG_ = Gardener (landscape maker)
     gardener: {
-        walk: 308,
-        work_1: 309,
-        work_2: 310,
+        DG_WALK: 308,
+        DG_SEED: 309,
+        DG_WORK: 310,
     },
+    // TS_ = Temple Servant
     temple_servant: {
-        walk: 328,
-        carry: 329,
-        pickup: 330,
-        work: 331,
+        TS_WALK: 328,
+        TS_WALK_WINE: 329,
+        TS_PICKUP_WINE: 330,
+        TS_WORK: 331, // or TS_ANIM
     },
     angel_1: {
-        idle: 333,
+        ANGEL1_WALK: 333,
     },
     angel_2: {
-        idle: 334,
+        ANGEL2_WALK: 334,
     },
     angel_3: {
-        idle: 335,
+        ANGEL3_WALK: 335,
     },
 
-    // All races have the same donkey (duplicates).
-    // But file 24 has additional donkey fight animation
+    // DONKEY_ — all races have the same donkey (file 24 has additional fight animation)
     donkey: {
-        walk: 336,
-        idle: 337,
-        carry_1: 338,
-        carry_2: 339,
-        fight: 340,
+        DONKEY_WALK: 336,
+        DONKEY_IDLE: 337,
+        DONKEY_WALK_FULLBASKET: 338,
+        DONKEY_WALK_EMPTYBASKET: 339,
+        DONKEY_DROP_GOODS: 340, // fight in file 24
     },
 
-    // trojan only
+    // SFF_ = Sunflower Farmer (Trojan only)
     sunflower_farmer: {
-        walk: 350,
-        carry_sunflower: 351,
-        carry_plant: 352,
-        carry_waterer: 353,
-
-        work_plant: 354,
-        work_sunflower: 355,
-        work_water: 356,
-        pickup_sunflower: 357,
+        SFF_WALK: 350,
+        SFF_WALK_PLANT: 351,
+        SFF_WALK_SMALL_PLANT: 352, // was carry_plant
+        SFF_WALK_WATERER: 353, // (watering can carry)
+        SFF_WORK_PLANT: 354,
+        SFF_WORK: 355,
+        SFF_PICKUP_PLANT: 356,
+        SFF_PICKUP_SUNFLOWER: 357, // (pickup mature sunflower)
     },
+    // SOM_ = Sunflower Oil Maker (Trojan only)
     oil_maker: {
-        walk: 358,
-        carry_sunfloweroil: 359,
-        carry_sunflower: 360,
-        pickup_sunflower: 361,
-        pickup_sunfloweroil: 362,
+        SOM_WALK: 358,
+        SOM_WALK_OIL: 359,
+        SOM_WALK_PLANT: 360,
+        SOM_PICKUP_PLANT: 361,
+        SOM_PICKUP_OIL: 362,
     },
 
-    // Mushroom farmer (Dark Tribe specific, file 23.jil)
+    // MF_ = Mushroom Farmer (Dark Tribe, file 23.jil)
     mushroom_farmer: {
-        walk: 313,
-        work: 314,
+        MF_WALK: 313,
+        MF_PLANT: 314,
     },
+    // GA_ = Dark Gardener (Dark Tribe)
     dark_gardener: {
-        walk: 315,
-        carry: 316,
-        work_1: 317,
-        work_2: 318,
-        work_3: 319,
-        work_4: 320,
-        work_5: 321,
-        work_6: 322,
+        GA_WALK: 315,
+        GA_WALK_MANA: 316, // (carry mana — no direct XML match)
+        GA_BEAT_MUSHROOM: 317,
+        GA_WORK: 318,
+        GA_WORK_3: 319,
+        GA_WORK_4: 320,
+        GA_WORK_5: 321,
+        GA_WORK_6: 322,
     },
+    // SHM_ = Shaman (Dark Tribe)
     shaman: {
-        walk: 323,
-        work: 324,
+        SHM_WALK: 323,
+        SHM_ENSLAVE: 324,
     },
+    // CO_ = Slaved Settler (Dark Tribe)
     slaved_settler: {
-        walk: 325,
-        work_1: 326,
-        work_2: 327,
+        CO_WALK: 325,
+        CO_WALK_COAL: 326,
+        CO_WALK_LOG: 327,
     },
     manacopter_master: {
-        walk: 363,
-        fight: 364,
-        work: 365,
+        MC_WALK: 363,
+        MC_FIGHT: 364,
+        MC_WORK: 365,
     },
 } as const;
 
@@ -549,108 +560,80 @@ export const SETTLER_KEY_TO_UNIT_TYPE: Readonly<Record<string, UnitType>> = {
 /** Type alias for a settler's animation data — all fields are plain numbers. */
 export type SettlerAnimData = Readonly<Record<string, number>>;
 
-/** Extract the first numeric index from a walk or idle/idle_* field. */
+// ============================================================
+// XML field name utilities
+// ============================================================
+
+/**
+ * Strip the XML prefix from a field name, returning the action suffix.
+ * E.g., 'WC_CUT_TREE' → 'CUT_TREE', 'BML01_WALK' → 'WALK', 'C_DOWN_LOG' → 'DOWN_LOG'.
+ *
+ * The prefix is everything up to and including the first underscore, UNLESS the
+ * second segment is a level number like '01', '02', '03' — then strip two segments.
+ */
+export function stripXmlPrefix(key: string): string {
+    const first = key.indexOf('_');
+    if (first === -1) return key;
+    const rest = key.slice(first + 1);
+    // Check if next segment is a level number (e.g., SML01_WALK → strip 'SML01_')
+    const levelMatch = /^(\d{2})_(.+)$/.exec(rest);
+    if (levelMatch) return levelMatch[2]!;
+    return rest;
+}
+
+/**
+ * Extract the XML prefix from a field name.
+ * E.g., 'WC_CUT_TREE' → 'WC', 'BML01_WALK' → 'BML01', 'C_DOWN_LOG' → 'C'.
+ */
+function extractXmlPrefix(key: string): string {
+    const first = key.indexOf('_');
+    if (first === -1) return key;
+    const prefix = key.slice(0, first);
+    const rest = key.slice(first + 1);
+    const levelMatch = /^(\d{2})_/.exec(rest);
+    if (levelMatch) return `${prefix}${levelMatch[1]}`;
+    return prefix;
+}
+
+/** Test whether a field's action suffix is WALK (base walk, no cargo). */
+function isWalkField(key: string): boolean {
+    return stripXmlPrefix(key) === 'WALK';
+}
+
+/** Test whether a field's action suffix starts with IDLE. */
+function isIdleField(key: string): boolean {
+    const action = stripXmlPrefix(key);
+    return action === 'IDLE' || action.startsWith('IDLE');
+}
+
+/** Extract the first walk or idle job index — used for base JIL index. */
 function extractBaseIndex(data: SettlerAnimData): number | undefined {
-    if ('walk' in data) return data['walk'];
-    if ('idle' in data) return data['idle'];
-    // Check for prefixed idle fields (e.g. idle_1)
     for (const [key, value] of Object.entries(data)) {
-        if (key.startsWith('idle_')) return value;
+        if (isWalkField(key)) return value;
+    }
+    for (const [key, value] of Object.entries(data)) {
+        if (isIdleField(key)) return value;
     }
     return undefined;
 }
 
 /**
- * Collect all JIL job indices from fields matching a prefix.
- * Matches exact name (e.g. "work") and underscore-suffixed variants (e.g. "work_chop", "work_1").
- * Returns values in Object.entries() order (insertion order).
+ * Precomputed UnitType → XML prefix mapping.
+ * Derived from SETTLER_JOB_INDICES: takes the prefix of the first field of each unit type.
+ * E.g., UnitType.Woodcutter → 'WC', UnitType.Swordsman1 → 'SML01'.
  */
-export function collectFieldsByPrefix(data: SettlerAnimData, prefix: string): number[] {
-    const results: number[] = [];
-    for (const [key, value] of Object.entries(data)) {
-        if (key === prefix || key.startsWith(`${prefix}_`)) {
-            results.push(value);
+export const UNIT_XML_PREFIX: Readonly<Partial<Record<UnitType, string>>> = (() => {
+    const result: Partial<Record<UnitType, string>> = {};
+    for (const [workerKey, workerData] of Object.entries(SETTLER_JOB_INDICES)) {
+        const unitType = SETTLER_KEY_TO_UNIT_TYPE[workerKey];
+        if (unitType === undefined) continue;
+        const firstField = Object.keys(workerData)[0];
+        if (firstField) {
+            result[unitType] = extractXmlPrefix(firstField);
         }
     }
-    return results;
-}
-
-/** A JIL field with its parsed suffix and job index. */
-export interface SuffixedField {
-    /** Material/variant suffix: 'coal', 'iron', '0' (generic), '1' (numbered). */
-    suffix: string;
-    /** JIL job index. */
-    jobIndex: number;
-}
-
-/**
- * Collect all JIL fields matching a prefix, preserving the suffix for material-aware keying.
- *
- * Field name → suffix:
- *   'pickup'       → '0'       (generic — no material distinction)
- *   'pickup_coal'  → 'coal'    (material-specific)
- *   'pickup_1'     → '0','1'   (numbered — sequential index, not a material name)
- *   'carry_iron'   → 'iron'
- */
-export function collectFieldsWithSuffix(data: SettlerAnimData, prefix: string): SuffixedField[] {
-    const results: SuffixedField[] = [];
-    let numberedCount = 0;
-    for (const [key, value] of Object.entries(data)) {
-        if (key === prefix) {
-            results.push({ suffix: '0', jobIndex: value });
-        } else if (key.startsWith(`${prefix}_`)) {
-            const raw = key.slice(prefix.length + 1);
-            // Numbered fields (pickup_1, carry_2) → sequential index
-            const suffix = /^\d+$/.test(raw) ? String(numberedCount++) : raw;
-            results.push({ suffix, jobIndex: value });
-        }
-    }
-    return results;
-}
-
-/** Non-material carry/pickup suffixes — visual states, not transportable goods. */
-const NON_MATERIAL_SUFFIXES: ReadonlySet<string> = new Set([
-    'empty',
-    'unbaked_bread',
-    'plant',
-    'waterer', // Visual carry states (no material being transported)
-    'animal', // Hunter pickup / butcher carry (race-dependent animal, not a single material)
-    'stone2', // Shipyard stone variant (second stone carry animation)
-]);
-
-/**
- * Parse a JIL field suffix as an EMaterialType.
- *
- * Suffixes must match EMaterialType names exactly (lowercased):
- *   'coal' → EMaterialType.COAL, 'ironore' → EMaterialType.IRONORE, etc.
- *
- * Returns null for numbered variants ('0', '1') and known non-material suffixes.
- * Throws for unrecognised suffixes — catches naming errors in jil-indices.ts.
- */
-export function parseMaterialSuffix(suffix: string): EMaterialType | null {
-    if (/^\d+$/.test(suffix)) return null;
-    if (NON_MATERIAL_SUFFIXES.has(suffix)) return null;
-    const value = EMaterialType[suffix.toUpperCase() as keyof typeof EMaterialType] as EMaterialType | undefined;
-    if (value === undefined) {
-        throw new Error(
-            `JIL field suffix '${suffix}' does not match any EMaterialType. ` +
-                `Rename the field in jil-indices.ts to use the exact EMaterialType name (lowercased).`
-        );
-    }
-    return value;
-}
-
-/**
- * Get the first value matching a prefix, or undefined if no match.
- * Useful for fields like carry that may be "carry" or "carry_1".
- */
-export function getFirstFieldByPrefix(data: SettlerAnimData, prefix: string): number | undefined {
-    if (prefix in data) return data[prefix];
-    for (const [key, value] of Object.entries(data)) {
-        if (key.startsWith(`${prefix}_`)) return value;
-    }
-    return undefined;
-}
+    return result;
+})();
 
 /**
  * Derive the base JIL job index per UnitType from SETTLER_JOB_INDICES.

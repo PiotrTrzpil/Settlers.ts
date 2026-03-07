@@ -17,7 +17,8 @@ import type { Entity } from '../../entity';
 import { EntityType, isUnitTypeMilitary, UnitType } from '../../entity';
 import { hexDistance, getApproxDirection } from '../../systems/hex-directions';
 import { CombatState, CombatStatus, createCombatState, getCombatStats } from './combat-state';
-import { resolveTaskAnimation } from '../../animation/index';
+import { xmlKey } from '../../animation';
+import { UNIT_XML_PREFIX } from '../../renderer/sprite-metadata';
 import type { EntityVisualService } from '../../animation/entity-visual-service';
 import { createLogger } from '@/utilities/logger';
 import { sortedEntries } from '@/utilities/collections';
@@ -92,6 +93,12 @@ export class CombatSystem implements TickSystem, Persistable<SerializedCombatUni
         return this.states.size;
     }
 
+    /** True if the entity is actively fighting or pursuing an enemy. */
+    isInCombat(entityId: number): boolean {
+        const state = this.states.get(entityId);
+        return state !== undefined && state.status !== CombatStatus.Idle;
+    }
+
     /**
      * Release a unit from combat, returning it to idle.
      * Called when the player issues an explicit command (move/attack override).
@@ -155,6 +162,7 @@ export class CombatSystem implements TickSystem, Persistable<SerializedCombatUni
         state.targetId = target.id;
         state.status = CombatStatus.Pursuing;
         this.pursuitTimers.set(state.entityId, PURSUIT_REPATH_INTERVAL); // path immediately
+        this.applyWalkAnimation(entity, target);
         log.debug(`Unit ${state.entityId} detected enemy ${target.id}, pursuing`);
     }
 
@@ -162,6 +170,15 @@ export class CombatSystem implements TickSystem, Persistable<SerializedCombatUni
         // Validate target still exists and is alive
         const target = this.validateTarget(state, entity);
         if (!target) return;
+
+        // Keep animation direction in sync with movement controller
+        const controller = this.gameState.movement.getController(state.entityId);
+        if (controller) {
+            const vs = this.visualService.getState(entity.id);
+            if (vs?.animation && vs.animation.direction !== controller.direction) {
+                this.visualService.setDirection(entity.id, controller.direction);
+            }
+        }
 
         const dist = hexDistance(entity.x, entity.y, target.x, target.y);
 
@@ -171,7 +188,6 @@ export class CombatSystem implements TickSystem, Persistable<SerializedCombatUni
             state.attackTimer = 0;
 
             // Stop moving — we're in range
-            const controller = this.gameState.movement.getController(state.entityId);
             if (controller && controller.state !== 'idle') {
                 controller.clearPath();
             }
@@ -188,6 +204,7 @@ export class CombatSystem implements TickSystem, Persistable<SerializedCombatUni
         if (elapsed >= PURSUIT_REPATH_INTERVAL) {
             this.pursuitTimers.set(state.entityId, 0);
             this.gameState.movement.moveUnit(state.entityId, target.x, target.y);
+            this.applyWalkAnimation(entity, target);
         }
     }
 
@@ -202,6 +219,13 @@ export class CombatSystem implements TickSystem, Persistable<SerializedCombatUni
             state.status = CombatStatus.Pursuing;
             this.pursuitTimers.set(state.entityId, PURSUIT_REPATH_INTERVAL);
             return;
+        }
+
+        // Keep facing the target (target may shift position while adjacent)
+        const direction = getApproxDirection(entity.x, entity.y, target.x, target.y);
+        const vs = this.visualService.getState(entity.id);
+        if (vs?.animation && vs.animation.direction !== direction) {
+            this.visualService.setDirection(entity.id, direction);
         }
 
         // Apply damage on cooldown
@@ -330,20 +354,40 @@ export class CombatSystem implements TickSystem, Persistable<SerializedCombatUni
 
     // ── Animation helpers ─────────────────────────────────────────────────
 
-    /** Play fight animation and face the target. */
-    private applyFightAnimation(entity: Entity, target: Entity): void {
+    /** Play walk animation facing the target (used during pursuit). */
+    private applyWalkAnimation(entity: Entity, target: Entity): void {
         const direction = getApproxDirection(entity.x, entity.y, target.x, target.y);
-        const intent = resolveTaskAnimation('fight', entity);
-        this.visualService.applyIntent(entity.id, intent);
+        const prefix = UNIT_XML_PREFIX[entity.subType as UnitType]!;
+        this.visualService.applyIntent(entity.id, {
+            sequence: xmlKey(prefix, 'WALK'),
+            loop: true,
+            stopped: false,
+        });
         this.visualService.setDirection(entity.id, direction);
     }
 
-    /** Restore idle animation (stopped on level-appropriate idle pose). */
+    /** Play fight animation and face the target. */
+    private applyFightAnimation(entity: Entity, target: Entity): void {
+        const direction = getApproxDirection(entity.x, entity.y, target.x, target.y);
+        const prefix = UNIT_XML_PREFIX[entity.subType as UnitType]!;
+        this.visualService.applyIntent(entity.id, {
+            sequence: xmlKey(prefix, 'FIGHT'),
+            loop: true,
+            stopped: false,
+        });
+        this.visualService.setDirection(entity.id, direction);
+    }
+
+    /** Restore idle animation (stopped on frame 0 of walk). */
     private applyIdleAnimation(entityId: number): void {
         const entity = this.gameState.getEntity(entityId);
         if (!entity) return;
-        const intent = resolveTaskAnimation('idle', entity);
-        this.visualService.applyIntent(entityId, intent);
+        const prefix = UNIT_XML_PREFIX[entity.subType as UnitType]!;
+        this.visualService.applyIntent(entityId, {
+            sequence: xmlKey(prefix, 'WALK'),
+            loop: false,
+            stopped: true,
+        });
     }
 
     // ── Persistable ───────────────────────────────────────────────

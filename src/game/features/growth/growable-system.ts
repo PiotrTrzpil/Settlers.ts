@@ -237,6 +237,11 @@ export abstract class GrowableSystem<TState extends GrowableState = GrowableStat
 
     /** Restore a state from serialized data. Updates entity visual variation. */
     restoreState(entityId: number, data: TState): void {
+        // Skip stale entries — entity may have been removed between snapshot capture and restore
+        if (!this.visualService.getState(entityId)) {
+            this.log.debug(`restoreState: skipping entity ${entityId} — no visual state (entity likely removed)`);
+            return;
+        }
         this.states.set(entityId, data);
         this.visualService.setVariation(entityId, data.currentOffset);
     }

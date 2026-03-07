@@ -9,7 +9,7 @@
  */
 
 import { EntityType } from '@/game/entity';
-import { AnimationData, AnimationSequence, ANIMATION_DEFAULTS, ANIMATION_SEQUENCES } from '@/game/animation';
+import { AnimationData, AnimationSequence, ANIMATION_DEFAULTS } from '@/game/animation';
 import type { SpriteEntry, AnimatedSpriteEntry } from '../types';
 
 /**
@@ -48,6 +48,9 @@ export class AnimatedEntityCategory {
      * @param frameDurationMs Duration per frame in milliseconds
      * @param loop Whether the animation loops
      * @param race Optional race for race-specific storage (buildings/units)
+     * @param walkSequenceKey For units: the XML sequence key for the walk animation (e.g. 'WC_WALK').
+     *        The walk job's frames get split: frame 0 registered under walkKey (stopped=idle),
+     *        frames 1+ registered under walkKey (loop=walk cycle).
      */
     // eslint-disable-next-line sonarjs/cognitive-complexity, complexity -- multi-path animation setup
     register(
@@ -56,7 +59,8 @@ export class AnimatedEntityCategory {
         directionFrames: Map<number, SpriteEntry[]>,
         frameDurationMs: number = ANIMATION_DEFAULTS.FRAME_DURATION_MS,
         loop: boolean = true,
-        race?: number
+        race?: number,
+        walkSequenceKey?: string
     ): void {
         if (directionFrames.size === 0) return;
 
@@ -73,21 +77,11 @@ export class AnimatedEntityCategory {
 
         const sequences = new Map<string, Map<number, AnimationSequence>>();
 
-        if (entityType === EntityType.Unit) {
-            // Idle sequence: just frame 0 for each direction
-            const idleDirectionMap = new Map<number, AnimationSequence>();
-            for (const [direction, frames] of directionFrames) {
-                if (frames.length > 0) {
-                    idleDirectionMap.set(direction, {
-                        frames: [frames[0]!],
-                        frameDurationMs,
-                        loop: false,
-                    });
-                }
-            }
-            sequences.set(ANIMATION_SEQUENCES.DEFAULT, idleDirectionMap);
-
-            // Walk sequence: frames 1+ (skip standing frame)
+        if (entityType === EntityType.Unit && walkSequenceKey) {
+            // Register the walk animation under the XML walk key.
+            // Walk = frames 1+ (skip idle pose), used when walking.
+            // The idle pose is frame 0 of the walk job — the caller uses
+            // the same walkSequenceKey with stopped=true to show idle.
             const walkDirectionMap = new Map<number, AnimationSequence>();
             for (const [direction, frames] of directionFrames) {
                 if (frames.length > 1) {
@@ -100,14 +94,17 @@ export class AnimatedEntityCategory {
                     walkDirectionMap.set(direction, { frames, frameDurationMs, loop });
                 }
             }
-            sequences.set(ANIMATION_SEQUENCES.WALK, walkDirectionMap);
+            sequences.set(walkSequenceKey, walkDirectionMap);
         } else {
-            sequences.set(ANIMATION_SEQUENCES.DEFAULT, directionMap);
+            // Non-unit entities (buildings, map objects) or units without a walk key
+            const defaultKey = walkSequenceKey ?? 'default';
+            sequences.set(defaultKey, directionMap);
         }
 
+        const defaultSequence = walkSequenceKey ?? 'default';
         const animationData: AnimationData = {
             sequences,
-            defaultSequence: ANIMATION_SEQUENCES.DEFAULT,
+            defaultSequence,
         };
 
         const entry: AnimatedSpriteEntry = {

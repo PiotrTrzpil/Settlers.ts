@@ -1,12 +1,14 @@
 /**
  * Unit sprite loading: base units, carrier variants, and worker animations.
  * Extracted from SpriteRenderManager for file size and cohesion.
+ *
+ * All animations are registered under their XML field names from SETTLER_JOB_INDICES.
+ * E.g., WC_WALK, WC_CUT_TREE, BA_WALK_FLOUR — the same keys that job-part-resolver uses.
  */
 
 import { LogHandler } from '@/utilities/log-handler';
 import { EntityTextureAtlas } from './entity-texture-atlas';
 import {
-    SpriteMetadataRegistry,
     SpriteEntry,
     Race,
     getUnitSpriteMap,
@@ -15,23 +17,13 @@ import {
     SETTLER_JOB_INDICES,
     SETTLER_KEY_TO_UNIT_TYPE,
     type SettlerAnimData,
-    collectFieldsByPrefix,
-    collectFieldsWithSuffix,
-    parseMaterialSuffix,
-    getFirstFieldByPrefix,
+    stripXmlPrefix,
+    UNIT_XML_PREFIX,
 } from './sprite-metadata';
 import type { LoadedGfxFileSet, LoadedSprite } from './sprite-loader';
 import { UnitType, EntityType } from '../entity';
 import { EMaterialType } from '../economy';
-import {
-    ANIMATION_DEFAULTS,
-    carrySequenceKey,
-    fightSequenceKey,
-    levelIdleSequenceKey,
-    levelWalkSequenceKey,
-    pickupSequenceKey,
-    workSequenceKey,
-} from '../animation';
+import { ANIMATION_DEFAULTS, xmlKey } from '../animation';
 import { isMaterialAvailableForRace, isUnitAvailableForRace } from '../race-availability';
 import { type SpriteLoadContext, getPaletteBase } from './sprite-load-context';
 
@@ -50,7 +42,7 @@ function toEntryMap(loadedDirs: Map<number, LoadedSprite[]>): Map<number, Sprite
 }
 
 // =============================================================================
-// SafeLoadBatch (shared utility, duplicated to avoid circular deps)
+// SafeLoadBatch (shared utility)
 // =============================================================================
 
 class SafeLoadBatch<T> {
@@ -83,105 +75,12 @@ interface UnitFileCtx extends SpriteLoadContext {
 }
 
 // =============================================================================
-// Generic sequence animation loader
-// =============================================================================
-
-type SeqAnimEntry = { unitType: UnitType; seqKey: string; frames: Map<number, SpriteEntry[]> };
-
-/**
- * Generic loader for animation sequences. Most sequence loaders follow the same
- * structure: parallel-load directions → batch → registerAnimationSequence.
- *
- * @param jobs - Pre-collected job descriptors, each with a `jobIndex` for sprite loading
- * @param mapResult - Converts loaded direction frames into one or more sequence entries
- */
-async function loadSequenceAnimations<J extends { jobIndex: number }>(
-    ctx: UnitFileCtx,
-    jobs: J[],
-    mapResult: (job: J, dirFrames: Map<number, SpriteEntry[]>) => SeqAnimEntry[]
-): Promise<number> {
-    const { fileSet, race, paletteBase } = ctx;
-    const batch = new SafeLoadBatch<SeqAnimEntry>();
-
-    // Batch-load all jobs in a single worker round-trip
-    const jobIndices = jobs.map(j => j.jobIndex);
-    const allDirs = await ctx.spriteLoader.loadMultiJobBatch(fileSet, jobIndices, ctx.atlas, paletteBase);
-
-    for (const job of jobs) {
-        const loadedDirs = allDirs.get(job.jobIndex);
-        if (!loadedDirs) continue;
-        const dirFrames = toEntryMap(loadedDirs);
-        if (dirFrames.size === 0) continue;
-        for (const entry of mapResult(job, dirFrames)) {
-            batch.add(entry);
-        }
-    }
-
-    let count = 0;
-    batch.finalize(ctx.atlas, ctx.gl, data => {
-        ctx.registry.registerAnimationSequence(
-            EntityType.Unit,
-            data.unitType,
-            data.seqKey,
-            data.frames,
-            ANIMATION_DEFAULTS.FRAME_DURATION_MS,
-            true,
-            race
-        );
-        count++;
-    });
-
-    return count;
-}
-
-// =============================================================================
-// Job collectors (shared by sequence loaders)
-// =============================================================================
-
-type PrefixJob = { unitType: UnitType; fieldIndex: number; jobIndex: number };
-
-/** Collect jobs from SETTLER_JOB_INDICES for fields matching a prefix (e.g., 'work'). */
-function collectPrefixJobs(ctx: UnitFileCtx, prefix: string): PrefixJob[] {
-    const { fileSet } = ctx;
-    const jobs: PrefixJob[] = [];
-    for (const [workerKey, workerData] of Object.entries(SETTLER_JOB_INDICES)) {
-        const unitType = SETTLER_KEY_TO_UNIT_TYPE[workerKey];
-        if (unitType === undefined) continue;
-        const indices = collectFieldsByPrefix(workerData as SettlerAnimData, prefix);
-        for (let i = 0; i < indices.length; i++) {
-            const jobIndex = indices[i]!;
-            if (ctx.spriteLoader.getDirectionCount(fileSet, jobIndex) > 0) {
-                jobs.push({ unitType, fieldIndex: i, jobIndex });
-            }
-        }
-    }
-    return jobs;
-}
-
-type SuffixJob = { unitType: UnitType; suffix: string; jobIndex: number };
-
-/** Collect jobs from SETTLER_JOB_INDICES for fields with suffix variants (e.g., 'pickup', 'carry'). */
-function collectSuffixJobs(ctx: UnitFileCtx, prefix: string, skipTypes?: ReadonlySet<UnitType>): SuffixJob[] {
-    const { fileSet } = ctx;
-    const jobs: SuffixJob[] = [];
-    for (const [workerKey, workerData] of Object.entries(SETTLER_JOB_INDICES)) {
-        const unitType = SETTLER_KEY_TO_UNIT_TYPE[workerKey];
-        if (unitType === undefined || skipTypes?.has(unitType)) continue;
-        for (const { suffix, jobIndex } of collectFieldsWithSuffix(workerData as SettlerAnimData, prefix)) {
-            if (ctx.spriteLoader.getDirectionCount(fileSet, jobIndex) > 0) {
-                jobs.push({ unitType, suffix, jobIndex });
-            }
-        }
-    }
-    return jobs;
-}
-
-// =============================================================================
 // Public API
 // =============================================================================
 
 /**
- * Load all unit sprites for a race: base units, carrier material variants, and worker animations.
+ * Load all unit sprites for a race: base units, carrier material variants, and all
+ * worker animations (registered under XML field names from SETTLER_JOB_INDICES).
  * Returns true if any unit sprites were loaded.
  */
 export async function loadUnitSpritesForRace(race: Race, ctx: SpriteLoadContext): Promise<boolean> {
@@ -193,18 +92,10 @@ export async function loadUnitSpritesForRace(race: Race, ctx: SpriteLoadContext)
 
     const unitCount = await loadBaseUnits(fc);
     const carrierCount = await loadCarrierVariants(fc);
-    const workerCount = await loadWorkerAnimations(fc);
-    const workerCarryCount = await loadWorkerCarryAnimations(fc);
-    const pickupCount = await loadPickupAnimations(fc);
-    const fightCount = await loadFightAnimations(fc);
-    const levelCount = await loadMilitaryLevelAnimations(fc);
+    const animCount = await loadAllWorkerAnimations(fc);
 
-    if (unitCount > 0 || carrierCount > 0 || workerCount > 0 || fightCount > 0 || levelCount > 0) {
-        log.debug(
-            `${Race[race]}: ${unitCount} units, ${carrierCount} carriers, ` +
-                `${workerCount} workers (${workerCarryCount} carry, ${pickupCount} pickup), ` +
-                `${fightCount} fight anims, ${levelCount} level anims`
-        );
+    if (unitCount > 0 || carrierCount > 0 || animCount > 0) {
+        log.debug(`${Race[race]}: ${unitCount} units, ${carrierCount} carriers, ${animCount} animation sequences`);
     }
 
     return unitCount > 0;
@@ -216,7 +107,7 @@ export async function loadUnitSpritesForRace(race: Race, ctx: SpriteLoadContext)
 
 async function loadBaseUnits(ctx: UnitFileCtx): Promise<number> {
     const { fileSet, race, paletteBase } = ctx;
-    type UnitData = { unitType: UnitType; directionFrames: Map<number, SpriteEntry[]> };
+    type UnitData = { unitType: UnitType; directionFrames: Map<number, SpriteEntry[]>; walkKey: string };
     const batch = new SafeLoadBatch<UnitData>();
 
     const unitEntries = Object.entries(getUnitSpriteMap(race)).filter(
@@ -233,7 +124,12 @@ async function loadBaseUnits(ctx: UnitFileCtx): Promise<number> {
         const loadedDirs = allDirs.get(info.index);
         if (!loadedDirs) continue;
         const directionFrames = toEntryMap(loadedDirs);
-        if (directionFrames.size > 0) batch.add({ unitType, directionFrames });
+        if (directionFrames.size > 0) {
+            const prefix = UNIT_XML_PREFIX[unitType];
+            if (!prefix) continue;
+            const walkKey = xmlKey(prefix, 'WALK');
+            batch.add({ unitType, directionFrames, walkKey });
+        }
     }
 
     batch.finalize(ctx.atlas, ctx.gl, data => {
@@ -243,7 +139,8 @@ async function loadBaseUnits(ctx: UnitFileCtx): Promise<number> {
             data.directionFrames,
             ANIMATION_DEFAULTS.FRAME_DURATION_MS,
             true,
-            race
+            race,
+            data.walkKey
         );
         for (const [dir, frames] of data.directionFrames) {
             if (frames.length > 0) {
@@ -256,244 +153,123 @@ async function loadBaseUnits(ctx: UnitFileCtx): Promise<number> {
 }
 
 async function loadCarrierVariants(ctx: UnitFileCtx): Promise<number> {
+    const { fileSet, race, paletteBase } = ctx;
+
     const carrierJobs = Object.entries(CARRIER_MATERIAL_JOB_INDICES)
         .filter(([typeStr]) => isMaterialAvailableForRace(Number(typeStr) as EMaterialType, ctx.race))
         .map(([typeStr, jobIndex]) => ({ jobIndex, materialType: Number(typeStr) as EMaterialType }));
 
-    return loadSequenceAnimations(ctx, carrierJobs, (job, frames) => [
-        { unitType: UnitType.Carrier, seqKey: carrySequenceKey(job.materialType), frames },
-    ]);
-}
+    const batch = new SafeLoadBatch<{ seqKey: string; frames: Map<number, SpriteEntry[]> }>();
 
-/**
- * Extract military level (1-3) from a SETTLER_JOB_INDICES key like 'swordsman_2'.
- * Returns 0 for non-military/non-levelled keys.
- */
-function getMilitaryLevel(workerKey: string): number {
-    const match = /_(\d+)$/.exec(workerKey);
-    return match ? parseInt(match[1]!, 10) : 0;
-}
+    const jobIndices = carrierJobs.map(j => j.jobIndex);
+    const allDirs = await ctx.spriteLoader.loadMultiJobBatch(fileSet, jobIndices, ctx.atlas, paletteBase);
 
-async function loadWorkerAnimations(ctx: UnitFileCtx): Promise<number> {
-    return loadSequenceAnimations(ctx, collectPrefixJobs(ctx, 'work'), (job, frames) => [
-        { unitType: job.unitType, seqKey: workSequenceKey(job.fieldIndex), frames },
-    ]);
-}
+    for (const job of carrierJobs) {
+        const loadedDirs = allDirs.get(job.jobIndex);
+        if (!loadedDirs) continue;
+        const dirFrames = toEntryMap(loadedDirs);
+        if (dirFrames.size === 0) continue;
+        // Register carrier material walk under the XML name: C_WALK_{MATERIAL}
+        // (these aren't in SETTLER_JOB_INDICES because there are too many —
+        // CARRIER_MATERIAL_JOB_INDICES is generated from RESOURCE_JOB_INDICES)
+        const materialName = EMaterialType[job.materialType];
+        if (!materialName) continue;
+        const seqKey = xmlKey('C', `WALK_${materialName}`);
+        batch.add({ seqKey, frames: dirFrames });
+    }
 
-async function loadPickupAnimations(ctx: UnitFileCtx): Promise<number> {
-    return loadSequenceAnimations(ctx, collectSuffixJobs(ctx, 'pickup'), (job, frames) => [
-        { unitType: job.unitType, seqKey: pickupSequenceKey(job.suffix), frames },
-    ]);
-}
-
-type CarryAnimData = {
-    unitType: UnitType;
-    suffix: string;
-    directionFrames: Map<number, SpriteEntry[]>;
-};
-
-/** Register carry sequences for one unit type; returns count of registered sequences. */
-function registerCarryVariants(
-    unitType: UnitType,
-    variants: CarryAnimData[],
-    allMaterialTypes: number[],
-    race: Race,
-    registry: SpriteMetadataRegistry
-): number {
-    const coveredMaterials = new Set<number>();
     let count = 0;
-
-    for (const { suffix, directionFrames } of variants) {
-        const material = parseMaterialSuffix(suffix);
-        if (material !== null) {
-            registry.registerAnimationSequence(
-                EntityType.Unit,
-                unitType,
-                carrySequenceKey(material),
-                directionFrames,
-                ANIMATION_DEFAULTS.FRAME_DURATION_MS,
-                true,
-                race
-            );
-            coveredMaterials.add(material);
-            count++;
-        }
-    }
-
-    const fallback = variants[0]!;
-    for (const matId of allMaterialTypes) {
-        if (!coveredMaterials.has(matId)) {
-            registry.registerAnimationSequence(
-                EntityType.Unit,
-                unitType,
-                carrySequenceKey(matId),
-                fallback.directionFrames,
-                ANIMATION_DEFAULTS.FRAME_DURATION_MS,
-                true,
-                race
-            );
-            count++;
-        }
-    }
+    batch.finalize(ctx.atlas, ctx.gl, data => {
+        ctx.registry.registerAnimationSequence(
+            EntityType.Unit,
+            UnitType.Carrier,
+            data.seqKey,
+            data.frames,
+            ANIMATION_DEFAULTS.FRAME_DURATION_MS,
+            true,
+            race
+        );
+        count++;
+    });
 
     return count;
 }
 
+// =============================================================================
+// Worker animations — register all SETTLER_JOB_INDICES fields under XML names
+// =============================================================================
+
+type AnimJob = { unitType: UnitType; xmlFieldName: string; jobIndex: number };
+
 /**
- * Load carry animations for workers that transport materials back to their building.
- *
- * Workers with material-specific carry sprites (e.g., miner: carry_coal, carry_iron)
- * get each variant registered for its matching EMaterialType(s) via JIL_SUFFIX_TO_MATERIALS.
- * A generic/numbered carry variant is registered as fallback for all remaining materials.
- *
- * Skips Carrier since it already has per-material carrier variants
- * registered by loadCarrierVariants.
+ * Collect all non-walk animation jobs from SETTLER_JOB_INDICES.
+ * Walk jobs are already loaded by loadBaseUnits; everything else (work, carry,
+ * pickup, fight, idle) is collected here and registered under the XML field name.
  */
-async function loadWorkerCarryAnimations(ctx: UnitFileCtx): Promise<number> {
-    const { fileSet, race, paletteBase } = ctx;
-    const batch = new SafeLoadBatch<CarryAnimData>();
-
-    const carryJobs = collectSuffixJobs(ctx, 'carry', new Set([UnitType.Carrier]));
-
-    // Batch-load all carry jobs in a single worker round-trip
-    const jobIndices = carryJobs.map(j => j.jobIndex);
-    const allDirs = await ctx.spriteLoader.loadMultiJobBatch(fileSet, jobIndices, ctx.atlas, paletteBase);
-
-    for (const { unitType, suffix, jobIndex } of carryJobs) {
-        const loadedDirs = allDirs.get(jobIndex);
-        if (!loadedDirs) continue;
-        const directionFrames = toEntryMap(loadedDirs);
-        if (directionFrames.size > 0) batch.add({ unitType, suffix, directionFrames });
-    }
-
-    // All material types that can appear as carry_X sequence keys
-    const allMaterialTypes = Object.keys(CARRIER_MATERIAL_JOB_INDICES)
-        .map(Number)
-        .filter(matId => isMaterialAvailableForRace(matId as EMaterialType, race));
-
-    let loadedCount = 0;
-    // Group by unitType so we can track which materials are covered per worker
-    const byUnit = new Map<UnitType, CarryAnimData[]>();
-    batch.finalize(ctx.atlas, ctx.gl, data => {
-        let list = byUnit.get(data.unitType);
-        if (!list) {
-            list = [];
-            byUnit.set(data.unitType, list);
-        }
-        list.push(data);
-    });
-
-    for (const [unitType, variants] of byUnit) {
-        loadedCount += registerCarryVariants(unitType, variants, allMaterialTypes, race, ctx.registry);
-    }
-
-    return loadedCount;
-}
-
-type FightJob = { unitType: UnitType; fightIndex: number; jobIndex: number };
-
-/** Fight animations that only exist in a specific race's JIL file. */
-const RACE_SPECIFIC_FIGHT_ANIMS: ReadonlyMap<string, Race> = new Map([
-    ['donkey', Race.Trojan], // donkey fight animation only in file 24 (Trojan)
-]);
-
-/** Returns true if this unit's fight animation is known to only exist in another race's file. */
-function isFightAnimRaceSpecific(workerKey: string, race: Race): boolean {
-    const exclusiveRace = RACE_SPECIFIC_FIGHT_ANIMS.get(workerKey);
-    return exclusiveRace !== undefined && exclusiveRace !== race;
-}
-
-/** Collect fight animation jobs from SETTLER_JOB_INDICES, using military level for fight index offset. */
-function collectFightJobs(ctx: UnitFileCtx): FightJob[] {
+function collectAllAnimJobs(ctx: UnitFileCtx): AnimJob[] {
     const { fileSet, race } = ctx;
-    const fileId = SETTLER_FILE_NUMBERS[race];
-    const jobs: FightJob[] = [];
+    const jobs: AnimJob[] = [];
+
     for (const [workerKey, workerData] of Object.entries(SETTLER_JOB_INDICES)) {
         const unitType = SETTLER_KEY_TO_UNIT_TYPE[workerKey];
         if (unitType === undefined) continue;
         if (!isUnitAvailableForRace(unitType, race)) continue;
 
-        const fightJobIndices = collectFieldsByPrefix(workerData as SettlerAnimData, 'fight');
-        if (fightJobIndices.length === 0) continue;
+        for (const [fieldName, jobIndex] of Object.entries(workerData as SettlerAnimData)) {
+            // Skip the base WALK field — already loaded by loadBaseUnits
+            if (stripXmlPrefix(fieldName) === 'WALK') continue;
 
-        const level = getMilitaryLevel(workerKey);
-        const baseFightIndex = level > 0 ? level - 1 : 0;
-
-        for (let i = 0; i < fightJobIndices.length; i++) {
-            const jobIndex = fightJobIndices[i]!;
             const dirCount = ctx.spriteLoader.getDirectionCount(fileSet, jobIndex);
             if (dirCount > 0) {
-                jobs.push({ unitType, fightIndex: baseFightIndex + i, jobIndex });
-            } else if (!isFightAnimRaceSpecific(workerKey, race)) {
-                log.error(
-                    `Fight animation missing: ${workerKey} JIL index ${jobIndex} has 0 directions ` +
-                        `in file ${fileId}.jil (${Race[race]}) — fix the index in jil-indices.ts`
-                );
+                jobs.push({ unitType, xmlFieldName: fieldName, jobIndex });
             }
         }
     }
-    return jobs;
-}
 
-async function loadFightAnimations(ctx: UnitFileCtx): Promise<number> {
-    return loadSequenceAnimations(ctx, collectFightJobs(ctx), (job, frames) => [
-        { unitType: job.unitType, seqKey: fightSequenceKey(job.fightIndex), frames },
-    ]);
-}
-
-/** Extract frame[0] per direction (idle pose). */
-function extractIdleFrames(directionFrames: Map<number, SpriteEntry[]>): Map<number, SpriteEntry[]> {
-    const result = new Map<number, SpriteEntry[]>();
-    for (const [dir, frames] of directionFrames) {
-        if (frames.length > 0) result.set(dir, [frames[0]!]);
-    }
-    return result;
-}
-
-/** Extract frames[1+] per direction (walk cycle, skipping idle frame). */
-function extractWalkFrames(directionFrames: Map<number, SpriteEntry[]>): Map<number, SpriteEntry[]> {
-    const result = new Map<number, SpriteEntry[]>();
-    for (const [dir, frames] of directionFrames) {
-        if (frames.length > 1) result.set(dir, frames.slice(1));
-        else if (frames.length === 1) result.set(dir, frames);
-    }
-    return result;
-}
-
-/** Collect military level > 1 idle jobs from SETTLER_JOB_INDICES. */
-function collectMilitaryLevelJobs(ctx: UnitFileCtx): { unitType: UnitType; level: number; jobIndex: number }[] {
-    const { fileSet } = ctx;
-    const jobs: { unitType: UnitType; level: number; jobIndex: number }[] = [];
-    for (const [workerKey, workerData] of Object.entries(SETTLER_JOB_INDICES)) {
-        const level = getMilitaryLevel(workerKey);
-        if (level <= 1) continue;
-        const unitType = SETTLER_KEY_TO_UNIT_TYPE[workerKey];
-        if (unitType === undefined) continue;
-        const jobIndex = getFirstFieldByPrefix(workerData as SettlerAnimData, 'idle');
-        if (jobIndex === undefined) continue;
-        if (jobIndex >= 0 && ctx.spriteLoader.getDirectionCount(fileSet, jobIndex) > 0) {
-            jobs.push({ unitType, level, jobIndex });
-        }
-    }
     return jobs;
 }
 
 /**
- * Load level 2/3 idle and walk animations for military units.
- * Level 1 idle/walk is already loaded by loadBaseUnits from UNIT_BASE_JOB_INDICES.
- * This registers level-specific sequences (e.g., 'default.2', 'walk.2') on the same entity.
+ * Load all non-walk animations from SETTLER_JOB_INDICES and register each
+ * under its XML field name as the sequence key.
  */
-async function loadMilitaryLevelAnimations(ctx: UnitFileCtx): Promise<number> {
-    return loadSequenceAnimations(ctx, collectMilitaryLevelJobs(ctx), (_job, dirFrames) => {
-        const entries: SeqAnimEntry[] = [];
-        const idleFrames = extractIdleFrames(dirFrames);
-        if (idleFrames.size > 0) {
-            entries.push({ unitType: _job.unitType, seqKey: levelIdleSequenceKey(_job.level), frames: idleFrames });
-        }
-        const walkFrames = extractWalkFrames(dirFrames);
-        if (walkFrames.size > 0) {
-            entries.push({ unitType: _job.unitType, seqKey: levelWalkSequenceKey(_job.level), frames: walkFrames });
-        }
-        return entries;
+async function loadAllWorkerAnimations(ctx: UnitFileCtx): Promise<number> {
+    const { fileSet, race, paletteBase } = ctx;
+    const animJobs = collectAllAnimJobs(ctx);
+    if (animJobs.length === 0) return 0;
+
+    type SeqData = { unitType: UnitType; seqKey: string; frames: Map<number, SpriteEntry[]> };
+    const batch = new SafeLoadBatch<SeqData>();
+
+    // Batch-load all jobs in a single worker round-trip
+    const jobIndices = animJobs.map(j => j.jobIndex);
+    const allDirs = await ctx.spriteLoader.loadMultiJobBatch(fileSet, jobIndices, ctx.atlas, paletteBase);
+
+    for (const job of animJobs) {
+        const loadedDirs = allDirs.get(job.jobIndex);
+        if (!loadedDirs) continue;
+        const dirFrames = toEntryMap(loadedDirs);
+        if (dirFrames.size === 0) continue;
+        batch.add({ unitType: job.unitType, seqKey: job.xmlFieldName, frames: dirFrames });
+    }
+
+    let count = 0;
+    batch.finalize(ctx.atlas, ctx.gl, data => {
+        // Determine loop behaviour from the action suffix
+        const action = stripXmlPrefix(data.seqKey);
+        const loop = !action.startsWith('PICKUP') && !action.startsWith('DOWN') && !action.startsWith('DROP');
+
+        ctx.registry.registerAnimationSequence(
+            EntityType.Unit,
+            data.unitType,
+            data.seqKey,
+            data.frames,
+            ANIMATION_DEFAULTS.FRAME_DURATION_MS,
+            loop,
+            race
+        );
+        count++;
     });
+
+    return count;
 }

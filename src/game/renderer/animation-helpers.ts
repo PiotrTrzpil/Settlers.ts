@@ -9,7 +9,35 @@
 import type { AnimationPlayback } from '../animation/entity-visual-service';
 import type { AnimationData } from '../animation';
 import type { SpriteEntry } from './sprite-metadata';
-import type { EntityType } from '../entity';
+import { EntityType } from '../entity';
+import { UnitType } from '../unit-types';
+import { BuildingType } from '../buildings/building-type';
+import { createLogger } from '@/utilities/logger';
+
+const log = createLogger('AnimationHelpers');
+
+/** Track already-warned animation misses to avoid per-frame spam. */
+const warnedAnimKeys = new Set<string>();
+
+function warnOnce(key: string, msg: () => string): void {
+    if (warnedAnimKeys.has(key)) return;
+    warnedAnimKeys.add(key);
+    log.warn(msg());
+}
+
+function entityLabel(entityType: EntityType, subType: number): string {
+    switch (entityType) {
+    case EntityType.Unit:
+        return `Unit/${UnitType[subType] ?? subType}`;
+    case EntityType.Building:
+        return `Building/${BuildingType[subType] ?? subType}`;
+    case EntityType.None:
+    case EntityType.MapObject:
+    case EntityType.StackedPile:
+    case EntityType.Decoration:
+        return `${EntityType[entityType]}/${subType}`;
+    }
+}
 
 /**
  * Unified animation data provider interface.
@@ -23,17 +51,40 @@ export interface AnimationDataProvider {
 /**
  * Resolve an animation playback to a concrete sprite frame.
  * Returns null if the sequence/direction is missing — caller provides fallback.
- * Expected for partial sprite data; not an error worth throwing for.
+ * Warns once per unknown sequence key to catch typos (e.g., 'idle' vs 'default').
  *
  * @param playback The entity's animation playback state
  * @param animationData The animation data for this entity type
  */
-export function resolveAnimationFrame(playback: AnimationPlayback, animationData: AnimationData): SpriteEntry | null {
+export function resolveAnimationFrame(
+    playback: AnimationPlayback,
+    animationData: AnimationData,
+    eType?: EntityType,
+    eSubType?: number
+): SpriteEntry | null {
+    const label = eType !== undefined && eSubType !== undefined ? entityLabel(eType, eSubType) : 'unknown';
     const directionMap = animationData.sequences.get(playback.sequenceKey);
-    if (!directionMap) return null;
+
+    if (!directionMap) {
+        warnOnce(
+            `seq:${label}:${playback.sequenceKey}`,
+            () =>
+                `[${label}] Unknown animation sequence '${playback.sequenceKey}'. ` +
+                `Available: [${[...animationData.sequences.keys()].join(', ')}]`
+        );
+        return null;
+    }
 
     const sequence = directionMap.get(playback.direction);
-    if (!sequence || sequence.frames.length === 0) return null;
+    if (!sequence || sequence.frames.length === 0) {
+        warnOnce(
+            `dir:${label}:${playback.sequenceKey}:${playback.direction}`,
+            () =>
+                `[${label}] No frames for sequence '${playback.sequenceKey}' direction ${playback.direction}. ` +
+                `Available directions: [${[...directionMap.keys()].join(', ')}]`
+        );
+        return null;
+    }
 
     const frameIndex = sequence.loop
         ? playback.currentFrame % sequence.frames.length
@@ -52,21 +103,33 @@ export function resolveAnimationFrame(playback: AnimationPlayback, animationData
 export function getAnimatedSprite(
     playback: AnimationPlayback | undefined,
     animationData: AnimationData | undefined,
-    fallbackSprite: SpriteEntry | null
+    fallbackSprite: SpriteEntry | null,
+    eType?: EntityType,
+    eSubType?: number
 ): SpriteEntry | null {
     if (!playback || !animationData) {
         return fallbackSprite;
     }
 
+    const label = eType !== undefined && eSubType !== undefined ? entityLabel(eType, eSubType) : 'unknown';
     const directionMap = animationData.sequences.get(playback.sequenceKey);
     if (!directionMap) {
         throw new Error(
-            `Animation sequence '${playback.sequenceKey}' not found. Available: ${[...animationData.sequences.keys()].join(', ')}`
+            `[${label}] Animation sequence '${playback.sequenceKey}' not found. ` +
+                `Available: ${[...animationData.sequences.keys()].join(', ')}`
         );
     }
 
     const sequence = directionMap.get(playback.direction);
-    if (!sequence || sequence.frames.length === 0) return fallbackSprite;
+    if (!sequence || sequence.frames.length === 0) {
+        warnOnce(
+            `dir:${label}:${playback.sequenceKey}:${playback.direction}`,
+            () =>
+                `[${label}] No frames for sequence '${playback.sequenceKey}' direction ${playback.direction}. ` +
+                `Available directions: [${[...directionMap.keys()].join(', ')}]`
+        );
+        return fallbackSprite;
+    }
 
     const frameIndex = sequence.loop
         ? playback.currentFrame % sequence.frames.length
@@ -87,21 +150,31 @@ export function getAnimatedSpriteForDirection(
     playback: AnimationPlayback,
     animationData: AnimationData | undefined,
     direction: number,
-    fallbackSprite: SpriteEntry | null
+    fallbackSprite: SpriteEntry | null,
+    eType?: EntityType,
+    eSubType?: number
 ): SpriteEntry | null {
     if (!animationData) {
         return fallbackSprite;
     }
 
+    const label = eType !== undefined && eSubType !== undefined ? entityLabel(eType, eSubType) : 'unknown';
     const directionMap = animationData.sequences.get(playback.sequenceKey);
     if (!directionMap) {
         throw new Error(
-            `Animation sequence '${playback.sequenceKey}' not found. Available: ${[...animationData.sequences.keys()].join(', ')}`
+            `[${label}] Animation sequence '${playback.sequenceKey}' not found. ` +
+                `Available: ${[...animationData.sequences.keys()].join(', ')}`
         );
     }
 
     const sequence = directionMap.get(direction);
     if (!sequence || sequence.frames.length === 0) {
+        warnOnce(
+            `dir:${label}:${playback.sequenceKey}:${direction}`,
+            () =>
+                `[${label}] No frames for sequence '${playback.sequenceKey}' direction ${direction}. ` +
+                `Available directions: [${[...directionMap.keys()].join(', ')}]`
+        );
         return fallbackSprite;
     }
 

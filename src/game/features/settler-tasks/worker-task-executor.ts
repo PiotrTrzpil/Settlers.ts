@@ -667,28 +667,24 @@ export class WorkerTaskExecutor {
 
     /**
      * Check if a building's output is full for the goods produced by this choreo job.
-     * Looks for PUT_GOOD or RESOURCE_GATHERING nodes that declare an output good.
+     * Looks for PUT_GOOD / PUT_GOOD_VIRTUAL / RESOURCE_GATHERING / RESOURCE_GATHERING_VIRTUAL
+     * nodes that declare an output good.
      */
     private isOutputFull(homeBuilding: Entity, job: ChoreoJob): boolean {
         const outputNode = job.nodes.find(
-            n => n.task === ChoreoTaskType.PUT_GOOD || n.task === ChoreoTaskType.RESOURCE_GATHERING
+            n =>
+                n.task === ChoreoTaskType.PUT_GOOD ||
+                n.task === ChoreoTaskType.PUT_GOOD_VIRTUAL ||
+                n.task === ChoreoTaskType.RESOURCE_GATHERING ||
+                n.task === ChoreoTaskType.RESOURCE_GATHERING_VIRTUAL
         );
-        if (!outputNode || !outputNode.entity) return false;
+        if (!outputNode?.entity) return false;
 
         const material = this.parseMaterial(outputNode.entity);
         if (material === null) return false;
 
-        const id = homeBuilding.id;
-        const inv = this.inventoryManager;
-        if (inv.canAcceptInput(id, material, 1)) return false;
-        if (inv.getInputSpace(id, material) > 0) return false;
-
-        const inventory = inv.getInventory(id);
-        if (!inventory) return false;
-        const outputSlot = inventory.outputSlots.find(s => s.materialType === material);
-        if (outputSlot && outputSlot.currentAmount < outputSlot.maxCapacity) return false;
-
-        return true;
+        const slot = this.inventoryManager.getOutputSlot(homeBuilding.id, material);
+        return slot !== undefined && slot.currentAmount >= slot.maxCapacity;
     }
 
     /** Parse a material string (e.g. 'GOOD_LOG' or 'LOG') to EMaterialType, or null. */
