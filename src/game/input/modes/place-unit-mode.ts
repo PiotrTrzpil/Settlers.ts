@@ -13,8 +13,6 @@ export interface PlaceUnitModeData extends PlacementModeData<UnitType> {
     unitType: UnitType;
     /** Race for the placed unit */
     race: Race;
-    /** Military unit level (1-3). Defaults to 1. */
-    level: number;
 }
 
 /**
@@ -23,8 +21,6 @@ export interface PlaceUnitModeData extends PlacementModeData<UnitType> {
 export interface PlaceUnitEnterData extends PlacementModeEnterData<UnitType> {
     /** The unit type to place (alias for subType) */
     unitType?: UnitType;
-    /** Military unit level (1-3) */
-    level?: number;
 }
 
 /**
@@ -55,12 +51,7 @@ export class PlaceUnitMode extends BasePlacementMode<UnitType> {
         return { x: tileX, y: tileY };
     }
 
-    protected override getPreviewExtra(data: PlacementModeData<UnitType>): Record<string, unknown> {
-        return { level: (data as PlaceUnitModeData).level };
-    }
-
     protected createPlacementCommand(x: number, y: number, data: PlacementModeData<UnitType>): Record<string, unknown> {
-        const unitData = data as PlaceUnitModeData;
         return {
             type: this.getCommandType(),
             unitType: data.subType,
@@ -68,7 +59,6 @@ export class PlaceUnitMode extends BasePlacementMode<UnitType> {
             y,
             player: this.currentPlayer,
             race: data.race!,
-            level: unitData.level,
         };
     }
 
@@ -83,7 +73,6 @@ export class PlaceUnitMode extends BasePlacementMode<UnitType> {
             subType: unitType,
             unitType,
             race: enterData.race!,
-            level: enterData.level ?? 1,
             previewX: 0,
             previewY: 0,
             previewValid: false,

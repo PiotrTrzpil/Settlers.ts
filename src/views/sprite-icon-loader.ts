@@ -10,10 +10,7 @@ import {
     BUILDING_JOB_INDICES,
     RESOURCE_JOB_INDICES,
     UNIT_BASE_JOB_INDICES,
-    SETTLER_JOB_INDICES,
     SETTLER_FILE_NUMBERS,
-    type SettlerAnimData,
-    getFirstFieldByPrefix,
 } from '@/game/renderer/sprite-metadata';
 import { Race } from '@/game/race';
 import { BuildingType, UnitType } from '@/game/entity';
@@ -172,17 +169,8 @@ export async function loadBuildingIcons(
     return icons;
 }
 
-/** Resolve the JIL job index for a unit, accounting for military levels. */
-function getUnitJobIndex(unitType: UnitType, level: number): number | undefined {
-    if (level > 1) {
-        const typeName = UnitType[unitType].toLowerCase();
-        const key = `${typeName}_${level}` as keyof typeof SETTLER_JOB_INDICES;
-        const entry = SETTLER_JOB_INDICES[key] as SettlerAnimData | undefined;
-        if (entry) {
-            const idle = getFirstFieldByPrefix(entry, 'idle');
-            if (idle !== undefined && idle >= 0) return idle;
-        }
-    }
+/** Resolve the JIL job index for a unit type. */
+function getUnitJobIndex(unitType: UnitType): number | undefined {
     return UNIT_BASE_JOB_INDICES[unitType];
 }
 
@@ -190,7 +178,7 @@ function getUnitJobIndex(unitType: UnitType, level: number): number | undefined 
 export async function loadUnitIcons(
     fileManager: FileManager,
     race: Race,
-    units: { id: string; type: UnitType; level?: number }[]
+    units: { id: string; type: UnitType }[]
 ): Promise<Record<string, IconEntry>> {
     const loader = new SpriteLoader(fileManager);
     const fileSet = await loader.loadFileSet(String(SETTLER_FILE_NUMBERS[race]));
@@ -200,7 +188,7 @@ export async function loadUnitIcons(
     let minDim = Infinity,
         maxDim = 0;
     for (const u of units) {
-        const jobIndex = getUnitJobIndex(u.type, u.level ?? 1);
+        const jobIndex = getUnitJobIndex(u.type);
         if (jobIndex === undefined || jobIndex < 0) continue;
         const data = extractJobSprite(fileSet, jobIndex, 0);
         if (!data) continue;

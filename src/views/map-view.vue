@@ -88,12 +88,9 @@
                         class="sidebar-btn"
                         :data-testid="'btn-spawn-' + u.id"
                         :class="{
-                            active:
-                                currentMode === 'place_unit' &&
-                                placeUnitType === u.type &&
-                                placeUnitLevel === (u.level ?? 1),
+                            active: currentMode === 'place_unit' && placeUnitType === u.type,
                         }"
-                        @click="setPlaceUnitMode(u.type, u.level)"
+                        @click="setPlaceUnitMode(u.type)"
                     >
                         <span class="btn-icon">
                             <img
@@ -275,7 +272,6 @@ const {
     placeBuildingType,
     placeResourceType,
     placeUnitType,
-    placeUnitLevel,
     availableBuildings,
     availableUnits,
     availableResources,

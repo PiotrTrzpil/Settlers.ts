@@ -151,16 +151,16 @@ function createModeToggler(getGame: () => Game | null, getInputManager: () => In
             }
         },
 
-        setPlaceUnitMode(unitType: UnitType, race: Race, level: number = 1): void {
+        setPlaceUnitMode(unitType: UnitType, race: Race): void {
             const game = getGame();
             const inputManager = getInputManager();
             if (!game || !inputManager) return;
 
             const vs = game.viewState.state;
-            if (vs.mode === 'place_unit' && vs.placeUnitType === unitType && vs.placeUnitLevel === level) {
+            if (vs.mode === 'place_unit' && vs.placeUnitType === unitType) {
                 inputManager.switchMode('select');
             } else {
-                inputManager.switchMode('place_unit', { unitType, race, level, player: game.currentPlayer });
+                inputManager.switchMode('place_unit', { unitType, race, player: game.currentPlayer });
             }
         },
 
@@ -486,7 +486,6 @@ export function useMapView(
     const placeBuildingType = computed(() => game.value?.viewState.state.placeBuildingType ?? 0);
     const placeResourceType = computed(() => game.value?.viewState.state.placePileType ?? 0);
     const placeUnitType = computed(() => game.value?.viewState.state.placeUnitType ?? 0);
-    const placeUnitLevel = computed(() => game.value?.viewState.state.placeUnitLevel ?? 1);
 
     const layerCounts = computed<LayerCounts>(() => {
         const vs = game.value?.viewState.state;
@@ -545,8 +544,7 @@ export function useMapView(
 
     const setPlaceMode = modeToggler.setPlaceMode;
     const setPlaceResourceMode = (rt: EMaterialType) => modeToggler.setPlacePileMode(rt, resourceAmount.value);
-    const setPlaceUnitMode = (ut: UnitType, level?: number) =>
-        modeToggler.setPlaceUnitMode(ut, currentPlayerRace.value, level);
+    const setPlaceUnitMode = (ut: UnitType) => modeToggler.setPlaceUnitMode(ut, currentPlayerRace.value);
     const setSelectMode = modeToggler.setSelectMode;
     const removeSelected = gameActions.removeSelected;
     const togglePause = gameActions.togglePause;
@@ -573,7 +571,6 @@ export function useMapView(
         placeBuildingType,
         placeResourceType,
         placeUnitType,
-        placeUnitLevel,
         availableBuildings,
         availableUnits,
         availableResources,

@@ -78,8 +78,6 @@ export interface SpawnUnitCommand {
     player: number;
     /** Race override — defaults to player race from GameState.playerRaces. */
     race?: Race;
-    /** Military unit level (1-3). Defaults to 1. */
-    level?: number;
 }
 
 export interface MoveUnitCommand {

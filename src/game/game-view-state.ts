@@ -27,7 +27,6 @@ export interface GameViewStateData {
     placeBuildingType: number;
     placePileType: number;
     placeUnitType: number;
-    placeUnitLevel: number;
 
     // Selection
     selectedEntityId: number | null;
@@ -62,7 +61,6 @@ export class GameViewState {
             placeBuildingType: 0,
             placePileType: 0,
             placeUnitType: 0,
-            placeUnitLevel: 1,
             selectedEntityId: null,
             selectedCount: 0,
             entityCount: 0,

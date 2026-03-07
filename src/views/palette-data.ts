@@ -77,8 +77,8 @@ export const ALL_BUILDINGS = [
     { type: BuildingType.ManaCopterHall, id: 'manacopter', name: 'Mana Copter Hall', icon: '👼' },
 ];
 
-/** All unit definitions for the UI — each military type has 3 level entries */
-export const ALL_UNITS: { type: UnitType; id: string; name: string; icon: string; level?: number }[] = [
+/** All unit definitions for the UI */
+export const ALL_UNITS: { type: UnitType; id: string; name: string; icon: string }[] = [
     { type: UnitType.Carrier, id: 'carrier', name: 'Carrier', icon: '🧑' },
     { type: UnitType.Builder, id: 'builder', name: 'Builder', icon: '👷' },
     { type: UnitType.Woodcutter, id: 'woodcutter', name: 'Woodcutter', icon: '🪓' },
@@ -88,12 +88,12 @@ export const ALL_UNITS: { type: UnitType; id: string; name: string; icon: string
     { type: UnitType.Smith, id: 'smith', name: 'Smith', icon: '🔨' },
     { type: UnitType.Digger, id: 'digger', name: 'Digger', icon: '🕳️' },
     { type: UnitType.SawmillWorker, id: 'sawmillworker', name: 'Sawmill Worker', icon: '🪚' },
-    { type: UnitType.Swordsman1, id: 'swordsman-1', name: 'Swordsman L1', icon: '⚔️', level: 1 },
-    { type: UnitType.Swordsman1, id: 'swordsman-2', name: 'Swordsman L2', icon: '⚔️', level: 2 },
-    { type: UnitType.Swordsman1, id: 'swordsman-3', name: 'Swordsman L3', icon: '⚔️', level: 3 },
-    { type: UnitType.Bowman1, id: 'bowman-1', name: 'Bowman L1', icon: '🏹', level: 1 },
-    { type: UnitType.Bowman1, id: 'bowman-2', name: 'Bowman L2', icon: '🏹', level: 2 },
-    { type: UnitType.Bowman1, id: 'bowman-3', name: 'Bowman L3', icon: '🏹', level: 3 },
+    { type: UnitType.Swordsman1, id: 'swordsman-1', name: 'Swordsman L1', icon: '⚔️' },
+    { type: UnitType.Swordsman2, id: 'swordsman-2', name: 'Swordsman L2', icon: '⚔️' },
+    { type: UnitType.Swordsman3, id: 'swordsman-3', name: 'Swordsman L3', icon: '⚔️' },
+    { type: UnitType.Bowman1, id: 'bowman-1', name: 'Bowman L1', icon: '🏹' },
+    { type: UnitType.Bowman2, id: 'bowman-2', name: 'Bowman L2', icon: '🏹' },
+    { type: UnitType.Bowman3, id: 'bowman-3', name: 'Bowman L3', icon: '🏹' },
     { type: UnitType.Priest, id: 'priest', name: 'Priest', icon: '🙏' },
     { type: UnitType.Pioneer, id: 'pioneer', name: 'Pioneer', icon: '🚩' },
     { type: UnitType.Thief, id: 'thief', name: 'Thief', icon: '🥷' },
@@ -130,11 +130,6 @@ export const ALL_UNITS: { type: UnitType; id: string; name: string; icon: string
     { type: UnitType.AxeWarrior1, id: 'axewarrior', name: 'Axe Warrior', icon: '🪓' },
     { type: UnitType.BlowgunWarrior1, id: 'blowgunwarrior', name: 'Blowgun Warrior', icon: '🎯' },
     { type: UnitType.BackpackCatapultist1, id: 'backpackcatapultist', name: 'Backpack Catapultist', icon: '💣' },
-    // Level 2/3 variants
-    { type: UnitType.Swordsman2, id: 'swordsman2', name: 'Swordsman L2', icon: '⚔️' },
-    { type: UnitType.Swordsman3, id: 'swordsman3', name: 'Swordsman L3', icon: '⚔️' },
-    { type: UnitType.Bowman2, id: 'bowman2', name: 'Bowman L2', icon: '🏹' },
-    { type: UnitType.Bowman3, id: 'bowman3', name: 'Bowman L3', icon: '🏹' },
     { type: UnitType.Medic2, id: 'medic2', name: 'Medic L2', icon: '🩺' },
     { type: UnitType.Medic3, id: 'medic3', name: 'Medic L3', icon: '🩺' },
     { type: UnitType.AxeWarrior2, id: 'axewarrior2', name: 'Axe Warrior L2', icon: '🪓' },

@@ -72,10 +72,9 @@ export function handleModeChange(
         vs.placePileType =
             newMode === 'place_pile' && data?.['resourceType'] !== undefined ? (data['resourceType'] as number) : 0;
 
-        // Update unit type and level
-        const isUnitMode = newMode === 'place_unit';
-        vs.placeUnitType = isUnitMode && data?.['unitType'] !== undefined ? (data['unitType'] as number) : 0;
-        vs.placeUnitLevel = isUnitMode && data?.['level'] !== undefined ? (data['level'] as number) : 1;
+        // Update unit type
+        vs.placeUnitType =
+            newMode === 'place_unit' && data?.['unitType'] !== undefined ? (data['unitType'] as number) : 0;
 
         // Sync with game for backward compatibility
         game.mode = newMode;
