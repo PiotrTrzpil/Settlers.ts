@@ -65,7 +65,10 @@ export class IdleAnimationController {
         // If unit is moving (e.g., pushed), play walk animation
         if (movementState === 'moving') {
             const vs = this.visualService.getState(unit.id);
-            const walkKey = xmlKey(getPrefix(unit), 'WALK');
+            const prefix = getPrefix(unit);
+            const walkKey = unit.carrying
+                ? xmlKey(prefix, `WALK_${EMaterialType[unit.carrying.material]}`)
+                : xmlKey(prefix, 'WALK');
             if (!vs?.animation?.playing || vs.animation.sequenceKey !== walkKey) {
                 this.startWalkAnimation(unit, movementDirection);
             }

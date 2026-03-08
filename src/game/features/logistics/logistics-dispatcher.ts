@@ -36,6 +36,8 @@ import { StallDetector } from './stall-detector';
 import { MatchDiagnostics } from './match-diagnostics';
 import { ThrottledEmitter } from './throttled-emitter';
 import { TransportJobBuilder, type TransportPositionResolver, type ChoreographyLookup } from './transport-job-builder';
+import { InFlightTrackerImpl } from './in-flight-tracker';
+import type { InFlightTracker } from './in-flight-tracker';
 
 /** Maximum number of job assignments per tick (to avoid frame drops) */
 const MAX_ASSIGNMENTS_PER_TICK = 5;
@@ -72,6 +74,9 @@ export class LogisticsDispatcher implements TickSystem {
 
     private readonly eventBus: EventBus;
 
+    /** Destination-side in-flight material tracking. */
+    readonly inFlightTracker: InFlightTracker;
+
     /** Active transport jobs indexed by carrier ID. Exposed read-only for testing/diagnostics. */
     readonly activeJobs: Map<number, TransportJobRecord> = new Map();
 
@@ -91,11 +96,13 @@ export class LogisticsDispatcher implements TickSystem {
         this.eventBus = config.eventBus;
         this.requestManager = config.requestManager;
         this.reservationManager = new InventoryReservationManager(config.inventoryManager);
+        this.inFlightTracker = new InFlightTrackerImpl();
 
         this.transportJobDeps = {
             reservationManager: this.reservationManager,
             requestManager: this.requestManager,
             eventBus: this.eventBus,
+            inFlightTracker: this.inFlightTracker,
         };
 
         this.requestMatcher = new RequestMatcher({
@@ -119,6 +126,7 @@ export class LogisticsDispatcher implements TickSystem {
             transportJobBuilder,
             reservationManager: this.reservationManager,
             requestManager: config.requestManager,
+            inFlightTracker: this.inFlightTracker,
             carrierFilter: config.carrierFilter,
             activeJobs: this.activeJobs,
         });
@@ -225,8 +233,8 @@ export class LogisticsDispatcher implements TickSystem {
                 continue;
             }
 
-            const match = this.requestMatcher.matchRequest(request);
-            if (!match) {
+            const candidates = this.requestMatcher.matchRequestCandidates(request, 5);
+            if (candidates.length === 0) {
                 if (this.matchDiagnostics.isDue()) {
                     this.matchDiagnostics.logFailure(request);
                 }
@@ -234,9 +242,9 @@ export class LogisticsDispatcher implements TickSystem {
                 continue; // No supply available for this request
             }
 
-            const result = this.carrierAssigner.tryAssign(request, match);
+            const result = this.carrierAssigner.tryAssignBest(request, candidates);
             if (result === 'no_carrier') {
-                this.emitNoCarrierThrottled(request, match.sourceBuilding);
+                this.emitNoCarrierThrottled(request, candidates[0]!.sourceBuilding);
                 continue;
             }
             if (result) {

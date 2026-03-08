@@ -228,6 +228,22 @@ export class SettlerTaskSystem implements TickSystem, Persistable<SerializedUnit
         // Register GOOD handler for carriers (they get jobs assigned externally by LogisticsDispatcher)
         this.handlerRegistry.register(SearchType.GOOD, createCarrierHandler());
 
+        // Subscribe: when a transport job is cancelled (stall recovery, building destroyed, etc.),
+        // interrupt the carrier's active task so it drops carried material as a free pile.
+        config.eventBus.on('carrier:transportCancelled', ({ carrierId }) => {
+            const runtime = this.runtimes.get(carrierId);
+            if (!runtime?.job) return;
+
+            const entity = this.gameState.getEntity(carrierId);
+            if (!entity) return;
+
+            const unitConfig = this.settlerConfigs.get(entity.subType as UnitType);
+            if (!unitConfig) return;
+
+            this.interruptJobForCleanup(entity, unitConfig, runtime);
+            runtime.job = null;
+        });
+
         // Subscribe: when a building is destroyed while a worker settler is approaching it,
         // clear their home assignment, interrupt any active job, and cancel movement.
         // Note: onBuildingRemoved may have already run (called from onEntityRemoved directly);
@@ -692,7 +708,7 @@ export class SettlerTaskSystem implements TickSystem, Persistable<SerializedUnit
             const entityHandler = this.handlerRegistry.findEntityHandlerForJob(runtime.job.jobId, this.settlerConfigs);
             if (entityHandler) {
                 try {
-                    entityHandler.onWorkInterrupt?.(runtime.job.targetId);
+                    entityHandler.onWorkInterrupt?.(runtime.job.targetId, entityId);
                 } catch (e) {
                     const err = e instanceof Error ? e : new Error(String(e));
                     log.error(`onWorkInterrupt failed for entity ${entityId}`, err);
@@ -822,8 +838,7 @@ export class SettlerTaskSystem implements TickSystem, Persistable<SerializedUnit
                 lastDirection: 0,
                 idleState: this.animController.createIdleState(),
                 homeAssignment: null,
-                // Stagger initial cooldown by entity ID to prevent thundering herd
-                idleSearchCooldown: entityId % IDLE_SEARCH_COOLDOWN,
+                idleSearchCooldown: 0,
             };
             this.runtimes.set(entityId, runtime);
         }

@@ -23,6 +23,7 @@ import { BuildingLifecycleHandler } from './building-lifecycle-feature';
 export interface BuildingConstructionExports {
     constructionSiteManager: ConstructionSiteManager;
     constructionSystem: BuildingConstructionSystem;
+    constructionRequestSystem: ConstructionRequestSystem;
     residenceSpawner: ResidenceSpawnerSystem;
 }
 
@@ -68,6 +69,7 @@ export const BuildingConstructionFeature: FeatureDefinition = {
         const exports: BuildingConstructionExports = {
             constructionSiteManager,
             constructionSystem,
+            constructionRequestSystem,
             residenceSpawner,
         };
 

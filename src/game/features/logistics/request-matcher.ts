@@ -8,7 +8,7 @@
 
 import type { GameState } from '../../game-state';
 import type { BuildingInventoryManager } from '../inventory';
-import { matchRequestToSupply, type FulfillmentMatch } from './fulfillment-matcher';
+import { matchRequestToSupply, findAllMatches, type FulfillmentMatch } from './fulfillment-matcher';
 import type { InventoryReservationManager } from './inventory-reservation';
 import type { ResourceRequest } from './resource-request';
 import type { LogisticsMatchFilter } from './logistics-filter';
@@ -75,5 +75,35 @@ export class RequestMatcher {
         }
 
         return { ...match, playerId };
+    }
+
+    /**
+     * Find the top N supply candidates for a pending request, sorted by source→dest distance.
+     * Used for joint carrier+supply optimization (total trip distance).
+     *
+     * @param maxCandidates Maximum number of candidates to return.
+     * @returns Array of match results (may be empty), filtered by policy.
+     */
+    matchRequestCandidates(request: ResourceRequest, maxCandidates: number): RequestMatchResult[] {
+        const destBuilding = this.gameState.getEntityOrThrow(request.buildingId, 'requesting building');
+        const playerId = destBuilding.player;
+
+        const allMatches = findAllMatches(request, this.gameState, this.inventoryManager, {
+            playerId,
+            reservationManager: this.reservationManager,
+        });
+
+        const results: RequestMatchResult[] = [];
+        for (const match of allMatches) {
+            if (results.length >= maxCandidates) break;
+
+            if (this.matchFilter) {
+                const sourceEntity = this.gameState.getEntityOrThrow(match.sourceBuilding, 'match filter source');
+                if (!this.matchFilter(sourceEntity, destBuilding, playerId)) continue;
+            }
+
+            results.push({ ...match, playerId });
+        }
+        return results;
     }
 }

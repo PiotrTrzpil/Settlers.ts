@@ -10,11 +10,13 @@ import type { InventoryReservationManager } from './inventory-reservation';
 import type { RequestManager, RequestResetReason } from './request-manager';
 import type { EventBus } from '../../event-bus';
 import { TransportPhase, type TransportJobRecord } from './transport-job-record';
+import type { InFlightTracker } from './in-flight-tracker';
 
 export interface TransportJobDeps {
     reservationManager: InventoryReservationManager;
     requestManager: RequestManager;
     eventBus: EventBus;
+    inFlightTracker: InFlightTracker;
 }
 
 let nextJobId = 1;
@@ -60,6 +62,7 @@ export function pickUp(record: TransportJobRecord, deps: TransportJobDeps): void
         throw new Error(`TransportJobService.pickUp: expected phase 'reserved', got '${record.phase}'`);
     }
     deps.reservationManager.consumeReservationForRequest(record.requestId);
+    deps.inFlightTracker.recordPickup(record.destBuilding, record.material, record.amount);
     record.phase = TransportPhase.PickedUp;
 }
 
@@ -72,6 +75,7 @@ export function deliver(record: TransportJobRecord, deps: TransportJobDeps): voi
         throw new Error(`TransportJobService.deliver: expected phase 'picked-up', got '${record.phase}'`);
     }
     deps.requestManager.fulfillRequest(record.requestId);
+    deps.inFlightTracker.recordResolved(record.destBuilding, record.material, record.amount);
     record.phase = TransportPhase.Delivered;
 }
 
@@ -85,6 +89,9 @@ export function cancel(record: TransportJobRecord, reason: RequestResetReason, d
     }
     if (record.phase === TransportPhase.Reserved) {
         deps.reservationManager.releaseReservationForRequest(record.requestId);
+    }
+    if (record.phase === TransportPhase.PickedUp) {
+        deps.inFlightTracker.recordResolved(record.destBuilding, record.material, record.amount);
     }
     deps.requestManager.resetRequest(record.requestId, reason);
     record.phase = TransportPhase.Cancelled;

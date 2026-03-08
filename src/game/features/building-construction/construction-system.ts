@@ -9,10 +9,10 @@
  * - construction:diggingStarted  → TerrainLeveling
  * - construction:levelingComplete → Evacuating (if units on footprint) or WaitingForBuilders
  * - construction:buildingStarted  → ConstructionRising
- * - construction:progressComplete → CompletedRising (progress-based countdown)
+ * - construction:progressComplete → building:completed (direct, builder-driven)
  *
  * Listens for building:removed events to restore terrain on construction cancellation.
- * Listens for building:completed to spawn units once the CompletedRising timer fires.
+ * Listens for building:completed to spawn units.
  */
 
 import type { TickSystem } from '../../core/tick-system';
@@ -22,7 +22,7 @@ import { type EventBus, EventSubscriptionManager } from '../../event-bus';
 import { EntityType, BuildingType, tileKey, getBuildingFootprint } from '../../entity';
 import { getBuildingDoorCorridor } from '../../buildings/types';
 import { BuildingConstructionPhase, type TerrainContext, type ConstructionSite } from './types';
-import { COMPLETED_RISING_DURATION } from './internal/phase-transitions';
+
 import { captureOriginalTerrain, restoreOriginalTerrain, applySingleTileLeveling } from './terrain';
 import type { ConstructionSiteManager } from './construction-site-manager';
 import type { Command, CommandResult } from '../../commands';
@@ -40,7 +40,7 @@ export interface BuildingConstructionSystemConfig extends CoreDeps {
 
 /**
  * Building construction tick system.
- * Handles terrain modification, CompletedRising countdown, and unit spawning.
+ * Handles terrain modification and unit spawning.
  * Phase transitions are driven by construction events from ConstructionSiteManager.
  */
 export class BuildingConstructionSystem implements TickSystem {
@@ -71,6 +71,97 @@ export class BuildingConstructionSystem implements TickSystem {
     /** Set terrain context for terrain modification during construction */
     setTerrainContext(ctx: TerrainContext | undefined): void {
         this.terrainContext = ctx;
+        if (ctx) this.rebuildTerrainForRestoredSites(ctx);
+    }
+
+    /**
+     * Rebuild terrain state for restored construction sites and re-emit worker-needed events.
+     *
+     * After deserialize, worker assignments are empty and mid-leveling sites have
+     * originalTerrain=null (terrain data isn't persisted). This method:
+     * 1. Re-captures terrain from the live map for TerrainLeveling sites
+     * 2. Re-emits construction:workerNeeded for all phases that need workers
+     */
+    private rebuildTerrainForRestoredSites(ctx: TerrainContext): void {
+        const { groundType, groundHeight, mapSize } = ctx.terrain;
+        // Use getAllSiteIds() — returns a snapshot array, safe to iterate while emitting events that remove sites
+        for (const siteId of this.constructionSiteManager.getAllSiteIds()) {
+            const site = this.constructionSiteManager.getSite(siteId);
+            if (!site) continue; // removed by a previous iteration's building:completed
+
+            this.rebuildSingleSite(site, groundType, groundHeight, mapSize);
+        }
+    }
+
+    /** Rebuild a single restored construction site: terrain data, completion, or worker re-emission. */
+    private rebuildSingleSite(
+        site: ConstructionSite,
+        groundType: Uint8Array,
+        groundHeight: Uint8Array,
+        mapSize: import('@/utilities/map-size').MapSize
+    ): void {
+        // Rebuild terrain for mid-leveling sites
+        if (site.phase === BuildingConstructionPhase.TerrainLeveling && !site.terrain.originalTerrain) {
+            site.terrain.originalTerrain = captureOriginalTerrain(site, groundType, groundHeight, mapSize);
+            this.constructionSiteManager.populateUnleveledTiles(site.buildingId);
+            if (site.terrain.complete) {
+                site.phase = BuildingConstructionPhase.WaitingForBuilders;
+                this.state.restoreBuildingFootprintBlock(site.buildingId);
+            }
+        }
+
+        // Complete buildings that finished construction but site wasn't removed before save
+        if (this.tryCompleteRestoredSite(site)) return;
+
+        // Re-emit worker-needed events — worker assignments are empty after restore
+        this.reemitWorkerNeeded(site);
+    }
+
+    /**
+     * If a restored site was already fully constructed (or in a terminal phase),
+     * re-emit building:completed so the lifecycle handler removes it.
+     * Returns true if the site was completed (and removed).
+     */
+    private tryCompleteRestoredSite(site: ConstructionSite): boolean {
+        const isConstructionDone =
+            site.phase === BuildingConstructionPhase.ConstructionRising && site.building.progress >= 1.0;
+        const isTerminalPhase =
+            site.phase === BuildingConstructionPhase.CompletedRising ||
+            site.phase === BuildingConstructionPhase.Completed;
+
+        if (!isConstructionDone && !isTerminalPhase) return false;
+
+        this.eventBus.emit('building:completed', {
+            entityId: site.buildingId,
+            buildingType: site.buildingType,
+            race: site.race,
+            spawnWorker: false, // workers already spawned before save
+        });
+        return true;
+    }
+
+    /** Re-emit construction:workerNeeded for a restored site so workers get re-assigned. */
+    private reemitWorkerNeeded(site: ConstructionSite): void {
+        if (!site.terrain.complete) {
+            this.eventBus.emit('construction:workerNeeded', {
+                role: 'digger' as const,
+                siteId: site.buildingId,
+                tileX: site.tileX,
+                tileY: site.tileY,
+                player: site.player,
+            });
+        } else if (
+            site.phase === BuildingConstructionPhase.WaitingForBuilders ||
+            site.phase === BuildingConstructionPhase.ConstructionRising
+        ) {
+            this.eventBus.emit('construction:workerNeeded', {
+                role: 'builder' as const,
+                siteId: site.buildingId,
+                tileX: site.tileX,
+                tileY: site.tileY,
+                player: site.player,
+            });
+        }
     }
 
     /** Set the residence spawner for interval-based carrier spawning */
@@ -167,12 +258,12 @@ export class BuildingConstructionSystem implements TickSystem {
             site.phase = BuildingConstructionPhase.ConstructionRising;
         });
 
-        // construction:progressComplete → CompletedRising (progress-based countdown)
+        // construction:progressComplete → building:completed (builder-driven, no timer)
         this.subscriptions.subscribe(this.eventBus, 'construction:progressComplete', ({ buildingId }) => {
             const site = this.constructionSiteManager.getSite(buildingId);
             if (!site) return;
-            site.phase = BuildingConstructionPhase.CompletedRising;
-            site.completedRisingProgress = 0.0;
+            const { buildingType, race } = site;
+            this.eventBus.emit('building:completed', { entityId: buildingId, buildingType, race, spawnWorker: true });
         });
     }
 
@@ -198,25 +289,12 @@ export class BuildingConstructionSystem implements TickSystem {
         }
     }
 
-    private tickSite(entityId: number, dt: number): void {
+    private tickSite(entityId: number, _dt: number): void {
         const site = this.constructionSiteManager.getSite(entityId);
         if (!site) return;
 
         if (site.phase === BuildingConstructionPhase.Evacuating) {
             this.tickEvacuation(entityId, site);
-        } else if (site.phase === BuildingConstructionPhase.CompletedRising) {
-            this.tickCompletedRising(entityId, site, dt);
-        }
-    }
-
-    /** Advance CompletedRising progress and transition to Completed when done. */
-    private tickCompletedRising(entityId: number, site: ConstructionSite, dt: number): void {
-        site.completedRisingProgress += dt / COMPLETED_RISING_DURATION;
-        if (site.completedRisingProgress >= 1.0) {
-            site.phase = BuildingConstructionPhase.Completed;
-            // Extract site fields before removal — game-services.ts removes the site in its handler
-            const { buildingType, race } = site;
-            this.eventBus.emit('building:completed', { entityId, buildingType, race, spawnWorker: true });
         }
     }
 

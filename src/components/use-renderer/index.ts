@@ -201,7 +201,7 @@ function buildInputManager(deps: InputManagerDeps): InputManager {
                     placeBuildingMode.setGrid(grid);
                 }
             }
-            if (oldMode === 'place_building') {
+            if (oldMode === 'place_building' && newMode !== 'place_building') {
                 onPlacementGridChange(null);
                 placeBuildingMode.setGrid(null);
             }

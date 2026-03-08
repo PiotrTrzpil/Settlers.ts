@@ -20,6 +20,7 @@ import type { ConstructionCost } from '../../economy/building-production';
 import { getConstructionCosts } from '../../economy/building-production';
 import type { EventBus } from '../../event-bus';
 import { getBuildingInfo } from '../../data/game-data-access';
+import { getBuildingFootprintFromInfo } from '@/resources/game-data';
 import type { SeededRng } from '../../core/rng';
 import { type ComponentStore, mapStore } from '../../ecs';
 import { BuildingConstructionPhase, type CapturedTerrainTile, type ConstructionSite } from './types';
@@ -54,23 +55,25 @@ export interface SerializedConstructionSite {
 const DEFAULT_WORKER_COUNT = 2;
 
 /**
- * Get worker slot count from XML builderNumber.
+ * Derive worker slot count from building footprint tile count.
+ * Thresholds match the design doc (docs/designs/building-construction-process.md).
+ */
+function getWorkerCountFromFootprint(footprintTileCount: number): number {
+    if (footprintTileCount <= 30) return 2;
+    if (footprintTileCount <= 60) return 3;
+    if (footprintTileCount <= 100) return 4;
+    if (footprintTileCount <= 150) return 5;
+    return 6;
+}
+
+/**
+ * Get worker slot count from building footprint size.
  * Falls back to DEFAULT_WORKER_COUNT if no BuildingInfo exists for this building/race.
  */
 function getWorkerCount(buildingType: BuildingType, race: Race): number {
     const info = getBuildingInfo(race, buildingType);
-    return info ? info.builderNumber : DEFAULT_WORKER_COUNT;
-}
-
-/** Pick a random element from a Set using the given RNG. Caller must ensure the set is non-empty. */
-function randomFromSet(set: Set<number>, rng: SeededRng): number {
-    const idx = rng.nextInt(set.size);
-    let i = 0;
-    for (const val of set) {
-        if (i === idx) return val;
-        i++;
-    }
-    return set.values().next().value!; // unreachable, satisfies TS
+    if (!info) return DEFAULT_WORKER_COUNT;
+    return getWorkerCountFromFootprint(getBuildingFootprintFromInfo(info).length);
 }
 
 // ── ConstructionSiteManager ──
@@ -147,6 +150,7 @@ export class ConstructionSiteManager implements Persistable<SerializedConstructi
                 originalTerrain: null,
                 modified: false,
                 unleveledTiles: null,
+                reservedTiles: new Set(),
                 totalLevelingTiles: 0,
             },
             materials: {
@@ -160,7 +164,6 @@ export class ConstructionSiteManager implements Persistable<SerializedConstructi
                 slots: { required: workerCount, assigned: new Set(), started: false },
                 progress: 0,
             },
-            completedRisingProgress: 0,
         };
 
         this.sites.set(buildingId, site);
@@ -285,30 +288,49 @@ export class ConstructionSiteManager implements Persistable<SerializedConstructi
     }
 
     /**
-     * Get the position of a random unleveled tile for a digger to walk to.
-     * Returns null if no tiles remain (leveling complete).
-     * Does NOT remove the tile from the set — that happens in completeNextTile.
+     * Reserve a random unleveled tile for a digger to walk to and dig.
+     * Returns the tile index + position, or null if no unreserved tiles remain.
+     * The tile stays in unleveledTiles but is excluded from future reservations
+     * until released via releaseReservedTile or completed via completeTile.
      */
-    getNextUnleveledTilePos(buildingId: number): { x: number; y: number } | null {
-        const site = this.getSiteOrThrow(buildingId, 'getNextUnleveledTilePos');
+    reserveUnleveledTile(buildingId: number): { tileIndex: number; x: number; y: number } | null {
+        const site = this.getSiteOrThrow(buildingId, 'reserveUnleveledTile');
         if (!site.terrain.unleveledTiles || site.terrain.unleveledTiles.size === 0) return null;
-        const tileIndex = randomFromSet(site.terrain.unleveledTiles, this.rng);
+
+        // Build set of unreserved tiles
+        const unreserved: number[] = [];
+        for (const idx of site.terrain.unleveledTiles) {
+            if (!site.terrain.reservedTiles.has(idx)) unreserved.push(idx);
+        }
+        if (unreserved.length === 0) return null;
+
+        const tileIndex = unreserved[this.rng.nextInt(unreserved.length)]!;
+        site.terrain.reservedTiles.add(tileIndex);
         const tile = site.terrain.originalTerrain!.tiles[tileIndex]!;
-        return { x: tile.x, y: tile.y };
+        return { tileIndex, x: tile.x, y: tile.y };
     }
 
     /**
-     * Complete leveling for a random unleveled tile.
-     * Removes it from the set, emits construction:tileCompleted with tile data,
-     * updates terrain.progress, and emits construction:levelingComplete when done.
-     * Returns the completed tile data, or null if no tiles remain.
+     * Release a previously reserved tile without completing it.
+     * Called when a digger is interrupted before finishing the dig animation.
      */
-    completeNextTile(buildingId: number): CapturedTerrainTile | null {
-        const site = this.getSiteOrThrow(buildingId, 'completeNextTile');
-        if (!site.terrain.unleveledTiles || site.terrain.unleveledTiles.size === 0) return null;
+    releaseReservedTile(buildingId: number, tileIndex: number): void {
+        const site = this.getSite(buildingId);
+        if (site) site.terrain.reservedTiles.delete(tileIndex);
+    }
 
-        const tileIndex = randomFromSet(site.terrain.unleveledTiles, this.rng);
+    /**
+     * Complete leveling for a specific tile (by index from reserveUnleveledTile).
+     * Removes it from unleveledTiles and reservedTiles, emits construction:tileCompleted,
+     * updates terrain.progress, and emits construction:levelingComplete when done.
+     * Returns the completed tile data, or null if the tile was already completed.
+     */
+    completeTile(buildingId: number, tileIndex: number): CapturedTerrainTile | null {
+        const site = this.getSiteOrThrow(buildingId, 'completeTile');
+        if (!site.terrain.unleveledTiles || !site.terrain.unleveledTiles.has(tileIndex)) return null;
+
         site.terrain.unleveledTiles.delete(tileIndex);
+        site.terrain.reservedTiles.delete(tileIndex);
 
         const tile = site.terrain.originalTerrain!.tiles[tileIndex]!;
 
@@ -579,9 +601,12 @@ export class ConstructionSiteManager implements Persistable<SerializedConstructi
                 },
                 progress: data.levelingProgress,
                 complete: data.levelingComplete,
-                originalTerrain: null, // Not persisted — terrain is already in modified state
+                // originalTerrain + unleveledTiles are rebuilt from live map data
+                // in BuildingConstructionSystem.rebuildTerrainForRestoredSites()
+                originalTerrain: null,
                 modified: data.terrainModified,
                 unleveledTiles: null,
+                reservedTiles: new Set(),
                 totalLevelingTiles: 0,
             },
             materials: {
@@ -599,7 +624,6 @@ export class ConstructionSiteManager implements Persistable<SerializedConstructi
                 },
                 progress: data.constructionProgress,
             },
-            completedRisingProgress: 0,
         };
 
         this.sites.set(data.buildingId, site);

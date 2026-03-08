@@ -577,10 +577,18 @@ export function createDiggerHandler(
     const pendingClaims = new Map<number, number[]>();
     // Active workers: settlerId → targetId; used to release the correct slot on complete/interrupt
     const activeWorkers = new Map<number, number>();
+    // Reserved tile per settler: settlerId → tileIndex (from reserveUnleveledTile)
+    const reservedTileBySettler = new Map<number, number>();
 
     function releaseActive(targetId: number, settlerLabel: string): void {
         for (const [sid, tid] of activeWorkers) {
             if (tid === targetId) {
+                // Release any reserved tile
+                const tileIdx = reservedTileBySettler.get(sid);
+                if (tileIdx !== undefined) {
+                    constructionSiteManager.releaseReservedTile(targetId, tileIdx);
+                    reservedTileBySettler.delete(sid);
+                }
                 const site = constructionSiteManager.getSite(targetId);
                 if (site) {
                     constructionSiteManager.releaseDiggerSlot(targetId, sid);
@@ -591,6 +599,14 @@ export function createDiggerHandler(
                 return;
             }
         }
+    }
+
+    /** Reserve a tile for a settler and return the target info, or null if no tiles available. */
+    function reserveTileForSettler(buildingId: number, settlerId: number): { x: number; y: number } | null {
+        const reservation = constructionSiteManager.reserveUnleveledTile(buildingId);
+        if (!reservation) return null;
+        reservedTileBySettler.set(settlerId, reservation.tileIndex);
+        return { x: reservation.x, y: reservation.y };
     }
 
     return {
@@ -605,8 +621,8 @@ export function createDiggerHandler(
             if (existingTarget !== undefined) {
                 const site = constructionSiteManager.getSite(existingTarget);
                 if (site && !site.terrain.complete) {
-                    // Return next unleveled tile position (not door) for intra-site walking
-                    const tilePos = constructionSiteManager.getNextUnleveledTilePos(existingTarget);
+                    // Reserve a new tile for the next dig cycle
+                    const tilePos = reserveTileForSettler(existingTarget, settlerId);
                     if (tilePos) {
                         return { entityId: existingTarget, x: tilePos.x, y: tilePos.y };
                     }
@@ -632,8 +648,8 @@ export function createDiggerHandler(
             queue.push(settlerId);
             pendingClaims.set(buildingId, queue);
 
-            // Return next unleveled tile position for direct walking to work site
-            const tilePos = constructionSiteManager.getNextUnleveledTilePos(buildingId);
+            // Reserve a tile for this digger to walk to
+            const tilePos = reserveTileForSettler(buildingId, settlerId);
             if (tilePos) {
                 return { entityId: buildingId, x: tilePos.x, y: tilePos.y };
             }
@@ -663,19 +679,37 @@ export function createDiggerHandler(
             return true;
         },
 
-        onWorkComplete: (targetId: number) => {
+        onWorkComplete: (targetId: number, _sx: number, _sy: number, settlerId?: number) => {
             const site = constructionSiteManager.getSite(targetId);
-            if (site) {
-                // Complete one tile's terrain leveling
-                constructionSiteManager.completeNextTile(targetId);
+            if (site && settlerId !== undefined) {
+                // Complete the specific tile this digger reserved
+                const tileIdx = reservedTileBySettler.get(settlerId);
+                if (tileIdx !== undefined) {
+                    constructionSiteManager.completeTile(targetId, tileIdx);
+                    reservedTileBySettler.delete(settlerId);
+                }
                 // Stay claimed until leveling is complete
                 if (!site.terrain.complete) return;
             }
             releaseActive(targetId, 'digger onWorkComplete');
         },
 
-        onWorkInterrupt: (targetId: number) => {
-            releaseActive(targetId, 'digger onWorkInterrupt');
+        onWorkInterrupt: (targetId: number, settlerId?: number) => {
+            if (settlerId !== undefined) {
+                // Release the reserved tile and slot for this specific settler
+                const tileIdx = reservedTileBySettler.get(settlerId);
+                if (tileIdx !== undefined) {
+                    constructionSiteManager.releaseReservedTile(targetId, tileIdx);
+                    reservedTileBySettler.delete(settlerId);
+                }
+                const site = constructionSiteManager.getSite(targetId);
+                if (site) {
+                    constructionSiteManager.releaseDiggerSlot(targetId, settlerId);
+                }
+                activeWorkers.delete(settlerId);
+            } else {
+                releaseActive(targetId, 'digger onWorkInterrupt');
+            }
         },
     };
 }

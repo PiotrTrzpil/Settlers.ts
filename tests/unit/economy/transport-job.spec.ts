@@ -15,6 +15,7 @@ import { RequestPriority, RequestStatus } from '@/game/features/logistics';
 import type { BuildingInventoryManager } from '@/game/features/inventory';
 import { EventBus } from '@/game/event-bus';
 import type { TransportJobDeps } from '@/game/features/logistics/transport-job-service';
+import { InFlightTrackerImpl } from '@/game/features/logistics/in-flight-tracker';
 
 // ─── Minimal BuildingInventoryManager stub ──────────────────────────
 
@@ -76,7 +77,7 @@ describe('TransportJobService', () => {
         requestManager = new RequestManager(eventBus);
         inventoryManager = createInventoryStub(5);
         reservationManager = new InventoryReservationManager(inventoryManager as unknown as BuildingInventoryManager);
-        deps = { reservationManager, requestManager, eventBus };
+        deps = { reservationManager, requestManager, eventBus, inFlightTracker: new InFlightTrackerImpl() };
     });
 
     function addRequest() {
@@ -115,7 +116,7 @@ describe('TransportJobService', () => {
             reservationManager = new InventoryReservationManager(
                 inventoryManager as unknown as BuildingInventoryManager
             );
-            deps = { reservationManager, requestManager, eventBus };
+            deps = { reservationManager, requestManager, eventBus, inFlightTracker: new InFlightTrackerImpl() };
 
             const request = addRequest();
             const record = TransportJobService.activate(request.id, SOURCE, DEST, MATERIAL, 1, CARRIER, deps);

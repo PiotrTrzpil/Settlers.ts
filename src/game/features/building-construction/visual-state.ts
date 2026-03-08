@@ -24,7 +24,7 @@ export function getBuildingVisualState(site: ConstructionSite | undefined): Buil
         };
     }
 
-    const { phase, completedRisingProgress } = site;
+    const { phase } = site;
     const levelingProgress = site.terrain.progress;
     const constructionProgress = site.building.progress;
 
@@ -43,35 +43,36 @@ export function getBuildingVisualState(site: ConstructionSite | undefined): Buil
         };
 
     case BuildingConstructionPhase.ConstructionRising:
-        // Construction sprite rises from bottom
-        return {
-            useConstructionSprite: true,
-            verticalProgress: constructionProgress,
-            overallProgress: 0.3 + constructionProgress * 0.7,
-            isCompleted: false,
-            phase,
-        };
-
-    case BuildingConstructionPhase.CompletedRising:
-        if (completedRisingProgress < 0.5) {
-            // First half: construction sprite rises from bottom to fully visible
+        if (constructionProgress < 0.5) {
+            // First half: construction scaffold sprite rises from bottom to fully visible
             return {
                 useConstructionSprite: true,
-                verticalProgress: completedRisingProgress * 2,
-                overallProgress: 1.0,
+                verticalProgress: constructionProgress * 2,
+                overallProgress: 0.3 + constructionProgress * 0.7,
                 isCompleted: false,
                 phase,
             };
         } else {
-            // Second half: completed sprite rises from bottom over the fully-visible construction sprite
+            // Second half: final building sprite rises from bottom; scaffold stays fully visible as overlay
             return {
                 useConstructionSprite: false,
-                verticalProgress: (completedRisingProgress - 0.5) * 2,
-                overallProgress: 1.0,
+                verticalProgress: (constructionProgress - 0.5) * 2,
+                overallProgress: 0.3 + constructionProgress * 0.7,
                 isCompleted: false,
                 phase,
             };
         }
+
+    case BuildingConstructionPhase.CompletedRising:
+        // Not actively entered — building:completed is emitted directly from construction:progressComplete.
+        // Kept as a safe fallback for any deserialized state in transit.
+        return {
+            useConstructionSprite: false,
+            verticalProgress: 1.0,
+            overallProgress: 1.0,
+            isCompleted: false,
+            phase,
+        };
 
     case BuildingConstructionPhase.Completed:
         // Terminal state — site should be removed immediately after

@@ -32,8 +32,8 @@ export function resolveBuildingOverlays(
 }
 
 /**
- * During the second half of CompletedRising, emit the construction sprite fully visible behind
- * the rising completed building. Not emitted in the first half (construction sprite is the main sprite).
+ * During the second half of ConstructionRising (constructionProgress >= 0.5),
+ * emit the construction sprite fully visible behind the rising completed building.
  */
 function resolveConstructionOverlay(
     entityId: number,
@@ -43,9 +43,8 @@ function resolveConstructionOverlay(
 ): void {
     const site = g.services.constructionSiteManager.getSite(entityId);
     const vs = getBuildingVisualState(site);
-    if (vs.phase !== BuildingConstructionPhase.CompletedRising || !er.spriteManager) return;
-    // Only in the second half — first half shows the construction sprite as the main sprite
-    if (!site || site.completedRisingProgress < 0.5) return;
+    if (vs.phase !== BuildingConstructionPhase.ConstructionRising || !er.spriteManager) return;
+    if (!site || site.building.progress < 0.5) return;
 
     const entity = g.state.getEntity(entityId);
     if (!entity) return;

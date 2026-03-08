@@ -98,7 +98,7 @@ function tickEntityWork(
 
     if (complete) {
         safeCall(
-            () => handler.onWorkComplete?.(job.targetId!, settler.x, settler.y),
+            () => handler.onWorkComplete?.(job.targetId!, settler.x, settler.y, settler.id),
             ctx.handlerErrorLogger,
             `onWorkComplete ${label} failed for target ${job.targetId}`
         );
@@ -108,11 +108,17 @@ function tickEntityWork(
 }
 
 /** Start entity work on first tick. Returns FAILED on error. */
-function startEntityWork(job: ChoreoJobState, handler: EntityWorkHandler, ctx: WorkContext, label: string): boolean {
+function startEntityWork(
+    settler: Entity,
+    job: ChoreoJobState,
+    handler: EntityWorkHandler,
+    ctx: WorkContext,
+    label: string
+): boolean {
     if (job.workStarted) return true;
     const ok = safeCall(
         () => {
-            handler.onWorkStart?.(job.targetId!);
+            handler.onWorkStart?.(job.targetId!, settler.id);
             return true;
         },
         ctx.handlerErrorLogger,
@@ -149,7 +155,7 @@ export function executeWork(
 
     // Entity handler path (digger/builder construction work)
     if (ctx.entityHandler && job.targetId !== null) {
-        if (!startEntityWork(job, ctx.entityHandler, ctx, '')) return TaskResult.FAILED;
+        if (!startEntityWork(settler, job, ctx.entityHandler, ctx, '')) return TaskResult.FAILED;
         return tickEntityWork(settler, job, node, dt, ctx.entityHandler, ctx, '');
     }
 
@@ -187,7 +193,7 @@ export function executeWorkOnEntity(
     applyDirectionConstraint(settler, node, job, ctx);
     fireTriggerOnStart(settler, node, job, ctx);
 
-    if (!startEntityWork(job, ctx.entityHandler, ctx, '')) return TaskResult.FAILED;
+    if (!startEntityWork(settler, job, ctx.entityHandler, ctx, '')) return TaskResult.FAILED;
     return tickEntityWork(settler, job, node, dt, ctx.entityHandler, ctx, '');
 }
 
@@ -244,7 +250,7 @@ export function executeWorkOnEntityVirtual(
     applyDirectionConstraint(settler, node, job, ctx);
     fireTriggerOnStart(settler, node, job, ctx);
 
-    if (!startEntityWork(job, ctx.entityHandler, ctx, '(virtual)')) return TaskResult.FAILED;
+    if (!startEntityWork(settler, job, ctx.entityHandler, ctx, '(virtual)')) return TaskResult.FAILED;
     return tickEntityWork(settler, job, node, dt, ctx.entityHandler, ctx, '(virtual)');
 }
 

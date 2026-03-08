@@ -87,6 +87,8 @@ export interface TerrainPhase {
     modified: boolean;
     /** Indices into originalTerrain.tiles[] for tiles that still need height leveling. Null before terrain capture. */
     unleveledTiles: Set<number> | null;
+    /** Tile indices currently reserved by a digger (claimed via reserveUnleveledTile, released on complete/interrupt). */
+    reservedTiles: Set<number>;
     /** Total number of tiles that needed leveling (for progress calculation). 0 before terrain capture. */
     totalLevelingTiles: number;
 }
@@ -141,8 +143,6 @@ export interface ConstructionSite {
     materials: MaterialsData;
     /** Building construction phase data (builder slots, progress) */
     building: BuildingPhase;
-    /** 0.0–1.0, driven by CompletedRising timer. Used by visual state for the final rise animation. */
-    completedRisingProgress: number;
 }
 
 /**

@@ -6,6 +6,7 @@
 
 import type { FeatureDefinition, FeatureContext } from '../feature';
 import type { CarrierFeatureExports } from '../carriers';
+import type { BuildingConstructionExports } from '../building-construction/building-construction-feature';
 import type { RequestManagerExports } from './request-manager-feature';
 import type { InventoryExports } from '../inventory';
 import type { SettlerTaskSystem } from '../settler-tasks';
@@ -21,7 +22,7 @@ export interface LogisticsDispatcherExports {
 
 export const LogisticsDispatcherFeature: FeatureDefinition = {
     id: 'logistics-dispatcher',
-    dependencies: ['carriers', 'settler-tasks', 'logistics', 'inventory'],
+    dependencies: ['carriers', 'settler-tasks', 'logistics', 'inventory', 'building-construction'],
 
     create(ctx: FeatureContext) {
         const { carrierRegistry } = ctx.getFeature<CarrierFeatureExports>('carriers');
@@ -43,6 +44,10 @@ export const LogisticsDispatcherFeature: FeatureDefinition = {
 
         // Wire transport job ops back to settler tasks (late binding — dispatcher depends on settler tasks)
         settlerTaskSystem.setTransportJobOps(logisticsDispatcher.createTransportJobOps());
+
+        // Wire in-flight tracker to construction request system (late binding — avoids circular dep)
+        const { constructionRequestSystem } = ctx.getFeature<BuildingConstructionExports>('building-construction');
+        constructionRequestSystem.setInFlightTracker(logisticsDispatcher.inFlightTracker);
 
         return {
             systems: [logisticsDispatcher],

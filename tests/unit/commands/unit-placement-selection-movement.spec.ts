@@ -35,7 +35,6 @@ describe('Unit Placement, Selection & Movement', () => {
         state = new GameState(eventBus);
         const movement = new MovementSystem({
             eventBus,
-            rng: state.rng,
             updatePosition: (id, x, y) => {
                 state.updateEntityPosition(id, x, y);
                 return true;
@@ -43,6 +42,7 @@ describe('Unit Placement, Selection & Movement', () => {
             getEntity: id => state.getEntity(id),
             tileOccupancy: state.tileOccupancy,
             buildingOccupancy: state.buildingOccupancy,
+            buildingFootprint: state.buildingFootprint,
         });
         state.initMovement(movement);
 

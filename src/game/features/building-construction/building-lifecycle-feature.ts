@@ -48,6 +48,11 @@ export class BuildingLifecycleHandler {
         this.subscriptions.subscribe(this.eventBus, 'building:placed', this.onBuildingPlaced.bind(this));
         this.subscriptions.subscribe(this.eventBus, 'building:completed', this.onBuildingCompleted.bind(this));
         this.subscriptions.subscribe(this.eventBus, 'inventory:changed', this.onInventoryChanged.bind(this));
+        this.subscriptions.subscribe(
+            this.eventBus,
+            'construction:materialOverflowed',
+            this.onMaterialOverflowed.bind(this)
+        );
 
         this.cleanupRegistry.onEntityRemoved(
             this.constructionSiteManager.removeSite.bind(this.constructionSiteManager)
@@ -71,6 +76,16 @@ export class BuildingLifecycleHandler {
     private onBuildingCompleted({ entityId, buildingType, race }: GameEvents['building:completed']): void {
         this.inventoryManager.swapInventoryPhase(entityId, buildingType, race);
         this.constructionSiteManager.removeSite(entityId);
+    }
+
+    private onMaterialOverflowed({
+        buildingId,
+        material,
+        amount,
+    }: GameEvents['construction:materialOverflowed']): void {
+        const site = this.constructionSiteManager.getSite(buildingId);
+        if (!site) return;
+        this.constructionSiteManager.recordDelivery(buildingId, material, amount);
     }
 
     private onInventoryChanged({

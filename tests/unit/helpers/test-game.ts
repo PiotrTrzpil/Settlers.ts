@@ -53,7 +53,6 @@ export function createGameState(): GameState {
 
     const movement = new MovementSystem({
         eventBus,
-        rng: state.rng,
         updatePosition: (id, x, y) => {
             state.updateEntityPosition(id, x, y);
             return true;
@@ -61,8 +60,13 @@ export function createGameState(): GameState {
         getEntity: id => state.getEntity(id),
         tileOccupancy: state.tileOccupancy,
         buildingOccupancy: state.buildingOccupancy,
+        buildingFootprint: state.buildingFootprint,
     });
     state.initMovement(movement);
+
+    // Set terrain data so pathfinding and bump validation work in tests
+    const map = createTestMap(DEFAULT_TEST_MAP_SIZE, DEFAULT_TEST_MAP_SIZE);
+    movement.setTerrainData(map.groundType, map.groundHeight, map.mapSize.width, map.mapSize.height);
 
     // Wire entity lifecycle events (mirrors GameServices subscriptions)
     wireEntityLifecycleEvents(eventBus, movement, state);
@@ -169,7 +173,6 @@ export function createTestContext(mapWidth = 64, mapHeight = 64): TestContext {
     // Create MovementSystem (owned externally, set on GameState)
     const movement = new MovementSystem({
         eventBus,
-        rng: state.rng,
         updatePosition: (id, x, y) => {
             state.updateEntityPosition(id, x, y);
             return true;
@@ -177,6 +180,7 @@ export function createTestContext(mapWidth = 64, mapHeight = 64): TestContext {
         getEntity: id => state.getEntity(id),
         tileOccupancy: state.tileOccupancy,
         buildingOccupancy: state.buildingOccupancy,
+        buildingFootprint: state.buildingFootprint,
     });
     state.initMovement(movement);
 
@@ -341,8 +345,7 @@ export function registerConstructionSite(
 /**
  * Fast-forward a building to construction completion using event-driven phase progression.
  * Emits all construction events to drive through WaitingForDiggers → TerrainLeveling →
- * WaitingForBuilders → ConstructionRising → CompletedRising, then ticks to finish the
- * CompletedRising countdown (0.5s) and emit building:completed.
+ * WaitingForBuilders → ConstructionRising → building:completed.
  */
 export function completeConstruction(ctx: TestContext, entityId: number): void {
     // Register a construction site if one doesn't already exist (tests that create entities
@@ -363,8 +366,6 @@ export function completeConstruction(ctx: TestContext, entityId: number): void {
     ctx.eventBus.emit('construction:levelingComplete', { buildingId: entityId });
     ctx.eventBus.emit('construction:buildingStarted', { buildingId: entityId });
     ctx.eventBus.emit('construction:progressComplete', { buildingId: entityId });
-    // Tick past the CompletedRising countdown (COMPLETED_RISING_DURATION = 0.5s)
-    ctx.buildingConstructionSystem.tick(0.6);
 }
 
 // ─── Command execution helpers ──────────────────────────────────────

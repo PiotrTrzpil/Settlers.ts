@@ -82,6 +82,10 @@ export { TransportPhase, type TransportJobRecord } from './transport-job-record'
 export * as TransportJobService from './transport-job-service';
 export type { TransportJobDeps } from './transport-job-service';
 
+// In-flight tracking (destination-side material tracking)
+export type { InFlightTracker } from './in-flight-tracker';
+export { InFlightTrackerImpl } from './in-flight-tracker';
+
 // Request matcher (supply matching with territory filtering)
 export { RequestMatcher, type RequestMatcherConfig, type RequestMatchResult } from './request-matcher';
 

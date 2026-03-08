@@ -196,7 +196,7 @@ export class GameState {
     /** Spatial lookup: "x,y" -> entityId */
     public tileOccupancy: Map<string, number> = new Map();
 
-    /** Building footprint tiles — always blocks pathfinding regardless of ignoreOccupancy */
+    /** Building footprint tiles — always blocks pathfinding */
     public buildingOccupancy: Set<string> = new Set();
 
     /** All building footprint tiles (including door corridors) — used for placement gap check */

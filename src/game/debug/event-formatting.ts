@@ -172,6 +172,9 @@ export const EventFmt = {
 
     'construction:materialDelivered': (e: GameEvents['construction:materialDelivered']) => EMaterialType[e.material],
 
+    'construction:materialOverflowed': (e: GameEvents['construction:materialOverflowed']) =>
+        `${EMaterialType[e.material]} x${e.amount}`,
+
     'construction:buildingStarted': () => '',
     'construction:progressComplete': () => '',
 

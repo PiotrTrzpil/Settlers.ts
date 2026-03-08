@@ -197,12 +197,14 @@ export class UnitStateMachine {
             // Also handle idle turning when not working (handleIdle may change state to WORKING)
             // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- handleIdle mutates runtime.state
             if (runtime.state === SettlerState.IDLE) {
-                // Ensure idle pose — reset any playing animation (e.g. interrupted mid-walk)
-                const settlerVs = this.visualService.getState(settler.id);
-                if (!settlerVs?.animation || settlerVs.animation.playing) {
-                    this.animController.setIdleAnimation(settler);
-                }
-                this.animController.updateIdleTurning(settler, runtime.idleState, dt);
+                const controller = this.gameState.movement.getController(settler.id);
+                this.animController.updateIdleUnit(
+                    settler,
+                    runtime.idleState,
+                    dt,
+                    controller?.state,
+                    controller?.direction
+                );
             }
             break;
 

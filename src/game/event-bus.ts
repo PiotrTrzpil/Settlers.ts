@@ -424,6 +424,12 @@ export interface GameEvents {
         buildingId: number;
         material: EMaterialType;
     };
+    /** Emitted when delivered material overflows (destination full) — used to keep delivery count in sync */
+    'construction:materialOverflowed': {
+        buildingId: number;
+        material: EMaterialType;
+        amount: number;
+    };
     /** Emitted when construction progress reaches 1.0 */
     'construction:progressComplete': {
         buildingId: number;

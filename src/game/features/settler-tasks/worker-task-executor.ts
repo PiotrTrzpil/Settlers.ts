@@ -424,7 +424,8 @@ export class WorkerTaskExecutor {
      * Complete a job and return to idle state.
      */
     completeJob(settler: Entity, runtime: WorkerRuntimeState): void {
-        const job = runtime.job!;
+        if (!runtime.job) return;
+        const job = runtime.job;
 
         // Stop any active trigger
         if (job.activeTrigger) {
@@ -463,13 +464,17 @@ export class WorkerTaskExecutor {
      * use completeJob for that case. Callers should check `isJobDone()` first.
      */
     interruptJob(settler: Entity, config: SettlerConfig, runtime: WorkerRuntimeState): void {
+        // Job may have already been cleaned up by a re-entrant event handler
+        // (e.g., building destroyed during executeNode triggers interruptJobForCleanup)
+        if (!runtime.job) return;
+
         const entityHandler = this.handlerRegistry.getEntityHandler(config.search);
-        const job = runtime.job!;
+        const job = runtime.job;
 
         // Only call onWorkInterrupt on entity handlers when work actually started
         if (entityHandler && job.targetId && job.workStarted) {
             safeCall(
-                () => entityHandler.onWorkInterrupt?.(job.targetId!),
+                () => entityHandler.onWorkInterrupt?.(job.targetId!, settler.id),
                 this.handlerErrorLogger,
                 `onWorkInterrupt failed for target ${job.targetId}`
             );

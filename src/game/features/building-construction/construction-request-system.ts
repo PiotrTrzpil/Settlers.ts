@@ -12,6 +12,7 @@
 import type { TickSystem } from '../../core/tick-system';
 import type { EMaterialType } from '../../economy/material-type';
 import type { ConstructionSiteManager } from './construction-site-manager';
+import type { InFlightTracker } from '../logistics/in-flight-tracker';
 import type { RequestManager } from '../logistics/request-manager';
 import { RequestPriority } from '../logistics/resource-request';
 
@@ -21,6 +22,7 @@ const MAX_ACTIVE_PER_MATERIAL = 8;
 export class ConstructionRequestSystem implements TickSystem {
     private readonly constructionSiteManager: ConstructionSiteManager;
     private readonly requestManager: RequestManager;
+    private inFlightTracker: InFlightTracker | null = null;
 
     private accumulator = 0;
     private static readonly TICK_INTERVAL = 0.5; // seconds
@@ -28,6 +30,11 @@ export class ConstructionRequestSystem implements TickSystem {
     constructor(constructionSiteManager: ConstructionSiteManager, requestManager: RequestManager) {
         this.constructionSiteManager = constructionSiteManager;
         this.requestManager = requestManager;
+    }
+
+    /** Late-bind the in-flight tracker (avoids circular feature dependency). */
+    setInFlightTracker(tracker: InFlightTracker): void {
+        this.inFlightTracker = tracker;
     }
 
     tick(dt: number): void {
@@ -51,7 +58,8 @@ export class ConstructionRequestSystem implements TickSystem {
             .getRequestsForBuilding(buildingId)
             .filter(r => r.materialType === material).length;
 
-        const cap = Math.min(remaining, MAX_ACTIVE_PER_MATERIAL);
+        const inFlight = this.inFlightTracker?.getInFlightAmount(buildingId, material) ?? 0;
+        const cap = Math.min(remaining - inFlight, MAX_ACTIVE_PER_MATERIAL);
         for (let i = activeRequests; i < cap; i++) {
             this.requestManager.addRequest(buildingId, material, 1, RequestPriority.Normal);
         }

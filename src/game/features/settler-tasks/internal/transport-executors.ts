@@ -86,6 +86,13 @@ export function executeTransportDelivery(
 ): TaskResult {
     const { jobId, destBuildingId, material } = td;
 
+    // Job may have been cancelled externally (building destroyed, construction completed, etc.)
+    if (!ctx.transportJobOps.getJob(jobId)) {
+        log.debug(`Carrier ${settler.id}: transport job ${jobId} no longer exists, dropping material`);
+        ctx.materialTransfer.drop(settler.id);
+        return TaskResult.FAILED;
+    }
+
     if (!settler.carrying) {
         throw new Error(
             `Carrier ${settler.id}: PUT_GOOD called but settler is not carrying anything ` +
@@ -103,6 +110,11 @@ export function executeTransportDelivery(
         log.warn(
             `Carrier ${settler.id}: ${overflow} of ${EMaterialType[material]} overflow at building ${destBuildingId}`
         );
+        ctx.eventBus.emit('construction:materialOverflowed', {
+            buildingId: destBuildingId,
+            material,
+            amount: overflow,
+        });
     }
 
     job.carryingGood = null;

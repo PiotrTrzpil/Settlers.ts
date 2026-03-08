@@ -101,13 +101,13 @@ export interface EntityWorkHandler {
     /** If true, worker waits (idles) when canWork is false instead of failing */
     shouldWaitForWork?: boolean;
     /** Called when WORK_ON_ENTITY starts */
-    onWorkStart?(targetId: number): void;
+    onWorkStart?(targetId: number, settlerId?: number): void;
     /** Called each tick during WORK_ON_ENTITY, return true when done */
     onWorkTick(targetId: number, progress: number): boolean;
     /** Called when work completes */
-    onWorkComplete?(targetId: number, settlerX: number, settlerY: number): void;
+    onWorkComplete?(targetId: number, settlerX: number, settlerY: number, settlerId?: number): void;
     /** Called if work is interrupted */
-    onWorkInterrupt?(targetId: number): void;
+    onWorkInterrupt?(targetId: number, settlerId?: number): void;
 }
 
 /** Handler for position-based work: SEARCH → GO_TO_POS → WORK */

@@ -24,6 +24,7 @@ import type { JobState } from '../settler-tasks/types';
 import { hexDistance } from '../../systems/hex-directions';
 import type { CarrierFilter } from './logistics-filter';
 import { query } from '../../ecs';
+import type { InFlightTracker } from './in-flight-tracker';
 
 /** Assigns a job to a settler and optionally starts movement. */
 export interface JobAssigner {
@@ -36,6 +37,7 @@ export interface CarrierAssignerConfig extends CoreDeps {
     transportJobBuilder: TransportJobBuilder;
     reservationManager: InventoryReservationManager;
     requestManager: RequestManager;
+    inFlightTracker: InFlightTracker;
     carrierFilter?: CarrierFilter;
     activeJobs: ReadonlyMap<number, unknown>;
 }
@@ -47,6 +49,9 @@ export interface AssignmentSuccess {
     /** Entity ID of the carrier that was assigned. */
     carrierId: number;
 }
+
+/** Result of tryAssign / tryAssignBest — success, no carrier available, or hard failure. */
+export type AssignResult = AssignmentSuccess | 'no_carrier' | null;
 
 /**
  * Assigns available carriers to matched transport requests.
@@ -79,16 +84,73 @@ export class CarrierAssigner {
             reservationManager: this.reservationManager,
             requestManager: this.requestManager,
             eventBus: this.eventBus,
+            inFlightTracker: config.inFlightTracker,
         };
         this.carrierFilter = config.carrierFilter ?? null;
     }
 
     /**
-     * Try to assign a carrier to fulfill a matched request.
+     * Try to assign a carrier to fulfill a matched request (single candidate).
      *
      * @returns AssignmentSuccess on success, `'no_carrier'` when all carriers are busy, or null on hard failure.
      */
-    tryAssign(request: ResourceRequest, match: RequestMatchResult): AssignmentSuccess | 'no_carrier' | null {
+    tryAssign(request: ResourceRequest, match: RequestMatchResult): AssignResult {
+        return this.tryAssignMatch(request, match);
+    }
+
+    /**
+     * Try to assign the best (carrier, source) pair from multiple supply candidates.
+     * Picks the pair with the lowest total trip distance: carrier→source + source→dest.
+     *
+     * Falls back to single-match behavior if only one candidate.
+     */
+    // eslint-disable-next-line sonarjs/function-return-type -- discriminated union return is intentional
+    tryAssignBest(request: ResourceRequest, candidates: readonly RequestMatchResult[]): AssignResult {
+        if (candidates.length === 0) return null;
+        if (candidates.length === 1) return this.tryAssignMatch(request, candidates[0]!);
+
+        const destBuilding = this.gameState.getEntityOrThrow(request.buildingId, 'dest building');
+        const ranked = this.rankByTotalTrip(candidates, destBuilding.x, destBuilding.y);
+        if (!ranked) return 'no_carrier';
+
+        return this.tryAssignMatch(request, ranked.match);
+    }
+
+    /**
+     * Rank supply candidates by total trip distance (carrier→source + source→dest).
+     * Returns the best candidate+carrier pair, or null if no carrier is available.
+     */
+    private rankByTotalTrip(
+        candidates: readonly RequestMatchResult[],
+        destX: number,
+        destY: number
+    ): { match: RequestMatchResult } | null {
+        let bestMatch: RequestMatchResult | null = null;
+        let bestTotal = Infinity;
+
+        for (const candidate of candidates) {
+            const source = this.gameState.getEntity(candidate.sourceBuilding);
+            if (!source) continue;
+
+            const carrier = this.findAvailableCarrier(source.x, source.y, candidate.playerId);
+            if (!carrier) continue;
+
+            const carrierEntity = this.gameState.getEntityOrThrow(carrier.entityId, 'carrier');
+            const carrierToSource = hexDistance(carrierEntity.x, carrierEntity.y, source.x, source.y);
+            const sourceToDest = hexDistance(source.x, source.y, destX, destY);
+            const total = carrierToSource + sourceToDest;
+
+            if (total < bestTotal) {
+                bestTotal = total;
+                bestMatch = candidate;
+            }
+        }
+
+        return bestMatch ? { match: bestMatch } : null;
+    }
+
+    // eslint-disable-next-line sonarjs/function-return-type -- discriminated union return is intentional
+    private tryAssignMatch(request: ResourceRequest, match: RequestMatchResult): AssignResult {
         const sourceBuilding = this.gameState.getEntityOrThrow(match.sourceBuilding, 'carrier source building');
         const carrier = this.findAvailableCarrier(sourceBuilding.x, sourceBuilding.y, match.playerId);
         if (!carrier) {
