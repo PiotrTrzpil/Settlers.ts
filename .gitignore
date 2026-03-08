@@ -41,3 +41,6 @@ output/
 
 # Backup files
 *.bak
+
+# Benchmark/perf screenshots
+/*.png
