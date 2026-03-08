@@ -17,7 +17,7 @@ import { Race, AVAILABLE_RACES } from '@/game/renderer/sprite-metadata';
 import { canPlaceResource, canPlaceUnit, canPlaceBuildingFootprint } from '@/game/features/placement';
 import { ValidPositionGrid, type GridComputeRequest } from '@/game/features/placement/valid-position-grid';
 import type { Command, CommandResult } from '@/game/commands';
-import { debugStats } from '@/game/debug-stats';
+import { debugStats } from '@/game/debug/debug-stats';
 import {
     InputManager,
     SelectMode,
@@ -30,10 +30,10 @@ import type { SelectionBox } from '@/game/input/render-state';
 import type { DebugEntityLabel } from '@/game/renderer/render-passes/types';
 import { LayerVisibility } from '@/game/renderer/layer-visibility';
 import { loadCameraState } from '@/game/renderer/camera-persistence';
-import { getCurrentMapId } from '@/game/game-state-persistence';
+import { getCurrentMapId } from '@/game/state/game-state-persistence';
 import { initRenderersAsync, exposeForE2E } from './renderer-init';
 import { createUpdateCallback, createRenderCallback } from './frame-callbacks';
-import { updateTileDebugStats, createBuildingAdjustMode, handleModeChange } from './input-setup';
+import { updateTileDebugStats, createBuildingAdjustMode, handleModeChange, createHintState } from './input-setup';
 import { createEntityPicker, createEntityRectPicker, type EntityPickerContext } from '@/game/input/entity-picker';
 
 /** Build the EntityPickerContext from current game/renderer state. */
@@ -75,9 +75,22 @@ async function loadOverlaySpritesAndUpdateFrameCounts(er: EntityRenderer, game: 
     }
     if (manifest.length === 0) return;
 
-    await spriteManager.loadOverlaySprites(manifest);
+    // Check if overlays are already in the registry (cache hit with full overlay data).
+    // Use .some() across the whole manifest — the first entry may fail to load (missing GFX job),
+    // so checking only manifest[0] would trigger a reload every time.
+    const alreadyLoaded = manifest.some(
+        e => spriteManager.getOverlayFrames(e.gfxFile, e.jobIndex, e.directionIndex ?? 0) !== null
+    );
 
-    // Update frame counts on all existing overlay instances
+    if (!alreadyLoaded) {
+        const tOverlay = performance.now();
+        await spriteManager.loadOverlaySprites(manifest);
+        debugStats.state.loadTimings.overlaySprites = Math.round(performance.now() - tOverlay);
+        // Save cache now that overlays are included — subsequent hits skip overlay loading entirely.
+        spriteManager.saveCache();
+    }
+
+    // Always update frame counts (cheap read from registry, no loading).
     for (const race of AVAILABLE_RACES) {
         for (const def of game.services.overlayRegistry.getSpriteManifest(race)) {
             const { gfxFile, jobIndex, directionIndex = 0 } = def.spriteRef;
@@ -133,6 +146,94 @@ function createPlacementGrid(game: Game, buildingType: number, viewX: number, vi
     );
 }
 
+interface InputManagerDeps {
+    canvas: Ref<HTMLElement | null>;
+    getGame: () => Game | null;
+    resolveTile: (screenX: number, screenY: number) => TileCoord | null;
+    executeCommand: (cmd: Record<string, unknown>) => CommandResult;
+    entityPicker: ReturnType<typeof createEntityPicker>;
+    entityRectPicker: ReturnType<typeof createEntityRectPicker>;
+    hintProvider: (msg: string, sx: number, sy: number) => void;
+    onTileClick: (tile: { x: number; y: number }) => void;
+    getRenderer: () => Renderer | null;
+    onPlacementGridChange: (grid: ValidPositionGrid | null) => void;
+}
+
+/** Create and configure an InputManager with all game modes registered. */
+function buildInputManager(deps: InputManagerDeps): InputManager {
+    const { getGame, onTileClick, getRenderer, onPlacementGridChange } = deps;
+
+    const placeBuildingMode = new PlaceBuildingMode(
+        (x, y, buildingType) => canPlaceBuilding(getGame, x, y, buildingType),
+        () => {
+            const game = getGame();
+            return {
+                placeBuildingsCompleted: game?.settings.state.placeBuildingsCompleted ?? false,
+                placeBuildingsWithWorker: game?.settings.state.placeBuildingsWithWorker ?? false,
+            };
+        }
+    );
+
+    const baseModeChange = handleModeChange(getGame);
+    const manager = new InputManager({
+        target: deps.canvas,
+        config: getDefaultInputConfig(),
+        tileResolver: deps.resolveTile,
+        commandExecutor: deps.executeCommand,
+        entityPicker: deps.entityPicker,
+        entityRectPicker: deps.entityRectPicker,
+        hintProvider: deps.hintProvider,
+        initialMode: 'select',
+        onModeChange: (oldMode, newMode, data) => {
+            baseModeChange(oldMode, newMode, data);
+            if (newMode === 'place_building') {
+                const game = getGame();
+                const buildingType =
+                    (data?.['buildingType'] as number | undefined) ?? (data?.['subType'] as number | undefined);
+                if (game && buildingType !== undefined) {
+                    const grid = createPlacementGrid(
+                        game,
+                        buildingType,
+                        getRenderer()!.viewPoint.x,
+                        getRenderer()!.viewPoint.y
+                    );
+                    onPlacementGridChange(grid);
+                    placeBuildingMode.setGrid(grid);
+                }
+            }
+            if (oldMode === 'place_building') {
+                onPlacementGridChange(null);
+                placeBuildingMode.setGrid(null);
+            }
+        },
+        raceProvider: () => {
+            const g = getGame();
+            return g?.playerRaces.get(g.currentPlayer) ?? null;
+        },
+    });
+
+    const tileHover = (x: number, y: number) => updateTileDebugStats(x, y, getGame, onTileClick);
+    manager.registerMode(new SelectMode());
+    manager.registerMode(placeBuildingMode);
+    manager.registerMode(
+        new PlaceResourceMode((x, y) => {
+            const game = getGame();
+            return game ? canPlaceResource(game.terrain, game.state.tileOccupancy, x, y) : false;
+        }, tileHover)
+    );
+    manager.registerMode(
+        new PlaceUnitMode((x, y) => {
+            const game = getGame();
+            return game ? canPlaceUnit(game.terrain, game.state.tileOccupancy, x, y) : false;
+        }, tileHover)
+    );
+    manager.registerMode(createBuildingAdjustMode(getGame));
+    manager.attach();
+    const r = getRenderer();
+    if (r) manager.getCamera().setViewPoint(r.viewPoint);
+    return manager;
+}
+
 /** Execute a game command, updating debug stats for tile-targeting commands. */
 function executeGameCommand(
     command: Record<string, unknown>,
@@ -185,8 +286,8 @@ export function useRenderer({
     let rendererInitStart = 0;
     let placementGrid: ValidPositionGrid | null = null;
 
-    // Selection box state for rendering drag selection overlay
-    const selectionBox = ref<SelectionBox | null>(null);
+    const selectionBox = ref<SelectionBox | null>(null); // drag selection overlay
+    const { hintMessage, hintProvider } = createHintState(); // transient cursor hint
 
     /**
      * Resolve screen coordinates to tile coordinates.
@@ -220,87 +321,23 @@ export function useRenderer({
         () => buildPickerContext(getGame, renderer, entityRenderer, canvas)
     );
 
-    /**
-     * Create and configure the InputManager.
-     */
+    /** Create and configure the InputManager with all modes registered. */
     function createInputManager(): void {
         if (!canvas.value) return;
-
-        const placeBuildingMode = new PlaceBuildingMode(
-            (x, y, buildingType) => canPlaceBuilding(getGame, x, y, buildingType),
-            () => {
-                const game = getGame();
-                return {
-                    placeBuildingsCompleted: game?.settings.state.placeBuildingsCompleted ?? false,
-                    placeBuildingsWithWorker: game?.settings.state.placeBuildingsWithWorker ?? false,
-                };
-            }
-        );
-
-        const baseModeChange = handleModeChange(getGame);
-
-        inputManager = new InputManager({
-            target: canvas as Ref<HTMLElement | null>,
-            config: getDefaultInputConfig(),
-            tileResolver: resolveTile,
-            commandExecutor: executeCommand,
+        inputManager = buildInputManager({
+            canvas: canvas as Ref<HTMLElement | null>,
+            getGame,
+            resolveTile,
+            executeCommand,
             entityPicker,
             entityRectPicker,
-            initialMode: 'select',
-            onModeChange: (oldMode: string, newMode: string, data?: Record<string, unknown>) => {
-                baseModeChange(oldMode, newMode, data);
-
-                // Create grid when entering building placement mode
-                if (newMode === 'place_building') {
-                    const game = getGame();
-                    const buildingType =
-                        (data?.['buildingType'] as number | undefined) ?? (data?.['subType'] as number | undefined);
-                    if (game && buildingType !== undefined) {
-                        placementGrid = createPlacementGrid(
-                            game,
-                            buildingType,
-                            renderer!.viewPoint.x,
-                            renderer!.viewPoint.y
-                        );
-                        placeBuildingMode.setGrid(placementGrid);
-                    }
-                }
-
-                // Destroy grid when leaving building placement mode
-                if (oldMode === 'place_building') {
-                    placementGrid = null;
-                    placeBuildingMode.setGrid(null);
-                }
-            },
-            raceProvider: () => {
-                const g = getGame();
-                return g?.playerRaces.get(g.currentPlayer) ?? null;
+            hintProvider,
+            onTileClick,
+            getRenderer: () => renderer,
+            onPlacementGridChange: grid => {
+                placementGrid = grid;
             },
         });
-
-        inputManager.registerMode(new SelectMode());
-        const tileHover = (x: number, y: number) => updateTileDebugStats(x, y, getGame, onTileClick);
-
-        inputManager.registerMode(placeBuildingMode);
-        inputManager.registerMode(
-            new PlaceResourceMode((x, y) => {
-                const game = getGame();
-                return game ? canPlaceResource(game.terrain, game.state.tileOccupancy, x, y) : false;
-            }, tileHover)
-        );
-        inputManager.registerMode(
-            new PlaceUnitMode((x, y) => {
-                const game = getGame();
-                return game ? canPlaceUnit(game.terrain, game.state.tileOccupancy, x, y) : false;
-            }, tileHover)
-        );
-        inputManager.registerMode(createBuildingAdjustMode(getGame));
-        inputManager.attach();
-
-        // Connect camera mode to the ViewPoint
-        if (renderer) {
-            inputManager.getCamera().setViewPoint(renderer.viewPoint);
-        }
     }
 
     /**
@@ -411,6 +448,7 @@ export function useRenderer({
     }
 
     onMounted(() => {
+        console.log(`[${performance.now().toFixed(0)}ms] [perf] Canvas mounted`);
         const cavEl = canvas.value!;
         const game = getGame();
         renderer = new Renderer(cavEl, { externalInput: true, antialias: game?.settings.state.antialias });
@@ -448,9 +486,7 @@ export function useRenderer({
         return entityRenderer.getRace();
     }
 
-    function getInputManager(): InputManager | null {
-        return inputManager;
-    }
+    const getInputManager = (): InputManager | null => inputManager;
 
     function getCamera(): { x: number; y: number; zoom: number } | null {
         if (!renderer) return null;
@@ -473,9 +509,7 @@ export function useRenderer({
         }
     }
 
-    function getDecoLabels(): DebugEntityLabel[] {
-        return entityRenderer?.debugDecoLabels ?? [];
-    }
+    const getDecoLabels = (): DebugEntityLabel[] => entityRenderer?.debugDecoLabels ?? [];
 
     return {
         getRenderer: () => renderer,
@@ -486,5 +520,6 @@ export function useRenderer({
         centerOnPlayerStart,
         getDecoLabels,
         selectionBox,
+        hintMessage,
     };
 }

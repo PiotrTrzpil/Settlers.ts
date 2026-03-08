@@ -7,7 +7,7 @@
  */
 
 import type { Entity } from '../../entity';
-import { raceToRaceId } from '../../game-data-access';
+import { raceToRaceId } from '../../data/game-data-access';
 import { ChoreoTaskType, type ChoreoJob, type ChoreoNode } from './choreo-types';
 import type { JobChoreographyStore } from './job-choreography-store';
 import type { SettlerConfig } from './types';

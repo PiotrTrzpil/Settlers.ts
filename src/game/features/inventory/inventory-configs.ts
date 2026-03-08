@@ -6,8 +6,8 @@
 import { BuildingType } from '../../entity';
 import { EMaterialType } from '../../economy/material-type';
 import { getConstructionCosts } from '../../economy/building-production';
-import { Race } from '../../race';
-import { getBuildingInfo, hasBuildingXmlMapping, xmlGoodToMaterialType } from '../../game-data-access';
+import { Race } from '../../core/race';
+import { getBuildingInfo, hasBuildingXmlMapping, xmlGoodToMaterialType } from '../../data/game-data-access';
 import { PileSlotType } from '@/resources/game-data';
 
 /**

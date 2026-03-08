@@ -10,7 +10,7 @@
  */
 
 import { EntityType, BuildingType, type Entity } from '../../../entity';
-import { getBuildingDoorPos } from '../../../game-data-access';
+import { getBuildingDoorPos } from '../../../data/game-data-access';
 import { hexDistance, getApproxDirection } from '../../../systems/hex-directions';
 import { createLogger } from '@/utilities/logger';
 import { TaskResult } from '../types';

@@ -23,8 +23,8 @@ import {
 import type { LoadedGfxFileSet, LoadedSprite } from './sprite-loader';
 import { UnitType, EntityType } from '../entity';
 import { EMaterialType } from '../economy';
-import { ANIMATION_DEFAULTS, xmlKey } from '../animation';
-import { isMaterialAvailableForRace, isUnitAvailableForRace } from '../race-availability';
+import { ANIMATION_DEFAULTS, xmlKey } from '../animation/animation';
+import { isMaterialAvailableForRace, isUnitAvailableForRace } from '../data/race-availability';
 import { type SpriteLoadContext, getPaletteBase } from './sprite-load-context';
 
 const log = new LogHandler('SpriteUnitLoader');

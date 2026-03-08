@@ -1,6 +1,6 @@
 import { type Page, type Locator, expect } from '@playwright/test';
-import type { DebugStatsState } from '@/game/debug-stats';
-import type { GameViewStateData } from '@/game/game-view-state';
+import type { DebugStatsState } from '@/game/debug/debug-stats';
+import type { GameViewStateData } from '@/game/ui/game-view-state';
 import { Frames, Timeout } from './wait-config';
 import * as gameActions from './game-actions';
 import * as gameQueries from './game-queries';

@@ -20,9 +20,9 @@
  * - tick — advance animation timers
  */
 
-import type { TickSystem } from '../../tick-system';
+import type { TickSystem } from '../../core/tick-system';
 import { EntityType, type BuildingType, type EntityProvider } from '../../entity';
-import type { Race } from '../../race';
+import type { Race } from '../../core/race';
 import type { ConstructionSiteManager } from '../building-construction/construction-site-manager';
 import type { OverlayRegistry } from './overlay-registry';
 import { OverlayCondition, type BuildingOverlayInstance, type BuildingOverlayDef } from './types';

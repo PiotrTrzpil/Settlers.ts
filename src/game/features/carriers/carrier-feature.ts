@@ -7,7 +7,7 @@
  */
 
 import type { FeatureDefinition, FeatureContext } from '../feature';
-import { CarrierRegistry } from './carrier-manager';
+import { CarrierRegistry } from '../../systems/carrier-registry';
 import { UnitType } from '../../entity';
 
 export interface CarrierFeatureExports {

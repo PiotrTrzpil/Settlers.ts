@@ -9,9 +9,9 @@
  */
 
 import { reactive, watch } from 'vue';
-import type { Game } from './game';
-import type { GameSettingsManager } from './game-settings';
-import { spiralSearch } from './utils/spiral-search';
+import type { Game } from '../game';
+import type { GameSettingsManager } from '../game-settings';
+import { spiralSearch } from '../utils/spiral-search';
 import { getBridge } from './debug-bridge';
 
 const WINDOW_SIZE = 60;
@@ -32,7 +32,19 @@ export interface LoadTimings {
     unitsByRace: Record<string, number>;
     /** Time to deserialize registry from cache (0 on cache miss) */
     deserialize: number;
+    /** Sub-timing: EntityTextureAtlas.fromCache() — per-layer pixel data memcpy */
+    atlasRestore: number;
+    /** Sub-timing: SpriteMetadataRegistry.deserialize() — JSON→Maps reconstruction */
+    registryDeserialize: number;
+    /** Sub-timing: palette restore + GPU upload */
+    paletteUpload: number;
     gpuUpload: number;
+    /** Number of atlas layers uploaded to GPU */
+    gpuLayers: number;
+    /** Time to load selection indicator sprites after main sprites */
+    selectionIndicators: number;
+    /** Time to load building overlay sprites */
+    overlaySprites: number;
     totalSprites: number;
     atlasSize: string;
     spriteCount: number;
@@ -340,7 +352,13 @@ class DebugStats {
                 units: 0,
                 unitsByRace: {},
                 deserialize: 0,
+                atlasRestore: 0,
+                registryDeserialize: 0,
+                paletteUpload: 0,
                 gpuUpload: 0,
+                gpuLayers: 0,
+                selectionIndicators: 0,
+                overlaySprites: 0,
                 totalSprites: 0,
                 atlasSize: '',
                 spriteCount: 0,
@@ -504,7 +522,7 @@ class DebugStats {
             this.mapLoadStartTime = 0;
             const slt = this.state.loadTimings;
             console.log(
-                `[perf] Map load complete: ${mlt.totalLoad}ms` +
+                `[${performance.now().toFixed(0)}ms] [perf] Map load complete: ${mlt.totalLoad}ms` +
                     ` (game ${mlt.gameConstructor}ms, landscape ${slt.landscape}ms` +
                     `, cacheWait ${slt.cacheWait}ms, sprites ${slt.totalSprites}ms` +
                     `, renderer ${mlt.rendererInit}ms)`

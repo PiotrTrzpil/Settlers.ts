@@ -1,6 +1,6 @@
 import type { EMaterialType } from '../economy';
 import type { BuildingType } from '../entity';
-import type { Race } from '../race';
+import type { Race } from '../core/race';
 
 /**
  * Supported placement entity types.

@@ -56,8 +56,8 @@ export type { PileSlotKey } from './pile-registry';
 export { InventoryPileSync } from './inventory-pile-sync';
 export { StorageFilterManager } from './storage-filter-manager';
 export { PilePositionResolver } from './pile-position-resolver';
-export type { PileKind, LinkedPileKind, LinkedSlotKind } from './pile-kind';
-export { SlotKind, isLinkedPile, getOwnerBuildingId } from './pile-kind';
+export type { PileKind, LinkedPileKind, LinkedSlotKind } from '../../core/pile-kind';
+export { SlotKind, isLinkedPile, getOwnerBuildingId } from '../../core/pile-kind';
 
 // Feature definition (self-registering via FeatureRegistry)
 export { InventoryFeature, type InventoryExports } from './inventory-feature';

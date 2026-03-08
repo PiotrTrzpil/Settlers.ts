@@ -18,6 +18,27 @@
             <StatRow label="Position" :value="`${stats.cameraX}, ${stats.cameraY}`" />
             <StatRow label="Zoom" :value="`${stats.zoom}x`" />
             <StatRow label="Canvas" :value="`${stats.canvasWidth} x ${stats.canvasHeight}`" />
+            <div class="goto-row">
+                <input
+                    v-model="gotoTileCoords"
+                    class="goto-input goto-input-wide"
+                    type="text"
+                    placeholder="x, y"
+                    @keydown.enter="goToTile"
+                />
+                <button class="ctrl-btn" @click="goToTile">Go to tile</button>
+            </div>
+            <div class="goto-row">
+                <input
+                    v-model="gotoEntityId"
+                    class="goto-input goto-input-wide"
+                    type="number"
+                    placeholder="Entity ID"
+                    @keydown.enter="goToEntity"
+                />
+                <button class="ctrl-btn" @click="goToEntity">Go to entity</button>
+            </div>
+            <StatRow v-if="gotoEntityError" :label="gotoEntityError" dim />
         </CollapseSection>
 
         <!-- Tile -->
@@ -80,10 +101,10 @@
 
 <script setup lang="ts">
 import { computed, ref } from 'vue';
-import { debugStats } from '@/game/debug-stats';
+import { debugStats } from '@/game/debug/debug-stats';
 
 import type { Game } from '@/game/game';
-import { clearSavedTreeState } from '@/game/game-state-persistence';
+import { clearSavedTreeState } from '@/game/state/game-state-persistence';
 import { MapObjectCategory } from '@/game/types/map-object-types';
 import { useDebugMapObjects } from './use-debug-map-objects';
 import Checkbox from './Checkbox.vue';
@@ -94,6 +115,33 @@ import DebugPerformanceSection from './DebugPerformanceSection.vue';
 import DebugFrameTimings from './DebugFrameTimings.vue';
 import DebugMapLoadTimings from './DebugMapLoadTimings.vue';
 import SettingsSlider from './settings/SettingsSlider.vue';
+
+const gotoTileCoords = ref('');
+
+function goToTile(): void {
+    const parts = gotoTileCoords.value
+        .split(/[\s,;]+/)
+        .filter(Boolean)
+        .map(Number);
+    if (parts.length < 2 || parts[0] === undefined || parts[1] === undefined) return;
+    if (!isFinite(parts[0]) || !isFinite(parts[1])) return;
+    window.__settlers__?.viewpoint?.setPosition(parts[0], parts[1]);
+}
+
+const gotoEntityId = ref<number | ''>('');
+const gotoEntityError = ref('');
+
+function goToEntity(): void {
+    gotoEntityError.value = '';
+    const id = Number(gotoEntityId.value);
+    if (!isFinite(id) || gotoEntityId.value === '') return;
+    const entity = props.game.state.getEntity(id);
+    if (!entity) {
+        gotoEntityError.value = `Entity ${id} not found`;
+        return;
+    }
+    window.__settlers__?.viewpoint?.setPosition(entity.x, entity.y);
+}
 
 const props = defineProps<{
     paused: boolean;
@@ -150,6 +198,43 @@ const { mapObjectCounts, hasObjectTypeData, spawnCategory, spawnAllFromMap, clea
 .stat-value {
     color: var(--text-bright);
     text-align: right;
+}
+
+/* Camera go-to row */
+.goto-row {
+    display: flex;
+    gap: 4px;
+    margin-top: 4px;
+    align-items: center;
+}
+
+.goto-input {
+    width: 48px;
+    padding: 3px 4px;
+    background: var(--bg-mid);
+    color: var(--text);
+    border: 1px solid var(--border-mid);
+    border-radius: 3px;
+    font-size: 10px;
+    font-family: monospace;
+    text-align: center;
+    /* hide number input spinners */
+    -moz-appearance: textfield;
+}
+
+.goto-input::-webkit-outer-spin-button,
+.goto-input::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+}
+
+.goto-input:focus {
+    outline: none;
+    border-color: var(--border-hover);
+}
+
+.goto-input-wide {
+    width: 80px;
+    flex: 1;
 }
 
 /* Controls section */

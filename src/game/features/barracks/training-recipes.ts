@@ -10,8 +10,8 @@
  */
 
 import { EMaterialType } from '@/game/economy/material-type';
-import { UnitType } from '@/game/unit-types';
-import { Race } from '@/game/race';
+import { UnitType } from '@/game/core/unit-types';
+import { Race } from '@/game/core/race';
 import type { TrainingRecipe, TrainingRecipeSet } from './types';
 
 // ─── Common recipes (all non-DarkTribe races) ─────────────────────

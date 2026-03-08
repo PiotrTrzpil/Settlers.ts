@@ -10,7 +10,7 @@ import {
 } from '@/game/features/inventory';
 import { EMaterialType } from '@/game/economy/material-type';
 import { BuildingType } from '@/game/entity';
-import { Race } from '@/game/race';
+import { Race } from '@/game/core/race';
 
 beforeAll(() => installTestGameData());
 afterAll(() => resetTestGameData());

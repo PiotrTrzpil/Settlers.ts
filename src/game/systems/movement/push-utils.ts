@@ -9,7 +9,7 @@ import { TileCoord, tileKey } from '../../entity';
 import { isPassable } from '../../terrain';
 import { getAllNeighbors, GRID_DELTAS, hexDistance, NUMBER_OF_DIRECTIONS } from '../hex-directions';
 import { MovementController } from './movement-controller';
-import type { SeededRng } from '../../rng';
+import type { SeededRng } from '../../core/rng';
 
 /**
  * Interface for accessing tile occupancy data.

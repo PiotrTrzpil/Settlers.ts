@@ -14,7 +14,7 @@
 
 import type { Entity } from '../entity';
 import { EntityType, UnitType, isUnitTypeMilitary } from '../entity';
-import { getUnitLevel } from '../unit-types';
+import { getUnitLevel } from '../core/unit-types';
 import { HUD_OVERLAY_SPRITES } from './sprite-metadata/gil-indices';
 import { GilSpriteManifest } from './sprite-metadata/gil-sprite-manifest';
 import type { SpriteEntry } from './sprite-metadata';
@@ -39,24 +39,50 @@ const HEALTH_DOT = HUD_OVERLAY_SPRITES.HEALTH_DOT_SMALL;
 const HUD_GFX_FILE = 7;
 
 /**
- * Sprite manifest for the selection indicator system.
- * Single source of truth: the loader uses it to know what to preload,
- * and the resolver uses it to look up loaded sprites at render time.
+ * Named GIL indices for all selection indicator sprites.
+ * Single declaration used by both the manifest (preloading) and the resolve calls.
+ * Adding a new sprite here is sufficient — no separate list needed.
  */
-export const SELECTION_INDICATOR_MANIFEST = new GilSpriteManifest(
-    HUD_GFX_FILE,
-    (() => {
-        const indices: number[] = [
-            HUD_OVERLAY_SPRITES.SELECTION_BRACKET_COMPACT,
-            HUD_OVERLAY_SPRITES.MILITARY_BRACKET_LVL1,
-            HUD_OVERLAY_SPRITES.MILITARY_BRACKET_LVL2,
-            HUD_OVERLAY_SPRITES.MILITARY_BRACKET_LVL3,
-            HUD_OVERLAY_SPRITES.MILITARY_BRACKET_LEADER,
-        ];
-        for (let d = 0; d < HEALTH_DOT.count; d++) indices.push(HEALTH_DOT.start + d);
-        return indices;
-    })()
-);
+const SPRITES = {
+    UNIT_COMPACT: HUD_OVERLAY_SPRITES.SELECTION_BRACKET_COMPACT,
+    BUILDING: HUD_OVERLAY_SPRITES.SELECTION_BRACKET_MEDIUM,
+    MILITARY_LVL1: HUD_OVERLAY_SPRITES.MILITARY_BRACKET_LVL1,
+    MILITARY_LVL2: HUD_OVERLAY_SPRITES.MILITARY_BRACKET_LVL2,
+    MILITARY_LVL3: HUD_OVERLAY_SPRITES.MILITARY_BRACKET_LVL3,
+    MILITARY_LEADER: HUD_OVERLAY_SPRITES.MILITARY_BRACKET_LEADER,
+} as const;
+
+/**
+ * Sprite manifest for the selection indicator system.
+ * gilIndices derived automatically from SPRITES + health dot range — no separate list.
+ */
+export const SELECTION_INDICATOR_MANIFEST = new GilSpriteManifest(HUD_GFX_FILE, [
+    ...Object.values(SPRITES),
+    ...Array.from({ length: HEALTH_DOT.count }, (_, i) => HEALTH_DOT.start + i),
+]);
+
+/** Resolve a sprite from the selection indicator manifest. Throws if not loaded (programming error). */
+function resolveFromManifest(gilIndex: number, spriteManager: SpriteRenderManager): SpriteEntry {
+    const sprite = SELECTION_INDICATOR_MANIFEST.resolve(gilIndex, spriteManager.spriteRegistry!);
+    if (!sprite) throw new Error(`Selection indicator sprite GIL ${gilIndex} not loaded — bump CACHE_SCHEMA_VERSION`);
+    return sprite;
+}
+
+/**
+ * Build a zoom-compensated sprite entry scaled by baseScale at REFERENCE_ZOOM.
+ * offsetY: 'center' centers the sprite on the draw position; 'bottom' anchors it at the bottom.
+ */
+function zoomScaledSprite(
+    sprite: SpriteEntry,
+    baseScale: number,
+    zoom: number,
+    offsetY: 'center' | 'bottom'
+): SpriteEntry {
+    const scale = baseScale * (REFERENCE_ZOOM / zoom);
+    const w = sprite.widthWorld * scale;
+    const h = sprite.heightWorld * scale;
+    return { ...sprite, widthWorld: w, heightWorld: h, offsetX: -w / 2, offsetY: offsetY === 'center' ? -h / 2 : -h };
+}
 
 /**
  * Get the GIL index for the selection bracket sprite appropriate for this entity.
@@ -67,18 +93,16 @@ export function getSelectionBracketGilIndex(entity: Entity): number | null {
 
     const unitType = entity.subType as UnitType;
 
-    if (unitType === UnitType.SquadLeader) {
-        return HUD_OVERLAY_SPRITES.MILITARY_BRACKET_LEADER;
-    }
+    if (unitType === UnitType.SquadLeader) return SPRITES.MILITARY_LEADER;
 
     if (isUnitTypeMilitary(unitType)) {
         const level = getUnitLevel(unitType);
-        if (level === 3) return HUD_OVERLAY_SPRITES.MILITARY_BRACKET_LVL3;
-        if (level === 2) return HUD_OVERLAY_SPRITES.MILITARY_BRACKET_LVL2;
-        return HUD_OVERLAY_SPRITES.MILITARY_BRACKET_LVL1;
+        if (level === 3) return SPRITES.MILITARY_LVL3;
+        if (level === 2) return SPRITES.MILITARY_LVL2;
+        return SPRITES.MILITARY_LVL1;
     }
 
-    return HUD_OVERLAY_SPRITES.SELECTION_BRACKET_COMPACT;
+    return SPRITES.UNIT_COMPACT;
 }
 
 /**
@@ -89,7 +113,7 @@ export function getSelectionBracketGilIndex(entity: Entity): number | null {
  * and anchored at the bottom — when drawn at the sprite's top Y coordinate
  * the indicator appears just above the unit's head.
  *
- * Returns null if no sprite is available.
+ * Returns null for entities that don't use sprite-based selection.
  */
 export function resolveSelectionIndicator(
     entity: Entity,
@@ -98,24 +122,24 @@ export function resolveSelectionIndicator(
 ): SpriteEntry | null {
     const gilIndex = getSelectionBracketGilIndex(entity);
     if (gilIndex === null) return null;
-
-    const sprite = SELECTION_INDICATOR_MANIFEST.resolve(gilIndex, spriteManager.spriteRegistry!);
-    if (!sprite) return null;
-
-    const zoomCompensation = REFERENCE_ZOOM / currentZoom;
-    const scale = SELECTION_INDICATOR_BASE_SCALE * zoomCompensation;
-
-    const w = sprite.widthWorld * scale;
-    const h = sprite.heightWorld * scale;
-
+    const sprite = resolveFromManifest(gilIndex, spriteManager);
     // Center horizontally; anchor bottom edge at draw position so it sits above the head.
-    return {
-        ...sprite,
-        widthWorld: w,
-        heightWorld: h,
-        offsetX: -w / 2,
-        offsetY: -h,
-    };
+    return zoomScaledSprite(sprite, SELECTION_INDICATOR_BASE_SCALE, currentZoom, 'bottom');
+}
+
+/**
+ * Resolve the selection indicator SpriteEntry for a selected building.
+ * Uses BUILDING sprite scaled to cover the building's world-space footprint.
+ * The returned sprite is centered horizontally and aligned to the top of the footprint.
+ */
+export function resolveBuildingSelectionIndicator(
+    bounds: { minX: number; minY: number; maxX: number; maxY: number },
+    spriteManager: SpriteRenderManager
+): SpriteEntry {
+    const sprite = resolveFromManifest(SPRITES.BUILDING, spriteManager);
+    const w = bounds.maxX - bounds.minX;
+    const h = sprite.heightWorld * (w / sprite.widthWorld); // preserve aspect ratio
+    return { ...sprite, widthWorld: w, heightWorld: h, offsetX: -w / 2, offsetY: -h / 2 };
 }
 
 /**
@@ -123,32 +147,14 @@ export function resolveSelectionIndicator(
  * The dot is centered on the draw position and zoom-compensated.
  *
  * @param healthRatio 0-1 where 1 = full health, 0 = dead
- * @returns SpriteEntry for the health dot, or null if unavailable
  */
 export function resolveHealthDot(
     healthRatio: number,
     spriteManager: SpriteRenderManager,
     currentZoom: number
-): SpriteEntry | null {
+): SpriteEntry {
     // Map ratio to dot level: 0=green (full), 7=red (empty)
     const level = Math.min(HEALTH_DOT.count - 1, Math.floor((1 - healthRatio) * HEALTH_DOT.count));
-    const gilIndex = HEALTH_DOT.start + level;
-
-    const sprite = SELECTION_INDICATOR_MANIFEST.resolve(gilIndex, spriteManager.spriteRegistry!);
-    if (!sprite) return null;
-
-    const zoomCompensation = REFERENCE_ZOOM / currentZoom;
-    const scale = HEALTH_DOT_BASE_SCALE * zoomCompensation;
-
-    const w = sprite.widthWorld * scale;
-    const h = sprite.heightWorld * scale;
-
-    // Center the dot on the draw position.
-    return {
-        ...sprite,
-        widthWorld: w,
-        heightWorld: h,
-        offsetX: -w / 2,
-        offsetY: -h / 2,
-    };
+    const sprite = resolveFromManifest(HEALTH_DOT.start + level, spriteManager);
+    return zoomScaledSprite(sprite, HEALTH_DOT_BASE_SCALE, currentZoom, 'center');
 }

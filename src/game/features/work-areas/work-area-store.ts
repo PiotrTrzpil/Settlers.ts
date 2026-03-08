@@ -9,10 +9,10 @@
  */
 
 import type { BuildingType } from '../../buildings/types';
-import type { Race } from '../../race';
+import type { Race } from '../../core/race';
 import type { TileOffset } from '../building-adjust/types';
 import { WORK_AREA_BUILDINGS } from './types';
-import { getBuildingInfo } from '../../game-data-access';
+import { getBuildingInfo } from '../../data/game-data-access';
 import type { Persistable } from '@/game/persistence';
 
 /** Default work area center offset from the building tile anchor (tiles). Easy to change. */

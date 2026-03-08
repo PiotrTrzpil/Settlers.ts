@@ -50,10 +50,10 @@ import { installRealGameData } from '../../helpers/test-game-data';
 import { TERRAIN, setTerrainAt, blockColumnWithGap } from '../../helpers/test-map';
 import { BuildingType } from '@/game/buildings/building-type';
 import { tileKey, getBuildingFootprint, type TileCoord } from '@/game/entity';
-import { UnitType } from '@/game/unit-types';
+import { UnitType } from '@/game/core/unit-types';
 import { hexDistance, GRID_DELTAS } from '@/game/systems/hex-directions';
-import { Race } from '@/game/race';
-import { getBuildingDoorPos } from '@/game/game-data-access';
+import { Race } from '@/game/core/race';
+import { getBuildingDoorPos } from '@/game/data/game-data-access';
 
 const hasRealData = installRealGameData();
 

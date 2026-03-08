@@ -18,7 +18,7 @@ import type { GameState } from '@/game/game-state';
 import type { GameDataLoader } from '@/resources/game-data/game-data-loader';
 import type { BuildingTrigger } from '@/resources/game-data/types';
 import { EntityType } from '@/game/entity';
-import { raceToRaceId } from '@/game/game-data-access';
+import { raceToRaceId } from '@/game/data/game-data-access';
 const log = createLogger('TriggerSystem');
 
 // ============================================================================

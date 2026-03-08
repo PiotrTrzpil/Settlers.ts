@@ -18,7 +18,7 @@ import type {
     RaceJobData,
 } from '@/resources/game-data/types';
 import { PileSlotType } from '@/resources/game-data/types';
-import { clearWorkerBuildingCache } from '@/game/game-data-access';
+import { clearWorkerBuildingCache } from '@/game/data/game-data-access';
 import { loadGameDataFromFiles } from '@/resources/game-data/load-game-data-from-files';
 import { resetJobChoreographyStore } from '@/game/features/settler-tasks/job-choreography-store';
 import { existsSync } from 'fs';

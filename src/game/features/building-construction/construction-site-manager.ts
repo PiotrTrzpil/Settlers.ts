@@ -14,13 +14,13 @@
  */
 
 import { getBuildingFootprint, type BuildingType } from '../../buildings/types';
-import type { Race } from '../../race';
+import type { Race } from '../../core/race';
 import type { EMaterialType } from '../../economy/material-type';
 import type { ConstructionCost } from '../../economy/building-production';
 import { getConstructionCosts } from '../../economy/building-production';
 import type { EventBus } from '../../event-bus';
-import { getBuildingInfo } from '../../game-data-access';
-import type { SeededRng } from '../../rng';
+import { getBuildingInfo } from '../../data/game-data-access';
+import type { SeededRng } from '../../core/rng';
 import { type ComponentStore, mapStore } from '../../ecs';
 import { BuildingConstructionPhase, type CapturedTerrainTile, type ConstructionSite } from './types';
 import type { Persistable } from '@/game/persistence';
@@ -164,6 +164,35 @@ export class ConstructionSiteManager implements Persistable<SerializedConstructi
         };
 
         this.sites.set(buildingId, site);
+        this.eventBus.emit('construction:workerNeeded', { role: 'digger', siteId: buildingId, tileX, tileY, player });
+    }
+
+    private emitBuilderNeededIfRequired(site: ConstructionSite): void {
+        if (
+            site.terrain.complete &&
+            site.building.slots.assigned.size < site.building.slots.required &&
+            site.materials.deliveredAmount > site.materials.consumedAmount
+        ) {
+            this.eventBus.emit('construction:workerNeeded', {
+                role: 'builder',
+                siteId: site.buildingId,
+                tileX: site.tileX,
+                tileY: site.tileY,
+                player: site.player,
+            });
+        }
+    }
+
+    private emitDiggerNeededIfRequired(site: ConstructionSite): void {
+        if (!site.terrain.complete && site.terrain.slots.assigned.size < site.terrain.slots.required) {
+            this.eventBus.emit('construction:workerNeeded', {
+                role: 'digger',
+                siteId: site.buildingId,
+                tileX: site.tileX,
+                tileY: site.tileY,
+                player: site.player,
+            });
+        }
     }
 
     /** Remove the construction site record. No-op if it doesn't exist. */
@@ -222,23 +251,7 @@ export class ConstructionSiteManager implements Persistable<SerializedConstructi
         const site = this.getSiteOrThrow(buildingId, 'releaseDiggerSlot');
         site.terrain.slots.assigned.delete(diggerId);
         this.eventBus.emit('construction:workerReleased', { buildingId, workerId: diggerId, role: 'digger' });
-    }
-
-    /**
-     * Advance terrain leveling by `amount` (0.0–1.0 fraction).
-     * Emits `construction:levelingComplete` the first time `terrain.progress` reaches 1.0.
-     * No-op when per-tile tracking is active (unleveledTiles set) — progress is managed by completeNextTile.
-     */
-    advanceLeveling(buildingId: number, amount: number): void {
-        const site = this.getSiteOrThrow(buildingId, 'advanceLeveling');
-        if (site.terrain.complete) return;
-        // Per-tile tracking active — progress is managed by completeNextTile
-        if (site.terrain.unleveledTiles) return;
-        site.terrain.progress += amount;
-        if (site.terrain.progress >= 1.0) {
-            site.terrain.complete = true;
-            this.eventBus.emit('construction:levelingComplete', { buildingId });
-        }
+        this.emitDiggerNeededIfRequired(site);
     }
 
     /**
@@ -267,6 +280,7 @@ export class ConstructionSiteManager implements Persistable<SerializedConstructi
             site.terrain.complete = true;
             site.terrain.progress = 1;
             this.eventBus.emit('construction:levelingComplete', { buildingId });
+            this.emitBuilderNeededIfRequired(site);
         }
     }
 
@@ -316,6 +330,7 @@ export class ConstructionSiteManager implements Persistable<SerializedConstructi
         if (site.terrain.unleveledTiles.size === 0) {
             site.terrain.complete = true;
             this.eventBus.emit('construction:levelingComplete', { buildingId });
+            this.emitBuilderNeededIfRequired(site);
         }
 
         return tile;
@@ -348,6 +363,7 @@ export class ConstructionSiteManager implements Persistable<SerializedConstructi
         const site = this.getSiteOrThrow(buildingId, 'releaseBuilderSlot');
         site.building.slots.assigned.delete(builderId);
         this.eventBus.emit('construction:workerReleased', { buildingId, workerId: builderId, role: 'builder' });
+        this.emitBuilderNeededIfRequired(site);
     }
 
     /**
@@ -394,6 +410,7 @@ export class ConstructionSiteManager implements Persistable<SerializedConstructi
         const current = site.materials.delivered.get(material) ?? 0;
         site.materials.delivered.set(material, current + amount);
         site.materials.deliveredAmount += amount;
+        this.emitBuilderNeededIfRequired(site);
     }
 
     /**
@@ -549,7 +566,11 @@ export class ConstructionSiteManager implements Persistable<SerializedConstructi
             player: data.player,
             tileX: data.tileX,
             tileY: data.tileY,
-            phase: data.phase,
+            // Evacuating is a transient sub-frame state — restore as WaitingForBuilders
+            phase:
+                data.phase === BuildingConstructionPhase.Evacuating
+                    ? BuildingConstructionPhase.WaitingForBuilders
+                    : data.phase,
             terrain: {
                 slots: {
                     required: workerCount,

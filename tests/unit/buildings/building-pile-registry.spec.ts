@@ -8,11 +8,11 @@
 import { describe, it, expect } from 'vitest';
 import { BuildingPileRegistry } from '@/game/features/inventory/building-pile-registry';
 import { BuildingType } from '@/game/buildings/building-type';
-import { Race } from '@/game/race';
+import { Race } from '@/game/core/race';
 import { EMaterialType } from '@/game/economy/material-type';
 import { PileSlotType } from '@/resources/game-data';
 import type { GameData, BuildingInfo, BuildingPileInfo, RaceBuildingData } from '@/resources/game-data';
-import { SlotKind } from '@/game/features/inventory/pile-kind';
+import { SlotKind } from '@/game/core/pile-kind';
 
 // ─────────────────────────────────────────────────────────────
 // Helpers

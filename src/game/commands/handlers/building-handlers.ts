@@ -16,7 +16,7 @@ import {
     BUILDING_SPAWN_ON_COMPLETE,
     RESIDENCE_CONSTRUCTION_WORKER_SPAWNS,
 } from '../../features/building-construction/spawn-units';
-import { getBuildingWorkerInfo, getBuildingDoorPos } from '../../game-data-access';
+import { getBuildingWorkerInfo, getBuildingDoorPos } from '../../data/game-data-access';
 import { ringTiles } from '../../systems/spatial-search';
 import type {
     PlaceBuildingCommand,

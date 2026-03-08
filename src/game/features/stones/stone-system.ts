@@ -16,7 +16,7 @@ import { createLogger } from '@/utilities/logger';
 import { findEmptySpot } from '../../systems/spatial-search';
 import type { Command, CommandResult } from '../../commands';
 import type { Persistable } from '@/game/persistence';
-import type { SerializedStone } from '@/game/game-state-persistence';
+import type { SerializedStone } from '@/game/state/game-state-persistence';
 
 const log = createLogger('StoneSystem');
 

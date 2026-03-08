@@ -194,7 +194,8 @@ class ConstructionSiteManager {
     getDiggerSlotAvailable(buildingId: number): boolean;
     claimDiggerSlot(buildingId: number, diggerId: number): void;
     releaseDiggerSlot(buildingId: number, diggerId: number): void;
-    advanceLeveling(buildingId: number, amount: number): void;
+    completeNextTile(buildingId: number): CapturedTerrainTile | null;
+    getNextUnleveledTilePos(buildingId: number): { x: number; y: number } | null;
 
     // ── Builder management (unchanged) ──
     getBuilderSlotAvailable(buildingId: number): boolean;

@@ -3,7 +3,7 @@ import type { InputState } from './input-state';
 import type { TileCoord } from '../entity';
 import { type ModeRenderState, createDefaultRenderState } from './render-state';
 import type { CommandResult } from '../commands';
-import type { Race } from '../race';
+import type { Race } from '../core/race';
 
 /**
  * Context passed to input mode handlers.
@@ -27,6 +27,11 @@ export interface InputContext {
     pickEntityAtScreen: ((screenX: number, screenY: number) => number | null) | null;
     /** Pick entities whose sprites intersect a screen-space rectangle. Null if not wired. */
     pickEntitiesInScreenRect: ((sx1: number, sy1: number, sx2: number, sy2: number) => number[]) | null;
+    /**
+     * Show a transient hint message near a screen position (e.g. "No garrison slot available").
+     * Optional — not wired in all environments (tests, non-interactive contexts).
+     */
+    showHint?: (message: string, screenX: number, screenY: number) => void;
 }
 
 /**

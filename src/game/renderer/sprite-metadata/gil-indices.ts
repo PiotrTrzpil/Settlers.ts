@@ -12,7 +12,7 @@
  */
 
 import { BuildingType } from '../../entity';
-import { Race } from '../../race';
+import { Race } from '../../core/race';
 
 // ============================================================
 // Building UI Icons — GIL indices per race

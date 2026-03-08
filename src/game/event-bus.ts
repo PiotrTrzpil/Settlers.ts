@@ -7,16 +7,35 @@
  */
 
 import type { BuildingType } from './buildings/types';
-import type { Race } from './race';
-import type { UnitType } from './unit-types';
+import type { Race } from './core/race';
+import type { UnitType } from './core/unit-types';
 import type { EntityType } from './entity';
 import type { EMaterialType } from './economy';
 import type { MapObjectType } from './types/map-object-types';
-import type { TrainingRecipe } from './features/barracks/types';
-import type { ProductionMode } from './features/production-control';
 import { LogHandler } from '@/utilities/log-handler';
 import { ThrottledLogger } from '@/utilities/throttled-logger';
-import { toastError } from './toast-notifications';
+
+// ─────────────────────────────────────────────────────────────
+// Shared payload types — defined here so event-bus has no feature imports.
+// Features re-export these from event-bus rather than defining their own.
+// ─────────────────────────────────────────────────────────────
+
+/** Single barracks training recipe — inputs consumed to produce one soldier. */
+export interface TrainingRecipe {
+    /** Materials consumed per training cycle. */
+    inputs: readonly { material: EMaterialType; count: number }[];
+    /** Base soldier type produced (e.g. Swordsman, not Swordsman2). */
+    unitType: UnitType;
+    /** Soldier level (1, 2, or 3). */
+    level: number;
+}
+
+/** Controls how the next recipe is selected for a multi-recipe building. */
+export enum ProductionMode {
+    Even = 'even',
+    Proportional = 'proportional',
+    Manual = 'manual',
+}
 
 /** Event map defining all game events and their payloads */
 export interface GameEvents {
@@ -421,6 +440,17 @@ export interface GameEvents {
         workerId: number;
         role: 'digger' | 'builder';
     };
+    /**
+     * Emitted by ConstructionSiteManager when a site needs a worker it doesn't have.
+     * RecruitSystem subscribes to this instead of polling ConstructionSiteManager.
+     */
+    'construction:workerNeeded': {
+        role: 'digger' | 'builder';
+        siteId: number;
+        tileX: number;
+        tileY: number;
+        player: number;
+    };
 
     // === Barracks Training Events ===
 
@@ -548,6 +578,32 @@ export interface GameEvents {
         fromType: UnitType;
         toType: UnitType;
     };
+
+    // === Settler Location Events ===
+
+    /**
+     * Emitted when a building is destroyed while a settler is approaching it with
+     * intent to enter. Features identify whether the settler is theirs via their own
+     * data structures (garrison via UnitReservationRegistry, settler-tasks via runtimes map).
+     */
+    'settler-location:approachInterrupted': {
+        settlerId: number;
+        buildingId: number;
+    };
+
+    // === Garrison Events ===
+
+    /** Emitted when a unit enters a tower garrison (becomes hidden). */
+    'garrison:unitEntered': {
+        buildingId: number;
+        unitId: number;
+    };
+
+    /** Emitted when a unit is ejected from a tower garrison (becomes visible at door). */
+    'garrison:unitExited': {
+        buildingId: number;
+        unitId: number;
+    };
 }
 
 export type EventHandler<T> = (payload: T) => void;
@@ -562,6 +618,9 @@ export class EventBus {
      * Enable in tests so failures surface immediately.
      */
     public strict = false;
+
+    /** Called when a handler error is logged for the first time (throttled). Set by the owning layer. */
+    onHandlerError: ((event: string, err: Error) => void) | null = null;
 
     /** Per-event throttled logger to prevent error spam */
     private errorLoggers = new Map<string, ThrottledLogger>();
@@ -612,7 +671,7 @@ export class EventBus {
                     err
                 );
                 if (logged) {
-                    toastError('EventBus', `${event as string}: ${err.message}`);
+                    this.onHandlerError?.(event as string, err);
                 }
             }
         }

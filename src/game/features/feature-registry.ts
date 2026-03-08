@@ -8,10 +8,11 @@
  * - Handle feature cleanup on destroy
  */
 
-import type { TickSystem } from '../tick-system';
+import type { TickSystem } from '../core/tick-system';
 import { EventSubscriptionManager } from '../event-bus';
 import type { EntityVisualService } from '../animation/entity-visual-service';
 import type { EntityCleanupRegistry } from '../systems/entity-cleanup-registry';
+import type { UnitReservationRegistry } from '../systems/unit-reservation';
 import type { CoreDeps, FeatureDefinition, FeatureInstance, FeatureContext, BoundCommandHandler } from './feature';
 import type { Command, CommandResult, CommandType } from '../commands';
 import type { Persistable } from '../persistence';
@@ -29,6 +30,7 @@ const log = createLogger('FeatureRegistry');
 export interface FeatureRegistryConfig extends CoreDeps {
     visualService: EntityVisualService;
     cleanupRegistry: EntityCleanupRegistry;
+    unitReservation: UnitReservationRegistry;
     executeCommand: (cmd: Command) => CommandResult;
 }
 
@@ -294,6 +296,7 @@ export class FeatureRegistry {
             eventBus,
             visualService: this.config.visualService,
             cleanupRegistry: this.config.cleanupRegistry,
+            unitReservation: this.config.unitReservation,
             executeCommand: this.config.executeCommand,
 
             getFeature: <T>(featureId: string): T => {

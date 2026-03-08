@@ -41,6 +41,7 @@ export interface BuildingDebugInfo {
 const PHASE_NAMES: Record<BuildingConstructionPhase, string> = {
     [BuildingConstructionPhase.WaitingForDiggers]: 'Waiting for Diggers',
     [BuildingConstructionPhase.TerrainLeveling]: 'Leveling',
+    [BuildingConstructionPhase.Evacuating]: 'Evacuating',
     [BuildingConstructionPhase.WaitingForBuilders]: 'Waiting for Builders',
     [BuildingConstructionPhase.ConstructionRising]: 'Rising',
     [BuildingConstructionPhase.CompletedRising]: 'Completing',

@@ -1,9 +1,9 @@
 import { BuildingType, UnitType } from '../entity';
 import { MapObjectType } from '@/game/types/map-object-types';
 import { ProductionMode } from '../features/production-control';
-import type { Race } from '../race';
+import type { Race } from '../core/race';
 import type { EMaterialType } from '../economy/material-type';
-import type { PileKind } from '../features/inventory/pile-kind';
+import type { PileKind } from '../core/pile-kind';
 
 /**
  * Formation offsets for multi-unit movement commands.
@@ -221,6 +221,42 @@ export interface ScriptAddSettlersCommand {
     race?: Race;
 }
 
+// === Specialist Recruitment Commands ===
+
+export interface RecruitSpecialistCommand {
+    type: 'recruit_specialist';
+    unitType: UnitType;
+    /** Positive = enqueue N. Negative = dequeue N (e.g. -1 for the -1 button). */
+    count: number;
+    player: number;
+    race: Race;
+    /** Camera center tile at the time of the command. Used to find the nearest tool / carrier. */
+    nearX?: number;
+    nearY?: number;
+}
+
+// === Garrison Commands ===
+
+export interface GarrisonUnitsCommand {
+    type: 'garrison_units';
+    buildingId: number;
+    /** Unit IDs to attempt to garrison. Handler filters to those that fit. */
+    unitIds: number[];
+}
+
+export interface UngarrisonUnitCommand {
+    type: 'ungarrison_unit';
+    buildingId: number;
+    unitId: number;
+}
+
+/** Garrison all currently selected military units into a building at the given tile. */
+export interface GarrisonSelectedUnitsCommand {
+    type: 'garrison_selected_units';
+    tileX: number;
+    tileY: number;
+}
+
 // === Selection Commands ===
 
 export interface SelectCommand {
@@ -253,6 +289,14 @@ export interface SelectMultipleCommand {
     entityIds: number[];
 }
 
+export interface SelectSameUnitTypeCommand {
+    type: 'select_same_unit_type';
+    /** The entity whose subType we want to match. */
+    seedEntityId: number;
+    /** Candidate entity IDs to filter (e.g. from a screen-space pick). */
+    candidateIds: number[];
+}
+
 /**
  * Union type of all game commands.
  */
@@ -266,6 +310,7 @@ export type Command =
     | ToggleSelectionCommand
     | SelectAreaCommand
     | SelectMultipleCommand
+    | SelectSameUnitTypeCommand
     | MoveSelectedUnitsCommand
     | RemoveEntityCommand
     | SpawnPileCommand
@@ -282,7 +327,11 @@ export type Command =
     | SetProductionModeCommand
     | SetRecipeProportionCommand
     | AddToProductionQueueCommand
-    | RemoveFromProductionQueueCommand;
+    | RemoveFromProductionQueueCommand
+    | GarrisonUnitsCommand
+    | UngarrisonUnitCommand
+    | GarrisonSelectedUnitsCommand
+    | RecruitSpecialistCommand;
 
 /** Union of all command type string literals. */
 export type CommandType = Command['type'];
@@ -363,13 +412,20 @@ export function isUnitCommand(cmd: Command): cmd is SpawnUnitCommand | MoveUnitC
  */
 export function isSelectionCommand(
     cmd: Command
-): cmd is SelectCommand | SelectAtTileCommand | ToggleSelectionCommand | SelectAreaCommand | SelectMultipleCommand {
+): cmd is
+    | SelectCommand
+    | SelectAtTileCommand
+    | ToggleSelectionCommand
+    | SelectAreaCommand
+    | SelectMultipleCommand
+    | SelectSameUnitTypeCommand {
     return (
         cmd.type === 'select' ||
         cmd.type === 'select_at_tile' ||
         cmd.type === 'toggle_selection' ||
         cmd.type === 'select_area' ||
-        cmd.type === 'select_multiple'
+        cmd.type === 'select_multiple' ||
+        cmd.type === 'select_same_unit_type'
     );
 }
 

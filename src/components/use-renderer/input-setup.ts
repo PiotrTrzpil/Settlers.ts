@@ -2,11 +2,12 @@
  * Input mode setup — creates specialized input modes and handles mode changes.
  */
 
+import { ref, type Ref } from 'vue';
 import type { Game } from '@/game/game';
 import type { BuildingAdjustHandler } from '@/game/features/building-adjust/types';
 import { BuildingAdjustMode } from '@/game/input';
 import { WorkAreaAdjustHandler } from '@/game/features/building-adjust';
-import { debugStats } from '@/game/debug-stats';
+import { debugStats } from '@/game/debug/debug-stats';
 
 /**
  * Update debug stats with tile information during pointer move.
@@ -80,4 +81,33 @@ export function handleModeChange(
         game.mode = newMode;
         game.placeBuildingType = vs.placeBuildingType;
     };
+}
+
+/**
+ * Create a reactive hint message state and a provider function for the InputManager.
+ * Shows a transient message near the cursor (e.g. "No garrison slot available") for 2.5 s.
+ */
+export interface HintMessage {
+    text: string;
+    x: number;
+    y: number;
+}
+
+export interface HintState {
+    hintMessage: Ref<HintMessage | null>;
+    hintProvider: (msg: string, sx: number, sy: number) => void;
+}
+
+export function createHintState(): HintState {
+    const hintMessage = ref<HintMessage | null>(null);
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    function hintProvider(msg: string, sx: number, sy: number): void {
+        if (timer !== null) clearTimeout(timer);
+        hintMessage.value = { text: msg, x: sx, y: sy };
+        timer = setTimeout(() => {
+            hintMessage.value = null;
+            timer = null;
+        }, 2500);
+    }
+    return { hintMessage, hintProvider };
 }

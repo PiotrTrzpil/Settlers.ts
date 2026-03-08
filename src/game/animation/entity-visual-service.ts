@@ -37,7 +37,7 @@
  * - Call remove() when entity is destroyed
  */
 
-import { ANIMATION_DEFAULTS } from '../animation';
+import { ANIMATION_DEFAULTS } from './animation';
 /** What animation should play on an entity */
 export interface AnimationIntent {
     /** Sequence key (XML name, e.g., 'WC_WALK', 'SML01_FIGHT') */
@@ -277,6 +277,8 @@ export class EntityVisualService {
             const state = this.getStateOrThrow(entityId, 'applyIntent');
             if (state.animation) {
                 state.animation.playing = false;
+                state.animation.currentFrame = 0;
+                state.animation.elapsedMs = 0;
             }
         } else {
             this.play(entityId, intent.sequence, { loop: intent.loop });

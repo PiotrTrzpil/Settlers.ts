@@ -37,6 +37,7 @@ export const BarracksFeature: FeatureDefinition = {
             settlerTaskSystem,
             productionControlManager,
             eventBus: ctx.eventBus,
+            unitReservation: ctx.unitReservation,
             isCarrierBusy: (carrierId: number) => logisticsDispatcher.activeJobs.has(carrierId),
         });
 

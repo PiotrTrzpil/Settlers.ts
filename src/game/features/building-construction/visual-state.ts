@@ -31,8 +31,9 @@ export function getBuildingVisualState(site: ConstructionSite | undefined): Buil
     switch (phase) {
     case BuildingConstructionPhase.WaitingForDiggers:
     case BuildingConstructionPhase.TerrainLeveling:
+    case BuildingConstructionPhase.Evacuating:
     case BuildingConstructionPhase.WaitingForBuilders:
-        // Waiting/leveling phases: show construction sprite at 0 height (no visual progress yet)
+        // Waiting/leveling/evacuating phases: show construction sprite at 0 height (no visual progress yet)
         return {
             useConstructionSprite: true,
             verticalProgress: 0.0,
@@ -52,14 +53,25 @@ export function getBuildingVisualState(site: ConstructionSite | undefined): Buil
         };
 
     case BuildingConstructionPhase.CompletedRising:
-        // Completed sprite rises from bottom
-        return {
-            useConstructionSprite: false,
-            verticalProgress: completedRisingProgress,
-            overallProgress: 1.0,
-            isCompleted: false,
-            phase,
-        };
+        if (completedRisingProgress < 0.5) {
+            // First half: construction sprite rises from bottom to fully visible
+            return {
+                useConstructionSprite: true,
+                verticalProgress: completedRisingProgress * 2,
+                overallProgress: 1.0,
+                isCompleted: false,
+                phase,
+            };
+        } else {
+            // Second half: completed sprite rises from bottom over the fully-visible construction sprite
+            return {
+                useConstructionSprite: false,
+                verticalProgress: (completedRisingProgress - 0.5) * 2,
+                overallProgress: 1.0,
+                isCompleted: false,
+                phase,
+            };
+        }
 
     case BuildingConstructionPhase.Completed:
         // Terminal state — site should be removed immediately after
@@ -70,5 +82,10 @@ export function getBuildingVisualState(site: ConstructionSite | undefined): Buil
             isCompleted: true,
             phase,
         };
+
+    default: {
+        const _: never = phase;
+        throw new Error(`getBuildingVisualState: unhandled BuildingConstructionPhase ${_}`);
+    }
     }
 }

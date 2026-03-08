@@ -24,7 +24,7 @@ import type { Command, CommandResult } from '../../commands';
 import { findEmptySpot } from '../../systems/spatial-search';
 import type { EventBus } from '../../event-bus';
 import type { Persistable } from '@/game/persistence';
-import type { SerializedCrop } from '@/game/game-state-persistence';
+import type { SerializedCrop } from '@/game/state/game-state-persistence';
 
 // ── Stages ────────────────────────────────────────────────────
 

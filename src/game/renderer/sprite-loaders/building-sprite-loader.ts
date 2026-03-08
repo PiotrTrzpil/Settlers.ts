@@ -13,11 +13,11 @@ import {
     AVAILABLE_RACES,
     type BuildingSpriteInfo,
 } from '../sprite-metadata';
-import { ANIMATION_DEFAULTS } from '@/game/animation';
+import { ANIMATION_DEFAULTS } from '@/game/animation/animation';
 import type { LoadedGfxFileSet } from '../sprite-loader';
 import { SafeLoadBatch, yieldToEventLoop } from '../batch-loader';
 import { BuildingType, EntityType } from '@/game/entity';
-import { isBuildingAvailableForRace } from '@/game/race-availability';
+import { isBuildingAvailableForRace } from '@/game/data/race-availability';
 import { type SpriteLoadContext, getPaletteBase } from '../sprite-load-context';
 
 const log = new LogHandler('BuildingSpriteLoader');

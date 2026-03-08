@@ -1,6 +1,6 @@
 import { EMaterialType } from '../../economy/material-type';
 import type { Persistable } from '@/game/persistence';
-import type { SerializedStorageFilter } from '@/game/game-state-persistence';
+import type { SerializedStorageFilter } from '@/game/state/game-state-persistence';
 
 const EMPTY_SET: ReadonlySet<EMaterialType> = new Set();
 

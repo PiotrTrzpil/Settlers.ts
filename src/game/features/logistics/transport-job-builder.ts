@@ -9,7 +9,7 @@
 import { EMaterialType } from '../../economy';
 import { EntityType } from '../../entity';
 import { BuildingType } from '../../buildings/building-type';
-import { raceToRaceId, getBuildingDoorPos } from '../../game-data-access';
+import { raceToRaceId, getBuildingDoorPos } from '../../data/game-data-access';
 import { createChoreoJobState, type ChoreoJob } from '../settler-tasks/choreo-types';
 import type { JobState } from '../settler-tasks/types';
 import type { TransportJobRecord } from './transport-job-record';

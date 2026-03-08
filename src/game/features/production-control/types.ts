@@ -11,15 +11,11 @@
  */
 
 // ============================================================================
-// Production Mode
+// Production Mode — defined in event-bus (no feature deps), re-exported here.
 // ============================================================================
 
-/** Controls how the next recipe is selected for a multi-recipe building. */
-export enum ProductionMode {
-    Even = 'even',
-    Proportional = 'proportional',
-    Manual = 'manual',
-}
+import { ProductionMode } from '@/game/event-bus';
+export { ProductionMode };
 
 // ============================================================================
 // Production State

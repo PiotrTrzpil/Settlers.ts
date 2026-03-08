@@ -5,7 +5,7 @@
 
 import { EntityType } from '../entity';
 import { GameState } from '../game-state';
-import { S4_TO_MATERIAL_TYPE } from '../game-data-access';
+import { S4_TO_MATERIAL_TYPE } from '../data/game-data-access';
 import { LogHandler } from '@/utilities/log-handler';
 import type { EventBus } from '../event-bus';
 import type { MapStackData } from '@/resources/map/map-entity-data';

@@ -97,3 +97,8 @@ export { findNearestEntity, findEmptySpot, ringTiles, type FindEmptySpotConfig }
 // Entity Cleanup Registry
 // ============================================================================
 export { EntityCleanupRegistry, CLEANUP_PRIORITY, type CleanupPriority } from './entity-cleanup-registry';
+
+// ============================================================================
+// Unit Reservation Registry
+// ============================================================================
+export { UnitReservationRegistry } from './unit-reservation';

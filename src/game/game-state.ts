@@ -7,13 +7,13 @@ import {
     getBuildingFootprint,
     isUnitTypeSelectable,
 } from './entity';
-import { Race } from './race';
+import { Race } from './core/race';
 import { getBuildingDoorCorridor } from './buildings/types';
 import type { MovementSystem, MovementController } from './systems/movement/index';
-import { SeededRng, createGameRng } from './rng';
+import { SeededRng, createGameRng } from './core/rng';
 import { EventBus } from './event-bus';
-import { SelectionManager } from './selection-manager';
-import { StackedPileManager } from './stacked-pile-manager';
+import { SelectionManager } from './ui/selection-manager';
+import { StackedPileManager } from './state/stacked-pile-manager';
 import { type ComponentStore, mapStore } from './ecs';
 import { EntityIndex } from './entity-index';
 import type { SpatialGrid } from './spatial-grid';

@@ -1,7 +1,7 @@
 import { BasePlacementMode, type PlacementModeData, type PlacementModeEnterData } from './place-mode-base';
 import type { InputContext } from '../input-mode';
 import { UnitType } from '../../entity';
-import type { Race } from '../../race';
+import type { Race } from '../../core/race';
 import type { PlacementEntityType } from '../render-state';
 
 /**

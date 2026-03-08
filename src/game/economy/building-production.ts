@@ -4,9 +4,9 @@
  */
 
 import { BuildingType } from '../entity';
-import { Race, AVAILABLE_RACES } from '../race';
+import { Race, AVAILABLE_RACES } from '../core/race';
 import { EMaterialType } from './material-type';
-import { getBuildingInfo, hasBuildingXmlMapping } from '../game-data-access';
+import { getBuildingInfo, hasBuildingXmlMapping } from '../data/game-data-access';
 import type { BuildingInfo } from '@/resources/game-data';
 
 export interface ProductionChain {

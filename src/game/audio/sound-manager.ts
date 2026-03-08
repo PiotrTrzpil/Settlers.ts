@@ -34,6 +34,9 @@ export class SoundManager implements IAudioManager {
     private silReader: SilFileReader | null = null;
     private sndReader: SndFileReader | null = null;
 
+    /** Guard: setupAudioUnlock() must only add DOM listeners once per SoundManager instance */
+    private audioUnlockSetup = false;
+
     private constructor() {
         this.musicController = new MusicController(this);
         this.sfxPoolManager = new SfxPoolManager(
@@ -176,6 +179,9 @@ export class SoundManager implements IAudioManager {
     }
 
     private setupAudioUnlock(): void {
+        if (this.audioUnlockSetup) return;
+        this.audioUnlockSetup = true;
+
         let unlocking = false; // Prevent multiple concurrent unlock attempts
 
         const removeListeners = () => {
@@ -244,6 +250,7 @@ export class SoundManager implements IAudioManager {
         this.fileManager = null;
         this.silReader = null;
         this.sndReader = null;
+        this.initPromise = null; // Allow re-initialization on next game load
         SoundManager.log.debug('SoundManager unloaded');
     }
 

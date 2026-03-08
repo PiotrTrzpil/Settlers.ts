@@ -9,7 +9,7 @@ import { reactive, computed, type Ref } from 'vue';
 import type { LayerVisibility } from '@/game/renderer/layer-visibility';
 import { loadLayerVisibility, saveLayerVisibility } from '@/game/renderer/layer-visibility';
 import { RIVER_SLOT_PERMS } from '@/game/renderer/landscape/textures/landscape-texture-map';
-import { debugStats } from '@/game/debug-stats';
+import { debugStats } from '@/game/debug/debug-stats';
 
 /**
  * Returns reactive layer visibility state, river config state, and all actions

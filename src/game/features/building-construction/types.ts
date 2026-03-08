@@ -4,9 +4,9 @@
  */
 
 import { BuildingType } from '../../buildings/types';
-import { Race } from '../../race';
+import { Race } from '../../core/race';
 import type { TerrainData } from '../../terrain';
-import { UnitType } from '../../unit-types';
+import { UnitType } from '../../core/unit-types';
 import type { EMaterialType } from '../../economy/material-type';
 import type { ConstructionCost } from '../../economy/building-production';
 
@@ -19,14 +19,16 @@ export enum BuildingConstructionPhase {
     WaitingForDiggers = 0,
     /** Diggers actively leveling terrain (driven by digger work ticks) */
     TerrainLeveling = 1,
+    /** Leveling done but units still on footprint — evacuating before footprint block is restored */
+    Evacuating = 2,
     /** Leveling done, awaiting materials + builders */
-    WaitingForBuilders = 2,
+    WaitingForBuilders = 3,
     /** Builders actively constructing (driven by builder work ticks + materials) */
-    ConstructionRising = 3,
-    /** Final rise animation (timed, 0.5s) */
-    CompletedRising = 4,
+    ConstructionRising = 4,
+    /** Final rise animation (progress-based) */
+    CompletedRising = 5,
     /** Terminal — building is fully completed */
-    Completed = 5,
+    Completed = 6,
 }
 
 /**

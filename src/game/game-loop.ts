@@ -8,13 +8,13 @@
 import { GameState } from './game-state';
 import { LogHandler } from '@/utilities/log-handler';
 import { ThrottledLogger } from '@/utilities/throttled-logger';
-import { debugStats } from './debug-stats';
+import { debugStats } from './debug/debug-stats';
 import type { GameSettings } from './game-settings';
-import type { GameViewState } from './game-view-state';
-import type { TickSystem } from './tick-system';
+import type { GameViewState } from './ui/game-view-state';
+import type { TickSystem } from './core/tick-system';
 import type { FrameRenderTiming } from './renderer/renderer';
 import { EntityVisualService } from './animation/entity-visual-service';
-import { toastError, toastClearThrottle } from './toast-notifications';
+import { toastError, toastClearThrottle } from './ui/toast-notifications';
 
 const TICK_RATE = 30;
 const TICK_DURATION = 1 / TICK_RATE;

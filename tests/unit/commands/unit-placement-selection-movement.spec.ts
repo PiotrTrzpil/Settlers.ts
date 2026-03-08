@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { GameState } from '@/game/game-state';
 import { EntityType, UnitType, getUnitTypeSpeed, BuildingType } from '@/game/entity';
-import { Race } from '@/game/race';
+import { Race } from '@/game/core/race';
 import { installTestGameData, resetTestGameData } from '../helpers/test-game-data';
 import { CommandHandlerRegistry, registerAllHandlers } from '@/game/commands';
 import { MapSize } from '@/utilities/map-size';
@@ -78,6 +78,9 @@ describe('Unit Placement, Selection & Movement', () => {
             } as any,
             combatSystem: { releaseFromCombat: () => {} } as any,
             storageFilterManager: undefined as any,
+            unitReservation: { isReserved: () => false } as any,
+            recruitSystem: { enqueue: () => {}, dequeue: () => {}, getQueuedCount: () => 0, tick: () => {} } as any,
+            unitTransformer: { dismissSpecialist: () => false } as any,
             getPlacementFilter: () => null,
         });
         /* eslint-enable @typescript-eslint/no-explicit-any */

@@ -140,7 +140,6 @@ class ConstructionSiteManager {
     getDiggerSlotAvailable(buildingId: number): boolean;  // assignedDiggers.size < requiredDiggers
     claimDiggerSlot(buildingId: number, diggerId: number): void;
     releaseDiggerSlot(buildingId: number, diggerId: number): void;
-    advanceLeveling(buildingId: number, amount: number): void;  // increment levelingProgress
 
     // Builder management
     getBuilderSlotAvailable(buildingId: number): boolean;
@@ -179,8 +178,8 @@ function createDiggerHandler(
 Digger job choreography (built programmatically, like barracks training):
 1. `GO_TO_TARGET` — walk to building site
 2. `WORK` — leveling animation, duration = `LEVELING_WORK_FRAMES` (e.g. 50 frames = 5s per work cycle)
-3. On WORK completion: `constructionSiteManager.advanceLeveling(buildingId, progressPerCycle)`
-4. Loop steps 2–3 until `levelingProgress >= 1.0`
+3. On WORK completion: `constructionSiteManager.completeNextTile(buildingId)`
+4. Loop steps 2–3 until `completeNextTile` returns null (all tiles leveled)
 5. When done: release slot, return to idle
 
 `progressPerCycle = 1.0 / (LEVELING_CYCLES_TOTAL / requiredDiggers)` — more diggers = faster leveling. `LEVELING_CYCLES_TOTAL = 6` means a single digger does 6 cycles; 2 diggers each do 3; 3 diggers each do 2.
@@ -290,12 +289,12 @@ When construction completes, the construction inventory is replaced by the norma
 **Key decisions**:
 - Separate from `BuildingStateManager` — construction sites are transient (only exist during construction), building states persist. The manager bridges them by updating `BuildingState.phase` and `BuildingState.phaseProgress` as diggers/builders work.
 - Digger count from `getBuildingSize` not footprint tile count — the XML footprint bitmask includes exclusion zones (30–200+ tiles) which would yield absurd digger counts. The 2×2/3×3 size is the meaningful metric.
-- Progress is deterministic: `advanceLeveling` and `advanceConstruction` use fixed increments, not dt-based. Each work cycle completion adds a fixed fraction. This keeps replay determinism.
+- Progress is deterministic: leveling advances per-tile via `completeNextTile`, construction via `advanceConstruction`. Each work cycle completes exactly one tile. This keeps replay determinism.
 
 **Behavior**:
 - `registerSite` called from `executePlaceBuilding` (via event or direct call)
 - `removeSite` called on `building:removed` event (building cancelled)
-- When `levelingProgress >= 1.0`: sets `levelingComplete = true`, emits `construction:levelingComplete`
+- When last tile leveled (via `completeNextTile`) or terrain already flat (via `populateUnleveledTiles`): sets `levelingComplete = true`, emits `construction:levelingComplete`
 - When `constructionProgress >= 1.0`: emits `construction:progressComplete`
 - `findSiteNeedingDiggers/Builders`: iterates all sites for the player, returns nearest by Euclidean distance with available slots. Sorted by entity ID for determinism when equidistant.
 
@@ -339,7 +338,7 @@ When construction completes, the construction inventory is replaced by the norma
 - `findTarget()`: calls `constructionSiteManager.findSiteNeedingDiggers(x, y, player)`
 - Returns building entity ID as target
 - Job nodes: `GO_TO_TARGET` → (`WORK` × N cycles)
-- Each WORK completion calls `constructionSiteManager.advanceLeveling(buildingId, increment)` and triggers `applyTerrainLeveling` with updated progress
+- Each WORK completion calls `constructionSiteManager.completeNextTile(buildingId)` which emits `construction:tileCompleted` to apply the individual tile's terrain change
 - When `levelingComplete`: current work node finishes, then digger is released
 - If building removed mid-work: digger released on `building:removed` cleanup
 

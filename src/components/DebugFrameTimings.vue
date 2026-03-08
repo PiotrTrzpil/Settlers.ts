@@ -22,7 +22,7 @@
 </template>
 
 <script setup lang="ts">
-import { debugStats } from '@/game/debug-stats';
+import { debugStats } from '@/game/debug/debug-stats';
 import CollapseSection from './CollapseSection.vue';
 import StatRow from './StatRow.vue';
 

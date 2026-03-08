@@ -357,6 +357,13 @@ export function destroyDecoderPool(): void {
     }
 }
 
+// Terminate workers on HMR to prevent OOM from accumulated Web Workers
+if (import.meta.hot) {
+    import.meta.hot.dispose(() => {
+        destroyDecoderPool();
+    });
+}
+
 /**
  * Warm up the decoder pool to eliminate first-batch startup latency.
  * Call this during file preload, before sprites are loaded.

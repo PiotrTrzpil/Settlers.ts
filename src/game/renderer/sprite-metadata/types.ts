@@ -5,7 +5,7 @@
  */
 
 import { AtlasRegion } from '../entity-texture-atlas';
-import type { AnimationData } from '@/game/animation';
+import type { AnimationData } from '@/game/animation/animation';
 
 /**
  * Metadata for a single sprite entry in the atlas.

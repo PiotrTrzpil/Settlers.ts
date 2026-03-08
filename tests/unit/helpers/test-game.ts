@@ -7,7 +7,7 @@
 
 import { GameState, UnitStateView } from '@/game/game-state';
 import { EntityType, BuildingType, UnitType, getUnitTypeSpeed, type Entity } from '@/game/entity';
-import { Race } from '@/game/race';
+import { Race } from '@/game/core/race';
 import { createTestMap, type TestMap } from './test-map';
 import { EventBus } from '@/game/event-bus';
 import { spiralSearch } from '@/game/utils/spiral-search';
@@ -390,6 +390,9 @@ export function createTestRegistry(ctx: TestContext, eventBus?: EventBus): Comma
         } as any,
         combatSystem: { releaseFromCombat: () => {} } as any,
         storageFilterManager: undefined as any,
+        unitReservation: { isReserved: () => false } as any,
+        recruitSystem: { enqueue: () => {}, dequeue: () => {}, getQueuedCount: () => 0, tick: () => {} } as any,
+        unitTransformer: { dismissSpecialist: () => false } as any,
         getPlacementFilter: () => null,
     });
     /* eslint-enable @typescript-eslint/no-explicit-any */

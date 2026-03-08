@@ -11,7 +11,7 @@ import { LogHandler } from '@/utilities/log-handler';
 import { EntityTextureAtlas } from './entity-texture-atlas';
 import { PaletteTextureManager } from './palette-texture';
 import { SpriteMetadataRegistry, Race } from './sprite-metadata';
-import { debugStats } from '@/game/debug-stats';
+import { debugStats } from '@/game/debug/debug-stats';
 import {
     getAtlasCache,
     setAtlasCache,
@@ -24,35 +24,19 @@ import {
 const log = new LogHandler('SpriteAtlasCacheManager');
 
 // =============================================================================
-// Eager module-level prefetch
+// Prefetch state
 // =============================================================================
-// Starts the IndexedDB cache read the moment this module is imported.
-// By the time the main thread needs the result (~263ms later), the read is usually done.
 
-const PREFETCH_T0 = performance.now();
+let prefetchPromise: Promise<CachedAtlasData | null> | null = null;
+let prefetchStartedAt = 0;
 let prefetchResolvedAt = 0;
-let earlyPrefetch: Promise<CachedAtlasData | null> | null = null;
-
-/**
- * Trigger an IDB prefetch for the given race.
- * Call as soon as the local player's race is known (after map load).
- * No-op if a prefetch is already in flight or cache is disabled.
- */
-export function prefetchSpriteCache(race: Race): void {
-    if (!earlyPrefetch && !isCacheDisabled()) {
-        earlyPrefetch = getIndexedDBCache(race).then(v => {
-            prefetchResolvedAt = performance.now();
-            return v;
-        });
-    }
-}
 
 /**
  * Invalidate any in-flight or resolved prefetch.
  * Called by clearAllCaches() so a stale prefetch doesn't resurrect cleared data.
  */
 export function invalidatePrefetch(): void {
-    earlyPrefetch = null;
+    prefetchPromise = null;
 }
 
 // =============================================================================
@@ -74,21 +58,17 @@ export interface CacheRestoreResult {
  * Responsible for restoring and saving atlas + registry + palette data.
  */
 export class SpriteAtlasCacheManager {
-    /** Prefetched IndexedDB cache promise (started before GL is ready) */
-    private _prefetchedCache: Promise<CachedAtlasData | null> | null = null;
-
     /**
-     * Adopt the module-level early prefetch (started during map load), or start
-     * a new IDB read if no early prefetch is available.
+     * Start a cache prefetch for the given race. Call as early as possible
+     * (before GL is ready) so the Cache API reads overlap with landscape init.
      */
-    public adoptPrefetch(race: Race): void {
-        if (isCacheDisabled()) return;
-        if (earlyPrefetch) {
-            this._prefetchedCache = earlyPrefetch;
-            earlyPrefetch = null;
-        } else {
-            this._prefetchedCache = getIndexedDBCache(race);
-        }
+    public prefetch(race: Race): void {
+        if (isCacheDisabled() || prefetchPromise) return;
+        prefetchStartedAt = performance.now();
+        prefetchPromise = getIndexedDBCache(race).then(v => {
+            prefetchResolvedAt = performance.now();
+            return v;
+        });
     }
 
     /**
@@ -134,7 +114,7 @@ export class SpriteAtlasCacheManager {
         }
 
         const cacheData: CachedAtlasData = {
-            imgData: atlas.getImageDataBytes(),
+            layerBuffers: atlas.getLayerBuffers(),
             layerCount: atlas.layerCount,
             maxLayers: atlas.getMaxLayers(),
             slots: atlas.getSlots(),
@@ -167,28 +147,21 @@ export class SpriteAtlasCacheManager {
         textureUnit: number,
         paletteManager: PaletteTextureManager
     ): Promise<CacheRestoreResult | null> {
-        const prefetch = earlyPrefetch ?? this._prefetchedCache;
-        const hadPrefetch = !!prefetch;
-        earlyPrefetch = null;
+        const hadPrefetch = !!prefetchPromise;
         const t0 = performance.now();
-        const cached = await (prefetch ?? getIndexedDBCache(race));
+        const cached = await (prefetchPromise ?? getIndexedDBCache(race));
         const now = performance.now();
+        prefetchPromise = null;
         debugStats.state.loadTimings.cacheWait = Math.round(now - t0);
-        const resolvedStatus =
-            prefetchResolvedAt <= t0 ? 'YES' : 'no, late by ' + Math.round(prefetchResolvedAt - t0) + 'ms';
-        const prefetchDetail =
-            prefetchResolvedAt > 0
-                ? ', I/O=' +
-                  Math.round(prefetchResolvedAt - PREFETCH_T0) +
-                  'ms, head start=' +
-                  Math.round(t0 - PREFETCH_T0) +
-                  'ms, already resolved=' +
-                  resolvedStatus
-                : ', prefetch did not resolve (miss or no prefetch)';
-        console.log(
-            '[cache] prefetch=' + hadPrefetch + ', waited=' + Math.round(now - t0) + 'ms at await' + prefetchDetail
-        );
-        this._prefetchedCache = null;
+
+        const alreadyResolved = prefetchResolvedAt > 0 && prefetchResolvedAt <= t0;
+        const headStart = prefetchStartedAt > 0 ? Math.round(t0 - prefetchStartedAt) : 0;
+        const ioTime = prefetchResolvedAt > 0 ? Math.round(prefetchResolvedAt - prefetchStartedAt) : 0;
+        const resolvedLabel = alreadyResolved ? 'YES' : 'no';
+        const detail = hadPrefetch
+            ? `, I/O=${ioTime}ms, headStart=${headStart}ms, resolved=${resolvedLabel}`
+            : ' (no prefetch)';
+        console.log(`[${now.toFixed(0)}ms] [cache] prefetch=${hadPrefetch}, waited=${Math.round(now - t0)}ms${detail}`);
         if (!cached) return null;
 
         const result = this.restoreFromCachedData(gl, cached, 'indexeddb', textureUnit, paletteManager);
@@ -209,39 +182,32 @@ export class SpriteAtlasCacheManager {
     ): CacheRestoreResult {
         const t0 = performance.now();
 
-        // Phase 1: Uint16Array view + atlas setup
-        let imgData16: Uint16Array;
-        if (cached.imgData.byteOffset % 2 === 0) {
-            imgData16 = new Uint16Array(
-                cached.imgData.buffer,
-                cached.imgData.byteOffset,
-                cached.imgData.byteLength / 2
-            );
-        } else {
-            // byteOffset is not 2-byte aligned — copy into an aligned buffer
-            const aligned = new Uint8Array(cached.imgData.byteLength);
-            aligned.set(cached.imgData);
-            imgData16 = new Uint16Array(aligned.buffer);
-        }
-
+        // Phase 1: Atlas restore from per-layer buffers (zero-copy Uint16Array views)
         const atlas = EntityTextureAtlas.fromCache(
-            imgData16,
+            cached.layerBuffers,
             cached.layerCount,
             cached.maxLayers,
             cached.slots,
             textureUnit
         );
+        const atlasRestore = Math.round(performance.now() - t0);
 
-        // Phase 2: Registry deserialize
+        // Phase 2: Registry deserialize — JSON→Maps reconstruction
+        const tRegistry = performance.now();
         const registry = SpriteMetadataRegistry.deserialize(cached.registryData);
+        const registryDeserialize = Math.round(performance.now() - tRegistry);
+
         const t1 = performance.now();
         const deserialize = Math.round(t1 - t0);
 
-        // Phase 3: GPU upload — upload ALL layers at once for instant visibility on cache hit
-        atlas.update(gl);
-        const gpuUpload = Math.round(performance.now() - t1);
+        // Phase 3: GPU — allocate texture memory, defer pixel upload to render loop
+        atlas.allocateDeferred(gl);
+        const gpuAlloc = Math.round(performance.now() - t1);
 
-        // Phase 4: Palette restore
+        // Phase 4: Palette restore (CPU) + GPU upload — must be synchronous for shaders
+        const tPalRestore = performance.now();
+        let palRestoreMs = 0;
+        let palUploadMs = 0;
         if (cached.paletteData && cached.paletteOffsets && cached.paletteTotalColors) {
             paletteManager.restoreFromCache(
                 cached.paletteData,
@@ -249,10 +215,28 @@ export class SpriteAtlasCacheManager {
                 cached.paletteTotalColors,
                 cached.paletteRows
             );
+            palRestoreMs = Math.round(performance.now() - tPalRestore);
+
+            const tPalUpload = performance.now();
             paletteManager.upload(gl);
+            palUploadMs = Math.round(performance.now() - tPalUpload);
         }
+        const paletteUpload = palRestoreMs + palUploadMs;
+        const gpuUpload = gpuAlloc;
 
         const total = Math.round(performance.now() - t0);
+
+        // Detailed diagnostics
+        const imgMB = cached.layerBuffers.reduce((sum, b) => sum + b.byteLength, 0) / 1024 / 1024;
+        const palKB = cached.paletteData ? (cached.paletteData.byteLength / 1024).toFixed(1) : '0';
+        console.log(
+            `[${performance.now().toFixed(0)}ms] [restore] source=${source} total=${total}ms (atlas upload deferred)\n` +
+                `  atlas: ${atlasRestore}ms (${cached.layerCount} layers)\n` +
+                `  registry: ${registryDeserialize}ms\n` +
+                `  gpu alloc: ${gpuAlloc}ms (${cached.layerCount} layers deferred)\n` +
+                `  palette: restore=${palRestoreMs}ms upload=${palUploadMs}ms (${palKB}KB)\n` +
+                `  total: ${imgMB.toFixed(1)}MB atlas, deserialize=${deserialize}ms palette=${paletteUpload}ms`
+        );
 
         // Record cache hit in debug stats
         const lt = debugStats.state.loadTimings;
@@ -264,7 +248,11 @@ export class SpriteAtlasCacheManager {
             goods: 0,
             units: 0,
             deserialize,
+            atlasRestore,
+            registryDeserialize,
+            paletteUpload,
             gpuUpload,
+            gpuLayers: atlas.layerCount,
             totalSprites: total,
             atlasSize: `${atlas.layerCount}x${atlas.width}x${atlas.height}`,
             spriteCount:
@@ -275,12 +263,6 @@ export class SpriteAtlasCacheManager {
             cacheHit: true,
             cacheSource: source,
         });
-
-        const sourceLabel = source === 'module' ? 'module cache (HMR)' : 'IndexedDB (refresh)';
-        log.debug(
-            `Restored from ${sourceLabel} in ${total}ms (deserialize=${deserialize}, gpu=${gpuUpload}, ` +
-                `${atlas.layerCount} layers, ${registry.getBuildingCount()} buildings)`
-        );
 
         return { atlas, registry, source };
     }

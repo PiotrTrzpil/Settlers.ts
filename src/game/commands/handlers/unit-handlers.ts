@@ -6,7 +6,13 @@ import type { SettlerTaskSystem } from '../../features/settler-tasks';
 import type { CombatSystem } from '../../features/combat';
 import { FORMATION_OFFSETS } from '../command-types';
 import type { SpawnUnitCommand, MoveUnitCommand, MoveSelectedUnitsCommand, CommandResult } from '../command-types';
+import type { UnitReservationRegistry } from '../../systems/unit-reservation';
 import { commandSuccess, commandFailed } from '../command-types';
+import type { RecruitSpecialistCommand } from '../command-types';
+import { SPECIALIST_TOOL_MAP } from '../../systems/recruit/specialist-tool-map';
+import type { RecruitSystem } from '../../systems/recruit/recruit-system';
+import type { UnitTransformer } from '../../systems/recruit/unit-transformer';
+import { UnitType } from '../../core/unit-types';
 
 export interface SpawnUnitDeps {
     state: GameState;
@@ -18,12 +24,14 @@ export interface MoveUnitDeps {
     state: GameState;
     settlerTaskSystem: SettlerTaskSystem;
     combatSystem: CombatSystem;
+    unitReservation: UnitReservationRegistry;
 }
 
 export interface MoveSelectedUnitsDeps {
     state: GameState;
     settlerTaskSystem: SettlerTaskSystem;
     combatSystem: CombatSystem;
+    unitReservation: UnitReservationRegistry;
 }
 
 function findValidSpawnTile(
@@ -81,6 +89,10 @@ export function executeMoveUnit(deps: MoveUnitDeps, cmd: MoveUnitCommand): Comma
         return commandFailed(`Entity ${cmd.entityId} not found`);
     }
 
+    if (deps.unitReservation.isReserved(cmd.entityId)) {
+        return commandFailed(`Unit ${cmd.entityId} is reserved and cannot be moved`);
+    }
+
     deps.combatSystem.releaseFromCombat(cmd.entityId);
 
     const fromX = entity.x;
@@ -115,6 +127,8 @@ export function executeMoveSelectedUnits(deps: MoveSelectedUnitsDeps, cmd: MoveS
     }[] = [];
     for (let i = 0; i < selectedUnits.length; i++) {
         const unit = selectedUnits[i]!;
+        if (deps.unitReservation.isReserved(unit.id)) continue;
+
         const offset = FORMATION_OFFSETS[Math.min(i, FORMATION_OFFSETS.length - 1)]!;
         const targetX = cmd.targetX + offset[0];
         const targetY = cmd.targetY + offset[1];
@@ -143,4 +157,34 @@ export function executeMoveSelectedUnits(deps: MoveSelectedUnitsDeps, cmd: MoveS
     }
 
     return commandSuccess(effects);
+}
+
+export interface RecruitSpecialistDeps {
+    recruitSystem: RecruitSystem;
+    unitTransformer: UnitTransformer;
+}
+
+export function executeRecruitSpecialist(deps: RecruitSpecialistDeps, cmd: RecruitSpecialistCommand): CommandResult {
+    const toolMaterial = SPECIALIST_TOOL_MAP[cmd.unitType];
+    if (toolMaterial === undefined) return commandFailed(`Unknown specialist type: ${UnitType[cmd.unitType]}`);
+
+    if (cmd.count > 0) {
+        const near = cmd.nearX !== undefined && cmd.nearY !== undefined ? { x: cmd.nearX, y: cmd.nearY } : null;
+        deps.recruitSystem.enqueue(cmd.unitType, cmd.count, toolMaterial, cmd.player, cmd.race, near);
+    } else if (cmd.count < 0) {
+        let remaining = -cmd.count;
+        // Drain queue first
+        const queued = deps.recruitSystem.getQueuedCount(cmd.unitType);
+        const fromQueue = Math.min(remaining, queued);
+        if (fromQueue > 0) {
+            deps.recruitSystem.dequeue(cmd.unitType, fromQueue);
+            remaining -= fromQueue;
+        }
+        // Dismiss live specialists for the remainder
+        for (let i = 0; i < remaining; i++) {
+            if (!deps.unitTransformer.dismissSpecialist(cmd.unitType, toolMaterial, cmd.player)) break;
+        }
+    }
+
+    return commandSuccess();
 }

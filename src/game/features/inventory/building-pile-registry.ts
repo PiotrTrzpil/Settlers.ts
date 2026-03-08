@@ -8,14 +8,14 @@
  * Constructed at startup from GameData. Replaces the hand-maintained stack-positions.yaml.
  */
 
-import type { TileCoord } from '../../coordinates';
+import type { TileCoord } from '../../core/coordinates';
 import { EMaterialType } from '../../economy/material-type';
-import { Race } from '../../race';
+import { Race } from '../../core/race';
 import { BuildingType } from '../../buildings/building-type';
 import type { GameData, BuildingInfo } from '@/resources/game-data';
 import { PileSlotType } from '@/resources/game-data';
-import { getBuildingTypesByXmlId, raceIdToRace, xmlGoodToMaterialType } from '../../game-data-access';
-import { SlotKind } from './pile-kind';
+import { getBuildingTypesByXmlId, raceIdToRace, xmlGoodToMaterialType } from '../../data/game-data-access';
+import { SlotKind } from '../../core/pile-kind';
 
 /** A single pile slot with hotspot-adjusted offsets */
 export interface PileSlot {

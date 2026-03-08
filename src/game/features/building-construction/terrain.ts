@@ -7,10 +7,10 @@
  * of the footprint are also captured so their heights can be smoothly leveled.
  */
 
-import { CARDINAL_OFFSETS } from '../../coordinates';
+import { CARDINAL_OFFSETS } from '../../core/coordinates';
 import { getBuildingFootprint } from '../../buildings/types';
 import type { BuildingType } from '../../buildings/types';
-import type { Race } from '../../race';
+import type { Race } from '../../core/race';
 import type { ConstructionSiteOriginalTerrain, CapturedTerrainTile } from './types';
 import { MapSize } from '@/utilities/map-size';
 import { LandscapeType } from '../../renderer/landscape/landscape-type';

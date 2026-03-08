@@ -11,8 +11,8 @@ import type { EntitySpriteResolver } from '../renderer/entity-sprite-resolver';
 import { scaleSprite, getSpriteScale } from '../renderer/entity-renderer-constants';
 import { getEntityWorldPos, type WorldPositionContext } from '../renderer/world-position';
 import { worldToNdc, ndcToScreen } from '../systems/coordinate-system';
-import type { SelectionManager } from '../selection-manager';
-import { debugStats } from '../debug-stats';
+import type { SelectionManager } from '../ui/selection-manager';
+import { debugStats } from '../debug/debug-stats';
 
 export interface EntityPickerContext extends WorldPositionContext {
     canvasWidth: number;

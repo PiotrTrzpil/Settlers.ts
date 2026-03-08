@@ -4,7 +4,7 @@
  */
 
 import { tileKey, getBuildingFootprint, BuildingType, isMineBuilding } from '../../../entity';
-import type { Race } from '../../../race';
+import type { Race } from '../../../core/race';
 import type { TerrainData } from '../../../terrain';
 import { getAllNeighbors } from '../../../systems/hex-directions';
 import type { PlacementContext, PlacementFilter, PlacementResult } from '../types';

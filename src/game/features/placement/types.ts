@@ -4,7 +4,7 @@
  */
 
 import type { MapSize } from '@/utilities/map-size';
-import type { Race } from '../../race';
+import type { Race } from '../../core/race';
 
 /**
  * Placement status indicating why/how placement can or cannot occur.

@@ -1,7 +1,7 @@
 import { BaseInputMode, HANDLED, UNHANDLED, type InputContext, type InputResult } from '../input-mode';
 import { InputAction, MouseButton, type PointerData } from '../input-actions';
 import { CursorType, type ModeRenderState, type PlacementPreview, type PlacementEntityType } from '../render-state';
-import type { Race } from '../../race';
+import type { Race } from '../../core/race';
 import { LogHandler } from '../../../utilities/log-handler';
 
 /**

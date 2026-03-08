@@ -1,12 +1,12 @@
 import { BuildingType, UnitType, EntityType } from '../../entity';
 import { MapObjectType } from '@/game/types/map-object-types';
 import { EMaterialType } from '../../economy';
-import { ANIMATION_DEFAULTS } from '../../animation';
-import { Race } from '../../race';
-import { isUnitAvailableForRace, isBuildingAvailableForRace } from '../../race-availability';
+import { ANIMATION_DEFAULTS } from '../../animation/animation';
+import { Race } from '../../core/race';
+import { isUnitAvailableForRace, isBuildingAvailableForRace } from '../../data/race-availability';
 
 // Re-export from canonical locations and new index files
-export { Race, RACE_NAMES, AVAILABLE_RACES, s4TribeToRace, loadSavedRace, saveSavedRace } from '../../race';
+export { Race, RACE_NAMES, AVAILABLE_RACES, s4TribeToRace, loadSavedRace, saveSavedRace } from '../../core/race';
 export { BUILDING_ICON_INDICES, MAP_OBJECT_SPRITES } from './gil-indices';
 export { GilSpriteManifest } from './gil-sprite-manifest';
 export {
@@ -618,6 +618,7 @@ export class SpriteMetadataRegistry {
             this.mapObjectsCategory,
             this.goodsCategory,
             this.decoration,
+            this.overlays,
             this.animated,
             this._loadedRaces
         );
@@ -640,6 +641,9 @@ export class SpriteMetadataRegistry {
         registry.goodsCategory.setEntries(result.goods.getEntries());
         registry.decoration.setFlagsMap(result.decoration.getFlagsMap());
         registry.decoration.setTerritoryDotsMap(result.decoration.getTerritoryDotsMap());
+        for (const [key, frames] of result.overlays.getFramesMap()) {
+            registry.overlays.getFramesMap().set(key, frames);
+        }
         for (const [entityType, subTypeMap] of result.animated.getSharedEntities()) {
             registry.animated.setSharedEntry(entityType, subTypeMap);
         }

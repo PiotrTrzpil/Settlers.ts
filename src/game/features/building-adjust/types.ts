@@ -11,7 +11,7 @@
  */
 
 import type { BuildingType } from '../../entity';
-import type { Race } from '../../race';
+import type { Race } from '../../core/race';
 import type { TileHighlight } from '../../input/render-state';
 
 // ============================================================================

@@ -20,9 +20,11 @@ import type { CropFeatureExports } from '../crops';
 import type { OreSignExports } from '../ore-veins';
 import type { OreVeinData } from '../ore-veins/ore-vein-data';
 import type { BuildingPileRegistry } from '../inventory';
+import type { SettlerLocationExports } from '../settler-location/types';
 import type { TerrainData } from '../../terrain';
 import type { BarracksTrainingManager } from '../barracks';
 import { SettlerTaskSystem, SearchType } from './index';
+import { ChoreoSystem } from '../../systems/choreo';
 import { MapObjectType } from '../../types/map-object-types';
 import {
     createWoodcuttingHandler,
@@ -38,6 +40,8 @@ import {
 
 export interface SettlerTaskExports {
     settlerTaskSystem: SettlerTaskSystem;
+    /** Shared choreography executor registry — features register task types here. */
+    choreoSystem: ChoreoSystem;
     /** Allows BarracksFeature to inject its training manager after loading. */
     setBarracksTrainingManager: (getter: () => BarracksTrainingManager) => void;
     /** Inject BuildingPileRegistry once game data is loaded. */
@@ -58,6 +62,7 @@ export const SettlerTaskFeature: FeatureDefinition = {
         'crops',
         'ore-signs',
         'combat',
+        'settler-location',
     ],
 
     create(ctx: FeatureContext) {
@@ -68,6 +73,7 @@ export const SettlerTaskFeature: FeatureDefinition = {
         const { productionControlManager } = ctx.getFeature<ProductionControlExports>('production-control');
         const { materialTransfer } = ctx.getFeature<MaterialTransferExports>('material-transfer');
         const { combatSystem } = ctx.getFeature<CombatExports>('combat');
+        const { locationManager } = ctx.getFeature<SettlerLocationExports>('settler-location');
         const { treeSystem } = ctx.getFeature<TreeFeatureExports>('trees');
         const { stoneSystem } = ctx.getFeature<StoneFeatureExports>('stones');
         const { cropSystem } = ctx.getFeature<CropFeatureExports>('crops');
@@ -81,7 +87,12 @@ export const SettlerTaskFeature: FeatureDefinition = {
         // The closure reads the mutable variable at call time, not at construction time.
         let barracksTrainingManagerGetter: (() => BarracksTrainingManager) | undefined;
 
+        // Shared choreography executor registry — core executors registered in WorkerTaskExecutor ctor;
+        // domain features (recruit) register their task types after create() runs.
+        const choreoSystem = new ChoreoSystem();
+
         const settlerTaskSystem = new SettlerTaskSystem({
+            choreoSystem,
             gameState: ctx.gameState,
             visualService: ctx.visualService,
             inventoryManager,
@@ -96,6 +107,7 @@ export const SettlerTaskFeature: FeatureDefinition = {
             executeCommand: ctx.executeCommand,
             materialTransfer,
             isInCombat: combatSystem.isInCombat.bind(combatSystem),
+            locationManager,
         });
 
         // --- Non-terrain work handlers ---
@@ -127,6 +139,7 @@ export const SettlerTaskFeature: FeatureDefinition = {
 
         const exports: SettlerTaskExports = {
             settlerTaskSystem,
+            choreoSystem,
             setBarracksTrainingManager: (getter: () => BarracksTrainingManager) => {
                 barracksTrainingManagerGetter = getter;
             },

@@ -207,7 +207,9 @@ function depositWorkerGood(
         // inputs and WORK_VIRTUAL is a pure timer; the correct output comes from BUILDING_PRODUCTIONS.
         const produced = ctx.inventoryManager.produceOutput(buildingId);
         if (!produced) {
-            log.warn(`PUT_GOOD: settler ${settler.id} — building ${buildingId} produceOutput failed`);
+            log.warn(
+                `PUT_GOOD: settler ${settler.id} — building ${buildingId} output full (produceOutput), material lost`
+            );
         } else {
             log.debug(`PUT_GOOD: settler ${settler.id} produced output at building ${buildingId}`);
         }
@@ -256,6 +258,9 @@ export const executeResourceGathering: InventoryExecutorFn = (
     _dt: number,
     ctx: InventoryExecutorContext
 ): TaskResult => {
+    // No entity means no material to collect (e.g. geologist prospecting — work is already done).
+    if (!node.entity) return TaskResult.DONE;
+
     const material = requireMaterial(node, settler.id);
 
     ctx.materialTransfer.produce(settler.id, material, 1);

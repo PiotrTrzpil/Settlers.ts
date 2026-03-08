@@ -23,7 +23,11 @@
             <StatRow label="Sprite Load" :value="spriteLoadLabel" :depth="1" />
             <template v-if="slt.cacheHit">
                 <StatRow label="Deserialize" :value="`${slt.deserialize} ms`" :depth="2" />
-                <StatRow label="GPU Upload" :value="`${slt.gpuUpload} ms`" :depth="2" />
+                <StatRow label="Atlas Restore" :value="`${slt.atlasRestore} ms`" :depth="3" />
+                <StatRow label="Registry" :value="`${slt.registryDeserialize} ms`" :depth="3" />
+                <StatRow label="GPU Upload" :value="`${slt.gpuUpload} ms (${slt.gpuLayers} layers)`" :depth="2" />
+                <StatRow label="Palette Upload" :value="`${slt.paletteUpload} ms`" :depth="2" />
+                <StatRow label="Selection Indicators" :value="`${slt.selectionIndicators} ms`" :depth="2" />
             </template>
             <template v-else>
                 <StatRow label="File Preload" :value="`${slt.filePreload} ms`" :depth="2" />
@@ -39,8 +43,15 @@
                     :value="`${ms} ms`"
                     :depth="3"
                 />
-                <StatRow label="GPU Upload" :value="`${slt.gpuUpload} ms`" :depth="2" />
+                <StatRow label="Selection Indicators" :value="`${slt.selectionIndicators} ms`" :depth="2" />
+                <StatRow label="GPU Upload" :value="`${slt.gpuUpload} ms (${slt.gpuLayers} layers)`" :depth="2" />
             </template>
+            <StatRow
+                v-if="slt.overlaySprites > 0"
+                label="Overlay Sprites"
+                :value="`${slt.overlaySprites} ms`"
+                :depth="1"
+            />
             <StatRow label="Total (wall)" :value="`${mlt.totalLoad} ms`" total />
             <StatRow label="Map Size" :value="mlt.mapSize || '-'" />
             <StatRow label="Entities" :value="mlt.entityCount" />
@@ -56,7 +67,7 @@
 
 <script setup lang="ts">
 import { computed } from 'vue';
-import { debugStats } from '@/game/debug-stats';
+import { debugStats } from '@/game/debug/debug-stats';
 import CollapseSection from './CollapseSection.vue';
 import StatRow from './StatRow.vue';
 

@@ -9,7 +9,7 @@
  */
 
 import { EntityType } from '@/game/entity';
-import { AnimationData, AnimationSequence, ANIMATION_DEFAULTS } from '@/game/animation';
+import { AnimationData, AnimationSequence, ANIMATION_DEFAULTS } from '@/game/animation/animation';
 import type { SpriteEntry, AnimatedSpriteEntry } from '../types';
 
 /**
@@ -49,8 +49,8 @@ export class AnimatedEntityCategory {
      * @param loop Whether the animation loops
      * @param race Optional race for race-specific storage (buildings/units)
      * @param walkSequenceKey For units: the XML sequence key for the walk animation (e.g. 'WC_WALK').
-     *        The walk job's frames get split: frame 0 registered under walkKey (stopped=idle),
-     *        frames 1+ registered under walkKey (loop=walk cycle).
+     *        All frames are registered under walkKey. Frame 0 is the standing pose (shown when
+     *        stopped=true/idle); frames 1+ form the walk cycle.
      */
     // eslint-disable-next-line sonarjs/cognitive-complexity, complexity -- multi-path animation setup
     register(
@@ -79,18 +79,13 @@ export class AnimatedEntityCategory {
 
         if (entityType === EntityType.Unit && walkSequenceKey) {
             // Register the walk animation under the XML walk key.
-            // Walk = frames 1+ (skip idle pose), used when walking.
-            // The idle pose is frame 0 of the walk job — the caller uses
-            // the same walkSequenceKey with stopped=true to show idle.
+            // All frames are included: frame 0 is the standing/idle pose,
+            // frames 1+ are the walk cycle. setIdleAnimation uses stopped=true
+            // (currentFrame=0) to show the standing pose; startWalkAnimation
+            // plays the full sequence in a loop.
             const walkDirectionMap = new Map<number, AnimationSequence>();
             for (const [direction, frames] of directionFrames) {
-                if (frames.length > 1) {
-                    walkDirectionMap.set(direction, {
-                        frames: frames.slice(1),
-                        frameDurationMs,
-                        loop,
-                    });
-                } else if (frames.length === 1) {
+                if (frames.length > 0) {
                     walkDirectionMap.set(direction, { frames, frameDurationMs, loop });
                 }
             }

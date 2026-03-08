@@ -6,7 +6,7 @@
  */
 
 import { BuildingType } from '../../buildings/types';
-import { UnitType } from '../../unit-types';
+import { UnitType } from '../../core/unit-types';
 import type { BuildingSpawnConfig } from './types';
 
 /**

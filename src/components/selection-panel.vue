@@ -136,6 +136,13 @@
                         </div>
                     </template>
 
+                    <!-- Garrison (shown for garrison buildings: GuardTowerSmall, GuardTowerBig, Castle) -->
+                    <GarrisonPanel
+                        v-if="selectedBuildingId !== null"
+                        :building-id="selectedBuildingId"
+                        :game="props.game"
+                    />
+
                     <!-- Storage filter (shown only for StorageArea buildings, not under construction) -->
                     <template v-if="isStorageArea">
                         <div class="info-section storage-section">
@@ -294,8 +301,9 @@
 import { computed, ref, watch } from 'vue';
 import Badge from './Badge.vue';
 import StatRow from './StatRow.vue';
-import { debugStats } from '@/game/debug-stats';
+import { debugStats } from '@/game/debug/debug-stats';
 import type { Game } from '@/game/game';
+import { EntityType } from '@/game/entity';
 import { useSelectionPanel } from '@/composables/useSelectionPanel';
 import { useCarrierDebugInfo } from '@/composables/useCarrierDebugInfo';
 import { useBuildingDebugInfo } from '@/composables/useBuildingDebugInfo';
@@ -305,6 +313,7 @@ import { useProductionControl } from '@/composables/useProductionControl';
 import { useConstructionInfo } from '@/composables/useConstructionInfo';
 import { useStorageFilter } from '@/composables/useStorageFilter';
 import { ProductionMode } from '@/game/features/production-control';
+import GarrisonPanel from './GarrisonPanel.vue';
 
 const props = defineProps<{
     game: Game | null;
@@ -336,6 +345,12 @@ const { productionControl, setProductionMode, setRecipeProportion, addToProducti
     useProductionControl(gameRef, selectedEntity, tick);
 const { constructionInfo } = useConstructionInfo(gameRef, selectedEntity, tick);
 const { isStorageArea, storageFilter, toggleMaterial } = useStorageFilter(gameRef, selectedEntity, tick);
+
+const selectedBuildingId = computed<number | null>(() => {
+    const entity = selectedEntity.value;
+    if (!entity || entity.type !== EntityType.Building) return null;
+    return entity.id;
+});
 
 // Debug section state
 const debugExpanded = ref(true);

@@ -9,7 +9,7 @@
  * during terrain leveling, parallel to the diggers, exactly as in Settlers 4.
  */
 
-import type { TickSystem } from '../../tick-system';
+import type { TickSystem } from '../../core/tick-system';
 import type { EMaterialType } from '../../economy/material-type';
 import type { ConstructionSiteManager } from './construction-site-manager';
 import type { RequestManager } from '../logistics/request-manager';

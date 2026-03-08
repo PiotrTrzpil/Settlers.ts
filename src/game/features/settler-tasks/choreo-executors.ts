@@ -1,31 +1,13 @@
 /**
- * Choreography executor dispatch — category-scoped maps.
+ * Choreography executor registration — registers all core executors on a ChoreoSystem.
  *
- * Replaces the single CHOREO_EXECUTOR_MAP with four per-category maps,
- * each typed to its narrow executor context. The TASK_CATEGORY map
- * classifies every ChoreoTaskType so the dispatcher can select the
- * right map and construct the minimal context.
- *
- * Usage (in WorkerTaskExecutor):
- *   const category = TASK_CATEGORY[node.task];
- *   switch (category) {
- *       case ExecutorCategory.MOVEMENT:
- *           return MOVEMENT_EXECUTORS[node.task](settler, job, node, dt, movementCtx);
- *       ...
- *   }
+ * Call registerCoreExecutors() once during WorkerTaskExecutor construction to wire
+ * all built-in task types. Domain features (e.g. recruit) register their own
+ * task types independently on the same ChoreoSystem instance.
  */
 
-import type { Entity } from '../../entity';
-import {
-    ChoreoTaskType,
-    type ChoreoJobState,
-    type ChoreoNode,
-    type MovementExecutorFn,
-    type WorkExecutorFn,
-    type InventoryExecutorFn,
-    type ControlExecutorFn,
-} from './choreo-types';
-import { TaskResult } from './types';
+import { ChoreoSystem, ChoreoTaskType } from '../../systems/choreo';
+import type { MovementContext, WorkContext, InventoryExecutorContext, ControlContext } from './choreo-types';
 
 // Movement
 import {
@@ -67,163 +49,92 @@ import {
     executeAttackReaction,
 } from './internal/control-executors';
 
-// Auto-recruit
-import { executeTransformRecruit } from '../auto-recruit/recruitment-job';
+export { ChoreoSystem };
 
 // ─────────────────────────────────────────────────────────────
-// Executor categories
+// Core executor registration
 // ─────────────────────────────────────────────────────────────
 
-/** Executor category — determines which context type is constructed. */
-export enum ExecutorCategory {
-    MOVEMENT,
-    WORK,
-    INVENTORY,
-    CONTROL,
+/**
+ * Register all core choreography executors on a ChoreoSystem instance.
+ *
+ * Executors are closures that capture their context objects by reference.
+ * Contexts are mutated in-place per tick (zero allocation) — mutations are
+ * visible to already-registered closures.
+ *
+ * TRANSFORM_RECRUIT and TRANSFORM_DIRECT are NOT registered here.
+ * The recruit feature registers those on the same ChoreoSystem after creation.
+ */
+export function registerCoreExecutors(
+    choreoSystem: ChoreoSystem,
+    movCtx: MovementContext,
+    workCtx: WorkContext,
+    invCtx: InventoryExecutorContext,
+    ctrlCtx: ControlContext
+): void {
+    // ── Movement ──────────────────────────────────────────────
+    choreoSystem.register(ChoreoTaskType.GO_TO_TARGET, (s, j, n, dt) => executeGoToTarget(s, j, n, dt, movCtx));
+    choreoSystem.register(ChoreoTaskType.GO_TO_TARGET_ROUGHLY, (s, j, n, dt) =>
+        executeGoToTargetRoughly(s, j, n, dt, movCtx)
+    );
+    choreoSystem.register(ChoreoTaskType.GO_TO_POS, (s, j, n, dt) => executeGoToPos(s, j, n, dt, movCtx));
+    choreoSystem.register(ChoreoTaskType.GO_TO_POS_ROUGHLY, (s, j, n, dt) =>
+        executeGoToPosRoughly(s, j, n, dt, movCtx)
+    );
+    choreoSystem.register(ChoreoTaskType.GO_TO_SOURCE_PILE, (s, j, n, dt) =>
+        executeGoToSourcePile(s, j, n, dt, movCtx)
+    );
+    choreoSystem.register(ChoreoTaskType.GO_TO_DESTINATION_PILE, (s, j, n, dt) =>
+        executeGoToDestinationPile(s, j, n, dt, movCtx)
+    );
+    choreoSystem.register(ChoreoTaskType.GO_HOME, (s, j, n, dt) => executeGoHome(s, j, n, dt, movCtx));
+    choreoSystem.register(ChoreoTaskType.GO_VIRTUAL, (s, j, n, dt) => executeGoVirtual(s, j, n, dt, movCtx));
+    choreoSystem.register(ChoreoTaskType.SEARCH, (s, j, n, dt) => executeSearch(s, j, n, dt, movCtx));
+
+    // ── Work ──────────────────────────────────────────────────
+    choreoSystem.register(ChoreoTaskType.WORK, (s, j, n, dt) => executeWork(s, j, n, dt, workCtx));
+    choreoSystem.register(ChoreoTaskType.WORK_ON_ENTITY, (s, j, n, dt) => executeWorkOnEntity(s, j, n, dt, workCtx));
+    choreoSystem.register(ChoreoTaskType.WORK_VIRTUAL, (s, j, n, dt) => executeWorkVirtual(s, j, n, dt, workCtx));
+    choreoSystem.register(ChoreoTaskType.WORK_ON_ENTITY_VIRTUAL, (s, j, n, dt) =>
+        executeWorkOnEntityVirtual(s, j, n, dt, workCtx)
+    );
+    choreoSystem.register(ChoreoTaskType.PRODUCE_VIRTUAL, (s, j, n, dt) => executeProduceVirtual(s, j, n, dt, workCtx));
+    choreoSystem.register(ChoreoTaskType.PLANT, (s, j, n, dt) => executeWork(s, j, n, dt, workCtx));
+
+    // ── Inventory ─────────────────────────────────────────────
+    choreoSystem.register(ChoreoTaskType.GET_GOOD, (s, j, n, dt) => executeGetGood(s, j, n, dt, invCtx));
+    choreoSystem.register(ChoreoTaskType.GET_GOOD_VIRTUAL, (s, j, n, dt) => {
+        j.visible = false;
+        return executeGetGood(s, j, n, dt, invCtx);
+    });
+    choreoSystem.register(ChoreoTaskType.PUT_GOOD, (s, j, n, dt) => executePutGood(s, j, n, dt, invCtx));
+    choreoSystem.register(ChoreoTaskType.PUT_GOOD_VIRTUAL, (s, j, n, dt) => {
+        j.visible = false;
+        return executePutGood(s, j, n, dt, invCtx);
+    });
+    choreoSystem.register(ChoreoTaskType.RESOURCE_GATHERING, (s, j, n, dt) =>
+        executeResourceGathering(s, j, n, dt, invCtx)
+    );
+    choreoSystem.register(ChoreoTaskType.RESOURCE_GATHERING_VIRTUAL, (s, j, n, dt) => {
+        j.visible = false;
+        return executeResourceGathering(s, j, n, dt, invCtx);
+    });
+    choreoSystem.register(ChoreoTaskType.LOAD_GOOD, (s, j, n, dt) => executeLoadGood(s, j, n, dt, invCtx));
+
+    // ── Control ───────────────────────────────────────────────
+    choreoSystem.register(ChoreoTaskType.WAIT, (s, j, n, dt) => executeWait(s, j, n, dt, ctrlCtx));
+    choreoSystem.register(ChoreoTaskType.WAIT_VIRTUAL, (s, j, n, dt) => {
+        j.visible = false;
+        return executeWait(s, j, n, dt, ctrlCtx);
+    });
+    choreoSystem.register(ChoreoTaskType.CHECKIN, (s, j, n, dt) => executeCheckin(s, j, n, dt, ctrlCtx));
+    choreoSystem.register(ChoreoTaskType.CHANGE_JOB, (s, j, n, dt) => executeChangeJob(s, j, n, dt, ctrlCtx));
+    choreoSystem.register(ChoreoTaskType.CHANGE_JOB_COME_TO_WORK, (s, j, n, dt) =>
+        executeChangeJob(s, j, n, dt, ctrlCtx)
+    );
+    choreoSystem.register(ChoreoTaskType.CHANGE_TYPE_AT_BARRACKS, (s, j, n, dt) =>
+        executeChangeTypeAtBarracks(s, j, n, dt, ctrlCtx)
+    );
+    choreoSystem.register(ChoreoTaskType.HEAL_ENTITY, (s, j, n, dt) => executeHealEntity(s, j, n, dt, ctrlCtx));
+    choreoSystem.register(ChoreoTaskType.ATTACK_REACTION, (s, j, n, dt) => executeAttackReaction(s, j, n, dt, ctrlCtx));
 }
-
-// ─────────────────────────────────────────────────────────────
-// Task → Category classification
-// ─────────────────────────────────────────────────────────────
-
-/** Maps every ChoreoTaskType to its executor category for context construction. */
-export const TASK_CATEGORY: Record<ChoreoTaskType, ExecutorCategory> = {
-    [ChoreoTaskType.GO_TO_TARGET]: ExecutorCategory.MOVEMENT,
-    [ChoreoTaskType.GO_TO_TARGET_ROUGHLY]: ExecutorCategory.MOVEMENT,
-    [ChoreoTaskType.GO_TO_POS]: ExecutorCategory.MOVEMENT,
-    [ChoreoTaskType.GO_TO_POS_ROUGHLY]: ExecutorCategory.MOVEMENT,
-    [ChoreoTaskType.GO_TO_SOURCE_PILE]: ExecutorCategory.MOVEMENT,
-    [ChoreoTaskType.GO_TO_DESTINATION_PILE]: ExecutorCategory.MOVEMENT,
-    [ChoreoTaskType.GO_HOME]: ExecutorCategory.MOVEMENT,
-    [ChoreoTaskType.GO_VIRTUAL]: ExecutorCategory.MOVEMENT,
-    [ChoreoTaskType.SEARCH]: ExecutorCategory.MOVEMENT,
-
-    [ChoreoTaskType.WORK]: ExecutorCategory.WORK,
-    [ChoreoTaskType.WORK_ON_ENTITY]: ExecutorCategory.WORK,
-    [ChoreoTaskType.WORK_VIRTUAL]: ExecutorCategory.WORK,
-    [ChoreoTaskType.WORK_ON_ENTITY_VIRTUAL]: ExecutorCategory.WORK,
-    [ChoreoTaskType.PRODUCE_VIRTUAL]: ExecutorCategory.WORK,
-    [ChoreoTaskType.PLANT]: ExecutorCategory.WORK,
-
-    [ChoreoTaskType.GET_GOOD]: ExecutorCategory.INVENTORY,
-    [ChoreoTaskType.GET_GOOD_VIRTUAL]: ExecutorCategory.INVENTORY,
-    [ChoreoTaskType.PUT_GOOD]: ExecutorCategory.INVENTORY,
-    [ChoreoTaskType.PUT_GOOD_VIRTUAL]: ExecutorCategory.INVENTORY,
-    [ChoreoTaskType.RESOURCE_GATHERING]: ExecutorCategory.INVENTORY,
-    [ChoreoTaskType.RESOURCE_GATHERING_VIRTUAL]: ExecutorCategory.INVENTORY,
-    [ChoreoTaskType.LOAD_GOOD]: ExecutorCategory.INVENTORY,
-
-    [ChoreoTaskType.WAIT]: ExecutorCategory.CONTROL,
-    [ChoreoTaskType.WAIT_VIRTUAL]: ExecutorCategory.CONTROL,
-    [ChoreoTaskType.CHECKIN]: ExecutorCategory.CONTROL,
-    [ChoreoTaskType.CHANGE_JOB]: ExecutorCategory.CONTROL,
-    [ChoreoTaskType.CHANGE_JOB_COME_TO_WORK]: ExecutorCategory.CONTROL,
-    [ChoreoTaskType.CHANGE_TYPE_AT_BARRACKS]: ExecutorCategory.CONTROL,
-    [ChoreoTaskType.HEAL_ENTITY]: ExecutorCategory.CONTROL,
-    [ChoreoTaskType.ATTACK_REACTION]: ExecutorCategory.CONTROL,
-    [ChoreoTaskType.TRANSFORM_RECRUIT]: ExecutorCategory.CONTROL,
-};
-
-// ─────────────────────────────────────────────────────────────
-// Virtual wrapper — creates a hidden variant of any executor
-// ─────────────────────────────────────────────────────────────
-
-type AnyExecutorFn = (settler: Entity, job: ChoreoJobState, node: ChoreoNode, dt: number, ctx: never) => TaskResult;
-
-/** Create a virtual (hidden) variant — wraps any executor to set job.visible=false. */
-function asVirtual<Fn extends AnyExecutorFn>(fn: Fn): Fn {
-    return ((settler: Entity, job: ChoreoJobState, node: ChoreoNode, dt: number, ctx: never) => {
-        job.visible = false;
-        return fn(settler, job, node, dt, ctx);
-    }) as Fn;
-}
-
-// ─────────────────────────────────────────────────────────────
-// Per-category executor maps
-// ─────────────────────────────────────────────────────────────
-
-type MovementTaskType =
-    | ChoreoTaskType.GO_TO_TARGET
-    | ChoreoTaskType.GO_TO_TARGET_ROUGHLY
-    | ChoreoTaskType.GO_TO_POS
-    | ChoreoTaskType.GO_TO_POS_ROUGHLY
-    | ChoreoTaskType.GO_TO_SOURCE_PILE
-    | ChoreoTaskType.GO_TO_DESTINATION_PILE
-    | ChoreoTaskType.GO_HOME
-    | ChoreoTaskType.GO_VIRTUAL
-    | ChoreoTaskType.SEARCH;
-
-type WorkTaskType =
-    | ChoreoTaskType.WORK
-    | ChoreoTaskType.WORK_ON_ENTITY
-    | ChoreoTaskType.WORK_VIRTUAL
-    | ChoreoTaskType.WORK_ON_ENTITY_VIRTUAL
-    | ChoreoTaskType.PRODUCE_VIRTUAL
-    | ChoreoTaskType.PLANT;
-
-type InventoryTaskType =
-    | ChoreoTaskType.GET_GOOD
-    | ChoreoTaskType.GET_GOOD_VIRTUAL
-    | ChoreoTaskType.PUT_GOOD
-    | ChoreoTaskType.PUT_GOOD_VIRTUAL
-    | ChoreoTaskType.RESOURCE_GATHERING
-    | ChoreoTaskType.RESOURCE_GATHERING_VIRTUAL
-    | ChoreoTaskType.LOAD_GOOD;
-
-type ControlTaskType =
-    | ChoreoTaskType.WAIT
-    | ChoreoTaskType.WAIT_VIRTUAL
-    | ChoreoTaskType.CHECKIN
-    | ChoreoTaskType.CHANGE_JOB
-    | ChoreoTaskType.CHANGE_JOB_COME_TO_WORK
-    | ChoreoTaskType.CHANGE_TYPE_AT_BARRACKS
-    | ChoreoTaskType.HEAL_ENTITY
-    | ChoreoTaskType.ATTACK_REACTION
-    | ChoreoTaskType.TRANSFORM_RECRUIT;
-
-/** Movement executor map — GO_TO_*, SEARCH, GO_HOME, GO_VIRTUAL. */
-export const MOVEMENT_EXECUTORS: Record<MovementTaskType, MovementExecutorFn> = {
-    [ChoreoTaskType.GO_TO_TARGET]: executeGoToTarget,
-    [ChoreoTaskType.GO_TO_TARGET_ROUGHLY]: executeGoToTargetRoughly,
-    [ChoreoTaskType.GO_TO_POS]: executeGoToPos,
-    [ChoreoTaskType.GO_TO_POS_ROUGHLY]: executeGoToPosRoughly,
-    [ChoreoTaskType.GO_TO_SOURCE_PILE]: executeGoToSourcePile,
-    [ChoreoTaskType.GO_TO_DESTINATION_PILE]: executeGoToDestinationPile,
-    [ChoreoTaskType.GO_HOME]: executeGoHome,
-    [ChoreoTaskType.GO_VIRTUAL]: executeGoVirtual,
-    [ChoreoTaskType.SEARCH]: executeSearch,
-};
-
-/** Work executor map — WORK, WORK_ON_ENTITY, PLANT, *_VIRTUAL, PRODUCE_VIRTUAL. */
-export const WORK_EXECUTORS: Record<WorkTaskType, WorkExecutorFn> = {
-    [ChoreoTaskType.WORK]: executeWork,
-    [ChoreoTaskType.WORK_ON_ENTITY]: executeWorkOnEntity,
-    [ChoreoTaskType.WORK_VIRTUAL]: executeWorkVirtual,
-    [ChoreoTaskType.WORK_ON_ENTITY_VIRTUAL]: executeWorkOnEntityVirtual,
-    [ChoreoTaskType.PRODUCE_VIRTUAL]: executeProduceVirtual,
-    [ChoreoTaskType.PLANT]: executeWork,
-};
-
-/** Inventory executor map — GET_GOOD, PUT_GOOD, RESOURCE_GATHERING, LOAD_GOOD, *_VIRTUAL. */
-export const INVENTORY_EXECUTORS: Record<InventoryTaskType, InventoryExecutorFn> = {
-    [ChoreoTaskType.GET_GOOD]: executeGetGood,
-    [ChoreoTaskType.GET_GOOD_VIRTUAL]: asVirtual(executeGetGood),
-    [ChoreoTaskType.PUT_GOOD]: executePutGood,
-    [ChoreoTaskType.PUT_GOOD_VIRTUAL]: asVirtual(executePutGood),
-    [ChoreoTaskType.RESOURCE_GATHERING]: executeResourceGathering,
-    [ChoreoTaskType.RESOURCE_GATHERING_VIRTUAL]: asVirtual(executeResourceGathering),
-    [ChoreoTaskType.LOAD_GOOD]: executeLoadGood,
-};
-
-/** Control executor map — WAIT, CHECKIN, CHANGE_JOB, military stubs, auto-recruit. */
-export const CONTROL_EXECUTORS: Record<ControlTaskType, ControlExecutorFn> = {
-    [ChoreoTaskType.WAIT]: executeWait,
-    [ChoreoTaskType.WAIT_VIRTUAL]: asVirtual(executeWait),
-    [ChoreoTaskType.CHECKIN]: executeCheckin,
-    [ChoreoTaskType.CHANGE_JOB]: executeChangeJob,
-    [ChoreoTaskType.CHANGE_JOB_COME_TO_WORK]: executeChangeJob,
-    [ChoreoTaskType.CHANGE_TYPE_AT_BARRACKS]: executeChangeTypeAtBarracks,
-    [ChoreoTaskType.HEAL_ENTITY]: executeHealEntity,
-    [ChoreoTaskType.ATTACK_REACTION]: executeAttackReaction,
-    [ChoreoTaskType.TRANSFORM_RECRUIT]: executeTransformRecruit,
-};

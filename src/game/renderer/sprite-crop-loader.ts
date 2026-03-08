@@ -5,7 +5,7 @@
 
 import { EntityType } from '../entity';
 import { MapObjectType } from '@/game/types/map-object-types';
-import { ANIMATION_DEFAULTS } from '../animation';
+import { ANIMATION_DEFAULTS } from '../animation/animation';
 import { CROP_SPRITE_CONFIGS } from '../features/crops/crop-system';
 import { SafeLoadBatch } from './batch-loader';
 import type { EntityTextureAtlas } from './entity-texture-atlas';

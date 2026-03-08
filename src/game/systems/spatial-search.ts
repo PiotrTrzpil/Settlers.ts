@@ -7,7 +7,7 @@
 
 import type { GameState } from '../game-state';
 import type { Entity } from '../entity';
-import type { SeededRng } from '../rng';
+import type { SeededRng } from '../core/rng';
 
 // ─────────────────────────────────────────────────────────────
 // Ring iteration

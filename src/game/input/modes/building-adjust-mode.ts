@@ -22,7 +22,7 @@ import { BaseInputMode, HANDLED, UNHANDLED, type InputContext, type InputResult 
 import { InputAction, MouseButton, type PointerData } from '../input-actions';
 import { CursorType, type ModeRenderState, type TileHighlight } from '../render-state';
 import { EntityType, type BuildingType } from '../../entity';
-import type { Race } from '../../race';
+import type { Race } from '../../core/race';
 import type { GameState } from '../../game-state';
 import type {
     BuildingAdjustHandler,

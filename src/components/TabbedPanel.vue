@@ -44,7 +44,7 @@
 
 <script setup lang="ts">
 import { computed, provide } from 'vue';
-import { debugStats } from '@/game/debug-stats';
+import { debugStats } from '@/game/debug/debug-stats';
 import type { Game } from '@/game/game';
 import type { LayerVisibility } from '@/game/renderer/layer-visibility';
 import type { LayerCounts } from '@/views/use-map-view';

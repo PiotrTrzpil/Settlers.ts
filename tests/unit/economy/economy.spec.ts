@@ -12,7 +12,7 @@ import {
     getBuildingTypesRequestingMaterial,
 } from '@/game/economy';
 import { BuildingType } from '@/game/entity';
-import { Race } from '@/game/race';
+import { Race } from '@/game/core/race';
 import { installRealGameData, resetTestGameData } from '../helpers/test-game-data';
 
 describe('Material Types', () => {

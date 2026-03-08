@@ -13,7 +13,7 @@
  * - Persistence helpers (getAllStates, restoreState)
  */
 
-import type { TickSystem } from '../../tick-system';
+import type { TickSystem } from '../../core/tick-system';
 import type { GameState } from '../../game-state';
 import { EntityType } from '../../entity';
 import { MapObjectCategory, MapObjectType } from '@/game/types/map-object-types';

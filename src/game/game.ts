@@ -11,18 +11,19 @@ import { populateMapBuildings } from './features/building-construction';
 import { populateMapSettlers } from './systems/map-settlers';
 import { populateMapStacks } from './systems/map-stacks';
 import { SoundManager } from './audio';
-import { Race, s4TribeToRace, loadSavedRace } from './race';
+import { Race, s4TribeToRace, loadSavedRace } from './core/race';
 import { EventBus } from './event-bus';
+import { toastError } from './ui/toast-notifications';
 import { GameSettingsManager } from './game-settings';
-import { GameViewState } from './game-view-state';
+import { GameViewState } from './ui/game-view-state';
 import { setDirectionRunLength } from './systems/pathfinding';
 import { watch } from 'vue';
 import type { FrameRenderTiming } from './renderer/renderer';
 import type { MapObjectData } from '@/resources/map/map-entity-data';
-import type { MapLoadTimings } from './debug-stats';
-import { debugStats } from './debug-stats';
+import type { MapLoadTimings } from './debug/debug-stats';
+import { debugStats } from './debug/debug-stats';
 import type { SystemState } from './game-loop';
-import { loadInitialState, restoreFromSnapshot, restoreInitialTerrain } from './game-state-persistence';
+import { loadInitialState, restoreFromSnapshot, restoreInitialTerrain } from './state/game-state-persistence';
 import type { PlacementFilter } from './features/placement';
 import {
     createTerritoryPlacementFilter,
@@ -73,6 +74,9 @@ export class Game {
     /** Whether territory boundary dots are visible (toggled by debug panel) */
     private _territoryVisible = false;
 
+    /** Stop handle for the pathStraightness watcher — must be called in destroy() */
+    private readonly _stopPathWatcher: () => void;
+
     /** Territory-based placement filter — created after terrain data is available */
     private _placementFilter: PlacementFilter | null = null;
 
@@ -110,13 +114,15 @@ export class Game {
 
         const initStart = performance.now();
         this.eventBus = new EventBus();
+        this.eventBus.onHandlerError = (event, err) => toastError('EventBus', `${event}: ${err.message}`);
         this.state = new GameState(this.eventBus);
         this.settings = new GameSettingsManager();
         this.viewState = new GameViewState();
 
-        // Sync pathfinding direction run length from settings (initial + reactive)
+        // Sync pathfinding direction run length from settings (initial + reactive).
+        // Store stop handle so the watcher is cleaned up in destroy(), preventing leaks.
         setDirectionRunLength(this.settings.state.pathStraightness);
-        watch(
+        this._stopPathWatcher = watch(
             () => this.settings.state.pathStraightness,
             v => setDirectionRunLength(v)
         );
@@ -140,7 +146,10 @@ export class Game {
             constructionSiteManager: this.services.constructionSiteManager,
             combatSystem: this.services.combatSystem,
             storageFilterManager: this.services.storageFilterManager,
+            unitReservation: this.services.unitReservation,
             getPlacementFilter: () => this._placementFilter,
+            recruitSystem: this.services.recruitSystem,
+            unitTransformer: this.services.unitTransformer,
         });
         // Territory filters start as null (off). Enabled via the Territory feature toggle.
 
@@ -203,7 +212,9 @@ export class Game {
         mlt.gameConstructor = Math.round(performance.now() - start);
         mlt.mapSize = `${this.terrain.width}x${this.terrain.height}`;
         mlt.entityCount = this.state.entities.length;
-        console.log(`Game\tMap loaded: ${this.terrain.width}x${this.terrain.height} in ${mlt.gameConstructor}ms`);
+        console.log(
+            `[${performance.now().toFixed(0)}ms] Game\tMap loaded: ${this.terrain.width}x${this.terrain.height} in ${mlt.gameConstructor}ms`
+        );
     }
 
     /** Load players, objects, buildings, settlers, and pile stacks from parsed map data. */
@@ -239,7 +250,8 @@ export class Game {
                 terrain: this.terrain,
             });
             mlt.populateBuildings = Math.round(performance.now() - t0);
-            if (count > 0) console.log(`Game: Loaded ${count} buildings from map data`);
+            if (count > 0)
+                console.log(`[${performance.now().toFixed(0)}ms] Game: Loaded ${count} buildings from map data`);
         }
 
         // Settlers (units)
@@ -247,7 +259,8 @@ export class Game {
             const t0 = performance.now();
             const count = populateMapSettlers(this.state, entityData.settlers, this.eventBus);
             mlt.populateUnits = Math.round(performance.now() - t0);
-            if (count > 0) console.log(`Game: Loaded ${count} settlers from map data`);
+            if (count > 0)
+                console.log(`[${performance.now().toFixed(0)}ms] Game: Loaded ${count} settlers from map data`);
         }
 
         // Resource stacks
@@ -255,7 +268,8 @@ export class Game {
             const t0 = performance.now();
             const count = populateMapStacks(this.state, entityData.stacks, this.eventBus);
             mlt.populateStacks = Math.round(performance.now() - t0);
-            if (count > 0) console.log(`Game: Loaded ${count} pile stacks from map data`);
+            if (count > 0)
+                console.log(`[${performance.now().toFixed(0)}ms] Game: Loaded ${count} pile stacks from map data`);
         }
     }
 
@@ -269,7 +283,9 @@ export class Game {
         const seedCount = populateMapObjectsFromEntityData(this.state, objects, this.terrain);
         const totalAdded = this.state.entities.length - beforeCount;
         const decoCount = totalAdded - seedCount;
-        console.log(`Game: Loaded ${seedCount} seed trees + ${decoCount} decorations from map data`);
+        console.log(
+            `[${performance.now().toFixed(0)}ms] Game: Loaded ${seedCount} seed trees + ${decoCount} decorations from map data`
+        );
 
         const expandRaw = localStorage.getItem('settlers_treeExpansion');
         const expandEnabled = expandRaw !== 'false';
@@ -281,7 +297,9 @@ export class Game {
                 minSpacing: 1,
             });
             mlt.treeExpansion = Math.round(performance.now() - t0);
-            console.log(`Game: Expanded into ${expandedCount} additional trees (from ${seedCount} seeds)`);
+            console.log(
+                `[${performance.now().toFixed(0)}ms] Game: Expanded into ${expandedCount} additional trees (from ${seedCount} seeds)`
+            );
         } else if (!expandEnabled) {
             console.log(
                 `Game: Tree expansion DISABLED (localStorage=${expandRaw}), showing ${seedCount} seed trees only`
@@ -472,6 +490,9 @@ export class Game {
 
     /** Destroy the game and clean up all resources */
     public destroy(): void {
+        this._stopPathWatcher();
+        this.settings.destroy();
+        this.soundManager.unload();
         this.scriptService?.destroy();
         this.services.destroy();
         this._gameLoop.destroy();

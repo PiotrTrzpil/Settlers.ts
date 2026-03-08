@@ -7,15 +7,15 @@
  *
  * Phase progression is event-driven:
  * - construction:diggingStarted  → TerrainLeveling
- * - construction:levelingComplete → WaitingForBuilders (terrain finalized)
+ * - construction:levelingComplete → Evacuating (if units on footprint) or WaitingForBuilders
  * - construction:buildingStarted  → ConstructionRising
- * - construction:progressComplete → CompletedRising (timed countdown)
+ * - construction:progressComplete → CompletedRising (progress-based countdown)
  *
  * Listens for building:removed events to restore terrain on construction cancellation.
  * Listens for building:completed to spawn units once the CompletedRising timer fires.
  */
 
-import type { TickSystem } from '../../tick-system';
+import type { TickSystem } from '../../core/tick-system';
 import type { CoreDeps } from '../feature';
 import type { GameState } from '../../game-state';
 import { type EventBus, EventSubscriptionManager } from '../../event-bus';
@@ -50,9 +50,6 @@ export class BuildingConstructionSystem implements TickSystem {
     private terrainContext: TerrainContext | undefined; // OK: optional, set via setter
     private readonly eventBus: EventBus;
     private residenceSpawner: ResidenceSpawnerSystem | null = null;
-
-    /** Remaining time (seconds) for buildings in CompletedRising phase */
-    private readonly completedRisingTimers = new Map<number, number>();
 
     /**
      * Buildings awaiting evacuation before footprint block is restored.
@@ -154,11 +151,9 @@ export class BuildingConstructionSystem implements TickSystem {
 
             const unitsOnFootprint = this.findUnitsOnFootprint(buildingId);
             if (unitsOnFootprint.size > 0) {
-                // Defer footprint block — evacuate units first
+                site.phase = BuildingConstructionPhase.Evacuating;
                 this.pendingEvacuations.set(buildingId, unitsOnFootprint);
                 this.evacuateUnits(buildingId, unitsOnFootprint);
-                // Phase stays at TerrainLeveling-equivalent until evacuation completes;
-                // we set WaitingForBuilders once all units have left (in tickEvacuation).
             } else {
                 site.phase = BuildingConstructionPhase.WaitingForBuilders;
                 this.state.restoreBuildingFootprintBlock(buildingId);
@@ -172,12 +167,12 @@ export class BuildingConstructionSystem implements TickSystem {
             site.phase = BuildingConstructionPhase.ConstructionRising;
         });
 
-        // construction:progressComplete → CompletedRising (start countdown timer)
+        // construction:progressComplete → CompletedRising (progress-based countdown)
         this.subscriptions.subscribe(this.eventBus, 'construction:progressComplete', ({ buildingId }) => {
             const site = this.constructionSiteManager.getSite(buildingId);
             if (!site) return;
             site.phase = BuildingConstructionPhase.CompletedRising;
-            this.completedRisingTimers.set(buildingId, COMPLETED_RISING_DURATION);
+            site.completedRisingProgress = 0.0;
         });
     }
 
@@ -193,63 +188,35 @@ export class BuildingConstructionSystem implements TickSystem {
 
     /** Called by GameLoop each tick */
     tick(dt: number): void {
-        let terrainModified = false;
-
-        try {
-            for (const entityId of this.constructionSiteManager.getAllSiteIds()) {
-                terrainModified = this.tickSite(entityId, dt) || terrainModified;
+        for (const entityId of this.constructionSiteManager.getAllSiteIds()) {
+            try {
+                this.tickSite(entityId, dt);
+            } catch (e) {
+                const err = e instanceof Error ? e : new Error(String(e));
+                console.error(`[BuildingConstructionSystem] Error ticking site ${entityId}:`, err);
             }
-        } catch (e) {
-            const err = e instanceof Error ? e : new Error(String(e));
-            console.error('[BuildingConstructionSystem] Error in tick:', err);
-        }
-
-        if (terrainModified && this.terrainContext?.onTerrainModified) {
-            this.terrainContext.onTerrainModified();
         }
     }
 
-    /** Tick a single construction site. Returns true if terrain was modified. */
-    private tickSite(entityId: number, dt: number): boolean {
+    private tickSite(entityId: number, dt: number): void {
         const site = this.constructionSiteManager.getSite(entityId);
-        if (!site) return false;
+        if (!site) return;
 
-        try {
-            if (site.phase === BuildingConstructionPhase.TerrainLeveling) {
-                return this.tickTerrainLeveling(site);
-            } else if (site.phase === BuildingConstructionPhase.CompletedRising) {
-                this.tickCompletedRising(entityId, site, dt);
-            }
-        } catch (e) {
-            const err = e instanceof Error ? e : new Error(String(e));
-            console.error(`[BuildingConstructionSystem] Error ticking site ${entityId}:`, err);
-        }
-
-        // Check pending evacuations
-        if (this.pendingEvacuations.has(entityId)) {
+        if (site.phase === BuildingConstructionPhase.Evacuating) {
             this.tickEvacuation(entityId, site);
+        } else if (site.phase === BuildingConstructionPhase.CompletedRising) {
+            this.tickCompletedRising(entityId, site, dt);
         }
-
-        return false;
     }
 
-    /** Per-tile leveling is now event-driven via construction:tileCompleted. */
-    private tickTerrainLeveling(_site: ConstructionSite): boolean {
-        return false;
-    }
-
-    /** Count down CompletedRising timer and transition to Completed. */
+    /** Advance CompletedRising progress and transition to Completed when done. */
     private tickCompletedRising(entityId: number, site: ConstructionSite, dt: number): void {
-        const remaining = (this.completedRisingTimers.get(entityId) ?? COMPLETED_RISING_DURATION) - dt;
-        if (remaining <= 0) {
-            this.completedRisingTimers.delete(entityId);
+        site.completedRisingProgress += dt / COMPLETED_RISING_DURATION;
+        if (site.completedRisingProgress >= 1.0) {
             site.phase = BuildingConstructionPhase.Completed;
             // Extract site fields before removal — game-services.ts removes the site in its handler
             const { buildingType, race } = site;
             this.eventBus.emit('building:completed', { entityId, buildingType, race, spawnWorker: true });
-        } else {
-            this.completedRisingTimers.set(entityId, remaining);
-            site.completedRisingProgress = 1 - remaining / COMPLETED_RISING_DURATION;
         }
     }
 
@@ -278,8 +245,8 @@ export class BuildingConstructionSystem implements TickSystem {
             const occupant = this.state.tileOccupancy.get(key);
             if (occupant === undefined) continue;
             // Only evacuate units, not the building itself or piles
-            const occupantEntity = this.state.getEntity(occupant);
-            if (occupantEntity && occupantEntity.type === EntityType.Unit) {
+            const occupantEntity = this.state.getEntityOrThrow(occupant, 'findUnitsOnFootprint');
+            if (occupantEntity.type === EntityType.Unit) {
                 unitIds.add(occupant);
             }
         }
@@ -299,8 +266,7 @@ export class BuildingConstructionSystem implements TickSystem {
         }
 
         for (const unitId of unitIds) {
-            const unit = this.state.getEntity(unitId);
-            if (!unit) continue;
+            const unit = this.state.getEntityOrThrow(unitId, 'evacuateUnits');
             const target = this.findNearestFreeOutside(unit.x, unit.y, footprintKeys);
             if (target) {
                 this.executeCommand({ type: 'move_unit', entityId: unitId, targetX: target.x, targetY: target.y });
@@ -333,6 +299,8 @@ export class BuildingConstructionSystem implements TickSystem {
      */
     private tickEvacuation(buildingId: number, site: ConstructionSite): void {
         const unitIds = this.pendingEvacuations.get(buildingId)!;
+
+        // Building may be cancelled mid-evacuation — clean up and bail
         const building = this.state.getEntity(buildingId);
         if (!building) {
             this.pendingEvacuations.delete(buildingId);
@@ -354,9 +322,9 @@ export class BuildingConstructionSystem implements TickSystem {
             if (!passableKeys.has(key)) blockedKeys.add(key);
         }
 
-        // Check if any tracked unit is still on a blocked footprint tile
-        for (const unitId of unitIds) {
-            const unit = this.state.getEntity(unitId);
+        // Remove units that have cleared the footprint or died since evacuation started
+        for (const unitId of [...unitIds]) {
+            const unit = this.state.getEntity(unitId); // unit may have died between ticks
             if (!unit || !blockedKeys.has(tileKey(unit.x, unit.y))) {
                 unitIds.delete(unitId);
             }
@@ -369,9 +337,8 @@ export class BuildingConstructionSystem implements TickSystem {
         }
     }
 
-    /** Handle building removal - restore terrain and clean up timers */
+    /** Handle building removal — restore terrain and clean up pending evacuation */
     private onBuildingRemoved(entityId: number): void {
-        this.completedRisingTimers.delete(entityId);
         this.pendingEvacuations.delete(entityId);
         const site = this.constructionSiteManager.getSite(entityId);
         if (!site || !site.terrain.originalTerrain) return;

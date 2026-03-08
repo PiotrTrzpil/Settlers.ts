@@ -8,7 +8,7 @@
 
 import { MapSize } from '@/utilities/map-size';
 import { BuildingType, getBuildingFootprint } from '../../entity';
-import type { Race } from '../../race';
+import type { Race } from '../../core/race';
 import type { PlacementContext, PlacementFilter } from './types';
 import { validateBuildingPlacement } from './internal/building-validator';
 import { computeHeightRange } from './slope';

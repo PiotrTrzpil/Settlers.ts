@@ -1,4 +1,4 @@
-import { reactive, watch } from 'vue';
+import { reactive, watch, effectScope, type EffectScope } from 'vue';
 
 const SETTINGS_STORAGE_KEY = 'settlers_game_settings';
 
@@ -128,13 +128,26 @@ export class GameSettingsManager {
     public readonly state: GameSettings;
 
     private saveTimeoutId: ReturnType<typeof setTimeout> | null = null;
+    private readonly _scope: EffectScope;
 
     constructor() {
         // Load persisted settings
         this.state = reactive<GameSettings>(loadSettings());
 
-        // Set up watchers to auto-save settings when they change
-        this.setupAutoSave();
+        // Set up watchers to auto-save settings when they change — scoped so they
+        // can be stopped when this manager is destroyed (prevents Vue watcher leaks).
+        this._scope = effectScope();
+        this._scope.run(() => this.setupAutoSave());
+    }
+
+    /** Stop auto-save watchers and flush any pending save. Call from Game.destroy(). */
+    public destroy(): void {
+        this._scope.stop();
+        if (this.saveTimeoutId !== null) {
+            clearTimeout(this.saveTimeoutId);
+            saveSettings(this.state); // flush pending write
+            this.saveTimeoutId = null;
+        }
     }
 
     /** Set up watchers to persist settings on change (debounced) */

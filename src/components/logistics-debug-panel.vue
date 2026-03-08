@@ -89,11 +89,11 @@
 
 <script setup lang="ts">
 import { computed, watch } from 'vue';
-import { debugStats } from '@/game/debug-stats';
+import { debugStats } from '@/game/debug/debug-stats';
 import { useLogisticsDebug } from '@/composables/useLogisticsDebug';
 import type { Game } from '@/game/game';
 import { EntityType } from '@/game/entity';
-import { isUnitTypeSelectable, UnitType } from '@/game/unit-types';
+import { isUnitTypeSelectable, UnitType } from '@/game/core/unit-types';
 import Checkbox from './Checkbox.vue';
 import CollapseSection from './CollapseSection.vue';
 import StatRow from './StatRow.vue';

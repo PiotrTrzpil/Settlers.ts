@@ -5,7 +5,7 @@
 
 import { getUnitLevel } from '../entity';
 import { GameState } from '../game-state';
-import { S4_TO_UNIT_TYPE } from '../game-data-access';
+import { S4_TO_UNIT_TYPE } from '../data/game-data-access';
 import { LogHandler } from '@/utilities/log-handler';
 import type { EventBus } from '../event-bus';
 import type { MapSettlerData } from '@/resources/map/map-entity-data';

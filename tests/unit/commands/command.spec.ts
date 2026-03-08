@@ -6,7 +6,7 @@ import {
     CONSTRUCTION_SITE_GROUND_TYPE,
 } from '@/game/features/building-construction';
 import { BuildingType } from '@/game/entity';
-import { Race } from '@/game/race';
+import { Race } from '@/game/core/race';
 import { TERRAIN, setTerrainAt, blockColumn } from '../helpers/test-map';
 import { createTestContext, addBuilding, createTestRegistry, type TestContext } from '../helpers/test-game';
 

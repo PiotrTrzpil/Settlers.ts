@@ -3,15 +3,15 @@
  * Uses a simple approach: serialize state, reload via existing create methods.
  */
 
-import type { Game } from './game';
-import { EntityType } from './entity';
-import type { CarryingState, Entity } from './entity';
-import type { Race } from './race';
-import type { EMaterialType } from './economy/material-type';
-import type { TreeStage } from './features/trees/tree-system';
-import type { StoneStage } from './features/stones/stone-system';
-import type { RequestPriority, RequestStatus } from './features/logistics/resource-request';
-import type { SerializedConstructionSite } from './features/building-construction';
+import type { Game } from '../game';
+import { EntityType } from '../entity';
+import type { CarryingState, Entity } from '../entity';
+import type { Race } from '../core/race';
+import type { EMaterialType } from '../economy/material-type';
+import type { TreeStage } from '../features/trees/tree-system';
+import type { StoneStage } from '../features/stones/stone-system';
+import type { RequestPriority, RequestStatus } from '../features/logistics/resource-request';
+import type { SerializedConstructionSite } from '../features/building-construction';
 
 const STORAGE_KEY = 'settlers_game_state';
 const INITIAL_STATE_KEY = 'settlers_initial_state';
@@ -145,21 +145,14 @@ export interface SerializedBarracksTraining {
 }
 
 /**
- * Serialized auto-recruit state.
+ * Serialized unit-transformer state (pending carrier → specialist transformations).
  */
-export interface SerializedAutoRecruit {
-    accumulatedTime: number;
-    playerStates: Array<{
-        player: number;
-        pendingDiggers: number;
-        pendingBuilders: number;
-        recruitments: Array<{
-            carrierId: number;
-            targetUnitType: number;
-            toolMaterial: number;
-            pileEntityId: number;
-            siteId: number;
-        }>;
+export interface SerializedUnitTransformer {
+    pendingTransforms: Array<{
+        carrierId: number;
+        targetUnitType: number;
+        toolMaterial: number;
+        pileEntityId: number;
     }>;
 }
 
@@ -237,8 +230,8 @@ export interface GameStateSnapshot {
     combat?: SerializedCombatUnit[];
     /** Barracks training state (races + active trainings) */
     barracksTraining?: SerializedBarracksTraining;
-    /** Auto-recruit state (accumulated time + per-player recruitments) */
-    autoRecruit?: SerializedAutoRecruit;
+    /** Unit transformer state (pending carrier → specialist transformations) */
+    unitTransformer?: SerializedUnitTransformer;
     /** Resource requests (pending and in-progress) */
     requests?: SerializedRequest[];
     /** Production cycle progress per building (deprecated v5 field, kept for backward compat) */
@@ -521,10 +514,14 @@ function restoreTerrain(game: Game, snapshot: GameStateSnapshot): void {
  * Must be called on a fresh Game instance (entities array should be empty or will be cleared).
  */
 export function restoreFromSnapshot(game: Game, snapshot: GameStateSnapshot): void {
-    // 1. Clear existing entities via the normal removal path
+    // 1. Clear existing entities via the normal removal path.
     const existingIds = game.state.entities.map(e => e.id);
     for (const id of existingIds) {
         game.execute({ type: 'remove_entity', entityId: id });
+    }
+    // Remove any entities spawned as side-effects of the above removals.
+    while (game.state.entities.length > 0) {
+        game.execute({ type: 'remove_entity', entityId: game.state.entities[0]!.id });
     }
 
     // 2. Restore RNG state and nextId
@@ -546,7 +543,9 @@ export function restoreFromSnapshot(game: Game, snapshot: GameStateSnapshot): vo
     game.services.inventoryPileSync?.rebuildFromExistingEntities();
     game.services.buildingOverlayManager.rebuildFromExistingEntities(game.services.constructionSiteManager);
 
-    console.log(`GameState: Restored ${snapshot.entities.length} entities from snapshot`);
+    console.log(
+        `[${performance.now().toFixed(0)}ms] GameState: Restored ${snapshot.entities.length} entities from snapshot`
+    );
 }
 
 /**
@@ -563,7 +562,9 @@ export function saveInitialState(game: Game): boolean {
         } catch {
             console.warn('GameState: localStorage full — initial state cached in memory only');
         }
-        console.log(`GameState: Saved initial state with ${snapshot.entities.length} entities`);
+        console.log(
+            `[${performance.now().toFixed(0)}ms] GameState: Saved initial state with ${snapshot.entities.length} entities`
+        );
         // Cache initial terrain in memory so subsequent auto-saves can store sparse diffs instead of full arrays.
         _cachedInitialGroundType = new Uint8Array(game.terrain.groundType);
         _cachedInitialGroundHeight = new Uint8Array(game.terrain.groundHeight);

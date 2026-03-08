@@ -5,7 +5,7 @@
 
 import { BuildingType } from '../../entity';
 import { EMaterialType } from '../../economy/material-type';
-import { Race } from '../../race';
+import { Race } from '../../core/race';
 import { BUILDING_PRODUCTIONS, type Recipe } from '../../economy/building-production';
 import type { InventorySlot } from './inventory-slot';
 import {
@@ -617,8 +617,8 @@ export class BuildingInventoryManager implements Persistable<SerializedBuildingI
         const output = recipe ? recipe.output : BUILDING_PRODUCTIONS.get(inventory.buildingType)?.output;
         if (output === undefined || output === EMaterialType.NO_MATERIAL) return false;
 
-        this.depositOutput(buildingId, output, 1);
-        return true;
+        const deposited = this.depositOutput(buildingId, output, 1);
+        return deposited > 0;
     }
 
     /**

@@ -11,7 +11,7 @@
 import type { GameState } from '../../game-state';
 import { EntityType, UnitType, BuildingType, type Entity } from '../../entity';
 import type { ConstructionSiteManager } from '../building-construction/construction-site-manager';
-import { getBuildingDoorPos } from '../../game-data-access';
+import { getBuildingDoorPos } from '../../data/game-data-access';
 import { MapObjectCategory, MapObjectType } from '@/game/types/map-object-types';
 import type { BuildingInventoryManager } from '../inventory';
 import type { OreVeinData } from '../ore-veins';
@@ -26,7 +26,7 @@ import type { CropSystem } from '../crops/crop-system';
 import { OBJECT_TYPE_CATEGORY } from '../../systems/map-objects';
 import { findNearestEntity } from '../../systems/spatial-search';
 import { ProductionMode } from '../production-control';
-import { getWorkerBuildingTypes } from '../../game-data-access';
+import { getWorkerBuildingTypes } from '../../data/game-data-access';
 import { getBuildingMaxOccupants } from '../../buildings/types';
 import { spiralSearch } from '../../utils/spiral-search';
 import type { TerrainData } from '../../terrain';
@@ -505,21 +505,50 @@ export function createGeologistHandler(
     terrain: TerrainData,
     signSystem: ResourceSignSystem
 ): PositionWorkHandler {
+    // Per-settler: the initial position where they started prospecting.
+    // Spiral always originates from this point so prospecting fans out from
+    // the mountain the player originally clicked, not the settler's current tile.
+    const originBySettler = new Map<number, { x: number; y: number }>();
+
     return {
         type: WorkHandlerType.POSITION,
 
-        findPosition: (x: number, y: number) => {
-            return spiralSearch(x, y, terrain.width, terrain.height, (tx, ty) => {
-                if (Math.abs(tx - x) > GEOLOGIST_SEARCH_RADIUS || Math.abs(ty - y) > GEOLOGIST_SEARCH_RADIUS) {
+        findPosition: (x: number, y: number, settlerId?: number) => {
+            // Resolve (or record) the fixed origin for this geologist
+            let cx = x;
+            let cy = y;
+            if (settlerId !== undefined) {
+                const stored = originBySettler.get(settlerId);
+                if (stored) {
+                    cx = stored.x;
+                    cy = stored.y;
+                } else {
+                    originBySettler.set(settlerId, { x, y });
+                }
+            }
+
+            const result = spiralSearch(cx, cy, terrain.width, terrain.height, (tx, ty) => {
+                if (Math.abs(tx - cx) > GEOLOGIST_SEARCH_RADIUS || Math.abs(ty - cy) > GEOLOGIST_SEARCH_RADIUS) {
                     return false;
                 }
                 return terrain.isRock(tx, ty) && !oreVeinData.isProspected(tx, ty);
             });
+
+            // No more tiles — clear so the geologist can be reassigned to a new area
+            if (!result && settlerId !== undefined) {
+                originBySettler.delete(settlerId);
+            }
+
+            return result;
         },
 
         onWorkAtPositionComplete: (posX: number, posY: number, _settlerId: number) => {
             oreVeinData.setProspected(posX, posY);
             signSystem.placeSign(posX, posY);
+        },
+
+        onSettlerRemoved: (settlerId: number) => {
+            originBySettler.delete(settlerId);
         },
     };
 }

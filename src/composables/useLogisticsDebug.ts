@@ -12,7 +12,7 @@ import { RequestPriority, RequestStatus } from '@/game/features/logistics/resour
 import type { InventoryReservation } from '@/game/features/logistics/inventory-reservation';
 import { EMaterialType } from '@/game/economy';
 import { EntityType, type Entity } from '@/game/entity';
-import { UnitType } from '@/game/unit-types';
+import { UnitType } from '@/game/core/unit-types';
 import { query, type ComponentStore } from '@/game/ecs';
 import {
     diagnoseUnfulfilledRequest,

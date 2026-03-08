@@ -24,6 +24,9 @@
  */
 
 import { type EventBus, EventSubscriptionManager } from '../event-bus';
+import { createLogger } from '@/utilities/logger';
+
+const log = createLogger('EntityCleanupRegistry');
 
 // ─────────────────────────────────────────────────────────────
 // Priority constants
@@ -96,7 +99,16 @@ export class EntityCleanupRegistry {
 
         this.subscriptions.subscribe(eventBus, 'entity:removed', ({ entityId }) => {
             for (const { handler } of this.handlers) {
-                handler(entityId);
+                try {
+                    handler(entityId);
+                } catch (e) {
+                    // Cleanup handlers must not abort each other — log and continue.
+                    // This mirrors the EventBus's own per-handler isolation.
+                    log.error(
+                        `Cleanup handler for entity ${entityId} threw:`,
+                        e instanceof Error ? e : new Error(String(e))
+                    );
+                }
             }
         });
     }

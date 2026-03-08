@@ -7,14 +7,14 @@
  * Set `immediateMode = true` (test/debug) to spawn all carriers at once in register().
  */
 
-import type { TickSystem } from '../../tick-system';
+import type { TickSystem } from '../../core/tick-system';
 import type { GameState } from '../../game-state';
 import type { TerrainData } from '../../terrain';
 import type { BuildingSpawnConfig } from './types';
 import { ringTiles } from '../../systems/spatial-search';
 import type { Command, CommandResult } from '../../commands';
 import type { Persistable } from '@/game/persistence';
-import type { SerializedPendingSpawn } from '@/game/game-state-persistence';
+import type { SerializedPendingSpawn } from '@/game/state/game-state-persistence';
 
 interface PendingSpawn {
     buildingEntityId: number;

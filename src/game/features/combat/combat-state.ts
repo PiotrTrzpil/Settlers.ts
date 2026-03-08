@@ -2,7 +2,7 @@
  * Combat state types and unit combat configuration.
  */
 
-import { UnitType, getBaseUnitType, getUnitLevel } from '../../unit-types';
+import { UnitType, getBaseUnitType, getUnitLevel } from '../../core/unit-types';
 
 /** Combat behavior state for a military unit */
 export enum CombatStatus {

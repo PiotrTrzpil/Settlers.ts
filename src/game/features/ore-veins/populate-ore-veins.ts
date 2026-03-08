@@ -8,7 +8,7 @@
  */
 
 import type { TerrainData } from '../../terrain/terrain-data';
-import { SeededRng } from '../../rng';
+import { SeededRng } from '../../core/rng';
 import { OreType, MAX_ORE_LEVEL } from './ore-type';
 import { OreVeinData } from './ore-vein-data';
 

@@ -1,4 +1,4 @@
-import { Entity, EntityType, BuildingType, getBuildingFootprint } from '../entity';
+import { Entity, EntityType, getBuildingFootprint, BuildingType } from '../entity';
 import type { TileHighlight } from '../input/render-state';
 import { TilePicker } from '../input/tile-picker';
 import { tileToWorld, heightToWorld, TILE_CENTER_X, TILE_CENTER_Y } from '../systems/coordinate-system';
@@ -28,6 +28,47 @@ import {
 /** Shift a world position from tile center to tile vertex (matching building sprite anchor). */
 function shiftBuildingWorldPos(pos: { worldX: number; worldY: number }): { worldX: number; worldY: number } {
     return { worldX: pos.worldX - TILE_CENTER_X, worldY: pos.worldY - TILE_CENTER_Y * 0.5 };
+}
+
+/**
+ * Compute world-space bounding box for a building footprint.
+ * Uses the actual terrain face vertices (integer offsets) so the bounds match the visible tiles.
+ */
+export function calculateFootprintBounds(
+    footprint: { x: number; y: number }[],
+    mapSize: { toIndex(x: number, y: number): number },
+    groundHeight: Uint8Array,
+    viewPointX: number,
+    viewPointY: number
+): { minX: number; minY: number; maxX: number; maxY: number } {
+    let minX = Infinity,
+        minY = Infinity;
+    let maxX = -Infinity,
+        maxY = -Infinity;
+
+    // Terrain face vertices at integer offsets — (0,0),(1,0),(1,1),(0,1)
+    const cornerOffsets = [
+        { dx: 0, dy: 0 },
+        { dx: 1, dy: 0 },
+        { dx: 1, dy: 1 },
+        { dx: 0, dy: 1 },
+    ];
+
+    for (const tile of footprint) {
+        const idx = mapSize.toIndex(tile.x, tile.y);
+        const hWorld = heightToWorld(groundHeight[idx]!);
+        for (const offset of cornerOffsets) {
+            const worldPos = shiftBuildingWorldPos(
+                tileToWorld(tile.x + offset.dx, tile.y + offset.dy, hWorld, viewPointX, viewPointY)
+            );
+            minX = Math.min(minX, worldPos.worldX);
+            minY = Math.min(minY, worldPos.worldY);
+            maxX = Math.max(maxX, worldPos.worldX);
+            maxY = Math.max(maxY, worldPos.worldY);
+        }
+    }
+
+    return { minX, minY, maxX, maxY };
 }
 
 /**
@@ -61,32 +102,18 @@ export class SelectionOverlayRenderer {
 
         for (const entity of sortedEntities) {
             if (!selectedEntityIds.has(entity.id)) continue;
-            // Skip frames for units - they use dots instead
+            // Skip units (use dots) and buildings (use sprite-based indicator in entity-sprite-pass)
             if (entity.type === EntityType.Unit) continue;
+            if (entity.type === EntityType.Building) continue;
 
-            let minX: number, minY: number;
-            let maxX: number, maxY: number;
-
-            if (entity.type === EntityType.Building) {
-                // Get footprint tiles and calculate bounding box in world coordinates
-                const footprint = getBuildingFootprint(entity.x, entity.y, entity.subType as BuildingType, entity.race);
-                if (footprint.length === 0)
-                    throw new Error(`Empty footprint for building ${entity.id} (type ${entity.subType})`);
-                const bounds = this.calculateFootprintBounds(footprint, ctx);
-                minX = bounds.minX;
-                minY = bounds.minY;
-                maxX = bounds.maxX;
-                maxY = bounds.maxY;
-            } else {
-                // Non-building entities use simple scale-based sizing
-                const worldPos = getEntityWorldPos(entity, ctx);
-                const scale = this.getEntityScale(entity.type);
-                const half = scale * FRAME_PADDING * 0.5;
-                minX = worldPos.worldX - half;
-                maxX = worldPos.worldX + half;
-                minY = worldPos.worldY - half;
-                maxY = worldPos.worldY + half;
-            }
+            // Non-building entities use simple scale-based sizing
+            const worldPos = getEntityWorldPos(entity, ctx);
+            const scale = this.getEntityScale(entity.type);
+            const half = scale * FRAME_PADDING * 0.5;
+            const minX = worldPos.worldX - half;
+            const maxX = worldPos.worldX + half;
+            const minY = worldPos.worldY - half;
+            const maxY = worldPos.worldY + half;
 
             // Calculate center and half-sizes for drawing
             const centerX = (minX + maxX) / 2;
@@ -550,48 +577,6 @@ export class SelectionOverlayRenderer {
                 gl.drawArrays(gl.TRIANGLES, 0, 6);
             }
         }
-    }
-
-    /**
-     * Calculate world-space bounding box for a building's footprint tiles.
-     * Computes all 4 corners of each tile's diamond shape.
-     */
-    private calculateFootprintBounds(
-        footprint: { x: number; y: number }[],
-        ctx: SelectionRenderContext
-    ): { minX: number; minY: number; maxX: number; maxY: number } {
-        let minX = Infinity,
-            minY = Infinity;
-        let maxX = -Infinity,
-            maxY = -Infinity;
-
-        // Tile diamonds have corners at fractional tile positions
-        const cornerOffsets = [
-            { dx: 0.5, dy: 0 }, // Top corner
-            { dx: 1, dy: 0.5 }, // Right corner
-            { dx: 0.5, dy: 1 }, // Bottom corner
-            { dx: 0, dy: 0.5 }, // Left corner
-        ];
-
-        for (const tile of footprint) {
-            // Get height at integer tile position
-            const idx = ctx.mapSize.toIndex(tile.x, tile.y);
-            const hWorld = heightToWorld(ctx.groundHeight[idx]!);
-
-            for (const offset of cornerOffsets) {
-                // Use pure tileToWorld for fractional coords (tile corners)
-                // Shift to tile vertex (matching building sprite anchor)
-                const worldPos = shiftBuildingWorldPos(
-                    tileToWorld(tile.x + offset.dx, tile.y + offset.dy, hWorld, ctx.viewPoint.x, ctx.viewPoint.y)
-                );
-                minX = Math.min(minX, worldPos.worldX);
-                minY = Math.min(minY, worldPos.worldY);
-                maxX = Math.max(maxX, worldPos.worldX);
-                maxY = Math.max(maxY, worldPos.worldY);
-            }
-        }
-
-        return { minX, minY, maxX, maxY };
     }
 
     /**

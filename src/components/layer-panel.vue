@@ -188,7 +188,7 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import type { LayerVisibility } from '@/game/renderer/layer-visibility';
-import { debugStats } from '@/game/debug-stats';
+import { debugStats } from '@/game/debug/debug-stats';
 import type { LayerCounts } from '@/views/use-map-view';
 import LayerCheckbox from './LayerCheckbox.vue';
 import Checkbox from './Checkbox.vue';

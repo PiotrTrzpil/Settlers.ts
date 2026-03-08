@@ -7,10 +7,10 @@
  */
 
 import type { AnimationPlayback } from '../animation/entity-visual-service';
-import type { AnimationData } from '../animation';
+import type { AnimationData } from '../animation/animation';
 import type { SpriteEntry } from './sprite-metadata';
 import { EntityType } from '../entity';
-import { UnitType } from '../unit-types';
+import { UnitType } from '../core/unit-types';
 import { BuildingType } from '../buildings/building-type';
 import { createLogger } from '@/utilities/logger';
 

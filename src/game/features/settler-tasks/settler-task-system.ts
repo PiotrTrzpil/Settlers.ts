@@ -13,16 +13,16 @@
 
 import type { GameState } from '../../game-state';
 import type { CoreDeps } from '../feature';
-import type { TickSystem } from '../../tick-system';
+import type { TickSystem } from '../../core/tick-system';
 import type { Persistable } from '../../persistence/types';
 import { EntityType, UnitType, type Entity } from '../../entity';
-import { isAngelUnitType } from '../../unit-types';
+import { isAngelUnitType } from '../../core/unit-types';
 import { createLogger } from '@/utilities/logger';
 import { ThrottledLogger } from '@/utilities/throttled-logger';
 import { sortedEntries } from '@/utilities/collections';
 import { JobType, SearchType, SettlerState, type JobState, type WorkHandler, type SettlerConfig } from './types';
 import type { ChoreoJobState, ChoreoNode, TransportJobOps } from './choreo-types';
-import { buildAllSettlerConfigs } from '../../settler-data-access';
+import { buildAllSettlerConfigs } from '../../data/settler-data-access';
 import type { BuildingInventoryManager, BuildingPileRegistry } from '../inventory';
 import type { PileRegistry } from '../inventory/pile-registry';
 import { createWorkplaceHandler, createCarrierHandler } from './work-handlers';
@@ -44,6 +44,8 @@ import type { BarracksTrainingManager } from '../barracks';
 import type { ConstructionSiteManager } from '../building-construction/construction-site-manager';
 import type { Command, CommandResult } from '../../commands';
 import type { MaterialTransfer } from '../material-transfer';
+import type { ChoreoSystem } from '../../systems/choreo';
+import type { ISettlerBuildingLocationManager } from '../settler-location/types';
 
 const log = createLogger('SettlerTaskSystem');
 
@@ -58,6 +60,7 @@ type SettlerConfigs = Map<UnitType, SettlerConfig>;
 
 /** Configuration for SettlerTaskSystem dependencies */
 export interface SettlerTaskSystemConfig extends CoreDeps {
+    choreoSystem: ChoreoSystem;
     visualService: EntityVisualService;
     inventoryManager: BuildingInventoryManager;
     /** Lazy getter — pile slot registry for live entity lookup. */
@@ -80,6 +83,8 @@ export interface SettlerTaskSystemConfig extends CoreDeps {
     materialTransfer: MaterialTransfer;
     /** Returns true if the entity is actively in combat (fighting or pursuing). */
     isInCombat?: (entityId: number) => boolean;
+    /** Location manager for tracking settler approach/inside state. */
+    locationManager: ISettlerBuildingLocationManager;
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -129,6 +134,8 @@ export class SettlerTaskSystem implements TickSystem, Persistable<SerializedUnit
     private ticksSinceOrphanCheck = 0;
     /** Late-bound transport job ops — set by LogisticsDispatcherFeature after construction. */
     private _transportJobOps: TransportJobOps | null = null;
+    /** Location manager — owns approaching/inside state and entity.hidden transitions. */
+    private readonly locationManager: ISettlerBuildingLocationManager;
 
     /** Internal timing breakdown from last tick (exposed via getSubTimings). */
     private lastSubTimings: Record<string, number> = {};
@@ -136,6 +143,7 @@ export class SettlerTaskSystem implements TickSystem, Persistable<SerializedUnit
     constructor(config: SettlerTaskSystemConfig) {
         this.gameState = config.gameState;
         this.inventoryManager = config.inventoryManager;
+        this.locationManager = config.locationManager;
 
         this.settlerConfigs = buildAllSettlerConfigs();
         this.choreographyStore = new JobChoreographyStore();
@@ -172,6 +180,7 @@ export class SettlerTaskSystem implements TickSystem, Persistable<SerializedUnit
         };
 
         this.workerExecutor = new WorkerTaskExecutor({
+            choreoSystem: config.choreoSystem,
             gameState: this.gameState,
             choreographyStore: this.choreographyStore,
             handlerRegistry: this.handlerRegistry,
@@ -219,6 +228,34 @@ export class SettlerTaskSystem implements TickSystem, Persistable<SerializedUnit
         // Register GOOD handler for carriers (they get jobs assigned externally by LogisticsDispatcher)
         this.handlerRegistry.register(SearchType.GOOD, createCarrierHandler());
 
+        // Subscribe: when a building is destroyed while a worker settler is approaching it,
+        // clear their home assignment, interrupt any active job, and cancel movement.
+        // Note: onBuildingRemoved may have already run (called from onEntityRemoved directly);
+        // the homeAssignment check ensures we don't double-process.
+        config.eventBus.on('settler-location:approachInterrupted', ({ settlerId, buildingId }) => {
+            if (!this.runtimes.has(settlerId)) return;
+            const runtime = this.runtimes.get(settlerId)!;
+            if (runtime.homeAssignment?.buildingId !== buildingId) return;
+
+            runtime.homeAssignment = null;
+
+            if (runtime.job) {
+                const entity = this.gameState.getEntity(settlerId);
+                if (entity) {
+                    const unitConfig = this.settlerConfigs.get(entity.subType as UnitType);
+                    if (unitConfig) {
+                        this.interruptJobForCleanup(entity, unitConfig, runtime);
+                    }
+                }
+                runtime.job = null;
+            }
+
+            if (runtime.moveTask) {
+                runtime.moveTask = null;
+            }
+            this.gameState.movement.getController(settlerId)?.clearPath();
+        });
+
         log.debug(
             `Loaded ${this.settlerConfigs.size} settler configs, ${this.choreographyStore.cacheSize} cached jobs`
         );
@@ -250,7 +287,8 @@ export class SettlerTaskSystem implements TickSystem, Persistable<SerializedUnit
             runtime.lastDirection = entry.lastDirection;
 
             if (entry.homeAssignment) {
-                this.claimBuilding(runtime, entry.homeAssignment.buildingId);
+                // skipApproaching=true: location manager restores approach/inside state from its own persistence.
+                this.claimBuilding(runtime, entry.homeAssignment.buildingId, true);
                 runtime.homeAssignment!.hasVisited = entry.homeAssignment.hasVisited;
             }
 
@@ -262,13 +300,14 @@ export class SettlerTaskSystem implements TickSystem, Persistable<SerializedUnit
 
     private serializeRuntime(entityId: number, runtime: UnitRuntime): SerializedUnitRuntime {
         const job = runtime.job;
-        // Transport jobs restart idle (Option A) — skip the job
+        // Transport jobs and active move tasks are not serialized — restart idle on load.
         const hasTransport = job?.transportData !== undefined;
+        const hasMoveTask = runtime.moveTask !== null;
         const serializedJob = job && !hasTransport ? this.serializeJob(job) : null;
 
         return {
             entityId,
-            state: hasTransport ? SettlerState.IDLE : runtime.state,
+            state: hasTransport || hasMoveTask ? SettlerState.IDLE : runtime.state,
             lastDirection: runtime.lastDirection,
             homeAssignment: runtime.homeAssignment
                 ? {
@@ -458,10 +497,24 @@ export class SettlerTaskSystem implements TickSystem, Persistable<SerializedUnit
     // Building occupancy tracking
     // ─────────────────────────────────────────────────────────────
 
-    /** Assign a building to a worker, incrementing its occupant count. */
-    private claimBuilding(runtime: UnitRuntime, buildingId: number): void {
+    /**
+     * Assign a building to a worker, incrementing its occupant count.
+     * @param skipApproaching When true (deserialization), skips markApproaching — the location
+     *   manager restores its own state from its own persistence entry.
+     */
+    private claimBuilding(runtime: UnitRuntime, buildingId: number, skipApproaching = false): void {
         runtime.homeAssignment = { buildingId, hasVisited: false };
         this.buildingOccupants.set(buildingId, (this.buildingOccupants.get(buildingId) ?? 0) + 1);
+        if (!skipApproaching) {
+            // Locate the settler ID by reverse-lookup in the runtimes map.
+            // claimBuilding is called infrequently (once per assignment), so O(n) is acceptable.
+            for (const [id, r] of this.runtimes) {
+                if (r === runtime) {
+                    this.locationManager.markApproaching(id, buildingId);
+                    break;
+                }
+            }
+        }
     }
 
     /** Release a worker's building assignment, decrementing its occupant count. */
@@ -476,6 +529,19 @@ export class SettlerTaskSystem implements TickSystem, Persistable<SerializedUnit
         } else {
             this.buildingOccupants.set(id, count - 1);
         }
+
+        // Locate settler ID by reverse-lookup so we can clean up location state.
+        for (const [settlerId, r] of this.runtimes) {
+            if (r === runtime) {
+                if (this.locationManager.isInside(settlerId)) {
+                    this.locationManager.exitBuilding(settlerId);
+                } else if (this.locationManager.isCommitted(settlerId)) {
+                    this.locationManager.cancelApproach(settlerId);
+                }
+                break;
+            }
+        }
+
         runtime.homeAssignment = null;
     }
 
@@ -503,18 +569,29 @@ export class SettlerTaskSystem implements TickSystem, Persistable<SerializedUnit
         const runtime = this.getRuntime(entityId);
 
         // Interrupt any current job
+        const unitConfig = this.settlerConfigs.get(entity.subType as UnitType);
         if (runtime.job) {
-            const config = this.settlerConfigs.get(entity.subType as UnitType);
-            if (config) {
-                this.interruptJobForCleanup(entity, config, runtime);
+            if (unitConfig) {
+                this.interruptJobForCleanup(entity, unitConfig, runtime);
             }
             runtime.job = null;
         }
 
-        // Player is moving this worker away — release building assignment
+        // Clear any position handler state (e.g. geologist's prospecting origin) so the
+        // worker re-anchors to its new destination rather than the old area.
+        if (unitConfig) {
+            const posHandler = this.handlerRegistry.getPositionHandler(unitConfig.plantSearch ?? unitConfig.search);
+            posHandler?.onSettlerRemoved?.(entityId);
+        }
+
+        // Player is moving this worker away — release building assignment.
+        // releaseBuilding calls exitBuilding/cancelApproach for tracked settlers.
         this.releaseBuilding(runtime);
 
-        entity.hidden = false;
+        // Ensure visibility for settlers not tracked by locationManager (e.g. carriers).
+        if (!this.locationManager.isCommitted(entity.id)) {
+            entity.hidden = false;
+        }
         runtime.moveTask = { type: 'move', targetX, targetY };
         runtime.state = SettlerState.WORKING;
 
@@ -570,7 +647,10 @@ export class SettlerTaskSystem implements TickSystem, Persistable<SerializedUnit
             }
         }
 
-        entity.hidden = false;
+        // Ensure visibility for settlers not tracked by locationManager (e.g. carriers).
+        if (!this.locationManager.isCommitted(entity.id)) {
+            entity.hidden = false;
+        }
         runtime.state = SettlerState.WORKING;
         runtime.job = job;
         runtime.moveTask = null;
@@ -594,7 +674,6 @@ export class SettlerTaskSystem implements TickSystem, Persistable<SerializedUnit
      * Handles both settler removal (interrupt jobs, release building) and
      * building removal (release all workers assigned to it).
      */
-    // eslint-disable-next-line sonarjs/cognitive-complexity -- complex cleanup for active tasks
     onEntityRemoved(entityId: number): void {
         // If a building was destroyed, release all workers assigned to it
         if (this.buildingOccupants.has(entityId)) {
@@ -607,10 +686,7 @@ export class SettlerTaskSystem implements TickSystem, Persistable<SerializedUnit
 
         const entity = this.gameState.getEntity(entityId);
         if (entity) {
-            const config = this.settlerConfigs.get(entity.subType as UnitType);
-            if (config && runtime.job) {
-                this.interruptJobForCleanup(entity, config, runtime);
-            }
+            this.cleanupSettlerHandlers(entity, entityId, runtime);
         } else if (runtime.job?.targetId && runtime.job.workStarted) {
             // Entity already gone — call onWorkInterrupt directly
             const entityHandler = this.handlerRegistry.findEntityHandlerForJob(runtime.job.jobId, this.settlerConfigs);
@@ -626,6 +702,14 @@ export class SettlerTaskSystem implements TickSystem, Persistable<SerializedUnit
 
         this.releaseBuilding(runtime);
         this.runtimes.delete(entityId);
+    }
+
+    private cleanupSettlerHandlers(entity: Entity, entityId: number, runtime: UnitRuntime): void {
+        const config = this.settlerConfigs.get(entity.subType as UnitType);
+        if (!config) return;
+        if (runtime.job) this.interruptJobForCleanup(entity, config, runtime);
+        const posHandler = this.handlerRegistry.getPositionHandler(config.plantSearch ?? config.search);
+        posHandler?.onSettlerRemoved?.(entityId);
     }
 
     /** Release and interrupt all workers assigned to a destroyed building so they return to idle. */

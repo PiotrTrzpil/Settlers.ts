@@ -23,7 +23,7 @@ import type { ValidPositionGrid } from '@/game/features/placement/valid-position
 import { MAX_SLOPE_DIFF } from '@/game/features/placement';
 import { WorkAreaAdjustHandler } from '@/game/features/building-adjust';
 import { computeWorkAreaColoredRings } from '@/game/features/work-areas/work-area-boundary';
-import { debugStats } from '@/game/debug-stats';
+import { debugStats } from '@/game/debug/debug-stats';
 import { resolveBuildingOverlays } from './overlay-resolution';
 import { updatePlacementModeState, clearPlacementModeState } from './placement-state';
 

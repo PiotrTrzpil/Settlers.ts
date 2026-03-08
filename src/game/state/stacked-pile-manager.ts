@@ -5,13 +5,13 @@
  * should not live inside the entity store.
  */
 
-import type { StackedPileState } from './entity';
-import { MAX_PILE_SIZE, EntityType, type Entity, type EntityProvider } from './entity';
-import type { EMaterialType } from './economy';
-import { type PileKind, getOwnerBuildingId, SlotKind } from './features/inventory/pile-kind';
-import { type ComponentStore, mapStore } from './ecs';
+import type { StackedPileState } from '../entity';
+import { MAX_PILE_SIZE, EntityType, type Entity, type EntityProvider } from '../entity';
+import type { EMaterialType } from '../economy';
+import { type PileKind, getOwnerBuildingId, SlotKind } from '../core/pile-kind';
+import { type ComponentStore, mapStore } from '../ecs';
 import type { Persistable } from '@/game/persistence';
-import type { SpatialGrid } from './spatial-grid';
+import type { SpatialGrid } from '../spatial-grid';
 
 type SerializedResourceQuantity = { entityId: number; quantity: number };
 

@@ -7,6 +7,9 @@ import type { SettlerTaskSystem } from '../features/settler-tasks';
 import type { CombatSystem } from '../features/combat';
 import type { StorageFilterManager } from '../features/inventory/storage-filter-manager';
 import type { PlacementFilter } from '../features/placement';
+import type { UnitReservationRegistry } from '../systems/unit-reservation';
+import type { RecruitSystem } from '../systems/recruit/recruit-system';
+import type { UnitTransformer } from '../systems/recruit/unit-transformer';
 import { CommandHandlerRegistry } from './handler-registry';
 
 import {
@@ -15,8 +18,14 @@ import {
     executeToggleSelection,
     executeSelectArea,
     executeSelectMultiple,
+    executeSelectSameUnitType,
 } from './handlers/selection-handlers';
-import { executeSpawnUnit, executeMoveUnit, executeMoveSelectedUnits } from './handlers/unit-handlers';
+import {
+    executeSpawnUnit,
+    executeMoveUnit,
+    executeMoveSelectedUnits,
+    executeRecruitSpecialist,
+} from './handlers/unit-handlers';
 import { executePlaceBuilding, executeRemoveEntity, executeSpawnBuildingUnits } from './handlers/building-handlers';
 import {
     executePlacePile,
@@ -42,8 +51,11 @@ export interface CommandRegistrationDeps {
     constructionSiteManager: ConstructionSiteManager;
     combatSystem: CombatSystem;
     storageFilterManager: StorageFilterManager;
+    unitReservation: UnitReservationRegistry;
     /** Getter for placement filter — mutable, re-read on each place_building call */
     getPlacementFilter: () => PlacementFilter | null;
+    recruitSystem: RecruitSystem;
+    unitTransformer: UnitTransformer;
 }
 
 /**
@@ -61,7 +73,10 @@ export function registerAllHandlers(registry: CommandHandlerRegistry, deps: Comm
         constructionSiteManager,
         combatSystem,
         storageFilterManager,
+        unitReservation,
         getPlacementFilter,
+        recruitSystem,
+        unitTransformer,
     } = deps;
 
     // Selection — only state
@@ -71,12 +86,16 @@ export function registerAllHandlers(registry: CommandHandlerRegistry, deps: Comm
     registry.register('toggle_selection', cmd => executeToggleSelection(selDeps, cmd));
     registry.register('select_area', cmd => executeSelectArea(selDeps, cmd));
     registry.register('select_multiple', cmd => executeSelectMultiple(selDeps, cmd));
+    registry.register('select_same_unit_type', cmd => executeSelectSameUnitType(selDeps, cmd));
 
     // Units
     registry.register('spawn_unit', cmd => executeSpawnUnit({ state, terrain, eventBus }, cmd));
-    registry.register('move_unit', cmd => executeMoveUnit({ state, settlerTaskSystem, combatSystem }, cmd));
+    registry.register('recruit_specialist', cmd => executeRecruitSpecialist({ recruitSystem, unitTransformer }, cmd));
+    registry.register('move_unit', cmd =>
+        executeMoveUnit({ state, settlerTaskSystem, combatSystem, unitReservation }, cmd)
+    );
     registry.register('move_selected_units', cmd =>
-        executeMoveSelectedUnits({ state, settlerTaskSystem, combatSystem }, cmd)
+        executeMoveSelectedUnits({ state, settlerTaskSystem, combatSystem, unitReservation }, cmd)
     );
 
     // Buildings

@@ -4,6 +4,14 @@
         <canvas ref="overlayCanvas" class="overlay-canvas" />
         <!-- Selection box overlay for drag selection -->
         <div v-if="selectionBox" class="selection-box" :style="selectionBoxStyle" />
+        <!-- Transient hint near cursor (e.g. "No garrison slot available") -->
+        <div
+            v-if="hintMessage"
+            class="cursor-hint"
+            :style="{ left: hintMessage.x + 'px', top: hintMessage.y - 40 + 'px' }"
+        >
+            {{ hintMessage.text }}
+        </div>
     </div>
 </template>
 
@@ -28,14 +36,15 @@ const emit = defineEmits<{
 const cav = useTemplateRef<HTMLCanvasElement>('cav');
 const overlayCanvas = useTemplateRef<HTMLCanvasElement>('overlayCanvas');
 
-const { setRace, getRace, getInputManager, getCamera, centerOnPlayerStart, getDecoLabels, selectionBox } = useRenderer({
-    canvas: cav,
-    getGame: () => props.game,
-    getDebugGrid: () => props.debugGrid,
-    getLayerVisibility: () => props.layerVisibility ?? DEFAULT_LAYER_VISIBILITY,
-    onTileClick: tile => emit('tileClick', tile),
-    getInitialCamera: () => props.initialCamera ?? null,
-});
+const { setRace, getRace, getInputManager, getCamera, centerOnPlayerStart, getDecoLabels, selectionBox, hintMessage } =
+    useRenderer({
+        canvas: cav,
+        getGame: () => props.game,
+        getDebugGrid: () => props.debugGrid,
+        getLayerVisibility: () => props.layerVisibility ?? DEFAULT_LAYER_VISIBILITY,
+        onTileClick: tile => emit('tileClick', tile),
+        getInitialCamera: () => props.initialCamera ?? null,
+    });
 
 // Draw debug decoration labels on the 2D overlay canvas
 let overlayRafId = 0;
@@ -140,5 +149,30 @@ defineExpose({ setRace, getRace, getInputManager, getCamera, centerOnPlayerStart
     border: 2px solid rgba(255, 255, 0, 0.9);
     background: rgba(255, 255, 0, 0.15);
     box-shadow: 0 0 4px rgba(255, 255, 0, 0.5);
+}
+
+.cursor-hint {
+    position: absolute;
+    pointer-events: none;
+    background: rgba(0, 0, 0, 0.75);
+    color: #fff;
+    font-size: 13px;
+    padding: 4px 8px;
+    border-radius: 4px;
+    white-space: nowrap;
+    transform: translateX(-50%);
+    animation: cursor-hint-fade 2.5s ease-in forwards;
+}
+
+@keyframes cursor-hint-fade {
+    0% {
+        opacity: 1;
+    }
+    60% {
+        opacity: 1;
+    }
+    100% {
+        opacity: 0;
+    }
 }
 </style>

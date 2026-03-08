@@ -9,7 +9,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { EntityType } from '@/game/entity';
 import { BuildingType, getBuildingFootprint } from '@/game/buildings';
-import { Race } from '@/game/race';
+import { Race } from '@/game/core/race';
 import { EMaterialType } from '@/game/economy/material-type';
 import { CONSTRUCTION_SITE_GROUND_TYPE } from '@/game/features/building-construction';
 import {

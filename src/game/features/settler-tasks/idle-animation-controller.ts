@@ -9,7 +9,7 @@
 import type { Entity } from '../../entity';
 import { UnitType } from '../../entity';
 import { EMaterialType } from '../../economy';
-import { xmlKey } from '../../animation';
+import { xmlKey } from '../../animation/animation';
 import { UNIT_XML_PREFIX } from '../../renderer/sprite-metadata';
 import type { EntityVisualService } from '../../animation/entity-visual-service';
 import type { JobPartResolution } from './choreo-types';

@@ -7,7 +7,7 @@
  */
 
 import { LogHandler } from '@/utilities/log-handler';
-import { Race } from '../../race';
+import { Race } from '../../core/race';
 import type { LuaRuntime } from '../lua-runtime';
 import type { GameState } from '@/game/game-state';
 import { EntityType, UnitType } from '@/game/entity';

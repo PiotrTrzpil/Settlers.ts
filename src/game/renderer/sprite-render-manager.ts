@@ -9,7 +9,7 @@ import { FileManager } from '@/utilities/file-manager';
 import { EntityTextureAtlas } from './entity-texture-atlas';
 import { PaletteTextureManager } from './palette-texture';
 import { TEXTURE_UNIT_PALETTE } from './entity-renderer-constants';
-import { debugStats } from '@/game/debug-stats';
+import { debugStats } from '@/game/debug/debug-stats';
 import {
     SpriteMetadataRegistry,
     SpriteEntry,
@@ -25,13 +25,13 @@ import { destroyDecoderPool, getDecoderPool, warmUpDecoderPool } from './sprite-
 import { yieldToEventLoop } from './batch-loader';
 import { BuildingType, UnitType, EntityType } from '../entity';
 import { MapObjectType } from '@/game/types/map-object-types';
-import { AnimationData } from '../animation';
+import { AnimationData } from '../animation/animation';
 import { AnimationDataProvider } from './animation-helpers';
 import { EMaterialType } from '../economy';
 import type { AtlasRegion } from './entity-texture-atlas';
 import { TEAM_COLOR_PALETTES } from '@/resources/gfx/team-colors';
 import { loadUnitSpritesForRace } from './sprite-unit-loader';
-import { SpriteAtlasCacheManager, prefetchSpriteCache } from './sprite-atlas-cache-manager';
+import { SpriteAtlasCacheManager } from './sprite-atlas-cache-manager';
 import {
     loadGilManifest,
     loadBuildingSprites,
@@ -41,8 +41,6 @@ import {
 } from './sprite-loaders';
 import { type SpriteLoadContext } from './sprite-load-context';
 import { SELECTION_INDICATOR_MANIFEST } from './selection-indicator';
-
-export { prefetchSpriteCache };
 
 /** Simple timer for measuring phases */
 function createTimer() {
@@ -138,13 +136,12 @@ export class SpriteRenderManager {
     }
 
     /**
-     * Adopt the module-level early prefetch (started during map load), or start
-     * a new IDB read if no early prefetch is available.
-     * No-op if the race has not been set yet.
+     * Start cache prefetch. Call as early as possible so Cache API reads
+     * overlap with landscape init. No-op if the race has not been set yet.
      */
     public prefetchCache(): void {
         if (this._currentRace === null) return;
-        this.cacheManager.adoptPrefetch(this._currentRace);
+        this.cacheManager.prefetch(this._currentRace);
     }
 
     /**
@@ -307,6 +304,18 @@ export class SpriteRenderManager {
     }
 
     /**
+     * Save the current atlas, registry, and palette to both cache tiers (fire-and-forget).
+     * Call after all sprites (including overlays) are loaded so the cache is complete.
+     */
+    public saveCache(): void {
+        const race = this._currentRace;
+        const atlas = this._spriteAtlas;
+        const registry = this._spriteRegistry;
+        if (!race || !atlas || !registry) return;
+        void this.cacheManager.save(race, atlas, registry, this.textureUnit, this._paletteManager);
+    }
+
+    /**
      * Load overlay sprites into the atlas.
      *
      * Call after building sprites are loaded (setRace / init). Accepts a manifest
@@ -367,15 +376,22 @@ export class SpriteRenderManager {
         if (cached) {
             this._spriteAtlas = cached.atlas;
             this._spriteRegistry = cached.registry;
-            // Load selection indicators on top of cached atlas (not included in cache)
-            const ctx: SpriteLoadContext = {
-                spriteLoader: this.spriteLoader,
-                atlas: cached.atlas,
-                registry: cached.registry,
-                gl,
-                paletteManager: this._paletteManager,
-            };
-            await this.loadSelectionIndicators(ctx);
+            // Selection indicators are now serialized in the registry — skip reloading if present.
+            const firstGilIndex = SELECTION_INDICATOR_MANIFEST.gilIndices[0]!;
+            const alreadyCached =
+                cached.registry.getOverlayFrames(SELECTION_INDICATOR_MANIFEST.gfxFile, firstGilIndex, 0) !== null;
+            if (!alreadyCached) {
+                const ctx: SpriteLoadContext = {
+                    spriteLoader: this.spriteLoader,
+                    atlas: cached.atlas,
+                    registry: cached.registry,
+                    gl,
+                    paletteManager: this._paletteManager,
+                };
+                const tSel = performance.now();
+                await this.loadSelectionIndicators(ctx);
+                debugStats.state.loadTimings.selectionIndicators = Math.round(performance.now() - tSel);
+            }
             return true;
         }
 
@@ -391,7 +407,7 @@ export class SpriteRenderManager {
     /**
      * Full load from GFX files. Called on cache miss.
      */
-    private async loadSpritesFromFiles(gl: WebGL2RenderingContext, race: Race): Promise<boolean> {
+    private async loadSpritesFromFiles(gl: WebGL2RenderingContext, _race: Race): Promise<boolean> {
         const t = createTimer();
         const racesToLoad = AVAILABLE_RACES;
 
@@ -449,7 +465,9 @@ export class SpriteRenderManager {
         const units = t.lap();
 
         // Load selection indicator sprites from GFX file 7 (HUD overlays)
+        const tSel = performance.now();
         await this.loadSelectionIndicators(ctx);
+        const selectionIndicators = Math.round(performance.now() - tSel);
 
         if (!buildingsLoaded && !mapObjectsLoaded && !goodsLoaded && !unitsLoaded) {
             return false;
@@ -463,7 +481,8 @@ export class SpriteRenderManager {
 
         const gpuUpload = t.lap();
 
-        void this.cacheManager.save(race, atlas, registry, this.textureUnit, this._paletteManager);
+        // Cache is saved by the caller (via saveCache()) after overlay sprites are also loaded,
+        // so the cache includes overlay pixel data and registry entries.
         this.recordLoadTimings(
             {
                 filePreload,
@@ -473,7 +492,9 @@ export class SpriteRenderManager {
                 goods,
                 units,
                 unitsByRace: unitRaceTimings,
+                selectionIndicators,
                 gpuUpload,
+                gpuLayers: atlas.layerCount,
             },
             t,
             atlas,
@@ -533,7 +554,9 @@ export class SpriteRenderManager {
             goods: number;
             units: number;
             unitsByRace: Record<string, number>;
+            selectionIndicators: number;
             gpuUpload: number;
+            gpuLayers: number;
         },
         timer: ReturnType<typeof createTimer>,
         atlas: EntityTextureAtlas,
@@ -542,6 +565,9 @@ export class SpriteRenderManager {
         Object.assign(debugStats.state.loadTimings, {
             ...timings,
             deserialize: 0,
+            atlasRestore: 0,
+            registryDeserialize: 0,
+            paletteUpload: 0,
             totalSprites: timer.total(),
             atlasSize: `${atlas.layerCount}x${atlas.width}x${atlas.height}`,
             spriteCount:
@@ -556,7 +582,8 @@ export class SpriteRenderManager {
         SpriteRenderManager.log.debug(
             `Sprite loading (ms): preload=${timings.filePreload}, buildings=${timings.buildings}, ` +
                 `mapObj=${timings.mapObjects}, goods=${timings.goods}, units=${timings.units}, ` +
-                `gpu=${timings.gpuUpload}, TOTAL=${timer.total()}, workers=${getDecoderPool().getDecodeCount()}`
+                `sel=${timings.selectionIndicators}, gpu=${timings.gpuUpload} (${timings.gpuLayers} layers), ` +
+                `TOTAL=${timer.total()}, workers=${getDecoderPool().getDecodeCount()}`
         );
     }
 }

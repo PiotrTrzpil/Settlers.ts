@@ -21,7 +21,7 @@ import type { PileRegistry } from '../inventory/pile-registry';
 import type { WorkAreaStore } from '../work-areas/work-area-store';
 import { EntityType, BuildingType, type Entity } from '../../entity';
 import { EMaterialType } from '../../economy/material-type';
-import { SlotKind } from '../inventory/pile-kind';
+import { SlotKind } from '../../core/pile-kind';
 
 // ─────────────────────────────────────────────────────────────
 // String → EMaterialType lookup

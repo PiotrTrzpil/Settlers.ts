@@ -11,12 +11,13 @@
 
 import { GameState } from './game-state';
 import type { TerrainData } from './terrain';
-import type { TickSystem } from './tick-system';
+import type { TickSystem } from './core/tick-system';
 import { EntityType } from './entity';
 import { EventBus, EventSubscriptionManager } from './event-bus';
 import { EntityVisualService } from './animation/entity-visual-service';
 import type { Command, CommandResult, CommandType } from './commands';
 import { EntityCleanupRegistry, CLEANUP_PRIORITY } from './systems/entity-cleanup-registry';
+import { UnitReservationRegistry } from './systems/unit-reservation';
 import { FeatureRegistry } from './features/feature-registry';
 import type { BoundCommandHandler } from './features/feature';
 import type { RenderPassDefinition } from './renderer/render-passes/types';
@@ -51,13 +52,18 @@ import {
     type MaterialTransferExports,
 } from './features/material-transfer/material-transfer-feature';
 import { SettlerTaskFeature, type SettlerTaskExports } from './features/settler-tasks/settler-tasks-feature';
-import { AutoRecruitFeature, type AutoRecruitExports } from './features/auto-recruit';
-import type { AutoRecruitSystem } from './features/auto-recruit';
+import { RecruitFeature, type RecruitExports } from './features/recruit';
+import type { UnitTransformer } from './features/recruit';
+import type { RecruitSystem } from './systems/recruit';
+
 import {
     LogisticsDispatcherFeature,
     type LogisticsDispatcherExports,
 } from './features/logistics/logistics-dispatcher-feature';
 import { BarracksFeature, type BarracksExports } from './features/barracks/barracks-feature';
+import { TowerGarrisonFeature, type TowerGarrisonExports } from './features/tower-garrison';
+import { SettlerLocationFeature } from './features/settler-location';
+import type { SettlerLocationExports } from './features/settler-location/types';
 import {
     InventoryPileSyncFeature,
     type InventoryPileSyncExports,
@@ -80,6 +86,7 @@ import type { TerritoryManager } from './features/territory';
 import type { WorkAreaStore } from './features/work-areas';
 import type { ProductionControlManager } from './features/production-control';
 import type { BarracksTrainingManager } from './features/barracks';
+import type { TowerGarrisonManager } from './features/tower-garrison';
 import type { MaterialTransfer } from './features/material-transfer';
 import type { TreeSystem } from './features/trees';
 import type { StoneSystem } from './features/stones';
@@ -87,6 +94,7 @@ import type { CropSystem } from './features/crops';
 import type { CombatSystem } from './features/combat';
 import type { OreVeinData, ResourceSignSystem } from './features/ore-veins';
 import type { SettlerTaskSystem } from './features/settler-tasks';
+import type { ISettlerBuildingLocationManager } from './features/settler-location/types';
 
 export class GameServices {
     // ===== Kernel services =====
@@ -109,12 +117,16 @@ export class GameServices {
     public readonly settlerTaskSystem: SettlerTaskSystem;
     public readonly logisticsDispatcher: LogisticsDispatcher;
     public readonly barracksTrainingManager: BarracksTrainingManager;
+    public readonly garrisonManager: TowerGarrisonManager;
     public readonly treeSystem: TreeSystem;
     public readonly stoneSystem: StoneSystem;
     public readonly cropSystem: CropSystem;
     public readonly combatSystem: CombatSystem;
     public readonly signSystem: ResourceSignSystem;
-    public readonly autoRecruitSystem: AutoRecruitSystem;
+    public readonly locationManager: ISettlerBuildingLocationManager;
+
+    public readonly unitTransformer: UnitTransformer;
+    public readonly recruitSystem: RecruitSystem;
     public readonly inventoryPileSync: InventoryPileSync | null;
     public readonly persistenceRegistry: PersistenceRegistry;
 
@@ -133,12 +145,23 @@ export class GameServices {
     private readonly subscriptions = new EventSubscriptionManager();
     private readonly cleanupRegistry = new EntityCleanupRegistry();
 
+    // ===== Shared kernel services (also exposed for command registration) =====
+    public readonly unitReservation: UnitReservationRegistry;
+
     constructor(gameState: GameState, eventBus: EventBus, executeCommand: (cmd: Command) => CommandResult) {
         // 1. Kernel services — created before features, provided via FeatureContext.
-        //    Visual init handler MUST fire before any feature handler (subscribed first).
+        //    UnitReservationRegistry must subscribe to entity:removed BEFORE cleanupRegistry
+        //    so onForcedRelease fires before any feature-level cleanup handlers.
+        this.unitReservation = new UnitReservationRegistry(eventBus);
         this.visualService = new EntityVisualService();
         this.subscriptions.subscribe(eventBus, 'entity:created', ({ entityId, variation }) =>
             this.visualService.init(entityId, variation)
+        );
+        // When any unit changes type (carrier↔specialist, soldier→death-angel, etc.),
+        // clear the stale animation so the idle/task controller re-derives the correct
+        // sequence key for the new unit type on the next tick.
+        this.subscriptions.subscribe(eventBus, 'unit:transformed', ({ entityId }) =>
+            this.visualService.clearAnimation(entityId)
         );
 
         // 2. Feature registry — loads all game features in dependency order.
@@ -147,6 +170,7 @@ export class GameServices {
             eventBus,
             visualService: this.visualService,
             cleanupRegistry: this.cleanupRegistry,
+            unitReservation: this.unitReservation,
             executeCommand,
         });
 
@@ -166,6 +190,7 @@ export class GameServices {
             DeathAngelFeature,
             OreSignFeature,
             TerritoryFeature,
+            SettlerLocationFeature,
             // Tier 1: depend on tier-0 features
             BuildingConstructionFeature,
             MaterialTransferFeature,
@@ -176,7 +201,8 @@ export class GameServices {
             LogisticsDispatcherFeature,
             // Tier 4: depend on logistics-dispatcher
             BarracksFeature,
-            AutoRecruitFeature,
+            TowerGarrisonFeature,
+            RecruitFeature,
             // Independent chains
             InventoryPileSyncFeature,
             FreePilesFeature,
@@ -203,12 +229,17 @@ export class GameServices {
         this.settlerTaskSystem = this.feat<SettlerTaskExports>('settler-tasks').settlerTaskSystem;
         this.logisticsDispatcher = this.feat<LogisticsDispatcherExports>('logistics-dispatcher').logisticsDispatcher;
         this.barracksTrainingManager = this.feat<BarracksExports>('barracks').barracksTrainingManager;
+        this.garrisonManager = this.feat<TowerGarrisonExports>('tower-garrison').garrisonManager;
         this.treeSystem = this.feat<TreeFeatureExports>('trees').treeSystem;
         this.stoneSystem = this.feat<StoneFeatureExports>('stones').stoneSystem;
         this.cropSystem = this.feat<CropFeatureExports>('crops').cropSystem;
         this.combatSystem = this.feat<CombatExports>('combat').combatSystem;
         this.signSystem = this.feat<OreSignExports>('ore-signs').signSystem;
-        this.autoRecruitSystem = this.feat<AutoRecruitExports>('auto-recruit').autoRecruitSystem;
+        this.locationManager = this.feat<SettlerLocationExports>('settler-location').locationManager;
+        const arExports = this.feat<RecruitExports>('recruit');
+
+        this.unitTransformer = arExports.unitTransformer;
+        this.recruitSystem = arExports.recruitSystem;
         const pileSyncExports = this.feat<InventoryPileSyncExports>('inventory-pile-sync');
         this.inventoryPileSync = pileSyncExports.inventoryPileSync;
 
@@ -229,7 +260,8 @@ export class GameServices {
         this.persistenceRegistry.register(this.signSystem);
         this.persistenceRegistry.register(this.residenceSpawner);
         this.persistenceRegistry.register(this.barracksTrainingManager, ['productionControl']);
-        this.persistenceRegistry.register(this.autoRecruitSystem);
+        // autoRecruitSystem is no longer Persistable; unitTransformer persistence is self-registered
+        // via the auto-recruit feature's persistence: [unitTransformer] array (collected above).
         this.persistenceRegistry.register(this.settlerTaskSystem, [
             'carriers',
             'constructionSites',

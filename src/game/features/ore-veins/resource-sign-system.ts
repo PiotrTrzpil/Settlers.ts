@@ -9,7 +9,7 @@
  * - `setOreVeinData(data)` — called after terrain loads to inject ore data
  */
 
-import type { TickSystem } from '../../tick-system';
+import type { TickSystem } from '../../core/tick-system';
 import type { OreVeinData } from './ore-vein-data';
 import { OreType } from './ore-type';
 import { MapObjectType } from '@/game/types/map-object-types';
@@ -17,7 +17,7 @@ import { createLogger } from '@/utilities/logger';
 import type { Command, CommandResult } from '../../commands';
 import { sortedEntries } from '@/utilities/collections';
 import type { Persistable } from '@/game/persistence';
-import type { SerializedResourceSign } from '@/game/game-state-persistence';
+import type { SerializedResourceSign } from '@/game/state/game-state-persistence';
 
 const log = createLogger('ResourceSignSystem');
 

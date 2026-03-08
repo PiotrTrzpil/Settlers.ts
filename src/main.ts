@@ -5,7 +5,7 @@ import 'vue-toastification/dist/index.css';
 import App from './app.vue';
 import router from './router';
 import { LogHandler } from './utilities/log-handler';
-import { toastError } from './game/toast-notifications';
+import { toastError } from './game/ui/toast-notifications';
 
 declare const __SOURCE_HASH__: string;
 
@@ -33,6 +33,8 @@ if (import.meta.hot) {
             '/src/game/features/',
             '/src/game/animation/',
             '/src/game/systems/',
+            '/src/composables/',
+            '/src/views/',
         ];
         const needsReload = payload.updates.some((update: { path: string }) =>
             reloadPaths.some(p => update.path.includes(p))

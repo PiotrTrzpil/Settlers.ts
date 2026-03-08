@@ -39,7 +39,7 @@ import { EntityType, UnitType, tileKey, type TileCoord } from '@/game/entity';
 import { EMaterialType } from '@/game/economy/material-type';
 import { MapObjectType } from '@/game/types/map-object-types';
 import { GameSettingsManager } from '@/game/game-settings';
-import { Race } from '@/game/race';
+import { Race } from '@/game/core/race';
 import { spiralSearch } from '@/game/utils/spiral-search';
 import { OreType } from '@/game/features/ore-veins/ore-type';
 import { isMineBuilding, getBuildingFootprint } from '@/game/buildings/types';
@@ -47,7 +47,7 @@ import { canPlaceBuildingFootprint } from '@/game/features/placement';
 import { BuildingConstructionPhase } from '@/game/features/building-construction/types';
 import type { InventorySlot } from '@/game/features/inventory/inventory-slot';
 import type { Entity } from '@/game/entity';
-import { EventFmt } from '@/game/event-formatting';
+import { EventFmt } from '@/game/debug/event-formatting';
 import { query } from '@/game/ecs';
 
 // ─── Formatting helpers ──────────────────────────────────────────
@@ -287,6 +287,9 @@ export class Simulation {
             constructionSiteManager: this.services.constructionSiteManager,
             combatSystem: this.services.combatSystem,
             storageFilterManager: this.services.storageFilterManager,
+            unitReservation: this.services.unitReservation,
+            recruitSystem: this.services.recruitSystem,
+            unitTransformer: this.services.unitTransformer,
             getPlacementFilter: () => null,
         });
 

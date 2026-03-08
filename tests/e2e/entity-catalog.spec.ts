@@ -1,10 +1,10 @@
 import { test, expect } from './fixtures';
 import { EntityType } from '@/game/entity';
 import { BuildingType } from '@/game/buildings/building-type';
-import { UnitType } from '@/game/unit-types';
+import { UnitType } from '@/game/core/unit-types';
 import { EMaterialType } from '@/game/economy/material-type';
-import { RACE_NAMES, AVAILABLE_RACES } from '@/game/race';
-import { isUnitAvailableForRace, isBuildingAvailableForRace } from '@/game/race-availability';
+import { RACE_NAMES, AVAILABLE_RACES } from '@/game/core/race';
+import { isUnitAvailableForRace, isBuildingAvailableForRace } from '@/game/data/race-availability';
 
 /**
  * Visual rendering catalog — screenshots of all entity types with real game assets.

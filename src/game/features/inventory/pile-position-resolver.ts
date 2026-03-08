@@ -7,16 +7,16 @@
  * - 'storage'           → BuildingPileRegistry.getStoragePileWorldPositions (first free slot)
  */
 
-import type { TileCoord } from '../../coordinates';
-import { tileKey } from '../../coordinates';
+import type { TileCoord } from '../../core/coordinates';
+import { tileKey } from '../../core/coordinates';
 import type { Entity } from '../../entity';
 import { EntityType, BuildingType } from '../../entity';
 import type { EMaterialType } from '../../economy/material-type';
 import type { GameState } from '../../game-state';
 import { LogHandler } from '@/utilities/log-handler';
 import type { BuildingPileRegistry } from './building-pile-registry';
-import type { LinkedSlotKind } from './pile-kind';
-import { SlotKind } from './pile-kind';
+import type { LinkedSlotKind } from '../../core/pile-kind';
+import { SlotKind } from '../../core/pile-kind';
 import { getConstructionCandidates, getConstructionPilePosition } from './construction-pile-positions';
 
 export class PilePositionResolver {

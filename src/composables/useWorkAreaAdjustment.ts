@@ -7,7 +7,7 @@
 import { computed, type Ref } from 'vue';
 import type { Entity } from '@/game/entity';
 import { EntityType, BuildingType } from '@/game/entity';
-import { getBridge } from '@/game/debug-bridge';
+import { getBridge } from '@/game/debug/debug-bridge';
 import { BuildingAdjustMode } from '@/game/input/modes/building-adjust-mode';
 import { WORK_AREA_BUILDINGS } from '@/game/features/work-areas';
 import type { WorkAreaAdjustHandler } from '@/game/features/building-adjust/work-area-handler';

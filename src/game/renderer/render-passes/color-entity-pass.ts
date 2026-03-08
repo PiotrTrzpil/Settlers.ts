@@ -7,7 +7,7 @@
 
 import type { Entity } from '@/game/entity';
 import { EntityType } from '@/game/entity';
-import { UnitType } from '@/game/unit-types';
+import { UnitType } from '@/game/core/unit-types';
 import { BuildingType } from '@/game/buildings/building-type';
 import { EMaterialType } from '@/game/economy/material-type';
 import type { IViewPoint } from '../i-view-point';

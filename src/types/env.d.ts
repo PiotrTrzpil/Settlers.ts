@@ -1,6 +1,6 @@
 /// <reference types="vite/client" />
 
-import type { SettlersBridge } from '@/game/debug-bridge';
+import type { SettlersBridge } from '@/game/debug/debug-bridge';
 
 /**
  * Global window extensions for the debug/test bridge and HMR singletons.

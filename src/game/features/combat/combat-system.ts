@@ -9,7 +9,7 @@
  * 5. Dead units are removed from the game
  */
 
-import type { TickSystem } from '../../tick-system';
+import type { TickSystem } from '../../core/tick-system';
 import type { CoreDeps } from '../feature';
 import type { GameState } from '../../game-state';
 import type { EventBus } from '../../event-bus';
@@ -17,14 +17,14 @@ import type { Entity } from '../../entity';
 import { EntityType, isUnitTypeMilitary, UnitType } from '../../entity';
 import { hexDistance, getApproxDirection } from '../../systems/hex-directions';
 import { CombatState, CombatStatus, createCombatState, getCombatStats } from './combat-state';
-import { xmlKey } from '../../animation';
+import { xmlKey } from '../../animation/animation';
 import { UNIT_XML_PREFIX } from '../../renderer/sprite-metadata';
 import type { EntityVisualService } from '../../animation/entity-visual-service';
 import { createLogger } from '@/utilities/logger';
 import { sortedEntries } from '@/utilities/collections';
 import type { Command, CommandResult } from '../../commands';
 import type { Persistable } from '@/game/persistence';
-import type { SerializedCombatUnit } from '@/game/game-state-persistence';
+import type { SerializedCombatUnit } from '@/game/state/game-state-persistence';
 
 const log = createLogger('CombatSystem');
 

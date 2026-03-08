@@ -3,7 +3,7 @@ import { ThrottledLogger } from '@/utilities/throttled-logger';
 import { IRenderer } from './i-renderer';
 import { ViewPoint } from './view-point';
 import type { EntityRenderer } from './entity-renderer';
-import { toastError } from '@/game/toast-notifications';
+import { toastError } from '@/game/ui/toast-notifications';
 
 /** Per-layer error tracking */
 interface LayerErrorState {

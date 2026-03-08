@@ -10,11 +10,11 @@
 
 import { getGameDataLoader, type RaceId, type BuildingInfo, type ObjectInfo } from '@/resources/game-data';
 import { S4SettlerType, S4GoodType } from '@/resources/map/s4-types';
-import { Race } from './race';
-import { BuildingType } from './buildings/building-type';
-import { UnitType } from './unit-types';
-import { EMaterialType } from './economy/material-type';
-import { MapObjectType } from './types/map-object-types';
+import { Race } from '../core/race';
+import { BuildingType } from '../buildings/building-type';
+import { UnitType } from '../core/unit-types';
+import { EMaterialType } from '../economy/material-type';
+import { MapObjectType } from '../types/map-object-types';
 import { isBuildingAvailableForRace } from './race-availability';
 
 // ============ Race translation ============

@@ -13,7 +13,7 @@ import {
     TREE_JOB_INDICES,
     TREE_JOBS_PER_TYPE,
 } from '../sprite-metadata';
-import { ANIMATION_DEFAULTS } from '@/game/animation';
+import { ANIMATION_DEFAULTS } from '@/game/animation/animation';
 import type { LoadedGfxFileSet } from '../sprite-loader';
 import { SafeLoadBatch } from '../batch-loader';
 import { EntityType } from '@/game/entity';

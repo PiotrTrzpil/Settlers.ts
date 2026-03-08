@@ -7,14 +7,14 @@
  * distinct material types required to construct the building (capped at 8).
  */
 
-import type { TileCoord } from '../../coordinates';
+import type { TileCoord } from '../../core/coordinates';
 import type { Entity } from '../../entity';
 import { EntityType } from '../../entity';
-import { tileKey } from '../../coordinates';
+import { tileKey } from '../../core/coordinates';
 import { BuildingType } from '../../buildings/building-type';
 import type { EMaterialType } from '../../economy/material-type';
 import type { GameState } from '../../game-state';
-import { getBuildingDoorPos } from '../../game-data-access';
+import { getBuildingDoorPos } from '../../data/game-data-access';
 import { getConstructionCosts } from '../../economy/building-production';
 
 /** Maximum number of construction staging slots. */

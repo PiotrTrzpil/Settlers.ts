@@ -1,7 +1,7 @@
 import type { Ref } from 'vue';
 import type { TileCoord } from '../entity';
 import type { InputMode, InputContext, InputResult } from './input-mode';
-import type { Race } from '../race';
+import type { Race } from '../core/race';
 import type { InputConfig } from './input-config';
 import type { InputState } from './input-state';
 import type { ModeRenderState } from './render-state';
@@ -63,6 +63,8 @@ export interface InputManagerOptions {
     onModeChange?: ModeChangeCallback;
     /** Provider for the local player's race (used in debug spawn commands). */
     raceProvider?: () => Race | null;
+    /** Show a transient hint near a screen position. Wired by the UI layer; absent in headless/test contexts. */
+    hintProvider?: (message: string, screenX: number, screenY: number) => void;
 }
 
 /**
@@ -85,6 +87,7 @@ export class InputManager {
     /** Game settings — nullable by design, set via setSettings when game loads */
     private _settings: GameSettings | null = null;
     private raceProvider: (() => Race | null) | null = null;
+    private hintProvider: ((message: string, screenX: number, screenY: number) => void) | null = null;
 
     // Bound event handlers for cleanup
     private boundHandlers: {
@@ -107,6 +110,7 @@ export class InputManager {
         this.entityRectPicker = options.entityRectPicker ?? null;
         this.onModeChange = options.onModeChange ?? null;
         this.raceProvider = options.raceProvider ?? null;
+        this.hintProvider = options.hintProvider ?? null;
 
         // Create input state tracker
         this.state = createInputState(this.target, this.config);
@@ -360,6 +364,7 @@ export class InputManager {
             localPlayerRace: this.raceProvider?.() ?? null,
             pickEntityAtScreen: this.entityPicker,
             pickEntitiesInScreenRect: this.entityRectPicker,
+            showHint: this.hintProvider ?? undefined,
         };
     }
 

@@ -9,7 +9,7 @@ import type { RaceId, JobInfo, JobNode } from '@/resources/game-data';
 import { getGameDataLoader } from '@/resources/game-data';
 import type { GameDataLoader } from '@/resources/game-data';
 import { ChoreoTaskType, parseChoreoTaskType, type ChoreoJob, type ChoreoNode } from './choreo-types';
-import { UnitType } from '../../unit-types';
+import { UnitType } from '../../core/unit-types';
 
 // ─────────────────────────────────────────────────────────────
 // UnitType → XML settler ID mapping (mirrors settler-data-access.ts)

@@ -9,11 +9,11 @@
  */
 
 import { reactive } from 'vue';
-import { EntityType } from './entity';
+import { EntityType } from '../entity';
 import { MapObjectType } from '@/game/types/map-object-types';
-import { isResourceDeposit, getEnvironmentSubLayer, EnvironmentSubLayer } from './renderer/layer-visibility';
-import type { GameState } from './game-state';
-import { getBridge } from './debug-bridge';
+import { isResourceDeposit, getEnvironmentSubLayer, EnvironmentSubLayer } from '../renderer/layer-visibility';
+import type { GameState } from '../game-state';
+import { getBridge } from '../debug/debug-bridge';
 
 export interface GameViewStateData {
     /** Increments every update — use as a reactive dirty flag in Vue computeds */

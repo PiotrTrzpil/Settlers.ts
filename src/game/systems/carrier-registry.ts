@@ -6,12 +6,12 @@
  * is all that's needed.
  */
 
-import type { EventBus } from '../../event-bus';
-import type { EntityProvider } from '../../entity';
-import { type ComponentStore, setStore } from '../../ecs';
+import type { EventBus } from '../event-bus';
+import type { EntityProvider } from '../entity';
+import { type ComponentStore, setStore } from '../ecs';
 import { createLogger } from '@/utilities/logger';
 import type { Persistable } from '@/game/persistence';
-import type { SerializedCarrier } from '@/game/game-state-persistence';
+import type { SerializedCarrier } from '@/game/state/game-state-persistence';
 
 const log = createLogger('CarrierRegistry');
 

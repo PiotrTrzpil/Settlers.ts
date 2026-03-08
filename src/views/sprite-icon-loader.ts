@@ -12,7 +12,7 @@ import {
     UNIT_BASE_JOB_INDICES,
     SETTLER_FILE_NUMBERS,
 } from '@/game/renderer/sprite-metadata';
-import { Race } from '@/game/race';
+import { Race } from '@/game/core/race';
 import { BuildingType, UnitType } from '@/game/entity';
 import { EMaterialType } from '@/game/economy';
 import { FileManager } from '@/utilities/file-manager';

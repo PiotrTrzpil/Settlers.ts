@@ -5,18 +5,9 @@
  * Each recipe has explicit { material, count } inputs and produces a specific unit type at a level.
  */
 
-import type { EMaterialType } from '@/game/economy/material-type';
-import type { UnitType } from '@/game/unit-types';
-
-/** Single training recipe — inputs consumed to produce one soldier. */
-export interface TrainingRecipe {
-    /** Materials consumed per training cycle (explicit counts for multi-material recipes). */
-    inputs: readonly { material: EMaterialType; count: number }[];
-    /** Base soldier type produced (e.g. Swordsman, not Swordsman2). */
-    unitType: UnitType;
-    /** Soldier level (1, 2, or 3). */
-    level: number;
-}
+// TrainingRecipe is defined in event-bus (no feature deps) and re-exported here.
+import type { TrainingRecipe } from '@/game/event-bus';
+export type { TrainingRecipe };
 
 /** Per-race recipe collection for the barracks. */
 export interface TrainingRecipeSet {

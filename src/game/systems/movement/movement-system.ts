@@ -3,9 +3,9 @@ import { MovementController, MovementState } from './movement-controller';
 import { PathfindingService } from './pathfinding-service';
 import { CollisionResolver } from './collision-resolver';
 import { BlockedStateHandler } from './blocked-state-handler';
-import type { TickSystem } from '../../tick-system';
+import type { TickSystem } from '../../core/tick-system';
 import type { EventBus } from '../../event-bus';
-import type { SeededRng } from '../../rng';
+import type { SeededRng } from '../../core/rng';
 import { type ComponentStore, mapStore } from '../../ecs';
 import { LogHandler } from '@/utilities/log-handler';
 

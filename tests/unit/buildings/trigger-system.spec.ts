@@ -10,7 +10,7 @@ import { TriggerSystemImpl, type TriggerSystemConfig } from '@/game/features/bui
 import type { BuildingTrigger } from '@/resources/game-data/types';
 import type { Entity } from '@/game/entity';
 import { EntityType } from '@/game/entity';
-import { Race } from '@/game/race';
+import { Race } from '@/game/core/race';
 
 function makeBuildingEntity(id: number, race: Race = Race.Roman): Entity {
     return { id, type: EntityType.Building, subType: 0, x: 0, y: 0, player: 0, race };

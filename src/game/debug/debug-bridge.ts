@@ -6,16 +6,16 @@
  * to set their properties; e2e tests read `window.__settlers__` in page.evaluate().
  */
 
-import type { Game } from './game';
-import type { GameSettingsManager } from './game-settings';
+import type { Game } from '../game';
+import type { GameSettingsManager } from '../game-settings';
 import type { DebugStatsState } from './debug-stats';
-import type { GameViewState, GameViewStateData } from './game-view-state';
-import type { ViewPoint } from './renderer/view-point';
-import type { LandscapeRenderer } from './renderer/landscape/landscape-renderer';
-import type { EntityRenderer } from './renderer/entity-renderer';
-import type { InputManager } from './input/input-manager';
-import type { SoundManager } from './audio/sound-manager';
-import type { spiralSearch } from './utils/spiral-search';
+import type { GameViewState, GameViewStateData } from '../ui/game-view-state';
+import type { ViewPoint } from '../renderer/view-point';
+import type { LandscapeRenderer } from '../renderer/landscape/landscape-renderer';
+import type { EntityRenderer } from '../renderer/entity-renderer';
+import type { InputManager } from '../input/input-manager';
+import type { SoundManager } from '../audio/sound-manager';
+import type { spiralSearch } from '../utils/spiral-search';
 
 /**
  * Bridge shape — all properties are optional because different modules

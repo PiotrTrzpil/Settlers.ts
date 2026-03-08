@@ -10,7 +10,7 @@
 import { LogHandler } from '@/utilities/log-handler';
 import { LuaScriptSystem, type LuaScriptSystemConfig } from './lua-script-system';
 import type { ScriptEventType } from './event-dispatcher';
-import type { TickSystem } from '../tick-system';
+import type { TickSystem } from '../core/tick-system';
 
 const log = new LogHandler('ScriptService');
 

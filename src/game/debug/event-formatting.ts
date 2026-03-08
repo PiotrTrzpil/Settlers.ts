@@ -11,11 +11,11 @@
  *   - Flags:              workStarted, wasCarrying
  */
 
-import { BuildingType } from './buildings/building-type';
-import { UnitType } from './unit-types';
-import { EntityType } from './entity';
-import { EMaterialType } from './economy/material-type';
-import type { GameEvents } from './event-bus';
+import { BuildingType } from '../buildings/building-type';
+import { UnitType } from '../core/unit-types';
+import { EntityType } from '../entity';
+import { EMaterialType } from '../economy/material-type';
+import type { GameEvents } from '../event-bus';
 
 /** Join non-empty parts with spaces. */
 function parts(...items: (string | false | null | undefined)[]): string {
@@ -167,6 +167,9 @@ export const EventFmt = {
 
     'construction:workerReleased': (e: GameEvents['construction:workerReleased']) => `${e.role} #${e.workerId}`,
 
+    'construction:workerNeeded': (e: GameEvents['construction:workerNeeded']) =>
+        `${e.role} @ (${e.tileX},${e.tileY}) player=${e.player}`,
+
     'construction:materialDelivered': (e: GameEvents['construction:materialDelivered']) => EMaterialType[e.material],
 
     'construction:buildingStarted': () => '',
@@ -213,4 +216,10 @@ export const EventFmt = {
 
     'unit:transformed': (e: GameEvents['unit:transformed']) =>
         `#${e.entityId} ${UnitType[e.fromType]} → ${UnitType[e.toType]}`,
+
+    'garrison:unitEntered': (e: GameEvents['garrison:unitEntered']) =>
+        `unit=#${e.unitId} entered tower=#${e.buildingId}`,
+    'garrison:unitExited': (e: GameEvents['garrison:unitExited']) => `unit=#${e.unitId} exited tower=#${e.buildingId}`,
+    'settler-location:approachInterrupted': (e: GameEvents['settler-location:approachInterrupted']) =>
+        `settler=#${e.settlerId} approach interrupted by building=#${e.buildingId} removal`,
 } satisfies { [K in keyof GameEvents]: (e: GameEvents[K]) => string };

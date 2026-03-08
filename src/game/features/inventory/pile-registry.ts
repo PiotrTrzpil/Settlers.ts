@@ -12,12 +12,12 @@
  * spawning/removing entities. The registry only maintains the index.
  */
 
-import type { TileCoord } from '../../coordinates';
+import type { TileCoord } from '../../core/coordinates';
 import type { EMaterialType } from '../../economy/material-type';
 import type { Entity } from '../../entity';
 import { EntityType } from '../../entity';
-import type { PileKind, LinkedSlotKind } from './pile-kind';
-import { isLinkedPile } from './pile-kind';
+import type { PileKind, LinkedSlotKind } from '../../core/pile-kind';
+import { isLinkedPile } from '../../core/pile-kind';
 
 /**
  * Identifies the exact inventory slot that a pile entity represents.

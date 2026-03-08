@@ -16,11 +16,11 @@ import type { CarrierRegistry } from '@/game/features/carriers';
 import type { SettlerTaskSystem } from '@/game/features/settler-tasks';
 import type { ProductionControlManager } from '@/game/features/production-control';
 import type { EventBus } from '@/game/event-bus';
-import { type Race } from '@/game/race';
-import { UnitType } from '@/game/unit-types';
+import { type Race } from '@/game/core/race';
+import { UnitType } from '@/game/core/unit-types';
 import { type EMaterialType } from '@/game/economy/material-type';
 import { BuildingType } from '@/game/buildings/building-type';
-import { getBuildingDoorPos } from '@/game/game-data-access';
+import { getBuildingDoorPos } from '@/game/data/game-data-access';
 import {
     ChoreoTaskType,
     createChoreoJobState,
@@ -30,10 +30,11 @@ import {
 import { getTrainingRecipeSet, getTrainingRecipes } from './training-recipes';
 import type { TrainingRecipe, BarracksTrainingState } from './types';
 import { createLogger } from '@/utilities/logger';
+import type { UnitReservationRegistry } from '@/game/systems/unit-reservation';
 import { sortedEntries } from '@/utilities/collections';
 import { query } from '@/game/ecs';
 import type { Persistable } from '@/game/persistence';
-import type { SerializedBarracksTraining } from '@/game/game-state-persistence';
+import type { SerializedBarracksTraining } from '@/game/state/game-state-persistence';
 
 const log = createLogger('BarracksTraining');
 
@@ -45,6 +46,7 @@ export interface BarracksTrainingManagerConfig extends CoreDeps {
     carrierRegistry: CarrierRegistry;
     settlerTaskSystem: SettlerTaskSystem;
     productionControlManager: ProductionControlManager;
+    unitReservation: UnitReservationRegistry;
     isCarrierBusy: (carrierId: number) => boolean;
 }
 
@@ -56,6 +58,7 @@ export class BarracksTrainingManager implements Persistable<SerializedBarracksTr
     private readonly settlerTaskSystem: SettlerTaskSystem;
     private readonly pcm: ProductionControlManager;
     private readonly eventBus: EventBus;
+    private readonly unitReservation: UnitReservationRegistry;
     private readonly isCarrierBusy: (carrierId: number) => boolean;
 
     /** Per-barracks race mapping (set at initBarracks). */
@@ -71,6 +74,7 @@ export class BarracksTrainingManager implements Persistable<SerializedBarracksTr
         this.settlerTaskSystem = config.settlerTaskSystem;
         this.pcm = config.productionControlManager;
         this.eventBus = config.eventBus;
+        this.unitReservation = config.unitReservation;
         this.isCarrierBusy = config.isCarrierBusy;
     }
 
@@ -93,7 +97,11 @@ export class BarracksTrainingManager implements Persistable<SerializedBarracksTr
     /** Unregister a barracks building and clean up all associated state. */
     removeBarracks(buildingId: number): void {
         this.barracksRaces.delete(buildingId);
-        this.activeTrainings.delete(buildingId);
+        const active = this.activeTrainings.get(buildingId);
+        if (active) {
+            this.unitReservation.release(active.carrierId);
+            this.activeTrainings.delete(buildingId);
+        }
         this.pcm.removeBuilding(buildingId);
     }
 
@@ -118,18 +126,9 @@ export class BarracksTrainingManager implements Persistable<SerializedBarracksTr
         const active = this.activeTrainings.get(buildingId);
 
         if (active) {
-            // Check if carrier still exists (may have been killed en route)
-            const carrier = this.gameState.getEntity(active.carrierId);
-            if (!carrier) {
-                // Carrier died — clear state, consumed materials are lost
-                this.activeTrainings.delete(buildingId);
-                this.eventBus.emit('barracks:trainingInterrupted', {
-                    buildingId,
-                    reason: 'carrier_killed',
-                });
-                log.debug(`Barracks ${buildingId}: carrier ${active.carrierId} killed, training interrupted`);
-            }
-            // Choreography system drives progression — nothing else to do while active
+            // Choreography system drives progression — nothing else to do while active.
+            // If the carrier is killed, UnitReservationRegistry fires onForcedRelease which
+            // clears activeTrainings and emits the interrupted event automatically.
             return;
         }
 
@@ -178,7 +177,21 @@ export class BarracksTrainingManager implements Persistable<SerializedBarracksTr
         // 7. Remove carrier from logistics so it won't be reassigned
         this.carrierRegistry.remove(carrierId);
 
-        // 8. Track active training
+        // 8. Reserve the carrier so player move commands cannot interrupt it.
+        //    onForcedRelease handles the carrier-killed case automatically.
+        this.unitReservation.reserve(carrierId, {
+            purpose: 'barracks-training',
+            onForcedRelease: () => {
+                this.activeTrainings.delete(buildingId);
+                this.eventBus.emit('barracks:trainingInterrupted', {
+                    buildingId,
+                    reason: 'carrier_killed',
+                });
+                log.debug(`Barracks ${buildingId}: carrier ${carrierId} killed, training interrupted`);
+            },
+        });
+
+        // 9. Track active training
         this.activeTrainings.set(buildingId, { recipe, carrierId });
 
         this.eventBus.emit('barracks:trainingStarted', {
@@ -261,6 +274,7 @@ export class BarracksTrainingManager implements Persistable<SerializedBarracksTr
             log.warn(`completeTraining: no active training for barracks ${buildingId}`);
             return;
         }
+        this.unitReservation.release(state.carrierId);
         this.activeTrainings.delete(buildingId);
     }
 
@@ -330,6 +344,19 @@ export class BarracksTrainingManager implements Persistable<SerializedBarracksTr
             this.activeTrainings.set(entry.buildingId, {
                 recipe,
                 carrierId: entry.carrierId,
+            });
+            // Restore reservation so the carrier cannot be interrupted after load.
+            const buildingId = entry.buildingId;
+            const carrierId = entry.carrierId;
+            this.unitReservation.reserve(carrierId, {
+                purpose: 'barracks-training',
+                onForcedRelease: () => {
+                    this.activeTrainings.delete(buildingId);
+                    this.eventBus.emit('barracks:trainingInterrupted', {
+                        buildingId,
+                        reason: 'carrier_killed',
+                    });
+                },
             });
         }
     }

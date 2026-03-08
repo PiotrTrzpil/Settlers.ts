@@ -8,8 +8,8 @@
 import { computed, type Ref } from 'vue';
 import type { Entity } from '@/game/entity';
 import { EntityType, UnitType, BuildingType } from '@/game/entity';
-import { getBuildingInfo } from '@/game/game-data-access';
-import { UNIT_TYPE_CONFIG, getUnitCategory, UnitCategory } from '@/game/unit-types';
+import { getBuildingInfo } from '@/game/data/game-data-access';
+import { UNIT_TYPE_CONFIG, getUnitCategory, UnitCategory } from '@/game/core/unit-types';
 import { EMaterialType } from '@/game/economy';
 import type { Game } from '@/game/game';
 

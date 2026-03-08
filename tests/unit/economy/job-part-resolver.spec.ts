@@ -9,7 +9,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { JobPartResolverImpl } from '@/game/features/settler-tasks/job-part-resolver';
 import { EntityType, UnitType } from '@/game/entity';
-import { Race } from '@/game/race';
+import { Race } from '@/game/core/race';
 import type { Entity } from '@/game/entity';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────

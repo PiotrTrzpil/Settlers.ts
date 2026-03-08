@@ -6,7 +6,7 @@
  * the public fields.
  */
 
-import { EntityType, type Entity, type EntityProvider } from './entity';
+import { EntityType, UnitCategory, UnitType, getUnitCategory, type Entity, type EntityProvider } from '../entity';
 
 export class SelectionManager {
     /** Primary selection (first selected entity or single selection) */
@@ -26,6 +26,7 @@ export class SelectionManager {
      */
     canSelect(entity: Entity | undefined, debugSelectAll = false): boolean {
         if (!entity) return false;
+        if (entity.hidden) return false;
         if (entity.selectable !== false) return true;
         return debugSelectAll && entity.type === EntityType.Unit;
     }
@@ -92,13 +93,36 @@ export class SelectionManager {
 
     /**
      * Select entities from a spatial area, applying selectability filtering.
-     * Prefers units over buildings when both are present (RTS convention).
+     * Tiered selection priority (RTS convention):
+     *   1. Military soldiers (if any)
+     *   2. Specialists and Religious units (if no soldiers)
+     *   3. Any other selectable units (if no specialists/religious)
+     *   4. All selectables including buildings (if no units at all)
      * @param entities All entities in the area (pre-filtered by caller's spatial query)
      * @param debugSelectAll When true, all units are selectable (debug mode)
      */
     selectArea(entities: Entity[], debugSelectAll = false): number[] {
         const selectable = entities.filter(e => this.canSelect(e, debugSelectAll));
         const units = selectable.filter(e => e.type === EntityType.Unit);
+
+        if (units.length > 0) {
+            const soldiers = units.filter(e => getUnitCategory(e.subType as UnitType) === UnitCategory.Military);
+            if (soldiers.length > 0) {
+                const ids = soldiers.map(e => e.id);
+                this.selectMultiple(ids);
+                return ids;
+            }
+            const specialists = units.filter(e => {
+                const cat = getUnitCategory(e.subType as UnitType);
+                return cat === UnitCategory.Specialist || cat === UnitCategory.Religious;
+            });
+            if (specialists.length > 0) {
+                const ids = specialists.map(e => e.id);
+                this.selectMultiple(ids);
+                return ids;
+            }
+        }
+
         const toSelect = units.length > 0 ? units : selectable;
         const ids = toSelect.map(e => e.id);
         this.selectMultiple(ids);

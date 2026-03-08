@@ -7,7 +7,7 @@
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { BuildingType, getBuildingFootprint } from '@/game/entity';
-import { Race } from '@/game/race';
+import { Race } from '@/game/core/race';
 import {
     captureOriginalTerrain,
     applyTerrainLeveling,

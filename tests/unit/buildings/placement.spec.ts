@@ -8,7 +8,7 @@ import {
 } from '@/game/features/placement';
 import type { PlacementFilter } from '@/game/features/placement';
 import { BuildingType } from '@/game/entity';
-import { Race } from '@/game/race';
+import { Race } from '@/game/core/race';
 import { createTestMap, TERRAIN, setTerrainAt, setHeightAt, type TestMap } from '../helpers/test-map';
 import { installTestGameData, resetTestGameData } from '../helpers/test-game-data';
 

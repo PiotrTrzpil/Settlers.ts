@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { Race } from '@/game/race';
-import { UnitType } from '@/game/unit-types';
+import { Race } from '@/game/core/race';
+import { UnitType } from '@/game/core/unit-types';
 import { EMaterialType } from '@/game/economy/material-type';
 import {
     getTrainingRecipes,

@@ -9,7 +9,7 @@
  */
 
 import type { BuildingInfo } from './types';
-import type { TileCoord } from '@/game/coordinates';
+import type { TileCoord } from '@/game/core/coordinates';
 
 /**
  * Decode buildingPosLines bitmask into tile coordinates.

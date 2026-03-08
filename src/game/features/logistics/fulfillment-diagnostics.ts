@@ -10,7 +10,7 @@
 
 import type { GameState } from '../../game-state';
 import type { BuildingInventoryManager } from '../inventory';
-import type { CarrierRegistry } from '../carriers/carrier-manager';
+import type { CarrierRegistry } from '../../systems/carrier-registry';
 import type { ResourceRequest } from './resource-request';
 import type { InventoryReservationManager } from './inventory-reservation';
 import { getAvailableSupplies } from './resource-supply';

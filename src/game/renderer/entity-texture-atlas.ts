@@ -402,19 +402,85 @@ export class EntityTextureAtlas extends ShaderTexture {
     }
 
     /**
+     * Upload all layers from a contiguous Uint16Array in a single gl.texImage3D call.
+     * Faster than update() for cache restores: one DMA transfer instead of N sub-region uploads.
+     * Sets gpuCapacity to layerCount and clears all dirty flags.
+     */
+    public uploadContiguous(gl: WebGL2RenderingContext, data: Uint16Array, layerCount: number): void {
+        this.glContext = gl;
+        this.bindAsArray(gl);
+        gl.pixelStorei(gl.UNPACK_ALIGNMENT, 2);
+        gl.texImage3D(
+            gl.TEXTURE_2D_ARRAY,
+            0,
+            gl.R16UI,
+            LAYER_SIZE,
+            LAYER_SIZE,
+            layerCount,
+            0,
+            gl.RED_INTEGER,
+            gl.UNSIGNED_SHORT,
+            data
+        );
+        this.gpuCapacity = layerCount;
+        for (let i = 0; i < this.dirtyRegions.length; i++) {
+            this.dirtyRegions[i] = null;
+        }
+    }
+
+    /**
+     * Allocate GPU texture memory without uploading pixel data.
+     * Marks all layers as fully dirty so uploadBudgeted() can drain them
+     * progressively across frames. Pre-sets gpuCapacity so uploadBudgeted()
+     * won't trigger a realloc (which would bypass the per-frame budget).
+     */
+    public allocateDeferred(gl: WebGL2RenderingContext): void {
+        this.glContext = gl;
+        this.bindAsArray(gl);
+        gl.pixelStorei(gl.UNPACK_ALIGNMENT, 2);
+
+        const capacity = Math.min(Math.max(this.layers.length, MIN_GPU_CAPACITY), this.maxLayers);
+        gl.texImage3D(
+            gl.TEXTURE_2D_ARRAY,
+            0,
+            gl.R16UI,
+            LAYER_SIZE,
+            LAYER_SIZE,
+            capacity,
+            0,
+            gl.RED_INTEGER,
+            gl.UNSIGNED_SHORT,
+            null
+        );
+        this.gpuCapacity = capacity;
+
+        // Mark all layers fully dirty for progressive upload
+        for (let i = 0; i < this.layers.length; i++) {
+            this.dirtyRegions[i] = { minX: 0, minY: 0, maxX: LAYER_SIZE, maxY: LAYER_SIZE };
+        }
+    }
+
+    /**
      * Upload up to `maxLayers` dirty layers, spreading GPU work across frames.
      * Returns true if more uploads remain pending.
      *
      * Sprites on un-uploaded layers appear transparent (palette index 0)
      * until their layer is uploaded in a subsequent frame.
+     *
+     * If `ensureCapacity` triggers a GPU reallocation, the budget is bypassed and
+     * ALL dirty layers are uploaded immediately. A realloc calls texImage3D(null)
+     * which clears all existing GPU data — deferring re-upload would cause every
+     * already-visible sprite to disappear until the budget fully drained.
      */
     public uploadBudgeted(gl: WebGL2RenderingContext, maxLayers: number): boolean {
+        const capacityBefore = this.gpuCapacity;
         this.prepareForUpload(gl);
+        const wasReallocated = this.gpuCapacity > capacityBefore;
 
         let uploaded = 0;
         for (let i = 0; i < this.dirtyRegions.length; i++) {
             if (!this.dirtyRegions[i]) continue;
-            if (uploaded >= maxLayers) return true;
+            if (!wasReallocated && uploaded >= maxLayers) return true;
             this.uploadDirtyLayer(gl, i);
             uploaded++;
         }
@@ -540,21 +606,19 @@ export class EntityTextureAtlas extends ShaderTexture {
     }
 
     /**
-     * Get the raw image data as bytes for serialization (cache).
-     * Concatenates all layers into a single Uint8Array.
+     * Get per-layer ArrayBuffers for cache serialization.
+     * Each buffer is exactly LAYER_SIZE*LAYER_SIZE*2 bytes.
+     * Returns owned copies so the atlas can be modified independently.
      */
-    public getImageDataBytes(): Uint8Array {
-        const bytesPerLayer = LAYER_SIZE * LAYER_SIZE * 2;
-        const result = new Uint8Array(this.layers.length * bytesPerLayer);
-        for (let i = 0; i < this.layers.length; i++) {
-            const layerBytes = new Uint8Array(
-                this.layers[i]!.buffer,
-                this.layers[i]!.byteOffset,
-                this.layers[i]!.byteLength
-            );
-            result.set(layerBytes, i * bytesPerLayer);
-        }
-        return result;
+    public getLayerBuffers(): ArrayBuffer[] {
+        return this.layers.map(layer => {
+            const buf = layer.buffer as ArrayBuffer;
+            if (layer.byteOffset === 0 && layer.byteLength === buf.byteLength) {
+                return buf;
+            }
+            // Layer is a subarray view — slice to get an owned copy
+            return buf.slice(layer.byteOffset, layer.byteOffset + layer.byteLength);
+        });
     }
 
     /**
@@ -579,22 +643,19 @@ export class EntityTextureAtlas extends ShaderTexture {
     }
 
     /**
-     * Restore atlas state from cached data.
+     * Restore atlas state from per-layer buffers.
+     * Each ArrayBuffer is exactly LAYER_SIZE*LAYER_SIZE*2 bytes (one layer's pixel data).
      */
-    public restoreFromCache(imgData: Uint16Array, layerCount: number, slots: CachedSlot[][]): void {
+    public restoreFromCache(layerBuffers: ArrayBuffer[], layerCount: number, slots: CachedSlot[][]): void {
         const start = performance.now();
-
-        const pixelsPerLayer = LAYER_SIZE * LAYER_SIZE;
 
         this.layers = [];
         this.layerSlots = [];
         this.dirtyRegions = [];
 
         for (let i = 0; i < layerCount; i++) {
-            // Create a copy so we own the memory
-            const layerData = new Uint16Array(pixelsPerLayer);
-            layerData.set(imgData.subarray(i * pixelsPerLayer, (i + 1) * pixelsPerLayer));
-            this.layers.push(layerData);
+            // Wrap each buffer as Uint16Array — zero-copy (each buffer is already layer-sized)
+            this.layers.push(new Uint16Array(layerBuffers[i]!));
 
             // Restore slots for this layer
             const layerSlotData = slots[i] || [];
@@ -620,17 +681,17 @@ export class EntityTextureAtlas extends ShaderTexture {
     }
 
     /**
-     * Create a new atlas instance restored from cached data.
+     * Create a new atlas instance restored from per-layer buffers.
      */
     public static fromCache(
-        imgData: Uint16Array,
+        layerBuffers: ArrayBuffer[],
         layerCount: number,
         maxLayers: number,
         slots: CachedSlot[][],
         textureUnit: number
     ): EntityTextureAtlas {
         const atlas = new EntityTextureAtlas(maxLayers, textureUnit, true);
-        atlas.restoreFromCache(imgData, layerCount, slots);
+        atlas.restoreFromCache(layerBuffers, layerCount, slots);
         return atlas;
     }
 }

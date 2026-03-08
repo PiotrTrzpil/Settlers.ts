@@ -7,8 +7,8 @@ import type { EntityRenderer } from '@/game/renderer/entity-renderer';
 import type { BuildingIndicatorRenderer } from '@/game/renderer/building-indicator-renderer';
 import type { ViewPoint } from '@/game/renderer/view-point';
 import type { InputManager } from '@/game/input';
-import { debugStats } from '@/game/debug-stats';
-import type { Race } from '@/game/race';
+import { debugStats } from '@/game/debug/debug-stats';
+import type { Race } from '@/game/core/race';
 
 /**
  * Initialize renderers asynchronously (landscape first for camera, then sprites).

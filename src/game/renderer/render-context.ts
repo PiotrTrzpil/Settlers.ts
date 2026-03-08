@@ -10,7 +10,7 @@
  */
 
 import type { Entity, StackedPileState, TileCoord } from '../entity';
-import type { Race } from '../race';
+import type { Race } from '../core/race';
 import type { EntityVisualState, DirectionTransition } from '../animation/entity-visual-service';
 import type { IViewPoint } from './i-view-point';
 import { DEFAULT_LAYER_VISIBILITY, type LayerVisibility } from './layer-visibility';

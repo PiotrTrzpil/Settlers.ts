@@ -1,7 +1,7 @@
 import type { FeatureDefinition, FeatureContext } from '../feature';
 import { MovementSystem } from '../../systems/movement';
 import { EntityType, UnitType, getUnitTypeSpeed } from '../../entity';
-import { isAngelUnitType } from '../../unit-types';
+import { isAngelUnitType } from '../../core/unit-types';
 import { BuildingType } from '../../buildings/building-type';
 import { setEntityDescriber } from '../../systems/pathfinding/astar';
 import type { TerrainData } from '../../terrain';

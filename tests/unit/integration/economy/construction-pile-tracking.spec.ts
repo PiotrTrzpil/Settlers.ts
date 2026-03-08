@@ -12,7 +12,7 @@ import { BuildingType, EntityType } from '@/game/entity';
 import { EMaterialType } from '@/game/economy';
 import { Simulation, createScenario, cleanupSimulation } from '../../helpers/test-simulation';
 import { installRealGameData } from '../../helpers/test-game-data';
-import { SlotKind } from '@/game/features/inventory/pile-kind';
+import { SlotKind } from '@/game/core/pile-kind';
 
 const hasRealData = installRealGameData();
 

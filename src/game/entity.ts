@@ -5,8 +5,8 @@
 
 /** Material carrying state - used by any unit that can carry materials */
 import type { EMaterialType } from './economy';
-import type { Race } from './race';
-import type { PileKind } from './features/inventory/pile-kind';
+import type { Race } from './core/race';
+import type { PileKind } from './core/pile-kind';
 
 export interface CarryingState {
     material: EMaterialType;
@@ -14,8 +14,8 @@ export interface CarryingState {
 }
 
 // === Re-export coordinates (base types with no dependencies) ===
-export type { TileCoord } from './coordinates';
-export { tileKey, CARDINAL_OFFSETS, EXTENDED_OFFSETS } from './coordinates';
+export type { TileCoord } from './core/coordinates';
+export { tileKey, CARDINAL_OFFSETS, EXTENDED_OFFSETS } from './core/coordinates';
 
 // === Core Types (defined here) ===
 
@@ -37,7 +37,7 @@ export enum EntityType {
 export { BuildingType, getBuildingFootprint, getBuildingHotspot, isMineBuilding } from './buildings';
 
 // Unit types and configuration
-export type { UnitTypeConfig } from './unit-types';
+export type { UnitTypeConfig } from './core/unit-types';
 export {
     UnitType,
     UnitCategory,
@@ -51,7 +51,7 @@ export {
     getBaseUnitType,
     getLevelVariants,
     getUnitTypeAtLevel,
-} from './unit-types';
+} from './core/unit-types';
 
 export interface Entity {
     id: number;

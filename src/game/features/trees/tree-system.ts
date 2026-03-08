@@ -21,7 +21,7 @@ import type { Command, CommandResult } from '../../commands';
 import { TREE_JOB_OFFSET, TREE_JOBS_PER_TYPE, TREE_JOB_INDICES } from '../../renderer/sprite-metadata/jil-indices';
 import type { EventBus } from '../../event-bus';
 import type { Persistable } from '@/game/persistence';
-import type { SerializedTree } from '@/game/game-state-persistence';
+import type { SerializedTree } from '@/game/state/game-state-persistence';
 
 /**
  * Logical tree stage (game state).

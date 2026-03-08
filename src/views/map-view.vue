@@ -49,6 +49,13 @@
                     >
                         Goods
                     </button>
+                    <button
+                        class="tab-btn"
+                        :class="{ active: activeTab === 'specialists' }"
+                        @click="activeTab = 'specialists'"
+                    >
+                        SP
+                    </button>
                 </div>
 
                 <!-- Buildings tab -->
@@ -107,6 +114,16 @@
                         </span>
                         <span class="btn-label">{{ u.name }}</span>
                     </button>
+                </div>
+
+                <!-- Specialists tab -->
+                <div v-if="activeTab === 'specialists'" class="tab-content">
+                    <specialists-panel
+                        :game="game"
+                        :race="currentRace"
+                        :specialist-icons="specialistIcons"
+                        :get-camera-center="() => rendererRef?.getCamera?.() ?? null"
+                    />
                 </div>
 
                 <!-- Resources tab -->
@@ -239,13 +256,14 @@ import { Race, RACE_NAMES, AVAILABLE_RACES, loadSavedRace, saveSavedRace } from 
 import type { Game } from '@/game/game';
 import { SoundManager } from '@/game/audio/sound-manager';
 import { saveCameraState, clearCameraState } from '@/game/renderer/camera-persistence';
-import { getCurrentMapId } from '@/game/game-state-persistence';
+import { getCurrentMapId } from '@/game/state/game-state-persistence';
 
 import FileBrowser from '@/components/file-browser.vue';
 import RendererViewer from '@/components/renderer-viewer.vue';
 import SelectionPanel from '@/components/selection-panel.vue';
 import TabbedPanel from '@/components/TabbedPanel.vue';
 import Checkbox from '@/components/Checkbox.vue';
+import SpecialistsPanel from '@/components/SpecialistsPanel.vue';
 
 const props = defineProps<{
     fileManager: FileManager;
@@ -287,6 +305,7 @@ const {
     updateLayerVisibility,
     buildingIcons,
     unitIcons,
+    specialistIcons,
 } = useMapView(
     () => props.fileManager,
     () => rendererRef.value?.getInputManager?.() ?? null,

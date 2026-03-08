@@ -4,7 +4,7 @@ import { populateMapBuildings, mapS4BuildingType } from '@/game/features/buildin
 import { S4BuildingType } from '@/resources/map/s4-types';
 import { BuildingType } from '@/game/buildings/types';
 import { EntityType } from '@/game/entity';
-import { Race } from '@/game/race';
+import { Race } from '@/game/core/race';
 import type { MapBuildingData } from '@/resources/map/map-entity-data';
 
 function createPopulateOptions(ctx: TestContext, player?: number) {

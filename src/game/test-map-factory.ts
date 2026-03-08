@@ -5,7 +5,7 @@ import { MapSize } from '@/utilities/map-size';
 import { LandscapeType } from './renderer/landscape/landscape-type';
 import type { MapEntityData, MapObjectData } from '@/resources/map/map-entity-data';
 import { S4TreeType, S4Tribe } from '@/resources/map/s4-types';
-import { SeededRng } from './rng';
+import { SeededRng } from './core/rng';
 
 const MAP_SIZE = 256;
 const TEST_MAP_SEED = 42; // Fixed seed for deterministic test maps

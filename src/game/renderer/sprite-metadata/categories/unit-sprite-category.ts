@@ -7,7 +7,7 @@
  */
 
 import { UnitType } from '@/game/entity';
-import { Race } from '@/game/race';
+import { Race } from '@/game/core/race';
 import type { SpriteEntry } from '../types';
 
 export class UnitSpriteCategory {

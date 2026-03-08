@@ -7,6 +7,7 @@
 
 import { describe, it, expect, beforeEach } from 'vitest';
 import { SettlerTaskSystem, type SettlerTaskSystemConfig } from '@/game/features/settler-tasks/settler-task-system';
+import { ChoreoSystem } from '@/game/systems/choreo';
 import {
     SearchType,
     SettlerState,
@@ -16,13 +17,26 @@ import {
 } from '@/game/features/settler-tasks/types';
 import { EntityVisualService } from '@/game/animation/entity-visual-service';
 import { EntityType, BuildingType } from '@/game/entity';
-import { UnitType } from '@/game/unit-types';
-import { Race } from '@/game/race';
+import { UnitType } from '@/game/core/unit-types';
+import { Race } from '@/game/core/race';
 import { createTestContext, addUnit, addBuilding, type TestContext } from '../helpers/test-game';
 import { MaterialTransfer } from '@/game/features/material-transfer';
 import type { WorkAreaStore } from '@/game/features/work-areas/work-area-store';
 import type { BuildingOverlayManager } from '@/game/features/building-overlays/building-overlay-manager';
 import type { ConstructionSiteManager } from '@/game/features/building-construction/construction-site-manager';
+import type { ISettlerBuildingLocationManager } from '@/game/features/settler-location/types';
+
+const noopLocationManager: ISettlerBuildingLocationManager = {
+    markApproaching: () => {},
+    cancelApproach: () => {},
+    enterBuilding: () => {},
+    exitBuilding: () => {},
+    getLocation: () => null,
+    isInside: () => false,
+    isCommitted: () => false,
+    getOccupants: () => [],
+    getApproaching: () => [],
+};
 
 /** Helper: create a SettlerTaskSystem wired to a TestContext */
 function createTaskSystem(ctx: TestContext): SettlerTaskSystem {
@@ -32,6 +46,7 @@ function createTaskSystem(ctx: TestContext): SettlerTaskSystem {
         visualService.init(entityId, variation);
     });
     const config: SettlerTaskSystemConfig = {
+        choreoSystem: new ChoreoSystem(),
         gameState: ctx.state,
         visualService,
         inventoryManager: ctx.inventoryManager,
@@ -42,6 +57,7 @@ function createTaskSystem(ctx: TestContext): SettlerTaskSystem {
         buildingOverlayManager: { setWorking() {} } as unknown as BuildingOverlayManager,
         constructionSiteManager: { hasSite: () => false } as unknown as ConstructionSiteManager,
         executeCommand: () => ({ success: true, effects: [] }),
+        locationManager: noopLocationManager,
         materialTransfer: new MaterialTransfer(
             ctx.state,
             ctx.inventoryManager,

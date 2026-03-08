@@ -6,7 +6,7 @@
  */
 
 import { getGameDataLoader, type BuildingPatch, type BuildingInfo } from '@/resources/game-data';
-import { raceIdToRace, getBuildingTypesByXmlId } from '../../game-data-access';
+import { raceIdToRace, getBuildingTypesByXmlId } from '../../data/game-data-access';
 import type { RaceId } from '@/resources/game-data';
 import { OverlayCondition, OverlayLayer, type BuildingOverlayDef, type OverlaySpriteRef } from './types';
 import type { OverlayRegistry } from './overlay-registry';

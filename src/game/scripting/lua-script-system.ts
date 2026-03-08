@@ -33,7 +33,7 @@ import type { GameState } from '@/game/game-state';
 import type { IMapLandscape } from '@/resources/map/imap-landscape';
 import type { ConstructionSiteManager } from '@/game/features/building-construction';
 import type { Command, CommandResult } from '@/game/commands';
-import type { Race } from '@/game/race';
+import type { Race } from '@/game/core/race';
 
 const log = new LogHandler('LuaScriptSystem');
 

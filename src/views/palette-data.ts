@@ -155,6 +155,24 @@ if (import.meta.env.DEV) {
     }
 }
 
+export interface SpecialistDef {
+    type: UnitType;
+    id: string;
+    name: string;
+    icon: string;
+    /** Tool the carrier must pick up. null = no tool needed (Thief). */
+    toolMaterial: EMaterialType | null;
+}
+
+export const ALL_SPECIALISTS: SpecialistDef[] = [
+    { type: UnitType.Builder, id: 'builder', name: 'Builder', icon: '👷', toolMaterial: EMaterialType.HAMMER },
+    { type: UnitType.Digger, id: 'digger', name: 'Digger', icon: '🕳️', toolMaterial: EMaterialType.SHOVEL },
+    { type: UnitType.Geologist, id: 'geologist', name: 'Geologist', icon: '🔍', toolMaterial: EMaterialType.PICKAXE },
+    { type: UnitType.Pioneer, id: 'pioneer', name: 'Pioneer', icon: '🚩', toolMaterial: EMaterialType.SHOVEL },
+    { type: UnitType.Gardener, id: 'gardener', name: 'Gardener', icon: '🌱', toolMaterial: EMaterialType.SHOVEL },
+    { type: UnitType.Thief, id: 'thief', name: 'Thief', icon: '🥷', toolMaterial: null },
+];
+
 /** Resources available in the UI (derived from droppable materials) */
 export const ALL_RESOURCES = DROPPABLE_MATERIALS.map(type => {
     const name = EMaterialType[type].charAt(0) + EMaterialType[type].slice(1).toLowerCase().replace('_', ' ');

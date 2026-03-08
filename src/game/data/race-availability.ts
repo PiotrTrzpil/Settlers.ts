@@ -6,10 +6,10 @@
  * Other races share a common pool with per-race drink/food chain variants.
  */
 
-import { Race } from './race';
-import { UnitType, getBaseUnitType } from './unit-types';
-import { BuildingType } from './buildings/building-type';
-import { EMaterialType } from './economy/material-type';
+import { Race } from '../core/race';
+import { UnitType, getBaseUnitType } from '../core/unit-types';
+import { BuildingType } from '../buildings/building-type';
+import { EMaterialType } from '../economy/material-type';
 
 // ─── Dark Tribe ──────────────────────────────────────────────────────────────
 // Dark Tribe uses an entirely separate unit and building set.

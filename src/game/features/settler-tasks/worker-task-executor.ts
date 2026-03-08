@@ -35,14 +35,8 @@ import type {
     TransportJobOps,
 } from './choreo-types';
 import { ChoreoTaskType, createChoreoJobState } from './choreo-types';
-import {
-    ExecutorCategory,
-    TASK_CATEGORY,
-    MOVEMENT_EXECUTORS,
-    WORK_EXECUTORS,
-    INVENTORY_EXECUTORS,
-    CONTROL_EXECUTORS,
-} from './choreo-executors';
+import { registerCoreExecutors } from './choreo-executors';
+import type { ChoreoSystem } from '../../systems/choreo';
 import type { JobChoreographyStore } from './job-choreography-store';
 import type { WorkHandlerRegistry } from './work-handler-registry';
 import type { IdleAnimationController } from './idle-animation-controller';
@@ -53,7 +47,7 @@ import type { MaterialTransfer } from '../material-transfer';
 import type { BarracksTrainingManager } from '../barracks';
 import type { Command, CommandResult } from '../../commands';
 import { EMaterialType } from '../../economy';
-import { getBuildingDoorPos, getWorkerBuildingTypes } from '../../game-data-access';
+import { getBuildingDoorPos, getWorkerBuildingTypes } from '../../data/game-data-access';
 import { BuildingType } from '../../buildings/building-type';
 import { findNearestWorkplace } from './work-handlers';
 import { JobSelector } from './job-selector';
@@ -72,6 +66,7 @@ export interface WorkerRuntimeState {
 export type OccupancyMap = ReadonlyMap<number, number>;
 
 export interface WorkerTaskExecutorConfig extends CoreDeps {
+    choreoSystem: ChoreoSystem;
     choreographyStore: JobChoreographyStore;
     handlerRegistry: WorkHandlerRegistry;
     animController: IdleAnimationController;
@@ -90,6 +85,7 @@ export interface WorkerTaskExecutorConfig extends CoreDeps {
 }
 
 export class WorkerTaskExecutor {
+    private readonly choreoSystem: ChoreoSystem;
     private readonly gameState: GameState;
     private readonly choreographyStore: JobChoreographyStore;
     private readonly handlerRegistry: WorkHandlerRegistry;
@@ -119,6 +115,7 @@ export class WorkerTaskExecutor {
     verbose = false;
 
     constructor(cfg: WorkerTaskExecutorConfig) {
+        this.choreoSystem = cfg.choreoSystem;
         this.gameState = cfg.gameState;
         this.choreographyStore = cfg.choreographyStore;
         this.handlerRegistry = cfg.handlerRegistry;
@@ -176,6 +173,9 @@ export class WorkerTaskExecutor {
             executeCommand: cfg.executeCommand,
             inventoryManager: cfg.inventoryManager,
         };
+
+        // Register core executors — TRANSFORM_RECRUIT/DIRECT are registered by recruit feature later.
+        registerCoreExecutors(cfg.choreoSystem, this.movementCtx, this.workCtx, this.inventoryCtx, this.controlCtx);
     }
 
     /**
@@ -315,8 +315,14 @@ export class WorkerTaskExecutor {
      * Handle a worker in WORKING state: advance the current choreography node.
      */
     handleWorking(settler: Entity, config: SettlerConfig, runtime: WorkerRuntimeState, dt: number): void {
-        // Job MUST exist when state is WORKING — crash if invariant violated
-        const job = runtime.job as ChoreoJobState;
+        if (!runtime.job) {
+            throw new Error(
+                `handleWorking: settler ${settler.id} (${UnitType[settler.subType]}) ` +
+                    `is in WORKING state but has no job. ` +
+                    `homeAssignment=${runtime.homeAssignment?.buildingId ?? null}`
+            );
+        }
+        const job = runtime.job;
 
         const nodes = job.nodes;
         if (job.nodeIndex >= nodes.length) {
@@ -390,50 +396,21 @@ export class WorkerTaskExecutor {
         job.pathRetryCountdown = 0;
         // Reset targetPos between nodes. Transport jobs read positions directly from
         // transportData (sourcePos/destPos) so they don't rely on cross-node targetPos.
-        job.targetPos = null;
+        // Exception: SEARCH sets targetPos so the immediately following WORK node can call
+        // onWorkAtPositionComplete at the correct tile. The settler may arrive within
+        // arrivalDist (1 tile) of the target rather than exactly on it, so settler.x/y
+        // cannot be relied upon — the SEARCH result must survive to WORK.
+        const completedTask = nodes[job.nodeIndex - 1]!.task;
+        if (completedTask !== ChoreoTaskType.SEARCH) {
+            job.targetPos = null;
+        }
         // Animation for the next node is applied on its first tick (progress sentinel = -1).
     }
 
     /** Execute a single choreography node, catching executor crashes. */
     private executeNode(settler: Entity, job: ChoreoJobState, node: ChoreoNode, dt: number): TaskResult {
-        const category = TASK_CATEGORY[node.task];
         try {
-            switch (category) {
-            case ExecutorCategory.MOVEMENT:
-                return MOVEMENT_EXECUTORS[node.task as keyof typeof MOVEMENT_EXECUTORS](
-                    settler,
-                    job,
-                    node,
-                    dt,
-                    this.movementCtx
-                );
-            case ExecutorCategory.WORK:
-                return WORK_EXECUTORS[node.task as keyof typeof WORK_EXECUTORS](
-                    settler,
-                    job,
-                    node,
-                    dt,
-                    this.workCtx
-                );
-            case ExecutorCategory.INVENTORY:
-                return INVENTORY_EXECUTORS[node.task as keyof typeof INVENTORY_EXECUTORS](
-                    settler,
-                    job,
-                    node,
-                    dt,
-                    this.inventoryCtx
-                );
-            case ExecutorCategory.CONTROL:
-                return CONTROL_EXECUTORS[node.task as keyof typeof CONTROL_EXECUTORS](
-                    settler,
-                    job,
-                    node,
-                    dt,
-                    this.controlCtx
-                );
-            default:
-                return TaskResult.FAILED;
-            }
+            return this.choreoSystem.execute(settler, job, node, dt);
         } catch (e) {
             this.handlerErrorLogger.error(
                 `Executor crash: settler=${settler.id} job=${job.jobId} nodeIdx=${job.nodeIndex} task=${node.task}`,

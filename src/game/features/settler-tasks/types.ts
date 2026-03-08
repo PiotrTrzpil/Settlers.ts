@@ -53,15 +53,7 @@ export interface SettlerConfig {
     buildingJobs?: Map<number, string[]>;
 }
 
-/** Result of executing a task */
-export enum TaskResult {
-    /** Task completed, move to next */
-    DONE = 'DONE',
-    /** Task in progress, continue next tick */
-    CONTINUE = 'CONTINUE',
-    /** Task failed, abort job */
-    FAILED = 'FAILED',
-}
+export { TaskResult } from '../../systems/choreo';
 
 /** Tracks a worker's assigned workplace building and whether they've visited it. */
 export interface HomeAssignment {
@@ -129,6 +121,8 @@ export interface PositionWorkHandler {
     useWorkAreaCenter?: boolean;
     /** Called when WORK task completes at searched position */
     onWorkAtPositionComplete(x: number, y: number, settlerId: number): void;
+    /** Called when a settler using this handler is removed (e.g. on game reset). */
+    onSettlerRemoved?(settlerId: number): void;
 }
 
 /** Discriminated union of work handler types */

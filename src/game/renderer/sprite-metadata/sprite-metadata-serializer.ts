@@ -10,7 +10,7 @@
 
 import { EntityType, UnitType } from '@/game/entity';
 import { EMaterialType } from '@/game/economy';
-import { AnimationSequence } from '@/game/animation';
+import { AnimationSequence } from '@/game/animation/animation';
 import { mapToArray, arrayToMap } from './sprite-metadata-helpers';
 import {
     BuildingSpriteCategory,
@@ -18,6 +18,7 @@ import {
     MapObjectSpriteCategory,
     GoodSpriteCategory,
     DecorationSpriteCategory,
+    OverlaySpriteCategory,
     AnimatedEntityCategory,
 } from './categories';
 import type { AnimatedSpriteEntry, SpriteEntry } from './types';
@@ -82,6 +83,7 @@ export class SpriteMetadataSerializer {
         mapObjects: MapObjectSpriteCategory,
         goods: GoodSpriteCategory,
         decoration: DecorationSpriteCategory,
+        overlays: OverlaySpriteCategory,
         animated: AnimatedEntityCategory,
         loadedRaces: ReadonlySet<number>
     ): Record<string, unknown> {
@@ -119,6 +121,7 @@ export class SpriteMetadataSerializer {
             unitsByRace: serializedUnits,
             flags: mapToArray(decoration.getFlagsMap()),
             territoryDots: mapToArray(decoration.getTerritoryDotsMap()),
+            overlayFrames: mapToArray(overlays.getFramesMap()),
             animatedEntities: serializedAnimatedEntities,
             animatedByRace: serializedAnimatedByRace,
             loadedRaces: [...loadedRaces],
@@ -135,6 +138,7 @@ export class SpriteMetadataSerializer {
         mapObjects: MapObjectSpriteCategory;
         goods: GoodSpriteCategory;
         decoration: DecorationSpriteCategory;
+        overlays: OverlaySpriteCategory;
         animated: AnimatedEntityCategory;
         loadedRaces: Set<number>;
     } {
@@ -143,6 +147,7 @@ export class SpriteMetadataSerializer {
         const mapObjects = new MapObjectSpriteCategory();
         const goods = new GoodSpriteCategory();
         const decoration = new DecorationSpriteCategory();
+        const overlays = new OverlaySpriteCategory();
         const animated = new AnimatedEntityCategory();
         const loadedRaces = new Set<number>();
 
@@ -151,10 +156,11 @@ export class SpriteMetadataSerializer {
         SpriteMetadataSerializer.deserializeMapObjects(data, mapObjects);
         SpriteMetadataSerializer.deserializeGoods(data, goods);
         SpriteMetadataSerializer.deserializeDecoration(data, decoration);
+        SpriteMetadataSerializer.deserializeOverlays(data, overlays);
         SpriteMetadataSerializer.deserializeAnimated(data, animated);
         SpriteMetadataSerializer.deserializeLegacyLoadedRaces(data, loadedRaces);
 
-        return { buildings, units, mapObjects, goods, decoration, animated, loadedRaces };
+        return { buildings, units, mapObjects, goods, decoration, overlays, animated, loadedRaces };
     }
 
     // ---- Private deserialization helpers ----
@@ -260,6 +266,14 @@ export class SpriteMetadataSerializer {
             subTypeMap.set(type, deserializeAnimEntry(entryData));
         }
         animated.setSharedEntry(entityType, subTypeMap);
+    }
+
+    private static deserializeOverlays(data: any, overlays: OverlaySpriteCategory): void {
+        if (!data.overlayFrames) return;
+        for (const [key, frames] of data.overlayFrames as Array<[string, SpriteEntry[]]>) {
+            const parts = key.split(':');
+            overlays.register(Number(parts[0]), Number(parts[1]), Number(parts[2]), frames);
+        }
     }
 
     private static deserializeLegacyLoadedRaces(data: any, loadedRaces: Set<number>): void {

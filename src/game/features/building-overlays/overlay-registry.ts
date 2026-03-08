@@ -20,7 +20,7 @@
  */
 
 import type { BuildingType } from '../../entity';
-import type { Race } from '../../race';
+import type { Race } from '../../core/race';
 import type { BuildingOverlayDef } from './types';
 
 /** Composite key for the registry map: "buildingType:race" */

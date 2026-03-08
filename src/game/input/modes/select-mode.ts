@@ -1,18 +1,32 @@
 import { BaseInputMode, HANDLED, UNHANDLED, type InputContext, type InputResult } from '../input-mode';
 import { InputAction, MouseButton, type PointerData, type DragData } from '../input-actions';
 import { CursorType, type ModeRenderState, type SelectionBox } from '../render-state';
+import { UnitType } from '../../entity';
+
+const DOUBLE_CLICK_MS = 300;
+const DOUBLE_CLICK_MOVE_PX = 10;
+/** Viewport padding added on each side when searching for same-type units (px). */
+const DOUBLE_CLICK_SCREEN_PAD = 200;
+
+interface SelectModeData {
+    lastClickTime: number;
+    lastClickX: number;
+    lastClickY: number;
+    lastClickEntityId: number | null;
+}
 
 /**
  * Select mode - default mode for selecting entities and issuing commands.
  *
- * Left click:        Select entity at tile (replaces selection)
- * Shift+left click:  Add/remove entity from selection (toggle)
- * Left drag:         Box select all units in rectangle
- * Right click:       Move selected units to target (with formation)
- * Delete/Backspace:  Remove selected entity
- * Escape:            Deselect all
- * U:                 Spawn carrier at hovered tile
- * I:                 Spawn swordsman at hovered tile
+ * Left click:           Select entity at tile (replaces selection)
+ * Double-left click:    Select all units of the same type visible on screen
+ * Shift+left click:     Add/remove entity from selection (toggle)
+ * Left drag:            Box select all units in rectangle
+ * Right click:          Move selected units to target (with formation)
+ * Delete/Backspace:     Remove selected entity
+ * Escape:               Deselect all
+ * U:                    Spawn carrier at hovered tile
+ * I:                    Spawn swordsman at hovered tile
  */
 export class SelectMode extends BaseInputMode {
     readonly name = 'select';
@@ -40,7 +54,7 @@ export class SelectMode extends BaseInputMode {
             if (tile && race !== null) {
                 context.executeCommand({
                     type: 'spawn_unit',
-                    unitType: 0, // Carrier
+                    unitType: UnitType.Carrier,
                     x: tile.x,
                     y: tile.y,
                     player: 0,
@@ -56,7 +70,7 @@ export class SelectMode extends BaseInputMode {
             if (tile && race !== null) {
                 context.executeCommand({
                     type: 'spawn_unit',
-                    unitType: 2, // Swordsman
+                    unitType: UnitType.Swordsman1,
                     x: tile.x,
                     y: tile.y,
                     player: 0,
@@ -88,18 +102,36 @@ export class SelectMode extends BaseInputMode {
                 // Drag selection completed - handled by onDragEnd
                 return HANDLED;
             }
-            this.handleClickSelect(data, context);
+
+            const prev = context.getModeData<SelectModeData>();
+            const now = performance.now();
+            const pickedId = context.pickEntityAtScreen?.(data.screenX, data.screenY) ?? null;
+
+            const isDoubleClick =
+                prev !== undefined &&
+                pickedId !== null &&
+                pickedId === prev.lastClickEntityId &&
+                now - prev.lastClickTime < DOUBLE_CLICK_MS &&
+                Math.abs(data.screenX - prev.lastClickX) < DOUBLE_CLICK_MOVE_PX &&
+                Math.abs(data.screenY - prev.lastClickY) < DOUBLE_CLICK_MOVE_PX;
+
+            if (isDoubleClick) {
+                this.handleDoubleClickSelect(pickedId, data, context);
+            } else {
+                this.handleClickSelect(pickedId, data, context);
+                context.setModeData<SelectModeData>({
+                    lastClickTime: now,
+                    lastClickX: data.screenX,
+                    lastClickY: data.screenY,
+                    lastClickEntityId: pickedId,
+                });
+            }
             return HANDLED;
         }
 
         if (data.button === MouseButton.Right) {
-            // Right click - move selected units to target with formation
             if (data.tileX !== undefined && data.tileY !== undefined) {
-                context.executeCommand({
-                    type: 'move_selected_units',
-                    targetX: data.tileX,
-                    targetY: data.tileY,
-                });
+                this.handleRightClick(data, context);
             }
             return HANDLED;
         }
@@ -108,9 +140,7 @@ export class SelectMode extends BaseInputMode {
     }
 
     /** Handle single-click entity selection with sprite-bounds picking. */
-    private handleClickSelect(data: PointerData, context: InputContext): void {
-        // Try sprite-bounds pick first, fall back to tile pick
-        const pickedId = context.pickEntityAtScreen?.(data.screenX, data.screenY) ?? null;
+    private handleClickSelect(pickedId: number | null, data: PointerData, context: InputContext): void {
         if (pickedId !== null) {
             if (data.shiftKey) {
                 context.executeCommand({ type: 'toggle_selection', entityId: pickedId });
@@ -127,6 +157,44 @@ export class SelectMode extends BaseInputMode {
         } else {
             context.executeCommand({ type: 'select', entityId: null });
         }
+    }
+
+    /**
+     * Handle right-click: garrison selected military units into a clicked building,
+     * or move selected units to target tile.
+     *
+     * Three outcomes:
+     * - success → done (units en-route, selection cleared)
+     * - not_garrison_building → fall back to move_selected_units
+     * - garrison_building_blocked → show hint near cursor; do NOT move (tile is inside building)
+     */
+    private handleRightClick(data: PointerData, context: InputContext): void {
+        const tileX = data.tileX!;
+        const tileY = data.tileY!;
+        // Try to garrison selected military units into the building at this tile.
+        // Uses tile coords (not sprite pick) so clicking anywhere on the building works.
+        const garrisonResult = context.executeCommand({ type: 'garrison_selected_units', tileX, tileY });
+        if (!garrisonResult.success) {
+            if (garrisonResult.error === 'not_garrison_building') {
+                context.executeCommand({ type: 'move_selected_units', targetX: tileX, targetY: tileY });
+            } else {
+                // Garrison building rejected the units — show feedback, but do NOT move (tile is inside building).
+                context.showHint?.(garrisonResult.error ?? 'Cannot garrison', data.screenX, data.screenY);
+            }
+        }
+    }
+
+    /** Handle double-click: select all units of the same type visible on screen. */
+    private handleDoubleClickSelect(seedEntityId: number, _data: PointerData, context: InputContext): void {
+        // Use a large screen rect with padding — the picker clips to rendered entities anyway.
+        const candidateIds =
+            context.pickEntitiesInScreenRect?.(
+                -DOUBLE_CLICK_SCREEN_PAD,
+                -DOUBLE_CLICK_SCREEN_PAD,
+                window.innerWidth + DOUBLE_CLICK_SCREEN_PAD,
+                window.innerHeight + DOUBLE_CLICK_SCREEN_PAD
+            ) ?? [];
+        context.executeCommand({ type: 'select_same_unit_type', seedEntityId, candidateIds });
     }
 
     override onDrag(_data: DragData, _context: InputContext): InputResult {

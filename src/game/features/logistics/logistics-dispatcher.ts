@@ -13,7 +13,7 @@
  * and cancelling jobs when external events require it (carrier removed, building destroyed).
  */
 
-import type { TickSystem } from '../../tick-system';
+import type { TickSystem } from '../../core/tick-system';
 import type { CoreDeps } from '../feature';
 import type { EMaterialType } from '../../economy/material-type';
 import { sortedEntries } from '@/utilities/collections';

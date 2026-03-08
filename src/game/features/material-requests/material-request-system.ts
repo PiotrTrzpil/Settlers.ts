@@ -12,7 +12,7 @@
  * Active request tracking is delegated to the RequestManager (single source of truth).
  */
 
-import type { TickSystem } from '../../tick-system';
+import type { TickSystem } from '../../core/tick-system';
 import type { CoreDeps } from '../feature';
 import type { GameState } from '../../game-state';
 import { EntityType, BuildingType } from '../../entity';

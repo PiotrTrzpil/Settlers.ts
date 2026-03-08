@@ -28,11 +28,12 @@
  * ```
  */
 
-import type { TickSystem } from '../tick-system';
+import type { TickSystem } from '../core/tick-system';
 import type { GameState } from '../game-state';
 import type { EventBus, EventHandler, GameEvents } from '../event-bus';
 import type { EntityVisualService } from '../animation/entity-visual-service';
 import type { EntityCleanupRegistry } from '../systems/entity-cleanup-registry';
+import type { UnitReservationRegistry } from '../systems/unit-reservation';
 import type { Command, CommandResult, CommandType } from '../commands';
 import type { Persistable } from '../persistence';
 import type { TerrainData } from '../terrain';
@@ -63,6 +64,17 @@ export interface FeatureContext extends CoreDeps {
      * ctx.cleanupRegistry.onEntityRemoved(entityId => myMap.delete(entityId));
      */
     cleanupRegistry: EntityCleanupRegistry;
+
+    /**
+     * Registry for units committed to a feature-managed task.
+     * Reserve a unit to prevent player move commands from interrupting it.
+     * Release when the task completes, is cancelled, or the unit is removed.
+     *
+     * @example
+     * ctx.unitReservation.reserve(unitId);   // unit is walking to barracks / tower
+     * ctx.unitReservation.release(unitId);   // training done / garrison arrived
+     */
+    unitReservation: UnitReservationRegistry;
 
     /** Execute a game command. Available to all features at creation time. */
     executeCommand: (cmd: Command) => CommandResult;

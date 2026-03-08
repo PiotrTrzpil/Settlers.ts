@@ -9,6 +9,6 @@
  * - CarrierFeature, CarrierFeatureExports
  */
 
-export { CarrierRegistry, type CarrierRegistryConfig } from './carrier-manager';
+export { CarrierRegistry, type CarrierRegistryConfig } from '../../systems/carrier-registry';
 export { CarrierFeature, type CarrierFeatureExports } from './carrier-feature';
 export type { EntityProvider } from '../../entity';

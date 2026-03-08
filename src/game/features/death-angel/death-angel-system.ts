@@ -7,10 +7,10 @@
  * idle-animation-controller interference.
  */
 
-import type { TickSystem } from '../../tick-system';
+import type { TickSystem } from '../../core/tick-system';
 import type { EntityVisualService } from '../../animation/entity-visual-service';
 import type { Command, CommandResult } from '../../commands';
-import { xmlKey } from '../../animation';
+import { xmlKey } from '../../animation/animation';
 import { UNIT_XML_PREFIX } from '../../renderer/sprite-metadata';
 import { UnitType } from '../../entity';
 import { createLogger } from '@/utilities/logger';

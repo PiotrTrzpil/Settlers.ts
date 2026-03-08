@@ -5,9 +5,9 @@
  */
 
 import { getGameDataLoader, type RaceId, type SettlerValueInfo } from '@/resources/game-data';
-import { Race } from './race';
-import { UnitType } from './unit-types';
-import { SearchType, type SettlerConfig } from './features/settler-tasks/types';
+import { Race } from '../core/race';
+import { UnitType } from '../core/unit-types';
+import { SearchType, type SettlerConfig } from '../features/settler-tasks/types';
 import { raceToRaceId, xmlIdToBuildingTypes } from './game-data-access';
 
 /**
@@ -37,6 +37,7 @@ const UNIT_TYPE_TO_XML_SETTLER: Partial<Record<UnitType, string>> = {
     [UnitType.AnimalFarmer]: 'SETTLER_FARMERANIMALS',
     [UnitType.SunflowerFarmer]: 'SETTLER_SUNFLOWERFARMER',
     [UnitType.TempleServant]: 'SETTLER_TEMPLE_SERVANT',
+    [UnitType.Geologist]: 'SETTLER_GEOLOGIST',
 };
 
 const ALL_RACE_IDS: RaceId[] = ['RACE_ROMAN', 'RACE_VIKING', 'RACE_MAYA', 'RACE_DARK', 'RACE_TROJAN'];

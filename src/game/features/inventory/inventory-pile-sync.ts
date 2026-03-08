@@ -22,8 +22,8 @@ import type { ConstructionSiteManager } from '../building-construction/construct
 import type { PileRegistry } from './pile-registry';
 import type { PileSlotKey } from './pile-registry';
 import type { PilePositionResolver } from './pile-position-resolver';
-import type { PileKind, LinkedSlotKind } from './pile-kind';
-import { SlotKind } from './pile-kind';
+import type { PileKind, LinkedSlotKind } from '../../core/pile-kind';
+import { SlotKind } from '../../core/pile-kind';
 import type { EntityCleanupRegistry } from '../../systems/entity-cleanup-registry';
 
 const log = createLogger('InventoryPileSync');

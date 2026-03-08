@@ -11,7 +11,7 @@
  * The XML prefix identifies the unit type, the suffix identifies the action.
  */
 
-import type { SpriteEntry } from './renderer/sprite-metadata';
+import type { SpriteEntry } from '../renderer/sprite-metadata';
 
 /**
  * Build an XML sequence key from a unit's XML prefix and an action suffix.

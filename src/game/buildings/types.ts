@@ -3,10 +3,10 @@
  * Centralized building-related types, enums, and size configurations.
  */
 
-import { type TileCoord, tileKey } from '../coordinates';
-import { Race } from '../race';
+import { type TileCoord, tileKey } from '../core/coordinates';
+import { Race } from '../core/race';
 import { getBuildingFootprintAt } from '@/resources/game-data';
-import { getBuildingInfo } from '../game-data-access';
+import { getBuildingInfo } from '../data/game-data-access';
 import { getAllNeighbors, hexDistance } from '../systems/hex-directions';
 import { BuildingType } from './building-type';
 

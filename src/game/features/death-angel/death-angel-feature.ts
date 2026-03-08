@@ -8,7 +8,7 @@
 
 import type { FeatureDefinition } from '../feature';
 import { UnitType } from '../../entity';
-import { xmlKey } from '../../animation';
+import { xmlKey } from '../../animation/animation';
 import { UNIT_XML_PREFIX } from '../../renderer/sprite-metadata';
 import { DeathAngelSystem } from './death-angel-system';
 import { createLogger } from '@/utilities/logger';

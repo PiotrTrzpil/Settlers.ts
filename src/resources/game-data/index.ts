@@ -2,7 +2,7 @@
  * Game Data module - parses and provides access to game configuration XML files.
  *
  * This is a pure data layer keyed by XML string identifiers (RaceId, building XML IDs).
- * For domain-typed access (Race, BuildingType enums), use '@/game/game-data-access'.
+ * For domain-typed access (Race, BuildingType enums), use '@/game/data/game-data-access'.
  *
  * Usage:
  *   import { getGameDataLoader } from '@/resources/game-data';

@@ -1,18 +1,29 @@
-import { ref, shallowRef, triggerRef, computed, watch, onMounted, reactive, type Ref, type ShallowRef } from 'vue';
+import {
+    ref,
+    shallowRef,
+    triggerRef,
+    computed,
+    watch,
+    onMounted,
+    onBeforeUnmount,
+    reactive,
+    type Ref,
+    type ShallowRef,
+} from 'vue';
 import { useRoute } from 'vue-router';
 import { MapLoader } from '@/resources/map/map-loader';
 import { Game } from '@/game/game';
 import { createTestMapLoader, createEmptyMapLoader } from '@/game/test-map-factory';
 import { Entity, TileCoord, UnitType } from '@/game/entity';
-import { isUnitAvailableForRace, isBuildingAvailableForRace } from '@/game/race-availability';
-import { Race } from '@/game/race';
+import { isUnitAvailableForRace, isBuildingAvailableForRace } from '@/game/data/race-availability';
+import { Race } from '@/game/core/race';
 import type { EMaterialType } from '@/game/economy';
 import { FileManager, IFileSource } from '@/utilities/file-manager';
 import { LogHandler } from '@/utilities/log-handler';
 import { LayerVisibility, loadLayerVisibility, saveLayerVisibility } from '@/game/renderer/layer-visibility';
 import type { InputManager } from '@/game/input';
 import { loadBuildingIcons, loadResourceIcons, loadUnitIcons, type IconEntry } from './sprite-icon-loader';
-import { debugStats } from '@/game/debug-stats';
+import { debugStats } from '@/game/debug/debug-stats';
 import {
     gameStatePersistence,
     loadSnapshot,
@@ -20,9 +31,9 @@ import {
     clearSavedGameState,
     setCurrentMapId,
     saveInitialState,
-} from '@/game/game-state-persistence';
-import { ALL_BUILDINGS, ALL_UNITS, ALL_RESOURCES } from './palette-data';
-import { toastError } from '@/game/toast-notifications';
+} from '@/game/state/game-state-persistence';
+import { ALL_BUILDINGS, ALL_UNITS, ALL_RESOURCES, ALL_SPECIALISTS } from './palette-data';
+import { toastError } from '@/game/ui/toast-notifications';
 
 /** Entity counts per layer for display in the layer panel */
 export interface LayerCounts {
@@ -214,7 +225,8 @@ function setupIconLoading(
     currentPlayerRace: Ref<Race>,
     resourceIcons: Ref<Record<number, string>>,
     buildingIcons: Ref<Record<number, IconEntry>>,
-    unitIcons: Ref<Record<string, IconEntry>>
+    unitIcons: Ref<Record<string, IconEntry>>,
+    specialistIcons: Ref<Record<string, IconEntry>>
 ): void {
     watch(game, g => {
         if (g) {
@@ -227,6 +239,9 @@ function setupIconLoading(
             void loadUnitIcons(getFileManager(), currentPlayerRace.value, ALL_UNITS).then(icons => {
                 unitIcons.value = icons;
             });
+            void loadUnitIcons(getFileManager(), currentPlayerRace.value, ALL_SPECIALISTS).then(icons => {
+                specialistIcons.value = icons;
+            });
         }
     });
 
@@ -238,7 +253,21 @@ function setupIconLoading(
             void loadUnitIcons(getFileManager(), race, ALL_UNITS).then(icons => {
                 unitIcons.value = icons;
             });
+            void loadUnitIcons(getFileManager(), race, ALL_SPECIALISTS).then(icons => {
+                specialistIcons.value = icons;
+            });
         }
+    });
+}
+
+/** Register mount/unmount hooks for game lifecycle. */
+function setupLifecycle(game: ShallowRef<Game | null>, initializeMap: () => void): void {
+    onMounted(() => initializeMap());
+    onBeforeUnmount(() => {
+        if (!game.value) return;
+        gameStatePersistence.stop();
+        game.value.destroy();
+        game.value = null;
     });
 }
 
@@ -300,6 +329,7 @@ export function useMapView(
 
         mapLoadState.isLoading = true;
         debugStats.startMapLoad();
+        console.log(`[${performance.now().toFixed(0)}ms] [perf] Map load started`);
 
         try {
             // Destroy old game first to prevent multiple game loops
@@ -432,10 +462,12 @@ export function useMapView(
         },
     });
 
-    const VALID_TABS = new Set(['buildings', 'units', 'resources']);
+    const VALID_TABS = new Set(['buildings', 'units', 'resources', 'specialists']);
     const savedTab = localStorage.getItem('sidebar_active_tab');
-    const activeTab = ref<'buildings' | 'units' | 'resources'>(
-        savedTab && VALID_TABS.has(savedTab) ? (savedTab as 'buildings' | 'units' | 'resources') : 'buildings'
+    const activeTab = ref<'buildings' | 'units' | 'resources' | 'specialists'>(
+        savedTab && VALID_TABS.has(savedTab)
+            ? (savedTab as 'buildings' | 'units' | 'resources' | 'specialists')
+            : 'buildings'
     );
     watch(activeTab, tab => localStorage.setItem('sidebar_active_tab', tab));
     const resourceAmount = ref(1);
@@ -443,6 +475,7 @@ export function useMapView(
     const resourceIcons = ref<Record<number, string>>({});
     const buildingIcons = ref<Record<number, IconEntry>>({});
     const unitIcons = ref<Record<string, IconEntry>>({});
+    const specialistIcons = ref<Record<string, IconEntry>>({});
 
     // Layer visibility state (loaded from localStorage)
     const layerVisibility = reactive<LayerVisibility>(loadLayerVisibility());
@@ -506,9 +539,7 @@ export function useMapView(
     // Lifecycle
     // =========================================================================
 
-    onMounted(() => {
-        initializeMap();
-    });
+    setupLifecycle(game, initializeMap);
 
     // Re-initialize if FileManager changes (e.g., user selects new game directory)
     watch(getFileManager, () => {
@@ -551,7 +582,7 @@ export function useMapView(
     const resetGameState = gameActions.resetGameState;
 
     // Load icons from GFX files when game becomes available / race changes
-    setupIconLoading(game, getFileManager, currentPlayerRace, resourceIcons, buildingIcons, unitIcons);
+    setupIconLoading(game, getFileManager, currentPlayerRace, resourceIcons, buildingIcons, unitIcons, specialistIcons);
 
     return {
         fileName,
@@ -563,6 +594,7 @@ export function useMapView(
         resourceIcons,
         buildingIcons,
         unitIcons,
+        specialistIcons,
         hoveredTile,
         selectedEntity,
         selectionCount,

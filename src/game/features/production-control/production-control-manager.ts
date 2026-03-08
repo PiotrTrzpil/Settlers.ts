@@ -13,7 +13,7 @@
 import { ProductionMode, type ProductionState } from './types';
 import { type ComponentStore, mapStore } from '../../ecs';
 import type { Persistable } from '@/game/persistence';
-import type { SerializedProductionControl } from '@/game/game-state-persistence';
+import type { SerializedProductionControl } from '@/game/state/game-state-persistence';
 
 /**
  * Manages runtime production state for all multi-recipe buildings.
