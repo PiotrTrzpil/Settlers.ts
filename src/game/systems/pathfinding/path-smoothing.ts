@@ -16,9 +16,7 @@ export interface PathSmoothingParams {
     groundType: Uint8Array;
     mapWidth: number;
     mapHeight: number;
-    tileOccupancy: Map<string, number>;
     buildingOccupancy: Set<string>;
-    ignoreOccupancy: boolean;
 }
 
 /**
@@ -33,7 +31,7 @@ function hasLineOfSight(
     params: PathSmoothingParams
 ): boolean {
     const tiles = getHexLine(startX, startY, endX, endY);
-    const { groundType, mapWidth, mapHeight, tileOccupancy, buildingOccupancy, ignoreOccupancy } = params;
+    const { groundType, mapWidth, mapHeight, buildingOccupancy } = params;
 
     // Check each intermediate tile (skip start, include end)
     for (let i = 1; i < tiles.length; i++) {
@@ -50,16 +48,9 @@ function hasLineOfSight(
             return false;
         }
 
-        const key = tileKey(x, y);
+        // Building footprints block line-of-sight (end tile allowed for building interaction)
         const isEnd = x === endX && y === endY;
-
-        // Building footprints always block line-of-sight (end tile allowed for building interaction)
-        if (!isEnd && buildingOccupancy.has(key)) {
-            return false;
-        }
-
-        // Occupancy check (allow the end tile even if occupied)
-        if (!ignoreOccupancy && !isEnd && tileOccupancy.has(key)) {
+        if (!isEnd && buildingOccupancy.has(tileKey(x, y))) {
             return false;
         }
     }

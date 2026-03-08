@@ -34,17 +34,8 @@ import { TileCoord } from '../../entity';
  * This is the main entry point for pathfinding. It wraps findPathAStar
  * with a simpler signature for backward compatibility.
  *
- * @param startX Starting X coordinate
- * @param startY Starting Y coordinate
- * @param goalX Goal X coordinate
- * @param goalY Goal Y coordinate
- * @param groundType Terrain type array
- * @param groundHeight Height map array
- * @param mapWidth Map width in tiles
- * @param mapHeight Map height in tiles
- * @param tileOccupancy Map of occupied tiles
- * @param ignoreOccupancy If true, ignore occupancy for path planning
- * @returns Path waypoints or null if no path exists
+ * Unit occupancy is never considered — only terrain and buildings block.
+ * tileOccupancy is passed through for building tunnel identification only.
  */
 export function findPath(
     startX: number,
@@ -56,8 +47,7 @@ export function findPath(
     mapWidth: number,
     mapHeight: number,
     tileOccupancy: Map<string, number>,
-    buildingOccupancy: Set<string>,
-    ignoreOccupancy: boolean = false
+    buildingOccupancy: Set<string>
 ): TileCoord[] | null {
     const terrain: PathfindingTerrain = {
         groundType,
@@ -66,5 +56,5 @@ export function findPath(
         mapHeight,
     };
 
-    return findPathAStar(startX, startY, goalX, goalY, terrain, tileOccupancy, buildingOccupancy, ignoreOccupancy);
+    return findPathAStar(startX, startY, goalX, goalY, terrain, tileOccupancy, buildingOccupancy);
 }

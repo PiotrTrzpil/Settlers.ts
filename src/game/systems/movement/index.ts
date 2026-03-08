@@ -4,18 +4,16 @@
  * This module provides a clean, encapsulated movement system for units:
  *
  * - MovementController: Per-unit state machine managing position, path, and interpolation
- * - MovementSystem: Coordinates all controllers, handles collision resolution
+ * - MovementSystem: Coordinates all controllers, handles bump resolution
  * - Interpolator: Calculates smooth visual positions between tiles
  *
  * Usage:
  *   const system = new MovementSystem({
  *       eventBus,
- *       rng,
  *       updatePosition: (id, x, y) => ...,
  *       getEntity: (id) => ...,
  *   });
  *   system.setTerrainData(groundType, groundHeight, width, height);
- *   system.setTileOccupancy(occupancy);
  *
  *   // Create controller when unit spawns
  *   const controller = system.createController(entityId, x, y, speed);
@@ -38,20 +36,6 @@ export { MovementSystem } from './movement-system';
 export type { WorldCoord, TileToWorldFn } from './interpolator';
 export { Interpolator, createTestInterpolator } from './interpolator';
 
-// Push utilities - clean API without GameState coupling
-export {
-    pushUnit,
-    findRandomFreeDirection,
-    findSmartFreeDirection,
-    findBestNeighbor,
-    shouldYieldToPush,
-    executePush,
-} from './push-utils';
-export type { TileOccupancyAccessor, TerrainAccessor, FindNeighborOptions } from './push-utils';
-
 // Extracted sub-modules
-export type { IPathfinder, PathfindingTerrain } from './pathfinding-service';
+export type { IPathfinder } from './pathfinding-service';
 export { PathfindingService } from './pathfinding-service';
-export type { ICollisionResolver, CollisionResolverConfig } from './collision-resolver';
-export { CollisionResolver } from './collision-resolver';
-export { BlockedStateHandler } from './blocked-state-handler';

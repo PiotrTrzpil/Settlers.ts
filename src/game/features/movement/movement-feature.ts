@@ -18,7 +18,6 @@ export const MovementFeature: FeatureDefinition = {
 
         const movement = new MovementSystem({
             eventBus: ctx.eventBus,
-            rng: gameState.rng,
             updatePosition: (id, x, y) => {
                 gameState.updateEntityPosition(id, x, y);
                 return true;
@@ -26,6 +25,7 @@ export const MovementFeature: FeatureDefinition = {
             getEntity: gameState.getEntity.bind(gameState),
             tileOccupancy: gameState.tileOccupancy,
             buildingOccupancy: gameState.buildingOccupancy,
+            buildingFootprint: gameState.buildingFootprint,
         });
         gameState.initMovement(movement);
 

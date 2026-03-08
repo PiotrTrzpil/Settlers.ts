@@ -38,25 +38,23 @@ let _buildingBitmap = new Uint8Array(0);
 const _openQueue = new BucketPriorityQueue();
 
 /**
- * Clear the building bitmap for the building surrounding the start tile.
- * Uses tileOccupancy to identify which building owns the neighbors, then
- * clears those tiles so the unit can exit.
+ * Clear the building bitmap for the building surrounding a tile.
+ * Clears the tile itself and all immediate neighbors belonging to the same building,
+ * creating a one-ring "tunnel" that lets the path enter or exit through the footprint.
  */
-function clearStartBuildingFromBitmap(
-    startX: number,
-    startY: number,
+function clearBuildingTunnelFromBitmap(
+    x: number,
+    y: number,
+    buildingId: number,
     mapWidth: number,
     mapHeight: number,
     tileOccupancy: Map<string, number>
 ): void {
-    const buildingId = findStartBuildingId(startX, startY, mapWidth, mapHeight, tileOccupancy);
-    if (buildingId === undefined) return;
-
-    _buildingBitmap[startX + startY * mapWidth] = 0;
+    _buildingBitmap[x + y * mapWidth] = 0;
     for (let d = 0; d < NUMBER_OF_DIRECTIONS; d++) {
         const [dx, dy] = GRID_DELTAS[d]!;
-        const nx = startX + dx;
-        const ny = startY + dy;
+        const nx = x + dx;
+        const ny = y + dy;
         if (nx < 0 || nx >= mapWidth || ny < 0 || ny >= mapHeight) continue;
         const nIdx = nx + ny * mapWidth;
         if (_buildingBitmap[nIdx] && tileOccupancy.get(tileKey(nx, ny)) === buildingId) {
@@ -65,7 +63,10 @@ function clearStartBuildingFromBitmap(
     }
 }
 
-/** Find the building entity that owns the footprint around the start tile. */
+/**
+ * Find the building entity that owns the footprint around the start tile.
+ * Checks neighbors first because the start tile itself may hold a unit (the mover), not the building.
+ */
 function findStartBuildingId(
     startX: number,
     startY: number,
@@ -73,8 +74,6 @@ function findStartBuildingId(
     mapHeight: number,
     tileOccupancy: Map<string, number>
 ): number | undefined {
-    // Check neighbors first — they reliably hold the building entity ID in tileOccupancy.
-    // The start tile itself may hold a unit (the one trying to path out), not the building.
     for (let d = 0; d < NUMBER_OF_DIRECTIONS; d++) {
         const [dx, dy] = GRID_DELTAS[d]!;
         const nx = startX + dx;
@@ -85,6 +84,65 @@ function findStartBuildingId(
         if (occupant !== undefined) return occupant;
     }
     return undefined;
+}
+
+/**
+ * Find the building entity that owns the goal tile.
+ * Checks the goal tile itself first (no unit will be there), then falls back to neighbors.
+ */
+function findGoalBuildingId(
+    goalX: number,
+    goalY: number,
+    mapWidth: number,
+    mapHeight: number,
+    tileOccupancy: Map<string, number>
+): number | undefined {
+    const direct = tileOccupancy.get(tileKey(goalX, goalY));
+    if (direct !== undefined) return direct;
+    for (let d = 0; d < NUMBER_OF_DIRECTIONS; d++) {
+        const [dx, dy] = GRID_DELTAS[d]!;
+        const nx = goalX + dx;
+        const ny = goalY + dy;
+        if (nx < 0 || nx >= mapWidth || ny < 0 || ny >= mapHeight) continue;
+        if (!_buildingBitmap[nx + ny * mapWidth]) continue;
+        const occupant = tileOccupancy.get(tileKey(nx, ny));
+        if (occupant !== undefined) return occupant;
+    }
+    return undefined;
+}
+
+/**
+ * If the start tile is inside a building, clear that building's immediate tiles from the bitmap
+ * so the unit can walk out (exit tunnel).
+ */
+function tryCreateExitTunnel(
+    x: number,
+    y: number,
+    idx: number,
+    mapWidth: number,
+    mapHeight: number,
+    tileOccupancy: Map<string, number>
+): void {
+    if (!_buildingBitmap[idx]) return;
+    const buildingId = findStartBuildingId(x, y, mapWidth, mapHeight, tileOccupancy);
+    if (buildingId !== undefined) clearBuildingTunnelFromBitmap(x, y, buildingId, mapWidth, mapHeight, tileOccupancy);
+}
+
+/**
+ * If the goal tile is inside a building, clear that building's immediate tiles from the bitmap
+ * so the unit can path in (entry tunnel — e.g. worker returning to workplace door).
+ */
+function tryCreateEntryTunnel(
+    x: number,
+    y: number,
+    idx: number,
+    mapWidth: number,
+    mapHeight: number,
+    tileOccupancy: Map<string, number>
+): void {
+    if (!_buildingBitmap[idx]) return;
+    const buildingId = findGoalBuildingId(x, y, mapWidth, mapHeight, tileOccupancy);
+    if (buildingId !== undefined) clearBuildingTunnelFromBitmap(x, y, buildingId, mapWidth, mapHeight, tileOccupancy);
 }
 
 function prepareBuffers(totalTiles: number): void {
@@ -156,9 +214,7 @@ interface SearchContext {
     goalX: number;
     goalY: number;
     goalIdx: number;
-    tileOccupancy: Map<string, number>;
     buildingBitmap: Uint8Array;
-    ignoreOccupancy: boolean;
     gCost: Float32Array;
     parent: Int32Array;
     flags: Uint8Array;
@@ -171,8 +227,10 @@ interface SearchContext {
 
 /**
  * Check if a tile can be entered.
+ * Only considers terrain passability and building footprints — unit occupancy is ignored
+ * (collisions are resolved at movement time via bump-or-wait).
  */
-function canEnterTile(nx: number, ny: number, nIdx: number, ctx: SearchContext): boolean {
+function canEnterTile(_nx: number, _ny: number, nIdx: number, ctx: SearchContext): boolean {
     // Already processed?
     if (ctx.flags[nIdx]! & FLAG_CLOSED) return false;
 
@@ -182,13 +240,8 @@ function canEnterTile(nx: number, ny: number, nIdx: number, ctx: SearchContext):
     // Goal tile is always enterable (for building interaction / final position)
     if (nIdx === ctx.goalIdx) return true;
 
-    // Building footprints always block — integer-indexed bitmap (no string creation)
+    // Building footprints block — integer-indexed bitmap (no string creation)
     if (ctx.buildingBitmap[nIdx]) return false;
-
-    // Occupied by another unit?
-    if (!ctx.ignoreOccupancy && ctx.tileOccupancy.has(tileKey(nx, ny))) {
-        return false;
-    }
 
     return true;
 }
@@ -303,8 +356,7 @@ function diagnoseNeighbor(
     groundType: Uint8Array,
     mapWidth: number,
     mapHeight: number,
-    tileOccupancy: Map<string, number>,
-    ignoreOccupancy: boolean
+    tileOccupancy: Map<string, number>
 ): string {
     const [dx, dy] = GRID_DELTAS[d]!;
     const nx = startX + dx;
@@ -316,9 +368,6 @@ function diagnoseNeighbor(
     if (_buildingBitmap[nIdx]) {
         const occupant = tileOccupancy.get(tileKey(nx, ny));
         return pos + ':building' + (occupant !== undefined ? '[' + entityTag(occupant) + ']' : '');
-    }
-    if (!ignoreOccupancy && tileOccupancy.has(tileKey(nx, ny))) {
-        return pos + ':unit[' + entityTag(tileOccupancy.get(tileKey(nx, ny))!) + ']';
     }
     return pos + ':closed';
 }
@@ -336,8 +385,7 @@ function logPathfindingFailure(
     mapWidth: number,
     mapHeight: number,
     tileOccupancy: Map<string, number>,
-    buildingOccupancy: Set<string>,
-    ignoreOccupancy: boolean
+    buildingOccupancy: Set<string>
 ): void {
     const startKey = tileKey(startX, startY);
     const goalKey = tileKey(goalX, goalY);
@@ -352,9 +400,7 @@ function logPathfindingFailure(
     if (nodesSearched <= 1) {
         const reasons: string[] = [];
         for (let d = 0; d < NUMBER_OF_DIRECTIONS; d++) {
-            reasons.push(
-                diagnoseNeighbor(d, startX, startY, groundType, mapWidth, mapHeight, tileOccupancy, ignoreOccupancy)
-            );
+            reasons.push(diagnoseNeighbor(d, startX, startY, groundType, mapWidth, mapHeight, tileOccupancy));
         }
         neighborInfo = ' neighbors=[' + reasons.join(', ') + ']';
     }
@@ -364,8 +410,7 @@ function logPathfindingFailure(
         `[A*] No path (${startX},${startY})->(${goalX},${goalY}): ` +
             `searched=${nodesSearched}/${MAX_SEARCH_NODES} ${exhausted ? 'EXHAUSTED' : 'EMPTY_QUEUE'} ` +
             `start[passable=${startPassable}, inBuilding=${startInBuilding}${occupantTag}] ` +
-            `goal[passable=${goalPassable}, inBuilding=${goalInBuilding}] ` +
-            `ignoreOccupancy=${ignoreOccupancy}${neighborInfo}`
+            `goal[passable=${goalPassable}, inBuilding=${goalInBuilding}]${neighborInfo}`
     );
 }
 
@@ -379,13 +424,16 @@ function logPathfindingFailure(
  * Uses A* with hex distance heuristic and bucket priority queue.
  * Applies path smoothing to remove unnecessary zigzags.
  *
+ * A* only considers terrain and building footprints for blocking — unit occupancy
+ * is ignored. Collisions with other units are resolved at movement time via bump-or-wait.
+ *
  * @param startX Starting tile X coordinate
  * @param startY Starting tile Y coordinate
  * @param goalX Goal tile X coordinate
  * @param goalY Goal tile Y coordinate
  * @param terrain Terrain data (ground type, height, dimensions)
- * @param tileOccupancy Map of occupied tiles
- * @param ignoreOccupancy If true, ignore unit occupancy (for planning)
+ * @param tileOccupancy Map of occupied tiles (used only for building tunnel identification)
+ * @param buildingOccupancy Set of tiles occupied by building footprints
  * @returns Array of waypoints from start (exclusive) to goal (inclusive), or null if no path
  */
 export function findPathAStar(
@@ -395,8 +443,7 @@ export function findPathAStar(
     goalY: number,
     terrain: PathfindingTerrain,
     tileOccupancy: Map<string, number>,
-    buildingOccupancy: Set<string>,
-    ignoreOccupancy: boolean = false
+    buildingOccupancy: Set<string>
 ): TileCoord[] | null {
     // Trivial case: already at goal
     if (startX === goalX && startY === goalY) {
@@ -424,9 +471,7 @@ export function findPathAStar(
         goalX,
         goalY,
         goalIdx,
-        tileOccupancy,
         buildingBitmap: _buildingBitmap,
-        ignoreOccupancy,
         gCost,
         parent,
         flags,
@@ -436,11 +481,11 @@ export function findPathAStar(
     // Initialize start node
     const startIdx = startX + startY * mapWidth;
 
-    // If start is inside a building footprint, clear that building's tiles from the bitmap
-    // so the unit can walk out (e.g. workers spawned inside their workplace).
-    if (_buildingBitmap[startIdx]) {
-        clearStartBuildingFromBitmap(startX, startY, mapWidth, mapHeight, tileOccupancy);
-    }
+    // If start or goal is inside a building footprint, create a local tunnel so the path
+    // can exit (start inside = worker leaving workplace) or enter (goal inside = worker
+    // returning to workplace door).
+    tryCreateExitTunnel(startX, startY, startIdx, mapWidth, mapHeight, tileOccupancy);
+    tryCreateEntryTunnel(goalX, goalY, goalIdx, mapWidth, mapHeight, tileOccupancy);
 
     gCost[startIdx] = 0;
     flags[startIdx] = FLAG_OPEN;
@@ -470,9 +515,7 @@ export function findPathAStar(
                 groundType,
                 mapWidth,
                 mapHeight,
-                tileOccupancy,
                 buildingOccupancy,
-                ignoreOccupancy,
             });
         }
 
@@ -494,8 +537,7 @@ export function findPathAStar(
         mapWidth,
         mapHeight,
         tileOccupancy,
-        buildingOccupancy,
-        ignoreOccupancy
+        buildingOccupancy
     );
     return null;
 }

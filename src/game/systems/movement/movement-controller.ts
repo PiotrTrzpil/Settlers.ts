@@ -4,19 +4,17 @@ import { getApproxDirection, EDirection, getStepDistanceFactor } from '../hex-di
 /**
  * Movement state machine states (external API).
  * - idle: Unit has no path and is stationary
- * - moving: Unit is actively following a path (or sliding after push)
- * - blocked: Unit is temporarily blocked and waiting
+ * - moving: Unit is actively following a path (includes waiting for occupied tiles)
  */
-export type MovementState = 'idle' | 'moving' | 'blocked';
+export type MovementState = 'idle' | 'moving';
 
 /**
  * Tagged union for controller phase — makes state transitions explicit
- * and scopes path/blocked data to the phases that use them.
+ * and scopes path/wait data to the phases that use them.
  */
 type ControllerPhase =
     | { readonly tag: 'idle' }
-    | { readonly tag: 'moving'; path: TileCoord[]; pathIndex: number }
-    | { readonly tag: 'blocked'; path: TileCoord[]; pathIndex: number; blockedTime: number };
+    | { readonly tag: 'moving'; path: TileCoord[]; pathIndex: number; waitTime: number };
 
 const IDLE: ControllerPhase = { tag: 'idle' };
 
@@ -63,7 +61,7 @@ export class MovementController {
 
     /** External state — derives from phase tag + transit status. */
     get state(): MovementState {
-        if (this._phase.tag !== 'idle') return this._phase.tag === 'blocked' ? 'blocked' : 'moving';
+        if (this._phase.tag === 'moving') return 'moving';
         // Idle phase but still sliding (e.g. after push without path) → report 'moving'
         return this.isInTransit ? 'moving' : 'idle';
     }
@@ -134,8 +132,9 @@ export class MovementController {
         return path.length > 0 ? (path[path.length - 1] ?? null) : null;
     }
 
-    get blockedTime(): number {
-        return this._phase.tag === 'blocked' ? this._phase.blockedTime : 0;
+    /** How long the unit has been waiting for an occupied tile (only meaningful while moving). */
+    get waitTime(): number {
+        return this._phase.tag === 'moving' ? this._phase.waitTime : 0;
     }
 
     // =====================================================================
@@ -148,7 +147,7 @@ export class MovementController {
 
         const visualBefore = this.computeVisualPosition();
 
-        this._phase = { tag: 'moving', path: [...path], pathIndex: 0 };
+        this._phase = { tag: 'moving', path: [...path], pathIndex: 0, waitTime: 0 };
 
         if (!this.isInTransit) {
             this._prevTileX = this._tileX;
@@ -167,27 +166,8 @@ export class MovementController {
         }
 
         const visualBefore = this.computeVisualPosition();
-        this._phase = { tag: 'moving', path: [...path], pathIndex: 0 };
+        this._phase = { tag: 'moving', path: [...path], pathIndex: 0, waitTime: 0 };
         this.warnIfTeleported(visualBefore, 'redirectPath');
-    }
-
-    /** Clear the current path and transition to idle. */
-    clearPath(): void {
-        this._phase = IDLE;
-    }
-
-    /** Insert a detour tile at the current path position. */
-    insertDetour(tile: TileCoord): void {
-        const p = this.activePathPhase();
-        p.path.splice(p.pathIndex, 0, tile);
-    }
-
-    /** Replace path with a new prefix and keep remaining suffix. */
-    replacePathPrefix(newPrefix: TileCoord[], suffixStartIndex: number): void {
-        const p = this.activePathPhase();
-        const suffix = p.path.slice(suffixStartIndex);
-        p.path = [...newPrefix, ...suffix];
-        p.pathIndex = 0;
     }
 
     /** Replace entire remaining path. */
@@ -195,12 +175,44 @@ export class MovementController {
         const p = this.activePathPhase();
         p.path = [...newPath];
         p.pathIndex = 0;
+        p.waitTime = 0;
     }
 
-    /** Replace path from a given index onward with a new suffix. */
-    replacePathSuffix(newSuffix: TileCoord[], suffixStartIndex: number): void {
-        const p = this.activePathPhase();
-        p.path = [...p.path.slice(0, suffixStartIndex), ...newSuffix];
+    /** Clear the current path and transition to idle. */
+    clearPath(): void {
+        this._phase = IDLE;
+    }
+
+    // =====================================================================
+    // Progress & wait time management
+    // =====================================================================
+
+    /**
+     * Halt progress accumulation when the unit can't advance further this tick.
+     * Must snap any completed transit first — otherwise the visual interpolation
+     * (lerp from prevTile to tile at progress) would show the unit at prevTile
+     * instead of at tile where it actually is.
+     */
+    haltProgress(): void {
+        if (this.isInTransit) {
+            this._prevTileX = this._tileX;
+            this._prevTileY = this._tileY;
+        }
+        this._progress = 0;
+    }
+
+    /** Add elapsed time to the wait counter (called every tick while waiting for an occupied tile). */
+    addWaitTime(deltaSec: number): void {
+        if (this._phase.tag === 'moving') {
+            this._phase.waitTime += deltaSec;
+        }
+    }
+
+    /** Reset wait time to zero (e.g. after a successful step or repath). */
+    resetWaitTime(): void {
+        if (this._phase.tag === 'moving') {
+            this._phase.waitTime = 0;
+        }
     }
 
     // =====================================================================
@@ -241,39 +253,10 @@ export class MovementController {
         p.pathIndex++;
         this._progress -= 1;
 
-        // Successful move → ensure we're in 'moving' phase (clears blocked)
-        if (p.tag === 'blocked') {
-            this._phase = { tag: 'moving', path: p.path, pathIndex: p.pathIndex };
-        }
+        // Successful move → reset wait time
+        p.waitTime = 0;
 
         return wp;
-    }
-
-    /** Mark the unit as blocked this tick. Resets progress so the unit waits. */
-    setBlocked(): void {
-        const phase = this._phase;
-        if (phase.tag === 'idle') return; // pushed/sliding unit — nothing to block
-        this._phase = {
-            tag: 'blocked',
-            path: phase.path,
-            pathIndex: phase.pathIndex,
-            blockedTime: phase.tag === 'blocked' ? phase.blockedTime : 0,
-        };
-        this._progress = 0;
-    }
-
-    /** Add elapsed time to the blocked counter (called every tick while blocked). */
-    addBlockedTime(deltaSec: number): void {
-        if (this._phase.tag === 'blocked') {
-            this._phase.blockedTime += deltaSec;
-        }
-    }
-
-    /** Reset blocked time (e.g. after escalated repath succeeds). */
-    resetBlockedTime(): void {
-        if (this._phase.tag === 'blocked') {
-            this._phase.blockedTime = 0;
-        }
     }
 
     /** Handle path completion and transit completion. Call after processing all moves. */
@@ -313,7 +296,7 @@ export class MovementController {
     }
 
     /**
-     * Handle being pushed by another unit.
+     * Handle being pushed/bumped by another unit.
      * Only updates position and visual state — path management is handled by caller.
      * IMPORTANT: Caller must ensure unit is NOT mid-transit to prevent teleporting.
      */
@@ -321,7 +304,8 @@ export class MovementController {
         if (this.isInTransit) {
             console.warn(
                 `[MovementController] handlePush called mid-transit for entity ${this.entityId}! ` +
-                    `Visual pos: (${this._prevTileX},${this._prevTileY}) -> (${this._tileX},${this._tileY}) @ ${this._progress.toFixed(2)}`
+                    `Visual pos: (${this._prevTileX},${this._prevTileY}) -> (${this._tileX},${this._tileY})` +
+                    ` @ ${this._progress.toFixed(2)}`
             );
         }
 
@@ -335,8 +319,8 @@ export class MovementController {
         this._distanceFactor = getStepDistanceFactor(this._tileX - this._prevTileX, this._tileY - this._prevTileY);
 
         // Transition to moving if we have a path; idle units stay idle (transit tracked via isInTransit)
-        if (this._phase.tag !== 'idle') {
-            this._phase = { tag: 'moving', path: this._phase.path, pathIndex: this._phase.pathIndex };
+        if (this._phase.tag === 'moving') {
+            this._phase.waitTime = 0;
         }
     }
 
@@ -369,8 +353,8 @@ export class MovementController {
         };
     }
 
-    /** Get the active path phase (moving or blocked). Throws on idle — contract violation. */
-    private activePathPhase(): Exclude<ControllerPhase, { tag: 'idle' }> {
+    /** Get the active path phase (moving). Throws on idle — contract violation. */
+    private activePathPhase(): Extract<ControllerPhase, { tag: 'moving' }> {
         if (this._phase.tag === 'idle') {
             throw new Error(`Entity ${this.entityId}: path operation on idle controller`);
         }

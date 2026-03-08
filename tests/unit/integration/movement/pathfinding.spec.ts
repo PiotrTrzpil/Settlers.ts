@@ -15,7 +15,8 @@
  *
  *   tileOccupancy (Map<string, entityId>)
  *     — Tracks which entity "owns" each tile. Updated when units move.
- *     — Pathfinder can optionally ignore this (for initial route planning).
+ *     — Pathfinder always ignores unit occupancy; collisions are resolved
+ *       locally via bump-or-wait.
  *
  *   buildingOccupancy (Set<string>)
  *     — Tiles blocked by building footprints. ALWAYS blocks pathfinding
@@ -33,7 +34,8 @@
  * ───────
  * Water (terrain types 0-8) is impassable. All other types are passable
  * with varying height costs. The A* pathfinder considers terrain type,
- * height differences, tile occupancy, and building occupancy.
+ * height differences, and building occupancy. Unit occupancy is never
+ * considered during pathfinding.
  *
  * ASSERTIONS
  * ──────────
@@ -583,7 +585,8 @@ describe.skipIf(!hasRealData)('Movement & Pathfinding simulation (real game data
         });
         assertAllArrived(sim, ids, targets);
         assertNoTeleports(trails);
-        assertSmoothMovement(trails);
+        // Allow 180° turns — bumps in tight corridors can push units backward temporarily
+        assertSmoothMovement(trails, 3);
     });
 
     it('ten swordsmen march through a dense building cluster with idle settlers', () => {

@@ -1,114 +1,560 @@
+/**
+ * Comprehensive tests for the bump/wait collision model.
+ *
+ * Collision rules (from movement-simplification design):
+ *   - A* always ignores unit occupancy — units path through each other
+ *   - When unit A tries to step onto a tile occupied by unit B:
+ *     1. If B is idle or waiting → bump B to a free neighbor (lower ID has priority)
+ *     2. If B is moving (will leave soon) → wait
+ *     3. If waiting > REPATH_WAIT_TIMEOUT (0.5s) → repath from current position
+ *     4. If waiting > GIVEUP_WAIT_TIMEOUT (2.0s) → clear path, emit stopped
+ *
+ * Tests verify:
+ *   - Visual position consistency (no teleport-back)
+ *   - Tile occupancy consistency (exactly one entity per tile)
+ *   - Forward progress (units eventually reach destinations)
+ *   - Deterministic bump priority (lower ID always wins)
+ */
+
 import { describe, it, expect, beforeEach } from 'vitest';
 import { createGameState, addUnit, addUnitWithPath } from '../helpers/test-game';
 import type { GameState } from '@/game/game-state';
+import { tileKey, type TileCoord } from '@/game/entity';
+import { hexDistance } from '@/game/systems/hex-directions';
 
-describe('Movement System – collision resolution', () => {
+// ─── Helpers ──────────────────────────────────────────────────────────
+
+/** Track entity position and controller visual position every tick. */
+function trackPositions(
+    state: GameState,
+    entityIds: number[],
+    ticks: number,
+    dt = 0.1
+): Map<number, { entity: TileCoord[]; visual: { x: number; y: number }[] }> {
+    const trails = new Map<number, { entity: TileCoord[]; visual: { x: number; y: number }[] }>();
+    for (const id of entityIds) {
+        trails.set(id, { entity: [], visual: [] });
+    }
+
+    for (let i = 0; i < ticks; i++) {
+        state.movement.update(dt);
+        for (const id of entityIds) {
+            const e = state.getEntity(id);
+            const c = state.movement.getController(id);
+            if (!e || !c) continue;
+            const trail = trails.get(id)!;
+            trail.entity.push({ x: e.x, y: e.y });
+            // Visual position from controller interpolation
+            const t = Math.max(0, Math.min(c.progress, 1));
+            trail.visual.push({
+                x: c.prevTileX + (c.tileX - c.prevTileX) * t,
+                y: c.prevTileY + (c.tileY - c.prevTileY) * t,
+            });
+        }
+    }
+    return trails;
+}
+
+/** Assert tile occupancy has exactly one entry per unit, matching entity position. */
+function assertOccupancyConsistent(state: GameState, entityIds: number[]): void {
+    for (const id of entityIds) {
+        const e = state.getEntity(id);
+        if (!e) continue;
+        const key = tileKey(e.x, e.y);
+        const occupant = state.tileOccupancy.get(key);
+        expect(occupant, `tile (${e.x},${e.y}) should be occupied by ${id}`).toBe(id);
+    }
+    // No two entities should share a tile
+    const positions = new Set<string>();
+    for (const id of entityIds) {
+        const e = state.getEntity(id);
+        if (!e) continue;
+        const key = tileKey(e.x, e.y);
+        expect(positions.has(key), `duplicate entity at ${key}`).toBe(false);
+        positions.add(key);
+    }
+}
+
+/**
+ * Assert visual position never "teleports back" — the controller's visual position
+ * should match its logical tile position (within ±1 tile of interpolation).
+ */
+function assertNoVisualTeleportBack(
+    trail: { entity: TileCoord[]; visual: { x: number; y: number }[] },
+    entityId: number
+): void {
+    for (let i = 0; i < trail.entity.length; i++) {
+        const ePos = trail.entity[i]!;
+        const vPos = trail.visual[i]!;
+        // Visual must be within 1 tile of entity position (interpolation between prev and current)
+        const dx = Math.abs(vPos.x - ePos.x);
+        const dy = Math.abs(vPos.y - ePos.y);
+        expect(
+            dx <= 1.01 && dy <= 1.01,
+            `entity #${entityId} visual (${vPos.x.toFixed(2)},${vPos.y.toFixed(2)}) ` +
+                `too far from entity pos (${ePos.x},${ePos.y}) at tick ${i}`
+        ).toBe(true);
+    }
+}
+
+describe('Movement System – bump/wait collision', () => {
     let state: GameState;
 
     beforeEach(() => {
         state = createGameState();
     });
 
-    it('unit walks around a stationary blocker via sidestep', () => {
-        // Unit A at (0,0) wants to go to (3,0) — straight east
-        // Unit B sits at (1,0), blocking the path
-        const { entity: unitA } = addUnitWithPath(state, 0, 0, [
-            { x: 1, y: 0 },
-            { x: 2, y: 0 },
-            { x: 3, y: 0 },
+    // ═════════════════════════════════════════════════════════════════
+    // Basic bump mechanics
+    // ═════════════════════════════════════════════════════════════════
+
+    it('bumps idle unit out of the way', () => {
+        const { entity: unitA } = addUnitWithPath(state, 10, 10, [
+            { x: 11, y: 10 },
+            { x: 12, y: 10 },
         ]);
-        addUnit(state, 1, 0); // blocker
+        const { entity: unitB } = addUnit(state, 11, 10);
 
-        // Tick several times — unit A should find a way around
-        for (let i = 0; i < 20; i++) {
-            state.movement.update(0.1);
-        }
+        expect(unitA.id).toBeLessThan(unitB.id);
 
-        // Unit A should have reached or be close to goal, NOT stuck at start
-        expect(unitA.x).not.toBe(0);
-    });
-
-    it('two units walking toward each other do not get stuck', () => {
-        // Unit A at (0,0) heading east, Unit B at (4,0) heading west
-        const { entity: unitA } = addUnitWithPath(state, 0, 0, [
-            { x: 1, y: 0 },
-            { x: 2, y: 0 },
-            { x: 3, y: 0 },
-            { x: 4, y: 0 },
-        ]);
-        const { entity: unitB } = addUnitWithPath(state, 4, 0, [
-            { x: 3, y: 0 },
-            { x: 2, y: 0 },
-            { x: 1, y: 0 },
-            { x: 0, y: 0 },
-        ]);
-
-        // Simulate several seconds — both should make progress
-        for (let i = 0; i < 60; i++) {
-            state.movement.update(0.1);
-        }
-
-        // Neither should be at their start position — they should have moved
-        const aMoved = unitA.x !== 0 || unitA.y !== 0;
-        const bMoved = unitB.x !== 4 || unitB.y !== 0;
-        expect(aMoved).toBe(true);
-        expect(bMoved).toBe(true);
-    });
-
-    it('blocked unit gives up after timeout', () => {
-        // Unit A at (0,0) wants east, completely surrounded by blockers except origin
-        const { entity: unitA } = addUnitWithPath(state, 0, 0, [
-            { x: 1, y: 0 },
-            { x: 2, y: 0 },
-        ]);
-
-        // Surround with blockers on all 6 neighbors
-        addUnit(state, 1, -1);
-        addUnit(state, 1, 0);
-        addUnit(state, 0, 1);
-        addUnit(state, -1, 1);
-        addUnit(state, -1, 0);
-        addUnit(state, 0, -1);
-
-        // Tick for longer than BLOCKED_GIVEUP_TIMEOUT (2s)
         for (let i = 0; i < 30; i++) {
             state.movement.update(0.1);
         }
 
-        // Unit should have given up — state should be idle
-        const controller = state.movement.getController(unitA.id);
-        expect(controller!.state).toBe('idle');
+        // A should have passed through (11,10)
+        expect(unitA.x).toBeGreaterThanOrEqual(11);
+        // B should have been displaced from (11,10)
+        expect(unitB.x !== 11 || unitB.y !== 10).toBe(true);
+        assertOccupancyConsistent(state, [unitA.id, unitB.id]);
     });
 
-    it('unit does not oscillate back and forth (no position loops)', () => {
-        // Unit A at (0,0) heading east, Unit B at (1,0) heading west
-        const { entity: unitA } = addUnitWithPath(state, 0, 0, [
-            { x: 1, y: 0 },
-            { x: 2, y: 0 },
+    it('lower ID bumps higher ID, higher ID waits', () => {
+        // A (lower) heading east, B (higher) heading west — meet at same tile
+        const { entity: unitA } = addUnitWithPath(state, 10, 10, [
+            { x: 11, y: 10 },
+            { x: 12, y: 10 },
         ]);
-        addUnitWithPath(state, 2, 0, [
-            { x: 1, y: 0 },
-            { x: 0, y: 0 },
+        const { entity: unitB } = addUnitWithPath(state, 12, 10, [
+            { x: 11, y: 10 },
+            { x: 10, y: 10 },
         ]);
 
-        // Track unit A's positions over time
-        const positions: string[] = [];
+        expect(unitA.id).toBeLessThan(unitB.id);
+
         for (let i = 0; i < 40; i++) {
             state.movement.update(0.1);
-            positions.push(`${unitA.x},${unitA.y}`);
         }
 
-        // Check that no position appears more than 4 times (would indicate oscillation)
-        const counts = new Map<string, number>();
-        for (const pos of positions) {
-            counts.set(pos, (counts.get(pos) ?? 0) + 1);
+        // A must have made forward progress (it has priority)
+        expect(unitA.x).toBeGreaterThanOrEqual(11);
+        assertOccupancyConsistent(state, [unitA.id, unitB.id]);
+    });
+
+    it('bumped unit is pushed toward its own goal when possible', () => {
+        // A heading east, B idle at (11,10) with goal to the south
+        const { entity: unitA } = addUnitWithPath(state, 10, 10, [
+            { x: 11, y: 10 },
+            { x: 12, y: 10 },
+        ]);
+        const { entity: unitB } = addUnitWithPath(state, 11, 10, [
+            { x: 11, y: 11 },
+            { x: 11, y: 12 },
+        ]);
+
+        for (let i = 0; i < 30; i++) {
+            state.movement.update(0.1);
         }
-        for (const [pos, count] of counts) {
-            if (count > 6) {
-                // Allow some dwelling but not infinite oscillation
-                // If stuck at start for >6 ticks, that's a problem (unless completely boxed in)
-                expect(pos).not.toBe('0,0');
-            }
+
+        // A should have passed through, B should be displaced southward (toward its goal)
+        expect(unitA.x).toBeGreaterThanOrEqual(11);
+        // B should have moved — its y should be > 10 (toward goal) or at least displaced
+        expect(unitB.x !== 11 || unitB.y !== 10).toBe(true);
+    });
+
+    it('does not bump a unit that is actively moving (waitTime=0)', () => {
+        // B starts first, actively moves east
+        const { entity: unitB } = addUnitWithPath(state, 11, 10, [
+            { x: 12, y: 10 },
+            { x: 13, y: 10 },
+            { x: 14, y: 10 },
+        ]);
+
+        // Tick once so B starts moving (in transit, waitTime=0)
+        state.movement.update(0.05);
+
+        // Now A starts, heading toward B's old position
+        const { entity: unitA } = addUnitWithPath(state, 10, 10, [
+            { x: 11, y: 10 },
+            { x: 12, y: 10 },
+        ]);
+
+        for (let i = 0; i < 30; i++) {
+            state.movement.update(0.1);
+        }
+
+        // B should have continued moving east undisturbed
+        expect(unitB.x).toBeGreaterThan(11);
+        // A should also have progressed (B moved out of the way naturally)
+        expect(unitA.x).toBeGreaterThan(10);
+    });
+
+    // ═════════════════════════════════════════════════════════════════
+    // Visual position consistency (the teleport-back bug)
+    // ═════════════════════════════════════════════════════════════════
+
+    it('no visual teleport-back when blocked after stepping', () => {
+        // Unit steps to a tile, then next tile is occupied — visual must not snap back
+        const { entity: unitA } = addUnitWithPath(state, 10, 10, [
+            { x: 11, y: 10 },
+            { x: 12, y: 10 },
+            { x: 13, y: 10 },
+        ]);
+        // Block (12,10) with a higher-ID unit that A can't bump (we'll make it move so it
+        // has state=moving, waitTime=0 — which prevents bumping)
+        addUnitWithPath(state, 12, 10, [
+            // Give it a path so it's "moving" but actually stuck against another blocker
+            { x: 12, y: 9 },
+        ]);
+        // Block blocker's path so it stays at (12,10)
+        addUnit(state, 12, 9);
+
+        const trails = trackPositions(state, [unitA.id], 50, 0.1);
+        const trail = trails.get(unitA.id)!;
+
+        assertNoVisualTeleportBack(trail, unitA.id);
+    });
+
+    it('no visual teleport-back with high speed unit', () => {
+        // High speed means progress accumulates fast — unit might step multiple tiles per tick
+        const { entity: unitA } = addUnitWithPath(
+            state,
+            10,
+            10,
+            [
+                { x: 11, y: 10 },
+                { x: 12, y: 10 },
+                { x: 13, y: 10 },
+            ],
+            20
+        ); // speed=20 (very fast)
+
+        // Block at (13,10)
+        addUnit(state, 13, 10);
+
+        const trails = trackPositions(state, [unitA.id], 30, 0.1);
+        const trail = trails.get(unitA.id)!;
+
+        assertNoVisualTeleportBack(trail, unitA.id);
+        // A should have reached at least (12,10) before being blocked
+        expect(unitA.x).toBeGreaterThanOrEqual(12);
+    });
+
+    it('controller tile position matches entity position every tick', () => {
+        const { entity: unitA } = addUnitWithPath(state, 10, 10, [
+            { x: 11, y: 10 },
+            { x: 12, y: 10 },
+        ]);
+        addUnit(state, 12, 10); // blocker
+
+        for (let i = 0; i < 30; i++) {
+            state.movement.update(0.1);
+            const controller = state.movement.getController(unitA.id)!;
+            expect(
+                controller.tileX === unitA.x && controller.tileY === unitA.y,
+                `tick ${i}: controller (${controller.tileX},${controller.tileY}) ≠ entity (${unitA.x},${unitA.y})`
+            ).toBe(true);
+        }
+    });
+
+    // ═════════════════════════════════════════════════════════════════
+    // Tile occupancy invariants
+    // ═════════════════════════════════════════════════════════════════
+
+    it('tile occupancy stays consistent during bump', () => {
+        const { entity: unitA } = addUnitWithPath(state, 10, 10, [
+            { x: 11, y: 10 },
+            { x: 12, y: 10 },
+        ]);
+        const { entity: unitB } = addUnit(state, 11, 10);
+
+        for (let i = 0; i < 30; i++) {
+            state.movement.update(0.1);
+            assertOccupancyConsistent(state, [unitA.id, unitB.id]);
+        }
+    });
+
+    it('tile occupancy stays consistent during multi-unit movement', () => {
+        const ids: number[] = [];
+        for (let i = 0; i < 5; i++) {
+            const { entity } = addUnitWithPath(state, 10 + i * 3, 10, [
+                { x: 10 + i * 3 + 1, y: 10 },
+                { x: 10 + i * 3 + 2, y: 10 },
+                { x: 10 + i * 3 + 3, y: 10 },
+            ]);
+            ids.push(entity.id);
+        }
+
+        for (let i = 0; i < 50; i++) {
+            state.movement.update(0.1);
+            assertOccupancyConsistent(state, ids);
+        }
+    });
+
+    // ═════════════════════════════════════════════════════════════════
+    // Wait and timeout behavior
+    // ═════════════════════════════════════════════════════════════════
+
+    it('wait time resets on successful step', () => {
+        const { entity: unitA } = addUnitWithPath(state, 10, 10, [
+            { x: 11, y: 10 },
+            { x: 12, y: 10 },
+            { x: 13, y: 10 },
+        ]);
+        const controller = state.movement.getController(unitA.id)!;
+
+        for (let i = 0; i < 20; i++) {
+            state.movement.update(0.1);
+        }
+
+        // Open terrain — wait time should always be 0
+        expect(controller.waitTime).toBe(0);
+    });
+
+    it('unit repaths after REPATH_WAIT_TIMEOUT (0.5s)', () => {
+        const { entity: unitA } = addUnitWithPath(state, 10, 10, [
+            { x: 11, y: 10 },
+            { x: 12, y: 10 },
+        ]);
+        const controller = state.movement.getController(unitA.id)!;
+
+        // Surround (11,10) so bump always fails — A has lower ID but ALL
+        // neighbors of the blocker are also occupied
+        addUnit(state, 11, 10);
+        addUnit(state, 11, 9);
+        addUnit(state, 12, 10);
+        addUnit(state, 11, 11);
+        addUnit(state, 10, 11);
+
+        // Tick for 0.6s — past REPATH_WAIT_TIMEOUT
+        for (let i = 0; i < 6; i++) {
+            state.movement.update(0.1);
+        }
+
+        // After repath, waitTime should have been reset
+        expect(controller.waitTime).toBeLessThan(0.5);
+        // But unit should still be trying (not given up)
+        expect(controller.state).toBe('moving');
+    });
+
+    it('unit gives up after GIVEUP_WAIT_TIMEOUT (2.0s)', () => {
+        const { entity: unitA } = addUnitWithPath(state, 10, 10, [
+            { x: 11, y: 10 },
+            { x: 12, y: 10 },
+        ]);
+
+        // Box in with 6 units on all neighbors — A has lowest ID so it CAN
+        // bump them, but their neighbors are also full (all 6 surrounding tiles occupied)
+        addUnit(state, 11, 9);
+        addUnit(state, 11, 10);
+        addUnit(state, 10, 11);
+        addUnit(state, 9, 11);
+        addUnit(state, 9, 10);
+        addUnit(state, 10, 9);
+
+        // Tick for over 2.0s
+        for (let i = 0; i < 25; i++) {
+            state.movement.update(0.1);
+        }
+
+        const controller = state.movement.getController(unitA.id)!;
+        expect(controller.state).toBe('idle');
+    });
+
+    // ═════════════════════════════════════════════════════════════════
+    // Multi-unit scenarios
+    // ═════════════════════════════════════════════════════════════════
+
+    it('two units walking same direction do not block each other permanently', () => {
+        // A behind B, both heading east
+        const { entity: unitA } = addUnitWithPath(state, 10, 10, [
+            { x: 11, y: 10 },
+            { x: 12, y: 10 },
+            { x: 13, y: 10 },
+            { x: 14, y: 10 },
+        ]);
+        const { entity: unitB } = addUnitWithPath(state, 11, 10, [
+            { x: 12, y: 10 },
+            { x: 13, y: 10 },
+            { x: 14, y: 10 },
+            { x: 15, y: 10 },
+        ]);
+
+        for (let i = 0; i < 60; i++) {
+            state.movement.update(0.1);
+        }
+
+        // Both should have reached their destinations or close
+        expect(unitA.x).toBeGreaterThanOrEqual(13);
+        expect(unitB.x).toBeGreaterThanOrEqual(14);
+        assertOccupancyConsistent(state, [unitA.id, unitB.id]);
+    });
+
+    it('three units converging on same tile sort themselves out', () => {
+        // Three units from different directions, all wanting to reach (12,10)
+        const { entity: u1 } = addUnitWithPath(state, 10, 10, [
+            { x: 11, y: 10 },
+            { x: 12, y: 10 },
+        ]);
+        const { entity: u2 } = addUnitWithPath(state, 12, 8, [
+            { x: 12, y: 9 },
+            { x: 12, y: 10 },
+        ]);
+        const { entity: u3 } = addUnitWithPath(state, 14, 10, [
+            { x: 13, y: 10 },
+            { x: 12, y: 10 },
+        ]);
+
+        for (let i = 0; i < 60; i++) {
+            state.movement.update(0.1);
+            assertOccupancyConsistent(state, [u1.id, u2.id, u3.id]);
+        }
+
+        // At most one unit can be at (12,10); others should have been bumped or repathed
+        let atTarget = 0;
+        for (const u of [u1, u2, u3]) {
+            if (u.x === 12 && u.y === 10) atTarget++;
+        }
+        expect(atTarget).toBeLessThanOrEqual(1);
+    });
+
+    it('units do not oscillate — position monotonically approaches goal', () => {
+        const { entity: unitA } = addUnitWithPath(state, 10, 10, [
+            { x: 11, y: 10 },
+            { x: 12, y: 10 },
+            { x: 13, y: 10 },
+            { x: 14, y: 10 },
+        ]);
+
+        // Place a blocker that A can't easily bump (higher ID but surrounded)
+        addUnit(state, 12, 10);
+
+        const positions: TileCoord[] = [];
+        for (let i = 0; i < 40; i++) {
+            state.movement.update(0.1);
+            positions.push({ x: unitA.x, y: unitA.y });
+        }
+
+        // Count how many times the unit moves backward (x decreases)
+        let backwardSteps = 0;
+        for (let i = 1; i < positions.length; i++) {
+            if (positions[i]!.x < positions[i - 1]!.x) backwardSteps++;
+        }
+        // At most 1 backward step is acceptable (from a bump displacement)
+        expect(backwardSteps).toBeLessThanOrEqual(1);
+    });
+
+    it('chain of 4 units walking single file all arrive', () => {
+        const units: { entity: ReturnType<typeof addUnit>['entity'] }[] = [];
+        for (let i = 0; i < 4; i++) {
+            const result = addUnitWithPath(state, 10 + i, 10, [
+                { x: 10 + i + 1, y: 10 },
+                { x: 10 + i + 2, y: 10 },
+                { x: 10 + i + 3, y: 10 },
+                { x: 10 + i + 4, y: 10 },
+            ]);
+            units.push(result);
+        }
+
+        for (let i = 0; i < 100; i++) {
+            state.movement.update(0.1);
+        }
+
+        // All should have advanced significantly
+        for (const { entity } of units) {
+            expect(entity.x).toBeGreaterThan(10);
+        }
+        assertOccupancyConsistent(
+            state,
+            units.map(u => u.entity.id)
+        );
+    });
+
+    // ═════════════════════════════════════════════════════════════════
+    // Edge cases
+    // ═════════════════════════════════════════════════════════════════
+
+    it('unit at map edge is not bumped out of bounds', () => {
+        // Place unit at edge, blocker tries to bump it
+        const { entity: unitB } = addUnit(state, 0, 0);
+        addUnitWithPath(state, 1, 0, [{ x: 0, y: 0 }]);
+
+        // The mover has higher ID than B (created after), so it cannot bump B
+        // Verify B stays in bounds regardless
+        for (let i = 0; i < 20; i++) {
+            state.movement.update(0.1);
+        }
+
+        // B should still be in bounds
+        expect(unitB.x).toBeGreaterThanOrEqual(0);
+        expect(unitB.y).toBeGreaterThanOrEqual(0);
+    });
+
+    it('bumped unit gets repathed to its goal', () => {
+        // A heading east, B at (11,10) with path to (11,15)
+        const { entity: unitA } = addUnitWithPath(state, 10, 10, [
+            { x: 11, y: 10 },
+            { x: 12, y: 10 },
+        ]);
+        const { entity: unitB } = addUnitWithPath(state, 11, 10, [
+            { x: 11, y: 11 },
+            { x: 11, y: 12 },
+            { x: 11, y: 13 },
+        ]);
+
+        for (let i = 0; i < 60; i++) {
+            state.movement.update(0.1);
+        }
+
+        // A should have passed through (11,10)
+        expect(unitA.x).toBeGreaterThanOrEqual(11);
+        // B should still be heading toward its goal (not lost in space)
+        const controllerB = state.movement.getController(unitB.id)!;
+        const bGoal = controllerB.goal;
+        if (bGoal && controllerB.state === 'moving') {
+            // B should be making progress toward its goal
+            const dist = hexDistance(unitB.x, unitB.y, bGoal.x, bGoal.y);
+            expect(dist).toBeLessThan(5); // Should be getting closer
+        }
+    });
+
+    it('haltProgress snaps transit so visual matches tile position', () => {
+        // Unit with fast speed steps to (11,10) then gets blocked at (12,10)
+        const { entity: unitA } = addUnitWithPath(
+            state,
+            10,
+            10,
+            [
+                { x: 11, y: 10 },
+                { x: 12, y: 10 },
+            ],
+            20
+        ); // high speed
+
+        addUnit(state, 12, 10); // blocker
+
+        // After one tick, unit should have stepped to (11,10) and be visually there
+        state.movement.update(0.1);
+
+        const controller = state.movement.getController(unitA.id)!;
+        if (controller.tileX === 11 && controller.tileY === 10) {
+            // Controller is at (11,10) — visual must also be there, not at (10,10)
+            const t = Math.max(0, Math.min(controller.progress, 1));
+            const visualX = controller.prevTileX + (controller.tileX - controller.prevTileX) * t;
+            // Visual should be at tile (11,10), not snapped back to prevTile
+            expect(
+                Math.abs(visualX - 11) < 0.01 || controller.prevTileX === controller.tileX,
+                `visual X=${visualX.toFixed(2)} should be at tile X=11 (prevTile=${controller.prevTileX})`
+            ).toBe(true);
         }
     });
 });
