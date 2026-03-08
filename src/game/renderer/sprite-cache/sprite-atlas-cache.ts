@@ -5,15 +5,17 @@
  *    - Instant restore (~0ms)
  *    - Lost on full page refresh
  *
- * 2. Cache API with per-layer storage - Persists across page refresh
- *    - Metadata + palette stored as one entry (small)
- *    - Each atlas layer stored as its own Cache entry (32MB each)
- *    - All entries read in parallel via Promise.all (no assembly needed)
+ * 2. Cache API with per-layer streaming via Web Worker
+ *    - Metadata + palette read first (small, fast)
+ *    - Layers streamed one by one in priority order (trees/buildings first)
+ *    - All I/O runs in a worker — zero main-thread blocking
  *    - Invalidated on server restart (build version embedded in URL)
  */
 
 import { LogHandler } from '@/utilities/log-handler';
 import { Race, SpriteMetadataRegistry } from '../sprite-metadata';
+import type { CacheStreamRequest, CacheSetPriorityRequest, WorkerOutboundMessage } from './cache-read-worker';
+import CacheReadWorker from './cache-read-worker?worker';
 
 const log = new LogHandler('SpriteAtlasCache');
 
@@ -24,7 +26,7 @@ declare const __BUILD_TIME__: string;
  * Schema version for cache invalidation.
  * Bump this when animation sequence names or sprite data format changes.
  */
-const CACHE_SCHEMA_VERSION = 18; // v18: per-layer cache storage
+const CACHE_SCHEMA_VERSION = 20; // v20: split meta/palette protocol — meta arrives first for faster priority computation
 
 /** Current build version for cache invalidation */
 const BUILD_VERSION =
@@ -45,7 +47,7 @@ export interface CachedSlot {
 }
 
 /** Base cached atlas data (shared between memory and Cache API) */
-interface CachedAtlasBase {
+export interface CachedAtlasBase {
     /** Number of layers in the texture array */
     layerCount: number;
     /** Maximum number of layers allowed */
@@ -70,6 +72,19 @@ export interface CachedAtlasData extends CachedAtlasBase {
     layerBuffers: ArrayBuffer[];
     /** Raw palette RGBA data */
     paletteData?: Uint8Array;
+}
+
+/** Metadata from the streaming read (before layers arrive). Palette arrives separately. */
+export interface CacheStreamMeta {
+    meta: CachedAtlasBase;
+    timings: {
+        cacheOpen: number;
+        metaMatch: number;
+        metaRead: number;
+        layerKickoff: number;
+        metaBytes: number;
+        layerCount: number;
+    };
 }
 
 // =============================================================================
@@ -125,16 +140,15 @@ export function clearAllAtlasCache(): void {
 
 // =============================================================================
 // Cache API persistence (Tier 2 - survives page refresh)
-//
-// Per-layer storage: each atlas layer is its own Cache entry.
-// Metadata + palette stored in a separate entry.
-// All reads happen in parallel via Promise.all — no assembly step.
 // =============================================================================
 
-const CACHE_NAME = 'settlers-atlas-v6';
+const CACHE_NAME = 'settlers-atlas-v7';
 
 /** Maximum layers we'll attempt to delete when clearing a race's cache */
 const MAX_CLEAR_LAYERS = 64;
+
+/** Maximum layer count to generate URLs for */
+const MAX_LAYER_URLS = 64;
 
 function metaUrl(race: Race): string {
     return `/_settlers_atlas_/${Race[race]}/meta?v=${BUILD_VERSION}`;
@@ -155,108 +169,176 @@ let cacheHandlePromise: Promise<Cache> =
     typeof caches !== 'undefined' ? caches.open(CACHE_NAME) : Promise.reject(new Error('Cache API not available'));
 
 // =============================================================================
-// Read API — worker-based (all I/O off main thread)
+// Streaming Read API — worker-based (all I/O off main thread)
 // =============================================================================
 
-import type { CacheBatchReadRequest, CacheBatchReadResponse } from './cache-read-worker';
-import CacheReadWorker from './cache-read-worker?worker';
+/**
+ * Start a streaming cache read via Web Worker.
+ * Meta arrives first (fast) — palette arrives separately via callback.
+ * Layers stream one by one after sendPriority() is called.
+ *
+ * @param race The race to read cache for
+ * @param onPalette Called when palette data arrives (separate from meta)
+ * @param onLayer Called for each layer as it arrives (in priority order)
+ * @param onDone Called when all layers have been delivered
+ */
+export function startStreamingRead(
+    race: Race,
+    onPalette: (paletteData: Uint8Array | null) => void,
+    onLayer: (index: number, buffer: ArrayBuffer) => void,
+    onDone: (timings: { layerRead: number; total: number }) => void
+): { metaPromise: Promise<CacheStreamMeta | null>; sendPriority: (layerOrder: number[]) => void } {
+    const worker = new CacheReadWorker();
+    const t0 = performance.now();
 
-/** Maximum layer count to generate URLs for (must cover any valid atlas) */
-const MAX_LAYER_URLS = 64;
+    // Generate layer URLs for all possible layers
+    const layerUrls: string[] = [];
+    for (let i = 0; i < MAX_LAYER_URLS; i++) {
+        layerUrls.push(layerUrl(race, i));
+    }
 
-/** Read all cache entries via a Web Worker — zero main-thread I/O. */
-function readViaWorker(race: Race): Promise<CacheBatchReadResponse> {
-    return new Promise((resolve, reject) => {
-        const worker = new CacheReadWorker();
-
-        // Pre-generate layer URLs for max possible count.
-        // The worker reads meta first, but we need to provide layer URLs up-front.
-        // Extra URLs that don't match just return null (cache miss) — no harm.
-        const layerUrls: string[] = [];
-        for (let i = 0; i < MAX_LAYER_URLS; i++) {
-            layerUrls.push(layerUrl(race, i));
-        }
-
-        const req: CacheBatchReadRequest = {
-            type: 'batch-read',
-            cacheName: CACHE_NAME,
-            metaUrl: metaUrl(race),
-            layerUrls,
-            paletteUrl: paletteUrl(race),
-        };
-
-        worker.onmessage = (e: MessageEvent<CacheBatchReadResponse>) => {
-            worker.terminate();
-            resolve(e.data);
-        };
-        worker.onerror = e => {
-            worker.terminate();
-            reject(new Error(`Cache worker error: ${e.message}`));
-        };
-        worker.postMessage(req);
+    let resolveMeta: (value: CacheStreamMeta | null) => void;
+    const metaPromise = new Promise<CacheStreamMeta | null>(resolve => {
+        resolveMeta = resolve;
     });
+
+    let layerCount = 0;
+    let gotPalette = false;
+    let gotDone = false;
+
+    /** Terminate worker only after both palette and done are received */
+    const maybeTerminate = () => {
+        if (gotPalette && gotDone) worker.terminate();
+    };
+
+    worker.onmessage = (e: MessageEvent<WorkerOutboundMessage>) => {
+        const msg = e.data;
+        if (msg.type === 'meta') {
+            if (!msg.metaJson || msg.error) {
+                if (msg.error) log.debug(`Cache worker error: ${msg.error}`);
+                worker.terminate();
+                resolveMeta(null);
+                return;
+            }
+
+            const meta = JSON.parse(msg.metaJson) as CachedAtlasBase;
+            layerCount = meta.layerCount;
+
+            const tMeta = performance.now();
+            const t = msg.timings;
+            const metaKB = Math.round(t.metaBytes / 1024);
+            console.log(
+                `[${tMeta.toFixed(0)}ms] [cache] meta for ${Race[race]} in ${Math.round(tMeta - t0)}ms ` +
+                    `(worker: open=${t.cacheOpen}ms match=${t.metaMatch}ms metaRead=${t.metaRead}ms ` +
+                    `layerKickoff=${t.layerKickoff}ms) meta=${metaKB}KB layers=${t.layerCount}`
+            );
+
+            resolveMeta({ meta, timings: msg.timings });
+        } else if (msg.type === 'palette') {
+            const paletteData = msg.paletteBuffer ? new Uint8Array(msg.paletteBuffer) : null;
+            const palKB = Math.round(msg.paletteBytes / 1024);
+            console.log(
+                `[${performance.now().toFixed(0)}ms] [cache] palette for ${Race[race]}: ${palKB}KB in ${msg.readMs}ms`
+            );
+            gotPalette = true;
+            onPalette(paletteData);
+            maybeTerminate();
+        } else if (msg.type === 'layer') {
+            onLayer(msg.index, msg.buffer);
+        } else {
+            const tDone = performance.now();
+            const layerMB = (msg.timings.layerBytes / 1024 / 1024).toFixed(1);
+            console.log(
+                `[${tDone.toFixed(0)}ms] [cache] all ${layerCount} layers streamed in ${Math.round(tDone - t0)}ms ` +
+                    `(worker: firstLayer=${msg.timings.firstLayerMs}ms read=${msg.timings.layerRead}ms ` +
+                    `${layerMB}MB total)`
+            );
+            gotDone = true;
+            onDone(msg.timings);
+            maybeTerminate();
+        }
+    };
+
+    worker.onerror = e => {
+        log.debug(`Cache worker error: ${e.message}`);
+        worker.terminate();
+        resolveMeta(null);
+    };
+
+    // Send start request
+    const req: CacheStreamRequest = {
+        type: 'start',
+        cacheName: CACHE_NAME,
+        metaUrl: metaUrl(race),
+        layerUrls,
+        paletteUrl: paletteUrl(race),
+    };
+    worker.postMessage(req);
+
+    // Return handle for sending priority after meta is processed
+    const sendPriority = (layerOrder: number[]) => {
+        const msg: CacheSetPriorityRequest = { type: 'set-priority', layerOrder };
+        worker.postMessage(msg);
+    };
+
+    return { metaPromise, sendPriority };
 }
 
-/** Get cached atlas from Cache API via worker (null on miss) */
+// =============================================================================
+// Legacy batch read (kept for module-cache population on save)
+// =============================================================================
+
+/** Get cached atlas from Cache API — used only as fallback when streaming is not applicable */
 export async function getIndexedDBCache(race: Race): Promise<CachedAtlasData | null> {
-    try {
-        const t0 = performance.now();
-        const resp = await readViaWorker(race);
-        const tDone = performance.now();
-
-        if (!resp.metaJson) {
-            log.debug(`Cache API: no cache for ${Race[race]}`);
-            return null;
-        }
-
-        if (resp.error) {
-            log.debug(`Cache API worker error: ${resp.error}`);
-            return null;
-        }
-
-        const meta = JSON.parse(resp.metaJson) as CachedAtlasBase;
-
-        // Trim layer buffers to actual layer count and validate
+    // Use streaming internally but collect everything into a single result
+    return new Promise<CachedAtlasData | null>(resolve => {
         const layerBuffers: ArrayBuffer[] = [];
-        for (let i = 0; i < meta.layerCount; i++) {
-            const buf = resp.layerBuffers[i];
-            if (!buf) {
-                log.debug(`Cache API: missing layer ${i} for ${Race[race]}`);
-                return null;
+        let layerCount = 0;
+        let paletteData: Uint8Array | undefined;
+
+        const { metaPromise, sendPriority } = startStreamingRead(
+            race,
+            pd => {
+                paletteData = pd ?? undefined;
+            },
+            (index, buffer) => {
+                layerBuffers[index] = buffer;
+            },
+            () => {
+                // Validate all layers arrived
+                for (let i = 0; i < layerCount; i++) {
+                    if (!layerBuffers[i]) {
+                        log.debug(`Cache API: missing layer ${i} for ${Race[race]}`);
+                        resolve(null);
+                        return;
+                    }
+                }
+
+                void metaPromise.then(streamMeta => {
+                    if (!streamMeta) {
+                        resolve(null);
+                        return;
+                    }
+                    resolve({
+                        ...streamMeta.meta,
+                        layerBuffers,
+                        paletteData,
+                    });
+                });
             }
-            layerBuffers.push(buf);
-        }
-
-        const paletteData = resp.paletteBuffer ? new Uint8Array(resp.paletteBuffer) : undefined;
-
-        const totalMB = layerBuffers.reduce((sum, b) => sum + b.byteLength, 0) / 1024 / 1024;
-        const palMB = paletteData ? paletteData.byteLength / 1024 / 1024 : 0;
-        const ageMins = Math.round((Date.now() - meta.timestamp) / 60000);
-        const wt = resp.timings;
-        console.log(
-            `[${performance.now().toFixed(0)}ms] [cache] loaded ${Race[race]}: ${meta.layerCount} layers (${totalMB.toFixed(1)}MB) + pal ${palMB.toFixed(1)}MB, age: ${ageMins}m\n` +
-                `  worker: cacheOpen=${wt.cacheOpen}ms meta=${wt.metaRead}ms layers=${wt.layerRead}ms workerTotal=${wt.total}ms\n` +
-                `  mainThread: wallTime=${Math.round(tDone - t0)}ms (blocked=~0ms, all I/O in worker)`
         );
 
-        return {
-            layerBuffers,
-            paletteData,
-            layerCount: meta.layerCount,
-            maxLayers: meta.maxLayers,
-            slots: meta.slots,
-            registryData: meta.registryData,
-            race: meta.race,
-            textureUnit: meta.textureUnit,
-            timestamp: meta.timestamp,
-            paletteOffsets: meta.paletteOffsets,
-            paletteTotalColors: meta.paletteTotalColors,
-            paletteRows: meta.paletteRows,
-        };
-    } catch (e) {
-        log.debug(`Cache API read failed: ${e}`);
-        return null;
-    }
+        void metaPromise.then(streamMeta => {
+            if (!streamMeta) {
+                resolve(null);
+                return;
+            }
+            layerCount = streamMeta.meta.layerCount;
+            // Sequential order — no priority optimization for legacy path
+            const order = Array.from({ length: layerCount }, (_, i) => i);
+            sendPriority(order);
+        });
+    });
 }
 
 // =============================================================================
@@ -266,8 +348,9 @@ export async function getIndexedDBCache(race: Race): Promise<CachedAtlasData | n
 /** Save atlas data via Cache API — one entry per layer + metadata + palette */
 export async function setIndexedDBCache(race: Race, data: CachedAtlasData): Promise<void> {
     const totalMB = data.layerBuffers.reduce((sum, b) => sum + b.byteLength, 0) / 1024 / 1024;
-    log.debug(
-        `Cache API: saving ${Race[race]} (${data.layerCount} layers, ${totalMB.toFixed(1)}MB, version=${BUILD_VERSION})`
+    console.log(
+        `[${performance.now().toFixed(0)}ms] [cache] save started: ${Race[race]} ` +
+            `${data.layerCount} layers, ${totalMB.toFixed(1)}MB, version=${BUILD_VERSION}`
     );
 
     try {
@@ -289,32 +372,43 @@ export async function setIndexedDBCache(race: Race, data: CachedAtlasData): Prom
         };
         const metaBytes = encoder.encode(JSON.stringify(meta));
 
-        // Write metadata + all layers + palette in parallel
-        const writes: Promise<void>[] = [];
-        writes.push(cache.put(metaUrl(race), new Response(new Blob([metaBytes], { type: 'application/json' }))));
-
-        for (let i = 0; i < data.layerCount; i++) {
-            const buf = data.layerBuffers[i]!;
-            writes.push(
-                cache.put(layerUrl(race, i), new Response(new Blob([buf], { type: 'application/octet-stream' })))
-            );
-        }
+        // Write metadata + palette first (small, fast)
+        console.log(`[${performance.now().toFixed(0)}ms] [cache] writing meta (${metaBytes.byteLength} bytes)...`);
+        await cache.put(metaUrl(race), new Response(new Blob([metaBytes], { type: 'application/json' })));
+        console.log(`[${performance.now().toFixed(0)}ms] [cache] meta written OK`);
 
         if (data.paletteData) {
-            writes.push(
-                cache.put(
-                    paletteUrl(race),
-                    new Response(new Blob([data.paletteData as BlobPart], { type: 'application/octet-stream' }))
-                )
+            console.log(
+                `[${performance.now().toFixed(0)}ms] [cache] writing palette (${data.paletteData.byteLength} bytes)...`
             );
+            await cache.put(
+                paletteUrl(race),
+                new Response(new Blob([data.paletteData as BlobPart], { type: 'application/octet-stream' }))
+            );
+            console.log(`[${performance.now().toFixed(0)}ms] [cache] palette written OK`);
+        }
+        const tSmall = performance.now();
+
+        // Write layers sequentially — large blobs can fail with concurrent writes
+        for (let i = 0; i < data.layerCount; i++) {
+            const buf = data.layerBuffers[i]!;
+            await cache.put(layerUrl(race, i), new Response(new Blob([buf], { type: 'application/octet-stream' })));
+            if (i === 0 || i === data.layerCount - 1) {
+                console.log(
+                    `[${performance.now().toFixed(0)}ms] [cache] layer ${i}/${data.layerCount} written (${(buf.byteLength / 1024 / 1024).toFixed(1)}MB)`
+                );
+            }
         }
 
-        await Promise.all(writes);
-
         const saveMs = Math.round(performance.now() - t0);
-        log.debug(`Cache API: saved ${data.layerCount + 2} entries in ${saveMs}ms`);
+        const smallMs = Math.round(tSmall - t0);
+        console.log(
+            `[${performance.now().toFixed(0)}ms] [cache] save complete: ${data.layerCount + 2} entries ` +
+                `in ${saveMs}ms (meta+pal=${smallMs}ms)`
+        );
     } catch (e) {
-        log.warn(`Cache API save failed: ${e}`);
+        console.error(`[cache] save FAILED:`, e);
+        throw e;
     }
 }
 
@@ -337,7 +431,8 @@ export async function clearIndexedDBCache(race: Race): Promise<void> {
 export async function clearAllIndexedDBCache(): Promise<void> {
     try {
         await caches.delete(CACHE_NAME);
-        // Also delete old cache store from previous format
+        // Also delete old cache stores from previous formats
+        await caches.delete('settlers-atlas-v6');
         await caches.delete('settlers-atlas-v5');
         log.debug('Cache API: cleared all');
     } catch (e) {

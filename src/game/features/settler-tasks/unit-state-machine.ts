@@ -15,7 +15,7 @@
 import type { Entity } from '../../entity';
 import { UnitType } from '../../entity';
 import { createLogger } from '@/utilities/logger';
-import { SettlerState, type SettlerConfig, type JobState, type HomeAssignment } from './types';
+import { SearchType, SettlerState, type SettlerConfig, type JobState, type HomeAssignment } from './types';
 import type { IdleAnimationController, IdleAnimationState } from './idle-animation-controller';
 import type { WorkerTaskExecutor, WorkerRuntimeState, OccupancyMap } from './worker-task-executor';
 import type { GameState } from '../../game-state';
@@ -185,11 +185,14 @@ export class UnitStateMachine {
     private updateSettler(settler: Entity, config: SettlerConfig, runtime: UnitRuntime, dt: number): void {
         switch (runtime.state) {
         case SettlerState.IDLE:
-            // Throttle expensive idle work search — only run when cooldown expires
-            if (runtime.idleSearchCooldown > 0) {
-                runtime.idleSearchCooldown--;
-            } else {
-                this.handleIdle(settler, config, runtime);
+            // Carriers are passively assigned jobs by LogisticsDispatcher — skip idle search entirely.
+            // All other settlers actively search for work on a cooldown.
+            if (config.search !== SearchType.GOOD) {
+                if (runtime.idleSearchCooldown > 0) {
+                    runtime.idleSearchCooldown--;
+                } else {
+                    this.handleIdle(settler, config, runtime);
+                }
             }
             // Also handle idle turning when not working (handleIdle may change state to WORKING)
             // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- handleIdle mutates runtime.state

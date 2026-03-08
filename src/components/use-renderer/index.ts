@@ -13,7 +13,7 @@ import { BuildingIndicatorRenderer } from '@/game/renderer/building-indicator-re
 import { Renderer } from '@/game/renderer/renderer';
 import { TilePicker } from '@/game/input/tile-picker';
 import { type TileCoord, BuildingType } from '@/game/entity';
-import { Race, AVAILABLE_RACES } from '@/game/renderer/sprite-metadata';
+import { Race, AVAILABLE_RACES, saveSavedRace } from '@/game/renderer/sprite-metadata';
 import { canPlaceResource, canPlaceUnit, canPlaceBuildingFootprint } from '@/game/features/placement';
 import { ValidPositionGrid, type GridComputeRequest } from '@/game/features/placement/valid-position-grid';
 import type { Command, CommandResult } from '@/game/commands';
@@ -382,7 +382,11 @@ export function useRenderer({
         if (gl) {
             rendererInitStart = performance.now();
             const localPlayerRace = game.playerRaces.get(game.currentPlayer) ?? null;
-            void initRenderersAsync(gl, landscapeRenderer, indicatorRenderer, entityRenderer, localPlayerRace);
+            // Persist race for eager prefetch on next page load
+            if (localPlayerRace !== null) {
+                saveSavedRace(localPlayerRace);
+            }
+            void initRenderersAsync(gl, landscapeRenderer, indicatorRenderer, entityRenderer, localPlayerRace, game);
         } else {
             debugStats.state.gameLoaded = true;
             if (game.useProceduralTextures) {

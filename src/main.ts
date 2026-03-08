@@ -1,3 +1,7 @@
+// Start cache prefetch ASAP — before Vue, router, or any heavy modules load.
+// This import has minimal dependencies (just the worker constructor) and fires immediately.
+import './game/renderer/sprite-cache/early-prefetch';
+
 import { createApp } from 'vue';
 import Toast from 'vue-toastification';
 import type { ToastOptionsAndRequiredContent } from 'vue-toastification/dist/types/types';

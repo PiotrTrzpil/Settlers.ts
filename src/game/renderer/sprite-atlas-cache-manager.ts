@@ -1,10 +1,14 @@
 /**
- * Sprite Atlas Cache Manager — three-tier caching for atlas data.
+ * Sprite Atlas Cache Manager — orchestrates streaming cache restore.
  *
- * Tier 1: Module-level Map (survives HMR, lost on page refresh).
- * Tier 2: IndexedDB (survives page refresh, invalidated on build version change).
- *
- * Extracted from SpriteRenderManager to separate caching concerns.
+ * Three-tier restore:
+ * 1. Module-level Map (instant, survives HMR)
+ * 2. Cache API via streaming worker:
+ *    a. Read metadata + palette first (fast, ~5ms)
+ *    b. Compute layer priority from nearby game entities
+ *    c. Stream layers one by one in priority order
+ *    d. Fire onEssentialReady when common sprites are loaded
+ *    e. Continue streaming remaining layers in background
  */
 
 import { LogHandler } from '@/utilities/log-handler';
@@ -15,11 +19,14 @@ import { debugStats } from '@/game/debug/debug-stats';
 import {
     getAtlasCache,
     setAtlasCache,
-    getIndexedDBCache,
-    setIndexedDBCache,
     isCacheDisabled,
+    startStreamingRead,
     type CachedAtlasData,
+    type CachedAtlasBase,
+    type CacheStreamMeta,
 } from './sprite-cache';
+import { consumeEarlyPrefetch, type EarlyPrefetchHandle } from './sprite-cache/early-prefetch';
+import type { Entity } from '@/game/entity';
 
 const log = new LogHandler('SpriteAtlasCacheManager');
 
@@ -27,16 +34,43 @@ const log = new LogHandler('SpriteAtlasCacheManager');
 // Prefetch state
 // =============================================================================
 
-let prefetchPromise: Promise<CachedAtlasData | null> | null = null;
-let prefetchStartedAt = 0;
-let prefetchResolvedAt = 0;
+let prefetchRace: Race | null = null;
+let prefetchMetaPromise: Promise<CacheStreamMeta | null> | null = null;
+let prefetchSendPriority: ((order: number[]) => void) | null = null;
+let prefetchSetPaletteCb: ((fn: (paletteData: Uint8Array | null) => void) => void) | null = null;
+let prefetchSetLayerCb: ((fn: (index: number, buffer: ArrayBuffer) => void) => void) | null = null;
+let prefetchSetDoneCb: ((fn: (timings: { layerRead: number; total: number }) => void) => void) | null = null;
 
 /**
  * Invalidate any in-flight or resolved prefetch.
  * Called by clearAllCaches() so a stale prefetch doesn't resurrect cleared data.
  */
 export function invalidatePrefetch(): void {
-    prefetchPromise = null;
+    prefetchRace = null;
+    prefetchMetaPromise = null;
+    prefetchSendPriority = null;
+    prefetchSetPaletteCb = null;
+    prefetchSetLayerCb = null;
+    prefetchSetDoneCb = null;
+}
+
+/**
+ * Adopt the early-prefetch handle (started from main.ts before Vue loaded).
+ * Converts the raw early handle into the typed prefetch state used by tryStreamingRestore.
+ */
+function adoptEarlyPrefetch(handle: EarlyPrefetchHandle): void {
+    prefetchRace = handle.race;
+    prefetchSendPriority = handle.sendPriority;
+    prefetchSetPaletteCb = handle.setPaletteCb;
+    prefetchSetLayerCb = handle.setLayerCb;
+    prefetchSetDoneCb = handle.setDoneCb;
+
+    // Convert the raw meta promise (metaJson string) into a typed CacheStreamMeta
+    prefetchMetaPromise = handle.metaPromise.then(raw => {
+        if (!raw) return null;
+        const meta = JSON.parse(raw.metaJson) as CachedAtlasBase;
+        return { meta, timings: raw.timings } as CacheStreamMeta;
+    });
 }
 
 // =============================================================================
@@ -50,36 +84,151 @@ export interface CacheRestoreResult {
 }
 
 // =============================================================================
-// SpriteAtlasCacheManager
+// Layer priority computation
 // =============================================================================
 
 /**
- * Manages three-tier sprite atlas caching: module Map, IndexedDB, and Cache API.
- * Responsible for restoring and saving atlas + registry + palette data.
+ * Compute layer load order based on which sprites are most common near the player start.
+ * Returns all layer indices sorted by priority (most important first).
+ */
+export function computeLayerPriority(
+    registry: SpriteMetadataRegistry,
+    nearbyEntities: Entity[],
+    playerRace: number,
+    totalLayers: number
+): { layerOrder: number[]; essentialCount: number } {
+    // Count entity subtypes by entity type
+    const mapObjectTypes = new Set<number>();
+    const buildingTypes = new Set<number>();
+    const unitTypes = new Set<number>();
+    const layerScore = new Map<number, number>();
+
+    for (const entity of nearbyEntities) {
+        const entityType = entity.type as number;
+        if (entityType === 3 /* MapObject */) {
+            mapObjectTypes.add(entity.subType);
+        } else if (entityType === 2 /* Building */) {
+            buildingTypes.add(entity.subType);
+        } else if (entityType === 1 /* Unit */) {
+            unitTypes.add(entity.subType);
+        }
+    }
+
+    // Score layers by how many nearby entities need sprites from them
+    const addScore = (layers: Set<number>, weight: number) => {
+        for (const layer of layers) {
+            layerScore.set(layer, (layerScore.get(layer) ?? 0) + weight);
+        }
+    };
+
+    // Map objects (trees, stones) are the most common visible elements
+    addScore(registry.getLayersForMapObjects(mapObjectTypes), 3);
+    // Buildings are next most important
+    addScore(registry.getLayersForBuildings(buildingTypes, playerRace), 2);
+    // Units
+    addScore(registry.getLayersForUnits(unitTypes, playerRace), 1);
+
+    // Sort by score (highest first), then by index for stability
+    const allLayers = Array.from({ length: totalLayers }, (_, i) => i);
+    allLayers.sort((a, b) => {
+        const scoreA = layerScore.get(a) ?? 0;
+        const scoreB = layerScore.get(b) ?? 0;
+        if (scoreB !== scoreA) return scoreB - scoreA;
+        return a - b;
+    });
+
+    // Essential = layers that have any score (contain nearby entity sprites)
+    const essentialCount = allLayers.filter(l => (layerScore.get(l) ?? 0) > 0).length;
+
+    log.debug(
+        `Layer priority: ${essentialCount} essential of ${totalLayers} total ` +
+            `(${mapObjectTypes.size} mapObj types, ${buildingTypes.size} building types, ${unitTypes.size} unit types)`
+    );
+
+    return { layerOrder: allLayers, essentialCount };
+}
+
+// =============================================================================
+// SpriteAtlasCacheManager
+// =============================================================================
+
+/** Callback for when essential sprites are ready (common sprites near player start) */
+export type EssentialSpritesCallback = () => void;
+
+/**
+ * Manages sprite atlas caching with progressive streaming.
  */
 export class SpriteAtlasCacheManager {
     /**
-     * Start a cache prefetch for the given race. Call as early as possible
-     * (before GL is ready) so the Cache API reads overlap with landscape init.
+     * Start a streaming cache prefetch for the given race.
+     * First tries to adopt the early-prefetch handle (started from main.ts before Vue loaded).
+     * Falls back to starting a fresh streaming read if no early prefetch is available.
      */
     public prefetch(race: Race): void {
-        if (isCacheDisabled() || prefetchPromise) return;
-        prefetchStartedAt = performance.now();
-        prefetchPromise = getIndexedDBCache(race).then(v => {
-            prefetchResolvedAt = performance.now();
-            return v;
-        });
+        if (isCacheDisabled() || prefetchMetaPromise) return;
+
+        // Try to adopt the early prefetch (started at module-init time in main.ts)
+        const earlyHandle = consumeEarlyPrefetch();
+        if (earlyHandle) {
+            if (earlyHandle.race === race) {
+                console.log(`[${performance.now().toFixed(0)}ms] [cache] adopting early prefetch for ${Race[race]}`);
+                adoptEarlyPrefetch(earlyHandle);
+                return;
+            }
+            // Race mismatch — discard early prefetch, start fresh
+            console.log(
+                `[${performance.now().toFixed(0)}ms] [cache] early prefetch race mismatch ` +
+                    `(early=${Race[earlyHandle.race]}, need=${Race[race]}), starting fresh`
+            );
+            earlyHandle.worker.terminate();
+        }
+
+        // No early prefetch or race mismatch — start fresh
+        console.log(`[${performance.now().toFixed(0)}ms] [cache] prefetch started for ${Race[race]}`);
+
+        let paletteCb: (paletteData: Uint8Array | null) => void = () => {};
+        let layerCb: (index: number, buffer: ArrayBuffer) => void = () => {};
+        let doneCb: (timings: { layerRead: number; total: number }) => void = () => {};
+
+        const { metaPromise, sendPriority } = startStreamingRead(
+            race,
+            pd => paletteCb(pd),
+            (index, buffer) => layerCb(index, buffer),
+            timings => doneCb(timings)
+        );
+
+        prefetchRace = race;
+        prefetchMetaPromise = metaPromise;
+        prefetchSendPriority = sendPriority;
+        prefetchSetPaletteCb = fn => {
+            paletteCb = fn;
+        };
+        prefetchSetLayerCb = fn => {
+            layerCb = fn;
+        };
+        prefetchSetDoneCb = fn => {
+            doneCb = fn;
+        };
     }
 
     /**
-     * Try to restore atlas + registry from cache (module or IndexedDB).
-     * Returns a CacheRestoreResult if successful, null if cache miss.
+     * Try to restore atlas + registry from cache.
+     * For module cache: instant restore (all layers available).
+     * For IndexedDB: starts streaming restore — returns immediately with atlas shell,
+     * then streams layers progressively.
+     *
+     * @param onEssentialReady Called when enough layers for common sprites are loaded
+     * @param nearbyEntities Entities near player start (for computing layer priority)
+     * @param playerRace Current player's race
      */
     public async tryRestore(
         gl: WebGL2RenderingContext,
         race: Race,
         textureUnit: number,
-        paletteManager: PaletteTextureManager
+        paletteManager: PaletteTextureManager,
+        onEssentialReady: EssentialSpritesCallback,
+        nearbyEntities: Entity[],
+        playerRace: number
     ): Promise<CacheRestoreResult | null> {
         if (isCacheDisabled()) {
             log.debug('Cache disabled via settings, loading from files');
@@ -89,18 +238,26 @@ export class SpriteAtlasCacheManager {
         // Tier 1: module-level cache (instant, survives HMR)
         const moduleCached = getAtlasCache(race);
         if (moduleCached) {
-            const result = this.restoreFromCachedData(gl, moduleCached, 'module', textureUnit, paletteManager);
+            const result = this.restoreFromModuleCache(gl, moduleCached, textureUnit, paletteManager);
+            onEssentialReady();
             return result;
         }
 
-        // Tier 2: IndexedDB (fast, survives page refresh)
-        return this.tryRestoreFromIndexedDB(gl, race, textureUnit, paletteManager);
+        // Tier 2: streaming restore from Cache API
+        return this.tryStreamingRestore(
+            gl,
+            race,
+            textureUnit,
+            paletteManager,
+            onEssentialReady,
+            nearbyEntities,
+            playerRace
+        );
     }
 
     /**
      * Save current atlas, registry, and palette to both cache tiers (fire-and-forget).
      */
-    // eslint-disable-next-line @typescript-eslint/require-await -- cache save is fire-and-forget
     public async save(
         race: Race,
         atlas: EntityTextureAtlas,
@@ -112,6 +269,8 @@ export class SpriteAtlasCacheManager {
             log.debug('Cache disabled, skipping save');
             return;
         }
+
+        const { setIndexedDBCache } = await import('./sprite-cache');
 
         const cacheData: CachedAtlasData = {
             layerBuffers: atlas.getLayerBuffers(),
@@ -131,9 +290,9 @@ export class SpriteAtlasCacheManager {
         // Save to module cache (sync, for HMR)
         setAtlasCache(race, cacheData);
 
-        // Save to IndexedDB (async, for page refresh) — don't await to avoid blocking
+        // Save to Cache API (async, for page refresh) — don't await to avoid blocking
         setIndexedDBCache(race, cacheData).catch((e: unknown) => {
-            log.warn(`IndexedDB cache save failed (non-fatal): ${e}`);
+            console.error(`[cache] save FAILED:`, e);
         });
     }
 
@@ -141,48 +300,15 @@ export class SpriteAtlasCacheManager {
     // Private helpers
     // ==========================================================================
 
-    private async tryRestoreFromIndexedDB(
-        gl: WebGL2RenderingContext,
-        race: Race,
-        textureUnit: number,
-        paletteManager: PaletteTextureManager
-    ): Promise<CacheRestoreResult | null> {
-        const hadPrefetch = !!prefetchPromise;
-        const t0 = performance.now();
-        const cached = await (prefetchPromise ?? getIndexedDBCache(race));
-        const now = performance.now();
-        prefetchPromise = null;
-        debugStats.state.loadTimings.cacheWait = Math.round(now - t0);
-
-        const alreadyResolved = prefetchResolvedAt > 0 && prefetchResolvedAt <= t0;
-        const headStart = prefetchStartedAt > 0 ? Math.round(t0 - prefetchStartedAt) : 0;
-        const ioTime = prefetchResolvedAt > 0 ? Math.round(prefetchResolvedAt - prefetchStartedAt) : 0;
-        const resolvedLabel = alreadyResolved ? 'YES' : 'no';
-        const detail = hadPrefetch
-            ? `, I/O=${ioTime}ms, headStart=${headStart}ms, resolved=${resolvedLabel}`
-            : ' (no prefetch)';
-        console.log(`[${now.toFixed(0)}ms] [cache] prefetch=${hadPrefetch}, waited=${Math.round(now - t0)}ms${detail}`);
-        if (!cached) return null;
-
-        const result = this.restoreFromCachedData(gl, cached, 'indexeddb', textureUnit, paletteManager);
-
-        // Also populate module cache for future HMR hits
-        setAtlasCache(race, cached);
-
-        return result;
-    }
-
-    /** Common restore logic for both cache tiers. Returns atlas + registry. */
-    private restoreFromCachedData(
+    /** Restore from module cache (all layers available immediately). */
+    private restoreFromModuleCache(
         gl: WebGL2RenderingContext,
         cached: CachedAtlasData,
-        source: 'module' | 'indexeddb',
         textureUnit: number,
         paletteManager: PaletteTextureManager
     ): CacheRestoreResult {
         const t0 = performance.now();
 
-        // Phase 1: Atlas restore from per-layer buffers (zero-copy Uint16Array views)
         const atlas = EntityTextureAtlas.fromCache(
             cached.layerBuffers,
             cached.layerCount,
@@ -190,24 +316,11 @@ export class SpriteAtlasCacheManager {
             cached.slots,
             textureUnit
         );
-        const atlasRestore = Math.round(performance.now() - t0);
 
-        // Phase 2: Registry deserialize — JSON→Maps reconstruction
-        const tRegistry = performance.now();
         const registry = SpriteMetadataRegistry.deserialize(cached.registryData);
-        const registryDeserialize = Math.round(performance.now() - tRegistry);
 
-        const t1 = performance.now();
-        const deserialize = Math.round(t1 - t0);
-
-        // Phase 3: GPU — allocate texture memory, defer pixel upload to render loop
         atlas.allocateDeferred(gl);
-        const gpuAlloc = Math.round(performance.now() - t1);
 
-        // Phase 4: Palette restore (CPU) + GPU upload — must be synchronous for shaders
-        const tPalRestore = performance.now();
-        let palRestoreMs = 0;
-        let palUploadMs = 0;
         if (cached.paletteData && cached.paletteOffsets && cached.paletteTotalColors) {
             paletteManager.restoreFromCache(
                 cached.paletteData,
@@ -215,30 +328,194 @@ export class SpriteAtlasCacheManager {
                 cached.paletteTotalColors,
                 cached.paletteRows
             );
-            palRestoreMs = Math.round(performance.now() - tPalRestore);
-
-            const tPalUpload = performance.now();
             paletteManager.upload(gl);
-            palUploadMs = Math.round(performance.now() - tPalUpload);
         }
-        const paletteUpload = palRestoreMs + palUploadMs;
-        const gpuUpload = gpuAlloc;
 
         const total = Math.round(performance.now() - t0);
+        console.log(`[${performance.now().toFixed(0)}ms] [restore] source=module total=${total}ms`);
 
-        // Detailed diagnostics
-        const imgMB = cached.layerBuffers.reduce((sum, b) => sum + b.byteLength, 0) / 1024 / 1024;
-        const palKB = cached.paletteData ? (cached.paletteData.byteLength / 1024).toFixed(1) : '0';
+        this.recordDebugStats(cached, atlas, registry, total, 'module');
+        return { atlas, registry, source: 'module' };
+    }
+
+    /** Streaming restore from Cache API via worker. */
+    private async tryStreamingRestore(
+        gl: WebGL2RenderingContext,
+        race: Race,
+        textureUnit: number,
+        paletteManager: PaletteTextureManager,
+        onEssentialReady: EssentialSpritesCallback,
+        nearbyEntities: Entity[],
+        playerRace: number
+    ): Promise<CacheRestoreResult | null> {
+        const t0 = performance.now();
+
+        // Use prefetched stream if available, otherwise start fresh
+        let metaPromise: Promise<CacheStreamMeta | null>;
+        let sendPriority: (order: number[]) => void;
+        let setPaletteCb: (fn: (paletteData: Uint8Array | null) => void) => void;
+        let setLayerCb: (fn: (index: number, buffer: ArrayBuffer) => void) => void;
+        let setDoneCb: (fn: (timings: { layerRead: number; total: number }) => void) => void;
+
+        if (prefetchMetaPromise && prefetchSendPriority && prefetchRace === race) {
+            metaPromise = prefetchMetaPromise;
+            sendPriority = prefetchSendPriority;
+            setPaletteCb = prefetchSetPaletteCb!;
+            setLayerCb = prefetchSetLayerCb!;
+            setDoneCb = prefetchSetDoneCb!;
+            // Clear prefetch state
+            invalidatePrefetch();
+        } else {
+            // Race mismatch or no prefetch — discard stale prefetch and start fresh
+            if (prefetchMetaPromise && prefetchRace !== race) {
+                console.log(
+                    `[${performance.now().toFixed(0)}ms] [cache] prefetch race mismatch ` +
+                        `(prefetched=${prefetchRace !== null ? Race[prefetchRace] : 'none'}, need=${Race[race]}), starting fresh`
+                );
+                invalidatePrefetch();
+            }
+            // No prefetch — start fresh streaming read
+            let paletteCb: (paletteData: Uint8Array | null) => void = () => {};
+            let layerCb: (index: number, buffer: ArrayBuffer) => void = () => {};
+            let doneCb: (timings: { layerRead: number; total: number }) => void = () => {};
+
+            const stream = startStreamingRead(
+                race,
+                pd => paletteCb(pd),
+                (index, buffer) => layerCb(index, buffer),
+                timings => doneCb(timings)
+            );
+            metaPromise = stream.metaPromise;
+            sendPriority = stream.sendPriority;
+            setPaletteCb = fn => {
+                paletteCb = fn;
+            };
+            setLayerCb = fn => {
+                layerCb = fn;
+            };
+            setDoneCb = fn => {
+                doneCb = fn;
+            };
+        }
+
+        // Wait for metadata (palette arrives separately — don't wait for it)
+        const streamMeta = await metaPromise;
+        debugStats.state.loadTimings.cacheWait = Math.round(performance.now() - t0);
+
+        if (!streamMeta) return null;
+
+        const { meta } = streamMeta;
+
+        // Phase 1: Restore registry (fast, ~2ms) — no palette wait needed
+        const tRegistry = performance.now();
+        const registry = SpriteMetadataRegistry.deserialize(meta.registryData);
+        const registryMs = Math.round(performance.now() - tRegistry);
+
+        // Phase 2: Create atlas shell (empty layers, zero-filled)
+        const atlas = EntityTextureAtlas.fromCacheShell(meta.layerCount, meta.maxLayers, meta.slots, textureUnit);
+        atlas.allocateDeferred(gl);
+
+        // Phase 3: Compute layer priority from nearby entities
+        const tPriority = performance.now();
+        const { layerOrder, essentialCount } = computeLayerPriority(
+            registry,
+            nearbyEntities,
+            playerRace,
+            meta.layerCount
+        );
+        const priorityMs = Math.round(performance.now() - tPriority);
+
+        const metaWaitMs = Math.round(performance.now() - t0);
         console.log(
-            `[${performance.now().toFixed(0)}ms] [restore] source=${source} total=${total}ms (atlas upload deferred)\n` +
-                `  atlas: ${atlasRestore}ms (${cached.layerCount} layers)\n` +
-                `  registry: ${registryDeserialize}ms\n` +
-                `  gpu alloc: ${gpuAlloc}ms (${cached.layerCount} layers deferred)\n` +
-                `  palette: restore=${palRestoreMs}ms upload=${palUploadMs}ms (${palKB}KB)\n` +
-                `  total: ${imgMB.toFixed(1)}MB atlas, deserialize=${deserialize}ms palette=${paletteUpload}ms`
+            `[${performance.now().toFixed(0)}ms] [restore] streaming: metaWait=${metaWaitMs}ms registry=${registryMs}ms ` +
+                `priority=${priorityMs}ms essential=${essentialCount}/${meta.layerCount} layers ` +
+                `nearby=${nearbyEntities.length} entities`
         );
 
-        // Record cache hit in debug stats
+        // Phase 4+5: Wire up palette and layer callbacks.
+        // Essential ready requires BOTH: enough layers AND palette uploaded.
+        let paletteData: Uint8Array | undefined;
+        let paletteReady = false;
+        let layersReceived = 0;
+        let essentialFired = false;
+        const layerBuffersForModuleCache: ArrayBuffer[] = new Array(meta.layerCount);
+
+        const tryFireEssential = () => {
+            if (essentialFired) return;
+            if (!paletteReady || layersReceived < essentialCount) return;
+            essentialFired = true;
+            const tEssential = performance.now();
+            console.log(
+                `[${tEssential.toFixed(0)}ms] [restore] essential sprites ready ` +
+                    `(${essentialCount} layers in ${Math.round(tEssential - t0)}ms)`
+            );
+            onEssentialReady();
+        };
+
+        setPaletteCb((pd: Uint8Array | null) => {
+            if (pd && meta.paletteOffsets && meta.paletteTotalColors) {
+                paletteData = pd;
+                paletteManager.restoreFromCache(pd, meta.paletteOffsets, meta.paletteTotalColors, meta.paletteRows);
+                paletteManager.upload(gl);
+                console.log(`[${performance.now().toFixed(0)}ms] [restore] palette uploaded`);
+            }
+            paletteReady = true;
+            tryFireEssential();
+        });
+
+        setLayerCb((index: number, buffer: ArrayBuffer) => {
+            // Store for module cache population later
+            layerBuffersForModuleCache[index] = buffer;
+
+            // Set layer data on atlas (marks dirty for GPU upload)
+            atlas.setLayerData(index, buffer);
+            layersReceived++;
+            tryFireEssential();
+        });
+
+        setDoneCb(() => {
+            // If essential wasn't fired (e.g. 0 essential layers), fire now
+            if (!essentialFired) {
+                essentialFired = true;
+                onEssentialReady();
+            }
+
+            console.log(
+                `[${performance.now().toFixed(0)}ms] [restore] all done, total=${Math.round(performance.now() - t0)}ms ` +
+                    `(${layersReceived} layers received)`
+            );
+
+            // Populate module cache with all layers for future HMR hits
+            const moduleCacheData: CachedAtlasData = {
+                ...meta,
+                layerBuffers: layerBuffersForModuleCache,
+                paletteData,
+            };
+            setAtlasCache(race, moduleCacheData);
+
+            this.recordDebugStats(moduleCacheData, atlas, registry, Math.round(performance.now() - t0), 'indexeddb');
+        });
+
+        // Phase 6: Send priority order to worker — starts layer delivery
+        console.log(
+            `[${performance.now().toFixed(0)}ms] [cache] sending priority to worker ` +
+                `(${Math.round(performance.now() - t0)}ms after restore start)`
+        );
+        sendPriority(layerOrder);
+
+        return { atlas, registry, source: 'indexeddb' };
+    }
+
+    /** Record cache hit in debug stats. */
+    private recordDebugStats(
+        cached:
+            | CachedAtlasData
+            | (CacheStreamMeta['meta'] & { layerBuffers?: ArrayBuffer[]; paletteData?: Uint8Array }),
+        atlas: EntityTextureAtlas,
+        registry: SpriteMetadataRegistry,
+        total: number,
+        source: 'module' | 'indexeddb'
+    ): void {
         const lt = debugStats.state.loadTimings;
         Object.assign(lt, {
             filePreload: 0,
@@ -247,11 +524,11 @@ export class SpriteAtlasCacheManager {
             mapObjects: 0,
             goods: 0,
             units: 0,
-            deserialize,
-            atlasRestore,
-            registryDeserialize,
-            paletteUpload,
-            gpuUpload,
+            deserialize: 0,
+            atlasRestore: 0,
+            registryDeserialize: 0,
+            paletteUpload: 0,
+            gpuUpload: 0,
             gpuLayers: atlas.layerCount,
             totalSprites: total,
             atlasSize: `${atlas.layerCount}x${atlas.width}x${atlas.height}`,
@@ -263,7 +540,5 @@ export class SpriteAtlasCacheManager {
             cacheHit: true,
             cacheSource: source,
         });
-
-        return { atlas, registry, source };
     }
 }

@@ -822,7 +822,8 @@ export class SettlerTaskSystem implements TickSystem, Persistable<SerializedUnit
                 lastDirection: 0,
                 idleState: this.animController.createIdleState(),
                 homeAssignment: null,
-                idleSearchCooldown: 0,
+                // Stagger initial cooldown by entity ID to prevent thundering herd
+                idleSearchCooldown: entityId % IDLE_SEARCH_COOLDOWN,
             };
             this.runtimes.set(entityId, runtime);
         }

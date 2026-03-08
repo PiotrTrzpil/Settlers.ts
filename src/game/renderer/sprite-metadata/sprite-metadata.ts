@@ -604,6 +604,59 @@ export class SpriteMetadataRegistry {
     }
 
     // ========================================================================
+    // Layer analysis (for progressive streaming priority)
+    // ========================================================================
+
+    /**
+     * Get the set of atlas layers that contain sprites for given entity subTypes.
+     * Used to prioritize layers containing sprites visible near the player start.
+     */
+    /**
+     * Get atlas layers for map objects — only first sprite per type (static frame).
+     * Full animation frames span many layers but aren't needed for initial display.
+     */
+    public getLayersForMapObjects(types: Set<number>): Set<number> {
+        const layers = new Set<number>();
+        for (const [type, entries] of this.mapObjectsCategory.getEntries()) {
+            if (types.has(type) && entries.length > 0) {
+                layers.add(entries[0]!.atlasRegion.layer);
+            }
+        }
+        return layers;
+    }
+
+    /**
+     * Get atlas layers for buildings — only completed sprite (no construction).
+     */
+    public getLayersForBuildings(types: Set<number>, race: number): Set<number> {
+        const layers = new Set<number>();
+        const raceMap = this.buildings.getRaceMap().get(race);
+        if (!raceMap) return layers;
+        for (const [type, sprites] of raceMap) {
+            if (types.has(type) && sprites.completed) {
+                layers.add(sprites.completed.atlasRegion.layer);
+            }
+        }
+        return layers;
+    }
+
+    /**
+     * Get atlas layers for units — only direction 0 (right-facing static sprite).
+     */
+    public getLayersForUnits(types: Set<number>, race: number): Set<number> {
+        const layers = new Set<number>();
+        const raceMap = this.units.getRaceMap().get(race);
+        if (!raceMap) return layers;
+        for (const [type, dirMap] of raceMap) {
+            if (types.has(type)) {
+                const dir0 = dirMap.get(0);
+                if (dir0) layers.add(dir0.atlasRegion.layer);
+            }
+        }
+        return layers;
+    }
+
+    // ========================================================================
     // Serialization
     // ========================================================================
 

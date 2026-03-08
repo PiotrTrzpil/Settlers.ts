@@ -298,6 +298,17 @@ export class EntityRenderer extends RendererBase implements IRenderer {
         if (this.spriteManager && !this.skipSpriteLoading) {
             this.spriteBatchRenderer.init(gl);
 
+            // Wire up essential sprites callback — fires when common sprites near
+            // player start are loaded (streaming cache path fires this early,
+            // before all layers arrive)
+            let essentialFired = false;
+            this.spriteManager.onEssentialSpritesReady = () => {
+                if (!essentialFired) {
+                    essentialFired = true;
+                    this._onSpritesLoaded?.();
+                }
+            };
+
             // Start sprite loading in background (don't await)
             this.spriteManager
                 .init(gl)
@@ -307,8 +318,12 @@ export class EntityRenderer extends RendererBase implements IRenderer {
                             `Sprite loading complete: ${this.spriteManager?.spriteRegistry?.getBuildingCount() ?? 0} building sprites for ${this.spriteManager?.currentRace != null ? Race[this.spriteManager.currentRace] : 'unknown'}`
                         );
                     }
-                    // Notify when sprites are loaded (even if loading failed, animations are ready)
-                    this._onSpritesLoaded?.();
+                    // For cold-load path (no cache): onEssentialSpritesReady was never
+                    // called by the cache manager, so fire now as fallback
+                    if (!essentialFired) {
+                        essentialFired = true;
+                        this._onSpritesLoaded?.();
+                    }
                 })
                 .catch((err: unknown) => {
                     EntityRenderer.log.warn(`Sprite loading failed: ${err}`);

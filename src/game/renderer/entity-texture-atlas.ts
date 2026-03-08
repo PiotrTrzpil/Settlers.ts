@@ -681,6 +681,49 @@ export class EntityTextureAtlas extends ShaderTexture {
     }
 
     /**
+     * Create an atlas shell with empty (zero-filled) layers for progressive streaming.
+     * Layers are allocated at full size but contain no pixel data.
+     * Use setLayerData() to populate individual layers as they arrive.
+     */
+    public static fromCacheShell(
+        layerCount: number,
+        maxLayers: number,
+        slots: CachedSlot[][],
+        textureUnit: number
+    ): EntityTextureAtlas {
+        const atlas = new EntityTextureAtlas(maxLayers, textureUnit, true);
+        atlas.layers = [];
+        atlas.layerSlots = [];
+        atlas.dirtyRegions = [];
+        atlas.reservedRegions = [];
+        atlas.gpuCapacity = 0;
+
+        for (let i = 0; i < layerCount; i++) {
+            // Zero-filled layer — sprites appear transparent until real data arrives
+            atlas.layers.push(new Uint16Array(LAYER_SIZE * LAYER_SIZE));
+            const layerSlotData = slots[i] || [];
+            atlas.layerSlots.push(
+                layerSlotData.map(s => {
+                    const slot = new Slot(s.y, s.width, s.height);
+                    slot.x = s.x;
+                    return slot;
+                })
+            );
+            atlas.dirtyRegions.push(null);
+        }
+        return atlas;
+    }
+
+    /**
+     * Set a single layer's pixel data from a cache buffer.
+     * Marks the layer fully dirty so it will be uploaded to GPU on next uploadBudgeted().
+     */
+    public setLayerData(layerIndex: number, buffer: ArrayBuffer): void {
+        this.layers[layerIndex] = new Uint16Array(buffer);
+        this.dirtyRegions[layerIndex] = { minX: 0, minY: 0, maxX: LAYER_SIZE, maxY: LAYER_SIZE };
+    }
+
+    /**
      * Create a new atlas instance restored from per-layer buffers.
      */
     public static fromCache(

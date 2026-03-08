@@ -23,7 +23,7 @@ import {
 import { SpriteLoader } from './sprite-loader';
 import { destroyDecoderPool, getDecoderPool, warmUpDecoderPool } from './sprite-decoder-pool';
 import { yieldToEventLoop } from './batch-loader';
-import { BuildingType, UnitType, EntityType } from '../entity';
+import { BuildingType, UnitType, EntityType, type Entity } from '../entity';
 import { MapObjectType } from '@/game/types/map-object-types';
 import { AnimationData } from '../animation/animation';
 import { AnimationDataProvider } from './animation-helpers';
@@ -31,7 +31,7 @@ import { EMaterialType } from '../economy';
 import type { AtlasRegion } from './entity-texture-atlas';
 import { TEAM_COLOR_PALETTES } from '@/resources/gfx/team-colors';
 import { loadUnitSpritesForRace } from './sprite-unit-loader';
-import { SpriteAtlasCacheManager } from './sprite-atlas-cache-manager';
+import { SpriteAtlasCacheManager, type EssentialSpritesCallback } from './sprite-atlas-cache-manager';
 import {
     loadGilManifest,
     loadBuildingSprites,
@@ -80,12 +80,34 @@ export class SpriteRenderManager {
     /** Combined palette texture for palettized atlas rendering */
     private _paletteManager: PaletteTextureManager;
 
+    /** Callback fired when essential sprites (common near player start) are ready */
+    private _onEssentialReady: EssentialSpritesCallback | null = null;
+
+    /** Entities near player start for computing layer priority */
+    private _nearbyEntities: Entity[] = [];
+
     constructor(fileManager: FileManager, textureUnit: number) {
         this.fileManager = fileManager;
         this.textureUnit = textureUnit;
         this.spriteLoader = new SpriteLoader(fileManager);
         this._paletteManager = new PaletteTextureManager(TEXTURE_UNIT_PALETTE);
         this.cacheManager = new SpriteAtlasCacheManager();
+    }
+
+    /**
+     * Set the callback for when essential sprites are ready.
+     * Essential = sprites visible near the player start (trees, buildings, player units).
+     */
+    public set onEssentialSpritesReady(callback: EssentialSpritesCallback | null) {
+        this._onEssentialReady = callback;
+    }
+
+    /**
+     * Set entities near the player start for computing layer priority.
+     * Call before init() — used to determine which atlas layers to stream first.
+     */
+    public setNearbyEntities(entities: Entity[]): void {
+        this._nearbyEntities = entities;
     }
 
     /** Get the palette texture manager for binding during render */
@@ -371,8 +393,19 @@ export class SpriteRenderManager {
      * Load sprites for a specific race.
      */
     private async loadSpritesForRace(gl: WebGL2RenderingContext, race: Race): Promise<boolean> {
-        // Try cache first — combined atlas keyed by `race` (always Roman on init).
-        const cached = await this.cacheManager.tryRestore(gl, race, this.textureUnit, this._paletteManager);
+        // Try cache first — combined atlas keyed by `race`.
+        // For streaming restore: the cache manager fires onEssentialReady when
+        // common sprites are loaded, but returns atlas+registry immediately (with empty layers).
+        const onEssentialReady = () => this._onEssentialReady?.();
+        const cached = await this.cacheManager.tryRestore(
+            gl,
+            race,
+            this.textureUnit,
+            this._paletteManager,
+            onEssentialReady,
+            this._nearbyEntities,
+            race
+        );
         if (cached) {
             this._spriteAtlas = cached.atlas;
             this._spriteRegistry = cached.registry;
