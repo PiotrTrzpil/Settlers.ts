@@ -337,8 +337,11 @@ export class MovementSystem implements TickSystem {
             this.updatePositionFn(controller.entityId, newPos.x, newPos.y);
             if (this._verbose) {
                 this.eventBus.emit('movement:step', {
-                    entityId: controller.entityId, x: newPos.x, y: newPos.y,
-                    pathIdx: controller.pathIndex, pathLen: controller.path.length,
+                    entityId: controller.entityId,
+                    x: newPos.x,
+                    y: newPos.y,
+                    pathIdx: controller.pathIndex,
+                    pathLen: controller.path.length,
                 });
             }
         }
@@ -355,7 +358,8 @@ export class MovementSystem implements TickSystem {
         if (controller.waitTime > GIVEUP_WAIT_TIMEOUT) {
             if (this._verbose) {
                 this.eventBus.emit('movement:escalation', {
-                    entityId: controller.entityId, result: 'gave_up',
+                    entityId: controller.entityId,
+                    result: 'gave_up',
                 });
             }
             controller.clearPath();
@@ -365,7 +369,8 @@ export class MovementSystem implements TickSystem {
         if (controller.waitTime > REPATH_WAIT_TIMEOUT) {
             if (this._verbose) {
                 this.eventBus.emit('movement:escalation', {
-                    entityId: controller.entityId, result: 'repath',
+                    entityId: controller.entityId,
+                    result: 'repath',
                 });
             }
             this.repathFromCurrent(controller);
@@ -381,8 +386,11 @@ export class MovementSystem implements TickSystem {
         if (this._verbose) {
             const wp = controller.nextWaypoint!;
             this.eventBus.emit('movement:blocked', {
-                entityId: controller.entityId, x: wp.x, y: wp.y,
-                blockerId: occupantId, isBuilding: false,
+                entityId: controller.entityId,
+                x: wp.x,
+                y: wp.y,
+                blockerId: occupantId,
+                isBuilding: false,
             });
         }
         controller.haltProgress();
@@ -428,8 +436,11 @@ export class MovementSystem implements TickSystem {
         if (this._verbose && depth === 0) {
             const occ = this.controllers.get(occupantId);
             this.eventBus.emit('movement:bumpAttempt', {
-                entityId: bumper.entityId, occupantId,
-                hasController: !!occ, occupantState: occ?.state, occupantBusy: occ?.busy,
+                entityId: bumper.entityId,
+                occupantId,
+                hasController: !!occ,
+                occupantState: occ?.state,
+                occupantBusy: occ?.busy,
             });
         }
         if (depth > MovementSystem.MAX_BUMP_DEPTH) {
@@ -440,7 +451,8 @@ export class MovementSystem implements TickSystem {
         const occupant = this.controllers.get(occupantId);
         if (!occupant || !this.canBumpOccupant(bumper, occupant)) {
             this.emitBumpFailed(bumper.entityId, occupantId, this.bumpFailReason(occupant), {
-                occupantState: occupant?.state, occupantBusy: occupant?.busy,
+                occupantState: occupant?.state,
+                occupantBusy: occupant?.busy,
             });
             return false;
         }
@@ -462,11 +474,20 @@ export class MovementSystem implements TickSystem {
         }
 
         // Execute the bump — update unitPositions before entity position
+        this.executeBump(bumper.entityId, occupant, occupantId, dest);
+        return true;
+    }
+
+    /** Perform the physical bump: update occupancy maps, move the occupant, repath if needed. */
+    private executeBump(bumperId: number, occupant: MovementController, occupantId: number, dest: TileCoord): void {
         if (this._verbose) {
             this.eventBus.emit('movement:bump', {
-                bumperId: bumper.entityId, occupantId,
-                fromX: occupant.tileX, fromY: occupant.tileY,
-                toX: dest.x, toY: dest.y,
+                bumperId,
+                occupantId,
+                fromX: occupant.tileX,
+                fromY: occupant.tileY,
+                toX: dest.x,
+                toY: dest.y,
             });
         }
         const oldKey = tileKey(occupant.tileX, occupant.tileY);
@@ -476,17 +497,17 @@ export class MovementSystem implements TickSystem {
         occupant.handlePush(dest.x, dest.y);
         this.unitPositions.set(tileKey(dest.x, dest.y), occupantId);
         this.updatePositionFn(occupantId, dest.x, dest.y);
+        this.repathBumpedOccupant(occupant, dest);
+    }
 
-        // If the bumped unit has a goal, repath it from the new position
-        const occupantGoal = occupant.goal;
-        if (occupantGoal) {
-            const newPath = this.pathfinder.findPath(dest.x, dest.y, occupantGoal.x, occupantGoal.y);
-            if (newPath && newPath.length > 0) {
-                occupant.replacePath(newPath);
-            }
+    /** If the bumped unit has a goal, repath it from its new position. */
+    private repathBumpedOccupant(occupant: MovementController, dest: TileCoord): void {
+        const goal = occupant.goal;
+        if (!goal) return;
+        const newPath = this.pathfinder.findPath(dest.x, dest.y, goal.x, goal.y);
+        if (newPath && newPath.length > 0) {
+            occupant.replacePath(newPath);
         }
-
-        return true;
     }
 
     /** Return the reason string for a failed bump check (before canBumpOccupant). */
