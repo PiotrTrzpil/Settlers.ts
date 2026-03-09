@@ -95,18 +95,12 @@ export const SETTLER_FILE_NUMBERS: Record<Race, number> = {
  * Units have 6 directions matching the hex grid.
  */
 export const UNIT_DIRECTION = {
-    /** Facing north-east (D0) */
-    NORTH_EAST: 0,
-    /** Facing east (D1) */
-    EAST: 1,
-    /** Facing south-east (D2) */
-    SOUTH_EAST: 2,
-    /** Facing south-west (D3) */
-    SOUTH_WEST: 3,
-    /** Facing west (D4) */
-    WEST: 4,
-    /** Facing north-west (D5) */
-    NORTH_WEST: 5,
+    RIGHT: 0,
+    RIGHT_BOTTOM: 1,
+    LEFT_BOTTOM: 2,
+    LEFT: 3,
+    LEFT_TOP: 4,
+    RIGHT_TOP: 5,
 } as const;
 
 export const NUM_UNIT_DIRECTIONS = 6;
@@ -467,7 +461,7 @@ export class SpriteMetadataRegistry {
 
     /**
      * Register a sprite entry for a unit type and direction.
-     * @param direction 0=RIGHT, 1=RIGHT_BOTTOM, 2=LEFT_BOTTOM, 3=LEFT
+     * @param direction Sprite direction index (see SpriteDirection enum)
      */
     public registerUnit(type: UnitType, direction: number, entry: SpriteEntry, race: number): void {
         this.units.register(type, direction, entry, race);
@@ -476,7 +470,7 @@ export class SpriteMetadataRegistry {
 
     /**
      * Look up the sprite entry for a unit type, direction, and race.
-     * @param direction 0=RIGHT, 1=RIGHT_BOTTOM, 2=LEFT_BOTTOM, 3=LEFT (defaults to 0)
+     * @param direction Sprite direction index (see SpriteDirection enum) (defaults to 0)
      */
     public getUnit(type: UnitType, direction: number = 0, race?: number): SpriteEntry | null {
         return this.units.get(type, direction, race);

@@ -64,7 +64,6 @@ export {
     type PathfindingTerrain,
     BucketPriorityQueue,
     getHexLine,
-    cubeRound,
     isHexLinePassable,
     smoothPath,
     type PathSmoothingParams,

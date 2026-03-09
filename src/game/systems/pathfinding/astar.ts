@@ -37,113 +37,6 @@ let _flags = new Uint8Array(0);
 let _buildingBitmap = new Uint8Array(0);
 const _openQueue = new BucketPriorityQueue();
 
-/**
- * Clear the building bitmap for the building surrounding a tile.
- * Clears the tile itself and all immediate neighbors belonging to the same building,
- * creating a one-ring "tunnel" that lets the path enter or exit through the footprint.
- */
-function clearBuildingTunnelFromBitmap(
-    x: number,
-    y: number,
-    buildingId: number,
-    mapWidth: number,
-    mapHeight: number,
-    tileOccupancy: Map<string, number>
-): void {
-    _buildingBitmap[x + y * mapWidth] = 0;
-    for (let d = 0; d < NUMBER_OF_DIRECTIONS; d++) {
-        const [dx, dy] = GRID_DELTAS[d]!;
-        const nx = x + dx;
-        const ny = y + dy;
-        if (nx < 0 || nx >= mapWidth || ny < 0 || ny >= mapHeight) continue;
-        const nIdx = nx + ny * mapWidth;
-        if (_buildingBitmap[nIdx] && tileOccupancy.get(tileKey(nx, ny)) === buildingId) {
-            _buildingBitmap[nIdx] = 0;
-        }
-    }
-}
-
-/**
- * Find the building entity that owns the footprint around the start tile.
- * Checks neighbors first because the start tile itself may hold a unit (the mover), not the building.
- */
-function findStartBuildingId(
-    startX: number,
-    startY: number,
-    mapWidth: number,
-    mapHeight: number,
-    tileOccupancy: Map<string, number>
-): number | undefined {
-    for (let d = 0; d < NUMBER_OF_DIRECTIONS; d++) {
-        const [dx, dy] = GRID_DELTAS[d]!;
-        const nx = startX + dx;
-        const ny = startY + dy;
-        if (nx < 0 || nx >= mapWidth || ny < 0 || ny >= mapHeight) continue;
-        if (!_buildingBitmap[nx + ny * mapWidth]) continue;
-        const occupant = tileOccupancy.get(tileKey(nx, ny));
-        if (occupant !== undefined) return occupant;
-    }
-    return undefined;
-}
-
-/**
- * Find the building entity that owns the goal tile.
- * Checks the goal tile itself first (no unit will be there), then falls back to neighbors.
- */
-function findGoalBuildingId(
-    goalX: number,
-    goalY: number,
-    mapWidth: number,
-    mapHeight: number,
-    tileOccupancy: Map<string, number>
-): number | undefined {
-    const direct = tileOccupancy.get(tileKey(goalX, goalY));
-    if (direct !== undefined) return direct;
-    for (let d = 0; d < NUMBER_OF_DIRECTIONS; d++) {
-        const [dx, dy] = GRID_DELTAS[d]!;
-        const nx = goalX + dx;
-        const ny = goalY + dy;
-        if (nx < 0 || nx >= mapWidth || ny < 0 || ny >= mapHeight) continue;
-        if (!_buildingBitmap[nx + ny * mapWidth]) continue;
-        const occupant = tileOccupancy.get(tileKey(nx, ny));
-        if (occupant !== undefined) return occupant;
-    }
-    return undefined;
-}
-
-/**
- * If the start tile is inside a building, clear that building's immediate tiles from the bitmap
- * so the unit can walk out (exit tunnel).
- */
-function tryCreateExitTunnel(
-    x: number,
-    y: number,
-    idx: number,
-    mapWidth: number,
-    mapHeight: number,
-    tileOccupancy: Map<string, number>
-): void {
-    if (!_buildingBitmap[idx]) return;
-    const buildingId = findStartBuildingId(x, y, mapWidth, mapHeight, tileOccupancy);
-    if (buildingId !== undefined) clearBuildingTunnelFromBitmap(x, y, buildingId, mapWidth, mapHeight, tileOccupancy);
-}
-
-/**
- * If the goal tile is inside a building, clear that building's immediate tiles from the bitmap
- * so the unit can path in (entry tunnel — e.g. worker returning to workplace door).
- */
-function tryCreateEntryTunnel(
-    x: number,
-    y: number,
-    idx: number,
-    mapWidth: number,
-    mapHeight: number,
-    tileOccupancy: Map<string, number>
-): void {
-    if (!_buildingBitmap[idx]) return;
-    const buildingId = findGoalBuildingId(x, y, mapWidth, mapHeight, tileOccupancy);
-    if (buildingId !== undefined) clearBuildingTunnelFromBitmap(x, y, buildingId, mapWidth, mapHeight, tileOccupancy);
-}
 
 function prepareBuffers(totalTiles: number): void {
     if (totalTiles > _bufferSize) {
@@ -186,6 +79,7 @@ const COST_SCALE = 10;
 
 /** Base movement cost per tile (uniform for Settlers-style games) */
 const MOVE_COST = 10;
+
 
 // ═══════════════════════════════════════════════════════════════════════════
 // TYPES
@@ -334,18 +228,12 @@ function reconstructPath(goalIdx: number, parent: Int32Array, mapWidth: number):
 // DIAGNOSTICS
 // ═══════════════════════════════════════════════════════════════════════════
 
-/** Optional hook to resolve entity IDs to human-readable descriptions (e.g. "Carrier", "Woodcutter", "WoodcutterHut"). */
-let _describeEntity: ((entityId: number) => string) | undefined;
+/** Debug hook: captures raw (pre-smoothing) and smoothed paths for diagnostics. */
+let _debugPathCallback: ((raw: TileCoord[], smoothed: TileCoord[]) => void) | undefined;
 
-/** Register a callback that resolves entity IDs to descriptive names for A* diagnostic logs. */
-export function setEntityDescriber(fn: (entityId: number) => string): void {
-    _describeEntity = fn;
-}
-
-/** Format an entity reference: "id(Type)" if describer is set, otherwise just "id". */
-function entityTag(entityId: number): string {
-    if (!_describeEntity) return String(entityId);
-    return entityId + '(' + _describeEntity(entityId) + ')';
+/** Set a callback to inspect raw vs smoothed paths. Pass undefined to clear. */
+export function setPathDebugHook(cb: ((raw: TileCoord[], smoothed: TileCoord[]) => void) | undefined): void {
+    _debugPathCallback = cb;
 }
 
 /** Diagnose why a single neighbor was rejected. */
@@ -355,8 +243,7 @@ function diagnoseNeighbor(
     startY: number,
     groundType: Uint8Array,
     mapWidth: number,
-    mapHeight: number,
-    tileOccupancy: Map<string, number>
+    mapHeight: number
 ): string {
     const [dx, dy] = GRID_DELTAS[d]!;
     const nx = startX + dx;
@@ -365,10 +252,7 @@ function diagnoseNeighbor(
     if (nx < 0 || nx >= mapWidth || ny < 0 || ny >= mapHeight) return pos + ':OOB';
     const nIdx = nx + ny * mapWidth;
     if (!isPassable(groundType[nIdx]!)) return pos + ':terrain';
-    if (_buildingBitmap[nIdx]) {
-        const occupant = tileOccupancy.get(tileKey(nx, ny));
-        return pos + ':building' + (occupant !== undefined ? '[' + entityTag(occupant) + ']' : '');
-    }
+    if (_buildingBitmap[nIdx]) return pos + ':building';
     return pos + ':closed';
 }
 
@@ -384,7 +268,6 @@ function logPathfindingFailure(
     groundType: Uint8Array,
     mapWidth: number,
     mapHeight: number,
-    tileOccupancy: Map<string, number>,
     buildingOccupancy: Set<string>
 ): void {
     const startKey = tileKey(startX, startY);
@@ -394,22 +277,19 @@ function logPathfindingFailure(
     const startPassable = isPassable(groundType[startIdx]!);
     const goalPassable = isPassable(groundType[goalIdx]!);
     const exhausted = nodesSearched >= MAX_SEARCH_NODES;
-    const startOccupant = tileOccupancy.get(startKey);
 
     let neighborInfo = '';
     if (nodesSearched <= 1) {
         const reasons: string[] = [];
         for (let d = 0; d < NUMBER_OF_DIRECTIONS; d++) {
-            reasons.push(diagnoseNeighbor(d, startX, startY, groundType, mapWidth, mapHeight, tileOccupancy));
+            reasons.push(diagnoseNeighbor(d, startX, startY, groundType, mapWidth, mapHeight));
         }
         neighborInfo = ' neighbors=[' + reasons.join(', ') + ']';
     }
-
-    const occupantTag = startOccupant !== undefined ? ', occupant=' + entityTag(startOccupant) : '';
     console.warn(
         `[A*] No path (${startX},${startY})->(${goalX},${goalY}): ` +
             `searched=${nodesSearched}/${MAX_SEARCH_NODES} ${exhausted ? 'EXHAUSTED' : 'EMPTY_QUEUE'} ` +
-            `start[passable=${startPassable}, inBuilding=${startInBuilding}${occupantTag}] ` +
+            `start[passable=${startPassable}, inBuilding=${startInBuilding}] ` +
             `goal[passable=${goalPassable}, inBuilding=${goalInBuilding}]${neighborInfo}`
     );
 }
@@ -417,6 +297,18 @@ function logPathfindingFailure(
 // ═══════════════════════════════════════════════════════════════════════════
 // PUBLIC API
 // ═══════════════════════════════════════════════════════════════════════════
+
+/** Reconstruct, smooth, and return the final path once the goal is reached. */
+function buildFinalPath(
+    goalIdx: number, startX: number, startY: number,
+    parent: Int32Array, mapWidth: number,
+    groundType: Uint8Array, mapHeight: number, buildingOccupancy: Set<string>
+): TileCoord[] {
+    const rawPath = reconstructPath(goalIdx, parent, mapWidth);
+    const smoothed = smoothPath(rawPath, startX, startY, { groundType, mapWidth, mapHeight, buildingOccupancy });
+    if (_debugPathCallback) _debugPathCallback(rawPath, smoothed);
+    return smoothed;
+}
 
 /**
  * Find a path from start to goal on a hex grid.
@@ -432,7 +324,6 @@ function logPathfindingFailure(
  * @param goalX Goal tile X coordinate
  * @param goalY Goal tile Y coordinate
  * @param terrain Terrain data (ground type, height, dimensions)
- * @param tileOccupancy Map of occupied tiles (used only for building tunnel identification)
  * @param buildingOccupancy Set of tiles occupied by building footprints
  * @returns Array of waypoints from start (exclusive) to goal (inclusive), or null if no path
  */
@@ -442,7 +333,6 @@ export function findPathAStar(
     goalX: number,
     goalY: number,
     terrain: PathfindingTerrain,
-    tileOccupancy: Map<string, number>,
     buildingOccupancy: Set<string>
 ): TileCoord[] | null {
     // Trivial case: already at goal
@@ -481,12 +371,6 @@ export function findPathAStar(
     // Initialize start node
     const startIdx = startX + startY * mapWidth;
 
-    // If start or goal is inside a building footprint, create a local tunnel so the path
-    // can exit (start inside = worker leaving workplace) or enter (goal inside = worker
-    // returning to workplace door).
-    tryCreateExitTunnel(startX, startY, startIdx, mapWidth, mapHeight, tileOccupancy);
-    tryCreateEntryTunnel(goalX, goalY, goalIdx, mapWidth, mapHeight, tileOccupancy);
-
     gCost[startIdx] = 0;
     flags[startIdx] = FLAG_OPEN;
     openQueue.insert(startIdx, hexDistance(startX, startY, goalX, goalY) * COST_SCALE);
@@ -508,18 +392,10 @@ export function findPathAStar(
 
         // Goal reached?
         if (cx === goalX && cy === goalY) {
-            const rawPath = reconstructPath(currentIdx, parent, mapWidth);
-
-            // Apply path smoothing
-            return smoothPath(rawPath, startX, startY, {
-                groundType,
-                mapWidth,
-                mapHeight,
-                buildingOccupancy,
-            });
+            return buildFinalPath(currentIdx, startX, startY, parent, mapWidth, groundType, mapHeight, buildingOccupancy);
         }
 
-        // Expand neighbors
+        // Expand all 6 neighbors
         for (let d = 0; d < NUMBER_OF_DIRECTIONS; d++) {
             processNeighbor(cx, cy, currentIdx, d, ctx);
         }
@@ -536,7 +412,6 @@ export function findPathAStar(
         groundType,
         mapWidth,
         mapHeight,
-        tileOccupancy,
         buildingOccupancy
     );
     return null;

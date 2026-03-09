@@ -3,7 +3,7 @@
  * Maps S4SettlerType to internal UnitType and creates unit entities with correct race.
  */
 
-import { getUnitLevel } from '../entity';
+import { EntityType, getUnitLevel } from '../entity';
 import { GameState } from '../game-state';
 import { S4_TO_UNIT_TYPE } from '../data/game-data-access';
 import { LogHandler } from '@/utilities/log-handler';
@@ -32,14 +32,20 @@ export function populateMapSettlers(state: GameState, settlers: MapSettlerData[]
             continue;
         }
 
-        // Skip if tile is already occupied
-        if (state.getEntityAt(settlerData.x, settlerData.y)) {
+        // Skip if tile is occupied by another unit (not a building).
+        // Settlers placed inside building footprints are valid — they become workers.
+        const existingEntity = state.getEntityAt(settlerData.x, settlerData.y);
+        if (existingEntity && existingEntity.type !== EntityType.Building) {
             log.debug(`Skipping settler at occupied tile (${settlerData.x}, ${settlerData.y})`);
             skipped++;
             continue;
         }
 
-        const entity = state.addUnit(unitType, settlerData.x, settlerData.y, settlerData.player);
+        // If placed on a building footprint, skip tile occupancy to preserve building's tile ownership
+        const onBuilding = existingEntity?.type === EntityType.Building;
+        const entity = state.addUnit(unitType, settlerData.x, settlerData.y, settlerData.player, {
+            occupancy: !onBuilding,
+        });
         entity.level = getUnitLevel(unitType);
 
         // Register the unit with carrier/combat/task systems (same event as spawn_unit command)

@@ -281,7 +281,10 @@ describe.skipIf(!hasRealData)('Movement & Pathfinding simulation (real game data
         const siteId = sim.placeBuilding(BuildingType.WoodcutterHut, 0, false);
         const building = sim.state.getEntityOrThrow(siteId, 'test');
 
-        // Every tile in the construction site footprint should NOT be in buildingOccupancy
+        // On flat terrain the site immediately advances past leveling, which restores
+        // footprint blocking. clearBuildingFootprintBlock must remove all of them.
+        sim.state.clearBuildingFootprintBlock(siteId);
+
         const footprint = getBuildingFootprint(building.x, building.y, building.subType, building.race);
         const leaked: string[] = [];
         for (const tile of footprint) {

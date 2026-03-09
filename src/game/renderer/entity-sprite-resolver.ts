@@ -15,6 +15,7 @@ import type { EntityVisualState, AnimationPlayback, DirectionTransition } from '
 import type { BuildingRenderState, PlacementEntityType } from './render-context';
 import type { LayerVisibility } from './layer-visibility';
 import { resolveAnimationFrame, getAnimatedSpriteForDirection } from './animation-helpers';
+import { toSpriteDirection } from './sprite-direction';
 
 // ============================================================================
 // Result types (replaces sentinel string 'transitioning')
@@ -199,13 +200,13 @@ export class EntitySpriteResolver {
             const oldSprite = this.getUnitSpriteForDirection(
                 unitType,
                 vs.animation,
-                transition.previousDirection,
+                toSpriteDirection(transition.previousDirection),
                 entity.race
             );
             const newSprite = this.getUnitSpriteForDirection(
                 unitType,
                 vs.animation,
-                vs.animation.direction,
+                toSpriteDirection(vs.animation.direction),
                 entity.race
             );
             if (oldSprite && newSprite) {
@@ -219,13 +220,15 @@ export class EntitySpriteResolver {
             }
         }
 
-        const direction = vs.animation?.direction ?? 0;
-        const staticSprite = this.sprites.getUnit(entity.subType as UnitType, direction, entity.race);
+        const spriteDir = toSpriteDirection(vs.animation?.direction ?? 0);
+        const staticSprite = this.sprites.getUnit(entity.subType as UnitType, spriteDir, entity.race);
 
         if (vs.animation) {
             const entry = this.sprites.getAnimatedEntity(entity.type, entity.subType, entity.race);
             if (entry) {
-                const frame = resolveAnimationFrame(vs.animation, entry.animationData, entity.type, entity.subType);
+                const frame = resolveAnimationFrame(
+                    vs.animation, entry.animationData, entity.type, entity.subType, spriteDir
+                );
                 if (frame) {
                     return { skip: false, transitioning: false, sprite: frame, progress: 1, transitionData: null };
                 }
@@ -239,19 +242,19 @@ export class EntitySpriteResolver {
     getUnitSpriteForDirection(
         unitType: UnitType,
         playback: AnimationPlayback,
-        direction: number,
+        spriteDir: number,
         race?: number
     ): SpriteEntry | null {
         if (!this.sprites) return null;
 
-        const fallback = this.sprites.getUnit(unitType, direction, race);
+        const fallback = this.sprites.getUnit(unitType, spriteDir, race);
         const animatedEntry = this.sprites.getAnimatedEntity(EntityType.Unit, unitType, race);
         if (!animatedEntry) return fallback;
 
         return getAnimatedSpriteForDirection(
             playback,
             animatedEntry.animationData,
-            direction,
+            spriteDir,
             fallback,
             EntityType.Unit,
             unitType

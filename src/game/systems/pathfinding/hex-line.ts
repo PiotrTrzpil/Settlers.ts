@@ -1,83 +1,95 @@
 /**
- * Hex grid line drawing utilities.
+ * Line drawing utilities for the isometric diamond grid.
  *
- * Provides functions for drawing lines on hex grids using cube coordinate
- * interpolation. This is the hex equivalent of Bresenham's line algorithm.
+ * Decomposes a displacement (dx, dy) into valid grid directions and
+ * distributes them evenly using Bresenham-style interleaving, then
+ * applies run-length grouping for visual smoothness.
+ *
+ * Valid grid directions (6 total):
+ *   Edge-sharing:    (+1,0) E, (-1,0) W, (0,+1) SE, (0,-1) NW
+ *   Vertex-sharing:  (+1,+1) NE, (-1,-1) SW
+ *
+ * Direction decomposition:
+ *   Same-sign dx,dy → diagonal covers both axes → max(|dx|,|dy|) steps
+ *   Different-sign   → axis-aligned only → |dx|+|dy| steps
  */
 
 import { TileCoord } from '../../entity';
-import { hexDistance } from '../hex-directions';
 
 /**
- * Round fractional cube coordinates (q, r, s) to the nearest hex tile.
- *
- * Uses the constraint q + r + s = 0 to fix rounding errors by adjusting
- * the component with the largest rounding difference.
+ * Bresenham-style even interleave of two direction types.
+ * Distributes `countA` steps of A and `countB` steps of B as evenly as possible.
  */
-export function cubeRound(q: number, r: number, s: number): TileCoord {
-    let rq = Math.round(q);
-    let rr = Math.round(r);
-    const rs = Math.round(s);
+function evenInterleave(a: Dir, countA: number, b: Dir, countB: number): Dir[] {
+    const total = countA + countB;
+    if (total === 0) return [];
+    if (countB === 0) return Array.from({ length: countA }, () => ({ dx: a.dx, dy: a.dy }));
+    if (countA === 0) return Array.from({ length: countB }, () => ({ dx: b.dx, dy: b.dy }));
 
-    const dq = Math.abs(rq - q);
-    const dr = Math.abs(rr - r);
-    const ds = Math.abs(rs - s);
-
-    // Fix rounding errors by adjusting the component with largest diff
-    if (dq > dr && dq > ds) {
-        rq = -rr - rs;
-    } else if (dr > ds) {
-        rr = -rq - rs;
+    const result: Dir[] = [];
+    let emittedA = 0;
+    for (let i = 0; i < total; i++) {
+        // At step i, the ideal number of A steps emitted is countA*(i+1)/total
+        const targetA = Math.round(countA * (i + 1) / total);
+        if (emittedA < targetA) {
+            result.push({ dx: a.dx, dy: a.dy });
+            emittedA++;
+        } else {
+            result.push({ dx: b.dx, dy: b.dy });
+        }
     }
-    // Note: s is derived from q and r, so no need to store it
-
-    return { x: rq, y: rr };
+    return result;
 }
 
 /**
- * Generate all tiles along a hex grid line from (x1, y1) to (x2, y2).
+ * Generate all tiles along a grid line from (x1, y1) to (x2, y2).
  *
- * Uses linear interpolation in cube coordinate space, then rounds each
- * point to the nearest hex tile, followed by a reorder pass that groups
- * same-direction steps into runs of 2+ to reduce visual zigzag.
+ * Decomposes the displacement into at most 2 valid direction types,
+ * interleaves them evenly (Bresenham-style), then applies run-length
+ * grouping to reduce visual zigzag.
  *
- * @param x1 Start X coordinate
- * @param y1 Start Y coordinate
- * @param x2 End X coordinate
- * @param y2 End Y coordinate
  * @returns Array of tile coordinates from start to end (inclusive)
  */
 export function getHexLine(x1: number, y1: number, x2: number, y2: number): TileCoord[] {
-    const n = hexDistance(x1, y1, x2, y2);
+    const dx = x2 - x1;
+    const dy = y2 - y1;
 
-    if (n === 0) {
+    if (dx === 0 && dy === 0) {
         return [{ x: x1, y: y1 }];
     }
 
-    const results: TileCoord[] = [];
+    let dirA: Dir, countA: number, dirB: Dir, countB: number;
+    const sameSign = (dx >= 0 && dy >= 0) || (dx <= 0 && dy <= 0);
 
-    // Convert offset coordinates to cube coordinates
-    // For our hex grid: q = x, r = y, s = -(x + y)
-    const q1 = x1,
-        r1 = y1,
-        s1 = -(x1 + y1);
-    const q2 = x2,
-        r2 = y2,
-        s2 = -(x2 + y2);
+    if (sameSign) {
+        // Diagonal (+1,+1) or (-1,-1) covers both axes simultaneously
+        const sign = (dx + dy) >= 0 ? 1 : -1;
+        const absDx = Math.abs(dx);
+        const absDy = Math.abs(dy);
+        const diag = Math.min(absDx, absDy);
 
-    for (let i = 0; i <= n; i++) {
-        const t = i / n;
+        dirA = { dx: sign, dy: sign };
+        countA = diag;
 
-        // Linear interpolation in cube space
-        const q = q1 + (q2 - q1) * t;
-        const r = r1 + (r2 - r1) * t;
-        const s = s1 + (s2 - s1) * t;
-
-        // Round to nearest hex and add to results
-        results.push(cubeRound(q, r, s));
+        // Remaining steps along the longer axis
+        if (absDx >= absDy) {
+            dirB = { dx: sign, dy: 0 };
+        } else {
+            dirB = { dx: 0, dy: sign };
+        }
+        countB = Math.max(absDx, absDy) - diag;
+    } else {
+        // Different signs — no diagonal helps, use axis-aligned only
+        dirA = { dx: dx > 0 ? 1 : -1, dy: 0 };
+        countA = Math.abs(dx);
+        dirB = { dx: 0, dy: dy > 0 ? 1 : -1 };
+        countB = Math.abs(dy);
     }
 
-    return groupDirectionRuns(results);
+    const dirs = evenInterleave(dirA, countA, dirB, countB);
+    const tiles = rebuildTilesFromDirs({ x: x1, y: y1 }, dirs);
+
+    return groupDirectionRuns(tiles);
 }
 
 // ═══════════════════════════════════════════════════════════════════════════

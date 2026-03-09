@@ -108,7 +108,16 @@ export interface GameEvents {
         toY: number;
     };
 
-    /** Unit's next waypoint is blocked by another entity */
+    /** Unit stepped onto a new tile */
+    'movement:step': {
+        entityId: number;
+        x: number;
+        y: number;
+        pathIdx: number;
+        pathLen: number;
+    };
+
+    /** Unit's next waypoint is blocked — waiting this tick */
     'movement:blocked': {
         entityId: number;
         x: number;
@@ -117,24 +126,39 @@ export interface GameEvents {
         isBuilding: boolean;
     };
 
-    /** Blocked-state handler escalated (repath or gave up) */
+    /** Blocked unit escalated (repath or gave up) */
     'movement:escalation': {
         entityId: number;
         result: 'repath' | 'gave_up';
     };
 
-    /** Collision resolution strategy was attempted */
-    'movement:collisionResolved': {
+    /** Bump attempt started */
+    'movement:bumpAttempt': {
         entityId: number;
-        strategy: 'detour' | 'pathRepair' | 'push' | 'yield' | 'wait';
-        success: boolean;
-        x: number;
-        y: number;
-        /** Target tile of the resolution (detour/push/yield destination) */
-        toX?: number;
-        toY?: number;
-        /** Entity that was pushed or blocking */
-        targetId?: number;
+        occupantId: number;
+        hasController: boolean;
+        occupantState?: string;
+        occupantBusy?: boolean;
+    };
+
+    /** Bump attempt failed — includes reason */
+    'movement:bumpFailed': {
+        entityId: number;
+        occupantId: number;
+        reason: string;
+        occupantState?: string;
+        occupantBusy?: boolean;
+        occupantPos?: string;
+    };
+
+    /** Unit bumped an occupant to a neighboring tile */
+    'movement:bump': {
+        bumperId: number;
+        occupantId: number;
+        fromX: number;
+        fromY: number;
+        toX: number;
+        toY: number;
     };
 
     // === Carrier Events ===
@@ -502,6 +526,13 @@ export interface GameEvents {
         reason: 'output_full' | 'cant_work' | 'first_visit';
     };
 
+    /** Verbose: idle search skipped or failed (gated by WorkerTaskExecutor.verbose) */
+    'choreo:idleSkipped': {
+        unitId: number;
+        reason: 'inside_building' | 'no_home' | 'no_target' | 'no_job';
+        homeBuilding: number | null;
+    };
+
     /** Emitted when a settler starts a choreography job (walking to target, gathering, etc.) */
     'settler:taskStarted': {
         unitId: number;
@@ -609,6 +640,49 @@ export interface GameEvents {
     'garrison:unitExited': {
         buildingId: number;
         unitId: number;
+    };
+
+    // === Siege Events ===
+
+    /** Emitted when a siege begins on a garrison building. */
+    'siege:started': {
+        buildingId: number;
+        attackerPlayer: number;
+    };
+
+    /** Emitted when a defender is ejected from a besieged building to fight. */
+    'siege:defenderEjected': {
+        buildingId: number;
+        defenderId: number;
+    };
+
+    /** Emitted when an attacker captures an enemy building (all defenders dead). */
+    'siege:buildingCaptured': {
+        buildingId: number;
+        oldPlayer: number;
+        newPlayer: number;
+    };
+
+    /** Emitted when a building changes ownership (e.g. via siege capture). */
+    'building:ownerChanged': {
+        entityId: number;
+        buildingType: BuildingType;
+        oldPlayer: number;
+        newPlayer: number;
+    };
+
+    // === Victory Condition Events ===
+
+    /** Emitted when a player is eliminated (last castle destroyed). */
+    'game:playerEliminated': {
+        player: number;
+    };
+
+    /** Emitted when the game ends (win or loss). */
+    'game:ended': {
+        /** Winning player index, or null if local player lost. */
+        winner: number | null;
+        reason: string;
     };
 }
 

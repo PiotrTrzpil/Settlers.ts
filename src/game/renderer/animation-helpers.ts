@@ -55,12 +55,16 @@ export interface AnimationDataProvider {
  *
  * @param playback The entity's animation playback state
  * @param animationData The animation data for this entity type
+ * @param eType Entity type for diagnostics
+ * @param eSubType Entity sub-type for diagnostics
+ * @param spriteDirection Override sprite direction (use when EDirection→sprite conversion is needed)
  */
 export function resolveAnimationFrame(
     playback: AnimationPlayback,
     animationData: AnimationData,
     eType?: EntityType,
-    eSubType?: number
+    eSubType?: number,
+    spriteDirection?: number
 ): SpriteEntry | null {
     const label = eType !== undefined && eSubType !== undefined ? entityLabel(eType, eSubType) : 'unknown';
     const directionMap = animationData.sequences.get(playback.sequenceKey);
@@ -75,12 +79,13 @@ export function resolveAnimationFrame(
         return null;
     }
 
-    const sequence = directionMap.get(playback.direction);
+    const dir = spriteDirection ?? playback.direction;
+    const sequence = directionMap.get(dir);
     if (!sequence || sequence.frames.length === 0) {
         warnOnce(
-            `dir:${label}:${playback.sequenceKey}:${playback.direction}`,
+            `dir:${label}:${playback.sequenceKey}:${dir}`,
             () =>
-                `[${label}] No frames for sequence '${playback.sequenceKey}' direction ${playback.direction}. ` +
+                `[${label}] No frames for sequence '${playback.sequenceKey}' direction ${dir}. ` +
                 `Available directions: [${[...directionMap.keys()].join(', ')}]`
         );
         return null;

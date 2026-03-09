@@ -72,7 +72,9 @@ export const SELECTION_DOT_COLOR = [0.2, 0.9, 1.0, 1.0]; // Cyan dot on sprite
 export const SELECTION_ORIGIN_DOT_COLOR = [1.0, 0.4, 0.2, 1.0]; // Orange dot at origin
 
 // Footprint debug visualization
-export const FOOTPRINT_TILE_COLOR = [0.2, 0.8, 1.0, 0.4]; // Semi-transparent cyan
+export const FOOTPRINT_TILE_COLOR = [0.2, 0.8, 1.0, 0.3]; // Semi-transparent cyan (full-face tiles)
+export const FOOTPRINT_EDGE_COLOR = [0.8, 0.2, 1.0, 0.25]; // Semi-transparent purple (edge/partial tiles)
+export const FOOTPRINT_DOOR_COLOR = [1.0, 0.3, 0.1, 0.5]; // Semi-transparent orange-red
 
 // Circle overlay segments (used by work area circles)
 export const CIRCLE_OVERLAY_SEGMENTS = 64;

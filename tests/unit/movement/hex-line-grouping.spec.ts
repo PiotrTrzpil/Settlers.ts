@@ -99,7 +99,8 @@ describe('Hex line grouping', () => {
     });
 
     it('run length controls grouping behavior', () => {
-        const rawLine = getHexLine(0, 0, 10, 10);
+        // Use a target that requires mixed directions (different-sign dx/dy)
+        const rawLine = getHexLine(0, 0, 10, -10);
 
         // maxRunLength=1: no regrouping (raw interpolation order)
         const noGroup = groupDirectionRuns(rawLine, 1);
@@ -109,9 +110,9 @@ describe('Hex line grouping', () => {
         const shortRuns = groupDirectionRuns(rawLine, 2);
         expect(getMaxRunLength(shortRuns)).toBeLessThanOrEqual(2);
 
-        // Large run length: groups all same-direction steps together
+        // Large run length on a same-sign diagonal: groups all same-direction steps together
         const longRuns = groupDirectionRuns(getHexLine(0, 0, 5, 5), 50);
-        expect(countDirectionChanges(longRuns)).toBe(1);
+        expect(countDirectionChanges(longRuns)).toBe(0); // all steps in one direction
     });
 
     it('should preserve invariants for all run lengths', () => {

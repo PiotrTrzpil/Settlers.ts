@@ -2,8 +2,6 @@ import type { FeatureDefinition, FeatureContext } from '../feature';
 import { MovementSystem } from '../../systems/movement';
 import { EntityType, UnitType, getUnitTypeSpeed } from '../../entity';
 import { isAngelUnitType } from '../../core/unit-types';
-import { BuildingType } from '../../buildings/building-type';
-import { setEntityDescriber } from '../../systems/pathfinding/astar';
 import type { TerrainData } from '../../terrain';
 
 export interface MovementExports {
@@ -28,14 +26,6 @@ export const MovementFeature: FeatureDefinition = {
             buildingFootprint: gameState.buildingFootprint,
         });
         gameState.initMovement(movement);
-
-        setEntityDescriber(id => {
-            const e = gameState.getEntity(id);
-            if (!e) return '?';
-            if (e.type === EntityType.Unit) return UnitType[e.subType] ?? 'Unit#' + e.subType;
-            if (e.type === EntityType.Building) return BuildingType[e.subType] ?? 'Building#' + e.subType;
-            return EntityType[e.type] || 'Entity';
-        });
 
         // Create movement controllers for units on spawn (skip ephemeral angels)
         ctx.on('entity:created', ({ entityId, type, subType, x, y }) => {

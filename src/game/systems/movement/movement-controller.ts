@@ -1,5 +1,5 @@
 import { TileCoord } from '../../entity';
-import { getApproxDirection, EDirection, getStepDistanceFactor } from '../hex-directions';
+import { getStepDirection, EDirection, getStepDistanceFactor } from '../hex-directions';
 
 /**
  * Movement state machine states (external API).
@@ -39,6 +39,9 @@ export class MovementController {
     private _speed: number;
     private _direction: number = EDirection.EAST;
     private _distanceFactor: number = 1.0;
+
+    // --- Busy state (pick/put animation — unbumpable) ---
+    private _busy = false;
 
     // --- Teleport detection ---
     private _lastVisualX = 0;
@@ -135,6 +138,20 @@ export class MovementController {
     /** How long the unit has been waiting for an occupied tile (only meaningful while moving). */
     get waitTime(): number {
         return this._phase.tag === 'moving' ? this._phase.waitTime : 0;
+    }
+
+    /** True when the unit has a path but is blocked waiting for an occupied tile. */
+    get isWaiting(): boolean {
+        return this._phase.tag === 'moving' && this._phase.waitTime > 0 && !this.isInTransit;
+    }
+
+    /** Whether the unit is performing an unbumpable action (e.g. pick/put animation at a pile). */
+    get busy(): boolean {
+        return this._busy;
+    }
+
+    set busy(value: boolean) {
+        this._busy = value;
     }
 
     // =====================================================================
@@ -247,7 +264,7 @@ export class MovementController {
         this._tileX = wp.x;
         this._tileY = wp.y;
 
-        this._direction = getApproxDirection(this._prevTileX, this._prevTileY, this._tileX, this._tileY);
+        this._direction = getStepDirection(this._tileX - this._prevTileX, this._tileY - this._prevTileY);
         this._distanceFactor = getStepDistanceFactor(this._tileX - this._prevTileX, this._tileY - this._prevTileY);
 
         p.pathIndex++;
@@ -315,7 +332,7 @@ export class MovementController {
         this._tileY = newY;
         this._progress = 0;
 
-        this._direction = getApproxDirection(this._prevTileX, this._prevTileY, this._tileX, this._tileY);
+        this._direction = getStepDirection(this._tileX - this._prevTileX, this._tileY - this._prevTileY);
         this._distanceFactor = getStepDistanceFactor(this._tileX - this._prevTileX, this._tileY - this._prevTileY);
 
         // Transition to moving if we have a path; idle units stay idle (transit tracked via isInTransit)

@@ -1,26 +1,36 @@
 import { TileCoord } from '../entity';
 
 /**
- * Six-direction hex grid system based on JSettlers EDirection.
+ * Six-direction isometric diamond grid.
  *
- * The hex grid uses offset coordinates where odd/even rows are
- * shifted. Grid deltas follow the JSettlers convention:
+ * Settlers 4 uses an isometric diamond tile grid (NOT a hex grid). Each tile
+ * is a diamond/rhombus with 4 edges and 4 vertices. Of the 8 surrounding tiles,
+ * 6 are reachable in one step — 4 share an edge, 2 share only a vertex.
  *
- *   NORTH_EAST = (1, -1)
- *   EAST       = (1,  0)
- *   SOUTH_EAST = (0,  1)
- *   SOUTH_WEST = (-1, 1)
- *   WEST       = (-1, 0)
- *   NORTH_WEST = (0, -1)
+ * The vertex-sharing directions (+1,+1) and (-1,-1) correspond to tiles that touch
+ * at a single corner point (no shared edge). The OTHER two corners (+1,-1) and (-1,+1)
+ * are NOT neighbors — those tiles are 2 steps apart.
+ *
+ * EDirection names match VISUAL screen directions (worldY increases downward):
+ *
+ * | EDirection   | tileDx,tileDy | screenDx | screenDy | type           |
+ * |--------------|---------------|----------|----------|----------------|
+ * | SOUTH_EAST   |  (+1, +1)     |  +0.5    |  +0.5   | vertex-sharing |
+ * | EAST         |  (+1,  0)     |  +1.0    |   0.0   | edge-sharing   |
+ * | SOUTH_WEST   |  ( 0, +1)     |  -0.5    |  +0.5   | edge-sharing   |
+ * | NORTH_WEST   |  (-1, -1)     |  -0.5    |  -0.5   | vertex-sharing |
+ * | WEST         |  (-1,  0)     |  -1.0    |   0.0   | edge-sharing   |
+ * | NORTH_EAST   |  ( 0, -1)     |  +0.5    |  -0.5   | edge-sharing   |
+ *
  */
 
 export enum EDirection {
-    NORTH_EAST = 0,
+    SOUTH_EAST = 0,
     EAST = 1,
-    SOUTH_EAST = 2,
-    SOUTH_WEST = 3,
+    SOUTH_WEST = 2,
+    NORTH_WEST = 3,
     WEST = 4,
-    NORTH_WEST = 5,
+    NORTH_EAST = 5,
 }
 
 export const NUMBER_OF_DIRECTIONS = 6;
@@ -29,16 +39,16 @@ export const NUMBER_OF_DIRECTIONS = 6;
 export const GRID_DELTA_X: readonly number[] = [1, 1, 0, -1, -1, 0];
 
 /** dy for each EDirection value */
-export const GRID_DELTA_Y: readonly number[] = [-1, 0, 1, 1, 0, -1];
+export const GRID_DELTA_Y: readonly number[] = [1, 0, 1, -1, 0, -1];
 
 /** Combined [dx, dy] offsets indexed by EDirection */
 export const GRID_DELTAS: ReadonlyArray<readonly [number, number]> = [
-    [1, -1], // NORTH_EAST
-    [1, 0], // EAST
-    [0, 1], // SOUTH_EAST
-    [-1, 1], // SOUTH_WEST
-    [-1, 0], // WEST
-    [0, -1], // NORTH_WEST
+    [1, 1], // SOUTH_EAST (vertex-sharing)
+    [1, 0], // EAST (edge-sharing)
+    [0, 1], // SOUTH_WEST (edge-sharing)
+    [-1, -1], // NORTH_WEST (vertex-sharing)
+    [-1, 0], // WEST (edge-sharing)
+    [0, -1], // NORTH_EAST (edge-sharing)
 ];
 
 /** Y scale factor for hex grid distance (sqrt(3)/2 * 0.999999) */
@@ -68,52 +78,42 @@ export function getAllNeighbors(pos: TileCoord): TileCoord[] {
     return neighbors;
 }
 
-/** Helper to get direction when q (x-axis) is dominant */
-function getQDominantDirection(q: number, r: number): EDirection {
-    if (q > 0) return r < 0 ? EDirection.NORTH_EAST : EDirection.EAST;
-    return r > 0 ? EDirection.SOUTH_WEST : EDirection.WEST;
-}
-
-/** Helper to get direction when r (y-axis) is dominant */
-function getRDominantDirection(q: number, r: number): EDirection {
-    if (r > 0) return q >= 0 ? EDirection.SOUTH_EAST : EDirection.SOUTH_WEST;
-    return q > 0 ? EDirection.NORTH_EAST : EDirection.NORTH_WEST;
-}
-
-/** Helper to get direction when s (diagonal) is dominant */
-function getSDominantDirection(q: number, s: number): EDirection {
-    if (s > 0) return q >= 0 ? EDirection.NORTH_WEST : EDirection.WEST;
-    return q > 0 ? EDirection.EAST : EDirection.SOUTH_EAST;
+/**
+ * Get the exact EDirection for a single tile step (dx, dy).
+ * Returns EDirection.EAST as fallback for zero or unrecognized deltas.
+ */
+export function getStepDirection(dx: number, dy: number): EDirection {
+    for (let d = 0; d < NUMBER_OF_DIRECTIONS; d++) {
+        if (GRID_DELTA_X[d]! === dx && GRID_DELTA_Y[d]! === dy) {
+            return d as EDirection;
+        }
+    }
+    return EDirection.EAST;
 }
 
 /**
  * Get the approximate direction from one point to another.
- * Uses cube coordinate decomposition on the hex grid to determine
- * which of the 6 directions best matches the displacement vector.
- *
- * The grid deltas map to cube coordinates (q, r, s) where q=dx, r=dy, s=-(dx+dy).
- * The dominant cube axis determines the direction.
+ * For single-step deltas, returns the exact direction.
+ * For multi-tile displacements, picks the closest direction via dot product.
  */
 export function getApproxDirection(fromX: number, fromY: number, toX: number, toY: number): EDirection {
-    const q = toX - fromX;
-    const r = toY - fromY;
-    const s = -(q + r);
+    const dx = toX - fromX;
+    const dy = toY - fromY;
 
-    if (q === 0 && r === 0) {
-        return EDirection.EAST; // arbitrary default for zero vector
+    if (dx === 0 && dy === 0) {
+        return EDirection.EAST;
     }
 
-    const absQ = Math.abs(q);
-    const absR = Math.abs(r);
-    const absS = Math.abs(s);
-
-    if (absQ >= absR && absQ >= absS) {
-        return getQDominantDirection(q, r);
+    let bestDir = 0;
+    let bestDot = -Infinity;
+    for (let d = 0; d < NUMBER_OF_DIRECTIONS; d++) {
+        const dot = dx * GRID_DELTA_X[d]! + dy * GRID_DELTA_Y[d]!;
+        if (dot > bestDot) {
+            bestDot = dot;
+            bestDir = d;
+        }
     }
-    if (absR >= absQ && absR >= absS) {
-        return getRDominantDirection(q, r);
-    }
-    return getSDominantDirection(q, s);
+    return bestDir as EDirection;
 }
 
 /**
@@ -126,18 +126,27 @@ export function rotateDirection(direction: EDirection, offset: number): EDirecti
 }
 
 /**
- * Hex grid Manhattan distance using cube coordinates.
- * Always admissible as an A* heuristic (never overestimates when
- * minimum step cost is 1).
+ * Grid distance (minimum number of steps) on the isometric diamond grid.
  *
- * Cube coords: q = dx, r = dy, s = -(dx + dy).
- * Distance = max(|q|, |r|, |s|).
+ * The 6 directions include 4 axis-aligned moves (±x, ±y) and 2 diagonal
+ * moves (+1,+1) and (-1,-1). The diagonal moves let you cover both axes
+ * simultaneously when dx and dy have the same sign:
+ *
+ *   same sign:      max(|dx|, |dy|)   — diagonals shorten the path
+ *   different sign:  |dx| + |dy|       — no useful diagonal exists
+ *
+ * This is exact (not just admissible) and never overestimates.
  */
 export function hexDistance(x1: number, y1: number, x2: number, y2: number): number {
-    const q = x2 - x1;
-    const r = y2 - y1;
-    const s = -(q + r);
-    return Math.max(Math.abs(q), Math.abs(r), Math.abs(s));
+    const dx = x2 - x1;
+    const dy = y2 - y1;
+    // When dx and dy have the same sign, diagonal moves (+1,+1) or (-1,-1)
+    // cover both axes at once → distance = max of the two magnitudes.
+    // When they differ, no diagonal helps → distance = sum.
+    if ((dx >= 0 && dy >= 0) || (dx <= 0 && dy <= 0)) {
+        return Math.max(Math.abs(dx), Math.abs(dy));
+    }
+    return Math.abs(dx) + Math.abs(dy);
 }
 
 /**
@@ -150,30 +159,25 @@ export function squaredHexDistance(x1: number, y1: number, x2: number, y2: numbe
 }
 
 /**
- * World-space distance for each hex direction.
+ * World-space distance for each direction.
  *
  * Derived from the isometric tile-to-world transform:
- *   worldDx = tileDx - tileDy * 0.5
- *   worldDy = tileDy * 0.5
+ *   worldDx = tileDx - tileDy × 0.5
+ *   worldDy = tileDy × 0.5
  *
- * | Direction   | tileDx,tileDy | worldDx | worldDy | distance |
- * |-------------|---------------|---------|---------|----------|
- * | NORTH_EAST  |  (1, -1)      |  1.5    | -0.5    | √2.5    |
- * | EAST        |  (1,  0)      |  1.0    |  0.0    | 1.0     |
- * | SOUTH_EAST  |  (0,  1)      | -0.5    |  0.5    | √0.5    |
- * | SOUTH_WEST  | (-1,  1)      | -1.5    |  0.5    | √2.5    |
- * | WEST        | (-1,  0)      | -1.0    |  0.0    | 1.0     |
- * | NORTH_WEST  |  (0, -1)      |  0.5    | -0.5    | √0.5    |
+ * See the direction table in the module header comment for full derivation.
+ * Edge-sharing moves (EAST/WEST) have distance 1.0.
+ * All other moves (SOUTH, NORTH, vertex-sharing diagonals) have distance √0.5.
  *
  * Used by movement to normalize visual speed across directions.
  */
 export const WORLD_DISTANCE_PER_DIRECTION: readonly number[] = [
-    Math.sqrt(2.5), // NORTH_EAST
-    1.0, // EAST
-    Math.sqrt(0.5), // SOUTH_EAST
-    Math.sqrt(2.5), // SOUTH_WEST
-    1.0, // WEST
-    Math.sqrt(0.5), // NORTH_WEST
+    Math.sqrt(0.5), // SOUTH_EAST (+1,+1)
+    1.0, // EAST (+1,0)
+    Math.sqrt(0.5), // SOUTH_WEST (0,+1)
+    Math.sqrt(0.5), // NORTH_WEST (-1,-1)
+    1.0, // WEST (-1,0)
+    Math.sqrt(0.5), // NORTH_EAST (0,-1)
 ];
 
 /**

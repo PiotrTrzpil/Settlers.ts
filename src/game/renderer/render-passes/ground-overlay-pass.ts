@@ -1,7 +1,8 @@
 /**
  * GroundOverlayPass — draws building footprints and work area circles.
  *
- * Only runs when at least one of these features is active.
+ * Work area circles render as ground overlays (below entities).
+ * Building footprints render on top of entity sprites via drawFootprints().
  */
 
 import type { IViewPoint } from '../i-view-point';
@@ -21,46 +22,58 @@ export class GroundOverlayPass implements IRenderPass {
         this.ctx = ctx;
     }
 
-    public draw(gl: WebGL2RenderingContext, projection: Float32Array, viewPoint: IViewPoint): void {
+    /** Draw ground-level overlays (work area circles). */
+    public draw(gl: WebGL2RenderingContext, _projection: Float32Array, viewPoint: IViewPoint): void {
         const { ctx } = this;
-        const hasFootprints = ctx.renderSettings.showBuildingFootprint;
         const hasWorkAreas = ctx.workAreaCircles.length > 0;
-        if (!hasFootprints && !hasWorkAreas) return;
+        if (!hasWorkAreas) return;
 
+        this.setupAttributes(gl, viewPoint);
+
+        this.overlay.drawCircleOverlays(
+            gl,
+            ctx.dynamicBuffer,
+            ctx.workAreaCircles,
+            ctx.aEntityPos,
+            ctx.aColor,
+            this.selCtx!,
+            WORK_AREA_CIRCLE_COLOR
+        );
+    }
+
+    /** Draw building footprint overlays (called after entity sprites for on-top rendering). */
+    public drawFootprints(gl: WebGL2RenderingContext, _projection: Float32Array, viewPoint: IViewPoint): void {
+        const { ctx } = this;
+        if (!ctx.renderSettings.showBuildingFootprint) return;
+
+        this.setupAttributes(gl, viewPoint);
+
+        this.overlay.drawBuildingFootprints(
+            gl,
+            ctx.dynamicBuffer,
+            ctx.sortedEntities,
+            ctx.aPosition,
+            ctx.aEntityPos,
+            ctx.aColor,
+            this.selCtx!
+        );
+    }
+
+    private selCtx: { mapSize: GroundOverlayContext['mapSize']; groundHeight: Uint8Array; viewPoint: IViewPoint; unitStates: GroundOverlayContext['unitStates'] } | null = null;
+
+    private setupAttributes(gl: WebGL2RenderingContext, viewPoint: IViewPoint): void {
+        const { ctx } = this;
         gl.bindBuffer(gl.ARRAY_BUFFER, ctx.dynamicBuffer);
         gl.enableVertexAttribArray(ctx.aPosition);
         gl.vertexAttribPointer(ctx.aPosition, 2, gl.FLOAT, false, 0, 0);
         gl.disableVertexAttribArray(ctx.aEntityPos);
         gl.disableVertexAttribArray(ctx.aColor);
 
-        const selCtx = {
+        this.selCtx = {
             mapSize: ctx.mapSize,
             groundHeight: ctx.groundHeight,
             viewPoint,
             unitStates: ctx.unitStates,
         };
-
-        if (hasFootprints) {
-            this.overlay.drawBuildingFootprints(
-                gl,
-                ctx.dynamicBuffer,
-                ctx.sortedEntities,
-                ctx.aPosition,
-                ctx.aEntityPos,
-                ctx.aColor,
-                selCtx
-            );
-        }
-        if (hasWorkAreas) {
-            this.overlay.drawCircleOverlays(
-                gl,
-                ctx.dynamicBuffer,
-                ctx.workAreaCircles,
-                ctx.aEntityPos,
-                ctx.aColor,
-                selCtx,
-                WORK_AREA_CIRCLE_COLOR
-            );
-        }
     }
 }

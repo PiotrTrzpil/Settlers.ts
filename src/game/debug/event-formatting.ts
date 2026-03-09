@@ -52,14 +52,23 @@ export const EventFmt = {
 
     'movement:escalation': (e: GameEvents['movement:escalation']) => e.result,
 
-    'movement:collisionResolved': (e: GameEvents['movement:collisionResolved']) =>
+    'movement:step': (e: GameEvents['movement:step']) =>
+        `(${e.x},${e.y}) [${e.pathIdx}/${e.pathLen}]`,
+
+    'movement:bumpAttempt': (e: GameEvents['movement:bumpAttempt']) =>
+        parts(`→#${e.occupantId}`, e.hasController ? `state=${e.occupantState}` : 'NO_CTRL', e.occupantBusy && 'busy'),
+
+    'movement:bumpFailed': (e: GameEvents['movement:bumpFailed']) =>
         parts(
-            e.strategy,
-            e.success ? 'OK' : 'FAIL',
-            `at (${e.x},${e.y})`,
-            e.toX !== undefined && `→(${e.toX},${e.toY})`,
-            e.targetId !== undefined && `target=#${e.targetId}`
+            `→#${e.occupantId}`,
+            e.reason,
+            e.occupantState && `state=${e.occupantState}`,
+            e.occupantBusy && 'busy',
+            e.occupantPos && `at (${e.occupantPos})`
         ),
+
+    'movement:bump': (e: GameEvents['movement:bump']) =>
+        `#${e.bumperId} pushed #${e.occupantId} (${e.fromX},${e.fromY})→(${e.toX},${e.toY})`,
 
     // Entity lifecycle
     'entity:created': (e: GameEvents['entity:created']) => {
@@ -85,6 +94,9 @@ export const EventFmt = {
         parts(e.jobPart, `→${e.sequenceKey}`, e.loop && 'loop'),
 
     'choreo:waitingAtHome': (e: GameEvents['choreo:waitingAtHome']) => `home=#${e.homeBuilding} ${e.reason}`,
+
+    'choreo:idleSkipped': (e: GameEvents['choreo:idleSkipped']) =>
+        parts(e.reason, e.homeBuilding !== null && `home=#${e.homeBuilding}`),
 
     'settler:taskStarted': (e: GameEvents['settler:taskStarted']) =>
         parts(
@@ -225,4 +237,16 @@ export const EventFmt = {
     'garrison:unitExited': (e: GameEvents['garrison:unitExited']) => `unit=#${e.unitId} exited tower=#${e.buildingId}`,
     'settler-location:approachInterrupted': (e: GameEvents['settler-location:approachInterrupted']) =>
         `settler=#${e.settlerId} approach interrupted by building=#${e.buildingId} removal`,
+
+    'siege:started': (e: GameEvents['siege:started']) => `building=#${e.buildingId} attacker=player${e.attackerPlayer}`,
+    'siege:defenderEjected': (e: GameEvents['siege:defenderEjected']) =>
+        `defender=#${e.defenderId} from building=#${e.buildingId}`,
+    'siege:buildingCaptured': (e: GameEvents['siege:buildingCaptured']) =>
+        `building=#${e.buildingId} player${e.oldPlayer}→player${e.newPlayer}`,
+    'building:ownerChanged': (e: GameEvents['building:ownerChanged']) =>
+        `#${e.entityId} ${BuildingType[e.buildingType]} player${e.oldPlayer}→player${e.newPlayer}`,
+
+    'game:playerEliminated': (e: GameEvents['game:playerEliminated']) => `player ${e.player} eliminated`,
+    'game:ended': (e: GameEvents['game:ended']) =>
+        `winner=${e.winner ?? 'none'} reason=${e.reason}`,
 } satisfies { [K in keyof GameEvents]: (e: GameEvents[K]) => string };

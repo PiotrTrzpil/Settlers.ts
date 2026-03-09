@@ -483,7 +483,7 @@ export class EntityRenderer extends RendererBase implements IRenderer {
         this.passStackGhost.prepare(passCtx);
         this.passPlacementPreview.prepare(passCtx);
 
-        // Pass 2: Ground overlays (footprints, service/work area circles)
+        // Pass 2: Ground overlays (work area circles only; footprints render after entities)
         this.setupColorShader(gl, projection);
         this.passGroundOverlay.draw(gl, projection, viewPoint);
 
@@ -516,6 +516,10 @@ export class EntityRenderer extends RendererBase implements IRenderer {
 
         // Accumulate debug deco labels from color pass
         this.debugDecoLabels = passCtx.debugDecoLabels;
+
+        // Pass 4b: Building footprint overlays (on top of entity sprites, semi-transparent)
+        this.setupColorShader(gl, projection);
+        this.passGroundOverlay.drawFootprints(gl, projection, viewPoint);
 
         // Pass 5: Selection overlays (frames, dots, tile highlights)
         this.setupColorShader(gl, projection);

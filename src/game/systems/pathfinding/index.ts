@@ -19,7 +19,7 @@ export { findPathAStar, type PathfindingTerrain } from './astar';
 export { BucketPriorityQueue } from './bucket-priority-queue';
 
 // Hex line utilities
-export { getHexLine, cubeRound, isHexLinePassable, groupDirectionRuns, setDirectionRunLength } from './hex-line';
+export { getHexLine, isHexLinePassable, groupDirectionRuns, setDirectionRunLength } from './hex-line';
 
 // Path post-processing
 export { smoothPath, type PathSmoothingParams } from './path-smoothing';
@@ -35,7 +35,6 @@ import { TileCoord } from '../../entity';
  * with a simpler signature for backward compatibility.
  *
  * Unit occupancy is never considered — only terrain and buildings block.
- * tileOccupancy is passed through for building tunnel identification only.
  */
 export function findPath(
     startX: number,
@@ -46,7 +45,6 @@ export function findPath(
     groundHeight: Uint8Array,
     mapWidth: number,
     mapHeight: number,
-    tileOccupancy: Map<string, number>,
     buildingOccupancy: Set<string>
 ): TileCoord[] | null {
     const terrain: PathfindingTerrain = {
@@ -56,5 +54,5 @@ export function findPath(
         mapHeight,
     };
 
-    return findPathAStar(startX, startY, goalX, goalY, terrain, tileOccupancy, buildingOccupancy);
+    return findPathAStar(startX, startY, goalX, goalY, terrain, buildingOccupancy);
 }

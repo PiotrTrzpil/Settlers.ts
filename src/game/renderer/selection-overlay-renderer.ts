@@ -1,4 +1,6 @@
-import { Entity, EntityType, getBuildingFootprint, BuildingType } from '../entity';
+import { Entity, EntityType, getBuildingFootprint, BuildingType, tileKey } from '../entity';
+import { getBuildingDoorPos } from '../data/game-data-access';
+import { getBuildingBlockArea } from '../buildings/types';
 import type { TileHighlight } from '../input/render-state';
 import { TilePicker } from '../input/tile-picker';
 import { tileToWorld, heightToWorld, TILE_CENTER_X, TILE_CENTER_Y } from '../systems/coordinate-system';
@@ -21,6 +23,8 @@ import {
     SELECTION_ORIGIN_DOT_SCALE,
     SELECTION_ORIGIN_DOT_COLOR,
     FOOTPRINT_TILE_COLOR,
+    FOOTPRINT_EDGE_COLOR,
+    FOOTPRINT_DOOR_COLOR,
     CIRCLE_OVERLAY_SEGMENTS,
     SHADER_VERTEX_SCALE,
 } from './entity-renderer-constants';
@@ -413,37 +417,26 @@ export class SelectionOverlayRenderer {
         if (buildings.length === 0) return;
 
         gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
-        gl.vertexAttrib4f(
-            aColor,
-            FOOTPRINT_TILE_COLOR[0]!,
-            FOOTPRINT_TILE_COLOR[1]!,
-            FOOTPRINT_TILE_COLOR[2]!,
-            FOOTPRINT_TILE_COLOR[3]!
-        );
 
         // Diamond vertex data for a single tile (6 vertices for 2 triangles)
         const diamondVerts = new Float32Array(12);
 
         for (const entity of buildings) {
-            const footprint = getBuildingFootprint(entity.x, entity.y, entity.subType as BuildingType, entity.race);
+            const buildingType = entity.subType as BuildingType;
+            const footprint = getBuildingFootprint(entity.x, entity.y, buildingType, entity.race);
+            const doorPos = getBuildingDoorPos(entity.x, entity.y, entity.race, buildingType);
 
-            // Build a set of footprint vertex positions for face-inclusion checks.
-            // Footprint positions are vertices; a terrain face at (x,y) is only fully
-            // covered when all 4 corner vertices (x,y), (x+1,y), (x,y+1), (x+1,y+1) are present.
-            const vertexSet = new Set<number>();
-            for (const t of footprint) {
-                vertexSet.add(t.x * 65536 + t.y);
-            }
+            // Block area tiles (actual movement blocking) shown in cyan
+            // Placement-only tiles (outer exclusion zone) shown in purple
+            const blockKeys = new Set<string>();
+            try {
+                const blockArea = getBuildingBlockArea(entity.x, entity.y, buildingType, entity.race);
+                for (const t of blockArea) blockKeys.add(tileKey(t.x, t.y));
+            } catch { /* no block data — treat all as block area */ }
 
             for (const tile of footprint) {
-                // Only draw if all 4 face corners are in the footprint
-                if (
-                    !vertexSet.has((tile.x + 1) * 65536 + tile.y) ||
-                    !vertexSet.has(tile.x * 65536 + (tile.y + 1)) ||
-                    !vertexSet.has((tile.x + 1) * 65536 + (tile.y + 1))
-                ) {
-                    continue;
-                }
+                const color = this.getFootprintTileColor(tile, doorPos, blockKeys);
+                gl.vertexAttrib4f(aColor, color[0]!, color[1]!, color[2]!, color[3]!);
 
                 const idx = ctx.mapSize.toIndex(tile.x, tile.y);
                 const hWorld = heightToWorld(ctx.groundHeight[idx]!);
@@ -470,6 +463,17 @@ export class SelectionOverlayRenderer {
                 gl.drawArrays(gl.TRIANGLES, 0, 6);
             }
         }
+    }
+
+    /** Pick tile color: door=orange-red, block area=cyan, placement-only zone=purple. */
+    private getFootprintTileColor(
+        tile: { x: number; y: number },
+        doorPos: { x: number; y: number },
+        blockKeys: Set<string>
+    ): readonly number[] {
+        if (tile.x === doorPos.x && tile.y === doorPos.y) return FOOTPRINT_DOOR_COLOR;
+        if (blockKeys.size === 0 || blockKeys.has(tileKey(tile.x, tile.y))) return FOOTPRINT_TILE_COLOR;
+        return FOOTPRINT_EDGE_COLOR;
     }
 
     /**

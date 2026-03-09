@@ -22,7 +22,7 @@ export class UnitSpriteCategory {
 
     /**
      * Register a sprite entry for a unit type and direction.
-     * @param direction 0=RIGHT, 1=RIGHT_BOTTOM, 2=LEFT_BOTTOM, 3=LEFT
+     * @param direction Sprite direction index (see SpriteDirection enum)
      */
     register(type: UnitType, direction: number, entry: SpriteEntry, race: number): void {
         let raceMap = this.byRace.get(race);
@@ -41,7 +41,7 @@ export class UnitSpriteCategory {
 
     /**
      * Look up the sprite entry for a unit type, direction, and race.
-     * @param direction 0=RIGHT, 1=RIGHT_BOTTOM, 2=LEFT_BOTTOM, 3=LEFT (defaults to 0)
+     * @param direction Sprite direction index (see SpriteDirection enum) (defaults to 0)
      */
     get(type: UnitType, direction: number = 0, race?: number): SpriteEntry | null {
         let dirMap: Map<number, SpriteEntry> | undefined;

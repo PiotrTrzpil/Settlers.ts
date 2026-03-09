@@ -27,7 +27,6 @@ export interface IPathfinder {
 export class PathfindingService implements IPathfinder {
     private terrain: PathfindingTerrain | undefined;
     private buildingOccupancy: Set<string> = new Set();
-    private tileOccupancy: Map<string, number> = new Map();
 
     /**
      * Set the terrain data used for all subsequent pathfinding calls.
@@ -41,14 +40,6 @@ export class PathfindingService implements IPathfinder {
      */
     setBuildingOccupancy(buildingOccupancy: Set<string>): void {
         this.buildingOccupancy = buildingOccupancy;
-    }
-
-    /**
-     * Set tile occupancy map — used only for building tunnel identification
-     * (determining which entity owns footprint tiles), NOT for blocking.
-     */
-    setTileOccupancy(tileOccupancy: Map<string, number>): void {
-        this.tileOccupancy = tileOccupancy;
     }
 
     /** Returns true if terrain data has been loaded. */
@@ -71,6 +62,6 @@ export class PathfindingService implements IPathfinder {
             throw new Error('PathfindingService.findPath: terrain data not set');
         }
 
-        return findPathAStar(startX, startY, goalX, goalY, this.terrain, this.tileOccupancy, this.buildingOccupancy);
+        return findPathAStar(startX, startY, goalX, goalY, this.terrain, this.buildingOccupancy);
     }
 }
