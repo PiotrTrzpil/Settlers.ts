@@ -190,6 +190,12 @@ export class Game {
 
         this.populateMapEntities(mapLoader);
 
+        // Assign workers that are positioned inside their matching building's footprint
+        this.services.settlerTaskSystem.assignInitialBuildingWorkers();
+
+        // Set local player for victory conditions after map populates currentPlayer
+        this.services.victorySystem.setLocalPlayer(this.currentPlayer);
+
         // Initialize Audio (async init called from constructor — sonarjs/no-async-constructor)
         // eslint-disable-next-line sonarjs/no-async-constructor -- fire-and-forget audio init, failure is non-fatal
         this.soundManager

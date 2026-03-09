@@ -65,6 +65,10 @@ export interface JobPartResolver {
 export interface BuildingPositionResolver {
     /** Resolve (buildingId, x, y, useWork) → world hex position. */
     resolvePosition(buildingId: number, x: number, y: number, useWork: boolean): { x: number; y: number };
+    /** Get the source (input) pile position for a material at a building. */
+    getSourcePilePosition(buildingId: number, material: string): { x: number; y: number } | null;
+    /** Get the destination (output) pile position for a material at a building. */
+    getDestinationPilePosition(buildingId: number, material: string): { x: number; y: number } | null;
 }
 
 /** Fires building overlay animations from trigger IDs. */

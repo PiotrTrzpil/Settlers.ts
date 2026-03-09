@@ -113,15 +113,15 @@ describe.skipIf(!hasRealData)('Building construction (real game data)', { timeou
 
     // ─── Edge cases: destruction during construction ─────────────────
 
-    it('removing building during WaitingForDiggers cleans up site and restores terrain', () => {
+    it('removing building before construction starts cleans up site and restores terrain', () => {
         sim = createSimulation();
         sim.placeBuilding(BuildingType.ResidenceSmall);
 
-        // No diggers spawned — stays in WaitingForDiggers
+        // No diggers spawned — flat terrain completes leveling instantly → WaitingForBuilders
         const hutId = sim.placeBuilding(BuildingType.WoodcutterHut, 0, false);
 
         expect(sim.services.constructionSiteManager.getSite(hutId)!.phase).toBe(
-            BuildingConstructionPhase.WaitingForDiggers
+            BuildingConstructionPhase.WaitingForBuilders
         );
 
         // Footprint should be DustyWay
@@ -165,8 +165,10 @@ describe.skipIf(!hasRealData)('Building construction (real game data)', { timeou
         const s = createScenario.constructionSite(BuildingType.WoodcutterHut);
         sim = s;
 
-        // Wait for builder to start constructing
-        const site = sim.waitForPhase(s.siteId, BuildingConstructionPhase.ConstructionRising);
+        // Wait for builder to start constructing and make some progress
+        sim.waitForPhase(s.siteId, BuildingConstructionPhase.ConstructionRising);
+        sim.runTicks(200); // let builder do some work cycles
+        const site = sim.services.constructionSiteManager.getSite(s.siteId);
         expect(site).toBeDefined();
         expect(site!.building.progress).toBeGreaterThan(0);
 

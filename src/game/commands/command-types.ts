@@ -235,6 +235,15 @@ export interface RecruitSpecialistCommand {
     nearY?: number;
 }
 
+// === Siege Commands (internal, not player-initiated) ===
+
+/** Internal command: siege system captures a building (changes ownership). */
+export interface CaptureBuildingCommand {
+    type: 'capture_building';
+    buildingId: number;
+    newPlayer: number;
+}
+
 // === Garrison Commands ===
 
 export interface GarrisonUnitsCommand {
@@ -331,7 +340,8 @@ export type Command =
     | GarrisonUnitsCommand
     | UngarrisonUnitCommand
     | GarrisonSelectedUnitsCommand
-    | RecruitSpecialistCommand;
+    | RecruitSpecialistCommand
+    | CaptureBuildingCommand;
 
 /** Union of all command type string literals. */
 export type CommandType = Command['type'];

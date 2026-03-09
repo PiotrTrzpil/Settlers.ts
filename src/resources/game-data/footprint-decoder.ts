@@ -71,6 +71,30 @@ export function getBuildingFootprintAt(info: BuildingInfo, placeX: number, place
 }
 
 /**
+ * Get the movement-blocking area tiles from BuildingInfo's blockPosLines.
+ *
+ * blockPosLines is a subset of buildingPosLines — it defines which tiles actually
+ * block movement. The outer ring of buildingPosLines (placement exclusion zone)
+ * is NOT movement-blocking. The door is at the edge of blockPosLines.
+ *
+ * Returns tiles relative to building placement position (0,0).
+ */
+export function getBuildingBlockAreaFromInfo(info: BuildingInfo): TileCoord[] {
+    return decodeBuildingFootprint(info.blockPosLines, info.hotSpotX, info.hotSpotY);
+}
+
+/**
+ * Get absolute movement-blocking tile coordinates for a building placed at (x, y).
+ */
+export function getBuildingBlockAreaAt(info: BuildingInfo, placeX: number, placeY: number): TileCoord[] {
+    const relativeTiles = getBuildingBlockAreaFromInfo(info);
+    return relativeTiles.map(tile => ({
+        x: placeX + tile.x,
+        y: placeY + tile.y,
+    }));
+}
+
+/**
  * Calculate bounding box of a building's footprint.
  */
 export function getFootprintBounds(tiles: TileCoord[]): {

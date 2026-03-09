@@ -21,7 +21,8 @@ pnpm dev              # Start Vite dev server (port 5173)
 pnpm lint             # Type-check (vue-tsc) + ESLint in parallel
 pnpm build            # Fast bundle (no fengari/Lua)
 pnpm build:full       # Full bundle (with fengari/Lua scripting)
-pnpm test:unit        # Run Vitest unit tests
+pnpm test:unit                                   # Run all Vitest unit tests
+pnpm test:unit tests/unit/path/to/file.spec.ts   # Run a single test file (deps may also run)
 pnpm test:watch       # Vitest in watch mode
 npx playwright test   # Run Playwright e2e tests (uses dev server locally)
 pnpm format           # Prettier formatting

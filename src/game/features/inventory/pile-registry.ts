@@ -21,11 +21,14 @@ import { isLinkedPile } from '../../core/pile-kind';
 
 /**
  * Identifies the exact inventory slot that a pile entity represents.
+ * For construction piles, pileIndex distinguishes multiple piles of the same material
+ * (each capped at 8 items). Default 0 for non-construction piles.
  */
 export interface PileSlotKey {
     buildingId: number;
     material: EMaterialType;
     slotKind: LinkedSlotKind;
+    pileIndex?: number;
 }
 
 /**
@@ -41,12 +44,14 @@ export interface PileKindProvider {
 // ─────────────────────────────────────────────────────────────────────────────
 
 function serializeKey(key: PileSlotKey): string {
-    return `${key.buildingId}:${key.slotKind}:${key.material}`;
+    const idx = key.pileIndex ?? 0;
+    return `${key.buildingId}:${key.slotKind}:${key.material}:${idx}`;
 }
 
 function deserializeKey(s: string): PileSlotKey {
     const parts = s.split(':');
-    if (parts.length !== 3) {
+    // Support both old 3-part keys and new 4-part keys (with pileIndex)
+    if (parts.length !== 3 && parts.length !== 4) {
         throw new Error(`PileRegistry: cannot deserialize invalid key "${s}"`);
     }
     const [buildingIdStr, slotKind, materialStr] = parts as [string, string, string];
@@ -55,7 +60,9 @@ function deserializeKey(s: string): PileSlotKey {
     if (isNaN(buildingId) || isNaN(material)) {
         throw new Error(`PileRegistry: key "${s}" contains non-numeric buildingId or material`);
     }
-    return { buildingId, material, slotKind: slotKind as LinkedSlotKind };
+    const rawIndex = parts.length === 4 ? parseInt(parts[3]!, 10) : 0;
+    const pileIndex = rawIndex > 0 ? rawIndex : undefined;
+    return { buildingId, material, slotKind: slotKind as LinkedSlotKind, pileIndex };
 }
 
 function makeTileKey(x: number, y: number): string {
@@ -211,16 +218,28 @@ export class PileRegistry {
     rebuildFromEntities(entities: readonly Entity[], resources: PileKindProvider): void {
         this.clear();
 
+        // Track pile indices for construction piles (multiple piles per material per building)
+        const constructionIndices = new Map<string, number>();
+
         for (const entity of entities) {
             if (entity.type !== EntityType.StackedPile) continue;
 
             const kind = resources.getKind(entity.id);
             if (!isLinkedPile(kind)) continue;
 
+            let pileIndex: number | undefined;
+            if (kind.kind === 'construction') {
+                const counterKey = `${kind.buildingId}:${entity.subType}`;
+                const idx = constructionIndices.get(counterKey) ?? 0;
+                pileIndex = idx;
+                constructionIndices.set(counterKey, idx + 1);
+            }
+
             const key: PileSlotKey = {
                 buildingId: kind.buildingId,
                 material: entity.subType as EMaterialType,
                 slotKind: kind.kind,
+                pileIndex,
             };
             this.register(entity.id, key, { x: entity.x, y: entity.y });
         }

@@ -156,6 +156,10 @@ export function populateMapBuildings(
         setConstructionSiteGroundType(terrainParams, groundType, mapSize, originalTerrain);
         applyTerrainLeveling(terrainParams, groundType, groundHeight, mapSize, 1.0, originalTerrain);
 
+        // Mark the building's footprint as movement-blocking (completed buildings block tiles).
+        // This must happen before building:completed so listeners see correct occupancy.
+        state.restoreBuildingFootprintBlock(entity.id);
+
         // Emit building:completed so that systems (like CarrierSystem) can register state
         // and spawn units (handled by BuildingConstructionSystem listener)
         eventBus.emit('building:completed', {

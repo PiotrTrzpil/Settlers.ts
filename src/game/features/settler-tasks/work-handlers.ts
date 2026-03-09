@@ -11,7 +11,6 @@
 import type { GameState } from '../../game-state';
 import { EntityType, UnitType, BuildingType, type Entity } from '../../entity';
 import type { ConstructionSiteManager } from '../building-construction/construction-site-manager';
-import { getBuildingDoorPos } from '../../data/game-data-access';
 import { MapObjectCategory, MapObjectType } from '@/game/types/map-object-types';
 import type { BuildingInventoryManager } from '../inventory';
 import type { OreVeinData } from '../ore-veins';
@@ -650,12 +649,12 @@ export function createDiggerHandler(
 
             // Reserve a tile for this digger to walk to
             const tilePos = reserveTileForSettler(buildingId, settlerId);
-            if (tilePos) {
-                return { entityId: buildingId, x: tilePos.x, y: tilePos.y };
+            if (!tilePos) {
+                throw new Error(
+                    `Digger ${settlerId}: site ${buildingId} needs diggers but has no unreserved tiles to level`
+                );
             }
-            // No tiles to level (shouldn't happen for a site needing diggers)
-            const door = getBuildingDoorPos(site.tileX, site.tileY, site.race, site.buildingType);
-            return { entityId: buildingId, x: door.x, y: door.y };
+            return { entityId: buildingId, x: tilePos.x, y: tilePos.y };
         },
 
         canWork: (targetId: number) => {

@@ -1,13 +1,12 @@
 /**
- * InventoryPileSync Feature -- conditionally creates pile entity synchronization
- * when XML game data (pile position definitions) is available.
+ * InventoryPileSync Feature -- creates pile entity synchronization
+ * using XML game data (pile position definitions).
  *
- * When game data is loaded:
  * - Creates BuildingPileRegistry (XML pile positions)
  * - Creates PilePositionResolver (resolves world positions for pile entities)
  * - Creates InventoryPileSync (event-driven sync between inventory and pile entities)
  *
- * When game data is NOT loaded (e.g., test maps), this feature is a no-op.
+ * Requires game data to be loaded before feature init.
  */
 
 import type { FeatureDefinition, FeatureContext } from '../feature';
@@ -33,14 +32,12 @@ export const InventoryPileSyncFeature: FeatureDefinition = {
 
         const dataLoader = getGameDataLoader();
         if (!dataLoader.isLoaded()) {
-            return {
-                exports: { inventoryPileSync: null, pileRegistry: null } satisfies InventoryPileSyncExports,
-            };
+            throw new Error('InventoryPileSyncFeature: game data must be loaded before feature init');
         }
 
         const gameData = dataLoader.getData();
         const pileRegistry = new BuildingPileRegistry(gameData);
-        const pilePositionResolver = new PilePositionResolver(ctx.gameState, pileRegistry);
+        const pilePositionResolver = new PilePositionResolver(ctx.gameState, pileRegistry, constructionSiteManager);
 
         const inventoryPileSync = new InventoryPileSync(
             ctx.gameState,

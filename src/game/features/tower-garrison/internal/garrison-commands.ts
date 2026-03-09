@@ -134,7 +134,12 @@ export function executeGarrisonUnitsCommand(
         manager.markEnRoute(unitId, cmd.buildingId);
         // If already at the door (e.g. just ejected), finalize immediately without waiting for movement.
         if (!manager.tryFinalizeAtDoor(unitId, cmd.buildingId)) {
-            settlerTaskSystem.assignMoveTask(unitId, approachPos.x, approachPos.y);
+            const moveStarted = settlerTaskSystem.assignMoveTask(unitId, approachPos.x, approachPos.y);
+            if (!moveStarted) {
+                // Pathfinding failed — cancel en-route so the unit is not stuck reserved forever.
+                manager.cancelEnRoute(unitId);
+                log.warn(`garrison_units: pathfinding failed for unit ${unitId} to approach (${approachPos.x},${approachPos.y})`);
+            }
         }
     }
 

@@ -3,54 +3,72 @@
  *
  * Resolves door-adjacent staging tile positions for construction piles.
  * Construction materials are placed near the building door, sorted by Manhattan
- * distance from the door. The number of staging slots matches the number of
- * distinct material types required to construct the building (capped at 8).
+ * distance from the door.
+ *
+ * Each pile holds at most PILE_CAPACITY (8) items. Materials needing more than 8
+ * units get multiple pile positions (ceil(count/8) tiles).
+ *
+ * Pile positions are assigned once at construction site creation and stored on
+ * the ConstructionSite for the entire construction lifecycle.
  */
 
 import type { TileCoord } from '../../core/coordinates';
-import type { Entity } from '../../entity';
-import { EntityType } from '../../entity';
 import { tileKey } from '../../core/coordinates';
-import { BuildingType } from '../../buildings/building-type';
+import type { BuildingType } from '../../buildings/building-type';
 import type { EMaterialType } from '../../economy/material-type';
-import type { GameState } from '../../game-state';
+import type { Race } from '../../core/race';
 import { getBuildingDoorPos } from '../../data/game-data-access';
 import { getConstructionCosts } from '../../economy/building-production';
+import { getBuildingBlockArea } from '../../buildings/types';
 
-/** Maximum number of construction staging slots. */
-const MAX_CONSTRUCTION_SLOTS = 8;
+/** Maximum items per construction pile (matches SLOT_CAPACITY). */
+export const CONSTRUCTION_PILE_CAPACITY = 8;
 
-/** All 8 adjacent tile offsets (ring of radius 1). */
-const RING_OFFSETS: ReadonlyArray<readonly [number, number]> = [
-    [-1, -1],
-    [0, -1],
-    [1, -1],
-    [-1, 0],
-    [1, 0],
-    [-1, 1],
-    [0, 1],
-    [1, 1],
+/** All 8 adjacent tile offsets (ring of radius 1), plus ring of radius 2 for overflow. */
+const RING1_OFFSETS: ReadonlyArray<readonly [number, number]> = [
+    [-1, -1], [0, -1], [1, -1],
+    [-1, 0], [1, 0],
+    [-1, 1], [0, 1], [1, 1],
+];
+
+const RING2_OFFSETS: ReadonlyArray<readonly [number, number]> = [
+    [-2, -2], [-1, -2], [0, -2], [1, -2], [2, -2],
+    [-2, -1], [2, -1],
+    [-2, 0], [2, 0],
+    [-2, 1], [2, 1],
+    [-2, 2], [-1, 2], [0, 2], [1, 2], [2, 2],
 ];
 
 /**
- * Returns an ordered list of candidate staging tiles adjacent to the building door.
- * Tiles are sorted by Manhattan distance from the door, ascending.
- * Count equals the number of distinct material types in the building's construction
- * costs for its race, capped at MAX_CONSTRUCTION_SLOTS.
+ * Returns candidate staging tiles near the building door, outside the block area.
+ * Sorted by Manhattan distance from door (ring 1 first, then ring 2).
+ * Returns up to `count` candidates.
  */
-export function getConstructionCandidates(building: Entity): TileCoord[] {
-    const buildingType = building.subType as BuildingType;
-    const race = building.race;
+function getCandidateTiles(
+    buildingType: BuildingType,
+    race: Race,
+    tileX: number,
+    tileY: number,
+    count: number
+): TileCoord[] {
+    const door = getBuildingDoorPos(tileX, tileY, race, buildingType);
 
-    const door = getBuildingDoorPos(building.x, building.y, race, buildingType);
-    const costs = getConstructionCosts(buildingType, race);
-    const count = Math.min(costs.length, MAX_CONSTRUCTION_SLOTS);
+    // Exclude tiles inside the building's block area so piles are always
+    // accessible without walking onto the (eventually blocked) footprint.
+    const blockArea = getBuildingBlockArea(tileX, tileY, buildingType, race);
+    const blockedKeys = new Set<string>();
+    for (const tile of blockArea) {
+        blockedKeys.add(tileKey(tile.x, tile.y));
+    }
 
-    const candidates = RING_OFFSETS.map(([dx, dy]) => ({
-        x: door.x + dx,
-        y: door.y + dy,
-        dist: Math.abs(dx) + Math.abs(dy),
-    }));
+    const allOffsets = [...RING1_OFFSETS, ...RING2_OFFSETS];
+    const candidates = allOffsets
+        .map(([dx, dy]) => ({
+            x: door.x + dx,
+            y: door.y + dy,
+            dist: Math.abs(dx) + Math.abs(dy),
+        }))
+        .filter(({ x, y }) => !blockedKeys.has(tileKey(x, y)));
 
     candidates.sort((a, b) => a.dist - b.dist);
 
@@ -58,30 +76,66 @@ export function getConstructionCandidates(building: Entity): TileCoord[] {
 }
 
 /**
- * Returns the first candidate tile that is not already used by another pile and
- * not occupied by a StackedPile entity.
- *
- * Returns null (with console.warn) if all candidate tiles are occupied.
+ * Returns an ordered list of candidate staging tiles adjacent to the building door.
+ * Count equals the number of distinct material types in the construction costs.
+ * Exported for tests.
  */
-export function getConstructionPilePosition(
-    building: Entity,
-    material: EMaterialType,
-    usedPositions: ReadonlySet<string>,
-    gameState: GameState
-): TileCoord | null {
-    const candidates = getConstructionCandidates(building);
+export function getConstructionCandidates(
+    buildingType: BuildingType,
+    race: Race,
+    tileX: number,
+    tileY: number
+): TileCoord[] {
+    const costs = getConstructionCosts(buildingType, race);
+    return getCandidateTiles(buildingType, race, tileX, tileY, costs.length);
+}
 
-    for (const pos of candidates) {
-        const key = tileKey(pos.x, pos.y);
-        if (usedPositions.has(key)) continue;
-        const occupant = gameState.getEntityAt(pos.x, pos.y);
-        if (occupant?.type === EntityType.StackedPile) continue;
-        return pos;
+/**
+ * Assign pile positions for all construction materials.
+ * Each material gets ceil(count / CONSTRUCTION_PILE_CAPACITY) positions.
+ * Positions are door-adjacent tiles outside the building block area, sorted by proximity.
+ *
+ * Called once at construction site creation.
+ */
+export function assignConstructionPilePositions(
+    buildingType: BuildingType,
+    race: Race,
+    tileX: number,
+    tileY: number
+): Map<EMaterialType, TileCoord[]> {
+    const costs = getConstructionCosts(buildingType, race);
+
+    // Calculate total number of pile slots needed across all materials
+    let totalSlots = 0;
+    for (const cost of costs) {
+        totalSlots += Math.ceil(cost.count / CONSTRUCTION_PILE_CAPACITY);
     }
 
-    console.warn(
-        `[construction-pile-positions] No free staging tile for material ${material} ` +
-            `near building ${building.id} at (${building.x}, ${building.y}); all candidates occupied.`
-    );
-    return null;
+    const candidates = getCandidateTiles(buildingType, race, tileX, tileY, totalSlots);
+    const positions = new Map<EMaterialType, TileCoord[]>();
+    let candidateIdx = 0;
+
+    for (const cost of costs) {
+        const slotsNeeded = Math.ceil(cost.count / CONSTRUCTION_PILE_CAPACITY);
+        const materialPositions: TileCoord[] = [];
+
+        for (let i = 0; i < slotsNeeded; i++) {
+            if (candidateIdx >= candidates.length) {
+                console.warn(
+                    `[construction-pile-positions] Not enough candidate tiles for material ` +
+                        `${cost.material} at building (${tileX}, ${tileY}); ` +
+                        `need ${totalSlots} slots but only ${candidates.length} tiles available.`
+                );
+                break;
+            }
+            materialPositions.push(candidates[candidateIdx]!);
+            candidateIdx++;
+        }
+
+        if (materialPositions.length > 0) {
+            positions.set(cost.material, materialPositions);
+        }
+    }
+
+    return positions;
 }

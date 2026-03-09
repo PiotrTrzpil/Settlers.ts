@@ -20,9 +20,15 @@ import { isAngelUnitType } from '../../core/unit-types';
 import { createLogger } from '@/utilities/logger';
 import { ThrottledLogger } from '@/utilities/throttled-logger';
 import { sortedEntries } from '@/utilities/collections';
-import { JobType, SearchType, SettlerState, type JobState, type WorkHandler, type SettlerConfig } from './types';
-import type { ChoreoJobState, ChoreoNode, TransportJobOps } from './choreo-types';
+import { SearchType, SettlerState, type JobState, type WorkHandler, type SettlerConfig } from './types';
+import type { TransportJobOps } from './choreo-types';
 import { buildAllSettlerConfigs } from '../../data/settler-data-access';
+import { assignInitialBuildingWorkers } from './initial-worker-assignment';
+import {
+    serializeRuntime,
+    deserializeJob,
+    type SerializedUnitRuntime,
+} from './settler-task-serialization';
 import type { BuildingInventoryManager, BuildingPileRegistry } from '../inventory';
 import type { PileRegistry } from '../inventory/pile-registry';
 import { createWorkplaceHandler, createCarrierHandler } from './work-handlers';
@@ -87,31 +93,6 @@ export interface SettlerTaskSystemConfig extends CoreDeps {
     locationManager: ISettlerBuildingLocationManager;
 }
 
-// ─────────────────────────────────────────────────────────────
-// Serialization types
-// ─────────────────────────────────────────────────────────────
-
-interface SerializedChoreoJob {
-    jobId: string;
-    nodes: ChoreoNode[];
-    nodeIndex: number;
-    progress: number;
-    visible: boolean;
-    activeTrigger: string;
-    targetId: number | null;
-    targetPos: { x: number; y: number } | null;
-    carryingGood: number | null;
-    workStarted: boolean;
-}
-
-interface SerializedUnitRuntime {
-    entityId: number;
-    state: string;
-    lastDirection: number;
-    homeAssignment: { buildingId: number; hasVisited: boolean } | null;
-    job: SerializedChoreoJob | null;
-}
-
 /**
  * Manages all unit behaviors through task execution.
  */
@@ -164,6 +145,7 @@ export class SettlerTaskSystem implements TickSystem, Persistable<SerializedUnit
             getPileSlotRegistry: config.getPileSlotRegistry,
             getPileRegistry: config.getPileRegistry,
             workAreaStore: config.workAreaStore,
+            constructionSiteManager: config.constructionSiteManager,
         });
 
         this.handlerRegistry = new WorkHandlerRegistry();
@@ -198,6 +180,7 @@ export class SettlerTaskSystem implements TickSystem, Persistable<SerializedUnit
             transportJobOps,
             getBarracksTrainingManager: config.getBarracksTrainingManager,
             executeCommand: config.executeCommand,
+            locationManager: this.locationManager,
         });
 
         this.stateMachine = new UnitStateMachine({
@@ -286,7 +269,7 @@ export class SettlerTaskSystem implements TickSystem, Persistable<SerializedUnit
     serialize(): SerializedUnitRuntime[] {
         const result: SerializedUnitRuntime[] = [];
         for (const [entityId, runtime] of this.runtimes) {
-            result.push(this.serializeRuntime(entityId, runtime));
+            result.push(serializeRuntime(entityId, runtime));
         }
         return result;
     }
@@ -309,62 +292,9 @@ export class SettlerTaskSystem implements TickSystem, Persistable<SerializedUnit
             }
 
             if (entry.job) {
-                runtime.job = this.deserializeJob(entry.job);
+                runtime.job = deserializeJob(entry.job);
             }
         }
-    }
-
-    private serializeRuntime(entityId: number, runtime: UnitRuntime): SerializedUnitRuntime {
-        const job = runtime.job;
-        // Transport jobs and active move tasks are not serialized — restart idle on load.
-        const hasTransport = job?.transportData !== undefined;
-        const hasMoveTask = runtime.moveTask !== null;
-        const serializedJob = job && !hasTransport ? this.serializeJob(job) : null;
-
-        return {
-            entityId,
-            state: hasTransport || hasMoveTask ? SettlerState.IDLE : runtime.state,
-            lastDirection: runtime.lastDirection,
-            homeAssignment: runtime.homeAssignment
-                ? {
-                    buildingId: runtime.homeAssignment.buildingId,
-                    hasVisited: runtime.homeAssignment.hasVisited,
-                }
-                : null,
-            job: serializedJob,
-        };
-    }
-
-    private serializeJob(job: ChoreoJobState): SerializedChoreoJob {
-        return {
-            jobId: job.jobId,
-            nodes: job.nodes,
-            nodeIndex: job.nodeIndex,
-            progress: job.progress,
-            visible: job.visible,
-            activeTrigger: job.activeTrigger,
-            targetId: job.targetId,
-            targetPos: job.targetPos ? { x: job.targetPos.x, y: job.targetPos.y } : null,
-            carryingGood: job.carryingGood,
-            workStarted: job.workStarted,
-        };
-    }
-
-    private deserializeJob(data: SerializedChoreoJob): ChoreoJobState {
-        return {
-            type: JobType.CHOREO,
-            jobId: data.jobId,
-            nodes: data.nodes,
-            nodeIndex: data.nodeIndex,
-            progress: data.progress,
-            visible: data.visible,
-            activeTrigger: data.activeTrigger,
-            targetId: data.targetId,
-            targetPos: data.targetPos ? { x: data.targetPos.x, y: data.targetPos.y } : null,
-            carryingGood: data.carryingGood as ChoreoJobState['carryingGood'],
-            workStarted: data.workStarted,
-            pathRetryCountdown: 0,
-        };
     }
 
     /** Set the transport job ops implementation (called by LogisticsDispatcherFeature after construction). */
@@ -559,6 +489,17 @@ export class SettlerTaskSystem implements TickSystem, Persistable<SerializedUnit
         }
 
         runtime.homeAssignment = null;
+    }
+
+    /** Assign workers positioned inside matching building footprints. Called once after map load. */
+    assignInitialBuildingWorkers(): void {
+        assignInitialBuildingWorkers(
+            this.gameState,
+            this.buildingOccupants,
+            this.locationManager,
+            id => this.getRuntime(id),
+            (runtime, buildingId) => this.claimBuilding(runtime, buildingId, true)
+        );
     }
 
     // ─────────────────────────────────────────────────────────────
@@ -838,7 +779,7 @@ export class SettlerTaskSystem implements TickSystem, Persistable<SerializedUnit
                 lastDirection: 0,
                 idleState: this.animController.createIdleState(),
                 homeAssignment: null,
-                idleSearchCooldown: 0,
+                idleSearchCooldown: entityId % IDLE_SEARCH_COOLDOWN,
             };
             this.runtimes.set(entityId, runtime);
         }

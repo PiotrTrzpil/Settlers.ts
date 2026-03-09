@@ -20,7 +20,7 @@ import type { CoreDeps } from '../feature';
 import type { GameState } from '../../game-state';
 import { type EventBus, EventSubscriptionManager } from '../../event-bus';
 import { EntityType, BuildingType, tileKey, getBuildingFootprint } from '../../entity';
-import { getBuildingDoorCorridor } from '../../buildings/types';
+import { getBuildingBlockArea } from '../../buildings/types';
 import { BuildingConstructionPhase, type TerrainContext, type ConstructionSite } from './types';
 
 import { captureOriginalTerrain, restoreOriginalTerrain, applySingleTileLeveling } from './terrain';
@@ -109,6 +109,10 @@ export class BuildingConstructionSystem implements TickSystem {
                 this.state.restoreBuildingFootprintBlock(site.buildingId);
             }
         }
+        // Restore footprint blocking for sites past leveling
+        if (site.phase >= BuildingConstructionPhase.WaitingForBuilders) {
+            this.state.restoreBuildingFootprintBlock(site.buildingId);
+        }
 
         // Complete buildings that finished construction but site wasn't removed before save
         if (this.tryCompleteRestoredSite(site)) return;
@@ -195,17 +199,11 @@ export class BuildingConstructionSystem implements TickSystem {
             }
         );
 
-        // construction:diggingStarted → TerrainLeveling (capture terrain if needed)
+        // construction:diggingStarted → TerrainLeveling phase transition
         this.subscriptions.subscribe(this.eventBus, 'construction:diggingStarted', ({ buildingId }) => {
             const site = this.constructionSiteManager.getSite(buildingId);
             if (!site) return;
             site.phase = BuildingConstructionPhase.TerrainLeveling;
-            if (!site.terrain.originalTerrain && this.terrainContext) {
-                const { groundType, groundHeight, mapSize } = this.terrainContext.terrain;
-                site.terrain.originalTerrain = captureOriginalTerrain(site, groundType, groundHeight, mapSize);
-            }
-            // Populate per-tile tracking from captured terrain
-            this.constructionSiteManager.populateUnleveledTiles(buildingId);
         });
 
         // construction:tileCompleted → apply single tile terrain change
@@ -230,8 +228,8 @@ export class BuildingConstructionSystem implements TickSystem {
             }
         );
 
-        // construction:levelingComplete → WaitingForBuilders (all tiles already leveled individually)
-        // If units are still on the footprint, defer blocking and evacuate them first.
+        // construction:levelingComplete → evacuate units from footprint, then block it.
+        // Construction piles are placed outside the block area so carriers can always deliver.
         this.subscriptions.subscribe(this.eventBus, 'construction:levelingComplete', ({ buildingId }) => {
             const site = this.constructionSiteManager.getSite(buildingId);
             if (!site) return;
@@ -303,23 +301,16 @@ export class BuildingConstructionSystem implements TickSystem {
     // ─────────────────────────────────────────────────────────────
 
     /**
-     * Find all unit entity IDs standing on the building's non-door footprint tiles.
+     * Find all unit entity IDs standing on any of the building's footprint tiles
+     * (including door tiles — idle units must be evacuated before construction rises).
      */
     private findUnitsOnFootprint(buildingId: number): Set<number> {
         const entity = this.state.getEntityOrThrow(buildingId, 'findUnitsOnFootprint');
-        const footprint = getBuildingFootprint(entity.x, entity.y, entity.subType as BuildingType, entity.race);
-        const passableKeys = getBuildingDoorCorridor(
-            entity.x,
-            entity.y,
-            entity.subType as BuildingType,
-            entity.race,
-            footprint
-        );
+        const blockArea = getBuildingBlockArea(entity.x, entity.y, entity.subType as BuildingType, entity.race);
         const unitIds = new Set<number>();
 
-        for (const tile of footprint) {
+        for (const tile of blockArea) {
             const key = tileKey(tile.x, tile.y);
-            if (passableKeys.has(key)) continue; // door corridor — always passable
             const occupant = this.state.tileOccupancy.get(key);
             if (occupant === undefined) continue;
             // Only evacuate units, not the building itself or piles
@@ -385,25 +376,17 @@ export class BuildingConstructionSystem implements TickSystem {
             return;
         }
 
-        // Build set of blocked (non-door) footprint tile keys
-        const footprint = getBuildingFootprint(building.x, building.y, building.subType as BuildingType, building.race);
-        const passableKeys = getBuildingDoorCorridor(
-            building.x,
-            building.y,
-            building.subType as BuildingType,
-            building.race,
-            footprint
-        );
-        const blockedKeys = new Set<string>();
-        for (const tile of footprint) {
-            const key = tileKey(tile.x, tile.y);
-            if (!passableKeys.has(key)) blockedKeys.add(key);
+        // Build set of all block area tile keys (including door — units must fully leave)
+        const blockArea = getBuildingBlockArea(building.x, building.y, building.subType as BuildingType, building.race);
+        const blockKeys = new Set<string>();
+        for (const tile of blockArea) {
+            blockKeys.add(tileKey(tile.x, tile.y));
         }
 
         // Remove units that have cleared the footprint or died since evacuation started
         for (const unitId of [...unitIds]) {
             const unit = this.state.getEntity(unitId); // unit may have died between ticks
-            if (!unit || !blockedKeys.has(tileKey(unit.x, unit.y))) {
+            if (!unit || !blockKeys.has(tileKey(unit.x, unit.y))) {
                 unitIds.delete(unitId);
             }
         }

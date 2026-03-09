@@ -70,6 +70,14 @@ import {
 } from './features/inventory/inventory-pile-sync-feature';
 import { FreePilesFeature } from './features/free-piles/free-piles-feature';
 import { TerritoryFeature, type TerritoryExports } from './features/territory/territory-feature';
+import {
+    VictoryConditionsFeature,
+    type VictoryConditionsExports,
+} from './features/victory-conditions';
+import {
+    BuildingSiegeFeature,
+    type BuildingSiegeExports,
+} from './features/building-siege';
 
 // Re-export types that external code imports transitively via GameServices
 import type { MovementSystem } from './systems/movement';
@@ -95,6 +103,8 @@ import type { CombatSystem } from './features/combat';
 import type { OreVeinData, ResourceSignSystem } from './features/ore-veins';
 import type { SettlerTaskSystem } from './features/settler-tasks';
 import type { ISettlerBuildingLocationManager } from './features/settler-location/types';
+import type { VictoryConditionsSystem } from './features/victory-conditions';
+import type { BuildingSiegeSystem } from './features/building-siege';
 
 export class GameServices {
     // ===== Kernel services =====
@@ -125,6 +135,8 @@ export class GameServices {
     public readonly signSystem: ResourceSignSystem;
     public readonly locationManager: ISettlerBuildingLocationManager;
 
+    public readonly siegeSystem: BuildingSiegeSystem;
+    public readonly victorySystem: VictoryConditionsSystem;
     public readonly unitTransformer: UnitTransformer;
     public readonly recruitSystem: RecruitSystem;
     public readonly inventoryPileSync: InventoryPileSync | null;
@@ -202,8 +214,10 @@ export class GameServices {
             // Tier 4: depend on logistics-dispatcher
             BarracksFeature,
             TowerGarrisonFeature,
+            BuildingSiegeFeature,
             RecruitFeature,
             // Independent chains
+            VictoryConditionsFeature,
             InventoryPileSyncFeature,
             FreePilesFeature,
         ]);
@@ -236,6 +250,8 @@ export class GameServices {
         this.combatSystem = this.feat<CombatExports>('combat').combatSystem;
         this.signSystem = this.feat<OreSignExports>('ore-signs').signSystem;
         this.locationManager = this.feat<SettlerLocationExports>('settler-location').locationManager;
+        this.siegeSystem = this.feat<BuildingSiegeExports>('building-siege').siegeSystem;
+        this.victorySystem = this.feat<VictoryConditionsExports>('victory-conditions').victorySystem;
         const arExports = this.feat<RecruitExports>('recruit');
 
         this.unitTransformer = arExports.unitTransformer;

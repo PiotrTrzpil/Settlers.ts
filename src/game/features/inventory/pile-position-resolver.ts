@@ -3,7 +3,7 @@
  *
  * Dispatches pile position resolution to the correct strategy based on slotKind:
  * - 'output' / 'input'  → BuildingPileRegistry (XML-defined, always present)
- * - 'construction'      → getConstructionPilePosition (door-adjacent staging)
+ * - 'construction'      → ConstructionSiteManager.getConstructionPilePosition (pre-computed at site creation)
  * - 'storage'           → BuildingPileRegistry.getStoragePileWorldPositions (first free slot)
  */
 
@@ -17,16 +17,19 @@ import { LogHandler } from '@/utilities/log-handler';
 import type { BuildingPileRegistry } from './building-pile-registry';
 import type { LinkedSlotKind } from '../../core/pile-kind';
 import { SlotKind } from '../../core/pile-kind';
-import { getConstructionCandidates, getConstructionPilePosition } from './construction-pile-positions';
+import { getConstructionCandidates } from './construction-pile-positions';
+import type { ConstructionSiteManager } from '../building-construction/construction-site-manager';
 
 export class PilePositionResolver {
     private readonly log = new LogHandler('PilePositionResolver');
     private readonly gameState: GameState;
     private readonly pileRegistry: BuildingPileRegistry;
+    private readonly constructionSiteManager: ConstructionSiteManager;
 
-    constructor(gameState: GameState, buildingPileRegistry: BuildingPileRegistry) {
+    constructor(gameState: GameState, buildingPileRegistry: BuildingPileRegistry, csm: ConstructionSiteManager) {
         this.gameState = gameState;
         this.pileRegistry = buildingPileRegistry;
+        this.constructionSiteManager = csm;
     }
 
     /**
@@ -43,6 +46,8 @@ export class PilePositionResolver {
         material: EMaterialType;
         slotKind: LinkedSlotKind;
         usedPositions: ReadonlySet<string>;
+        /** For construction piles: which pile index (when a material has multiple piles). Default 0. */
+        pileIndex?: number;
     }): TileCoord | null {
         const { building, material, slotKind, usedPositions } = params;
         const bt = building.subType as BuildingType;
@@ -85,7 +90,9 @@ export class PilePositionResolver {
         }
 
         case SlotKind.Construction: {
-            return getConstructionPilePosition(building, material, usedPositions, this.gameState);
+            return this.constructionSiteManager.getConstructionPilePosition(
+                params.buildingId, material, params.pileIndex ?? 0
+            ) ?? null;
         }
 
         case SlotKind.Storage: {
@@ -115,6 +122,6 @@ export class PilePositionResolver {
      * Exposed primarily for tests.
      */
     getConstructionCandidates(building: Entity): TileCoord[] {
-        return getConstructionCandidates(building);
+        return getConstructionCandidates(building.subType as BuildingType, building.race, building.x, building.y);
     }
 }

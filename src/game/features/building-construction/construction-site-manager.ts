@@ -25,6 +25,8 @@ import type { SeededRng } from '../../core/rng';
 import { type ComponentStore, mapStore } from '../../ecs';
 import { BuildingConstructionPhase, type CapturedTerrainTile, type ConstructionSite } from './types';
 import type { Persistable } from '@/game/persistence';
+import type { TileCoord } from '../../core/coordinates';
+import { assignConstructionPilePositions } from '../inventory/construction-pile-positions';
 
 // ── Serialization types ──
 
@@ -134,6 +136,7 @@ export class ConstructionSiteManager implements Persistable<SerializedConstructi
         const constructionCosts = getConstructionCosts(buildingType, race);
         const totalCost = constructionCosts.reduce((sum, c) => sum + c.count, 0);
         const workerCount = getWorkerCount(buildingType, race);
+        const pilePositions = assignConstructionPilePositions(buildingType, race, tileX, tileY);
 
         const site: ConstructionSite = {
             buildingId,
@@ -164,6 +167,7 @@ export class ConstructionSiteManager implements Persistable<SerializedConstructi
                 slots: { required: workerCount, assigned: new Set(), started: false },
                 progress: 0,
             },
+            pilePositions,
         };
 
         this.sites.set(buildingId, site);
@@ -460,6 +464,24 @@ export class ConstructionSiteManager implements Persistable<SerializedConstructi
         return remaining;
     }
 
+    // ── Pile positions ──
+
+    /**
+     * Get the pre-computed pile position for a material at a specific pile index.
+     * Returns undefined if the site/material/index doesn't exist.
+     */
+    getConstructionPilePosition(buildingId: number, material: EMaterialType, pileIndex: number = 0): TileCoord | undefined {
+        return this.sites.get(buildingId)?.pilePositions.get(material)?.[pileIndex];
+    }
+
+    /**
+     * Get all pre-computed pile positions for a material at a construction site.
+     * Returns undefined if the site doesn't exist or has no positions for that material.
+     */
+    getConstructionPilePositions(buildingId: number, material: EMaterialType): readonly TileCoord[] | undefined {
+        return this.sites.get(buildingId)?.pilePositions.get(material);
+    }
+
     // ── Worker queries ──
 
     /**
@@ -580,6 +602,7 @@ export class ConstructionSiteManager implements Persistable<SerializedConstructi
 
         const delivered = new Map<EMaterialType, number>(data.deliveredMaterials);
         const deliveredAmount = [...delivered.values()].reduce((sum, v) => sum + v, 0);
+        const pilePositions = assignConstructionPilePositions(data.buildingType, data.race, data.tileX, data.tileY);
 
         const site: ConstructionSite = {
             buildingId: data.buildingId,
@@ -624,6 +647,7 @@ export class ConstructionSiteManager implements Persistable<SerializedConstructi
                 },
                 progress: data.constructionProgress,
             },
+            pilePositions,
         };
 
         this.sites.set(data.buildingId, site);

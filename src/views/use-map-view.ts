@@ -34,6 +34,7 @@ import {
 } from '@/game/state/game-state-persistence';
 import { ALL_BUILDINGS, ALL_UNITS, ALL_RESOURCES, ALL_SPECIALISTS } from './palette-data';
 import { toastError } from '@/game/ui/toast-notifications';
+import { getGameDataLoader } from '@/resources/game-data';
 
 /** Entity counts per layer for display in the layer panel */
 export interface LayerCounts {
@@ -330,6 +331,10 @@ export function useMapView(
         mapLoadState.isLoading = true;
         debugStats.startMapLoad();
         console.log(`[${performance.now().toFixed(0)}ms] [perf] Map load started`);
+
+        // Ensure game data XML is loaded before creating the Game.
+        // load() is idempotent — returns cached data if already loaded.
+        await getGameDataLoader().load();
 
         try {
             // Destroy old game first to prevent multiple game loops

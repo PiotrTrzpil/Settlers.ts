@@ -43,5 +43,6 @@ export {
     decodeBuildingFootprint,
     getBuildingFootprintFromInfo,
     getBuildingFootprintAt,
+    getBuildingBlockAreaAt,
     getFootprintBounds,
 } from './footprint-decoder';

@@ -364,11 +364,11 @@ export function getBuildingWorkerInfo(race: Race, buildingType: BuildingType): B
 /**
  * Get all building types where a worker unit type can work, derived from XML.
  * This is the reverse lookup of getBuildingWorkerInfo: given a UnitType, find matching buildings.
- * Returns undefined if unit type has no workplace or if game data is not yet loaded.
+ * Returns undefined if unit type has no workplace.
  */
 export function getWorkerBuildingTypes(race: Race, unitType: UnitType): ReadonlySet<BuildingType> | undefined {
     const loader = getGameDataLoader();
-    if (!loader.isLoaded()) return undefined;
+    if (!loader.isLoaded()) throw new Error('getWorkerBuildingTypes called before game data is loaded');
 
     let raceMap = workerBuildingCache.get(race);
     if (!raceMap) {

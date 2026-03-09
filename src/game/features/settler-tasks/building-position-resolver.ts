@@ -19,6 +19,7 @@ import type { GameState } from '../../game-state';
 import type { BuildingPileRegistry } from '../inventory/building-pile-registry';
 import type { PileRegistry } from '../inventory/pile-registry';
 import type { WorkAreaStore } from '../work-areas/work-area-store';
+import type { ConstructionSiteManager } from '../building-construction/construction-site-manager';
 import { EntityType, BuildingType, type Entity } from '../../entity';
 import { EMaterialType } from '../../economy/material-type';
 import { SlotKind } from '../../core/pile-kind';
@@ -48,6 +49,7 @@ export interface BuildingPositionResolverConfig {
     /** Lazy getter — the pile registry may not be available at construction time. */
     getPileRegistry: () => BuildingPileRegistry | null;
     workAreaStore: WorkAreaStore;
+    constructionSiteManager: ConstructionSiteManager;
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -75,12 +77,14 @@ export class BuildingPositionResolverImpl implements BuildingPositionResolver {
     private readonly getPileSlotRegistry: () => PileRegistry | null;
     private readonly getPileRegistry: () => BuildingPileRegistry | null;
     private readonly workAreaStore: WorkAreaStore;
+    private readonly constructionSiteManager: ConstructionSiteManager;
 
     constructor(config: BuildingPositionResolverConfig) {
         this.gameState = config.gameState;
         this.getPileSlotRegistry = config.getPileSlotRegistry;
         this.getPileRegistry = config.getPileRegistry;
         this.workAreaStore = config.workAreaStore;
+        this.constructionSiteManager = config.constructionSiteManager;
     }
 
     /**
@@ -122,7 +126,11 @@ export class BuildingPositionResolverImpl implements BuildingPositionResolver {
         const materialType = parseMaterialString(material);
         if (materialType === null) return null;
 
-        return this.resolvePileFromRegistry(buildingId, materialType, SlotKind.Input);
+        const pos = this.resolvePileFromRegistry(buildingId, materialType, SlotKind.Input);
+        if (pos) return pos;
+
+        // Construction sites have no XML pile data — resolve via construction pile candidates
+        return this.resolveConstructionPilePosition(buildingId, materialType);
     }
 
     /**
@@ -194,6 +202,18 @@ export class BuildingPositionResolverImpl implements BuildingPositionResolver {
         // No pile defined (e.g. construction materials delivered to a production building).
         // Return null so the caller falls back to the building door.
         return null;
+    }
+
+    /**
+     * Resolve a construction pile position for a building under construction.
+     * Returns the first pre-computed pile position for this material.
+     * Returns null if the building is not under construction or has no position for this material.
+     */
+    private resolveConstructionPilePosition(
+        buildingId: number,
+        material: EMaterialType
+    ): { x: number; y: number } | null {
+        return this.constructionSiteManager.getConstructionPilePosition(buildingId, material, 0) ?? null;
     }
 }
 

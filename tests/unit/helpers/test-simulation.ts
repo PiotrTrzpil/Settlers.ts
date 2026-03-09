@@ -44,6 +44,9 @@ import { spiralSearch } from '@/game/utils/spiral-search';
 import { OreType } from '@/game/features/ore-veins/ore-type';
 import { isMineBuilding, getBuildingFootprint } from '@/game/buildings/types';
 import { canPlaceBuildingFootprint } from '@/game/features/placement';
+import { populateMapBuildings } from '@/game/features/building-construction';
+import { populateMapSettlers } from '@/game/systems/map-settlers';
+import type { MapBuildingData, MapSettlerData } from '@/resources/map/map-entity-data';
 import { BuildingConstructionPhase } from '@/game/features/building-construction/types';
 import type { InventorySlot } from '@/game/features/inventory/inventory-slot';
 import type { Entity } from '@/game/entity';
@@ -408,7 +411,7 @@ export class Simulation {
         const label = opts.label ?? 'predicate';
         const header = `TIMEOUT: "${label}" not reached in ${maxTicks} ticks`;
         const extra = opts.diagnose ? `\n[Diagnosis] ${opts.diagnose()}` : '';
-        this.dumpDiagnosticsBody(header + extra, 10000, errorsBefore);
+        this.dumpDiagnosticsBody(header + extra, 1_000_000, errorsBefore);
     }
 
     // ─── Snapshot ─────────────────────────────────────────────────
@@ -544,9 +547,10 @@ export class Simulation {
 
     // ─── Building placement ───────────────────────────────────────
 
-    placeBuilding(buildingType: BuildingType, player = 0, completed = true): number {
-        const pos = this.placer.findBuildingPosition(buildingType);
-        return this.placeBuildingAt(pos.x, pos.y, buildingType, player, completed);
+    placeBuilding(buildingType: BuildingType, player = 0, completed = true, race?: Race): number {
+        const r = race ?? this.state.playerRaces.get(player) ?? Race.Roman;
+        const pos = this.placer.findBuildingPosition(buildingType, r);
+        return this.placeBuildingAt(pos.x, pos.y, buildingType, player, completed, r);
     }
 
     /** Place a building at explicit coordinates (bypasses auto-placer). */
@@ -605,6 +609,29 @@ export class Simulation {
         if (!result.success) {
             throw new Error(`Failed to place ${EMaterialType[material]} near building ${buildingId}: ${result.error}`);
         }
+    }
+
+    // ─── Map-data population (real map-load pipeline) ─────────────
+
+    /**
+     * Populate buildings and settlers from raw map entity data arrays, using
+     * the same code paths as the real Game.populateMapEntities.
+     *
+     * Buildings are created via populateMapBuildings (no worker auto-spawn).
+     * Settlers are created via populateMapSettlers (placed on building footprints when applicable).
+     * Finally, assignInitialBuildingWorkers matches workers to their buildings.
+     */
+    populateMapData(
+        buildings: MapBuildingData[],
+        settlers: MapSettlerData[]
+    ): { buildingCount: number; settlerCount: number } {
+        const buildingCount = populateMapBuildings(this.state, buildings, {
+            eventBus: this.eventBus,
+            terrain: this.map.terrain,
+        });
+        const settlerCount = populateMapSettlers(this.state, settlers, this.eventBus);
+        this.services.settlerTaskSystem.assignInitialBuildingWorkers();
+        return { buildingCount, settlerCount };
     }
 
     // ─── Map object placement ─────────────────────────────────────

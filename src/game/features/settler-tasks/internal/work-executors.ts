@@ -81,9 +81,12 @@ function tickEntityWork(
     label: string
 ): TaskResult {
     const durationSeconds = resolveDurationSeconds(node);
-    if (durationSeconds !== Infinity) {
-        job.progress += dt / durationSeconds;
-    }
+    // For domain-controlled work (duration=-1), still advance progress using the
+    // default animation cycle so the work animation plays at least one full cycle
+    // before the handler's completion signal takes effect.
+    const effectiveDuration =
+        durationSeconds === Infinity ? framesToSeconds(DEFAULT_WORK_CYCLE_FRAMES) : durationSeconds;
+    job.progress += dt / effectiveDuration;
 
     const domainDone = safeCall(
         () => handler.onWorkTick(job.targetId!, job.progress),
@@ -92,9 +95,10 @@ function tickEntityWork(
     );
     if (domainDone === undefined) return TaskResult.FAILED;
 
-    // Domain-controlled (duration=-1): handler alone decides when work ends
-    // Duration-controlled: animation must play for full duration regardless of handler
-    const complete = durationSeconds === Infinity ? domainDone : job.progress >= 1;
+    // Domain-controlled (duration=-1): handler decides when work ends, but animation
+    // must play at least one full cycle (progress >= 1) before completion takes effect.
+    // Duration-controlled: animation must play for full duration regardless of handler.
+    const complete = durationSeconds === Infinity ? domainDone && job.progress >= 1 : job.progress >= 1;
 
     if (complete) {
         safeCall(

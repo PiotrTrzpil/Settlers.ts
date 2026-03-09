@@ -17,6 +17,7 @@
 
 import type { FeatureContext } from '../feature';
 import type { Persistable } from '@/game/persistence';
+import { EntityType, getUnitTypeSpeed, type UnitType } from '@/game/entity';
 import { CLEANUP_PRIORITY } from '@/game/systems/entity-cleanup-registry';
 import { createLogger } from '@/utilities/logger';
 import {
@@ -113,6 +114,12 @@ implements ISettlerBuildingLocationManager, Persistable<SerializedSettlerLocatio
 
         const entity = this.ctx.gameState.getEntityOrThrow(settlerId, 'SettlerBuildingLocationManager.enterBuilding');
         entity.hidden = true;
+
+        // Remove movement controller and tileOccupancy so the hidden unit
+        // doesn't ghost-block the tile for other units trying to reach the building.
+        this.ctx.gameState.movement.removeController(settlerId);
+        this.ctx.gameState.clearTileOccupancy(settlerId);
+
         log.debug(`Settler ${settlerId} entered building ${buildingId}`);
     }
 
@@ -134,6 +141,14 @@ implements ISettlerBuildingLocationManager, Persistable<SerializedSettlerLocatio
 
         const entity = this.ctx.gameState.getEntityOrThrow(settlerId, 'SettlerBuildingLocationManager.exitBuilding');
         entity.hidden = false;
+
+        // Restore movement controller and tileOccupancy (removed on enterBuilding)
+        if (entity.type === EntityType.Unit) {
+            const speed = getUnitTypeSpeed(entity.subType as UnitType);
+            this.ctx.gameState.movement.createController(settlerId, entity.x, entity.y, speed);
+            this.ctx.gameState.restoreTileOccupancy(settlerId);
+        }
+
         log.debug(`Settler ${settlerId} exited building ${buildingId}`);
     }
 
@@ -197,6 +212,9 @@ implements ISettlerBuildingLocationManager, Persistable<SerializedSettlerLocatio
             if (entry.status === SettlerBuildingStatus.Inside) {
                 const entity = this.ctx.gameState.getEntityOrThrow(entry.settlerId, 'settler-location restore');
                 entity.hidden = true;
+                // Remove controller + tileOccupancy (entity:created may have added them)
+                this.ctx.gameState.movement.removeController(entry.settlerId);
+                this.ctx.gameState.clearTileOccupancy(entry.settlerId);
             }
             // Approaching: entity stays visible; feature will re-issue movement on its own onTerrainReady
         }
@@ -227,6 +245,12 @@ implements ISettlerBuildingLocationManager, Persistable<SerializedSettlerLocatio
             const entity = this.ctx.gameState.getEntity(settlerId);
             if (entity) {
                 entity.hidden = false;
+                // Restore movement controller + tileOccupancy (removed on enterBuilding)
+                if (entity.type === EntityType.Unit) {
+                    const speed = getUnitTypeSpeed(entity.subType as UnitType);
+                    this.ctx.gameState.movement.createController(settlerId, entity.x, entity.y, speed);
+                    this.ctx.gameState.restoreTileOccupancy(settlerId);
+                }
             }
             log.debug(`Settler ${settlerId} unhidden — building ${buildingId} removed`);
         }

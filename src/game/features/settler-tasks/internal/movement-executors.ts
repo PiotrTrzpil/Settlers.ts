@@ -11,10 +11,11 @@
 
 import { EntityType, BuildingType, type Entity } from '../../../entity';
 import { getBuildingDoorPos } from '../../../data/game-data-access';
-import { hexDistance, getApproxDirection } from '../../../systems/hex-directions';
+import { hexDistance } from '../../../systems/hex-directions';
 import { createLogger } from '@/utilities/logger';
 import { TaskResult } from '../types';
 import type { ChoreoNode, MovementExecutorFn, ChoreoJobState, MovementContext } from '../choreo-types';
+import { ChoreoTaskType } from '../choreo-types';
 import { safeCall } from '../safe-call';
 
 const log = createLogger('MovementExecutors');
@@ -28,6 +29,9 @@ const ARRIVAL_DIST = 1;
 
 /** Arrival threshold for "roughly" movement tasks — settler doesn't need to be adjacent. */
 const ARRIVAL_DIST_ROUGH = 2;
+
+/** Arrival threshold for pile movements — carrier must step onto the exact pile tile. */
+const ARRIVAL_DIST_EXACT = 0;
 
 /** Ticks to wait before retrying pathfinding after a failed attempt. */
 const PATH_RETRY_COOLDOWN = 10;
@@ -115,6 +119,26 @@ function resolveAssignedBuildingId(settler: Entity, ctx: MovementContext): numbe
     return buildingId;
 }
 
+/**
+ * Scan forward from the current node to find the material entity string on
+ * the next matching inventory node (GET_GOOD, PUT_GOOD, etc.).
+ * Used by pile movement executors to resolve the correct pile position.
+ */
+function findMaterialInAdjacentNode(job: ChoreoJobState, taskType: ChoreoTaskType): string | undefined {
+    for (let i = job.nodeIndex + 1; i < job.nodes.length; i++) {
+        const n = job.nodes[i]!;
+        if (n.task === taskType && n.entity) return n.entity;
+        // Also check virtual variants
+        if (taskType === ChoreoTaskType.GET_GOOD && n.task === ChoreoTaskType.GET_GOOD_VIRTUAL && n.entity) {
+            return n.entity;
+        }
+        if (taskType === ChoreoTaskType.PUT_GOOD && n.task === ChoreoTaskType.PUT_GOOD_VIRTUAL && n.entity) {
+            return n.entity;
+        }
+    }
+    return undefined;
+}
+
 // ─────────────────────────────────────────────────────────────
 // Phase 2A — Regular movement executors
 // ─────────────────────────────────────────────────────────────
@@ -184,18 +208,21 @@ export const executeGoHome: MovementExecutorFn = (settler, job, node, _dt, ctx) 
  *
  * For carrier transport jobs: reads the source position directly from
  * transportData.sourcePos, pre-resolved by TransportJobBuilder.
- * For regular workers: resolves the building-relative (x, y) offset from the XML node,
- * identical to GO_TO_POS.
+ * For regular workers: resolves from the pile registry using the material
+ * from the next GET_GOOD node in the choreography.
  */
 export const executeGoToSourcePile: MovementExecutorFn = (settler, job, node, _dt, ctx) => {
-    // Transport jobs: read source directly from transport data
     if (job.transportData) {
-        const { sourcePos } = job.transportData;
-        return moveToPosition(settler, sourcePos.x, sourcePos.y, node, ctx, ARRIVAL_DIST, job);
+        return moveToPosition(settler, job.transportData.sourcePos.x, job.transportData.sourcePos.y,
+            node, ctx, ARRIVAL_DIST_EXACT, job);
     }
 
-    // Regular workers: resolve building-relative offset (same as GO_TO_POS)
-    return executeGoToPos(settler, job, node, _dt, ctx);
+    if (!job.targetPos) {
+        const material = findMaterialInAdjacentNode(job, ChoreoTaskType.GET_GOOD)!;
+        const buildingId = resolveAssignedBuildingId(settler, ctx);
+        job.targetPos = ctx.buildingPositionResolver.getSourcePilePosition(buildingId, material)!;
+    }
+    return moveToPosition(settler, job.targetPos.x, job.targetPos.y, node, ctx, ARRIVAL_DIST, job);
 };
 
 /**
@@ -203,18 +230,20 @@ export const executeGoToSourcePile: MovementExecutorFn = (settler, job, node, _d
  *
  * For carrier transport jobs: reads the destination position directly from
  * transportData.destPos, making the data flow explicit (no cross-node targetPos coupling).
- * For regular workers: resolves the building-relative (x, y) offset from the XML node,
- * identical to GO_TO_POS.
+ * For regular workers: resolves from the pile registry using the settler's carried material.
  */
 export const executeGoToDestinationPile: MovementExecutorFn = (settler, job, node, _dt, ctx) => {
-    // Transport jobs: read destination directly from transport data
     if (job.transportData) {
-        const { destPos } = job.transportData;
-        return moveToPosition(settler, destPos.x, destPos.y, node, ctx, ARRIVAL_DIST, job);
+        return moveToPosition(settler, job.transportData.destPos.x, job.transportData.destPos.y,
+            node, ctx, ARRIVAL_DIST_EXACT, job);
     }
 
-    // Regular workers: resolve building-relative offset (same as GO_TO_POS)
-    return executeGoToPos(settler, job, node, _dt, ctx);
+    if (!job.targetPos) {
+        const material = findMaterialInAdjacentNode(job, ChoreoTaskType.PUT_GOOD)!;
+        const buildingId = resolveAssignedBuildingId(settler, ctx);
+        job.targetPos = ctx.buildingPositionResolver.getDestinationPilePosition(buildingId, material)!;
+    }
+    return moveToPosition(settler, job.targetPos.x, job.targetPos.y, node, ctx, ARRIVAL_DIST, job);
 };
 
 /** Try entity handler search. Returns null when entityHandler is absent. */
@@ -326,33 +355,13 @@ export const executeGoVirtual: MovementExecutorFn = (settler, job, node, _dt, ct
     }
 
     // No target entity — interior/building teleport (original behavior)
+    // Visibility is handled by prepareNodeTick via the location manager (enterBuilding removes
+    // the movement controller and clears tile occupancy). We just teleport the position.
     const pos = ctx.buildingPositionResolver.resolvePosition(buildingId, node.x, node.y, node.useWork);
-
-    // Hide the settler inside the building
     job.visible = false;
-    settler.hidden = true;
 
-    // Teleport to resolved interior position
     settler.x = pos.x;
     settler.y = pos.y;
-
-    // Sync movement controller so it doesn't produce stale visual state
-    const controller = ctx.gameState.movement.getController(settler.id);
-    if (controller) {
-        controller.syncPosition(pos.x, pos.y);
-
-        // Apply explicit direction if specified
-        if (node.dir !== -1) {
-            controller.setDirection(node.dir);
-        } else {
-            // Default: face toward the building's center if possible
-            const building = ctx.gameState.getEntity(buildingId);
-            if (building) {
-                const dir = getApproxDirection(pos.x, pos.y, building.x, building.y);
-                controller.setDirection(dir);
-            }
-        }
-    }
 
     log.debug(`executeGoVirtual: settler ${settler.id} moved to (${pos.x}, ${pos.y}) inside building ${buildingId}`);
     return TaskResult.DONE;

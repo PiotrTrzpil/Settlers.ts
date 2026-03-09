@@ -27,15 +27,10 @@ export interface TimelineEntry {
     detail: string;
 }
 
-const MAX_ENTRIES = 10000;
-
 export class TimelineRecorder {
     private entries: TimelineEntry[] = [];
 
     record(tick: number, category: TimelineCategory, entityId: number | undefined, event: string, detail: string) {
-        if (this.entries.length >= MAX_ENTRIES) {
-            this.entries.splice(0, this.entries.length - MAX_ENTRIES + 1);
-        }
         this.entries.push({ tick, category, entityId, event, detail });
     }
 

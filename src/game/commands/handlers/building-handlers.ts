@@ -49,7 +49,12 @@ export interface SpawnBuildingUnitsDeps {
 type UnitSpawnEffect = { type: 'unit_spawned'; entityId: number; unitType: number; x: number; y: number };
 
 function isSpawnableTile(deps: SpawnBuildingUnitsDeps, x: number, y: number): boolean {
-    return deps.terrain.isInBounds(x, y) && deps.terrain.isPassable(x, y) && !deps.state.getEntityAt(x, y);
+    return (
+        deps.terrain.isInBounds(x, y) &&
+        deps.terrain.isPassable(x, y) &&
+        !deps.state.getEntityAt(x, y) &&
+        !deps.state.buildingOccupancy.has(tileKey(x, y))
+    );
 }
 
 function spawnUnitsNear(
@@ -150,8 +155,7 @@ export function executePlaceBuilding(deps: PlaceBuildingDeps, cmd: PlaceBuilding
 
     if (cmd.completed) {
         applyTerrainLeveling(terrainParams, groundType, groundHeight, mapSize, 1.0, originalTerrain);
-    } else {
-        state.clearBuildingFootprintBlock(entity.id);
+        state.restoreBuildingFootprintBlock(entity.id);
     }
 
     deps.eventBus.emit('terrain:modified', {});
@@ -164,8 +168,13 @@ export function executePlaceBuilding(deps: PlaceBuildingDeps, cmd: PlaceBuilding
         player: cmd.player,
     });
 
+    // Assign captured terrain after building:placed (which creates the site via registerSite),
+    // then populate unleveled tiles so digger findTarget can reserve tiles immediately.
     const site = deps.constructionSiteManager.getSite(entity.id);
-    if (site) site.terrain.originalTerrain = originalTerrain;
+    if (site) {
+        site.terrain.originalTerrain = originalTerrain;
+        deps.constructionSiteManager.populateUnleveledTiles(entity.id);
+    }
 
     if (cmd.completed) {
         deps.eventBus.emit('building:completed', {

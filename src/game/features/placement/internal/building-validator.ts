@@ -6,7 +6,6 @@
 import { tileKey, getBuildingFootprint, BuildingType, isMineBuilding } from '../../../entity';
 import type { Race } from '../../../core/race';
 import type { TerrainData } from '../../../terrain';
-import { getAllNeighbors } from '../../../systems/hex-directions';
 import type { PlacementContext, PlacementFilter, PlacementResult } from '../types';
 import { PlacementStatus } from '../types';
 import { isBuildable, isMineBuildable } from './terrain';
@@ -51,24 +50,6 @@ function checkPlacementFilter(footprint: TileCoord[], ctx: PlacementContext): Pl
 }
 
 /**
- * Enforce 1-tile gap between building footprints for pathfinding.
- * Rejects if any external neighbor of the new footprint touches any
- * existing building footprint tile (including door corridors).
- */
-function footprintTouchesBuilding(footprint: TileCoord[], buildingFootprint: ReadonlySet<string>): boolean {
-    const fpKeys = new Set(footprint.map(t => tileKey(t.x, t.y)));
-    for (const tile of footprint) {
-        for (const n of getAllNeighbors(tile)) {
-            const key = tileKey(n.x, n.y);
-            if (!fpKeys.has(key) && buildingFootprint.has(key)) {
-                return true;
-            }
-        }
-    }
-    return false;
-}
-
-/**
  * Validate building placement with detailed status.
  *
  * @param x Top-left X coordinate of building footprint
@@ -107,13 +88,6 @@ export function validateBuildingPlacement(
         const blockingStatus = checkTileBasics(tile, ctx, isMine);
         if (blockingStatus !== null) {
             return { canPlace: false, status: blockingStatus };
-        }
-    }
-
-    // 1-tile gap between building footprints for pathfinding
-    if (ctx.buildingFootprint && ctx.buildingFootprint.size > 0) {
-        if (footprintTouchesBuilding(footprint, ctx.buildingFootprint)) {
-            return { canPlace: false, status: PlacementStatus.Occupied };
         }
     }
 

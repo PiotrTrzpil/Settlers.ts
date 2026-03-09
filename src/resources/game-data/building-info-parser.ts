@@ -26,6 +26,7 @@ function parsePositionOffset(parent: Element, tagName: string): PositionOffset {
     };
 }
 
+
 function parseBoundingRect(parent: Element): BoundingRect {
     const el = parent.getElementsByTagName('bitBoundingRect')[0];
     if (!el) return { minX: 0, maxX: 0, minY: 0, maxY: 0 };

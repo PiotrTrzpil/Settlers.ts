@@ -25,6 +25,7 @@ import type { PilePositionResolver } from './pile-position-resolver';
 import type { PileKind, LinkedSlotKind } from '../../core/pile-kind';
 import { SlotKind } from '../../core/pile-kind';
 import type { EntityCleanupRegistry } from '../../systems/entity-cleanup-registry';
+import { CONSTRUCTION_PILE_CAPACITY } from './construction-pile-positions';
 
 const log = createLogger('InventoryPileSync');
 
@@ -152,6 +153,13 @@ export class InventoryPileSync {
         if (entity.type === EntityType.StackedPile) return;
 
         const slotKind = this.resolveSlotKind(buildingId, slotType);
+
+        // Construction piles: distribute across multiple pile entities (8 items each)
+        if (slotKind === SlotKind.Construction) {
+            this.syncConstructionPiles(buildingId, materialType, newAmount);
+            return;
+        }
+
         const key: PileSlotKey = { buildingId, material: materialType, slotKind };
         const existingEntityId = this.pileRegistry.getEntityId(key);
 
@@ -284,5 +292,69 @@ export class InventoryPileSync {
 
         const entityId = extractEntityIdFromResult(result);
         this.pileRegistry.register(entityId, key, position);
+    }
+
+    // ─── Construction pile distribution ──────────────────────────────────────
+
+    /**
+     * Distribute a material's total quantity across multiple construction pile entities,
+     * each holding at most CONSTRUCTION_PILE_CAPACITY (8) items.
+     *
+     * For each pile index:
+     *   - quantity > 0 and no entity → spawn
+     *   - quantity > 0 and entity exists → update
+     *   - quantity = 0 and entity exists → remove
+     */
+    private syncConstructionPiles(buildingId: number, materialType: EMaterialType, totalAmount: number): void {
+        const positions = this.constructionSiteManager.getConstructionPilePositions(buildingId, materialType);
+        if (!positions || positions.length === 0) {
+            log.warn(
+                `No construction pile positions for building=${buildingId}, ` +
+                    `material=${EMaterialType[materialType]}`
+            );
+            return;
+        }
+
+        const building = this.gameState.getEntityOrThrow(buildingId, 'syncConstructionPiles');
+        let remaining = totalAmount;
+
+        for (let i = 0; i < positions.length; i++) {
+            const pileQty = Math.min(remaining, CONSTRUCTION_PILE_CAPACITY);
+            remaining -= pileQty;
+
+            const key: PileSlotKey = {
+                buildingId,
+                material: materialType,
+                slotKind: SlotKind.Construction,
+                pileIndex: i,
+            };
+            const existingEntityId = this.pileRegistry.getEntityId(key);
+
+            if (pileQty > 0) {
+                if (existingEntityId !== undefined) {
+                    this.executeCommand({
+                        type: 'update_pile_quantity',
+                        entityId: existingEntityId,
+                        quantity: pileQty,
+                    });
+                } else {
+                    const position = positions[i]!;
+                    const result = this.executeCommand({
+                        type: 'spawn_pile',
+                        materialType,
+                        x: position.x,
+                        y: position.y,
+                        player: building.player,
+                        quantity: pileQty,
+                        kind: buildKind(SlotKind.Construction, buildingId),
+                    });
+                    const entityId = extractEntityIdFromResult(result);
+                    this.pileRegistry.register(entityId, key, position);
+                }
+            } else if (existingEntityId !== undefined) {
+                this.executeCommand({ type: 'remove_entity', entityId: existingEntityId });
+                this.pileRegistry.deregister(existingEntityId);
+            }
+        }
     }
 }

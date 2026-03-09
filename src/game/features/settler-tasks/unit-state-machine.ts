@@ -26,6 +26,9 @@ type SettlerConfigs = Map<UnitType, SettlerConfig>;
 
 const log = createLogger('UnitStateMachine');
 
+/** Ticks to rest after completing a job before searching for new work (~1 second at 30 tps). */
+const POST_JOB_REST_TICKS = 30;
+
 /** Simple move task state (for user-initiated movement) */
 export interface MoveTaskState {
     type: 'move';
@@ -148,6 +151,16 @@ export class UnitStateMachine {
             }
             runtime.lastDirection = currentDirection;
         }
+
+        // Freeze walk animation when blocked waiting for an occupied tile
+        const vs = this.visualService.getState(unit.id);
+        if (vs?.animation) {
+            if (controller.isWaiting && vs.animation.playing) {
+                vs.animation.playing = false;
+            } else if (!controller.isWaiting && !vs.animation.playing && controller.state === 'moving') {
+                vs.animation.playing = true;
+            }
+        }
     }
 
     // ─────────────────────────────────────────────────────────────
@@ -241,9 +254,12 @@ export class UnitStateMachine {
         // Sync direction immediately after task execution (FACE_POS sets it mid-tick, avoid one-frame lag)
         this.updateDirectionTracking(settler, runtime);
 
-        // Job completed/interrupted → search for new work immediately on next idle tick
         if (runtime.state !== SettlerState.WORKING) {
-            runtime.idleSearchCooldown = 0;
+            // Interrupted → search immediately to recover.
+            // Job completed → brief rest for home-building workers (matches S4 pacing).
+            // Roaming workers (diggers, builders) work continuously — no rest between cycles.
+            const hasHome = !!(runtime as WorkerRuntimeState).homeAssignment;
+            runtime.idleSearchCooldown = runtime.state === SettlerState.IDLE && hasHome ? POST_JOB_REST_TICKS : 0;
         }
     }
 }

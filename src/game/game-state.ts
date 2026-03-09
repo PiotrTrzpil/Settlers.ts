@@ -8,7 +8,7 @@ import {
     isUnitTypeSelectable,
 } from './entity';
 import { Race } from './core/race';
-import { getBuildingDoorCorridor } from './buildings/types';
+import { getBuildingBlockArea, getBuildingPassableTiles } from './buildings/types';
 import type { MovementSystem, MovementController } from './systems/movement/index';
 import { SeededRng, createGameRng } from './core/rng';
 import { EventBus } from './event-bus';
@@ -314,17 +314,14 @@ export class GameState {
         if (type === EntityType.Decoration) {
             // no-op: decorations don't occupy tiles
         } else if (type === EntityType.Building) {
+            // Footprint (buildingPosLines) — placement exclusion zone + tile ownership.
+            // buildingOccupancy is NOT set here — construction sites start with walkable
+            // footprints. Completed buildings call restoreBuildingFootprintBlock explicitly.
             const footprint = getBuildingFootprint(x, y, subType as BuildingType, entity.race);
-            const passableKeys = getBuildingDoorCorridor(x, y, subType as BuildingType, entity.race, footprint);
             for (const tile of footprint) {
                 const key = tileKey(tile.x, tile.y);
                 this.tileOccupancy.set(key, entity.id);
                 this.buildingFootprint.add(key);
-                if (!passableKeys.has(key)) {
-                    this.buildingOccupancy.add(key);
-                } else {
-                    this.buildingOccupancy.delete(key);
-                }
             }
         } else {
             this.tileOccupancy.set(tileKey(x, y), entity.id);
@@ -354,8 +351,8 @@ export class GameState {
     public clearBuildingFootprintBlock(buildingId: number): void {
         const entity = this.entityMap.get(buildingId);
         if (!entity || entity.type !== EntityType.Building) return;
-        const footprint = getBuildingFootprint(entity.x, entity.y, entity.subType as BuildingType, entity.race);
-        for (const tile of footprint) {
+        const blockArea = getBuildingBlockArea(entity.x, entity.y, entity.subType as BuildingType, entity.race);
+        for (const tile of blockArea) {
             this.buildingOccupancy.delete(tileKey(tile.x, tile.y));
         }
     }
@@ -367,15 +364,15 @@ export class GameState {
     public restoreBuildingFootprintBlock(buildingId: number): void {
         const entity = this.entityMap.get(buildingId);
         if (!entity || entity.type !== EntityType.Building) return;
-        const footprint = getBuildingFootprint(entity.x, entity.y, entity.subType as BuildingType, entity.race);
-        const passableKeys = getBuildingDoorCorridor(
+        const blockArea = getBuildingBlockArea(entity.x, entity.y, entity.subType as BuildingType, entity.race);
+        const passableKeys = getBuildingPassableTiles(
             entity.x,
             entity.y,
             entity.subType as BuildingType,
             entity.race,
-            footprint
+            blockArea
         );
-        for (const tile of footprint) {
+        for (const tile of blockArea) {
             const key = tileKey(tile.x, tile.y);
             if (!passableKeys.has(key)) {
                 this.buildingOccupancy.add(key);
@@ -469,6 +466,63 @@ export class GameState {
     }
 
     /** Update occupancy when an entity moves */
+    /**
+     * Re-index an entity under a new player. Updates entity.player, entity.race, and EntityIndex.
+     * Used when a building is captured during a siege.
+     */
+    public changeEntityOwner(entityId: number, newPlayer: number): void {
+        const entity = this.getEntityOrThrow(entityId, 'changeEntityOwner');
+        const oldPlayer = entity.player;
+
+        const newRace = this.playerRaces.get(newPlayer);
+        if (newRace === undefined) {
+            throw new Error(`changeEntityOwner: no race mapping for player ${newPlayer}`);
+        }
+
+        // Re-index: remove from old (type, player) bucket, add to new
+        this.entityIndex.remove(entityId, entity.type, oldPlayer);
+        entity.player = newPlayer;
+        // Buildings keep their original race (visual/sprite identity); only units change race
+        if (entity.type !== EntityType.Building) {
+            entity.race = newRace;
+        }
+        this.entityIndex.add(entityId, entity.type, newPlayer);
+
+        this.eventBus.emit('building:ownerChanged', {
+            entityId,
+            buildingType: entity.subType as BuildingType,
+            oldPlayer,
+            newPlayer,
+        });
+    }
+
+    /**
+     * Remove a unit's tileOccupancy entry (e.g. when it enters a building and becomes hidden).
+     * Only clears if the entity currently owns the tile — won't remove a building's entry.
+     */
+    public clearTileOccupancy(entityId: number): void {
+        const entity = this.entityMap.get(entityId);
+        if (!entity) return;
+        const key = tileKey(entity.x, entity.y);
+        if (this.tileOccupancy.get(key) === entityId) {
+            this.tileOccupancy.delete(key);
+        }
+    }
+
+    /**
+     * Restore a unit's tileOccupancy entry (e.g. when it exits a building and becomes visible).
+     * Won't overwrite a static entity (building/map object) occupancy.
+     */
+    public restoreTileOccupancy(entityId: number): void {
+        const entity = this.entityMap.get(entityId);
+        if (!entity) return;
+        const key = tileKey(entity.x, entity.y);
+        const occupant = this.tileOccupancy.get(key);
+        if (occupant === undefined || this.entityMap.get(occupant)?.type === EntityType.Unit) {
+            this.tileOccupancy.set(key, entityId);
+        }
+    }
+
     public updateEntityPosition(id: number, newX: number, newY: number): void {
         const entity = this.entityMap.get(id);
         if (!entity) return;

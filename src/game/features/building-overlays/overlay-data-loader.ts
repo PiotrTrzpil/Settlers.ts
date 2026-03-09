@@ -180,7 +180,9 @@ function registerRaceOverlays(
 
 export function populateOverlayRegistry(registry: OverlayRegistry): number {
     const loader = getGameDataLoader();
-    if (!loader.isLoaded()) return 0;
+    if (!loader.isLoaded()) {
+        throw new Error('populateOverlayRegistry: game data must be loaded before overlay init');
+    }
 
     const data = loader.getData();
     let totalRegistered = 0;

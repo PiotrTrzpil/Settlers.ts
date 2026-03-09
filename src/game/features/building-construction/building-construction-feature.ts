@@ -49,7 +49,6 @@ export const BuildingConstructionFeature: FeatureDefinition = {
             executeCommand: ctx.executeCommand,
         });
         constructionSystem.setResidenceSpawner(residenceSpawner);
-        constructionSystem.registerEvents();
 
         const constructionRequestSystem = new ConstructionRequestSystem(constructionSiteManager, requestManager);
 
@@ -64,7 +63,10 @@ export const BuildingConstructionFeature: FeatureDefinition = {
             inventoryManager,
             cleanupRegistry: ctx.cleanupRegistry,
         });
+        // Lifecycle must register before construction system so registerSite runs
+        // before the building:placed handler that captures terrain data.
         buildingLifecycle.registerEvents();
+        constructionSystem.registerEvents();
 
         const exports: BuildingConstructionExports = {
             constructionSiteManager,
