@@ -445,7 +445,7 @@ describe.skipIf(!hasRealData)('Tower garrison (integration)', { timeout: 30_000 
         // Spawn unit on the far side of the wall (on grass)
         const unitId = sim.spawnUnit(tower.x, wallY + 10, UnitType.Swordsman1);
 
-        const result = garrisonUnits(sim, towerId, [unitId]);
+        garrisonUnits(sim, towerId, [unitId]);
         // Command may succeed (unit accepted) but pathfinding fails internally
 
         // Run a few ticks to let things settle
@@ -492,7 +492,8 @@ describe.skipIf(!hasRealData)('Tower garrison (integration)', { timeout: 30_000 
             const u = sim.state.getEntityOrThrow(secondId, 'diag');
             const chebyshev = Math.max(Math.abs(u.x - door.x), Math.abs(u.y - door.y));
             console.log(`[DIAG] tower=(${tower.x},${tower.y}) door=(${door.x},${door.y})`);
-            console.log(`[DIAG] unit stopped at (${stoppedPos?.x},${stoppedPos?.y}), now at (${u.x},${u.y})`);
+            const sp = stoppedPos as { x: number; y: number } | null;
+            console.log(`[DIAG] unit stopped at (${sp?.x},${sp?.y}), now at (${u.x},${u.y})`);
             console.log(`[DIAG] chebyshev from door=${chebyshev}`);
             console.log(`[DIAG] door in buildingOccupancy=${sim.state.buildingOccupancy.has(tileKey(door.x, door.y))}`);
             console.log(`[DIAG] isEnRoute=${sim.services.garrisonManager.isEnRoute(secondId)}`);

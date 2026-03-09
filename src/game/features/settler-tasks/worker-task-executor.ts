@@ -8,7 +8,6 @@
 import type { Entity } from '../../entity';
 import type { CoreDeps } from '../feature';
 import { UnitType } from '../../entity';
-import { createLogger } from '@/utilities/logger';
 import type { ThrottledLogger } from '@/utilities/throttled-logger';
 import { hexDistance } from '../../systems/hex-directions';
 import {
@@ -21,10 +20,7 @@ import {
     type HomeAssignment,
 } from './types';
 import type {
-    ChoreoJobState,
-    ChoreoNode,
     ChoreoJob,
-    JobPartResolution,
     MovementContext,
     WorkContext,
     InventoryExecutorContext,
@@ -34,7 +30,7 @@ import type {
     JobPartResolver,
     TransportJobOps,
 } from './choreo-types';
-import { ChoreoTaskType, createChoreoJobState } from './choreo-types';
+import { ChoreoTaskType } from './choreo-types';
 import { registerCoreExecutors } from './choreo-executors';
 import type { ChoreoSystem } from '../../systems/choreo';
 import type { JobChoreographyStore } from './job-choreography-store';
@@ -53,8 +49,7 @@ import type { ISettlerBuildingLocationManager } from '../settler-location';
 import { findNearestWorkplace } from './work-handlers';
 import { JobSelector } from './job-selector';
 import { safeCall } from './safe-call';
-
-const log = createLogger('WorkerTaskExecutor');
+import { WorkerJobLifecycle } from './internal/worker-job-lifecycle';
 
 /** Per-unit state needed by the worker executor (subset of UnitRuntime). */
 export interface WorkerRuntimeState {
@@ -87,26 +82,17 @@ export interface WorkerTaskExecutorConfig extends CoreDeps {
 }
 
 export class WorkerTaskExecutor {
-    private readonly choreoSystem: ChoreoSystem;
     private readonly gameState: GameState;
     private readonly choreographyStore: JobChoreographyStore;
     private readonly handlerRegistry: WorkHandlerRegistry;
-    private readonly animController: IdleAnimationController;
     private readonly handlerErrorLogger: ThrottledLogger;
     private readonly missingHandlerLogger: ThrottledLogger;
     private readonly isBuildingAvailable?: (buildingId: number) => boolean;
     private readonly jobSelector: JobSelector;
-
-    // Service references used directly by the executor (not passed to category executors)
     private readonly eventBus: EventBus;
     private readonly inventoryManager: BuildingInventoryManager;
-    private readonly jobPartResolver: JobPartResolver;
-    private readonly materialTransfer: MaterialTransfer;
-    private readonly transportJobOps: TransportJobOps;
-    private readonly triggerSystem: TriggerSystem;
     private readonly getWorkerHomeBuilding: (settlerId: number) => number | null;
     private readonly buildingPositionResolver: BuildingPositionResolver;
-    private readonly locationManager: ISettlerBuildingLocationManager;
 
     // Pre-built context objects — handler fields updated in-place per tick (no allocation)
     private readonly movementCtx: MovementContext;
@@ -114,30 +100,23 @@ export class WorkerTaskExecutor {
     private readonly inventoryCtx: InventoryExecutorContext;
     private readonly controlCtx: ControlContext;
 
+    private readonly lifecycle: WorkerJobLifecycle;
+
     /** Enable verbose choreography events (nodeStarted, nodeCompleted, animationApplied, waitingAtHome) */
     verbose = false;
 
     constructor(cfg: WorkerTaskExecutorConfig) {
-        this.choreoSystem = cfg.choreoSystem;
         this.gameState = cfg.gameState;
         this.choreographyStore = cfg.choreographyStore;
         this.handlerRegistry = cfg.handlerRegistry;
-        this.animController = cfg.animController;
         this.handlerErrorLogger = cfg.handlerErrorLogger;
         this.missingHandlerLogger = cfg.missingHandlerLogger;
         this.isBuildingAvailable = cfg.isBuildingAvailable;
         this.jobSelector = new JobSelector(cfg.choreographyStore);
-
-        // Store service references for direct use
         this.eventBus = cfg.eventBus;
         this.inventoryManager = cfg.inventoryManager;
-        this.jobPartResolver = cfg.jobPartResolver;
-        this.materialTransfer = cfg.materialTransfer;
-        this.transportJobOps = cfg.transportJobOps;
-        this.triggerSystem = cfg.triggerSystem;
         this.getWorkerHomeBuilding = cfg.getWorkerHomeBuilding;
         this.buildingPositionResolver = cfg.buildingPositionResolver;
-        this.locationManager = cfg.locationManager;
 
         // Pre-built context objects — handler fields mutated in-place each tick (zero allocation)
         this.movementCtx = {
@@ -178,6 +157,24 @@ export class WorkerTaskExecutor {
             inventoryManager: cfg.inventoryManager,
         };
 
+        this.lifecycle = new WorkerJobLifecycle({
+            choreoSystem: cfg.choreoSystem,
+            handlerRegistry: cfg.handlerRegistry,
+            animController: cfg.animController,
+            jobPartResolver: cfg.jobPartResolver,
+            locationManager: cfg.locationManager,
+            gameState: cfg.gameState,
+            triggerSystem: cfg.triggerSystem,
+            materialTransfer: cfg.materialTransfer,
+            transportJobOps: cfg.transportJobOps,
+            handlerErrorLogger: cfg.handlerErrorLogger,
+            eventBus: cfg.eventBus,
+            getWorkerHomeBuilding: cfg.getWorkerHomeBuilding,
+            movementCtx: this.movementCtx,
+            workCtx: this.workCtx,
+            getVerbose: () => this.verbose,
+        });
+
         // Register core executors — TRANSFORM_RECRUIT/DIRECT are registered by recruit feature later.
         registerCoreExecutors(cfg.choreoSystem, this.movementCtx, this.workCtx, this.inventoryCtx, this.controlCtx);
     }
@@ -216,9 +213,7 @@ export class WorkerTaskExecutor {
 
         // Workers with workplace buildings must have an assigned workplace before starting work
         if (!homeBuilding && getWorkerBuildingTypes(settler.race, settler.subType as UnitType)) {
-            if (this.verbose) {
-                this.eventBus.emit('choreo:idleSkipped', { unitId: settler.id, reason: 'no_home', homeBuilding: null });
-            }
+            this.emitIdleSkipped(settler.id, 'no_home', null);
             return false;
         }
 
@@ -231,7 +226,7 @@ export class WorkerTaskExecutor {
             if (this.isAtHomeBuilding(settler, homeBuilding)) {
                 runtime.homeAssignment!.hasVisited = true;
             } else {
-                this.returnHomeAndWait(settler, homeBuilding, 'first_visit');
+                this.lifecycle.returnHomeAndWait(settler, homeBuilding, 'first_visit');
                 return false;
             }
         }
@@ -241,26 +236,25 @@ export class WorkerTaskExecutor {
 
         const selected = this.jobSelector.selectJob(settler, config, targets.entity, homeBuilding, targets.position);
         if (!selected) {
-            if (this.verbose && !targets.entity && !targets.position) {
-                this.eventBus.emit('choreo:idleSkipped', {
-                    unitId: settler.id,
-                    reason: 'no_target',
-                    homeBuilding: homeBuilding?.id ?? null,
-                });
-            } else if (this.verbose) {
-                this.eventBus.emit('choreo:idleSkipped', {
-                    unitId: settler.id,
-                    reason: 'no_job',
-                    homeBuilding: homeBuilding?.id ?? null,
-                });
-            }
+            const reason = !targets.entity && !targets.position ? 'no_target' : 'no_job';
+            this.emitIdleSkipped(settler.id, reason, homeBuilding);
             return false;
         }
 
         if (this.shouldWaitBeforeStarting(settler, homeBuilding, selected, entityHandler, targets.entity)) return false;
 
-        this.startJob(settler, runtime, selected, targets.entity, homeBuilding, targets.position);
+        this.lifecycle.startJob(settler, runtime, selected, targets.entity, homeBuilding, targets.position);
         return true;
+    }
+
+    /** Emit choreo:idleSkipped if verbose logging is on. */
+    private emitIdleSkipped(
+        unitId: number,
+        reason: 'inside_building' | 'no_home' | 'no_target' | 'no_job',
+        homeBuilding: Entity | null
+    ): void {
+        if (!this.verbose) return;
+        this.eventBus.emit('choreo:idleSkipped', { unitId, reason, homeBuilding: homeBuilding?.id ?? null });
     }
 
     /** Find entity and position targets for a settler. Returns null if a handler errored. */
@@ -289,56 +283,16 @@ export class WorkerTaskExecutor {
         entityTarget: { entityId: number; x: number; y: number } | null
     ): boolean {
         if (homeBuilding && this.isOutputFull(homeBuilding, job)) {
-            this.returnHomeAndWait(settler, homeBuilding, 'output_full');
+            this.lifecycle.returnHomeAndWait(settler, homeBuilding, 'output_full');
             return true;
         }
         if (entityHandler?.canWork && entityTarget && !entityHandler.canWork(entityTarget.entityId)) {
             if (homeBuilding) {
-                this.returnHomeAndWait(settler, homeBuilding, 'cant_work');
+                this.lifecycle.returnHomeAndWait(settler, homeBuilding, 'cant_work');
             }
             return true;
         }
         return false;
-    }
-
-    /** Start a choreo job for a settler. */
-    private startJob(
-        settler: Entity,
-        runtime: WorkerRuntimeState,
-        selected: ChoreoJob,
-        entityTarget: { entityId: number; x: number; y: number } | null,
-        homeBuilding: Entity | null,
-        positionTarget?: { x: number; y: number } | null
-    ): void {
-        if (this.locationManager.isInside(settler.id)) {
-            this.locationManager.exitBuilding(settler.id);
-        }
-        runtime.state = SettlerState.WORKING;
-
-        const jobState = createChoreoJobState(selected.id, selected.nodes);
-        if (entityTarget) {
-            jobState.targetId = entityTarget.entityId;
-            jobState.targetPos = { x: entityTarget.x, y: entityTarget.y };
-        } else if (positionTarget) {
-            // Position-only target (e.g. forester planting spot) — no entity ID
-            jobState.targetPos = { x: positionTarget.x, y: positionTarget.y };
-        }
-        runtime.job = jobState;
-
-        const posStr = positionTarget ? `(${positionTarget.x},${positionTarget.y})` : 'none';
-        log.debug(
-            `Settler ${settler.id} starting choreo job ${selected.id}, ` +
-                `target ${entityTarget?.entityId ?? 'none'}, pos ${posStr}, ` +
-                `home ${homeBuilding?.id ?? 'none'}`
-        );
-
-        this.eventBus.emit('settler:taskStarted', {
-            unitId: settler.id,
-            jobId: selected.id,
-            targetId: entityTarget?.entityId ?? null,
-            targetPos: jobState.targetPos,
-            homeBuilding: homeBuilding?.id ?? null,
-        });
     }
 
     /**
@@ -356,242 +310,47 @@ export class WorkerTaskExecutor {
 
         const nodes = job.nodes;
         if (job.nodeIndex >= nodes.length) {
-            this.completeJob(settler, runtime);
+            this.lifecycle.completeJob(settler, runtime);
             return;
         }
 
         const node = nodes[job.nodeIndex]!;
-        this.prepareNodeTick(settler, config, job, node);
+        this.lifecycle.prepareNodeTick(settler, config, job, node);
 
-        // Mark unit as busy (unbumpable) during pick/put animation at a pile.
-        // This prevents other arriving carriers from pushing this unit mid-animation.
         const isPileAction = node.task === ChoreoTaskType.GET_GOOD || node.task === ChoreoTaskType.PUT_GOOD;
         const controller = isPileAction ? this.gameState.movement.getController(settler.id) : undefined;
         if (controller) controller.busy = true;
 
-        const result = this.executeNode(settler, job, node, dt);
+        const result = this.lifecycle.executeNode(settler, job, node, dt);
 
-        // Clear busy flag when the pick/put node finishes or fails
         if (controller && result !== TaskResult.CONTINUE) {
             controller.busy = false;
         }
 
         switch (result) {
         case TaskResult.DONE:
-            this.advanceToNextNode(settler, job, nodes);
+            this.lifecycle.advanceToNextNode(settler, job, nodes);
             break;
-
         case TaskResult.FAILED:
-            this.interruptJob(settler, config, runtime);
+            this.lifecycle.interruptJob(settler, config, runtime);
             break;
-
         case TaskResult.CONTINUE:
             break;
         }
     }
 
-    /** Set up animation, visibility, and handler context for the current node tick. */
-    private prepareNodeTick(settler: Entity, config: SettlerConfig, job: ChoreoJobState, node: ChoreoNode): void {
-        // Apply animation and visibility once on the true first tick of this node.
-        // progress < 0 is the sentinel set by advanceToNextNode / createChoreoJobState.
-        if (job.progress < 0) {
-            this.applyChoreoAnimation(settler, node);
-            if (this.verbose) {
-                this.emitNodeStarted(settler, job, node);
-            }
-
-            // Handle visibility transitions via location manager (only for settlers with a home building).
-            // Settlers without a home (diggers, builders) toggle hidden directly.
-            const buildingId = this.getWorkerHomeBuilding(settler.id);
-            if (buildingId !== null) {
-                const isInside = this.locationManager.isInside(settler.id);
-                if (!node.visible && !isInside) {
-                    this.locationManager.enterBuilding(settler.id, buildingId);
-                } else if (node.visible && isInside) {
-                    this.locationManager.exitBuilding(settler.id);
-                }
-            } else {
-                settler.hidden = !node.visible;
-            }
-
-            job.progress = 0;
-        }
-
-        // Update handler fields in-place (no allocation) for movement/work contexts
-        const entityHandler = this.handlerRegistry.getEntityHandler(config.search);
-        const positionHandler = this.handlerRegistry.getPositionHandler(config.plantSearch ?? config.search);
-        this.movementCtx.entityHandler = entityHandler;
-        this.movementCtx.positionHandler = positionHandler;
-        this.workCtx.entityHandler = entityHandler;
-        this.workCtx.positionHandler = positionHandler;
-    }
-
-    /** Advance to the next choreography node after the current one completes. */
-    private advanceToNextNode(settler: Entity, job: ChoreoJobState, nodes: readonly ChoreoNode[]): void {
-        if (this.verbose) {
-            const completedNode = nodes[job.nodeIndex]!;
-            this.eventBus.emit('choreo:nodeCompleted', {
-                unitId: settler.id,
-                jobId: job.jobId,
-                nodeIndex: job.nodeIndex,
-                task: ChoreoTaskType[completedNode.task],
-            });
-        }
-        // Stop active trigger when leaving a node
-        if (job.activeTrigger) {
-            const buildingId = this.getWorkerHomeBuilding(settler.id);
-            if (buildingId !== null) {
-                this.triggerSystem.stopTrigger(buildingId, job.activeTrigger);
-            }
-            job.activeTrigger = '';
-        }
-        job.nodeIndex++;
-        job.progress = -1; // sentinel: next tick is "first tick" of the new node
-        job.workStarted = false;
-        job.pathRetryCountdown = 0;
-        // Reset targetPos between nodes. Transport jobs read positions directly from
-        // transportData (sourcePos/destPos) so they don't rely on cross-node targetPos.
-        // Exception: SEARCH sets targetPos so the immediately following WORK node can call
-        // onWorkAtPositionComplete at the correct tile. The settler may arrive within
-        // arrivalDist (1 tile) of the target rather than exactly on it, so settler.x/y
-        // cannot be relied upon — the SEARCH result must survive to WORK.
-        const completedTask = nodes[job.nodeIndex - 1]!.task;
-        if (completedTask !== ChoreoTaskType.SEARCH) {
-            job.targetPos = null;
-        }
-        // Animation for the next node is applied on its first tick (progress sentinel = -1).
-    }
-
-    /** Execute a single choreography node, catching executor crashes. */
-    private executeNode(settler: Entity, job: ChoreoJobState, node: ChoreoNode, dt: number): TaskResult {
-        try {
-            return this.choreoSystem.execute(settler, job, node, dt);
-        } catch (e) {
-            this.handlerErrorLogger.error(
-                `Executor crash: settler=${settler.id} job=${job.jobId} nodeIdx=${job.nodeIndex} task=${node.task}`,
-                e instanceof Error ? e : new Error(String(e))
-            );
-            return TaskResult.FAILED;
-        }
-    }
-
-    /**
-     * Complete a job and return to idle state.
-     */
+    /** Complete a job and return to idle state. */
     completeJob(settler: Entity, runtime: WorkerRuntimeState): void {
-        if (!runtime.job) return;
-        const job = runtime.job;
-
-        // Stop any active trigger
-        if (job.activeTrigger) {
-            const homeId = this.getWorkerHomeBuilding(settler.id);
-            if (homeId !== null) {
-                this.triggerSystem.stopTrigger(homeId, job.activeTrigger);
-            }
-        }
-
-        // Clear busy flag in case the job ended during a pick/put animation
-        const controller = this.gameState.movement.getController(settler.id);
-        if (controller) controller.busy = false;
-
-        log.debug(`Settler ${settler.id} completed job ${job.jobId}`);
-
-        this.eventBus.emit('settler:taskCompleted', {
-            unitId: settler.id,
-            jobId: job.jobId,
-        });
-
-        runtime.state = SettlerState.IDLE;
-        runtime.job = null;
-
-        if (this.locationManager.isInside(settler.id)) {
-            this.locationManager.exitBuilding(settler.id);
-        } else {
-            settler.hidden = false;
-        }
-        this.animController.setIdleAnimation(settler);
-
-        // Hide settler if they finished at their home building
-        if (runtime.homeAssignment) {
-            const home = this.gameState.getEntity(runtime.homeAssignment.buildingId);
-            if (home && hexDistance(settler.x, settler.y, home.x, home.y) <= 1) {
-                this.locationManager.enterBuilding(settler.id, home.id);
-            }
-        }
+        this.lifecycle.completeJob(settler, runtime);
     }
 
     /**
      * Interrupt a job (target gone, pathfinding failure, etc.).
-     * Calls onWorkInterrupt on the entity handler if work had started.
-     *
      * Must NOT be called when the job has already completed all nodes —
      * use completeJob for that case. Callers should check `isJobDone()` first.
      */
     interruptJob(settler: Entity, config: SettlerConfig, runtime: WorkerRuntimeState): void {
-        // Job may have already been cleaned up by a re-entrant event handler
-        // (e.g., building destroyed during executeNode triggers interruptJobForCleanup)
-        if (!runtime.job) return;
-
-        const entityHandler = this.handlerRegistry.getEntityHandler(config.search);
-        const job = runtime.job;
-
-        // Only call onWorkInterrupt on entity handlers when work actually started
-        if (entityHandler && job.targetId && job.workStarted) {
-            safeCall(
-                () => entityHandler.onWorkInterrupt?.(job.targetId!, settler.id),
-                this.handlerErrorLogger,
-                `onWorkInterrupt failed for target ${job.targetId}`
-            );
-        }
-
-        // Cancel transport job if active (releases reservation + resets request)
-        if (job.transportData) {
-            this.transportJobOps.cancel(job.transportData.jobId);
-        }
-
-        // Drop carried material as free pile (no-op if not carrying)
-        this.materialTransfer.drop(settler.id);
-
-        // Stop any active trigger
-        if (job.activeTrigger) {
-            const homeId = this.getWorkerHomeBuilding(settler.id);
-            if (homeId !== null) {
-                this.triggerSystem.stopTrigger(homeId, job.activeTrigger);
-            }
-        }
-
-        // Restore visibility — exit building if inside
-        if (this.locationManager.isInside(settler.id)) {
-            this.locationManager.exitBuilding(settler.id);
-        }
-
-        // Clear busy flag in case the job was interrupted during a pick/put animation
-        const controller = this.gameState.movement.getController(settler.id);
-        if (controller) controller.busy = false;
-
-        log.debug(`Settler ${settler.id} interrupted job ${job.jobId}`);
-
-        const failedNode = job.nodes[job.nodeIndex];
-        let failedStep: string;
-        if (failedNode) {
-            failedStep = ChoreoTaskType[failedNode.task];
-        } else if (job.nodeIndex >= job.nodes.length) {
-            failedStep = 'END';
-        } else {
-            failedStep = 'unknown';
-        }
-        this.eventBus.emit('settler:taskFailed', {
-            unitId: settler.id,
-            jobId: job.jobId,
-            nodeIndex: job.nodeIndex,
-            failedStep,
-            targetId: job.targetId ?? null,
-            workStarted: job.workStarted,
-            wasCarrying: !!settler.carrying,
-        });
-
-        runtime.state = SettlerState.INTERRUPTED;
-        this.animController.setIdleAnimation(settler);
+        this.lifecycle.interruptJob(settler, config, runtime);
     }
 
     /**
@@ -676,47 +435,6 @@ export class WorkerTaskExecutor {
         return building;
     }
 
-    /** Emit verbose choreo:waitingAtHome event. */
-    private emitWaitingAtHome(
-        settler: Entity,
-        home: Entity,
-        reason: 'output_full' | 'cant_work' | 'first_visit'
-    ): void {
-        this.eventBus.emit('choreo:waitingAtHome', {
-            unitId: settler.id,
-            homeBuilding: home.id,
-            reason,
-        });
-    }
-
-    /** Emit verbose choreo:nodeStarted event. */
-    private emitNodeStarted(settler: Entity, job: ChoreoJobState, node: ChoreoNode): void {
-        this.eventBus.emit('choreo:nodeStarted', {
-            unitId: settler.id,
-            jobId: job.jobId,
-            nodeIndex: job.nodeIndex,
-            nodeCount: job.nodes.length,
-            task: ChoreoTaskType[node.task],
-            jobPart: node.jobPart,
-            duration: node.duration,
-        });
-    }
-
-    /** Apply choreography animation for a node via the JobPartResolver. */
-    private applyChoreoAnimation(settler: Entity, node: ChoreoNode): void {
-        if (!node.jobPart) return;
-        const resolution: JobPartResolution = this.jobPartResolver.resolve(node.jobPart, settler);
-        this.animController.applyChoreoAnimation(settler, resolution);
-        if (this.verbose) {
-            this.eventBus.emit('choreo:animationApplied', {
-                unitId: settler.id,
-                jobPart: node.jobPart,
-                sequenceKey: resolution.sequenceKey,
-                loop: resolution.loop,
-            });
-        }
-    }
-
     /**
      * Check if a building's output is full for the goods produced by this choreo job.
      * Looks for PUT_GOOD / PUT_GOOD_VIRTUAL / RESOURCE_GATHERING / RESOURCE_GATHERING_VIRTUAL
@@ -744,48 +462,5 @@ export class WorkerTaskExecutor {
         const key = entity.replace(/^GOOD_/, '');
         const value = EMaterialType[key as keyof typeof EMaterialType] as EMaterialType | undefined;
         return value ?? null;
-    }
-
-    /**
-     * Make settler return to home building and wait there.
-     * Used when output is full, settler can't work, or first visit.
-     * Emits choreo:waitingAtHome once on the transition (movement start or entering hidden).
-     */
-    private returnHomeAndWait(
-        settler: Entity,
-        homeBuilding: Entity,
-        reason?: 'output_full' | 'cant_work' | 'first_visit'
-    ): void {
-        const controller = this.gameState.movement.getController(settler.id);
-        if (!controller) {
-            throw new Error(`Settler ${settler.id} (${UnitType[settler.subType]}) has no movement controller`);
-        }
-
-        const door = getBuildingDoorPos(
-            homeBuilding.x,
-            homeBuilding.y,
-            homeBuilding.race,
-            homeBuilding.subType as BuildingType
-        );
-        const dist = hexDistance(settler.x, settler.y, door.x, door.y);
-
-        // At the door — enter the building
-        if (dist <= 1) {
-            if (this.verbose && reason) {
-                this.emitWaitingAtHome(settler, homeBuilding, reason);
-            }
-            this.locationManager.enterBuilding(settler.id, homeBuilding.id);
-            this.animController.setIdleAnimation(settler);
-            return;
-        }
-
-        // If not moving, start moving home
-        if (controller.state === 'idle') {
-            if (this.verbose && reason) {
-                this.emitWaitingAtHome(settler, homeBuilding, reason);
-            }
-            this.gameState.movement.moveUnit(settler.id, door.x, door.y);
-            this.animController.startWalkAnimation(settler, controller.direction);
-        }
     }
 }

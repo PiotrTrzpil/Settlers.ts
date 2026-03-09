@@ -156,7 +156,10 @@ export class VictoryConditionsSystem implements TickSystem {
         // before castles would immediately eliminate all players on tick 1.
         let anyCastles = false;
         for (const count of this.castleCounts.values()) {
-            if (count > 0) { anyCastles = true; break; }
+            if (count > 0) {
+                anyCastles = true;
+                break;
+            }
         }
         if (!anyCastles) return;
 
