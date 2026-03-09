@@ -46,7 +46,7 @@ describe.skipIf(!hasRealData)('Worker entering building with door occupant', { t
 
     it('woodcutter entering building pushes idle unit off the door', () => {
         sim = new Simulation();
-        const residenceId = sim.placeBuilding(BuildingType.ResidenceSmall);
+        sim.placeBuilding(BuildingType.ResidenceSmall);
         const wcId = sim.placeBuilding(BuildingType.WoodcutterHut);
 
         // Plant trees so the woodcutter has work
@@ -77,7 +77,7 @@ describe.skipIf(!hasRealData)('Worker entering building with door occupant', { t
         if (!woodcutterLeft) return; // skip if woodcutter never left
 
         // Now place an idle carrier on the door tile — the woodcutter will walk through on return
-        const blocker = sim.state.addUnit(UnitType.Carrier, door.x, door.y, 0);
+        sim.state.addUnit(UnitType.Carrier, door.x, door.y, 0);
 
         const violations: string[] = [];
         let tick = 0;

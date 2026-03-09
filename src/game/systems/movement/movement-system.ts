@@ -2,7 +2,7 @@ import { EntityType, TileCoord, tileKey } from '../../entity';
 import { MovementController, MovementState } from './movement-controller';
 import { PathfindingService } from './pathfinding-service';
 import type { TickSystem } from '../../core/tick-system';
-import type { EventBus } from '../../event-bus';
+import type { EventBus, GameEvents } from '../../event-bus';
 import { type ComponentStore, mapStore } from '../../ecs';
 import { LogHandler } from '@/utilities/log-handler';
 import { getAllNeighbors } from '../hex-directions';
@@ -433,55 +433,38 @@ export class MovementSystem implements TickSystem {
             });
         }
         if (depth > MovementSystem.MAX_BUMP_DEPTH) {
-            if (this._verbose) {
-                this.eventBus.emit('movement:bumpFailed', {
-                    entityId: bumper.entityId, occupantId, reason: 'max_depth',
-                });
-            }
+            this.emitBumpFailed(bumper.entityId, occupantId, 'max_depth');
             return false;
         }
 
         const occupant = this.controllers.get(occupantId);
         if (!occupant || !this.canBumpOccupant(bumper, occupant)) {
-            if (this._verbose) {
-                const reason = !occupant ? 'no_controller'
-                    : occupant.busy ? 'busy'
-                    : occupant.state === 'moving' && occupant.waitTime === 0 ? 'actively_moving'
-                    : 'priority';
-                this.eventBus.emit('movement:bumpFailed', {
-                    entityId: bumper.entityId, occupantId, reason,
-                    occupantState: occupant?.state, occupantBusy: occupant?.busy,
-                });
-            }
+            this.emitBumpFailed(bumper.entityId, occupantId, this.bumpFailReason(occupant), {
+                occupantState: occupant?.state, occupantBusy: occupant?.busy,
+            });
             return false;
         }
 
         const dest = this.findBumpDestination(occupant, bumper, depth);
         if (!dest) {
-            if (this._verbose) {
-                this.eventBus.emit('movement:bumpFailed', {
-                    entityId: bumper.entityId, occupantId, reason: 'no_destination',
-                    occupantPos: `${occupant.tileX},${occupant.tileY}`,
-                });
-            }
+            this.emitBumpFailed(bumper.entityId, occupantId, 'no_destination', {
+                occupantPos: `${occupant.tileX},${occupant.tileY}`,
+            });
             return false;
         }
 
         // If the destination is occupied, recursively bump its occupant first
         if (!this.clearTileForBump(occupant, dest, depth)) {
-            if (this._verbose) {
-                this.eventBus.emit('movement:bumpFailed', {
-                    entityId: bumper.entityId, occupantId, reason: 'dest_occupied',
-                    occupantPos: `${dest.x},${dest.y}`,
-                });
-            }
+            this.emitBumpFailed(bumper.entityId, occupantId, 'dest_occupied', {
+                occupantPos: `${dest.x},${dest.y}`,
+            });
             return false;
         }
 
         // Execute the bump — update unitPositions before entity position
         if (this._verbose) {
             this.eventBus.emit('movement:bump', {
-                entityId: bumper.entityId, occupantId,
+                bumperId: bumper.entityId, occupantId,
                 fromX: occupant.tileX, fromY: occupant.tileY,
                 toX: dest.x, toY: dest.y,
             });
@@ -504,6 +487,25 @@ export class MovementSystem implements TickSystem {
         }
 
         return true;
+    }
+
+    /** Return the reason string for a failed bump check (before canBumpOccupant). */
+    private bumpFailReason(occupant: MovementController | undefined): string {
+        if (!occupant) return 'no_controller';
+        if (occupant.busy) return 'busy';
+        if (occupant.state === 'moving' && occupant.waitTime === 0) return 'actively_moving';
+        return 'priority';
+    }
+
+    /** Emit movement:bumpFailed if verbose logging is enabled. */
+    private emitBumpFailed(
+        bumperId: number,
+        occupantId: number,
+        reason: string,
+        extra?: Omit<GameEvents['movement:bumpFailed'], 'entityId' | 'occupantId' | 'reason'>
+    ): void {
+        if (!this._verbose) return;
+        this.eventBus.emit('movement:bumpFailed', { entityId: bumperId, occupantId, reason, ...extra });
     }
 
     /** Ensure the target tile is free by recursively bumping its occupant if needed. */
