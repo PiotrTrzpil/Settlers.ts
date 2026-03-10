@@ -79,13 +79,15 @@ export const BuildingConstructionFeature: FeatureDefinition = {
             systems: [constructionSystem, residenceSpawner, constructionRequestSystem],
             systemGroup: 'Buildings',
             exports,
-            persistence: 'none',
+            persistence: [constructionSiteManager, residenceSpawner],
             onTerrainReady(terrain: TerrainData) {
                 constructionSystem.setTerrainContext({
                     terrain,
                     onTerrainModified: () => ctx.eventBus.emit('terrain:modified', {}),
                 });
-
+            },
+            onRestoreComplete() {
+                constructionSystem.rebuildAfterRestore();
             },
             destroy: () => buildingLifecycle.unregisterEvents(),
         };

@@ -1,25 +1,21 @@
 /**
  * Work Area Types
  *
- * Constants for the work area system.
+ * Helpers for the work area system.
  * Work areas define where a building's worker operates.
+ * Whether a building has a work area is derived from XML data (workingAreaRadius > 0).
  */
 
-import { BuildingType } from '../../buildings/types';
+import type { BuildingType } from '../../buildings/types';
+import type { Race } from '../../core/race';
+import { getBuildingInfo, hasBuildingXmlMapping } from '../../data/game-data-access';
 
 /**
- * Building types that have work areas (buildings whose workers go out to work).
- * Production buildings that process inputs indoors (Sawmill, Bakery, etc.) are excluded.
+ * Check if a building type has a work area for the given race.
+ * Derived from XML buildingInfo: a building has a work area when workingAreaRadius > 0.
  */
-export const WORK_AREA_BUILDINGS: ReadonlySet<BuildingType> = new Set([
-    BuildingType.WoodcutterHut,
-    BuildingType.StonecutterHut,
-    BuildingType.GrainFarm,
-    BuildingType.FisherHut,
-    BuildingType.HunterHut,
-    BuildingType.ForesterHut,
-    BuildingType.AgaveFarmerHut,
-    BuildingType.BeekeeperHut,
-    BuildingType.SunflowerFarmerHut,
-    BuildingType.WaterworkHut,
-]);
+export function hasWorkArea(buildingType: BuildingType, race: Race): boolean {
+    if (!hasBuildingXmlMapping(buildingType)) return false;
+    const info = getBuildingInfo(race, buildingType);
+    return info !== undefined && info.workingAreaRadius > 0;
+}

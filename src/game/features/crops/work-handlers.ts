@@ -24,13 +24,15 @@ export function createCropHarvestHandler(
 ): EntityWorkHandler {
     return {
         type: WorkHandlerType.ENTITY,
+        useWorkAreaCenter: true,
 
-        findTarget: (x: number, y: number, _settlerId?: number, player?: number) => {
+        findTarget: (x: number, y: number, _settlerId?: number, player?: number, searchRadius?: number) => {
+            const radius = searchRadius ?? CROP_HARVEST_SEARCH_RADIUS;
             return findNearestEntity(
-                gameState.spatialIndex.nearbyForPlayer(x, y, CROP_HARVEST_SEARCH_RADIUS, player!),
+                gameState.spatialIndex.nearbyForPlayer(x, y, radius, player!),
                 x,
                 y,
-                CROP_HARVEST_SEARCH_RADIUS,
+                radius,
                 entity => entity.subType === cropType && cropSystem.canHarvest(entity.id)
             );
         },

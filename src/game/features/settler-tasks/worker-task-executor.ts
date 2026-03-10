@@ -282,7 +282,7 @@ export class WorkerTaskExecutor {
         positionHandler: PositionWorkHandler | undefined,
         homeBuilding: Entity | null
     ): { entity: { entityId: number; x: number; y: number } | null; position: { x: number; y: number } | null } | null {
-        const entity = entityHandler ? this.findEntityTarget(entityHandler, settler) : null;
+        const entity = entityHandler ? this.findEntityTarget(entityHandler, settler, homeBuilding) : null;
         if (entity === undefined) return null;
 
         const position =
@@ -376,10 +376,16 @@ export class WorkerTaskExecutor {
      */
     findEntityTarget(
         handler: EntityWorkHandler,
-        settler: Entity
+        settler: Entity,
+        homeBuilding: Entity | null
     ): { entityId: number; x: number; y: number } | null | undefined {
+        const center = this.getSearchCenter(handler, settler, homeBuilding);
+        const radius =
+            handler.useWorkAreaCenter && homeBuilding
+                ? this.buildingPositionResolver.getWorkAreaRadius(homeBuilding.id)
+                : undefined;
         return safeCall(
-            () => handler.findTarget(settler.x, settler.y, settler.id, settler.player),
+            () => handler.findTarget(center.x, center.y, settler.id, settler.player, radius),
             this.handlerErrorLogger,
             `findTarget failed for settler ${settler.id}`
         );
@@ -402,9 +408,9 @@ export class WorkerTaskExecutor {
         );
     }
 
-    /** Get the search center for a position handler — work area center or settler position. */
+    /** Get the search center for a work handler — work area center or settler position. */
     private getSearchCenter(
-        handler: PositionWorkHandler,
+        handler: { useWorkAreaCenter?: boolean },
         settler: Entity,
         homeBuilding: Entity | null
     ): { x: number; y: number } {

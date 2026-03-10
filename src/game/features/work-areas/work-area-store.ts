@@ -11,7 +11,7 @@
 import type { BuildingType } from '../../buildings/types';
 import type { Race } from '../../core/race';
 import type { TileOffset } from '../../input/building-adjust/types';
-import { WORK_AREA_BUILDINGS } from './types';
+import { hasWorkArea } from './types';
 import { getBuildingInfo } from '../../data/game-data-access';
 import type { Persistable } from '@/game/persistence';
 
@@ -51,9 +51,9 @@ export class WorkAreaStore implements Persistable<SerializedWorkAreaOffset[]> {
         this.instanceOffsets.delete(buildingId);
     }
 
-    /** Check if a building type supports work areas */
-    hasWorkArea(buildingType: BuildingType): boolean {
-        return WORK_AREA_BUILDINGS.has(buildingType);
+    /** Check if a building type supports work areas (derived from XML workingAreaRadius > 0) */
+    hasWorkArea(buildingType: BuildingType, race: Race): boolean {
+        return hasWorkArea(buildingType, race);
     }
 
     /** Get the resolved work area center in absolute tile coordinates */

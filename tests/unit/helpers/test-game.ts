@@ -390,6 +390,7 @@ export function createTestRegistry(ctx: TestContext, eventBus?: EventBus): Comma
         } as any,
         combatSystem: { releaseFromCombat: () => {} } as any,
         storageFilterManager: undefined as any,
+        inventoryManager: undefined as any,
         unitReservation: { isReserved: () => false } as any,
         recruitSystem: { enqueue: () => {}, dequeue: () => {}, getQueuedCount: () => 0, tick: () => {} } as any,
         unitTransformer: { dismissSpecialist: () => false } as any,

@@ -52,8 +52,7 @@ export const EventFmt = {
 
     'movement:escalation': (e: GameEvents['movement:escalation']) => e.result,
 
-    'movement:step': (e: GameEvents['movement:step']) =>
-        `(${e.x},${e.y}) [${e.pathIdx}/${e.pathLen}]`,
+    'movement:step': (e: GameEvents['movement:step']) => `(${e.x},${e.y}) [${e.pathIdx}/${e.pathLen}]`,
 
     'movement:bumpAttempt': (e: GameEvents['movement:bumpAttempt']) =>
         parts(`→#${e.occupantId}`, e.hasController ? `state=${e.occupantState}` : 'NO_CTRL', e.occupantBusy && 'busy'),
@@ -146,6 +145,8 @@ export const EventFmt = {
 
     'inventory:changed': (e: GameEvents['inventory:changed']) =>
         `${EMaterialType[e.materialType]} ${e.previousAmount}→${e.newAmount}`,
+    'storage:directionChanged': (e: GameEvents['storage:directionChanged']) =>
+        `#${e.buildingId} ${EMaterialType[e.materialType]}`,
 
     'logistics:noMatch': (e: GameEvents['logistics:noMatch']) => `${EMaterialType[e.materialType]} req=${e.requestId}`,
 
@@ -255,6 +256,5 @@ export const EventFmt = {
     'building:workerLost': (e: GameEvents['building:workerLost']) =>
         `building=${e.buildingId} settler=${e.settlerId} player=${e.player}`,
     'game:playerEliminated': (e: GameEvents['game:playerEliminated']) => `player ${e.player} eliminated`,
-    'game:ended': (e: GameEvents['game:ended']) =>
-        `winner=${e.winner ?? 'none'} reason=${e.reason}`,
+    'game:ended': (e: GameEvents['game:ended']) => `winner=${e.winner ?? 'none'} reason=${e.reason}`,
 } satisfies { [K in keyof GameEvents]: (e: GameEvents[K]) => string };

@@ -4,6 +4,7 @@ import { ProductionMode } from '../features/production-control';
 import type { Race } from '../core/race';
 import type { EMaterialType } from '../economy/material-type';
 import type { PileKind } from '../core/pile-kind';
+import { StorageDirection } from '../systems/inventory/storage-filter-manager';
 
 /**
  * Formation offsets for multi-unit movement commands.
@@ -124,7 +125,8 @@ export interface SetStorageFilterCommand {
     type: 'set_storage_filter';
     buildingId: number;
     material: EMaterialType;
-    allowed: boolean;
+    /** Direction to set, or null to disable this material entirely. */
+    direction: StorageDirection | null;
 }
 
 export interface SpawnBuildingUnitsCommand {

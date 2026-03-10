@@ -14,14 +14,10 @@ import type { EventBus } from '../../event-bus';
 import { EventSubscriptionManager } from '../../event-bus';
 import type { ChoreoJobState } from '../../systems/choreo/types';
 import { UnitType } from '../../core/unit-types';
+import { EntityType } from '../../entity';
 import type { DispatchRecruitmentOpts } from '../../systems/recruit/recruit-system';
 import type { ConstructionSiteManager } from './construction-site-manager';
-import {
-    buildDigTileJob,
-    buildBuildStepJob,
-    buildRecruitDiggerJob,
-    buildRecruitBuilderJob,
-} from './construction-jobs';
+import { buildDigTileJob, buildBuildStepJob, buildRecruitDiggerJob, buildRecruitBuilderJob } from './construction-jobs';
 import { createLogger } from '@/utilities/logger';
 
 const log = createLogger('ConstructionSiteDemand');
@@ -52,34 +48,15 @@ export interface ConstructionSiteDemandConfig {
     gameState: GameState;
     eventBus: EventBus;
     siteManager: ConstructionSiteManager;
-    findIdleSpecialist: (
-        unitType: UnitType,
-        player: number,
-        nearX: number,
-        nearY: number,
-    ) => number | null;
-    assignJob: (
-        unitId: number,
-        job: ChoreoJobState,
-        moveTo?: { x: number; y: number },
-    ) => boolean;
+    findIdleSpecialist: (unitType: UnitType, player: number, nearX: number, nearY: number) => number | null;
+    assignJob: (unitId: number, job: ChoreoJobState, moveTo?: { x: number; y: number }) => boolean;
     /** Full recruitment dispatch — find candidate, build choreo, assign job, register transform. */
-    dispatchRecruitment: (
-        unitType: UnitType,
-        player: number,
-        opts?: DispatchRecruitmentOpts,
-    ) => number | null;
+    dispatchRecruitment: (unitType: UnitType, player: number, opts?: DispatchRecruitmentOpts) => number | null;
 }
 
 // ─── Job ID constants ────────────────────────────────────────
 
-const CONSTRUCTION_JOB_IDS = new Set([
-    'DIG_TILE',
-    'BUILD_STEP',
-    'RECRUIT_DIGGER',
-    'RECRUIT_BUILDER',
-]);
-
+const CONSTRUCTION_JOB_IDS = new Set(['DIG_TILE', 'BUILD_STEP', 'RECRUIT_DIGGER', 'RECRUIT_BUILDER']);
 
 // ─── System ──────────────────────────────────────────────────
 
@@ -112,10 +89,8 @@ export class ConstructionSiteDemandSystem implements TickSystem {
     /** Create demands for a newly registered site (digger phase). */
     onSiteRegistered(siteId: number): void {
         const site = this.siteManager.getSiteOrThrow(siteId, 'DemandSystem.onSiteRegistered');
-        const needed = site.terrain.slots.required;
+        const count = site.terrain.slots.required;
         const player = site.player;
-        const cap = this.remainingCap('digger', player);
-        const count = Math.min(needed, cap);
 
         const siteDemands: ConstructionWorkerDemand[] = [];
         for (let i = 0; i < count; i++) {
@@ -167,10 +142,8 @@ export class ConstructionSiteDemandSystem implements TickSystem {
             return;
         }
 
-        const needed = site.building.slots.required;
+        const count = site.building.slots.required;
         const player = site.player;
-        const cap = this.remainingCap('builder', player);
-        const count = Math.min(needed, cap);
 
         const builderDemands: ConstructionWorkerDemand[] = [];
         for (let i = 0; i < count; i++) {
@@ -199,11 +172,8 @@ export class ConstructionSiteDemandSystem implements TickSystem {
 
         const existing = this.demands.get(siteId) ?? [];
         const activeBuilders = existing.filter(d => d.role === 'builder').length;
-        const needed = site.building.slots.required - activeBuilders;
-        if (needed <= 0) return;
-
-        const cap = this.remainingCap('builder', site.player);
-        const count = Math.min(needed, cap);
+        const count = site.building.slots.required - activeBuilders;
+        if (count <= 0) return;
 
         for (let i = 0; i < count; i++) {
             existing.push({
@@ -266,45 +236,29 @@ export class ConstructionSiteDemandSystem implements TickSystem {
     // ================================================================
 
     registerEvents(): void {
-        this.subscriptions.subscribe(
-            this.eventBus,
-            'settler:taskCompleted',
-            ({ unitId, jobId }) => {
-                if (!CONSTRUCTION_JOB_IDS.has(jobId)) return;
-                const siteId = this.findSiteForWorker(unitId);
-                if (siteId !== null) {
-                    this.onWorkerJobCompleted(unitId, siteId);
-                }
-            },
-        );
+        this.subscriptions.subscribe(this.eventBus, 'settler:taskCompleted', ({ unitId, jobId }) => {
+            if (!CONSTRUCTION_JOB_IDS.has(jobId)) return;
+            const siteId = this.findSiteForWorker(unitId);
+            if (siteId !== null) {
+                this.onWorkerJobCompleted(unitId, siteId);
+            }
+        });
 
-        this.subscriptions.subscribe(
-            this.eventBus,
-            'settler:taskFailed',
-            ({ unitId, jobId }) => {
-                if (!CONSTRUCTION_JOB_IDS.has(jobId)) return;
-                const siteId = this.findSiteForWorker(unitId);
-                if (siteId !== null) {
-                    this.onWorkerJobFailed(unitId, siteId);
-                }
-            },
-        );
+        this.subscriptions.subscribe(this.eventBus, 'settler:taskFailed', ({ unitId, jobId }) => {
+            if (!CONSTRUCTION_JOB_IDS.has(jobId)) return;
+            const siteId = this.findSiteForWorker(unitId);
+            if (siteId !== null) {
+                this.onWorkerJobFailed(unitId, siteId);
+            }
+        });
 
-        this.subscriptions.subscribe(
-            this.eventBus,
-            'construction:levelingComplete',
-            ({ buildingId }) => {
-                this.onLevelingComplete(buildingId);
-            },
-        );
+        this.subscriptions.subscribe(this.eventBus, 'construction:levelingComplete', ({ buildingId }) => {
+            this.onLevelingComplete(buildingId);
+        });
 
-        this.subscriptions.subscribe(
-            this.eventBus,
-            'building:removed',
-            ({ entityId }) => {
-                this.onSiteRemoved(entityId);
-            },
-        );
+        this.subscriptions.subscribe(this.eventBus, 'building:removed', ({ entityId }) => {
+            this.onSiteRemoved(entityId);
+        });
     }
 
     unregisterEvents(): void {
@@ -350,9 +304,7 @@ export class ConstructionSiteDemandSystem implements TickSystem {
         const unitType = demand.role === 'digger' ? UnitType.Digger : UnitType.Builder;
 
         // 1. Try idle specialist
-        const specialistId = this.findIdleSpecialist(
-            unitType, demand.player, site.tileX, site.tileY,
-        );
+        const specialistId = this.findIdleSpecialist(unitType, demand.player, site.tileX, site.tileY);
 
         if (specialistId !== null) {
             this.dispatchSpecialist(specialistId, demand);
@@ -382,8 +334,12 @@ export class ConstructionSiteDemandSystem implements TickSystem {
         demand: ConstructionWorkerDemand,
         unitType: UnitType,
         siteX: number,
-        siteY: number,
+        siteY: number
     ): void {
+        // Recruitment cap limits auto-creation of new workers from carriers.
+        // Idle specialists bypass this cap (handled in tryFulfill before this).
+        if (this.remainingRecruitmentCap(demand.role, demand.player) <= 0) return;
+
         // Pre-reserve work resources before dispatching — if no work is available,
         // skip recruitment entirely.
         let reservedTile: { tileIndex: number; x: number; y: number } | null = null;
@@ -397,18 +353,27 @@ export class ConstructionSiteDemandSystem implements TickSystem {
 
         const carrierId = this.dispatchRecruitment(unitType, demand.player, {
             target: { x: siteX, y: siteY },
-            buildJob: (candidate) => {
+            buildJob: candidate => {
                 const toolPile = candidate.toolPile!;
                 if (demand.role === 'digger') {
                     return buildRecruitDiggerJob(
-                        toolPile.x, toolPile.y, toolPile.pileEntityId,
-                        reservedTile!.x, reservedTile!.y, demand.siteId, reservedTile!.tileIndex,
+                        toolPile.x,
+                        toolPile.y,
+                        toolPile.pileEntityId,
+                        reservedTile!.x,
+                        reservedTile!.y,
+                        demand.siteId,
+                        reservedTile!.tileIndex
                     );
                 }
                 const pos = this.siteManager.getRandomBuilderWorkPos(demand.siteId);
                 return buildRecruitBuilderJob(
-                    toolPile.x, toolPile.y, toolPile.pileEntityId,
-                    pos.x, pos.y, demand.siteId,
+                    toolPile.x,
+                    toolPile.y,
+                    toolPile.pileEntityId,
+                    pos.x,
+                    pos.y,
+                    demand.siteId
                 );
             },
         });
@@ -421,8 +386,8 @@ export class ConstructionSiteDemandSystem implements TickSystem {
         demand.workerId = carrierId;
         this.claimSlot(demand);
         log.debug(
-            `Carrier ${carrierId} dispatched with combined recruit+work choreo `
-            + `as ${demand.role} for site ${demand.siteId}`,
+            `Carrier ${carrierId} dispatched with combined recruit+work choreo ` +
+                `as ${demand.role} for site ${demand.siteId}`
         );
     }
 
@@ -450,7 +415,6 @@ export class ConstructionSiteDemandSystem implements TickSystem {
         return buildBuildStepJob(pos.x, pos.y, demand.siteId);
     }
 
-
     // ================================================================
     // Internal — next assignment push
     // ================================================================
@@ -461,6 +425,7 @@ export class ConstructionSiteDemandSystem implements TickSystem {
 
         // Site may have been removed (building destroyed while digger was working)
         if (!this.siteManager.getSite(demand.siteId)) {
+            this.releaseDemandResources(demand);
             this.removeDemand(demand);
             log.debug(`Digger ${demand.workerId} released — site ${demand.siteId} removed`);
             return;
@@ -468,7 +433,8 @@ export class ConstructionSiteDemandSystem implements TickSystem {
 
         const tile = this.siteManager.reserveUnleveledTile(demand.siteId);
         if (!tile) {
-            // No more tiles — worker done with this site
+            // No more tiles — worker done with this site, release slot
+            this.releaseDemandResources(demand);
             this.removeDemand(demand);
             log.debug(`Digger ${demand.workerId} finished all tiles at site ${demand.siteId}`);
             return;
@@ -487,8 +453,8 @@ export class ConstructionSiteDemandSystem implements TickSystem {
 
     private pushNextBuilderJob(demand: ConstructionWorkerDemand): void {
         // Site may have been completed and removed by the BUILD_STEP that just finished
-        if (!this.siteManager.getSite(demand.siteId)
-            || !this.siteManager.hasAvailableMaterials(demand.siteId)) {
+        if (!this.siteManager.getSite(demand.siteId) || !this.siteManager.hasAvailableMaterials(demand.siteId)) {
+            this.releaseDemandResources(demand);
             this.removeDemand(demand);
             log.debug(`Builder ${demand.workerId} released — site ${demand.siteId} done or no materials`);
             return;
@@ -507,21 +473,27 @@ export class ConstructionSiteDemandSystem implements TickSystem {
     // Internal — helpers
     // ================================================================
 
-    private remainingCap(role: 'digger' | 'builder', player: number): number {
+    /**
+     * How many more workers of this role can be auto-recruited from carriers.
+     * Counts all existing entities of the relevant type for the player —
+     * not just demand-committed workers. This prevents over-recruitment when
+     * workers finish their demands and become idle (demands removed but entities persist).
+     */
+    private remainingRecruitmentCap(role: 'digger' | 'builder', player: number): number {
         const max = role === 'digger' ? MAX_DIGGERS_PER_PLAYER : MAX_BUILDERS_PER_PLAYER;
-        let committed = 0;
-        for (const siteDemands of this.demands.values()) {
-            for (const d of siteDemands) {
-                if (d.role === role && d.player === player) committed++;
+        const unitType = role === 'digger' ? UnitType.Digger : UnitType.Builder;
+
+        let existing = 0;
+        for (const entity of this.gameState.entities) {
+            if (entity.type === EntityType.Unit && entity.subType === unitType && entity.player === player) {
+                existing++;
             }
         }
-        return Math.max(0, max - committed);
+
+        return Math.max(0, max - existing);
     }
 
-    private findDemandForWorker(
-        workerId: number,
-        siteId: number,
-    ): ConstructionWorkerDemand | null {
+    private findDemandForWorker(workerId: number, siteId: number): ConstructionWorkerDemand | null {
         const siteDemands = this.demands.get(siteId);
         if (!siteDemands) return null;
         return siteDemands.find(d => d.workerId === workerId) ?? null;
@@ -554,6 +526,9 @@ export class ConstructionSiteDemandSystem implements TickSystem {
     }
 
     private releaseDemandResources(demand: ConstructionWorkerDemand): void {
+        // Site may have been removed (building completed/destroyed) — skip slot release
+        if (!this.siteManager.getSite(demand.siteId)) return;
+
         if (demand.reservedTileIndex !== null) {
             this.siteManager.releaseReservedTile(demand.siteId, demand.reservedTileIndex);
             demand.reservedTileIndex = null;

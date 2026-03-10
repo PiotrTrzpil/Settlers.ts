@@ -13,7 +13,7 @@ import type { Race } from '../../core/race';
 import type { TileHighlight } from '../../input/render-state';
 import type { BuildingAdjustHandler, AdjustableItem, TileOffset } from './types';
 import type { WorkAreaStore } from '../../features/work-areas/work-area-store';
-import { WORK_AREA_BUILDINGS } from '../../features/work-areas/types';
+import { hasWorkArea } from '../../features/work-areas/types';
 
 const INSTANCE_KEY = 'work-area-instance';
 
@@ -31,8 +31,8 @@ export class WorkAreaAdjustHandler implements BuildingAdjustHandler {
 
     constructor(private readonly store: WorkAreaStore) {}
 
-    getItems(buildingType: BuildingType, _race: Race): readonly AdjustableItem[] {
-        if (!WORK_AREA_BUILDINGS.has(buildingType)) return [];
+    getItems(buildingType: BuildingType, race: Race): readonly AdjustableItem[] {
+        if (!hasWorkArea(buildingType, race)) return [];
         return [WORK_AREA_INSTANCE_ITEM];
     }
 
@@ -79,7 +79,7 @@ export class WorkAreaAdjustHandler implements BuildingAdjustHandler {
         race: Race,
         activeItemKey: string | null
     ): TileHighlight[] {
-        if (!WORK_AREA_BUILDINGS.has(buildingType)) return [];
+        if (!hasWorkArea(buildingType, race)) return [];
 
         const offset = this.store.getOffset(buildingType, race, buildingId);
         const x = buildingX + offset.dx;

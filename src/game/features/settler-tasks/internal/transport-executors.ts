@@ -38,7 +38,9 @@ function resolveInventoryDuration(node: ChoreoNode): number {
 /** Require transportData on the job — all TRANSPORT_* executors need it. */
 function requireTransportData(job: ChoreoJobState, context: string): TransportData {
     if (!job.transportData) {
-        throw new Error(`${context}: job '${job.jobId}' has no transportData — only use TRANSPORT_* nodes in carrier jobs`);
+        throw new Error(
+            `${context}: job '${job.jobId}' has no transportData — only use TRANSPORT_* nodes in carrier jobs`
+        );
     }
     return job.transportData;
 }
@@ -99,6 +101,14 @@ export function executeTransportPickup(
             return TaskResult.FAILED;
         }
 
+        // Advance phase to PickedUp BEFORE withdrawal so that if the source entity
+        // is destroyed (e.g. free pile emptied to 0), the cleanup sees PickedUp and
+        // lets the carrier continue to deliver instead of cancelling the job.
+        if (!ctx.transportJobOps.pickUp(jobId)) {
+            log.debug(`Carrier ${settler.id}: transport job ${jobId} cancelled before pickup`);
+            return TaskResult.FAILED;
+        }
+
         const withdrawn = ctx.materialTransfer.pickUp(settler.id, sourceBuildingId, material, requestedAmount, true);
 
         if (withdrawn === 0) {
@@ -109,11 +119,6 @@ export function executeTransportPickup(
                 fromBuilding: sourceBuildingId,
                 requestedAmount,
             });
-            return TaskResult.FAILED;
-        }
-
-        if (!ctx.transportJobOps.pickUp(jobId)) {
-            log.debug(`Carrier ${settler.id}: transport job ${jobId} cancelled during pickup`);
             return TaskResult.FAILED;
         }
         job.carryingGood = material;
@@ -161,13 +166,15 @@ export function executeTransportDeliver(
 
         if (!settler.carrying) {
             throw new Error(
-                `Carrier ${settler.id}: TRANSPORT_DELIVER called but settler is not carrying anything `
-                    + `(job: material=${EMaterialType[material]})`
+                `Carrier ${settler.id}: TRANSPORT_DELIVER called but settler is not carrying anything ` +
+                    `(job: material=${EMaterialType[material]})`
             );
         }
 
         const amount = settler.carrying.amount;
-        const deposited = ctx.materialTransfer.deliver(settler.id, destBuildingId, 'input');
+        // StorageArea has no input slots — deliver to output (dynamic slot assignment)
+        const slotType = ctx.inventoryManager.isStorageArea(destBuildingId) ? 'output' : 'input';
+        const deposited = ctx.materialTransfer.deliver(settler.id, destBuildingId, slotType);
         ctx.transportJobOps.deliver(jobId);
 
         const overflow = amount - deposited;

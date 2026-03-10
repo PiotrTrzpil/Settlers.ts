@@ -72,6 +72,8 @@ export interface BuildingPositionResolver {
     getSourcePilePosition(buildingId: number, material: string): { x: number; y: number } | null;
     /** Get the destination (output) pile position for a material at a building. */
     getDestinationPilePosition(buildingId: number, material: string): { x: number; y: number } | null;
+    /** Get the work area radius (in tiles) for a building. Returns 0 if no work area. */
+    getWorkAreaRadius(buildingId: number): number;
 }
 
 /** Fires building overlay animations from trigger IDs. */

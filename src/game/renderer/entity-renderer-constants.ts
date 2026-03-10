@@ -54,11 +54,12 @@ export const DEPTH_FACTOR_UNIT = 1.0; // At feet (units stand on ground)
 export const DEPTH_FACTOR_PILE = 1.0; // On ground
 
 /**
- * Depth bias subtracted from seed trees (growing saplings) and fallen/cut tree stages
- * so they always render behind standing trees, units, and buildings at the same tile.
+ * Depth bias subtracted from "flat" sprites — entities that sit on terrain but should
+ * render behind standing trees, units, and buildings at the same tile.
+ * Applies to: fallen/cut tree stages, StorageArea building.
  * Must be less than tile row spacing (0.5 world units) to avoid cross-row mis-sorting.
  */
-export const FLAT_TREE_DEPTH_BIAS = 0.2;
+export const FLAT_SPRITE_DEPTH_BIAS = 0.2;
 
 // Selection frame parameters
 export const FRAME_PADDING = 1.3; // Frame size relative to entity scale

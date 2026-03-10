@@ -6,6 +6,7 @@ import { BuildingType } from '../../buildings/types';
 import type { TreeSystem } from '../../features/trees';
 import type { CropSystem } from '../../features/crops';
 import type { StorageFilterManager } from '../../systems/inventory/storage-filter-manager';
+import type { BuildingInventoryManager } from '../../systems/inventory/building-inventory';
 import type {
     PlacePileCommand,
     SpawnPileCommand,
@@ -41,7 +42,9 @@ export interface UpdatePileQuantityDeps {
 
 export interface SetStorageFilterDeps {
     state: GameState;
+    eventBus: EventBus;
     storageFilterManager: StorageFilterManager;
+    inventoryManager: BuildingInventoryManager;
 }
 
 export interface PlantTreeDeps {
@@ -128,11 +131,14 @@ export function executeSetStorageFilter(deps: SetStorageFilterDeps, cmd: SetStor
     if ((building.subType as BuildingType) !== BuildingType.StorageArea) {
         return commandFailed(`set_storage_filter: building ${cmd.buildingId} is not a StorageArea`);
     }
-    if (cmd.allowed) {
-        deps.storageFilterManager.allow(cmd.buildingId, cmd.material);
+    if (cmd.direction !== null) {
+        deps.storageFilterManager.setDirection(cmd.buildingId, cmd.material, cmd.direction);
     } else {
         deps.storageFilterManager.disallow(cmd.buildingId, cmd.material);
+        // Free empty output slots so they can be reused by other materials
+        deps.inventoryManager.freeEmptyStorageSlots(cmd.buildingId, cmd.material);
     }
+    deps.eventBus.emit('storage:directionChanged', { buildingId: cmd.buildingId, materialType: cmd.material });
     return COMMAND_OK;
 }
 

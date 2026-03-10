@@ -9,7 +9,7 @@ import type { Entity } from '@/game/entity';
 import { EntityType, BuildingType } from '@/game/entity';
 import { getBridge } from '@/game/debug/debug-bridge';
 import { BuildingAdjustMode } from '@/game/input/modes/building-adjust-mode';
-import { WORK_AREA_BUILDINGS } from '@/game/features/work-areas';
+import { hasWorkArea } from '@/game/features/work-areas';
 import type { WorkAreaAdjustHandler } from '@/game/input/building-adjust/work-area-handler';
 
 /** Get the BuildingAdjustMode if currently registered. */
@@ -30,10 +30,10 @@ export function useWorkAreaAdjustment(selectedEntity: Ref<Entity | undefined>): 
     isWorkAreaActive: Ref<boolean>;
     toggleWorkArea: () => void;
 } {
-    const hasWorkArea = computed(() => {
+    const hasWorkAreaFlag = computed(() => {
         const entity = selectedEntity.value;
         if (!entity || entity.type !== EntityType.Building) return false;
-        return WORK_AREA_BUILDINGS.has(entity.subType as BuildingType);
+        return hasWorkArea(entity.subType as BuildingType, entity.race);
     });
 
     const isWorkAreaActive = computed(() => {
@@ -77,5 +77,5 @@ export function useWorkAreaAdjustment(selectedEntity: Ref<Entity | undefined>): 
         }
     }
 
-    return { hasWorkArea, isWorkAreaActive, toggleWorkArea };
+    return { hasWorkArea: hasWorkAreaFlag, isWorkAreaActive, toggleWorkArea };
 }

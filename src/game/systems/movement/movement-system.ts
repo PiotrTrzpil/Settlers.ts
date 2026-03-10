@@ -185,6 +185,31 @@ export class MovementSystem implements TickSystem {
         return this.controllers.values();
     }
 
+    /**
+     * Repath all moving units whose remaining path passes through any of the given tiles.
+     * Used when building footprint is blocked mid-game (e.g. construction site evacuation)
+     * so in-flight units route around the newly blocked area.
+     * @param excludeIds Units to skip (e.g. evacuating units that have valid escape paths)
+     */
+    repathUnitsThrough(blockedKeys: Set<string>, excludeIds?: Set<number>): void {
+        for (const ctrl of this.controllers.values()) {
+            if (excludeIds?.has(ctrl.entityId)) continue;
+            if (ctrl.state !== 'moving' || !ctrl.hasPath) continue;
+            const remaining = ctrl.path.slice(ctrl.pathIndex);
+            const passesThrough = remaining.some(wp => blockedKeys.has(tileKey(wp.x, wp.y)));
+            if (!passesThrough) continue;
+
+            const goal = ctrl.goal;
+            if (!goal) continue;
+            const newPath = this.pathfinder.findPath(ctrl.tileX, ctrl.tileY, goal.x, goal.y);
+            if (newPath && newPath.length > 0) {
+                ctrl.replacePath(newPath);
+            } else {
+                ctrl.clearPath();
+            }
+        }
+    }
+
     // -------------------------------------------------------------------------
     // Movement commands
     // -------------------------------------------------------------------------
@@ -304,6 +329,20 @@ export class MovementSystem implements TickSystem {
         while (controller.canMove()) {
             const wp = controller.nextWaypoint;
             if (!wp) break;
+
+            // If next waypoint is building-blocked and the unit is NOT on a blocked tile
+            // itself (i.e. it's trying to enter, not escape), repath around it.
+            // Units on blocked tiles (e.g. during evacuation) must be allowed to step
+            // through to escape.
+            const wpKey = tileKey(wp.x, wp.y);
+            if (this.buildingOccupancy.has(wpKey)) {
+                const currentKey = tileKey(controller.tileX, controller.tileY);
+                if (!this.buildingOccupancy.has(currentKey)) {
+                    this.repathFromCurrent(controller);
+                    break;
+                }
+                // else: unit is escaping from inside blocked area — allow step
+            }
 
             const occupantId = this.getUnitAt(tileKey(wp.x, wp.y), controller.entityId);
 

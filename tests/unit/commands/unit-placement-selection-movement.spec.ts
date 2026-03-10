@@ -78,6 +78,7 @@ describe('Unit Placement, Selection & Movement', () => {
             } as any,
             combatSystem: { releaseFromCombat: () => {} } as any,
             storageFilterManager: undefined as any,
+            inventoryManager: undefined as any,
             unitReservation: { isReserved: () => false } as any,
             recruitSystem: { enqueue: () => {}, dequeue: () => {}, getQueuedCount: () => 0, tick: () => {} } as any,
             unitTransformer: { dismissSpecialist: () => false } as any,

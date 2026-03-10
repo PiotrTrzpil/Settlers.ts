@@ -24,12 +24,7 @@ import { CursorType, type ModeRenderState, type TileHighlight } from '../render-
 import { EntityType, type BuildingType } from '../../entity';
 import type { Race } from '../../core/race';
 import type { GameState } from '../../game-state';
-import type {
-    BuildingAdjustHandler,
-    AdjustableItem,
-    TileOffset,
-    PixelOffset,
-} from '../building-adjust/types';
+import type { BuildingAdjustHandler, AdjustableItem, TileOffset, PixelOffset } from '../building-adjust/types';
 
 // ============================================================================
 // Types
@@ -109,9 +104,10 @@ export class BuildingAdjustMode extends BaseInputMode {
     }
 
     override onAction(action: InputAction, context: InputContext): InputResult {
-        if (action === InputAction.DeselectAll) {
+        if (action === InputAction.DeselectAll || action === InputAction.CancelPlacement) {
             if (this.active) {
                 this.active = null;
+                context.switchMode('select');
                 return HANDLED;
             }
             context.switchMode('select');

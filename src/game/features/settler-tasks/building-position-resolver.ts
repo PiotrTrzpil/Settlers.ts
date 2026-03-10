@@ -147,6 +147,13 @@ export class BuildingPositionResolverImpl implements BuildingPositionResolver {
         return this.resolvePileFromRegistry(buildingId, materialType, SlotKind.Output);
     }
 
+    getWorkAreaRadius(buildingId: number): number {
+        const building = this.gameState.getEntityOrThrow(buildingId, 'getWorkAreaRadius');
+        assertIsBuilding(building, buildingId);
+        if (!this.workAreaStore.hasWorkArea(building.subType as BuildingType, building.race)) return 0;
+        return this.workAreaStore.getRadius(building.subType as BuildingType, building.race);
+    }
+
     /**
      * Resolve pile position from the BuildingPileRegistry (XML data).
      *

@@ -38,6 +38,7 @@ import { CommandHandlerRegistry, registerAllHandlers } from '@/game/commands';
 import { BuildingType } from '@/game/buildings/building-type';
 import { EntityType, UnitType, tileKey, type TileCoord } from '@/game/entity';
 import { EMaterialType } from '@/game/economy/material-type';
+import { StorageDirection } from '@/game/systems/inventory/storage-filter-manager';
 import { MapObjectType } from '@/game/types/map-object-types';
 import { GameSettingsManager } from '@/game/game-settings';
 import { Race } from '@/game/core/race';
@@ -293,6 +294,7 @@ export class Simulation {
             constructionSiteManager: this.services.constructionSiteManager,
             combatSystem: this.services.combatSystem,
             storageFilterManager: this.services.storageFilterManager,
+            inventoryManager: this.services.inventoryManager,
             unitReservation: this.services.unitReservation,
             recruitSystem: this.services.recruitSystem,
             unitTransformer: this.services.unitTransformer,
@@ -598,7 +600,11 @@ export class Simulation {
     // ─── Building placement ───────────────────────────────────────
 
     placeBuilding(
-        buildingType: BuildingType, player = 0, completed = true, race?: Race, spawnWorker?: boolean
+        buildingType: BuildingType,
+        player = 0,
+        completed = true,
+        race?: Race,
+        spawnWorker?: boolean
     ): number {
         const r = race ?? this.state.playerRaces.get(player) ?? Race.Roman;
         const pos = this.placer.findBuildingPosition(buildingType, r);
@@ -831,6 +837,13 @@ export class Simulation {
 
     injectOutput(buildingId: number, material: EMaterialType, amount: number) {
         this.services.inventoryManager.depositOutput(buildingId, material, amount);
+        // Auto-configure StorageArea direction so tests work without explicit setup
+        if (this.services.inventoryManager.isStorageArea(buildingId)) {
+            const sfm = this.services.storageFilterManager;
+            if (!sfm.getDirection(buildingId, material)) {
+                sfm.setDirection(buildingId, material, StorageDirection.Both);
+            }
+        }
     }
 
     getOutput(buildingId: number, material: EMaterialType): number {

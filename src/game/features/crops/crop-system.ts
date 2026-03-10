@@ -274,6 +274,7 @@ export class CropSystem extends GrowableSystem<CropState> implements Persistable
         return findEmptySpot(cx, cy, {
             gameState: this.gameState,
             searchRadius,
+            minRadius: 0,
             minDistanceSq: this.config.minDistanceSq,
             rng: this.gameState.rng,
             proximityEntities: [...this.gameState.spatialIndex.nearby(cx, cy, searchRadius * 2)],

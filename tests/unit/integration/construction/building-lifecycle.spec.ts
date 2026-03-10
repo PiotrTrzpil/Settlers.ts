@@ -11,9 +11,10 @@ import { createSimulation, createScenario, cleanupSimulation, Simulation } from 
 import { installRealGameData } from '../../helpers/test-game-data';
 import { BuildingType } from '@/game/buildings/building-type';
 import { EntityType, UnitType } from '@/game/entity';
+import { getBuildingBlockArea } from '@/game/buildings/types';
 import { EMaterialType } from '@/game/economy/material-type';
 import { BuildingConstructionPhase, CONSTRUCTION_SITE_GROUND_TYPE } from '@/game/features/building-construction';
-import { TERRAIN } from '../../helpers/test-map';
+import { TERRAIN, createSlope } from '../../helpers/test-map';
 
 const hasRealData = installRealGameData();
 
@@ -113,34 +114,38 @@ describe.skipIf(!hasRealData)('Building construction (real game data)', { timeou
 
     // ─── Full construction flow (auto-recruited from carriers) ───────
 
-    it('WoodcutterHut: carriers auto-recruit into digger+builders and complete construction', { timeout: 30_000 }, () => {
-        sim = createSimulation();
+    it(
+        'WoodcutterHut: carriers auto-recruit into digger+builders and complete construction',
+        { timeout: 30_000 },
+        () => {
+            sim = createSimulation();
 
-        // Residence for carrier supply
-        sim.placeBuilding(BuildingType.ResidenceSmall);
+            // Residence for carrier supply
+            sim.placeBuilding(BuildingType.ResidenceSmall);
 
-        // Storage with construction materials
-        const storageId = sim.placeBuilding(BuildingType.StorageArea);
-        sim.injectOutput(storageId, EMaterialType.BOARD, 8);
-        sim.injectOutput(storageId, EMaterialType.STONE, 8);
+            // Storage with construction materials
+            const storageId = sim.placeBuilding(BuildingType.StorageArea);
+            sim.injectOutput(storageId, EMaterialType.BOARD, 8);
+            sim.injectOutput(storageId, EMaterialType.STONE, 8);
 
-        // Tools as free piles (ToolSourceResolver only finds free piles)
-        sim.placeGoods(EMaterialType.SHOVEL, 4);
-        sim.placeGoods(EMaterialType.HAMMER, 4);
+            // Tools as free piles (ToolSourceResolver only finds free piles)
+            sim.placeGoods(EMaterialType.SHOVEL, 4);
+            sim.placeGoods(EMaterialType.HAMMER, 4);
 
-        // No pre-spawned specialists — only carriers from residence
-        expect(sim.countEntities(EntityType.Unit, UnitType.Digger)).toBe(0);
-        expect(sim.countEntities(EntityType.Unit, UnitType.Builder)).toBe(0);
-        expect(sim.countEntities(EntityType.Unit, UnitType.Carrier)).toBeGreaterThan(0);
+            // No pre-spawned specialists — only carriers from residence
+            expect(sim.countEntities(EntityType.Unit, UnitType.Digger)).toBe(0);
+            expect(sim.countEntities(EntityType.Unit, UnitType.Builder)).toBe(0);
+            expect(sim.countEntities(EntityType.Unit, UnitType.Carrier)).toBeGreaterThan(0);
 
-        // Place as construction site (not completed)
-        const siteId = sim.placeBuilding(BuildingType.WoodcutterHut, 0, false);
+            // Place as construction site (not completed)
+            const siteId = sim.placeBuilding(BuildingType.WoodcutterHut, 0, false);
 
-        sim.waitForConstructionComplete(siteId);
+            sim.waitForConstructionComplete(siteId);
 
-        expect(sim.countEntities(EntityType.Unit, UnitType.Woodcutter)).toBe(1);
-        expect(sim.errors).toHaveLength(0);
-    });
+            expect(sim.countEntities(EntityType.Unit, UnitType.Woodcutter)).toBe(1);
+            expect(sim.errors).toHaveLength(0);
+        }
+    );
 
     // ─── Edge cases: destruction during construction ─────────────────
 
@@ -197,10 +202,15 @@ describe.skipIf(!hasRealData)('Building construction (real game data)', { timeou
         sim = s;
 
         // Wait for builder to start constructing — check each tick, remove mid-progress
-        sim.runUntil(() => {
-            const site = sim.services.constructionSiteManager.getSite(s.siteId);
-            return !!site && site.phase >= BuildingConstructionPhase.ConstructionRising && site.building.progress > 0;
-        }, { maxTicks: 50_000, label: 'builder makes progress' });
+        sim.runUntil(
+            () => {
+                const site = sim.services.constructionSiteManager.getSite(s.siteId);
+                return (
+                    !!site && site.phase >= BuildingConstructionPhase.ConstructionRising && site.building.progress > 0
+                );
+            },
+            { maxTicks: 50_000, label: 'builder makes progress' }
+        );
 
         const site = sim.services.constructionSiteManager.getSite(s.siteId);
         expect(site).toBeDefined();
@@ -218,6 +228,50 @@ describe.skipIf(!hasRealData)('Building construction (real game data)', { timeou
 
         // No crashes when carriers/builders discover their target is gone
         sim.runTicks(300);
+        expect(sim.errors).toHaveLength(0);
+    });
+
+    // ─── Edge cases: evacuation from construction site ──────────────
+
+    it('carriers on footprint are evacuated when leveling completes', { timeout: 30_000 }, () => {
+        sim = createSimulation({ mapWidth: 256, mapHeight: 256 });
+
+        // Plenty of carriers to deliver materials — some will be on the footprint
+        sim.placeBuilding(BuildingType.ResidenceSmall);
+        sim.placeBuilding(BuildingType.ResidenceMedium);
+        sim.placeBuilding(BuildingType.ResidenceMedium);
+
+        // Storage with lots of materials right next to the future farm
+        const storageId = sim.placeBuilding(BuildingType.StorageArea);
+        sim.injectOutput(storageId, EMaterialType.BOARD, 8);
+        sim.injectOutput(storageId, EMaterialType.STONE, 8);
+
+        // Create uneven terrain so leveling takes many ticks
+        createSlope(sim.map, 20, 20, 80, 80, 0, 40);
+
+        // Tools
+        sim.placeGoods(EMaterialType.SHOVEL, 8);
+        sim.placeGoods(EMaterialType.HAMMER, 8);
+
+        // Place a large farm as construction site — big footprint, many carriers delivering
+        const siteId = sim.placeBuildingAt(40, 40, BuildingType.GrainFarm, 0, false);
+
+        // Wait for leveling to complete and check that evacuation happened
+        sim.waitForPhase(siteId, BuildingConstructionPhase.WaitingForBuilders, 80_000);
+
+        // After evacuation, no VISIBLE unit should be on the building's block area
+        const building = sim.state.getEntityOrThrow(siteId, 'test');
+        const blockArea = getBuildingBlockArea(building.x, building.y, BuildingType.GrainFarm, building.race);
+        const footprintKeys = new Set(blockArea.map(t => `${t.x},${t.y}`));
+
+        // Give a few ticks for evacuation moves to execute
+        sim.runTicks(60);
+
+        const unitsOnFootprint = sim.state.entities.filter(
+            e => e.type === EntityType.Unit && !e.hidden && footprintKeys.has(`${e.x},${e.y}`)
+        );
+
+        expect(unitsOnFootprint).toHaveLength(0);
         expect(sim.errors).toHaveLength(0);
     });
 

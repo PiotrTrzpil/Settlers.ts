@@ -59,6 +59,7 @@
                 </button>
                 <button class="ctrl-btn danger" @click="$emit('resetGameState')">Reset State</button>
             </div>
+            <Checkbox v-model="selectAllUnits" label="All units selectable" />
         </CollapseSection>
 
         <!-- Pathfinding -->
@@ -100,10 +101,12 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { debugStats } from '@/game/debug/debug-stats';
 
 import type { Game } from '@/game/game';
+import { EntityType } from '@/game/entity';
+import { isUnitTypeSelectable, UnitType } from '@/game/core/unit-types';
 import { clearSavedTreeState } from '@/game/state/game-state-persistence';
 import { MapObjectCategory } from '@/game/types/map-object-types';
 import { useDebugMapObjects } from './use-debug-map-objects';
@@ -182,6 +185,25 @@ const straightnessHint = computed(() => {
     if (v <= 15) return 'Straight paths';
     return 'Very straight (sharp turns)';
 });
+
+// Debug setting: allow selecting all units (including workers)
+const selectAllUnits = computed({
+    get: () => debugStats.state.selectAllUnits,
+    set: (value: boolean) => {
+        debugStats.state.selectAllUnits = value;
+    },
+});
+
+// When "select all units" is turned off, deselect any non-selectable units
+watch(
+    () => debugStats.state.selectAllUnits,
+    newValue => {
+        if (newValue) return;
+        props.game.state.selection.deselectWhere(
+            e => e.type === EntityType.Unit && !isUnitTypeSelectable(e.subType as UnitType)
+        );
+    }
+);
 
 // Map objects functionality (extracted to composable)
 const getGame = (): Game | null => props.game;

@@ -266,9 +266,7 @@ export class BuildingSiegeSystem implements TickSystem {
         const siege = this.getOrCreateSiege(unitId, target, unit.player);
         if (!siege) return; // already at max attackers
 
-        const door = getBuildingDoorPos(
-            target.x, target.y, target.race, target.subType as BuildingType
-        );
+        const door = getBuildingDoorPos(target.x, target.y, target.race, target.subType as BuildingType);
         const doorDist = Math.max(Math.abs(unit.x - door.x), Math.abs(unit.y - door.y));
 
         if (doorDist > DOOR_ARRIVAL_DISTANCE) {
@@ -286,7 +284,7 @@ export class BuildingSiegeSystem implements TickSystem {
     /** Find the closest enemy garrison building (by door distance) within the given radius. */
     private findNearbyEnemyGarrison(
         unit: { x: number; y: number; player: number },
-        radius: number,
+        radius: number
     ): Entity | undefined {
         const nearby = this.gameState.getEntitiesInRadius(unit.x, unit.y, radius);
         let best: Entity | undefined;
@@ -299,7 +297,10 @@ export class BuildingSiegeSystem implements TickSystem {
 
             // Measure distance to the door, not the building center
             const door = getBuildingDoorPos(
-                candidate.x, candidate.y, candidate.race, candidate.subType as BuildingType
+                candidate.x,
+                candidate.y,
+                candidate.race,
+                candidate.subType as BuildingType
             );
             const dx = door.x - unit.x;
             const dy = door.y - unit.y;
@@ -462,6 +463,16 @@ export class BuildingSiegeSystem implements TickSystem {
         const building = this.gameState.getEntityOrThrow(buildingId, 'BuildingSiegeSystem.captureBuilding');
         const oldPlayer = building.player;
         const newPlayer = siege.attackerPlayer;
+        const buildingType = building.subType as BuildingType;
+
+        // Pre-validate: ensure the building supports garrisons before mutating
+        // any state. This is a programming error (siege should only target
+        // garrison buildings), but catching it here prevents destroying the
+        // old garrison with no replacement.
+        if (!isGarrisonBuildingType(buildingType)) {
+            log.error(`captureBuilding: ${BuildingType[buildingType]} has no garrison capacity, aborting`);
+            return;
+        }
 
         // Release all attackers from combat and reservations
         for (const attackerId of siege.attackerIds) {
@@ -476,34 +487,15 @@ export class BuildingSiegeSystem implements TickSystem {
             newPlayer,
         } as Command);
 
-        // Re-initialize garrison for new owner
-        const buildingType = building.subType as BuildingType;
+        // Re-initialize garrison for new owner.
+        // removeTower ejects all garrisoned units; initTower cannot throw here
+        // because we pre-validated the building type above.
         this.garrisonManager.removeTower(buildingId);
         this.garrisonManager.initTower(buildingId, buildingType);
 
-        // Garrison the first attacker into the captured building.
-        // Reserve → assign as worker → dispatch via WORKER_DISPATCH.
-        // The unit is at the door, so the choreo completes near-instantly
-        // and settler-location:entered triggers garrison finalization.
-        const capturingUnitId = siege.attackerIds[0];
-        if (capturingUnitId !== undefined) {
-            const capturingUnit = this.gameState.getEntity(capturingUnitId);
-            if (capturingUnit) {
-                this.unitReservation.reserve(capturingUnitId, {
-                    purpose: 'garrison-en-route',
-                    onForcedRelease: () => {},
-                });
-                this.settlerTaskSystem.assignWorkerToBuilding(
-                    capturingUnitId, buildingId
-                );
-                const job = choreo('WORKER_DISPATCH')
-                    .goToDoorAndEnter(buildingId)
-                    .build();
-                this.settlerTaskSystem.assignJob(
-                    capturingUnitId, job, job.targetPos!
-                );
-            }
-        }
+        // Garrison the first attacker — best-effort. An empty captured tower
+        // is valid state; units will be dispatched normally later.
+        this.tryGarrisonCapturingUnit(buildingId, siege);
 
         this.eventBus.emit('siege:buildingCaptured', {
             buildingId,
@@ -517,6 +509,44 @@ export class BuildingSiegeSystem implements TickSystem {
         this.sieges.delete(buildingId);
     }
 
+    /**
+     * Best-effort: reserve the first attacker and dispatch it into the newly
+     * captured tower. If any step fails, partial state is rolled back so the
+     * tower is simply left empty (valid — garrison dispatch will fill it later).
+     */
+    private tryGarrisonCapturingUnit(buildingId: number, siege: SiegeState): void {
+        const capturingUnitId = siege.attackerIds[0];
+        if (capturingUnitId === undefined) return;
+
+        const capturingUnit = this.gameState.getEntity(capturingUnitId);
+        if (!capturingUnit) return;
+
+        this.unitReservation.reserve(capturingUnitId, {
+            purpose: 'garrison-en-route',
+            onForcedRelease: () => {},
+        });
+
+        try {
+            this.settlerTaskSystem.assignWorkerToBuilding(capturingUnitId, buildingId);
+
+            const job = choreo('WORKER_DISPATCH').goToDoorAndEnter(buildingId).build();
+            const assigned = this.settlerTaskSystem.assignJob(capturingUnitId, job, job.targetPos!);
+
+            if (!assigned) {
+                this.settlerTaskSystem.releaseWorkerAssignment(capturingUnitId);
+                this.unitReservation.release(capturingUnitId);
+                log.warn(
+                    `captureBuilding: movement failed for unit ${capturingUnitId}, tower ${buildingId} left empty`
+                );
+            }
+        } catch (e) {
+            // Undo whatever partial state was applied
+            this.settlerTaskSystem.releaseWorkerAssignment(capturingUnitId);
+            this.unitReservation.release(capturingUnitId);
+            log.error(`captureBuilding: failed to garrison unit ${capturingUnitId} into ${buildingId}`, e);
+        }
+    }
+
     // ── Helpers ──────────────────────────
 
     /** Check if any attacker is within door arrival distance of the building. */
@@ -524,9 +554,7 @@ export class BuildingSiegeSystem implements TickSystem {
         siege: SiegeState,
         building: { x: number; y: number; race: Race; subType: number }
     ): boolean {
-        const door = getBuildingDoorPos(
-            building.x, building.y, building.race, building.subType as BuildingType
-        );
+        const door = getBuildingDoorPos(building.x, building.y, building.race, building.subType as BuildingType);
 
         for (const attackerId of siege.attackerIds) {
             const attacker = this.gameState.getEntity(attackerId);

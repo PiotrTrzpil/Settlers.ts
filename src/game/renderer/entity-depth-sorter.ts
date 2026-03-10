@@ -8,7 +8,7 @@ import {
     DEPTH_FACTOR_MAP_OBJECT,
     DEPTH_FACTOR_UNIT,
     DEPTH_FACTOR_PILE,
-    FLAT_TREE_DEPTH_BIAS,
+    FLAT_SPRITE_DEPTH_BIAS,
 } from './entity-renderer-constants';
 import { getEntityWorldPos, type WorldPositionContext } from './world-position';
 
@@ -134,9 +134,11 @@ export class EntityDepthSorter {
             depth = worldY + offsetY + heightWorld * depthFactor;
         }
 
-        // Fallen/cut tree stages (variation 4-10) render behind standing trees, units, buildings
-        if (entity.type === EntityType.MapObject && ctx.getVariation(entity.id) >= 4) {
-            depth -= FLAT_TREE_DEPTH_BIAS;
+        // Flat sprites: render on terrain but behind standing trees, units, and other buildings
+        const isFlatTree = entity.type === EntityType.MapObject && ctx.getVariation(entity.id) >= 4;
+        const isFlatBuilding = entity.type === EntityType.Building && entity.subType === BuildingType.StorageArea;
+        if (isFlatTree || isFlatBuilding) {
+            depth -= FLAT_SPRITE_DEPTH_BIAS;
         }
 
         if (entity.depthBias) {

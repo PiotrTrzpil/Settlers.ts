@@ -22,6 +22,31 @@ import { installRealGameData } from '../../helpers/test-game-data';
 import { BuildingType } from '@/game/buildings/building-type';
 import { EMaterialType } from '@/game/economy/material-type';
 import { Race } from '@/game/core/race';
+import { MapObjectType } from '@/game/types/map-object-types';
+
+// ── Helpers ──────────────────────────────────────────────────────
+
+function getWorkAreaCenter(sim: Simulation, buildingId: number) {
+    const b = sim.state.getEntity(buildingId)!;
+    return sim.services.workAreaStore.getAbsoluteCenter(
+        buildingId,
+        b.x,
+        b.y,
+        b.subType as BuildingType,
+        sim.state.playerRaces.get(b.player)!
+    );
+}
+
+function collectPlantedPositions(sim: Simulation) {
+    const positions: { x: number; y: number }[] = [];
+    sim.eventBus.on('crop:planted', e => positions.push({ x: e.x, y: e.y }));
+    return positions;
+}
+
+/** Chebyshev (chessboard) distance */
+function chebyshev(a: { x: number; y: number }, b: { x: number; y: number }) {
+    return Math.max(Math.abs(a.x - b.x), Math.abs(a.y - b.y));
+}
 
 const hasRealData = installRealGameData();
 
@@ -148,6 +173,69 @@ describe.skipIf(!hasRealData)('Crop system (real game data)', { timeout: 10_000 
 
         expect(planted).toBeGreaterThanOrEqual(1);
         expect(harvested).toBeGreaterThanOrEqual(1);
+    });
+
+    // ── Planting from work area center ──────────────────────────
+
+    it('grain farm: crops are planted outward from the work area center', () => {
+        sim = createSimulation(SIM_256);
+
+        const planted = collectPlantedPositions(sim);
+
+        sim.placeBuilding(BuildingType.ResidenceSmall);
+        const farmId = sim.placeBuilding(BuildingType.GrainFarm);
+
+        sim.runUntil(() => planted.length >= 6, { maxTicks: 3000 * 30 });
+        expect(planted.length).toBeGreaterThanOrEqual(6);
+
+        const center = getWorkAreaCenter(sim, farmId);
+
+        // First crop should be at or adjacent to the work area center
+        expect(chebyshev(planted[0]!, center)).toBeLessThanOrEqual(1);
+
+        // All early crops should cluster tightly around center, not off to one side
+        for (let i = 0; i < 3; i++) {
+            expect(chebyshev(planted[i]!, center)).toBeLessThanOrEqual(2);
+        }
+    });
+
+    it('grain farm: farmer ignores mature crops outside the work area', () => {
+        sim = createSimulation(SIM_256);
+
+        sim.placeBuilding(BuildingType.ResidenceSmall);
+        const farmId = sim.placeBuilding(BuildingType.GrainFarm);
+
+        const center = getWorkAreaCenter(sim, farmId);
+        const farm = sim.state.getEntity(farmId)!;
+        const race = sim.state.playerRaces.get(farm.player)!;
+        const radius = sim.services.workAreaStore.getRadius(farm.subType as BuildingType, race);
+
+        // Spawn a crop well outside the work area — entity:created handler
+        // registers it as Mature (harvestable) since it wasn't planted by a farmer
+        const farX = center.x + radius * 2;
+        const farY = center.y;
+        sim.execute({ type: 'spawn_map_object', objectType: MapObjectType.Grain, x: farX, y: farY });
+
+        // Track which crops get harvested and their positions
+        const harvestedPositions: { x: number; y: number }[] = [];
+        sim.eventBus.on('crop:harvested', e => {
+            const entity = sim.state.getEntity(e.entityId);
+            if (entity) harvestedPositions.push({ x: entity.x, y: entity.y });
+        });
+
+        // Let the farmer plant some crops and start harvesting
+        sim.runUntil(() => harvestedPositions.length >= 1, { maxTicks: 5000 * 30 });
+
+        // The far-away crop should NOT have been harvested
+        for (const pos of harvestedPositions) {
+            const dx = pos.x - center.x;
+            const dy = pos.y - center.y;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            expect(
+                dist,
+                `crop harvested at (${pos.x}, ${pos.y}) is outside work area (dist=${dist.toFixed(1)}, radius=${radius})`
+            ).toBeLessThanOrEqual(radius + 1);
+        }
     });
 
     // ── Crop lifecycle invariants ────────────────────────────────

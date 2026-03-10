@@ -58,7 +58,7 @@ export const BarracksFeature: FeatureDefinition = {
             systems: [barracksTrainingManager],
             systemGroup: 'Military',
             exports: { barracksTrainingManager } satisfies BarracksExports,
-            persistence: 'none',
+            persistence: [{ persistable: barracksTrainingManager, after: ['productionControl'] }],
         };
     },
 };

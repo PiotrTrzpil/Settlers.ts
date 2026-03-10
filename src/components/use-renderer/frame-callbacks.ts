@@ -12,9 +12,9 @@ import { InputManager, BuildingAdjustMode } from '@/game/input';
 import type { SelectionBox } from '@/game/input/render-state';
 import {
     createRenderContext,
+    type RenderContextBuilder,
     type CircleRenderData,
     type TerritoryDotRenderData,
-    type StackGhostRenderData,
 } from '@/game/renderer/render-context';
 import { getBuildingVisualState } from '@/game/features/building-construction';
 import type { LayerVisibility } from '@/game/renderer/layer-visibility';
@@ -40,22 +40,47 @@ export interface CallbackContext {
     placementGrid: ValidPositionGrid | null;
 }
 
-/** Update entity renderer state from game using RenderContext interface */
-function syncEntityRendererState(
-    er: EntityRenderer,
-    g: Game,
-    ctx: CallbackContext,
-    alpha: number,
-    viewPoint: IViewPoint
-): void {
-    // Collect territory boundary dots (only when territory display is enabled)
+/** Wire core entity data into the render context */
+function applyEntityData(b: RenderContextBuilder, g: Game): void {
+    b.entities(g.state.entities).unitStates(g.state.unitStates).pileStates(g.state.piles.states).selection({
+        primaryId: g.state.selection.selectedEntityId,
+        ids: g.state.selection.selectedEntityIds,
+    });
+}
+
+/** Wire building construction visuals and overlays */
+function applyBuildingVisuals(b: RenderContextBuilder, g: Game, er: EntityRenderer): void {
+    const csm = g.services.constructionSiteManager;
+    b.buildingRenderStateGetter(entityId => {
+        const site = csm.getSite(entityId);
+        const vs = getBuildingVisualState(site);
+        return {
+            useConstructionSprite: vs.useConstructionSprite,
+            verticalProgress: vs.verticalProgress,
+        };
+    }).buildingOverlaysGetter(entityId => resolveBuildingOverlays(entityId, g, er));
+}
+
+/** Wire animation state and combat health ratio */
+function applyAnimationAndCombat(b: RenderContextBuilder, g: Game): void {
+    const visualService = g.services.visualService;
+    b.visualStateGetter(visualService.getState.bind(visualService))
+        .directionTransitionGetter(visualService.getDirectionTransition.bind(visualService))
+        .healthRatioGetter(entityId => {
+            const cs = g.services.combatSystem.getState(entityId);
+            if (!cs) return null;
+            return cs.maxHealth > 0 ? cs.health / cs.maxHealth : 1;
+        });
+}
+
+/** Compute and wire territory, work area, and stack ghost overlays */
+function applyMapOverlays(b: RenderContextBuilder, g: Game, ctx: CallbackContext): void {
     const getTerritoryDots = g.services
         .getRenderDataRegistry()
         .get<readonly TerritoryDotRenderData[]>('territory', 'territoryDots');
     const territoryDots: readonly TerritoryDotRenderData[] =
         ctx.layerVisibility.showTerritory && getTerritoryDots ? getTerritoryDots() : [];
 
-    // Collect work area visualization (dots for gameplay mode, circles for debug mode)
     // Isolated: getRadius() throws if BuildingInfo is missing, which must not kill the whole frame.
     let workAreaVis: { circles: readonly CircleRenderData[]; dots: readonly TerritoryDotRenderData[] };
     try {
@@ -65,43 +90,18 @@ function syncEntityRendererState(
         workAreaVis = EMPTY_WORK_AREA_VIS;
     }
 
-    // Stack positions now come from XML data; no ghost rendering is needed.
-    const stackGhosts: readonly StackGhostRenderData[] = [];
+    b.territoryDots(territoryDots).workAreaCircles(workAreaVis.circles).workAreaDots(workAreaVis.dots).stackGhosts([]);
+}
 
-    // Feature-specific computation happens here (glue layer), not in the renderer.
-    // The renderer receives pre-computed BuildingRenderState via the context.
-    const csm = g.services.constructionSiteManager;
-    const visualService = g.services.visualService;
-
-    const renderContext = createRenderContext()
-        .entities(g.state.entities)
-        .unitStates(g.state.unitStates)
-        .pileStates(g.state.piles.states)
-        .buildingRenderStateGetter(entityId => {
-            const site = csm.getSite(entityId);
-            const vs = getBuildingVisualState(site);
-            return {
-                useConstructionSprite: vs.useConstructionSprite,
-                verticalProgress: vs.verticalProgress,
-            };
-        })
-        .buildingOverlaysGetter(entityId => resolveBuildingOverlays(entityId, g, er))
-        .visualStateGetter(visualService.getState.bind(visualService))
-        .directionTransitionGetter(visualService.getDirectionTransition.bind(visualService))
-        .healthRatioGetter(entityId => {
-            const cs = g.services.combatSystem.getState(entityId);
-            if (!cs) return null;
-            return cs.maxHealth > 0 ? cs.health / cs.maxHealth : 1;
-        })
-        .selection({
-            primaryId: g.state.selection.selectedEntityId,
-            ids: g.state.selection.selectedEntityIds,
-        })
-        .territoryDots(territoryDots)
-        .workAreaCircles(workAreaVis.circles)
-        .workAreaDots(workAreaVis.dots)
-        .stackGhosts(stackGhosts)
-        .alpha(alpha)
+/** Wire terrain, camera, and rendering parameters */
+function applyRenderEnvironment(
+    b: RenderContextBuilder,
+    g: Game,
+    ctx: CallbackContext,
+    alpha: number,
+    viewPoint: IViewPoint
+): void {
+    b.alpha(alpha)
         .layerVisibility(ctx.layerVisibility)
         .settings({
             showBuildingFootprint: ctx.layerVisibility.showBuildingFootprint,
@@ -111,11 +111,24 @@ function syncEntityRendererState(
         .groundHeight(g.terrain.groundHeight)
         .groundType(g.terrain.groundType)
         .mapSize(g.terrain.width, g.terrain.height)
-        .viewPoint(viewPoint)
-        .build();
+        .viewPoint(viewPoint);
+}
 
-    // Use the new setContext method
-    er.setContext(renderContext);
+/** Update entity renderer state from game using RenderContext interface */
+function syncEntityRendererState(
+    er: EntityRenderer,
+    g: Game,
+    ctx: CallbackContext,
+    alpha: number,
+    viewPoint: IViewPoint
+): void {
+    const b = createRenderContext();
+    applyEntityData(b, g);
+    applyBuildingVisuals(b, g, er);
+    applyAnimationAndCombat(b, g);
+    applyMapOverlays(b, g, ctx);
+    applyRenderEnvironment(b, g, ctx, alpha, viewPoint);
+    er.setContext(b.build());
 }
 
 /** Empty result for when no work area visualization is needed */

@@ -6,6 +6,7 @@ import type { ConstructionSiteManager } from '../features/building-construction'
 import type { SettlerTaskSystem } from '../features/settler-tasks';
 import type { CombatSystem } from '../features/combat';
 import type { StorageFilterManager } from '../systems/inventory/storage-filter-manager';
+import type { BuildingInventoryManager } from '../systems/inventory/building-inventory';
 import type { PlacementFilter } from '../systems/placement';
 import type { UnitReservationRegistry } from '../systems/unit-reservation';
 import type { RecruitSystem } from '../systems/recruit/recruit-system';
@@ -51,6 +52,7 @@ export interface CommandRegistrationDeps {
     constructionSiteManager: ConstructionSiteManager;
     combatSystem: CombatSystem;
     storageFilterManager: StorageFilterManager;
+    inventoryManager: BuildingInventoryManager;
     unitReservation: UnitReservationRegistry;
     /** Getter for placement filter — mutable, re-read on each place_building call */
     getPlacementFilter: () => PlacementFilter | null;
@@ -73,6 +75,7 @@ export function registerAllHandlers(registry: CommandHandlerRegistry, deps: Comm
         constructionSiteManager,
         combatSystem,
         storageFilterManager,
+        inventoryManager,
         unitReservation,
         getPlacementFilter,
         recruitSystem,
@@ -114,7 +117,9 @@ export function registerAllHandlers(registry: CommandHandlerRegistry, deps: Comm
     registry.register('spawn_pile', cmd => executeSpawnPile({ state, terrain, eventBus }, cmd));
     registry.register('spawn_map_object', cmd => executeSpawnMapObject({ state }, cmd));
     registry.register('update_pile_quantity', cmd => executeUpdatePileQuantity({ state }, cmd));
-    registry.register('set_storage_filter', cmd => executeSetStorageFilter({ state, storageFilterManager }, cmd));
+    registry.register('set_storage_filter', cmd =>
+        executeSetStorageFilter({ state, eventBus, storageFilterManager, inventoryManager }, cmd)
+    );
 
     // Script
     registry.register('script_add_goods', cmd => executeScriptAddGoods({ state, eventBus }, cmd));

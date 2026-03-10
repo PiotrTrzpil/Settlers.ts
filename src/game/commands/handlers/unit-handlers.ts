@@ -1,4 +1,4 @@
-import { EntityType, EXTENDED_OFFSETS, getUnitLevel } from '../../entity';
+import { EntityType, EXTENDED_OFFSETS, getUnitLevel, tileKey } from '../../entity';
 import type { GameState } from '../../game-state';
 import type { TerrainData } from '../../terrain';
 import type { EventBus } from '../../event-bus';
@@ -52,8 +52,14 @@ function findValidSpawnTile(
 export function executeSpawnUnit(deps: SpawnUnitDeps, cmd: SpawnUnitCommand): CommandResult {
     const { state, terrain } = deps;
 
-    const isTileValid = (x: number, y: number) =>
-        terrain.isInBounds(x, y) && terrain.isPassable(x, y) && !state.getEntityAt(x, y);
+    const isTileValid = (x: number, y: number) => {
+        if (!terrain.isInBounds(x, y) || !terrain.isPassable(x, y)) return false;
+        const occupant = state.getEntityAt(x, y);
+        if (!occupant) return true;
+        // Allow spawning on construction site footprint tiles (not yet blocked for movement)
+        if (occupant.type === EntityType.Building && !state.buildingOccupancy.has(tileKey(x, y))) return true;
+        return false;
+    };
 
     let spawnX = cmd.x;
     let spawnY = cmd.y;

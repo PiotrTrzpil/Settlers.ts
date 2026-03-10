@@ -21,7 +21,7 @@ export const WorkAreaFeature: FeatureDefinition = {
 
         return {
             exports: { workAreaStore } satisfies WorkAreaExports,
-            persistence: 'none',
+            persistence: [workAreaStore],
         };
     },
 };

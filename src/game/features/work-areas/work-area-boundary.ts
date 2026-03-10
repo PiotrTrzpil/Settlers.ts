@@ -19,12 +19,12 @@ const RING_PLAYER_INDICES = [2, 3, 0] as const; // inner=green, mid=yellow, oute
 const Y_SQUASH = 0.7;
 
 /**
- * Compute evenly-spaced dots along an isometric ellipse.
+ * Compute evenly-spaced dots along the isometric ellipse boundary.
  *
- * Walks parametrically around the screen-space circle at regular angular
- * intervals, converts back to tile coordinates, rounds to integers, and
- * deduplicates. This produces much more uniform spacing than the
- * boundary-detection + spatial-thinning approach.
+ * Walks parametrically around a screen-space circle at angular intervals,
+ * converts back to tile coordinates via the inverse isometric transform,
+ * rounds to integers, and deduplicates. The screen-space radius equals
+ * the tile radius (tile (R,0) maps to screen (R,0)).
  */
 function computeEvenRingDots(
     cx: number,
@@ -34,17 +34,16 @@ function computeEvenRingDots(
     mapWidth: number,
     mapHeight: number
 ): WorkAreaDot[] {
-    const screenR = radius * 0.5;
     // Enough samples that rounding still yields a dense, gap-free ring
-    const numSamples = Math.max(36, Math.round(2 * Math.PI * screenR * 1.6));
+    const numSamples = Math.max(36, Math.round(2 * Math.PI * radius * 1.6));
 
     const seen = new Set<number>();
     const dots: WorkAreaDot[] = [];
 
     for (let i = 0; i < numSamples; i++) {
         const angle = (2 * Math.PI * i) / numSamples;
-        const sx = screenR * Math.cos(angle);
-        const sy = screenR * Math.sin(angle);
+        const sx = radius * Math.cos(angle);
+        const sy = radius * Math.sin(angle);
 
         // Inverse isometric: screen → tile offset
         const dy = sy * 2 * Y_SQUASH;

@@ -102,12 +102,15 @@ export interface EntityWorkHandler {
         x: number,
         y: number,
         settlerId?: number,
-        player?: number
+        player?: number,
+        searchRadius?: number
     ): { entityId: number; x: number; y: number } | null;
     /** Check if target is still valid / has materials to work with */
     canWork(targetId: number): boolean;
     /** If true, worker waits (idles) when canWork is false instead of failing */
     shouldWaitForWork?: boolean;
+    /** If true, search center is the work area center (not the settler's position). */
+    useWorkAreaCenter?: boolean;
     /** Called when WORK_ON_ENTITY starts */
     onWorkStart?(targetId: number, settlerId?: number): void;
     /** Called each tick during WORK_ON_ENTITY, return true when done */
