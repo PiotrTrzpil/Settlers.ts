@@ -44,13 +44,10 @@ import {
 import { MaterialRequestFeature } from './features/material-requests';
 import { TreeFeature, type TreeFeatureExports } from './features/trees';
 import { StoneFeature, type StoneFeatureExports } from './features/stones';
-import { CropFeature, type CropFeatureExports } from './features/crops';
+import { CropFeature } from './features/crops';
 import { CombatFeature, type CombatExports } from './features/combat';
 import { OreSignFeature, type OreSignExports } from './features/ore-veins';
-import {
-    MaterialTransferFeature,
-    type MaterialTransferExports,
-} from './features/material-transfer/material-transfer-feature';
+import { MaterialTransferFeature } from './features/material-transfer/material-transfer-feature';
 import { SettlerTaskFeature, type SettlerTaskExports } from './features/settler-tasks/settler-tasks-feature';
 import { RecruitFeature, type RecruitExports } from './features/recruit';
 import { BuildingDemandFeature } from './features/building-demand/building-demand-feature';
@@ -73,14 +70,8 @@ import {
 } from './features/inventory/inventory-pile-sync-feature';
 import { FreePilesFeature } from './features/inventory/free-piles-feature';
 import { TerritoryFeature, type TerritoryExports } from './features/territory/territory-feature';
-import {
-    VictoryConditionsFeature,
-    type VictoryConditionsExports,
-} from './features/victory-conditions';
-import {
-    BuildingSiegeFeature,
-    type BuildingSiegeExports,
-} from './features/building-siege';
+import { VictoryConditionsFeature, type VictoryConditionsExports } from './features/victory-conditions';
+import { BuildingSiegeFeature } from './features/building-siege';
 
 // Re-export types that external code imports transitively via GameServices
 import type { CarrierRegistry } from './features/carriers';
@@ -103,23 +94,20 @@ import type { WorkAreaStore } from './features/work-areas';
 import type { ProductionControlManager } from './features/production-control';
 import type { BarracksTrainingManager } from './features/barracks';
 import type { TowerGarrisonManager } from './features/tower-garrison';
-import type { MaterialTransfer } from './features/material-transfer';
 import type { TreeSystem } from './features/trees';
 import type { StoneSystem } from './features/stones';
-import type { CropSystem } from './features/crops';
 import type { CombatSystem } from './features/combat';
 import type { OreVeinData, ResourceSignSystem } from './features/ore-veins';
 import type { SettlerTaskSystem } from './features/settler-tasks';
 import type { ISettlerBuildingLocationManager } from './features/settler-location/types';
 import type { VictoryConditionsSystem } from './features/victory-conditions';
-import type { BuildingSiegeSystem } from './features/building-siege';
 
 export class GameServices {
     // ===== Kernel services =====
     public readonly visualService: EntityVisualService;
 
     // ===== Managers & systems (extracted from feature exports) =====
-    public readonly movement: MovementSystem;
+    private readonly movement: MovementSystem;
     public readonly carrierRegistry: CarrierRegistry;
     public readonly inventoryManager: BuildingInventoryManager;
     public readonly storageFilterManager: StorageFilterManager;
@@ -131,19 +119,16 @@ export class GameServices {
     public readonly residenceSpawner: ResidenceSpawnerSystem;
     public readonly workAreaStore: WorkAreaStore;
     public readonly productionControlManager: ProductionControlManager;
-    public readonly materialTransfer: MaterialTransfer;
     public readonly settlerTaskSystem: SettlerTaskSystem;
     public readonly logisticsDispatcher: LogisticsDispatcher;
     public readonly barracksTrainingManager: BarracksTrainingManager;
     public readonly garrisonManager: TowerGarrisonManager;
     public readonly treeSystem: TreeSystem;
     public readonly stoneSystem: StoneSystem;
-    public readonly cropSystem: CropSystem;
     public readonly combatSystem: CombatSystem;
     public readonly signSystem: ResourceSignSystem;
     public readonly locationManager: ISettlerBuildingLocationManager;
 
-    public readonly siegeSystem: BuildingSiegeSystem;
     public readonly victorySystem: VictoryConditionsSystem;
     public readonly unitTransformer: UnitTransformer;
     public readonly recruitSystem: RecruitSystem;
@@ -221,11 +206,15 @@ export class GameServices {
         });
 
         // Register inventory exports so features can access via ctx.getFeature('inventory')
-        this.featureRegistry.registerExports('inventory', {
-            inventoryManager: this.inventoryManager,
-            pileRegistry: pileSlotRegistry,
-            storageFilterManager: this.storageFilterManager,
-        });
+        this.featureRegistry.registerExports(
+            'inventory',
+            {
+                inventoryManager: this.inventoryManager,
+                pileRegistry: pileSlotRegistry,
+                storageFilterManager: this.storageFilterManager,
+            },
+            [{ persistable: this.inventoryManager, after: ['constructionSites'] }, this.storageFilterManager]
+        );
 
         // 3a. Movement system — instantiated directly (not a feature).
         this.movement = new MovementSystem({
@@ -305,18 +294,15 @@ export class GameServices {
         this.workAreaStore = this.feat<WorkAreaExports>('work-areas').workAreaStore;
         this.productionControlManager =
             this.feat<ProductionControlExports>('production-control').productionControlManager;
-        this.materialTransfer = this.feat<MaterialTransferExports>('material-transfer').materialTransfer;
         this.settlerTaskSystem = this.feat<SettlerTaskExports>('settler-tasks').settlerTaskSystem;
         this.logisticsDispatcher = this.feat<LogisticsDispatcherExports>('logistics-dispatcher').logisticsDispatcher;
         this.barracksTrainingManager = this.feat<BarracksExports>('barracks').barracksTrainingManager;
         this.garrisonManager = this.feat<TowerGarrisonExports>('tower-garrison').garrisonManager;
         this.treeSystem = this.feat<TreeFeatureExports>('trees').treeSystem;
         this.stoneSystem = this.feat<StoneFeatureExports>('stones').stoneSystem;
-        this.cropSystem = this.feat<CropFeatureExports>('crops').cropSystem;
         this.combatSystem = this.feat<CombatExports>('combat').combatSystem;
         this.signSystem = this.feat<OreSignExports>('ore-signs').signSystem;
         this.locationManager = this.feat<SettlerLocationExports>('settler-location').locationManager;
-        this.siegeSystem = this.feat<BuildingSiegeExports>('building-siege').siegeSystem;
         this.victorySystem = this.feat<VictoryConditionsExports>('victory-conditions').victorySystem;
         const arExports = this.feat<RecruitExports>('recruit');
 
@@ -327,28 +313,11 @@ export class GameServices {
 
         // 5. Persistence registry — register feature-declared persistables first, then manual ones.
         this.persistenceRegistry = new PersistenceRegistry();
-        for (const persistable of this.featureRegistry.getPersistables()) {
-            this.persistenceRegistry.register(persistable);
+        for (const { persistable, after } of this.featureRegistry.getPersistables()) {
+            this.persistenceRegistry.register(persistable, after);
         }
-        // Manual registrations for non-migrated features (with ordering constraints)
-        this.persistenceRegistry.register(this.constructionSiteManager);
-        this.persistenceRegistry.register(this.workAreaStore);
-        this.persistenceRegistry.register(this.stoneSystem);
+        // Manual registration for non-feature-owned persistable
         this.persistenceRegistry.register(gameState.piles);
-        this.persistenceRegistry.register(this.inventoryManager, ['constructionSites']);
-        this.persistenceRegistry.register(this.requestManager, ['constructionSites']);
-        this.persistenceRegistry.register(this.storageFilterManager);
-        this.persistenceRegistry.register(this.combatSystem);
-        this.persistenceRegistry.register(this.signSystem);
-        this.persistenceRegistry.register(this.residenceSpawner);
-        this.persistenceRegistry.register(this.barracksTrainingManager, ['productionControl']);
-        // autoRecruitSystem is no longer Persistable; unitTransformer persistence is self-registered
-        // via the auto-recruit feature's persistence: [unitTransformer] array (collected above).
-        this.persistenceRegistry.register(this.settlerTaskSystem, [
-            'carriers',
-            'constructionSites',
-            'buildingInventories',
-        ]);
 
         // 6. Wire pile registry to settler-tasks (cross-feature, conditional).
         if (pileSyncExports.pileRegistry) {
@@ -390,7 +359,7 @@ export class GameServices {
     }
 
     /** Feature-collected persistables (from features using self-registration). */
-    public getFeaturePersistables(): readonly Persistable[] {
+    public getFeaturePersistables(): readonly { persistable: Persistable; after: string[] }[] {
         return this.featureRegistry.getPersistables();
     }
 

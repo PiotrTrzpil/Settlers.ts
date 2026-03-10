@@ -44,10 +44,41 @@ VERBOSE_CHOREO=1 pnpm test:unit     # Include detailed choreography events in ti
 - **Architecture rules**: Read `docs/design-rules.md` for invariants and naming conventions
 
 ## Exploration
-**ALWAYS prefer cclsp mcp over manual grep for these operations:**
+**ALWAYS prefer Codebase Memory (MCP) or cclsp mcp over manual grep if possible:**
 
+cclsp:
 | Find usages | `find_references` |
 | Go to definition | `find_definition` |
+
+
+## Codebase Memory (MCP)
+
+This project is indexed by `codebase-memory-mcp`. Use it for structural queries instead of grep when possible.
+
+**Orientation:**
+- `get_architecture(aspects=['hotspots','boundaries','clusters'])` for dependency analysis
+- `manage_adr(mode='get')` before refactors/new features to check alignment
+
+**Prefer `search_graph` over `query_graph`** — it handles degree filtering, dead code detection, and regex name matching without Cypher syntax issues:
+- Dead code: `search_graph(label='Function', relationship='CALLS', direction='inbound', max_degree=0, exclude_entry_points=true)`
+- High fan-out: `search_graph(label='Function', relationship='CALLS', direction='outbound', min_degree=15, sort_by='degree')`
+- Find by name: `search_graph(name_pattern='.*Handler.*', label='Function')`
+
+**Use `query_graph` for relationship patterns** (who calls whom, edge properties, paths):
+- `MATCH (a)-[:CALLS]->(b) WHERE a.name = 'foo' RETURN b.name LIMIT 20`
+- `MATCH (m:Method) WHERE m.end_line - m.start_line > 80 RETURN m.name, m.file LIMIT 20`
+- `MATCH (f:Function) WHERE f.name IN ['main', 'init', 'setup'] RETURN f.name LIMIT 20`
+- Supports: arithmetic (`a - b > N`), `IN [...]`, `ENDS WITH`, `NOT`, nested `AND`/`OR`, property-to-property comparisons
+- IMPORTS edges have `via_barrel` property (true when import goes through a barrel/index file)
+- 200-row cap; no `WITH`, `COLLECT`, `OPTIONAL MATCH`
+
+**Other tools:**
+- `trace_call_path` — call chains from/to a function (use `search_graph` first to find exact name)
+- `search_code` — text search (like grep, not semantic), good for string literals and patterns not in the graph
+- `detect_changes` — map git diff to affected symbols + blast radius
+- After major changes: auto-sync keeps graph fresh; force with `index_repository` if needed
+
+
 
 ## Editing code
 

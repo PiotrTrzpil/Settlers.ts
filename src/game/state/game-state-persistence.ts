@@ -114,6 +114,8 @@ export interface SerializedCrop {
 export interface SerializedStorageFilter {
     buildingId: number;
     materials: number[];
+    /** Per-material direction (StorageDirection). Missing = legacy data, default to Both. */
+    directions?: number[];
 }
 
 export interface SerializedProductionControl {
@@ -486,6 +488,11 @@ export function restoreFromSnapshot(game: Game, snapshot: GameStateSnapshot): vo
     // 6. Rebuild derived state that is not owned by features.
     game.services.inventoryPileSync?.rebuildFromExistingEntities();
     game.services.buildingOverlayManager.rebuildFromExistingEntities(game.services.constructionSiteManager);
+
+    // 7. Notify features that restore is complete — features rebuild derived state,
+    // re-emit worker-needed events, etc. Must run AFTER all entities and feature
+    // stores are deserialized (step 5) and derived state is rebuilt (step 6).
+    game.services.notifyRestoreComplete();
 
     console.log(
         `[${performance.now().toFixed(0)}ms] GameState: Restored ${snapshot.entities.length} entities from snapshot`

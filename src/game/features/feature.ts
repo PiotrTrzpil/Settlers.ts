@@ -103,6 +103,13 @@ export interface FeatureContext extends CoreDeps {
 export type BoundCommandHandler = (cmd: Command) => CommandResult;
 
 /**
+ * Entry in the persistence array.
+ * A bare Persistable (no ordering constraints) or an object with explicit `after` keys
+ * for finer-grained ordering within the PersistenceRegistry.
+ */
+export type PersistenceEntry = Persistable | { persistable: Persistable; after: string[] };
+
+/**
  * Render data contribution from a feature.
  * Each key identifies a named data slot that the glue layer reads.
  * Values are getter functions called once per frame.
@@ -174,7 +181,7 @@ export interface FeatureInstance {
      * This field is required so that omitting it is a compile error —
      * preventing the "forgot to persist" bug.
      */
-    persistence: Persistable[] | 'none';
+    persistence: PersistenceEntry[] | 'none';
 
     /**
      * Command handlers owned by this feature.

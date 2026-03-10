@@ -13,7 +13,14 @@ import { EventSubscriptionManager } from '../event-bus';
 import type { EntityVisualService } from '../animation/entity-visual-service';
 import type { EntityCleanupRegistry } from '../systems/entity-cleanup-registry';
 import type { UnitReservationRegistry } from '../systems/unit-reservation';
-import type { CoreDeps, FeatureDefinition, FeatureInstance, FeatureContext, BoundCommandHandler } from './feature';
+import type {
+    CoreDeps,
+    FeatureDefinition,
+    FeatureInstance,
+    FeatureContext,
+    BoundCommandHandler,
+    PersistenceEntry,
+} from './feature';
 import type { Command, CommandResult, CommandType } from '../commands';
 import type { Persistable } from '../persistence';
 import type { TerrainData } from '../terrain';
@@ -55,8 +62,8 @@ export class FeatureRegistry {
     /** Track loaded feature IDs for summary logging */
     private readonly loadedIds: string[] = [];
 
-    /** Persistable managers collected in feature-load order */
-    private readonly persistables: Persistable[] = [];
+    /** Persistable managers collected in feature-load order, with ordering constraints */
+    private readonly persistables: { persistable: Persistable; after: string[] }[] = [];
 
     /** Command handlers collected from features, keyed by command type */
     private readonly commandHandlers = new Map<CommandType, BoundCommandHandler>();
@@ -79,13 +86,17 @@ export class FeatureRegistry {
      * Enables incremental migration: manually-created managers become
      * accessible to registry features via ctx.getFeature().
      */
-    registerExports(featureId: string, exports: Record<string, unknown>): void {
+    registerExports(featureId: string, exports: Record<string, unknown>, persistence?: PersistenceEntry[]): void {
         if (this.instances.has(featureId)) {
             throw new Error(`Feature '${featureId}' already registered`);
         }
-        this.instances.set(featureId, { exports, persistence: 'none' });
+        const resolved = persistence ?? 'none';
+        this.instances.set(featureId, { exports, persistence: resolved });
         this.exports.set(featureId, exports);
         this.loadedIds.push(featureId);
+        if (resolved !== 'none') {
+            this.collectPersistables({ persistence: resolved } as FeatureInstance);
+        }
     }
 
     /**
@@ -166,9 +177,10 @@ export class FeatureRegistry {
     }
 
     /**
-     * Get all persistables from loaded features, in feature-load order.
+     * Get all persistables from loaded features, in feature-load order,
+     * with ordering constraints for the PersistenceRegistry.
      */
-    getPersistables(): readonly Persistable[] {
+    getPersistables(): readonly { persistable: Persistable; after: string[] }[] {
         return this.persistables;
     }
 
@@ -268,11 +280,7 @@ export class FeatureRegistry {
      * Extracted from load() to keep complexity under the limit.
      */
     private collectPluginHooks(featureId: string, instance: FeatureInstance): void {
-        if (instance.persistence !== 'none') {
-            for (const persistable of instance.persistence) {
-                this.persistables.push(persistable);
-            }
-        }
+        this.collectPersistables(instance);
 
         if (instance.commands) {
             for (const [type, handler] of Object.entries(instance.commands)) {
@@ -299,6 +307,18 @@ export class FeatureRegistry {
 
         if (instance.diagnostics) {
             this.diagnosticsRegistry.register(featureId, instance.diagnostics);
+        }
+    }
+
+    /** Collect persistence entries from a feature instance. */
+    private collectPersistables(instance: FeatureInstance): void {
+        if (instance.persistence === 'none') return;
+        for (const entry of instance.persistence) {
+            if ('persistKey' in entry) {
+                this.persistables.push({ persistable: entry as Persistable, after: [] });
+            } else {
+                this.persistables.push(entry as { persistable: Persistable; after: string[] });
+            }
         }
     }
 

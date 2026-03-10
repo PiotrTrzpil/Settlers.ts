@@ -313,6 +313,12 @@ export interface GameEvents {
         newAmount: number;
     };
 
+    /** Emitted when a StorageArea's direction setting changes */
+    'storage:directionChanged': {
+        buildingId: number;
+        materialType: EMaterialType;
+    };
+
     // === Production Control Events ===
 
     /** Emitted when a building's production mode changes */
