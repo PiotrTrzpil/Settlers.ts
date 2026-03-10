@@ -15,6 +15,9 @@ import { EntityType } from '../../entity';
 import { MapObjectType } from '@/game/types/map-object-types';
 import type { PlantTreeCommand, PlantTreesAreaCommand } from '../../commands/command-types';
 import { executePlantTree, executePlantTreesArea } from '../../commands/handlers/system-handlers';
+import type { SettlerTaskExports } from '../settler-tasks/settler-tasks-feature';
+import { SearchType } from '../settler-tasks/types';
+import { createWoodcuttingHandler, createForesterHandler } from './work-handlers';
 
 /**
  * Exports provided by TreeFeature.
@@ -26,11 +29,11 @@ export interface TreeFeatureExports {
 
 /**
  * Tree feature definition.
- * No dependencies - uses only core services from context.
+ * Depends on settler-tasks for registering work handlers.
  */
 export const TreeFeature: FeatureDefinition = {
     id: 'trees',
-    dependencies: [],
+    dependencies: ['settler-tasks'],
 
     create(ctx: FeatureContext) {
         const treeSystem = new TreeSystem({
@@ -39,6 +42,11 @@ export const TreeFeature: FeatureDefinition = {
             eventBus: ctx.eventBus,
             executeCommand: ctx.executeCommand,
         });
+
+        // Register work handlers for woodcutting and forester planting
+        const { settlerTaskSystem } = ctx.getFeature<SettlerTaskExports>('settler-tasks');
+        settlerTaskSystem.registerWorkHandler(SearchType.TREE, createWoodcuttingHandler(ctx.gameState, treeSystem));
+        settlerTaskSystem.registerWorkHandler(SearchType.TREE_SEED_POS, createForesterHandler(treeSystem));
 
         // Register for map object creation events to auto-register trees
         ctx.on('entity:created', ({ entityId, type, subType }) => {

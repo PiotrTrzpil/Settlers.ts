@@ -152,6 +152,11 @@ export class FeatureRegistry {
         }
     }
 
+    /** Register an externally-created system (not owned by a feature). */
+    registerSystem(system: TickSystem, group: string): void {
+        this.allSystems.push({ system, group });
+    }
+
     /**
      * Get all systems from loaded features, with group labels.
      * Use this to register systems with GameLoop.

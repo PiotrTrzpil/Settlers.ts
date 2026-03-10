@@ -18,7 +18,7 @@ import type { BuildingPileRegistry } from './building-pile-registry';
 import type { LinkedSlotKind } from '../../core/pile-kind';
 import { SlotKind } from '../../core/pile-kind';
 import { getConstructionCandidates } from './construction-pile-positions';
-import type { ConstructionSiteManager } from '../building-construction/construction-site-manager';
+import type { ConstructionSiteManager } from '../../features/building-construction/construction-site-manager';
 
 export class PilePositionResolver {
     private readonly log = new LogHandler('PilePositionResolver');

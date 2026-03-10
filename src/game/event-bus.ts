@@ -628,6 +628,12 @@ export interface GameEvents {
         buildingId: number;
     };
 
+    /** Emitted when a settler enters a building (transitions to Inside). */
+    'settler-location:entered': {
+        settlerId: number;
+        buildingId: number;
+    };
+
     // === Garrison Events ===
 
     /** Emitted when a unit enters a tower garrison (becomes hidden). */
@@ -640,6 +646,32 @@ export interface GameEvents {
     'garrison:unitExited': {
         buildingId: number;
         unitId: number;
+    };
+
+    /** Emitted when a garrisoned bowman fires at an enemy. */
+    'garrison:bowmanFired': {
+        buildingId: number;
+        bowmanId: number;
+        targetId: number;
+        damage: number;
+    };
+
+    // === Worker Assignment Events ===
+
+    /** Emitted when a building spawns its dedicated worker at the door. */
+    'building:workerSpawned': {
+        buildingId: number;
+        settlerId: number;
+    };
+
+    /** Emitted when a building's worker is lost (died, reassigned by player move command).
+     *  NOT emitted when the building itself is destroyed. */
+    'building:workerLost': {
+        buildingId: number;
+        buildingType: BuildingType;
+        settlerId: number;
+        player: number;
+        race: Race;
     };
 
     // === Siege Events ===

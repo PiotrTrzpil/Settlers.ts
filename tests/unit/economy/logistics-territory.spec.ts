@@ -4,7 +4,7 @@ import {
     createTerritoryMatchFilter,
     createTerritoryCarrierFilter,
 } from '@/game/features/territory';
-import { PlacementStatus } from '@/game/features/placement';
+import { PlacementStatus } from '@/game/systems/placement';
 import type { TerritoryManager } from '@/game/features/territory';
 import type { Entity } from '@/game/entity';
 

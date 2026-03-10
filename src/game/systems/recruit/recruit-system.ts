@@ -1,43 +1,58 @@
 /**
- * RecruitSystem — unified system for carrier-to-specialist transformation.
+ * RecruitSystem — player-queued carrier-to-specialist transformation.
  *
- * Handles two recruitment flows in a single tick:
+ * Drains a per-type queue populated via enqueue() (from the
+ * recruit_specialist command). Supports a camera-center hint so the
+ * nearest carrier / tool pile to the current view is chosen first;
+ * without a hint the carrier closest to any available tool pile wins.
  *
- * 1. Background auto-recruitment (every 1 s):
- *    Watches construction sites and dispatches carriers as Builders / Diggers
- *    up to a per-type cap, nearest to each site.
- *
- * 2. Player-queued recruitment (every 0.5 s):
- *    Drains a per-type queue populated via enqueue() (from the recruit_specialist command).
- *    Supports a camera-center hint so the nearest carrier / tool pile to the current
- *    view is chosen first; without a hint the carrier closest to any available tool pile wins.
- *
- * Both flows delegate the actual transformation to UnitTransformer.
+ * Construction worker recruitment is handled by ConstructionSiteDemandSystem.
+ * Building-worker demands (specialist → workplace) are handled by
+ * BuildingDemandSystem.
  */
 
 import type { TickSystem } from '../../core/tick-system';
 import type { GameState } from '../../game-state';
 import { EventSubscriptionManager, type EventBus } from '../../event-bus';
-import { EntityType } from '../../entity';
 import { UnitType } from '../../core/unit-types';
 import { EMaterialType } from '../../economy/material-type';
-import type { CarrierRegistry } from '../carrier-registry';
 import type { UnitTransformer } from './unit-transformer';
-import type { UnitReservationRegistry } from '../unit-reservation';
 import type { ToolSourceResolver } from './tool-source-resolver';
+import type { IdleCarrierPool } from '../idle-carrier-pool';
 import type { Race } from '../../core/race';
-import { query } from '@/game/ecs';
+import type { ChoreoJobState } from '../choreo';
+import { SPECIALIST_TOOL_MAP } from './specialist-tool-map';
+import { createRecruitmentJob } from './recruitment-job';
 import { createLogger } from '@/utilities/logger';
+import { query } from '../../ecs';
 
 const log = createLogger('RecruitSystem');
 
 const QUEUE_DRAIN_INTERVAL = 0.5; // seconds
-const AUTO_CHECK_INTERVAL = 1.0; // seconds
 
-const MAX_AUTO_BUILDERS = 4;
-const MAX_AUTO_DIGGERS = 4;
+// ─── Public types ─────────────────────────────────────────────────────
 
-// ─── Queue entry ─────────────────────────────────────────────────────────────
+/** Result of findRecruitmentCandidate — carrier + optional tool pile. */
+export interface RecruitmentCandidate {
+    carrierId: number;
+    toolPile: { pileEntityId: number; x: number; y: number } | null;
+}
+
+/** Options for dispatchRecruitment. */
+export interface DispatchRecruitmentOpts {
+    /** Destination after recruitment (optimizes carrier→tool→target distance). */
+    target?: { x: number; y: number };
+    /** Camera-center hint (for player-queued recruitment from UI). */
+    hint?: { x: number; y: number };
+    /**
+     * Additional choreo steps appended after the recruitment prefix.
+     * Receives the ChoreoBuilder with walk-to-tool + transform already added,
+     * and should return the extended ChoreoJobState.
+     */
+    buildJob?: (candidate: RecruitmentCandidate) => ChoreoJobState;
+}
+
+// ─── Queue entry ──────────────────────────────────────────────────────
 
 interface QueueEntry {
     toolMaterial: EMaterialType | null;
@@ -48,55 +63,115 @@ interface QueueEntry {
     near: { x: number; y: number } | null;
 }
 
-// ─── Config ──────────────────────────────────────────────────────────────────
+// ─── Config ───────────────────────────────────────────────────────────
 
 export interface RecruitSystemConfig {
     gameState: GameState;
     eventBus: EventBus;
-    carrierRegistry: CarrierRegistry;
+    idleCarrierPool: IdleCarrierPool;
     unitTransformer: UnitTransformer;
-    unitReservation: UnitReservationRegistry;
     toolSourceResolver: ToolSourceResolver;
-    isCarrierBusy: (carrierId: number) => boolean;
+    assignJob: (unitId: number, job: ChoreoJobState, moveTo?: { x: number; y: number }) => boolean;
 }
 
-interface WorkerDemand {
-    role: 'digger' | 'builder';
-    tileX: number;
-    tileY: number;
-    player: number;
-}
-
-// ─── System ──────────────────────────────────────────────────────────────────
+// ─── System ───────────────────────────────────────────────────────────
 
 export class RecruitSystem implements TickSystem {
     private readonly gameState: GameState;
     private readonly eventBus: EventBus;
-    private readonly carrierRegistry: CarrierRegistry;
+    private readonly idleCarrierPool: IdleCarrierPool;
     private readonly unitTransformer: UnitTransformer;
-    private readonly unitReservation: UnitReservationRegistry;
     private readonly toolSourceResolver: ToolSourceResolver;
-    private readonly isCarrierBusy: (carrierId: number) => boolean;
+    private readonly assignJob: RecruitSystemConfig['assignJob'];
     private readonly subscriptions = new EventSubscriptionManager();
 
     private readonly queue = new Map<UnitType, QueueEntry>();
-    private pendingDemand: WorkerDemand[] = [];
     private queueTimer = 0;
-    private autoTimer = 0;
 
     constructor(config: RecruitSystemConfig) {
         this.gameState = config.gameState;
         this.eventBus = config.eventBus;
-        this.carrierRegistry = config.carrierRegistry;
+        this.idleCarrierPool = config.idleCarrierPool;
         this.unitTransformer = config.unitTransformer;
-        this.unitReservation = config.unitReservation;
         this.toolSourceResolver = config.toolSourceResolver;
-        this.isCarrierBusy = config.isCarrierBusy;
+        this.assignJob = config.assignJob;
     }
 
-    // =========================================================================
+    // =====================================================================
+    // Public API — unified recruitment dispatch
+    // =====================================================================
+
+    /**
+     * Find the best carrier to recruit as the given specialist type.
+     *
+     * Derives tool material from SPECIALIST_TOOL_MAP internally — callers
+     * never need to know about tool piles or tool sources.
+     *
+     * opts.target — destination after recruitment (building, construction site).
+     *   Optimizes total carrier→tool + tool→target distance.
+     * opts.hint — camera-center or reference point for "nearest" when no target
+     *   is known (e.g. player-queued recruitment from UI).
+     *
+     * When neither target nor hint is given, finds the carrier+tool pair with
+     * the shortest carrier→tool distance.
+     */
+    findRecruitmentCandidate(
+        unitType: UnitType,
+        player: number,
+        opts?: {
+            target?: { x: number; y: number };
+            hint?: { x: number; y: number };
+        },
+    ): RecruitmentCandidate | null {
+        const toolMaterial = SPECIALIST_TOOL_MAP[unitType] ?? null;
+
+        if (toolMaterial !== null) {
+            return this.findToolBasedCandidate(toolMaterial, player, opts);
+        }
+
+        // No tool needed — find nearest idle carrier
+        const ref = opts?.target ?? opts?.hint;
+        if (ref) {
+            const carrierId = this.idleCarrierPool.findNearest(ref.x, ref.y, player);
+            return carrierId !== null ? { carrierId, toolPile: null } : null;
+        }
+
+        // No reference point — find any idle carrier
+        const carrierId = this.idleCarrierPool.findNearest(0, 0, player);
+        return carrierId !== null ? { carrierId, toolPile: null } : null;
+    }
+
+    /**
+     * Full recruitment dispatch — find candidate, build choreo, assign job,
+     * register transform. Returns carrierId on success, null on failure.
+     *
+     * Callers provide opts.buildJob to customize the choreo (e.g. append
+     * walk-to-site → DIG_TILE after the recruitment prefix). If omitted,
+     * the default AUTO_RECRUIT job is used.
+     *
+     * This is the primary API for demand systems — they never need to touch
+     * UnitTransformer, tool piles, or choreo building directly.
+     */
+    dispatchRecruitment(
+        unitType: UnitType,
+        player: number,
+        opts?: DispatchRecruitmentOpts,
+    ): number | null {
+        const candidate = this.findRecruitmentCandidate(unitType, player, opts);
+        if (!candidate) return null;
+
+        const toolMaterial = SPECIALIST_TOOL_MAP[unitType] ?? null;
+
+        if (toolMaterial !== null) {
+            return this.executeToolRecruitment(candidate, unitType, toolMaterial, opts);
+        }
+
+        return this.executeDirectRecruitment(candidate.carrierId, unitType, player);
+    }
+
+    // =====================================================================
     // Public API — player-queued recruitment
-    // =========================================================================
+    // =====================================================================
 
     enqueue(
         unitType: UnitType,
@@ -111,9 +186,14 @@ export class RecruitSystem implements TickSystem {
             existing.count += count;
             if (near) existing.near = near;
         } else {
-            this.queue.set(unitType, { toolMaterial, player, race, count, near });
+            this.queue.set(unitType, {
+                toolMaterial, player, race, count, near,
+            });
         }
-        log.debug(`Enqueued ${count}× ${UnitType[unitType]} (total: ${this.queue.get(unitType)!.count})`);
+        log.debug(
+            `Enqueued ${count}× ${UnitType[unitType]}`
+            + ` (total: ${this.queue.get(unitType)!.count})`
+        );
     }
 
     dequeue(unitType: UnitType, count: number): void {
@@ -128,23 +208,21 @@ export class RecruitSystem implements TickSystem {
         return this.queue.get(unitType)?.count ?? 0;
     }
 
-    // =========================================================================
+    // =====================================================================
     // Event registration
-    // =========================================================================
+    // =====================================================================
 
     registerEvents(): void {
-        this.subscriptions.subscribe(this.eventBus, 'construction:workerNeeded', ({ role, tileX, tileY, player }) => {
-            this.pendingDemand.push({ role, tileX, tileY, player });
-        });
+        // No event subscriptions needed — player-queued recruitment is tick-driven.
     }
 
     unregisterEvents(): void {
         this.subscriptions.unsubscribeAll();
     }
 
-    // =========================================================================
+    // =====================================================================
     // TickSystem
-    // =========================================================================
+    // =====================================================================
 
     tick(dt: number): void {
         this.queueTimer += dt;
@@ -152,194 +230,156 @@ export class RecruitSystem implements TickSystem {
             this.queueTimer -= QUEUE_DRAIN_INTERVAL;
             this.drainQueue();
         }
-
-        this.autoTimer += dt;
-        if (this.autoTimer >= AUTO_CHECK_INTERVAL) {
-            this.autoTimer -= AUTO_CHECK_INTERVAL;
-            this.drainDemand();
-        }
     }
 
-    // =========================================================================
+    // =====================================================================
     // Queue drain (player-initiated)
-    // =========================================================================
+    // =====================================================================
 
     private drainQueue(): void {
         const justDispatched: number[] = [];
 
         for (const [unitType, entry] of this.queue) {
-            const target = this.resolveDispatch(entry);
-            if (!target) continue;
+            const carrierId = this.dispatchRecruitment(
+                unitType, entry.player,
+                entry.near ? { hint: entry.near } : undefined,
+            );
 
-            const ok =
-                entry.toolMaterial !== null
-                    ? this.unitTransformer.requestTransform(
-                        target.carrierId,
-                        unitType,
-                        entry.toolMaterial,
-                        target.nearX,
-                        target.nearY,
-                        entry.player
-                    )
-                    : this.unitTransformer.requestDirectTransform(target.carrierId, unitType, entry.player);
-
-            if (ok) {
+            if (carrierId !== null) {
                 entry.count--;
                 if (entry.count === 0) this.queue.delete(unitType);
-                justDispatched.push(target.carrierId);
+                justDispatched.push(carrierId);
             }
         }
 
         if (justDispatched.length > 0) {
-            // Add dispatched carriers to the selection so the player can track recruitment.
-            // Selection persists through transform (same entity ID), so the specialist
-            // will remain selected once the transform completes.
-            const current = [...this.gameState.selection.selectedEntityIds];
-            this.gameState.selection.selectMultiple([...current, ...justDispatched]);
+            const current = [
+                ...this.gameState.selection.selectedEntityIds,
+            ];
+            this.gameState.selection.selectMultiple([
+                ...current, ...justDispatched,
+            ]);
         }
     }
+
+    // =====================================================================
+    // Internal — recruitment execution
+    // =====================================================================
+
+    private executeToolRecruitment(
+        candidate: RecruitmentCandidate,
+        unitType: UnitType,
+        toolMaterial: EMaterialType,
+        opts?: DispatchRecruitmentOpts,
+    ): number | null {
+        const toolPile = candidate.toolPile!;
+
+        // Build choreo: either caller-provided or default AUTO_RECRUIT
+        const job = opts?.buildJob
+            ? opts.buildJob(candidate)
+            : createRecruitmentJob(toolPile.pileEntityId, toolPile.x, toolPile.y, unitType);
+
+        const assigned = this.unitTransformer.assignAndRegisterTransform(
+            candidate.carrierId, job, unitType, toolMaterial, toolPile,
+        );
+        return assigned ? candidate.carrierId : null;
+    }
+
+    private executeDirectRecruitment(
+        carrierId: number, unitType: UnitType, player: number,
+    ): number | null {
+        const ok = this.unitTransformer.requestDirectTransform(carrierId, unitType, player);
+        return ok ? carrierId : null;
+    }
+
+    // =====================================================================
+    // Internal — tool-based candidate search
+    // =====================================================================
 
     /**
-     * Resolve the best (carrierId, search-center) for a queue entry.
+     * Find the best (carrier, toolPile) pair for a tool-based recruitment.
      *
-     * With camera hint:
-     *   tool-based → tool nearest hint → carrier nearest that tool
-     *   no-tool    → carrier nearest hint
-     * Without hint:
-     *   tool-based → carrier closest to its own nearest tool pile
-     *   no-tool    → first idle carrier
+     * With hint: find tool nearest to hint, then carrier nearest to that tool.
+     * With target (no hint): iterate all idle carriers, find tool nearest to each,
+     *   minimize carrier→tool + tool→target.
+     * Neither: iterate all idle carriers, find tool nearest to each,
+     *   minimize carrier→tool distance only.
      */
-    private resolveDispatch(entry: QueueEntry): { carrierId: number; nearX: number; nearY: number } | null {
-        if (entry.toolMaterial !== null) {
-            return entry.near
-                ? this.dispatchToolWithHint(entry.toolMaterial, entry.near, entry.player)
-                : this.dispatchToolAuto(entry.toolMaterial, entry.player);
+    private findToolBasedCandidate(
+        toolMaterial: EMaterialType,
+        player: number,
+        opts?: { target?: { x: number; y: number }; hint?: { x: number; y: number } },
+    ): RecruitmentCandidate | null {
+        // Hint mode: find tool nearest to hint, then carrier nearest to tool
+        if (opts?.hint) {
+            return this.resolveToolWithHint(toolMaterial, opts.hint, player);
         }
-        if (entry.near) {
-            const id = this.findCarrierNearest(entry.near.x, entry.near.y, entry.player);
-            return id !== null ? { carrierId: id, nearX: entry.near.x, nearY: entry.near.y } : null;
-        }
-        const id = this.findAnyIdleCarrier(entry.player);
-        return id !== null ? { carrierId: id, nearX: 0, nearY: 0 } : null;
+
+        // Iterate carriers, find best (carrier, tool) pair
+        return this.resolveToolByScan(toolMaterial, player, opts?.target);
     }
 
-    private dispatchToolWithHint(
+    private resolveToolWithHint(
         toolMaterial: EMaterialType,
         hint: { x: number; y: number },
-        player: number
-    ): { carrierId: number; nearX: number; nearY: number } | null {
-        const tool = this.toolSourceResolver.findNearestToolPile(toolMaterial, hint.x, hint.y, player);
-        if (!tool) return null;
-        const carrierId = this.findCarrierNearest(tool.x, tool.y, player);
-        return carrierId !== null ? { carrierId, nearX: tool.x, nearY: tool.y } : null;
-    }
-
-    private dispatchToolAuto(
-        toolMaterial: EMaterialType,
-        player: number
-    ): { carrierId: number; nearX: number; nearY: number } | null {
-        let bestId: number | null = null;
-        let bestNearX = 0;
-        let bestNearY = 0;
-        let bestDistSq = Infinity;
-
-        for (const [id, , entity] of query(this.carrierRegistry.store, this.gameState.store)) {
-            if (!this.isIdleCarrier(id, entity.player, player)) continue;
-            const tool = this.toolSourceResolver.findNearestToolPile(toolMaterial, entity.x, entity.y, player);
-            if (!tool) continue;
-            const distSq = (entity.x - tool.x) ** 2 + (entity.y - tool.y) ** 2;
-            if (distSq < bestDistSq) {
-                bestDistSq = distSq;
-                bestId = id;
-                bestNearX = entity.x;
-                bestNearY = entity.y;
-            }
-        }
-
-        return bestId !== null ? { carrierId: bestId, nearX: bestNearX, nearY: bestNearY } : null;
-    }
-
-    // =========================================================================
-    // Auto-recruitment (event-driven demand queue)
-    // =========================================================================
-
-    private drainDemand(): void {
-        const remaining: WorkerDemand[] = [];
-        for (const demand of this.pendingDemand) {
-            try {
-                if (!this.tryFulfillDemand(demand)) remaining.push(demand);
-            } catch (e) {
-                log.error(`Auto-recruit failed for demand`, e instanceof Error ? e : new Error(String(e)));
-            }
-        }
-        this.pendingDemand = remaining;
+        player: number,
+    ): RecruitmentCandidate | null {
+        const toolPile = this.toolSourceResolver.findNearestToolPile(
+            toolMaterial, hint.x, hint.y, player,
+        );
+        if (!toolPile) return null;
+        const carrierId = this.idleCarrierPool.findNearest(toolPile.x, toolPile.y, player);
+        if (carrierId === null) return null;
+        return { carrierId, toolPile };
     }
 
     /**
-     * Try to fulfill one worker demand. Returns true if the demand is satisfied
-     * (either dispatched or discarded because we're at cap). Returns false if
-     * no idle carrier was available — caller should retry next tick.
+     * Scan all idle carriers. For each, find the nearest tool pile and compute
+     * total trip cost: carrier→tool + (tool→target if target given).
      */
-    private tryFulfillDemand(demand: WorkerDemand): boolean {
-        const unitType = demand.role === 'digger' ? UnitType.Digger : UnitType.Builder;
-        const toolMaterial = demand.role === 'digger' ? EMaterialType.SHOVEL : EMaterialType.HAMMER;
-        const cap = demand.role === 'digger' ? MAX_AUTO_DIGGERS : MAX_AUTO_BUILDERS;
+    private resolveToolByScan(
+        toolMaterial: EMaterialType,
+        player: number,
+        target?: { x: number; y: number },
+    ): RecruitmentCandidate | null {
+        let best: RecruitmentCandidate | null = null;
+        let bestCost = Infinity;
 
-        const live = this.countLive(demand.player, unitType);
-        const pending = this.unitTransformer.getPendingCountByType(unitType);
-        if (live + pending >= cap) return true; // at cap — discard demand
+        const store = this.idleCarrierPool.carrierStore;
 
-        const carrierId = this.findCarrierNearest(demand.tileX, demand.tileY, demand.player);
-        if (carrierId === null) return false; // retry when a carrier becomes available
+        for (const [id, , entity] of query(store, this.gameState.store)) {
+            if (entity.player !== player) continue;
+            if (!this.idleCarrierPool.isIdle(id)) continue;
 
-        return this.unitTransformer.requestTransform(
-            carrierId,
-            unitType,
-            toolMaterial,
-            demand.tileX,
-            demand.tileY,
-            demand.player
-        );
-    }
+            const toolPile = this.toolSourceResolver.findNearestToolPile(
+                toolMaterial, entity.x, entity.y, player,
+            );
+            if (!toolPile) continue;
 
-    // =========================================================================
-    // Shared carrier helpers
-    // =========================================================================
-
-    private findCarrierNearest(refX: number, refY: number, player: number): number | null {
-        let bestId: number | null = null;
-        let bestDistSq = Infinity;
-        for (const [id, , entity] of query(this.carrierRegistry.store, this.gameState.store)) {
-            if (!this.isIdleCarrier(id, entity.player, player)) continue;
-            const distSq = (entity.x - refX) ** 2 + (entity.y - refY) ** 2;
-            if (distSq < bestDistSq) {
-                bestDistSq = distSq;
-                bestId = id;
+            const cost = tripCost(entity.x, entity.y, toolPile.x, toolPile.y, target);
+            if (cost < bestCost) {
+                bestCost = cost;
+                best = { carrierId: id, toolPile };
             }
         }
-        return bestId;
-    }
 
-    private findAnyIdleCarrier(player: number): number | null {
-        for (const [id, , entity] of query(this.carrierRegistry.store, this.gameState.store)) {
-            if (this.isIdleCarrier(id, entity.player, player)) return id;
-        }
-        return null;
+        return best;
     }
+}
 
-    private isIdleCarrier(id: number, entityPlayer: number, player: number): boolean {
-        return entityPlayer === player && !this.isCarrierBusy(id) && !this.unitReservation.isReserved(id);
+/** Squared distance for carrier→tool leg, plus optional tool→target leg. */
+function tripCost(
+    carrierX: number, carrierY: number,
+    toolX: number, toolY: number,
+    target?: { x: number; y: number },
+): number {
+    const cdx = carrierX - toolX;
+    const cdy = carrierY - toolY;
+    let cost = cdx * cdx + cdy * cdy;
+    if (target) {
+        const tdx = toolX - target.x;
+        const tdy = toolY - target.y;
+        cost += tdx * tdx + tdy * tdy;
     }
-
-    // =========================================================================
-    // Misc helpers
-    // =========================================================================
-
-    private countLive(player: number, unitType: UnitType): number {
-        let count = 0;
-        for (const e of this.gameState.entities) {
-            if (e.type === EntityType.Unit && e.subType === unitType && e.player === player) count++;
-        }
-        return count;
-    }
+    return cost;
 }

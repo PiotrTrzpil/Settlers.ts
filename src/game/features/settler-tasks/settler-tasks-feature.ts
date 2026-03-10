@@ -2,8 +2,8 @@
  * SettlerTask Feature -- wraps SettlerTaskSystem and all work handlers
  * as a self-registering feature.
  *
- * Work handlers that need terrain (water, geologist) are registered
- * in onTerrainReady. All others are registered during create().
+ * Work handlers that need terrain (water) are registered in onTerrainReady.
+ * Domain features (trees, stones, crops, ore-signs) register their own handlers.
  */
 
 import type { FeatureDefinition, FeatureContext } from '../feature';
@@ -14,29 +14,13 @@ import type { WorkAreaExports } from '../work-areas/work-areas-feature';
 import type { ProductionControlExports } from '../production-control/production-control-feature';
 import type { MaterialTransferExports } from '../material-transfer/material-transfer-feature';
 import type { CombatExports } from '../combat';
-import type { TreeFeatureExports } from '../trees';
-import type { StoneFeatureExports } from '../stones';
-import type { CropFeatureExports } from '../crops';
-import type { OreSignExports } from '../ore-veins';
-import type { OreVeinData } from '../ore-veins/ore-vein-data';
 import type { BuildingPileRegistry } from '../inventory';
 import type { SettlerLocationExports } from '../settler-location/types';
 import type { TerrainData } from '../../terrain';
 import type { BarracksTrainingManager } from '../barracks';
 import { SettlerTaskSystem, SearchType } from './index';
 import { ChoreoSystem } from '../../systems/choreo';
-import { MapObjectType } from '../../types/map-object-types';
-import {
-    createWoodcuttingHandler,
-    createStonecuttingHandler,
-    createForesterHandler,
-    createCropHarvestHandler,
-    createPlantingHandler,
-    createWaterHandler,
-    createGeologistHandler,
-    createDiggerHandler,
-    createBuilderHandler,
-} from './work-handlers';
+import { createWaterHandler } from './work-handlers';
 
 export interface SettlerTaskExports {
     settlerTaskSystem: SettlerTaskSystem;
@@ -57,10 +41,6 @@ export const SettlerTaskFeature: FeatureDefinition = {
         'work-areas',
         'production-control',
         'material-transfer',
-        'trees',
-        'stones',
-        'crops',
-        'ore-signs',
         'combat',
         'settler-location',
     ],
@@ -74,10 +54,6 @@ export const SettlerTaskFeature: FeatureDefinition = {
         const { materialTransfer } = ctx.getFeature<MaterialTransferExports>('material-transfer');
         const { combatSystem } = ctx.getFeature<CombatExports>('combat');
         const { locationManager } = ctx.getFeature<SettlerLocationExports>('settler-location');
-        const { treeSystem } = ctx.getFeature<TreeFeatureExports>('trees');
-        const { stoneSystem } = ctx.getFeature<StoneFeatureExports>('stones');
-        const { cropSystem } = ctx.getFeature<CropFeatureExports>('crops');
-        const { signSystem } = ctx.getFeature<OreSignExports>('ore-signs');
 
         // BuildingPileRegistry (XML pile positions) -- conditionally set later when game data loads.
         // The lazy getter in SettlerTaskSystem tolerates null until then.
@@ -110,33 +86,6 @@ export const SettlerTaskFeature: FeatureDefinition = {
             locationManager,
         });
 
-        // --- Non-terrain work handlers ---
-
-        settlerTaskSystem.registerWorkHandler(
-            SearchType.CONSTRUCTION_DIG,
-            createDiggerHandler(ctx.gameState, constructionSiteManager)
-        );
-        settlerTaskSystem.registerWorkHandler(
-            SearchType.CONSTRUCTION,
-            createBuilderHandler(ctx.gameState, constructionSiteManager)
-        );
-        settlerTaskSystem.registerWorkHandler(SearchType.TREE, createWoodcuttingHandler(ctx.gameState, treeSystem));
-        settlerTaskSystem.registerWorkHandler(SearchType.STONE, createStonecuttingHandler(ctx.gameState, stoneSystem));
-        settlerTaskSystem.registerWorkHandler(SearchType.TREE_SEED_POS, createForesterHandler(treeSystem));
-
-        // Crop handlers -- harvest + planting for each crop type
-        const cropHandlerConfigs = [
-            { search: SearchType.GRAIN, plantSearch: SearchType.GRAIN_SEED_POS, crop: MapObjectType.Grain },
-            { search: SearchType.SUNFLOWER, plantSearch: SearchType.SUNFLOWER_SEED_POS, crop: MapObjectType.Sunflower },
-            { search: SearchType.AGAVE, plantSearch: SearchType.AGAVE_SEED_POS, crop: MapObjectType.Agave },
-            { search: SearchType.BEEHIVE, plantSearch: SearchType.BEEHIVE_SEED_POS, crop: MapObjectType.Beehive },
-        ] as const;
-
-        for (const { search, plantSearch, crop } of cropHandlerConfigs) {
-            settlerTaskSystem.registerWorkHandler(search, createCropHarvestHandler(ctx.gameState, cropSystem, crop));
-            settlerTaskSystem.registerWorkHandler(plantSearch, createPlantingHandler(cropSystem.getCropPlanter(crop)));
-        }
-
         const exports: SettlerTaskExports = {
             settlerTaskSystem,
             choreoSystem,
@@ -161,14 +110,6 @@ export const SettlerTaskFeature: FeatureDefinition = {
                         inventoryManager,
                         settlerTaskSystem.getAssignedBuilding.bind(settlerTaskSystem)
                     )
-                );
-
-                // Geologist handler -- needs terrain + ore vein data
-                const oreSignExports = ctx.getFeature<OreSignExports & { oreVeinData: OreVeinData }>('ore-signs');
-                settlerTaskSystem.setOreVeinData(oreSignExports.oreVeinData);
-                settlerTaskSystem.registerWorkHandler(
-                    SearchType.RESOURCE_POS,
-                    createGeologistHandler(oreSignExports.oreVeinData, terrain, signSystem)
                 );
             },
         };

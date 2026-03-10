@@ -15,7 +15,7 @@
  *   growingCount+1      = harvested sprite (static)
  */
 
-import { GrowableSystem, type GrowableConfig, type GrowableState, type PlantingCapable } from '../growth';
+import { GrowableSystem, type GrowableConfig, type GrowableState, type PlantingCapable } from '../../systems/growth';
 import type { CoreDeps } from '../feature';
 import { EntityType } from '../../entity';
 import { MapObjectCategory, MapObjectType } from '@/game/types/map-object-types';
@@ -63,6 +63,7 @@ const CROP_TYPE_CONFIGS: ReadonlyMap<MapObjectType, CropTypeConfig> = new Map([
     [MapObjectType.Sunflower, { growthTime: 120, harvestDecayTime: 20, growingCount: 3 }],
     [MapObjectType.Agave, { growthTime: 130, harvestDecayTime: 25, growingCount: 3 }],
     [MapObjectType.Beehive, { growthTime: 100, harvestDecayTime: 15, growingCount: 1 }],
+    [MapObjectType.Grape, { growthTime: 140, harvestDecayTime: 20, growingCount: 3 }],
 ]);
 
 function getCropConfig(cropType: MapObjectType): CropTypeConfig {
@@ -81,6 +82,7 @@ const ALL_CROP_TYPES: readonly MapObjectType[] = [
     MapObjectType.Sunflower,
     MapObjectType.Agave,
     MapObjectType.Beehive,
+    MapObjectType.Grape,
 ];
 
 const CROP_CONFIG: GrowableConfig = {
@@ -401,6 +403,14 @@ export const CROP_SPRITE_CONFIGS: ReadonlyMap<MapObjectType, CropSpriteConfig> =
             growingSprites: [1361],
             matureSprite: { start: 1361, count: 12 },
             harvestedSprite: 1373,
+        },
+    ],
+    [
+        MapObjectType.Grape,
+        {
+            growingSprites: [1125, 1126, 1127],
+            matureSprite: { start: 1128, count: 2 },
+            harvestedSprite: 1125,
         },
     ],
 ]);

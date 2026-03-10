@@ -50,8 +50,8 @@ export interface ISettlerBuildingLocationManager {
     /** Returns current location (approaching or inside), or null if settler is not tracked */
     getLocation(settlerId: number): SettlerBuildingLocation | null;
 
-    /** Returns true if settler is confirmed inside a building (hidden) */
-    isInside(settlerId: number): boolean;
+    /** Returns true if settler is confirmed inside a building (hidden). If buildingId is given, also checks it matches. */
+    isInside(settlerId: number, buildingId?: number): boolean;
 
     /** Returns true if settler is tracked (approaching or inside) */
     isCommitted(settlerId: number): boolean;

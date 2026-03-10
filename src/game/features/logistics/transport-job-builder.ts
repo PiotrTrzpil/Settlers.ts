@@ -4,17 +4,20 @@
  * Moved from SettlerTaskSystem to break the settler-tasks → logistics coupling.
  * The logistics feature builds the full job state (with positions resolved) and
  * passes it to settlerTaskSystem.assignJob() as an opaque job.
+ *
+ * Uses the fluent ChoreoBuilder instead of XML lookup — the XML choreography
+ * (JOB_CARRIER_TRANSPORT_GOOD) was just 4 trivial nodes with no real data.
  */
 
 import { EMaterialType } from '../../economy';
 import { EntityType } from '../../entity';
 import { BuildingType } from '../../buildings/building-type';
-import { raceToRaceId, getBuildingDoorPos } from '../../data/game-data-access';
-import { createChoreoJobState, type ChoreoJob } from '../settler-tasks/choreo-types';
+import { getBuildingDoorPos } from '../../data/game-data-access';
+import { ChoreoTaskType } from '../../systems/choreo/types';
+import { choreo } from '../../systems/choreo/choreo-builder';
 import type { JobState } from '../settler-tasks/types';
 import type { TransportJobRecord } from './transport-job-record';
 import type { GameState } from '../../game-state';
-import type { RaceId } from '@/resources/game-data/types';
 
 /**
  * Resolves pile positions for carrier transport (subset of BuildingPositionResolver).
@@ -25,54 +28,51 @@ export interface TransportPositionResolver {
     getDestinationPilePosition(buildingId: number, material: string): { x: number; y: number } | null;
 }
 
-/**
- * Looks up choreography job definitions by race and job ID.
- * Injected at construction so the builder has no direct dependency on JobChoreographyStore.
- */
-export interface ChoreographyLookup {
-    getJob(raceId: RaceId, jobId: string): ChoreoJob | undefined;
-}
-
 export interface TransportJobBuilderConfig {
     gameState: GameState;
     positionResolver: TransportPositionResolver;
-    choreographyLookup: ChoreographyLookup;
 }
 
 /**
  * Builds ChoreoJobState for carrier transport deliveries.
  *
  * Resolves pile positions (output pile at source, input pile at dest) via the
- * position resolver, falling back to building door. Looks up the carrier transport
- * choreography from XML data.
+ * position resolver, falling back to building door. Builds the transport
+ * choreography dynamically via ChoreoBuilder.
  */
 export class TransportJobBuilder {
     private readonly gameState: GameState;
     private readonly positionResolver: TransportPositionResolver;
-    private readonly choreographyLookup: ChoreographyLookup;
 
     constructor(config: TransportJobBuilderConfig) {
         this.gameState = config.gameState;
         this.positionResolver = config.positionResolver;
-        this.choreographyLookup = config.choreographyLookup;
     }
 
     /**
      * Build a ChoreoJobState for a carrier transport delivery.
      * Resolves pile positions and sets up transport data for the choreography executors.
      */
-    build(record: TransportJobRecord, carrierId: number): JobState {
-        const sourcePos = this.resolveTransportPos(record.sourceBuilding, record.material, 'output');
-        const destPos = this.resolveTransportPos(record.destBuilding, record.material, 'input');
+    build(record: TransportJobRecord): JobState {
+        const materialName = EMaterialType[record.material];
+        // Source building's output pile = where the carrier picks up
+        const sourcePos = this.resolvePilePos(
+            record.sourceBuilding, this.positionResolver.getDestinationPilePosition(record.sourceBuilding, materialName)
+        );
+        // Dest building's input pile = where the carrier delivers
+        const destPos = this.resolvePilePos(
+            record.destBuilding, this.positionResolver.getSourcePilePosition(record.destBuilding, materialName)
+        );
 
-        const carrier = this.gameState.getEntityOrThrow(carrierId, 'transport carrier');
-        const raceId = raceToRaceId(carrier.race);
-        const xmlJob = this.choreographyLookup.getJob(raceId, 'JOB_CARRIER_TRANSPORT_GOOD');
-        if (!xmlJob) {
-            throw new Error(`JOB_CARRIER_TRANSPORT_GOOD not found for race ${raceId}`);
-        }
+        const job = choreo('JOB_CARRIER_TRANSPORT_GOOD')
+            .addNode(ChoreoTaskType.TRANSPORT_GO_TO_SOURCE, { jobPart: 'C_WALK' })
+            .addNode(ChoreoTaskType.TRANSPORT_PICKUP, { jobPart: 'C_DOWN_NONE' })
+            .addNode(ChoreoTaskType.TRANSPORT_GO_TO_DEST, { jobPart: 'C_WALK' })
+            .addNode(ChoreoTaskType.TRANSPORT_DELIVER, { jobPart: 'C_DOWN_NONE' })
+            .build();
 
-        const job = createChoreoJobState(xmlJob.id, structuredClone(xmlJob.nodes));
+        // targetPos = first movement destination (source pile), used by assignJob for initial pathfinding
+        job.targetPos = sourcePos;
         job.transportData = {
             jobId: record.id,
             sourceBuildingId: record.sourceBuilding,
@@ -86,20 +86,11 @@ export class TransportJobBuilder {
         return job;
     }
 
-    /**
-     * Resolve a pile position for a carrier transport (output pile for pickup, input pile for delivery).
-     * Falls back to building door when no pile is defined in the building config.
-     */
-    private resolveTransportPos(
+    /** Resolve a pile position, falling back to building door or entity position. */
+    private resolvePilePos(
         buildingId: number,
-        material: EMaterialType,
-        slotType: 'input' | 'output'
+        pile: { x: number; y: number } | null
     ): { x: number; y: number } {
-        const materialName = EMaterialType[material];
-        const pile =
-            slotType === 'input'
-                ? this.positionResolver.getSourcePilePosition(buildingId, materialName)
-                : this.positionResolver.getDestinationPilePosition(buildingId, materialName);
         if (pile) return pile;
         const entity = this.gameState.getEntityOrThrow(buildingId, 'transport building/pile');
         // Free piles: use entity position directly (not a building, no door offset)

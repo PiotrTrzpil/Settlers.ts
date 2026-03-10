@@ -6,7 +6,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { BuildingPileRegistry } from '@/game/features/inventory/building-pile-registry';
+import { BuildingPileRegistry } from '@/game/systems/inventory/building-pile-registry';
 import { BuildingType } from '@/game/buildings/building-type';
 import { Race } from '@/game/core/race';
 import { EMaterialType } from '@/game/economy/material-type';

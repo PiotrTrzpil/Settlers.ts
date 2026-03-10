@@ -1,20 +1,21 @@
 /**
  * ResidenceSpawnerSystem — spawns carriers from residences at fixed intervals.
  *
- * Instead of spawning all carriers instantly when a residence completes,
- * this system queues them and spawns one at a time per interval tick.
+ * When a residence completes, carriers are queued and spawn one at a time
+ * at the building's door tile. Any unit blocking the door is pushed aside.
  *
  * Set `immediateMode = true` (test/debug) to spawn all carriers at once in register().
  */
 
 import type { TickSystem } from '../../core/tick-system';
 import type { GameState } from '../../game-state';
-import type { TerrainData } from '../../terrain';
+import type { EventBus } from '../../event-bus';
 import type { BuildingSpawnConfig } from './types';
-import { ringTiles } from '../../systems/spatial-search';
-import type { Command, CommandResult } from '../../commands';
 import type { Persistable } from '@/game/persistence';
 import type { SerializedPendingSpawn } from '@/game/state/game-state-persistence';
+import { BuildingType } from '../../buildings/types';
+import { getBuildingDoorPos } from '../../data/game-data-access';
+import { getUnitLevel } from '../../core/unit-types';
 
 interface PendingSpawn {
     buildingEntityId: number;
@@ -25,28 +26,21 @@ interface PendingSpawn {
 
 export interface ResidenceSpawnerConfig {
     gameState: GameState;
-    executeCommand: (cmd: Command) => CommandResult;
+    eventBus: EventBus;
 }
 
 export class ResidenceSpawnerSystem implements TickSystem, Persistable<SerializedPendingSpawn[]> {
     readonly persistKey = 'residenceSpawns' as const;
     private readonly pending: PendingSpawn[] = [];
     private readonly gameState: GameState;
-    private readonly executeCommand: (cmd: Command) => CommandResult;
+    private readonly eventBus: EventBus;
 
     /** When true, register() spawns all carriers immediately instead of queuing. */
     immediateMode = false;
 
     constructor(cfg: ResidenceSpawnerConfig) {
         this.gameState = cfg.gameState;
-        this.executeCommand = cfg.executeCommand;
-    }
-
-    /** Terrain reference — set when terrain is loaded */
-    private terrain!: TerrainData;
-
-    setTerrain(terrain: TerrainData): void {
-        this.terrain = terrain;
+        this.eventBus = cfg.eventBus;
     }
 
     /** Register a completed residence for carrier spawning */
@@ -86,31 +80,38 @@ export class ResidenceSpawnerSystem implements TickSystem, Persistable<Serialize
         }
     }
 
-    /** Spawn a single carrier near the building. Returns false if building no longer exists. */
+    /** Spawn a single carrier at the building's door tile, pushing any occupant aside. */
     private spawnOne(buildingEntityId: number, config: BuildingSpawnConfig): boolean {
         const building = this.gameState.getEntity(buildingEntityId);
         if (!building) return false;
 
-        const bx = building.x;
-        const by = building.y;
-        for (let radius = 1; radius <= 4; radius++) {
-            for (const tile of ringTiles(bx, by, radius)) {
-                if (!this.terrain.isInBounds(tile.x, tile.y)) continue;
-                if (!this.terrain.isPassable(tile.x, tile.y)) continue;
-                if (this.gameState.getEntityAt(tile.x, tile.y)) continue;
+        const door = getBuildingDoorPos(
+            building.x,
+            building.y,
+            building.race,
+            building.subType as BuildingType
+        );
 
-                this.executeCommand({
-                    type: 'spawn_unit',
-                    unitType: config.unitType,
-                    x: tile.x,
-                    y: tile.y,
-                    player: building.player,
-                    race: building.race,
-                });
-                return true;
-            }
-        }
-        return true; // building exists, just no space — keep trying
+        // Push any unit blocking the door
+        this.gameState.movement.pushUnitAt(door.x, door.y);
+
+        // Spawn directly at the door. The building owns this tile in tileOccupancy,
+        // so we use occupancy:false to avoid overwriting it. The movement controller
+        // created by entity:created tracks the unit in unitPositions instead.
+        const entity = this.gameState.addUnit(config.unitType, door.x, door.y, building.player, {
+            occupancy: false,
+        });
+        entity.level = getUnitLevel(config.unitType);
+
+        this.eventBus.emit('unit:spawned', {
+            entityId: entity.id,
+            unitType: config.unitType,
+            x: door.x,
+            y: door.y,
+            player: building.player,
+        });
+
+        return true;
     }
 
     onEntityRemoved(entityId: number): void {

@@ -12,7 +12,7 @@
  * Normal trees also play 'default' animation for sway.
  */
 
-import { GrowableSystem, type GrowableConfig, type GrowableState } from '../growth';
+import { GrowableSystem, type GrowableConfig, type GrowableState } from '../../systems/growth';
 import type { CoreDeps } from '../feature';
 import { MapObjectCategory, MapObjectType } from '@/game/types/map-object-types';
 import { OBJECT_TYPE_CATEGORY } from '../../systems/map-objects';

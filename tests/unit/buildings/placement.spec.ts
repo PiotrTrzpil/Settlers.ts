@@ -5,8 +5,8 @@ import {
     computeSlopeDifficulty,
     PlacementStatus,
     validateBuildingPlacement,
-} from '@/game/features/placement';
-import type { PlacementFilter } from '@/game/features/placement';
+} from '@/game/systems/placement';
+import type { PlacementFilter } from '@/game/systems/placement';
 import { BuildingType } from '@/game/entity';
 import { Race } from '@/game/core/race';
 import { createTestMap, TERRAIN, setTerrainAt, setHeightAt, type TestMap } from '../helpers/test-map';

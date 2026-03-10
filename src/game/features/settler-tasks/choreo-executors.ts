@@ -39,6 +39,14 @@ import {
     executeLoadGood,
 } from './internal/inventory-executors';
 
+// Carrier transport
+import {
+    executeTransportGoToSource,
+    executeTransportGoToDest,
+    executeTransportPickup,
+    executeTransportDeliver,
+} from './internal/transport-executors';
+
 // Control
 import {
     executeWait,
@@ -120,6 +128,20 @@ export function registerCoreExecutors(
         return executeResourceGathering(s, j, n, dt, invCtx);
     });
     choreoSystem.register(ChoreoTaskType.LOAD_GOOD, (s, j, n, dt) => executeLoadGood(s, j, n, dt, invCtx));
+
+    // ── Carrier transport ──────────────────────────────────────
+    choreoSystem.register(ChoreoTaskType.TRANSPORT_GO_TO_SOURCE, (s, j, n, dt) =>
+        executeTransportGoToSource(s, j, n, dt, movCtx)
+    );
+    choreoSystem.register(ChoreoTaskType.TRANSPORT_GO_TO_DEST, (s, j, n, dt) =>
+        executeTransportGoToDest(s, j, n, dt, movCtx)
+    );
+    choreoSystem.register(ChoreoTaskType.TRANSPORT_PICKUP, (s, j, n, dt) =>
+        executeTransportPickup(s, j, n, dt, invCtx)
+    );
+    choreoSystem.register(ChoreoTaskType.TRANSPORT_DELIVER, (s, j, n, dt) =>
+        executeTransportDeliver(s, j, n, dt, invCtx)
+    );
 
     // ── Control ───────────────────────────────────────────────
     choreoSystem.register(ChoreoTaskType.WAIT, (s, j, n, dt) => executeWait(s, j, n, dt, ctrlCtx));

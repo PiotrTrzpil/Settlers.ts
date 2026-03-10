@@ -11,4 +11,5 @@
 
 export { CarrierRegistry, type CarrierRegistryConfig } from '../../systems/carrier-registry';
 export { CarrierFeature, type CarrierFeatureExports } from './carrier-feature';
+export { IdleCarrierPool, type CarrierEligibilityFilter } from '../../systems/idle-carrier-pool';
 export type { EntityProvider } from '../../entity';

@@ -66,7 +66,6 @@ export default defineConfig({
         testTimeout: 10000,
         hookTimeout: 10000,
         teardownTimeout: 5000,
-        // Force exit after tests complete (helps with stale processes)
         passWithNoTests: true,
     },
 });

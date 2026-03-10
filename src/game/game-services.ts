@@ -12,7 +12,8 @@
 import { GameState } from './game-state';
 import type { TerrainData } from './terrain';
 import type { TickSystem } from './core/tick-system';
-import { EntityType } from './entity';
+import { EntityType, UnitType, getUnitTypeSpeed } from './entity';
+import { isAngelUnitType } from './core/unit-types';
 import { EventBus, EventSubscriptionManager } from './event-bus';
 import { EntityVisualService } from './animation/entity-visual-service';
 import type { Command, CommandResult, CommandType } from './commands';
@@ -25,15 +26,15 @@ import { RenderDataRegistry } from './features/render-data-registry';
 import { DiagnosticsRegistry } from './features/diagnostics-registry';
 import { PersistenceRegistry, type Persistable } from './persistence';
 
+import { MovementSystem } from './systems/movement';
+
 // Feature definitions
-import { MovementFeature, type MovementExports } from './features/movement/movement-feature';
 import { WorkAreaFeature, type WorkAreaExports } from './features/work-areas/work-areas-feature';
 import {
     ProductionControlFeature,
     type ProductionControlExports,
 } from './features/production-control/production-control-feature';
 import { CarrierFeature, type CarrierFeatureExports } from './features/carriers';
-import { InventoryFeature, type InventoryExports } from './features/inventory';
 import { RequestManagerFeature, type RequestManagerExports } from './features/logistics';
 import { BuildingOverlayFeature, type BuildingOverlayFeatureExports } from './features/building-overlays';
 import {
@@ -45,7 +46,6 @@ import { TreeFeature, type TreeFeatureExports } from './features/trees';
 import { StoneFeature, type StoneFeatureExports } from './features/stones';
 import { CropFeature, type CropFeatureExports } from './features/crops';
 import { CombatFeature, type CombatExports } from './features/combat';
-import { DeathAngelFeature } from './features/death-angel';
 import { OreSignFeature, type OreSignExports } from './features/ore-veins';
 import {
     MaterialTransferFeature,
@@ -53,6 +53,9 @@ import {
 } from './features/material-transfer/material-transfer-feature';
 import { SettlerTaskFeature, type SettlerTaskExports } from './features/settler-tasks/settler-tasks-feature';
 import { RecruitFeature, type RecruitExports } from './features/recruit';
+import { BuildingDemandFeature } from './features/building-demand/building-demand-feature';
+import { ConstructionDemandFeature } from './features/building-construction/construction-demand-feature';
+import { ChoreoBuilder } from './systems/choreo/choreo-builder';
 import type { UnitTransformer } from './features/recruit';
 import type { RecruitSystem } from './systems/recruit';
 
@@ -68,7 +71,7 @@ import {
     InventoryPileSyncFeature,
     type InventoryPileSyncExports,
 } from './features/inventory/inventory-pile-sync-feature';
-import { FreePilesFeature } from './features/free-piles/free-piles-feature';
+import { FreePilesFeature } from './features/inventory/free-piles-feature';
 import { TerritoryFeature, type TerritoryExports } from './features/territory/territory-feature';
 import {
     VictoryConditionsFeature,
@@ -80,9 +83,14 @@ import {
 } from './features/building-siege';
 
 // Re-export types that external code imports transitively via GameServices
-import type { MovementSystem } from './systems/movement';
 import type { CarrierRegistry } from './features/carriers';
-import type { BuildingInventoryManager, StorageFilterManager, InventoryPileSync } from './features/inventory';
+import {
+    BuildingInventoryManager,
+    PileRegistry,
+    StorageFilterManager,
+    type InventoryChangeCallback,
+} from './systems/inventory';
+import type { InventoryPileSync } from './features/inventory';
 import type { RequestManager, LogisticsDispatcher } from './features/logistics';
 import type { BuildingOverlayManager, OverlayRegistry } from './features/building-overlays';
 import type {
@@ -160,7 +168,10 @@ export class GameServices {
     // ===== Shared kernel services (also exposed for command registration) =====
     public readonly unitReservation: UnitReservationRegistry;
 
+    private readonly gameState: GameState;
+
     constructor(gameState: GameState, eventBus: EventBus, executeCommand: (cmd: Command) => CommandResult) {
+        this.gameState = gameState;
         // 1. Kernel services — created before features, provided via FeatureContext.
         //    UnitReservationRegistry must subscribe to entity:removed BEFORE cleanupRegistry
         //    so onForcedRelease fires before any feature-level cleanup handlers.
@@ -176,7 +187,30 @@ export class GameServices {
             this.visualService.clearAnimation(entityId)
         );
 
-        // 2. Feature registry — loads all game features in dependency order.
+        // 2. Inventory system — instantiated directly (not a feature).
+        this.inventoryManager = new BuildingInventoryManager();
+        const pileSlotRegistry = new PileRegistry();
+        this.storageFilterManager = new StorageFilterManager();
+
+        // Bridge inventory changes to EventBus for consumers (debug panel, UI)
+        const onInventoryChanged: InventoryChangeCallback = (
+            buildingId,
+            materialType,
+            slotType,
+            previousAmount,
+            newAmount
+        ) => {
+            eventBus.emit('inventory:changed', {
+                buildingId,
+                materialType,
+                slotType,
+                previousAmount,
+                newAmount,
+            });
+        };
+        this.inventoryManager.onChange(onInventoryChanged);
+
+        // 3. Feature registry — loads all game features in dependency order.
         this.featureRegistry = new FeatureRegistry({
             gameState,
             eventBus,
@@ -186,20 +220,54 @@ export class GameServices {
             executeCommand,
         });
 
+        // Register inventory exports so features can access via ctx.getFeature('inventory')
+        this.featureRegistry.registerExports('inventory', {
+            inventoryManager: this.inventoryManager,
+            pileRegistry: pileSlotRegistry,
+            storageFilterManager: this.storageFilterManager,
+        });
+
+        // 3a. Movement system — instantiated directly (not a feature).
+        this.movement = new MovementSystem({
+            eventBus,
+            updatePosition: (id, x, y) => {
+                gameState.updateEntityPosition(id, x, y);
+                return true;
+            },
+            getEntity: gameState.getEntity.bind(gameState),
+            tileOccupancy: gameState.tileOccupancy,
+            buildingOccupancy: gameState.buildingOccupancy,
+            buildingFootprint: gameState.buildingFootprint,
+        });
+        gameState.initMovement(this.movement);
+
+        // Create movement controllers for units on spawn (skip ephemeral angels)
+        this.subscriptions.subscribe(eventBus, 'entity:created', ({ entityId, type, subType, x, y }) => {
+            if (type === EntityType.Unit && !isAngelUnitType(subType as UnitType)) {
+                const speed = getUnitTypeSpeed(subType as UnitType);
+                this.movement.createController(entityId, x, y, speed);
+            }
+        });
+
+        // Remove movement controllers on entity removal
+        this.cleanupRegistry.onEntityRemoved(entityId => {
+            this.movement.removeController(entityId);
+        });
+
+        // Register movement as a tick system
+        this.featureRegistry.registerSystem(this.movement, 'Units');
+
         this.featureRegistry.loadAll([
             // Tier 0: no dependencies
-            MovementFeature,
             WorkAreaFeature,
             ProductionControlFeature,
             CarrierFeature,
-            InventoryFeature,
             RequestManagerFeature,
             BuildingOverlayFeature,
             TreeFeature,
             StoneFeature,
             CropFeature,
             CombatFeature,
-            DeathAngelFeature,
             OreSignFeature,
             TerritoryFeature,
             SettlerLocationFeature,
@@ -216,18 +284,16 @@ export class GameServices {
             TowerGarrisonFeature,
             BuildingSiegeFeature,
             RecruitFeature,
+            BuildingDemandFeature,
+            ConstructionDemandFeature,
             // Independent chains
             VictoryConditionsFeature,
             InventoryPileSyncFeature,
             FreePilesFeature,
         ]);
 
-        // 3. Extract commonly-accessed exports for external consumers.
-        this.movement = this.feat<MovementExports>('movement').movement;
+        // 4. Extract commonly-accessed exports for external consumers.
         this.carrierRegistry = this.feat<CarrierFeatureExports>('carriers').carrierRegistry;
-        const invExports = this.feat<InventoryExports>('inventory');
-        this.inventoryManager = invExports.inventoryManager;
-        this.storageFilterManager = invExports.storageFilterManager;
         this.requestManager = this.feat<RequestManagerExports>('logistics').requestManager;
         const overlayExports = this.feat<BuildingOverlayFeatureExports>('building-overlays');
         this.buildingOverlayManager = overlayExports.buildingOverlayManager;
@@ -259,7 +325,7 @@ export class GameServices {
         const pileSyncExports = this.feat<InventoryPileSyncExports>('inventory-pile-sync');
         this.inventoryPileSync = pileSyncExports.inventoryPileSync;
 
-        // 4. Persistence registry — register feature-declared persistables first, then manual ones.
+        // 5. Persistence registry — register feature-declared persistables first, then manual ones.
         this.persistenceRegistry = new PersistenceRegistry();
         for (const persistable of this.featureRegistry.getPersistables()) {
             this.persistenceRegistry.register(persistable);
@@ -284,12 +350,12 @@ export class GameServices {
             'buildingInventories',
         ]);
 
-        // 5. Wire pile registry to settler-tasks (cross-feature, conditional).
+        // 6. Wire pile registry to settler-tasks (cross-feature, conditional).
         if (pileSyncExports.pileRegistry) {
             this.feat<SettlerTaskExports>('settler-tasks').setPileRegistry(pileSyncExports.pileRegistry);
         }
 
-        // 6. Core entity lifecycle — too small to be a feature.
+        // 7. Core entity lifecycle — too small to be a feature.
         this.subscriptions.subscribe(eventBus, 'entity:created', ({ entityId, type }) => {
             if (type === EntityType.StackedPile) {
                 gameState.piles.createState(entityId);
@@ -301,7 +367,7 @@ export class GameServices {
             gameState.piles.removeState(entityId);
         });
 
-        // 7. Late inventory removal — MUST happen after logistics cleanup.
+        // 8. Late inventory removal — MUST happen after logistics cleanup.
         this.cleanupRegistry.onEntityRemoved(
             this.inventoryManager.destroyBuildingInventory.bind(this.inventoryManager),
             CLEANUP_PRIORITY.LATE
@@ -313,6 +379,8 @@ export class GameServices {
 
     /** Provide terrain data to all features that need it. */
     public setTerrainData(terrain: TerrainData, resourceData?: Uint8Array): void {
+        ChoreoBuilder.withContext({ gameState: this.gameState, terrain });
+        this.movement.setTerrainData(terrain.groundType, terrain.groundHeight, terrain.width, terrain.height);
         this.featureRegistry.setTerrainData(terrain, resourceData);
     }
 

@@ -66,4 +66,8 @@ export enum BuildingType {
     DarkTemple = 60,
     Fortress = 61,
     ManaCopterHall = 62,
+    // Infrastructure buildings
+    CharcoalMaker = 63,
+    Port = 64,
+    Marketplace = 65,
 }

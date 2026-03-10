@@ -1,140 +1,201 @@
 /**
  * Transport-specific choreography executors for carrier delivery jobs.
  *
- * Extracted from inventory-executors.ts to separate transport domain logic
- * from the generic worker inventory operations. These functions handle
- * TransportJob lifecycle (pickup/complete), carrier status transitions,
- * and carrier-specific events.
+ * Dedicated executors for TRANSPORT_* task types — no branching on transportData.
+ * These are registered alongside the core executors and only run for carrier
+ * transport choreographies built by TransportJobBuilder.
  *
- * Called by executeGetGood/executePutGood when job.transportData is present.
+ * Movement executors (TRANSPORT_GO_TO_SOURCE/DEST) read positions from
+ * job.transportData. Inventory executors (TRANSPORT_PICKUP/DELIVER) handle
+ * the TransportJob lifecycle, material transfer, and carrier events.
  */
 
 import { type Entity } from '../../../entity';
 import { EMaterialType } from '../../../economy';
 import { createLogger } from '@/utilities/logger';
-import { TaskResult } from '../types';
-import type { ChoreoJobState, InventoryExecutorContext, TransportData } from '../choreo-types';
+import { TaskResult, framesToSeconds, tickDuration } from '../../../systems/choreo/types';
+import type { ChoreoJobState, ChoreoNode, TransportData } from '../../../systems/choreo/types';
+import type { InventoryExecutorContext, MovementContext } from '../choreo-types';
+import { moveToPosition } from './movement-executors';
 
 const log = createLogger('TransportExecutors');
 
+/** Carrier must step onto the exact pile tile. */
+const ARRIVAL_DIST_EXACT = 0;
+
 /**
- * Handle carrier pickup from source building.
+ * Default animation cycle for inventory nodes with duration=0 (one pickup/dropoff animation).
+ * Carrier pickup/dropoff animations are typically 4-5 frames at 100ms each.
+ */
+const DEFAULT_INVENTORY_CYCLE_FRAMES = 5; // 0.5 seconds at CHOREO_FPS
+
+function resolveInventoryDuration(node: ChoreoNode): number {
+    if (node.duration === 0) return framesToSeconds(DEFAULT_INVENTORY_CYCLE_FRAMES);
+    if (node.duration <= 0) return 0;
+    return framesToSeconds(node.duration);
+}
+
+/** Require transportData on the job — all TRANSPORT_* executors need it. */
+function requireTransportData(job: ChoreoJobState, context: string): TransportData {
+    if (!job.transportData) {
+        throw new Error(`${context}: job '${job.jobId}' has no transportData — only use TRANSPORT_* nodes in carrier jobs`);
+    }
+    return job.transportData;
+}
+
+// ─────────────────────────────────────────────────────────────
+// Movement executors
+// ─────────────────────────────────────────────────────────────
+
+/** TRANSPORT_GO_TO_SOURCE — move to source building's output pile for pickup. */
+export function executeTransportGoToSource(
+    settler: Entity,
+    job: ChoreoJobState,
+    node: ChoreoNode,
+    _dt: number,
+    ctx: MovementContext
+): TaskResult {
+    const td = requireTransportData(job, 'TRANSPORT_GO_TO_SOURCE');
+    return moveToPosition(settler, td.sourcePos.x, td.sourcePos.y, node, ctx, ARRIVAL_DIST_EXACT, job);
+}
+
+/** TRANSPORT_GO_TO_DEST — move to destination building's input pile for delivery. */
+export function executeTransportGoToDest(
+    settler: Entity,
+    job: ChoreoJobState,
+    node: ChoreoNode,
+    _dt: number,
+    ctx: MovementContext
+): TaskResult {
+    const td = requireTransportData(job, 'TRANSPORT_GO_TO_DEST');
+    return moveToPosition(settler, td.destPos.x, td.destPos.y, node, ctx, ARRIVAL_DIST_EXACT, job);
+}
+
+// ─────────────────────────────────────────────────────────────
+// Inventory executors
+// ─────────────────────────────────────────────────────────────
+
+/**
+ * TRANSPORT_PICKUP — withdraw material from source building.
  *
- * Withdraws material via materialTransfer.pickUp(), then calls callbacks.onPickedUp()
- * to notify logistics (consumes reservation). Emits pickup events.
+ * First tick: validates job, withdraws via materialTransfer, consumes reservation.
+ * Subsequent ticks: plays pickup animation.
  */
 export function executeTransportPickup(
     settler: Entity,
     job: ChoreoJobState,
-    td: TransportData,
+    node: ChoreoNode,
+    dt: number,
     ctx: InventoryExecutorContext
 ): TaskResult {
-    const { jobId, material, sourceBuildingId, amount: requestedAmount } = td;
+    if (!job.workStarted) {
+        job.workStarted = true;
 
-    // Job may have been cancelled externally (building destroyed, state restore, etc.)
-    if (!ctx.transportJobOps.getJob(jobId)) {
-        log.debug(`Carrier ${settler.id}: transport job ${jobId} no longer exists, aborting pickup`);
-        return TaskResult.FAILED;
-    }
+        const td = requireTransportData(job, 'TRANSPORT_PICKUP');
+        const { jobId, material, sourceBuildingId, amount: requestedAmount } = td;
 
-    const withdrawn = ctx.materialTransfer.pickUp(settler.id, sourceBuildingId, material, requestedAmount, true);
+        if (!ctx.transportJobOps.getJob(jobId)) {
+            log.debug(`Carrier ${settler.id}: transport job ${jobId} no longer exists, aborting pickup`);
+            return TaskResult.FAILED;
+        }
 
-    if (withdrawn === 0) {
-        log.warn(`Carrier ${settler.id}: pickup failed at building ${sourceBuildingId}`);
-        ctx.eventBus.emit('carrier:pickupFailed', {
+        const withdrawn = ctx.materialTransfer.pickUp(settler.id, sourceBuildingId, material, requestedAmount, true);
+
+        if (withdrawn === 0) {
+            log.warn(`Carrier ${settler.id}: pickup failed at building ${sourceBuildingId}`);
+            ctx.eventBus.emit('carrier:pickupFailed', {
+                entityId: settler.id,
+                material,
+                fromBuilding: sourceBuildingId,
+                requestedAmount,
+            });
+            return TaskResult.FAILED;
+        }
+
+        if (!ctx.transportJobOps.pickUp(jobId)) {
+            log.debug(`Carrier ${settler.id}: transport job ${jobId} cancelled during pickup`);
+            return TaskResult.FAILED;
+        }
+        job.carryingGood = material;
+        td.amount = withdrawn;
+
+        log.debug(
+            `Carrier ${settler.id} picked up ${withdrawn} of ${EMaterialType[material]} from building ${sourceBuildingId}`
+        );
+
+        ctx.eventBus.emit('carrier:pickupComplete', {
             entityId: settler.id,
             material,
+            amount: withdrawn,
             fromBuilding: sourceBuildingId,
-            requestedAmount,
         });
-        return TaskResult.FAILED;
     }
 
-    // Job may have been cancelled between getJob check and now (e.g. during inventory withdrawal)
-    if (!ctx.transportJobOps.pickUp(jobId)) {
-        log.debug(`Carrier ${settler.id}: transport job ${jobId} cancelled during pickup`);
-        return TaskResult.FAILED;
-    }
-    job.carryingGood = material;
-    td.amount = withdrawn;
-
-    log.debug(
-        `Carrier ${settler.id} picked up ${withdrawn} of ${EMaterialType[material]} from building ${sourceBuildingId}`
-    );
-
-    ctx.eventBus.emit('carrier:pickupComplete', {
-        entityId: settler.id,
-        material,
-        amount: withdrawn,
-        fromBuilding: sourceBuildingId,
-    });
-
-    return TaskResult.DONE;
+    return tickDuration(job, dt, resolveInventoryDuration(node));
 }
 
 /**
- * Handle carrier delivery to destination building.
+ * TRANSPORT_DELIVER — deposit material at destination building.
  *
- * Deposits material via materialTransfer.deliver(), then calls callbacks.onDelivered()
- * to notify logistics (fulfills request). Emits delivery events.
+ * First tick: validates job, deposits via materialTransfer, fulfills request.
+ * Subsequent ticks: plays dropoff animation.
  */
-export function executeTransportDelivery(
+export function executeTransportDeliver(
     settler: Entity,
     job: ChoreoJobState,
-    td: TransportData,
+    node: ChoreoNode,
+    dt: number,
     ctx: InventoryExecutorContext
 ): TaskResult {
-    const { jobId, destBuildingId, material } = td;
+    if (!job.workStarted) {
+        job.workStarted = true;
 
-    // Job may have been cancelled externally (building destroyed, construction completed, etc.)
-    if (!ctx.transportJobOps.getJob(jobId)) {
-        log.debug(`Carrier ${settler.id}: transport job ${jobId} no longer exists, dropping material`);
-        ctx.materialTransfer.drop(settler.id);
-        return TaskResult.FAILED;
-    }
+        const td = requireTransportData(job, 'TRANSPORT_DELIVER');
+        const { jobId, destBuildingId, material } = td;
 
-    if (!settler.carrying) {
-        throw new Error(
-            `Carrier ${settler.id}: PUT_GOOD called but settler is not carrying anything ` +
-                `(job: material=${EMaterialType[material]})`
+        if (!ctx.transportJobOps.getJob(jobId)) {
+            log.debug(`Carrier ${settler.id}: transport job ${jobId} no longer exists, dropping material`);
+            ctx.materialTransfer.drop(settler.id);
+            return TaskResult.FAILED;
+        }
+
+        if (!settler.carrying) {
+            throw new Error(
+                `Carrier ${settler.id}: TRANSPORT_DELIVER called but settler is not carrying anything `
+                    + `(job: material=${EMaterialType[material]})`
+            );
+        }
+
+        const amount = settler.carrying.amount;
+        const deposited = ctx.materialTransfer.deliver(settler.id, destBuildingId, 'input');
+        ctx.transportJobOps.deliver(jobId);
+
+        const overflow = amount - deposited;
+        if (overflow > 0) {
+            log.warn(
+                `Carrier ${settler.id}: ${overflow} of ${EMaterialType[material]} overflow at building ${destBuildingId}`
+            );
+            ctx.eventBus.emit('construction:materialOverflowed', {
+                buildingId: destBuildingId,
+                material,
+                amount: overflow,
+            });
+        }
+
+        job.carryingGood = null;
+
+        log.debug(
+            `Carrier ${settler.id} delivered ${deposited} of ${EMaterialType[material]} to building ${destBuildingId}`
         );
-    }
 
-    const amount = settler.carrying.amount;
-    const deposited = ctx.materialTransfer.deliver(settler.id, destBuildingId, 'input');
-    // Job may have been cancelled externally — deliver gracefully handles missing jobs
-    ctx.transportJobOps.deliver(jobId);
-
-    const overflow = amount - deposited;
-    if (overflow > 0) {
-        log.warn(
-            `Carrier ${settler.id}: ${overflow} of ${EMaterialType[material]} overflow at building ${destBuildingId}`
-        );
-        ctx.eventBus.emit('construction:materialOverflowed', {
-            buildingId: destBuildingId,
+        ctx.eventBus.emit('carrier:deliveryComplete', {
+            entityId: settler.id,
             material,
-            amount: overflow,
+            amount: deposited,
+            toBuilding: destBuildingId,
+            overflow,
         });
     }
 
-    job.carryingGood = null;
-
-    log.debug(
-        `Carrier ${settler.id} delivered ${deposited} of ${EMaterialType[material]} to building ${destBuildingId}`
-    );
-
-    // NOTE: completeTransport (carrier → Idle) is NOT called here.
-    // It is deferred until the PUT_GOOD animation finishes (tickInventoryDuration returns DONE),
-    // to prevent the logistics dispatcher from re-assigning the carrier mid-animation.
-    // See executePutGood in inventory-executors.ts.
-
-    ctx.eventBus.emit('carrier:deliveryComplete', {
-        entityId: settler.id,
-        material,
-        amount: deposited,
-        toBuilding: destBuildingId,
-        overflow,
-    });
-
-    return TaskResult.DONE;
+    return tickDuration(job, dt, resolveInventoryDuration(node));
 }

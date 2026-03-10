@@ -112,7 +112,9 @@ export class TriggerSystemImpl implements TriggerSystem {
         const raceId = raceToRaceId(building.race);
         const triggerDef = this.dataLoader.getBuildingTrigger(raceId, triggerId);
         if (!triggerDef) {
-            log.warn(`fireTrigger: unknown trigger '${triggerId}' for race ${raceId} on building ${buildingId}`);
+            if (!SUPPRESSED_TRIGGERS.get(raceId)?.has(triggerId)) {
+                log.warn(`fireTrigger: unknown trigger '${triggerId}' for race ${raceId} on building ${buildingId}`);
+            }
             return;
         }
 
@@ -241,3 +243,11 @@ export class TriggerSystemImpl implements TriggerSystem {
 // ============================================================================
 
 const EMPTY_SET: ReadonlySet<string> = new Set();
+
+/**
+ * Triggers intentionally absent from BuildingTrigger.xml for specific races
+ * (commented out in the original game data). Silence warnings for these.
+ */
+const SUPPRESSED_TRIGGERS: ReadonlyMap<string, ReadonlySet<string>> = new Map([
+    ['RACE_ROMAN', new Set(['TRIGGER_TOOLSMITH_SMALLSMOKE', 'TRIGGER_WEAPONSMITH_SMALLSMOKE'])],
+]);

@@ -13,6 +13,9 @@ import type { FeatureDefinition, FeatureContext } from '../feature';
 import { StoneSystem } from './stone-system';
 import { EntityType } from '../../entity';
 import { MapObjectType } from '@/game/types/map-object-types';
+import type { SettlerTaskExports } from '../settler-tasks/settler-tasks-feature';
+import { SearchType } from '../settler-tasks';
+import { createStonecuttingHandler } from './work-handlers';
 
 /**
  * Exports provided by StoneFeature.
@@ -28,7 +31,7 @@ export interface StoneFeatureExports {
  */
 export const StoneFeature: FeatureDefinition = {
     id: 'stones',
-    dependencies: [],
+    dependencies: ['settler-tasks'],
 
     create(ctx: FeatureContext) {
         const stoneSystem = new StoneSystem({
@@ -47,6 +50,9 @@ export const StoneFeature: FeatureDefinition = {
 
         // Clean up stone state when entities are removed
         ctx.cleanupRegistry.onEntityRemoved(stoneSystem.unregister.bind(stoneSystem));
+
+        const { settlerTaskSystem } = ctx.getFeature<SettlerTaskExports>('settler-tasks');
+        settlerTaskSystem.registerWorkHandler(SearchType.STONE, createStonecuttingHandler(ctx.gameState, stoneSystem));
 
         return {
             systems: [],

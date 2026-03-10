@@ -19,9 +19,9 @@ import {
 import { getBuildingVisualState } from '@/game/features/building-construction';
 import type { LayerVisibility } from '@/game/renderer/layer-visibility';
 import type { IViewPoint } from '@/game/renderer/i-view-point';
-import type { ValidPositionGrid } from '@/game/features/placement/valid-position-grid';
-import { MAX_SLOPE_DIFF } from '@/game/features/placement';
-import { WorkAreaAdjustHandler } from '@/game/features/building-adjust';
+import type { ValidPositionGrid } from '@/game/systems/placement/valid-position-grid';
+import { MAX_SLOPE_DIFF } from '@/game/systems/placement';
+import { WorkAreaAdjustHandler } from '@/game/input/building-adjust';
 import { computeWorkAreaColoredRings } from '@/game/features/work-areas/work-area-boundary';
 import { debugStats } from '@/game/debug/debug-stats';
 import { resolveBuildingOverlays } from './overlay-resolution';

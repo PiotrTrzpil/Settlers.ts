@@ -9,13 +9,10 @@ import {
     setConstructionSiteGroundType,
     applyTerrainLeveling,
 } from '../../features/building-construction';
-import { canPlaceBuildingFootprint } from '../../features/placement';
-import type { PlacementFilter } from '../../features/placement';
+import { canPlaceBuildingFootprint } from '../../systems/placement';
+import type { PlacementFilter } from '../../systems/placement';
 import { BuildingType } from '../../buildings/types';
-import {
-    BUILDING_SPAWN_ON_COMPLETE,
-    RESIDENCE_CONSTRUCTION_WORKER_SPAWNS,
-} from '../../features/building-construction/spawn-units';
+import { BUILDING_SPAWN_ON_COMPLETE } from '../../features/building-construction/spawn-units';
 import { getBuildingWorkerInfo, getBuildingDoorPos } from '../../data/game-data-access';
 import { ringTiles } from '../../systems/spatial-search';
 import type {
@@ -90,7 +87,7 @@ function spawnUnitsNear(
     }
 }
 
-function spawnWorkerAtDoor(
+function spawnWorkerInsideBuilding(
     deps: SpawnBuildingUnitsDeps,
     entity: Entity,
     bx: number,
@@ -101,15 +98,13 @@ function spawnWorkerAtDoor(
     const buildingType = entity.subType as BuildingType;
     const workerInfo = getBuildingWorkerInfo(entity.race, buildingType);
     if (!workerInfo) return;
+
+    // Spawn the worker at the door tile but hidden (already inside the building).
+    // No occupancy — the building owns the door tile. The task system will assign
+    // the worker and the normal work cycle handles walking out via exitBuilding.
     const door = getBuildingDoorPos(bx, by, entity.race, buildingType);
-    const existingAtDoor = state.getEntityAt(door.x, door.y);
-    if (existingAtDoor && existingAtDoor.type === EntityType.Unit) return;
-    const doorKey = tileKey(door.x, door.y);
-    const previousOwner = state.tileOccupancy.get(doorKey);
-    const workerEntity = state.addUnit(workerInfo.unitType, door.x, door.y, entity.player);
-    if (previousOwner === entity.id) {
-        state.tileOccupancy.set(doorKey, entity.id);
-    }
+    const workerEntity = state.addUnit(workerInfo.unitType, door.x, door.y, entity.player, { occupancy: false });
+
     eventBus.emit('unit:spawned', {
         entityId: workerEntity.id,
         unitType: workerInfo.unitType,
@@ -117,6 +112,8 @@ function spawnWorkerAtDoor(
         y: door.y,
         player: entity.player,
     });
+    eventBus.emit('building:workerSpawned', { buildingId: entity.id, settlerId: workerEntity.id });
+
     effects.push({
         type: 'unit_spawned',
         entityId: workerEntity.id,
@@ -223,24 +220,8 @@ export function executeSpawnBuildingUnits(deps: SpawnBuildingUnitsDeps, cmd: Spa
         spawnUnitsNear(deps, bx, by, spawnDef.unitType, spawnDef.count, entity.player, spawnDef.selectable, effects);
     }
 
-    const workerSpawns = RESIDENCE_CONSTRUCTION_WORKER_SPAWNS[buildingType];
-    if (workerSpawns && !cmd.placedCompleted) {
-        for (const workerDef of workerSpawns) {
-            spawnUnitsNear(
-                deps,
-                bx,
-                by,
-                workerDef.unitType,
-                workerDef.count,
-                entity.player,
-                workerDef.selectable,
-                effects
-            );
-        }
-    }
-
     if (cmd.spawnWorker && !spawnDef) {
-        spawnWorkerAtDoor(deps, entity, bx, by, effects);
+        spawnWorkerInsideBuilding(deps, entity, bx, by, effects);
     }
 
     return commandSuccess(effects);

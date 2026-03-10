@@ -3,15 +3,15 @@ import { IViewPoint } from './i-view-point';
 import { MapSize } from '@/utilities/map-size';
 import { TilePicker } from '../input/tile-picker';
 import { TileCoord } from '../entity';
-import { PlacementStatus } from '../features/placement';
+import { PlacementStatus } from '../systems/placement';
 import { ShaderProgram } from './shader-program';
-import type { ValidPositionGrid, ValidPositionEntry } from '../features/placement/valid-position-grid';
+import type { ValidPositionGrid, ValidPositionEntry } from '../systems/placement/valid-position-grid';
 
 import vertCode from './shaders/entity-vert.glsl';
 import fragCode from './shaders/entity-frag.glsl';
 
 // Re-export PlacementStatus for backward compatibility
-export { PlacementStatus } from '../features/placement';
+export { PlacementStatus } from '../systems/placement';
 
 /**
  * Color mapping for non-buildable statuses (RGBA, 0-1 range).

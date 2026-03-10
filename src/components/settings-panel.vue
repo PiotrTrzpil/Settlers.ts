@@ -5,9 +5,9 @@
             <SettingsSlider
                 label="Game speed"
                 v-model="settings.gameSpeed"
-                :min="0.25"
-                :max="4"
-                :step="0.25"
+                :min="0.5"
+                :max="10"
+                :step="0.5"
                 :disabled="settings.paused"
             />
         </CollapseSection>

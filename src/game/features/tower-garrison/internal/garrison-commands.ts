@@ -9,9 +9,21 @@ import type { SettlerTaskSystem } from '@/game/features/settler-tasks';
 import { BuildingType } from '@/game/buildings/building-type';
 import { UnitType } from '@/game/core/unit-types';
 import { createLogger } from '@/utilities/logger';
+import { choreo } from '@/game/systems/choreo/choreo-builder';
+import type { UnitReservationRegistry } from '@/game/systems/unit-reservation';
+import type { ISettlerBuildingLocationManager } from '@/game/features/settler-location/types';
 import type { TowerGarrisonManager } from '../tower-garrison-manager';
 import { getGarrisonCapacity, getGarrisonRole } from './garrison-capacity';
 import type { GarrisonRole } from '../types';
+
+/** Shared context for garrison command execution. */
+export interface GarrisonCommandContext {
+    manager: TowerGarrisonManager;
+    settlerTaskSystem: SettlerTaskSystem;
+    gameState: GameState;
+    unitReservation: UnitReservationRegistry;
+    locationManager: ISettlerBuildingLocationManager;
+}
 
 const log = createLogger('GarrisonCommands');
 
@@ -68,15 +80,14 @@ function filterAcceptedUnits(
  * 3. Slot availability accounts for both garrisoned units AND en-route units, preventing over-commitment.
  * 4. Greedily allocate: fill available swordsman slots first, then bowman slots. Stop each role when full.
  * 5. If no units survive filtering: return false.
- * 6. For each accepted unit: markEnRoute → if already at door, finalize immediately; else assignMoveTask.
+ * 6. For each accepted unit: reserve → assign worker to building → assign WORKER_DISPATCH choreo job.
  * 7. Return true.
  */
 export function executeGarrisonUnitsCommand(
     cmd: GarrisonUnitsCommand,
-    manager: TowerGarrisonManager,
-    settlerTaskSystem: SettlerTaskSystem,
-    gameState: GameState
+    ctx: GarrisonCommandContext
 ): boolean {
+    const { manager, settlerTaskSystem, gameState, unitReservation, locationManager } = ctx;
     const building = gameState.getEntity(cmd.buildingId);
     if (!building) {
         log.warn(`garrison_units: building ${cmd.buildingId} not found`);
@@ -128,17 +139,42 @@ export function executeGarrisonUnitsCommand(
         return false;
     }
 
-    const approachPos = manager.getApproachTile(building);
-
     for (const unitId of acceptedUnitIds) {
-        manager.markEnRoute(unitId, cmd.buildingId);
-        // If already at the door (e.g. just ejected), finalize immediately without waiting for movement.
-        if (!manager.tryFinalizeAtDoor(unitId, cmd.buildingId)) {
-            const moveStarted = settlerTaskSystem.assignMoveTask(unitId, approachPos.x, approachPos.y);
-            if (!moveStarted) {
-                // Pathfinding failed — cancel en-route so the unit is not stuck reserved forever.
-                manager.cancelEnRoute(unitId);
-                log.warn(`garrison_units: pathfinding failed for unit ${unitId} to approach (${approachPos.x},${approachPos.y})`);
+        unitReservation.reserve(unitId, {
+            purpose: 'garrison-en-route',
+            onForcedRelease: () => {
+                log.debug(`En-route unit ${unitId} removed externally`);
+            },
+        });
+        settlerTaskSystem.assignWorkerToBuilding(unitId, cmd.buildingId);
+        const job = choreo('WORKER_DISPATCH')
+            .goToDoorAndEnter(cmd.buildingId)
+            .build();
+        // Pass targetPos for eager movement — but if pathfinding fails
+        // (same tile or unreachable), handle both cases.
+        const assigned = settlerTaskSystem.assignJob(
+            unitId, job, job.targetPos ?? undefined
+        );
+        if (!assigned) {
+            const unit = gameState.getEntityOrThrow(
+                unitId, 'garrison dispatch'
+            );
+            const atDoor = job.targetPos
+                && unit.x === job.targetPos.x
+                && unit.y === job.targetPos.y;
+            if (atDoor) {
+                // Unit already at door — enter directly via choreo
+                // without the GO_TO_TARGET movement step.
+                settlerTaskSystem.assignJob(unitId, job);
+            } else {
+                // Genuinely unreachable. Clean up.
+                settlerTaskSystem.releaseWorkerAssignment(unitId);
+                locationManager.cancelApproach(unitId);
+                unitReservation.release(unitId);
+                log.warn(
+                    `garrison_units: path failed for unit `
+                    + `${unitId} to tower ${cmd.buildingId}`
+                );
             }
         }
     }
@@ -164,27 +200,23 @@ export type GarrisonSelectedResult = 'success' | 'not_garrison_building' | 'garr
  */
 export function executeGarrisonSelectedUnitsCommand(
     cmd: GarrisonSelectedUnitsCommand,
-    manager: TowerGarrisonManager,
-    settlerTaskSystem: SettlerTaskSystem,
-    gameState: GameState
+    ctx: GarrisonCommandContext
 ): GarrisonSelectedResult {
     // Silent: user right-clicks on any tile — most won't be garrison buildings.
-    const building = gameState.getEntityAt(cmd.tileX, cmd.tileY);
+    const building = ctx.gameState.getEntityAt(cmd.tileX, cmd.tileY);
     if (!building || building.type !== EntityType.Building) return 'not_garrison_building';
     if (!getGarrisonCapacity(building.subType as BuildingType)) return 'not_garrison_building';
 
-    const selectedUnits = gameState.selection.getSelectedByType(EntityType.Unit);
+    const selectedUnits = ctx.gameState.selection.getSelectedByType(EntityType.Unit);
     if (selectedUnits.length === 0) return 'garrison_building_blocked';
 
     const unitIds = selectedUnits.map(u => u.id);
     const ok = executeGarrisonUnitsCommand(
         { type: 'garrison_units', buildingId: building.id, unitIds },
-        manager,
-        settlerTaskSystem,
-        gameState
+        ctx
     );
     if (ok) {
-        gameState.selection.select(null);
+        ctx.gameState.selection.select(null);
         return 'success';
     }
     return 'garrison_building_blocked';

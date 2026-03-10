@@ -44,10 +44,12 @@ const S4_TO_BUILDING_TYPE: Partial<Record<S4BuildingType, BuildingType>> = {
     [S4BuildingType.WEAPONSMITH]: BuildingType.WeaponSmith,
     [S4BuildingType.VEHICLEHALL]: BuildingType.SiegeWorkshop,
     [S4BuildingType.BARRACKS]: BuildingType.Barrack,
-    [S4BuildingType.CHARCOALMAKER]: BuildingType.CoalMine, // Approximation
+    [S4BuildingType.CHARCOALMAKER]: BuildingType.CharcoalMaker,
     [S4BuildingType.HEALERHUT]: BuildingType.HealerHut,
     [S4BuildingType.AMMOMAKERHUT]: BuildingType.AmmunitionMaker,
     [S4BuildingType.SHIPYARD]: BuildingType.Shipyard,
+    [S4BuildingType.PORT]: BuildingType.Port,
+    [S4BuildingType.MARKETPLACE]: BuildingType.Marketplace,
     [S4BuildingType.STORAGEAREA]: BuildingType.StorageArea,
     [S4BuildingType.VINYARD]: BuildingType.Vinyard,
     [S4BuildingType.AGAVEFARMERHUT]: BuildingType.AgaveFarmerHut,
@@ -162,11 +164,12 @@ export function populateMapBuildings(
 
         // Emit building:completed so that systems (like CarrierSystem) can register state
         // and spawn units (handled by BuildingConstructionSystem listener)
+        // Map-loaded buildings get their workers from map data + assignInitialBuildingWorkers.
+        // Do NOT set spawnWorker — that would spawn a duplicate worker at the door.
         eventBus.emit('building:completed', {
             entityId: entity.id,
             buildingType,
             race: entity.race,
-            spawnWorker: true,
         });
 
         const entries = perPlayer.get(buildingData.player) ?? [];

@@ -94,7 +94,7 @@ export const createScenario = {
         const sim = new Simulation(opts ?? {});
         const residenceId = sim.placeBuilding(BuildingType.ResidenceSmall);
         sim.spawnUnitNear(residenceId, UnitType.Digger);
-        sim.spawnUnitNear(residenceId, UnitType.Builder);
+        sim.spawnUnitNear(residenceId, UnitType.Builder, 2);
         const storageId = sim.placeBuilding(BuildingType.StorageArea);
         for (const [mat, amt] of materials) {
             sim.injectOutput(storageId, mat, amt);

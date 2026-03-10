@@ -10,7 +10,7 @@ import { EntityType, BuildingType } from '@/game/entity';
 import { getBridge } from '@/game/debug/debug-bridge';
 import { BuildingAdjustMode } from '@/game/input/modes/building-adjust-mode';
 import { WORK_AREA_BUILDINGS } from '@/game/features/work-areas';
-import type { WorkAreaAdjustHandler } from '@/game/features/building-adjust/work-area-handler';
+import type { WorkAreaAdjustHandler } from '@/game/input/building-adjust/work-area-handler';
 
 /** Get the BuildingAdjustMode if currently registered. */
 function getAdjustMode(): BuildingAdjustMode | null {

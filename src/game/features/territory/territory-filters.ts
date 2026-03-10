@@ -5,9 +5,9 @@
  */
 
 import type { TerritoryManager } from './territory-manager';
-import type { PlacementFilter } from '../placement/types';
+import type { PlacementFilter } from '../../systems/placement/types';
 import type { LogisticsMatchFilter, CarrierFilter } from '../logistics/logistics-filter';
-import { PlacementStatus } from '../placement/types';
+import { PlacementStatus } from '../../systems/placement/types';
 
 /** Reject placement outside player's territory. */
 export function createTerritoryPlacementFilter(tm: TerritoryManager): PlacementFilter {

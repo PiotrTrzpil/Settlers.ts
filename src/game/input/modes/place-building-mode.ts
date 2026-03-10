@@ -4,7 +4,7 @@ import { BuildingType } from '../../entity';
 import type { Race } from '../../core/race';
 import type { PlacementEntityType } from '../render-state';
 import type { TerrainData } from '../../terrain';
-import type { ValidPositionGrid } from '../../features/placement/valid-position-grid';
+import type { ValidPositionGrid } from '../../systems/placement/valid-position-grid';
 
 /** Everything PlaceBuildingMode needs from the game. */
 export interface BuildingPlacementContext {

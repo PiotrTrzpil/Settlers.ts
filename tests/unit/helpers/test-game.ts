@@ -213,9 +213,8 @@ export function createTestContext(mapWidth = 64, mapHeight = 64): TestContext {
     // carrier spawning without driving the timed interval loop.
     const residenceSpawner = new ResidenceSpawnerSystem({
         gameState: state,
-        executeCommand: cmd => getRegistry(context).execute(cmd),
+        eventBus,
     });
-    residenceSpawner.setTerrain(map.terrain);
     residenceSpawner.immediateMode = true;
     buildingConstructionSystem.setResidenceSpawner(residenceSpawner);
 

@@ -26,7 +26,7 @@ import { type ComponentStore, mapStore } from '../../ecs';
 import { BuildingConstructionPhase, type CapturedTerrainTile, type ConstructionSite } from './types';
 import type { Persistable } from '@/game/persistence';
 import type { TileCoord } from '../../core/coordinates';
-import { assignConstructionPilePositions } from '../inventory/construction-pile-positions';
+import { assignConstructionPilePositions } from '../../systems/inventory/construction-pile-positions';
 
 // ── Serialization types ──
 
@@ -47,6 +47,8 @@ export interface SerializedConstructionSite {
     levelingComplete: boolean;
     constructionProgress: number;
     deliveredMaterials: Array<[EMaterialType, number]>;
+    /** Per-material consumed counts. Optional for backward compat with old saves. */
+    consumedMaterials?: Array<[EMaterialType, number]>;
     consumedAmount: number;
     terrainModified: boolean;
 }
@@ -162,6 +164,7 @@ export class ConstructionSiteManager implements Persistable<SerializedConstructi
                 totalCost,
                 deliveredAmount: 0,
                 consumedAmount: 0,
+                consumed: new Map(),
             },
             building: {
                 slots: { required: workerCount, assigned: new Set(), started: false },
@@ -449,6 +452,27 @@ export class ConstructionSiteManager implements Persistable<SerializedConstructi
     }
 
     /**
+     * Pick the next material to consume and update per-material consumed tracking.
+     * Iterates costs in order, consuming from the first material that has
+     * delivered units not yet consumed. Returns the material type, or null
+     * if nothing is available.
+     */
+    consumeNextMaterial(buildingId: number): EMaterialType | null {
+        const site = this.sites.get(buildingId);
+        if (!site) return null;
+        for (const cost of site.materials.costs) {
+            const delivered = site.materials.delivered.get(cost.material) ?? 0;
+            const consumed = site.materials.consumed.get(cost.material) ?? 0;
+            if (consumed < delivered) {
+                site.materials.consumed.set(cost.material, consumed + 1);
+                site.materials.consumedAmount += 1;
+                return cost.material;
+            }
+        }
+        return null;
+    }
+
+    /**
      * Returns costs where delivery is still short of the required amount.
      * Each entry reflects the remaining quantity still needed.
      */
@@ -565,6 +589,7 @@ export class ConstructionSiteManager implements Persistable<SerializedConstructi
                 levelingComplete: site.terrain.complete,
                 constructionProgress: site.building.progress,
                 deliveredMaterials: [...site.materials.delivered.entries()],
+                consumedMaterials: [...site.materials.consumed.entries()],
                 consumedAmount: site.materials.consumedAmount,
                 terrainModified: site.terrain.modified,
             });
@@ -638,6 +663,7 @@ export class ConstructionSiteManager implements Persistable<SerializedConstructi
                 totalCost,
                 deliveredAmount,
                 consumedAmount: data.consumedAmount,
+                consumed: new Map<EMaterialType, number>(data.consumedMaterials ?? []),
             },
             building: {
                 slots: {

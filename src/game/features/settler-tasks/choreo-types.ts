@@ -29,6 +29,9 @@ export {
     CHOREO_FPS,
     framesToSeconds,
     tickDuration,
+    choreo,
+    node,
+    ChoreoBuilder,
 } from '../../systems/choreo';
 
 // ─────────────────────────────────────────────────────────────

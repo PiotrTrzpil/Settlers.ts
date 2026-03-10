@@ -99,13 +99,44 @@ describe.skipIf(!hasRealData)('Building construction (real game data)', { timeou
         expect(sim.countEntities(EntityType.Unit)).toBe(0);
     });
 
-    // ─── Full construction flow ──────────────────────────────────────
+    // ─── Full construction flow (pre-spawned specialists) ──────────────
 
-    it('WoodcutterHut: full construction → worker spawned', { timeout: 30_000 }, () => {
+    it('WoodcutterHut: pre-spawned digger+builders complete construction', { timeout: 30_000 }, () => {
         const s = createScenario.constructionSite(BuildingType.WoodcutterHut);
         sim = s;
 
         sim.waitForConstructionComplete(s.siteId);
+
+        expect(sim.countEntities(EntityType.Unit, UnitType.Woodcutter)).toBe(1);
+        expect(sim.errors).toHaveLength(0);
+    });
+
+    // ─── Full construction flow (auto-recruited from carriers) ───────
+
+    it('WoodcutterHut: carriers auto-recruit into digger+builders and complete construction', { timeout: 30_000 }, () => {
+        sim = createSimulation();
+
+        // Residence for carrier supply
+        sim.placeBuilding(BuildingType.ResidenceSmall);
+
+        // Storage with construction materials
+        const storageId = sim.placeBuilding(BuildingType.StorageArea);
+        sim.injectOutput(storageId, EMaterialType.BOARD, 8);
+        sim.injectOutput(storageId, EMaterialType.STONE, 8);
+
+        // Tools as free piles (ToolSourceResolver only finds free piles)
+        sim.placeGoods(EMaterialType.SHOVEL, 4);
+        sim.placeGoods(EMaterialType.HAMMER, 4);
+
+        // No pre-spawned specialists — only carriers from residence
+        expect(sim.countEntities(EntityType.Unit, UnitType.Digger)).toBe(0);
+        expect(sim.countEntities(EntityType.Unit, UnitType.Builder)).toBe(0);
+        expect(sim.countEntities(EntityType.Unit, UnitType.Carrier)).toBeGreaterThan(0);
+
+        // Place as construction site (not completed)
+        const siteId = sim.placeBuilding(BuildingType.WoodcutterHut, 0, false);
+
+        sim.waitForConstructionComplete(siteId);
 
         expect(sim.countEntities(EntityType.Unit, UnitType.Woodcutter)).toBe(1);
         expect(sim.errors).toHaveLength(0);
@@ -154,7 +185,7 @@ describe.skipIf(!hasRealData)('Building construction (real game data)', { timeou
 
         // Workers survive building removal
         expect(sim.countEntities(EntityType.Unit, UnitType.Digger)).toBe(1);
-        expect(sim.countEntities(EntityType.Unit, UnitType.Builder)).toBe(1);
+        expect(sim.countEntities(EntityType.Unit, UnitType.Builder)).toBe(2);
 
         // No crashes when workers discover their target is gone
         sim.runTicks(300);
@@ -165,9 +196,12 @@ describe.skipIf(!hasRealData)('Building construction (real game data)', { timeou
         const s = createScenario.constructionSite(BuildingType.WoodcutterHut);
         sim = s;
 
-        // Wait for builder to start constructing and make some progress
-        sim.waitForPhase(s.siteId, BuildingConstructionPhase.ConstructionRising);
-        sim.runTicks(200); // let builder do some work cycles
+        // Wait for builder to start constructing — check each tick, remove mid-progress
+        sim.runUntil(() => {
+            const site = sim.services.constructionSiteManager.getSite(s.siteId);
+            return !!site && site.phase >= BuildingConstructionPhase.ConstructionRising && site.building.progress > 0;
+        }, { maxTicks: 50_000, label: 'builder makes progress' });
+
         const site = sim.services.constructionSiteManager.getSite(s.siteId);
         expect(site).toBeDefined();
         expect(site!.building.progress).toBeGreaterThan(0);

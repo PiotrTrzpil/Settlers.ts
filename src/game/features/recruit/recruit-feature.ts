@@ -7,7 +7,6 @@ import type { FeatureDefinition, FeatureContext } from '../feature';
 import type { CarrierFeatureExports } from '../carriers';
 import type { SettlerTaskExports } from '../settler-tasks';
 import type { InventoryExports } from '../inventory';
-import type { LogisticsDispatcher } from '../logistics';
 import { ChoreoTaskType } from '../../systems/choreo';
 import { RecruitSystem } from '../../systems/recruit/recruit-system';
 import { UnitTransformer } from '../../systems/recruit/unit-transformer';
@@ -21,15 +20,12 @@ export interface RecruitExports {
 
 export const RecruitFeature: FeatureDefinition = {
     id: 'recruit',
-    dependencies: ['carriers', 'settler-tasks', 'logistics-dispatcher', 'inventory'],
+    dependencies: ['carriers', 'settler-tasks', 'inventory'],
 
     create(ctx: FeatureContext) {
-        const { carrierRegistry } = ctx.getFeature<CarrierFeatureExports>('carriers');
+        const { carrierRegistry, idleCarrierPool } = ctx.getFeature<CarrierFeatureExports>('carriers');
         const { settlerTaskSystem, choreoSystem } = ctx.getFeature<SettlerTaskExports>('settler-tasks');
         const { inventoryManager } = ctx.getFeature<InventoryExports>('inventory');
-        const { logisticsDispatcher } = ctx.getFeature<{
-            logisticsDispatcher: LogisticsDispatcher;
-        }>('logistics-dispatcher');
 
         const toolSourceResolver = new ToolSourceResolver(ctx.gameState);
 
@@ -45,11 +41,10 @@ export const RecruitFeature: FeatureDefinition = {
         const recruitSystem = new RecruitSystem({
             gameState: ctx.gameState,
             eventBus: ctx.eventBus,
-            carrierRegistry,
+            idleCarrierPool,
             unitTransformer,
-            unitReservation: ctx.unitReservation,
             toolSourceResolver,
-            isCarrierBusy: (id: number) => logisticsDispatcher.activeJobs.has(id),
+            assignJob: (unitId, job, moveTo) => settlerTaskSystem.assignJob(unitId, job, moveTo),
         });
 
         // Register recruit-specific choreography executors on the shared ChoreoSystem.

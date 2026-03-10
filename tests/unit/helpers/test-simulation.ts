@@ -27,6 +27,7 @@
  * See test-scenarios.ts for pre-configured simulation setups (createScenario).
  */
 
+import { onTestFailed } from 'vitest';
 import { installTestGameData, installRealGameData, resetTestGameData } from './test-game-data';
 import { createTestMap, TERRAIN, type TestMap } from './test-map';
 import { TimelineRecorder, type TimelineCategory } from './timeline-recorder';
@@ -43,12 +44,12 @@ import { Race } from '@/game/core/race';
 import { spiralSearch } from '@/game/utils/spiral-search';
 import { OreType } from '@/game/features/ore-veins/ore-type';
 import { isMineBuilding, getBuildingFootprint } from '@/game/buildings/types';
-import { canPlaceBuildingFootprint } from '@/game/features/placement';
+import { canPlaceBuildingFootprint } from '@/game/systems/placement';
 import { populateMapBuildings } from '@/game/features/building-construction';
 import { populateMapSettlers } from '@/game/systems/map-settlers';
 import type { MapBuildingData, MapSettlerData } from '@/resources/map/map-entity-data';
 import { BuildingConstructionPhase } from '@/game/features/building-construction/types';
-import type { InventorySlot } from '@/game/features/inventory/inventory-slot';
+import type { InventorySlot } from '@/game/systems/inventory/inventory-slot';
 import type { Entity } from '@/game/entity';
 import { EventFmt } from '@/game/debug/event-formatting';
 import { query } from '@/game/ecs';
@@ -183,6 +184,8 @@ export interface SimulationOptions {
     mapHeight?: number;
     /** When true, uses minimal stub data instead of real XML. Defaults to false (real data). */
     useStubData?: boolean;
+    /** Race for player 0 (defaults to Roman). */
+    race?: Race;
 }
 
 // ─── Flags ──────────────────────────────────────────────────────
@@ -243,7 +246,7 @@ export class Simulation {
     private tickCount = 0;
 
     constructor(opts: SimulationOptions = {}) {
-        const { mapWidth = 128, mapHeight = 128, useStubData = false } = opts;
+        const { mapWidth = 128, mapHeight = 128, useStubData = false, race = Race.Roman } = opts;
         this.mapWidth = mapWidth;
         this.mapHeight = mapHeight;
         this.timeline = new TimelineRecorder();
@@ -262,7 +265,7 @@ export class Simulation {
         this.eventBus.strict = true;
         this.state = new GameState(this.eventBus);
         this.state.playerRaces = new Map([
-            [0, Race.Roman],
+            [0, race],
             [1, Race.Roman],
         ]);
 
@@ -316,6 +319,13 @@ export class Simulation {
         if (VERBOSE_CHOREO) {
             this.services.settlerTaskSystem.verbose = true;
         }
+
+        // Dump timeline automatically when a test assertion fails
+        onTestFailed(() => {
+            if (!DUMP_TIMELINE && this.errors.length === 0) {
+                this.dumpDiagnostics();
+            }
+        });
     }
 
     // ─── Timeline event subscriptions ─────────────────────────────
@@ -406,12 +416,52 @@ export class Simulation {
         return elapsed;
     }
 
-    /** Dump full diagnostics on runUntil timeout. */
+    /** Dump diagnostics on runUntil timeout using a smart summary to avoid OOM on long runs. */
     private dumpTimeoutDiagnostics(opts: RunUntilOptions, maxTicks: number, errorsBefore: number) {
         const label = opts.label ?? 'predicate';
         const header = `TIMEOUT: "${label}" not reached in ${maxTicks} ticks`;
         const extra = opts.diagnose ? `\n[Diagnosis] ${opts.diagnose()}` : '';
-        this.dumpDiagnosticsBody(header + extra, 1_000_000, errorsBefore);
+
+        const sep = '═'.repeat(70);
+        console.log(`\n${sep}`);
+        console.log(`  ${header}${extra}`);
+        console.log(sep);
+
+        this.dumpSnapshot();
+
+        console.log(`\n[Timeline Summary]`);
+        console.log(this.timeline.formatSummary(50, 200));
+
+        this.dumpNewErrors(errorsBefore);
+        console.log(`${sep}\n`);
+    }
+
+    private dumpSnapshot(): void {
+        const snap = this.snapshot();
+        console.log(`\n[Snapshot at tick ${snap.tick}]`);
+        console.log(`  Entities: ${JSON.stringify(snap.entityCounts)}`);
+        for (const b of snap.buildings) {
+            const parts = [b.inputs, b.outputs].filter(Boolean);
+            console.log(`    #${b.id} ${b.type}${parts.length ? ': ' + parts.join(' | ') : ''}`);
+        }
+        for (const c of snap.carriers) {
+            console.log(`    #${c.id} ${c.status} ${c.pos}${c.carrying ? ' ' + c.carrying : ''}`);
+        }
+    }
+
+    private dumpNewErrors(errorsBefore: number): void {
+        if (this.errors.length <= errorsBefore) return;
+        const newErrors = this.errors.slice(errorsBefore);
+        const unique = new Map<string, { count: number; tick: number; system: string }>();
+        for (const e of newErrors) {
+            const existing = unique.get(e.error.message);
+            if (existing) existing.count++;
+            else unique.set(e.error.message, { count: 1, tick: e.tick, system: e.system });
+        }
+        console.log(`\n[Errors] ${newErrors.length} error(s) during run (${unique.size} unique):`);
+        for (const [msg, info] of unique) {
+            console.log(`  [tick ${info.tick}, ${info.system}] (×${info.count}) ${msg}`);
+        }
     }
 
     // ─── Snapshot ─────────────────────────────────────────────────
@@ -547,10 +597,12 @@ export class Simulation {
 
     // ─── Building placement ───────────────────────────────────────
 
-    placeBuilding(buildingType: BuildingType, player = 0, completed = true, race?: Race): number {
+    placeBuilding(
+        buildingType: BuildingType, player = 0, completed = true, race?: Race, spawnWorker?: boolean
+    ): number {
         const r = race ?? this.state.playerRaces.get(player) ?? Race.Roman;
         const pos = this.placer.findBuildingPosition(buildingType, r);
-        return this.placeBuildingAt(pos.x, pos.y, buildingType, player, completed, r);
+        return this.placeBuildingAt(pos.x, pos.y, buildingType, player, completed, r, spawnWorker);
     }
 
     /** Place a building at explicit coordinates (bypasses auto-placer). */
@@ -560,7 +612,8 @@ export class Simulation {
         buildingType: BuildingType,
         player = 0,
         completed = true,
-        race = Race.Roman
+        race = Race.Roman,
+        spawnWorker?: boolean
     ): number {
         const result = this.execute({
             type: 'place_building',
@@ -570,7 +623,7 @@ export class Simulation {
             player,
             race,
             completed,
-            spawnWorker: completed,
+            spawnWorker: spawnWorker ?? completed,
         });
         if (!result.success) {
             throw new Error(`Failed to place ${BuildingType[buildingType]} at (${x}, ${y}): ${result.error}`);

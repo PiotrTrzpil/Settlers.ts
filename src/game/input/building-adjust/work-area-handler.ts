@@ -12,8 +12,8 @@ import type { BuildingType } from '../../entity';
 import type { Race } from '../../core/race';
 import type { TileHighlight } from '../../input/render-state';
 import type { BuildingAdjustHandler, AdjustableItem, TileOffset } from './types';
-import type { WorkAreaStore } from '../work-areas/work-area-store';
-import { WORK_AREA_BUILDINGS } from '../work-areas/types';
+import type { WorkAreaStore } from '../../features/work-areas/work-area-store';
+import { WORK_AREA_BUILDINGS } from '../../features/work-areas/types';
 
 const INSTANCE_KEY = 'work-area-instance';
 

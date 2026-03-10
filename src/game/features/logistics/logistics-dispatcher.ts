@@ -20,7 +20,7 @@ import { sortedEntries } from '@/utilities/collections';
 import { type EventBus, EventSubscriptionManager } from '../../event-bus';
 import { CLEANUP_PRIORITY } from '../../systems/entity-cleanup-registry';
 import type { EntityCleanupRegistry } from '../../systems/entity-cleanup-registry';
-import type { CarrierRegistry } from '../carriers';
+import type { CarrierRegistry, IdleCarrierPool } from '../carriers';
 import type { RequestManager } from './request-manager';
 import { RequestStatus, type ResourceRequest } from './resource-request';
 import { InventoryReservationManager } from './inventory-reservation';
@@ -31,11 +31,12 @@ import type { TransportJobOps } from '../settler-tasks/choreo-types';
 import type { BuildingInventoryManager } from '../inventory';
 import { RequestMatcher } from './request-matcher';
 import type { LogisticsMatchFilter, CarrierFilter } from './logistics-filter';
-import { CarrierAssigner, type JobAssigner } from './carrier-assigner';
+import { CarrierAssigner, type AssignmentSuccess, type JobAssigner } from './carrier-assigner';
+import { PreAssignmentQueue } from './pre-assignment-queue';
 import { StallDetector } from './stall-detector';
 import { MatchDiagnostics } from './match-diagnostics';
 import { ThrottledEmitter } from './throttled-emitter';
-import { TransportJobBuilder, type TransportPositionResolver, type ChoreographyLookup } from './transport-job-builder';
+import { TransportJobBuilder, type TransportPositionResolver } from './transport-job-builder';
 import { InFlightTrackerImpl } from './in-flight-tracker';
 import type { InFlightTracker } from './in-flight-tracker';
 
@@ -48,9 +49,9 @@ const EVENT_COOLDOWN_SEC = 5;
 /** Configuration for LogisticsDispatcher dependencies */
 export interface LogisticsDispatcherConfig extends CoreDeps {
     carrierRegistry: CarrierRegistry;
+    idleCarrierPool: IdleCarrierPool;
     jobAssigner: JobAssigner;
     positionResolver: TransportPositionResolver;
-    choreographyLookup: ChoreographyLookup;
     requestManager: RequestManager;
     inventoryManager: BuildingInventoryManager;
     matchFilter?: LogisticsMatchFilter;
@@ -89,6 +90,12 @@ export class LogisticsDispatcher implements TickSystem {
     /** Event subscription manager for cleanup */
     private readonly subscriptions = new EventSubscriptionManager();
 
+    /** Pre-assignment queue for busy carriers that will get a job when their current delivery completes. */
+    private readonly preAssignmentQueue: PreAssignmentQueue;
+
+    /** Job assigner reference needed for flushing queued assignments. */
+    private readonly jobAssigner: JobAssigner;
+
     /** Pending pile redirects from building destruction (set at DEFAULT, consumed at LOGISTICS priority). */
     private readonly pendingPileRedirects = new Map<number, Map<EMaterialType, number>>();
 
@@ -97,6 +104,7 @@ export class LogisticsDispatcher implements TickSystem {
         this.requestManager = config.requestManager;
         this.reservationManager = new InventoryReservationManager(config.inventoryManager);
         this.inFlightTracker = new InFlightTrackerImpl();
+        this.jobAssigner = config.jobAssigner;
 
         this.transportJobDeps = {
             reservationManager: this.reservationManager,
@@ -104,6 +112,8 @@ export class LogisticsDispatcher implements TickSystem {
             eventBus: this.eventBus,
             inFlightTracker: this.inFlightTracker,
         };
+
+        this.preAssignmentQueue = new PreAssignmentQueue(this.transportJobDeps);
 
         this.requestMatcher = new RequestMatcher({
             gameState: config.gameState,
@@ -115,20 +125,20 @@ export class LogisticsDispatcher implements TickSystem {
         const transportJobBuilder = new TransportJobBuilder({
             gameState: config.gameState,
             positionResolver: config.positionResolver,
-            choreographyLookup: config.choreographyLookup,
         });
 
         this.carrierAssigner = new CarrierAssigner({
             gameState: config.gameState,
             eventBus: config.eventBus,
-            carrierRegistry: config.carrierRegistry,
+            idleCarrierPool: config.idleCarrierPool,
             jobAssigner: config.jobAssigner,
             transportJobBuilder,
             reservationManager: this.reservationManager,
             requestManager: config.requestManager,
             inFlightTracker: this.inFlightTracker,
-            carrierFilter: config.carrierFilter,
+            preAssignmentQueue: this.preAssignmentQueue,
             activeJobs: this.activeJobs,
+            carrierFilter: config.carrierFilter,
         });
 
         this.stallDetector = new StallDetector({
@@ -163,16 +173,23 @@ export class LogisticsDispatcher implements TickSystem {
      * before inventory removal (inventory data must exist when releasing reservations).
      */
     registerEvents(eventBus: EventBus, cleanupRegistry: EntityCleanupRegistry): void {
-        const onCarrierJobEnd = ({ entityId }: { entityId: number }) => this.activeJobs.delete(entityId);
-        this.subscriptions.subscribe(eventBus, 'carrier:deliveryComplete', onCarrierJobEnd);
-        this.subscriptions.subscribe(eventBus, 'carrier:pickupFailed', onCarrierJobEnd);
+        this.subscriptions.subscribe(eventBus, 'carrier:deliveryComplete', ({ entityId }) => {
+            this.activeJobs.delete(entityId);
+            this.flushQueuedAssignment(entityId);
+        });
+
+        this.subscriptions.subscribe(eventBus, 'carrier:pickupFailed', ({ entityId }) => {
+            this.activeJobs.delete(entityId);
+            this.preAssignmentQueue.cancel(entityId);
+        });
 
         // Unified cleanup: TransportJob.cancel() emits this event regardless of which path cancelled.
         // This ensures activeJobs is always cleaned up — even when cancellation comes from
         // WorkerTaskExecutor.interruptJob() (the "dual path" that previously left stale entries).
-        this.subscriptions.subscribe(eventBus, 'carrier:transportCancelled', ({ carrierId }) =>
-            this.activeJobs.delete(carrierId)
-        );
+        this.subscriptions.subscribe(eventBus, 'carrier:transportCancelled', ({ carrierId }) => {
+            this.activeJobs.delete(carrierId);
+            this.preAssignmentQueue.cancel(carrierId);
+        });
 
         // When a construction site completes, cancel all in-flight jobs and pending requests
         // targeting it. The inventory is swapped from construction → production, so carriers
@@ -248,10 +265,16 @@ export class LogisticsDispatcher implements TickSystem {
                 continue;
             }
             if (result) {
-                this.activeJobs.set(result.carrierId, result.record);
+                this.trackAssignmentResult(result);
                 assignmentCount++;
             }
         }
+    }
+
+    /** Track a successful assignment result — queued assignments skip activeJobs until flushed. */
+    private trackAssignmentResult(result: AssignmentSuccess | { queued: true }): void {
+        if ('queued' in result) return;
+        this.activeJobs.set(result.carrierId, result.record);
     }
 
     /** Emit `logistics:noMatch` at most once per cooldown per (building, material) pair. */
@@ -318,6 +341,23 @@ export class LogisticsDispatcher implements TickSystem {
     }
 
     /**
+     * Flush a queued assignment for a carrier that just finished its delivery.
+     * If the carrier has a pre-assigned job, assign it immediately.
+     */
+    private flushQueuedAssignment(carrierId: number): void {
+        const queued = this.preAssignmentQueue.flush(carrierId);
+        if (!queued) return;
+
+        const success = this.jobAssigner.assignJob(queued.carrierId, queued.job, queued.moveTo);
+        if (success) {
+            this.activeJobs.set(queued.carrierId, queued.record);
+        } else {
+            // Assignment failed (e.g. movement blocked) — cancel the reserved job
+            TransportJobService.cancel(queued.record, 'assignment_failed', this.transportJobDeps);
+        }
+    }
+
+    /**
      * Cancel all logistics targeting a building that just finished construction.
      *
      * When a construction site completes, its inventory is swapped from construction
@@ -334,6 +374,8 @@ export class LogisticsDispatcher implements TickSystem {
                 jobsCancelled++;
             }
         }
+
+        this.preAssignmentQueue.cancelForBuilding(buildingId);
 
         const requestsCancelled = this.requestManager.cancelRequestsForBuilding(buildingId);
 
@@ -385,6 +427,9 @@ export class LogisticsDispatcher implements TickSystem {
                 }
             }
         }
+
+        // Cancel queued assignments referencing the destroyed building
+        this.preAssignmentQueue.cancelForBuilding(buildingId);
 
         // Cancel pending requests TO this building (no carrier assigned yet)
         result.requestsCancelled = this.requestManager.cancelRequestsForBuilding(buildingId);

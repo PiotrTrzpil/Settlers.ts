@@ -6,7 +6,7 @@
 import { LogHandler } from '@/utilities/log-handler';
 import type { LuaRuntime } from '../lua-runtime';
 import type { IMapLandscape } from '@/resources/map/imap-landscape';
-import { isPassable, isBuildable } from '@/game/features/placement';
+import { isPassable, isBuildable } from '@/game/systems/placement';
 
 const log = new LogHandler('MapAPI');
 

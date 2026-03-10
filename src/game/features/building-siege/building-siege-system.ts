@@ -28,6 +28,7 @@ import type { Race } from '../../core/race';
 import { getBaseUnitType } from '../../core/unit-types';
 import { CombatStatus } from '../combat/combat-state';
 import { isGarrisonBuildingType } from '../tower-garrison/internal/garrison-capacity';
+import { choreo } from '@/game/systems/choreo/choreo-builder';
 import { getBuildingDoorPos } from '../../data/game-data-access';
 import { sortedEntries } from '@/utilities/collections';
 import { createLogger } from '@/utilities/logger';
@@ -480,13 +481,27 @@ export class BuildingSiegeSystem implements TickSystem {
         this.garrisonManager.removeTower(buildingId);
         this.garrisonManager.initTower(buildingId, buildingType);
 
-        // Garrison the first attacker into the captured building
+        // Garrison the first attacker into the captured building.
+        // Reserve → assign as worker → dispatch via WORKER_DISPATCH.
+        // The unit is at the door, so the choreo completes near-instantly
+        // and settler-location:entered triggers garrison finalization.
         const capturingUnitId = siege.attackerIds[0];
         if (capturingUnitId !== undefined) {
             const capturingUnit = this.gameState.getEntity(capturingUnitId);
             if (capturingUnit) {
-                this.garrisonManager.markEnRoute(capturingUnitId, buildingId);
-                this.garrisonManager.tryFinalizeAtDoor(capturingUnitId, buildingId);
+                this.unitReservation.reserve(capturingUnitId, {
+                    purpose: 'garrison-en-route',
+                    onForcedRelease: () => {},
+                });
+                this.settlerTaskSystem.assignWorkerToBuilding(
+                    capturingUnitId, buildingId
+                );
+                const job = choreo('WORKER_DISPATCH')
+                    .goToDoorAndEnter(buildingId)
+                    .build();
+                this.settlerTaskSystem.assignJob(
+                    capturingUnitId, job, job.targetPos!
+                );
             }
         }
 

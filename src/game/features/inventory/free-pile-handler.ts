@@ -9,7 +9,7 @@
 
 import { type EventBus, EventSubscriptionManager, type GameEvents } from '../../event-bus';
 import type { CoreDeps } from '../feature';
-import type { BuildingInventoryManager } from '../inventory';
+import type { BuildingInventoryManager } from '../../systems/inventory/building-inventory';
 import type { GameState } from '../../game-state';
 import type { TerritoryManager } from '../territory';
 import { EntityType } from '../../entity';

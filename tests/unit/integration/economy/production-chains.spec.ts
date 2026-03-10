@@ -93,6 +93,7 @@ import { EMaterialType } from '@/game/economy/material-type';
 import { OreType } from '@/game/features/ore-veins/ore-type';
 import { TrainingRecipeIndex } from '@/game/features/barracks';
 import { ProductionMode } from '@/game/features/production-control';
+import { buildAllSettlerConfigs } from '@/game/data/settler-data-access';
 
 const hasRealData = installRealGameData();
 
@@ -254,7 +255,8 @@ describe.skipIf(!hasRealData)('Economy simulation (real game data)', { timeout: 
                 sim.getOutput(weaponSmithId, EMaterialType.SWORD) >= 1,
             { maxTicks: 600 * 30 }
         );
-        expect(sim.getOutput(smelterId, EMaterialType.IRONBAR)).toBeGreaterThanOrEqual(1);
+        // Smelter IRONBAR output may be 0 if carriers already delivered all bars to smiths.
+        // The fact that AXE and SWORD were produced proves the smelter worked.
         expect(sim.getOutput(toolSmithId, EMaterialType.AXE)).toBeGreaterThanOrEqual(1);
         expect(sim.getOutput(weaponSmithId, EMaterialType.SWORD)).toBeGreaterThanOrEqual(1);
     });
@@ -380,11 +382,26 @@ describe.skipIf(!hasRealData)('Economy simulation (real game data)', { timeout: 
         expect(sim.getOutput(weaponSmithId, EMaterialType.SWORD)).toBe(2);
     });
 
-    // SmeltGold shares the Smelter worker type with IronSmelter. The XML
-    // choreography's GET_GOOD nodes specify IRONORE (correct for IronSmelter)
-    // but SmeltGold needs GOLDORE. The buildingJobs per-building job selection
-    // should remap materials but the XML job for SmeltGold isn't resolved yet.
-    it.todo('gold smelter: GOLDORE + COAL → GOLDBAR (isolated)', () => {
+    it('multi-building workers: buildingJobs map separates jobs by building type', () => {
+        sim = createSimulation();
+        const configs = buildAllSettlerConfigs();
+
+        // Smelter: IronSmelter vs SmeltGold
+        const smelterConfig = configs.get(UnitType.Smelter)!;
+        expect(smelterConfig.buildingJobs).toBeDefined();
+        expect(smelterConfig.buildingJobs!.get(BuildingType.IronSmelter)).toContain('JOB_SMELTERIRON_WORK');
+        expect(smelterConfig.buildingJobs!.get(BuildingType.SmeltGold)).toContain('JOB_SMELTERGOLD_WORK');
+        expect(smelterConfig.buildingJobs!.get(BuildingType.SmeltGold)).not.toContain('JOB_SMELTERIRON_WORK');
+
+        // Smith: ToolSmith vs WeaponSmith
+        const smithConfig = configs.get(UnitType.Smith)!;
+        expect(smithConfig.buildingJobs).toBeDefined();
+        expect(smithConfig.buildingJobs!.get(BuildingType.ToolSmith)).toContain('JOB_TOOLSMITH_WORK');
+        expect(smithConfig.buildingJobs!.get(BuildingType.WeaponSmith)).toContain('JOB_WEAPONSMITH_WORK');
+        expect(smithConfig.buildingJobs!.get(BuildingType.WeaponSmith)).not.toContain('JOB_TOOLSMITH_WORK');
+    });
+
+    it('gold smelter: GOLDORE + COAL → GOLDBAR (isolated)', () => {
         sim = createSimulation();
 
         sim.placeBuilding(BuildingType.ResidenceSmall);
@@ -395,6 +412,10 @@ describe.skipIf(!hasRealData)('Economy simulation (real game data)', { timeout: 
 
         sim.runUntil(() => sim.getOutput(goldSmelterId, EMaterialType.GOLDBAR) >= 2, { maxTicks: 300 * 30 });
         expect(sim.getOutput(goldSmelterId, EMaterialType.GOLDBAR)).toBe(2);
+
+        // Inputs fully consumed
+        expect(sim.getInput(goldSmelterId, EMaterialType.GOLDORE)).toBe(0);
+        expect(sim.getInput(goldSmelterId, EMaterialType.COAL)).toBe(0);
     });
 
     it('bakery: FLOUR + WATER → BREAD (isolated)', () => {

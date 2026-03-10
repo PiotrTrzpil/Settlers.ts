@@ -29,7 +29,7 @@ import type {
     AdjustableItem,
     TileOffset,
     PixelOffset,
-} from '../../features/building-adjust/types';
+} from '../building-adjust/types';
 
 // ============================================================================
 // Types

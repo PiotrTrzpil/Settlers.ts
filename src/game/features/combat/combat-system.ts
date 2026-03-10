@@ -239,6 +239,28 @@ export class CombatSystem implements TickSystem, Persistable<SerializedCombatUni
 
     // ── Damage & death ────────────────────────────────────────────────────
 
+    /**
+     * Apply damage to a combat target from an external source (e.g., garrisoned bowman).
+     * Handles health decrement, event emission, and death if health reaches zero.
+     */
+    applyExternalDamage(attackerId: number, targetId: number, damage: number): void {
+        const targetState = this.states.get(targetId);
+        if (!targetState) return;
+
+        targetState.health -= damage;
+
+        this.eventBus.emit('combat:unitAttacked', {
+            attackerId,
+            targetId,
+            damage,
+            remainingHealth: Math.max(0, targetState.health),
+        });
+
+        if (targetState.health <= 0) {
+            this.killUnit(targetState, attackerId);
+        }
+    }
+
     private applyDamage(attacker: CombatState, targetEntity: Entity, damage: number): void {
         const targetState = this.states.get(targetEntity.id);
         if (!targetState) return;

@@ -11,21 +11,21 @@
  */
 
 import type { GameState } from '../../game-state';
-import type { BuildingInventoryManager } from './building-inventory';
-import type { InventoryChangeCallback } from './building-inventory';
+import type { BuildingInventoryManager } from '../../systems/inventory/building-inventory';
+import type { InventoryChangeCallback } from '../../systems/inventory/building-inventory';
 import { BuildingType, EntityType } from '../../entity';
 import { EMaterialType } from '../../economy/material-type';
 import type { Command, CommandResult } from '../../commands';
 import { type EventBus, EventSubscriptionManager } from '../../event-bus';
 import { createLogger } from '@/utilities/logger';
 import type { ConstructionSiteManager } from '../building-construction/construction-site-manager';
-import type { PileRegistry } from './pile-registry';
-import type { PileSlotKey } from './pile-registry';
-import type { PilePositionResolver } from './pile-position-resolver';
+import type { PileRegistry } from '../../systems/inventory/pile-registry';
+import type { PileSlotKey } from '../../systems/inventory/pile-registry';
+import type { PilePositionResolver } from '../../systems/inventory/pile-position-resolver';
 import type { PileKind, LinkedSlotKind } from '../../core/pile-kind';
 import { SlotKind } from '../../core/pile-kind';
 import type { EntityCleanupRegistry } from '../../systems/entity-cleanup-registry';
-import { CONSTRUCTION_PILE_CAPACITY } from './construction-pile-positions';
+import { CONSTRUCTION_PILE_CAPACITY } from '../../systems/inventory/construction-pile-positions';
 
 const log = createLogger('InventoryPileSync');
 

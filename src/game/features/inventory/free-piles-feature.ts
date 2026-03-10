@@ -6,9 +6,9 @@
  */
 
 import type { FeatureDefinition, FeatureContext } from '../feature';
-import type { InventoryExports } from '../inventory';
+import type { InventoryExports } from '../../systems/inventory';
 import type { TerritoryExports } from '../territory/territory-feature';
-import { FreePileHandler } from './free-pile-feature';
+import { FreePileHandler } from './free-pile-handler';
 
 export const FreePilesFeature: FeatureDefinition = {
     id: 'free-piles',

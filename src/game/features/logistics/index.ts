@@ -102,7 +102,6 @@ export {
     TransportJobBuilder,
     type TransportJobBuilderConfig,
     type TransportPositionResolver,
-    type ChoreographyLookup,
 } from './transport-job-builder';
 
 // Stall detector (cancels timed-out in-progress requests)

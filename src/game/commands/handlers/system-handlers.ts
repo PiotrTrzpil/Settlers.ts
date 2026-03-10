@@ -5,7 +5,7 @@ import type { EventBus } from '../../event-bus';
 import { BuildingType } from '../../buildings/types';
 import type { TreeSystem } from '../../features/trees';
 import type { CropSystem } from '../../features/crops';
-import type { StorageFilterManager } from '../../features/inventory/storage-filter-manager';
+import type { StorageFilterManager } from '../../systems/inventory/storage-filter-manager';
 import type {
     PlacePileCommand,
     SpawnPileCommand,

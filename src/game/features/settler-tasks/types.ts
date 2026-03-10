@@ -31,6 +31,8 @@ export enum SearchType {
     FORGE = 'FORGE',
     /** Worker goes to their assigned workplace building and stays there */
     WORKPLACE = 'WORKPLACE',
+    /** No autonomous work search — unit only executes externally-assigned dispatch jobs. */
+    NONE = 'NONE',
 }
 
 /** Settler type configuration from SettlerValues.xml */
@@ -52,6 +54,12 @@ export interface SettlerConfig {
      */
     buildingJobs?: Map<number, string[]>;
 }
+
+/**
+ * Config for units that don't search for work autonomously but can execute
+ * externally-assigned choreo jobs (e.g. military garrison dispatch).
+ */
+export const DISPATCH_ONLY_CONFIG: SettlerConfig = { search: SearchType.NONE, jobs: [] };
 
 export { TaskResult } from '../../systems/choreo';
 

@@ -16,6 +16,10 @@ import { MapObjectCategory, MapObjectType } from '@/game/types/map-object-types'
 import { OBJECT_TYPE_CATEGORY } from '../../systems/map-objects';
 import type { PlantCropCommand } from '../../commands/command-types';
 import { executePlantCrop } from '../../commands/handlers/system-handlers';
+import type { SettlerTaskExports } from '../settler-tasks/settler-tasks-feature';
+import { SearchType } from '../settler-tasks';
+import { createCropHarvestHandler } from './work-handlers';
+import { createPlantingHandler } from '../trees/work-handlers';
 
 export interface CropFeatureExports {
     cropSystem: CropSystem;
@@ -23,7 +27,7 @@ export interface CropFeatureExports {
 
 export const CropFeature: FeatureDefinition = {
     id: 'crops',
-    dependencies: [],
+    dependencies: ['settler-tasks'],
 
     create(ctx: FeatureContext) {
         const cropSystem = new CropSystem({
@@ -32,6 +36,22 @@ export const CropFeature: FeatureDefinition = {
             eventBus: ctx.eventBus,
             executeCommand: ctx.executeCommand,
         });
+
+        // Register crop work handlers (harvest + planting for each crop type)
+        const { settlerTaskSystem } = ctx.getFeature<SettlerTaskExports>('settler-tasks');
+
+        const cropHandlerConfigs = [
+            { search: SearchType.GRAIN, plantSearch: SearchType.GRAIN_SEED_POS, crop: MapObjectType.Grain },
+            { search: SearchType.SUNFLOWER, plantSearch: SearchType.SUNFLOWER_SEED_POS, crop: MapObjectType.Sunflower },
+            { search: SearchType.AGAVE, plantSearch: SearchType.AGAVE_SEED_POS, crop: MapObjectType.Agave },
+            { search: SearchType.BEEHIVE, plantSearch: SearchType.BEEHIVE_SEED_POS, crop: MapObjectType.Beehive },
+            { search: SearchType.VINE, plantSearch: SearchType.VINE_SEED_POS, crop: MapObjectType.Grape },
+        ] as const;
+
+        for (const { search, plantSearch, crop } of cropHandlerConfigs) {
+            settlerTaskSystem.registerWorkHandler(search, createCropHarvestHandler(ctx.gameState, cropSystem, crop));
+            settlerTaskSystem.registerWorkHandler(plantSearch, createPlantingHandler(cropSystem.getCropPlanter(crop)));
+        }
 
         // Register crop entities on creation (map-loaded crops start as Mature)
         ctx.on('entity:created', ({ entityId, type, subType }) => {

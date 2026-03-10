@@ -25,7 +25,7 @@ export const LogisticsDispatcherFeature: FeatureDefinition = {
     dependencies: ['carriers', 'settler-tasks', 'logistics', 'inventory', 'building-construction'],
 
     create(ctx: FeatureContext) {
-        const { carrierRegistry } = ctx.getFeature<CarrierFeatureExports>('carriers');
+        const { carrierRegistry, idleCarrierPool, setIsTransportBusy } = ctx.getFeature<CarrierFeatureExports>('carriers');
         const { settlerTaskSystem } = ctx.getFeature<SettlerTaskExports>('settler-tasks');
         const { requestManager } = ctx.getFeature<RequestManagerExports>('logistics');
         const { inventoryManager } = ctx.getFeature<InventoryExports>('inventory');
@@ -34,13 +34,16 @@ export const LogisticsDispatcherFeature: FeatureDefinition = {
             gameState: ctx.gameState,
             eventBus: ctx.eventBus,
             carrierRegistry,
+            idleCarrierPool,
             jobAssigner: settlerTaskSystem,
             positionResolver: settlerTaskSystem.getPositionResolver(),
-            choreographyLookup: settlerTaskSystem.getChoreographyStore(),
             requestManager,
             inventoryManager,
         });
         logisticsDispatcher.registerEvents(ctx.eventBus, ctx.cleanupRegistry);
+
+        // Wire the transport busy check into the idle carrier pool (late binding)
+        setIsTransportBusy((carrierId: number) => logisticsDispatcher.activeJobs.has(carrierId));
 
         // Wire transport job ops back to settler tasks (late binding — dispatcher depends on settler tasks)
         settlerTaskSystem.setTransportJobOps(logisticsDispatcher.createTransportJobOps());

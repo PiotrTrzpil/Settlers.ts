@@ -32,12 +32,10 @@ import type { BuildingGarrisonState, SerializedTowerGarrison } from './types';
 
 const log = createLogger('TowerGarrisonManager');
 
-/** Chebyshev distance threshold for "unit is at the tower door". */
-const DOOR_ARRIVAL_DISTANCE = 1;
-
 export interface TowerGarrisonManagerConfig extends CoreDeps {
     unitReservation: UnitReservationRegistry;
     locationManager: ISettlerBuildingLocationManager;
+    releaseWorkerAssignment: (settlerId: number) => void;
 }
 
 export class TowerGarrisonManager implements Persistable<SerializedTowerGarrison> {
@@ -47,6 +45,7 @@ export class TowerGarrisonManager implements Persistable<SerializedTowerGarrison
     private readonly eventBus: EventBus;
     private readonly unitReservation: UnitReservationRegistry;
     private readonly locationManager: ISettlerBuildingLocationManager;
+    private readonly releaseWorkerAssignment: (settlerId: number) => void;
     private terrain: TerrainData | null = null;
 
     /** Per-tower garrison state. Keyed by building entity ID. */
@@ -57,11 +56,22 @@ export class TowerGarrisonManager implements Persistable<SerializedTowerGarrison
         this.eventBus = config.eventBus;
         this.unitReservation = config.unitReservation;
         this.locationManager = config.locationManager;
+        this.releaseWorkerAssignment = config.releaseWorkerAssignment;
+
+        this.eventBus.on('settler-location:entered', ({ settlerId, buildingId }) => {
+            const garrison = this.garrisons.get(buildingId);
+            if (!garrison) return;
+
+            const unit = this.gameState.getEntity(settlerId);
+            if (!unit) return;
+            const role = getGarrisonRole(unit.subType as UnitType);
+            if (!role) return;
+
+            this.finalizeGarrison(settlerId, buildingId);
+        });
 
         this.eventBus.on('settler-location:approachInterrupted', ({ settlerId }) => {
             if (!this.unitReservation.isReserved(settlerId)) return;
-            // Only handle units that are en-route to a tower (reserved with garrison-en-route purpose).
-            // The reservation was set by markEnRoute; we release it now since the approach was interrupted.
             this.unitReservation.release(settlerId);
             log.debug(`Unit ${settlerId} approach interrupted — reservation released`);
         });
@@ -207,67 +217,20 @@ export class TowerGarrisonManager implements Persistable<SerializedTowerGarrison
     }
 
     // =========================================================================
-    // En-route transitions
-    // =========================================================================
-
-    /**
-     * Mark a unit as en-route to a tower. Reserves the unit immediately so
-     * player move commands cannot interrupt it during transit.
-     */
-    markEnRoute(unitId: number, towerId: number): void {
-        this.unitReservation.reserve(unitId, {
-            purpose: 'garrison-en-route',
-            onForcedRelease: id => {
-                log.debug(`En-route unit ${id} removed externally, reservation auto-released`);
-            },
-        });
-        this.locationManager.markApproaching(unitId, towerId);
-        log.debug(`Unit ${unitId} marked en-route to tower ${towerId}`);
-    }
-
-    /**
-     * Cancel an en-route unit (e.g., movement failed or tower disappeared).
-     * Releases the reservation and removes the en-route tracking.
-     */
-    cancelEnRoute(unitId: number): void {
-        this.locationManager.cancelApproach(unitId);
-        this.unitReservation.release(unitId);
-        log.debug(`Unit ${unitId} en-route cancelled`);
-    }
-
-    // =========================================================================
     // Garrison finalization / ejection
     // =========================================================================
 
     /**
-     * If the unit is within Chebyshev distance <= 1 of the tower door, finalizes
-     * the garrison immediately and returns true. Returns false if not close enough.
-     *
-     * Single source of truth for the "at the door" check — used both from the
-     * garrison command (unit already standing there) and the arrival detector
-     * (unit stopped moving after walking).
-     */
-    tryFinalizeAtDoor(unitId: number, towerId: number): boolean {
-        const tower = this.gameState.getEntityOrThrow(towerId, 'TowerGarrisonManager.tryFinalizeAtDoor');
-        const unit = this.gameState.getEntityOrThrow(unitId, 'TowerGarrisonManager.tryFinalizeAtDoor');
-        const door = getBuildingDoorPos(tower.x, tower.y, tower.race, tower.subType as BuildingType);
-        const chebyshev = Math.max(Math.abs(unit.x - door.x), Math.abs(unit.y - door.y));
-        if (chebyshev > DOOR_ARRIVAL_DISTANCE) return false;
-        this.finalizeGarrison(unitId, towerId);
-        return true;
-    }
-
-    /**
-     * Finalize garrison for a unit that has arrived at the tower door.
-     * - Removes from enRoute
-     * - Transitions reservation from en-route to garrisoned (atomic update — no gap)
+     * Finalize garrison for a unit that has entered the tower.
+     * - Transitions reservation to garrisoned
      * - Adds to the correct role slot
-     * - Hides the entity
+     * - Releases worker assignment (garrison manager now owns this unit)
      * - Emits garrison:unitEntered
+     *
+     * Note: enterBuilding is already called by the ENTER_BUILDING executor
+     * before the settler-location:entered event fires.
      */
     finalizeGarrison(unitId: number, towerId: number): void {
-        // Atomically transition reservation from en-route to garrisoned,
-        // so the unit is never momentarily unreserved between the two states.
         this.unitReservation.updateReservation(unitId, {
             purpose: 'garrison',
             onForcedRelease: id => {
@@ -279,22 +242,30 @@ export class TowerGarrisonManager implements Persistable<SerializedTowerGarrison
             },
         });
 
-        const unit = this.gameState.getEntityOrThrow(unitId, 'TowerGarrisonManager.finalizeGarrison');
+        const unit = this.gameState.getEntityOrThrow(
+            unitId,
+            'TowerGarrisonManager.finalizeGarrison',
+        );
         const garrison = this.garrisons.get(towerId);
         if (!garrison) {
-            throw new Error(`TowerGarrisonManager.finalizeGarrison: tower ${towerId} not registered`);
+            throw new Error(
+                `TowerGarrisonManager.finalizeGarrison: tower ${towerId} not registered`,
+            );
         }
 
         const role = getGarrisonRole(unit.subType as UnitType);
         if (!role) {
             throw new Error(
-                `TowerGarrisonManager.finalizeGarrison: unit ${unitId} has no garrison role (subType=${unit.subType})`
+                `TowerGarrisonManager.finalizeGarrison: unit ${unitId} has no garrison role`,
             );
         }
 
         const slots = role === 'swordsman' ? garrison.swordsmanSlots : garrison.bowmanSlots;
         slots.unitIds.push(unitId);
-        this.locationManager.enterBuilding(unitId, towerId);
+
+        // Release the worker assignment — garrison manager now owns this unit.
+        // This prevents completeJob from exiting the building.
+        this.releaseWorkerAssignment(unitId);
 
         this.eventBus.emit('garrison:unitEntered', { buildingId: towerId, unitId });
         log.debug(`Unit ${unitId} garrisoned in tower ${towerId} (${role} slot)`);

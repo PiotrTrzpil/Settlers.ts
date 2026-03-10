@@ -235,8 +235,12 @@ export const EventFmt = {
     'garrison:unitEntered': (e: GameEvents['garrison:unitEntered']) =>
         `unit=#${e.unitId} entered tower=#${e.buildingId}`,
     'garrison:unitExited': (e: GameEvents['garrison:unitExited']) => `unit=#${e.unitId} exited tower=#${e.buildingId}`,
+    'garrison:bowmanFired': (e: GameEvents['garrison:bowmanFired']) =>
+        `bowman=#${e.bowmanId} in tower=#${e.buildingId} fired at #${e.targetId} for ${e.damage} dmg`,
     'settler-location:approachInterrupted': (e: GameEvents['settler-location:approachInterrupted']) =>
         `settler=#${e.settlerId} approach interrupted by building=#${e.buildingId} removal`,
+    'settler-location:entered': (e: GameEvents['settler-location:entered']) =>
+        `settler=#${e.settlerId} entered building=#${e.buildingId}`,
 
     'siege:started': (e: GameEvents['siege:started']) => `building=#${e.buildingId} attacker=player${e.attackerPlayer}`,
     'siege:defenderEjected': (e: GameEvents['siege:defenderEjected']) =>
@@ -246,6 +250,10 @@ export const EventFmt = {
     'building:ownerChanged': (e: GameEvents['building:ownerChanged']) =>
         `#${e.entityId} ${BuildingType[e.buildingType]} player${e.oldPlayer}→player${e.newPlayer}`,
 
+    'building:workerSpawned': (e: GameEvents['building:workerSpawned']) =>
+        `building=${e.buildingId} settler=${e.settlerId}`,
+    'building:workerLost': (e: GameEvents['building:workerLost']) =>
+        `building=${e.buildingId} settler=${e.settlerId} player=${e.player}`,
     'game:playerEliminated': (e: GameEvents['game:playerEliminated']) => `player ${e.player} eliminated`,
     'game:ended': (e: GameEvents['game:ended']) =>
         `winner=${e.winner ?? 'none'} reason=${e.reason}`,

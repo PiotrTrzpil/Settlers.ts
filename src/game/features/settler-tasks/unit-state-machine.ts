@@ -17,7 +17,7 @@ import { UnitType } from '../../entity';
 import { createLogger } from '@/utilities/logger';
 import { SearchType, SettlerState, type SettlerConfig, type JobState, type HomeAssignment } from './types';
 import type { IdleAnimationController, IdleAnimationState } from './idle-animation-controller';
-import type { WorkerTaskExecutor, WorkerRuntimeState, OccupancyMap } from './worker-task-executor';
+import type { WorkerTaskExecutor, WorkerRuntimeState } from './worker-task-executor';
 import type { GameState } from '../../game-state';
 import type { EntityVisualService } from '../../animation/entity-visual-service';
 
@@ -28,6 +28,7 @@ const log = createLogger('UnitStateMachine');
 
 /** Ticks to rest after completing a job before searching for new work (~1 second at 30 tps). */
 const POST_JOB_REST_TICKS = 30;
+
 
 /** Simple move task state (for user-initiated movement) */
 export interface MoveTaskState {
@@ -59,11 +60,8 @@ export interface UnitStateMachineConfig {
     settlerConfigs: SettlerConfigs;
     animController: IdleAnimationController;
     workerExecutor: WorkerTaskExecutor;
-    buildingOccupants: Map<number, number>;
     /** Returns true if the entity is actively in combat (fighting or pursuing). */
     isInCombat: (entityId: number) => boolean;
-    claimBuilding: (runtime: UnitRuntime, buildingId: number) => void;
-    releaseBuilding: (runtime: UnitRuntime) => void;
     /** Ticks to wait between idle work searches (0 = every tick). */
     idleSearchCooldown: number;
 }
@@ -74,15 +72,8 @@ export class UnitStateMachine {
     private readonly settlerConfigs: SettlerConfigs;
     private readonly animController: IdleAnimationController;
     private readonly workerExecutor: WorkerTaskExecutor;
-    private readonly buildingOccupants: Map<number, number>;
     private readonly isInCombat: (entityId: number) => boolean;
-    private readonly claimBuilding: (runtime: UnitRuntime, buildingId: number) => void;
-    private readonly releaseBuilding: (runtime: UnitRuntime) => void;
     private readonly idleSearchCooldown: number;
-
-    /** Pre-bound closures for handleIdle — avoids allocating new closures per call. */
-    private readonly boundClaimBuilding: (r: WorkerRuntimeState, buildingId: number) => void;
-    private readonly boundReleaseBuilding: (r: WorkerRuntimeState) => void;
 
     constructor(cfg: UnitStateMachineConfig) {
         this.gameState = cfg.gameState;
@@ -90,14 +81,8 @@ export class UnitStateMachine {
         this.settlerConfigs = cfg.settlerConfigs;
         this.animController = cfg.animController;
         this.workerExecutor = cfg.workerExecutor;
-        this.buildingOccupants = cfg.buildingOccupants;
         this.isInCombat = cfg.isInCombat;
-        this.claimBuilding = cfg.claimBuilding;
-        this.releaseBuilding = cfg.releaseBuilding;
         this.idleSearchCooldown = cfg.idleSearchCooldown;
-
-        this.boundClaimBuilding = (r, buildingId) => cfg.claimBuilding(r as UnitRuntime, buildingId);
-        this.boundReleaseBuilding = r => cfg.releaseBuilding(r as UnitRuntime);
     }
 
     /**
@@ -115,7 +100,6 @@ export class UnitStateMachine {
 
         // Handle choreography-based jobs for configured settlers
         if (config) {
-            // Working path calls updateDirectionTracking itself (after executor, for mid-tick direction changes)
             if (runtime.state !== SettlerState.WORKING) {
                 this.updateDirectionTracking(unit, runtime);
             }
@@ -198,9 +182,8 @@ export class UnitStateMachine {
     private updateSettler(settler: Entity, config: SettlerConfig, runtime: UnitRuntime, dt: number): void {
         switch (runtime.state) {
         case SettlerState.IDLE:
-            // Carriers are passively assigned jobs by LogisticsDispatcher — skip idle search entirely.
-            // All other settlers actively search for work on a cooldown.
-            if (config.search !== SearchType.GOOD) {
+            // Dispatch-only units (military) and carriers skip idle work search.
+            if (config.search !== SearchType.GOOD && config.search !== SearchType.NONE) {
                 if (runtime.idleSearchCooldown > 0) {
                     runtime.idleSearchCooldown--;
                 } else {
@@ -238,10 +221,7 @@ export class UnitStateMachine {
         const found = this.workerExecutor.handleIdle(
             settler,
             config,
-            runtime as WorkerRuntimeState,
-            this.buildingOccupants as OccupancyMap,
-            this.boundClaimBuilding,
-            this.boundReleaseBuilding
+            runtime as WorkerRuntimeState
         );
         if (!found) {
             runtime.idleSearchCooldown = this.idleSearchCooldown;

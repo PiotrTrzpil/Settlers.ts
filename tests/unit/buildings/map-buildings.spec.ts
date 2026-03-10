@@ -31,7 +31,7 @@ describe('populateMapBuildings', () => {
         const count = populateMapBuildings(ctx.state, buildings, createPopulateOptions(ctx));
 
         expect(count).toBe(2);
-        expect(ctx.state.entities).toHaveLength(4); // 2 buildings + 2 workers
+        expect(ctx.state.entities).toHaveLength(2); // 2 buildings (workers come from map settler data)
 
         const entity1 = ctx.state.getEntityAt(10, 10)!;
         expect(entity1.type).toBe(EntityType.Building);
@@ -88,14 +88,14 @@ describe('populateMapBuildings', () => {
 
         populateMapBuildings(ctx.state, buildings, createPopulateOptions(ctx));
 
-        // ResidenceSmall spawns 1 builder + 2 carriers
-        expect(ctx.state.entities).toHaveLength(4);
+        // ResidenceSmall spawns 2 carriers (1 building + 2 carriers)
+        expect(ctx.state.entities).toHaveLength(3);
 
         expect(completedEvents).toHaveLength(1);
         expect(completedEvents[0]!.race).toBe(Race.Roman);
 
-        // 1 builder + 2 carriers = 3 unit:spawned events
-        expect(spawnedEvents).toHaveLength(3);
+        // 2 carriers = 2 unit:spawned events
+        expect(spawnedEvents).toHaveLength(2);
     });
 });
 

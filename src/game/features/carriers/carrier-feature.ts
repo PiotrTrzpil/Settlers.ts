@@ -8,10 +8,14 @@
 
 import type { FeatureDefinition, FeatureContext } from '../feature';
 import { CarrierRegistry } from '../../systems/carrier-registry';
+import { IdleCarrierPool } from '../../systems/idle-carrier-pool';
 import { UnitType } from '../../entity';
 
 export interface CarrierFeatureExports {
     carrierRegistry: CarrierRegistry;
+    idleCarrierPool: IdleCarrierPool;
+    /** Late-bind the transport busy check from logistics-dispatcher. */
+    setIsTransportBusy(fn: (carrierId: number) => boolean): void;
 }
 
 export const CarrierFeature: FeatureDefinition = {
@@ -36,8 +40,25 @@ export const CarrierFeature: FeatureDefinition = {
             }
         });
 
+        // isTransportBusy is wired later by logistics-dispatcher feature (late binding
+        // avoids circular dep: carriers tier < logistics tier).
+        let isTransportBusy: (carrierId: number) => boolean = (_carrierId: number) => false;
+
+        const idleCarrierPool = new IdleCarrierPool({
+            gameState: ctx.gameState,
+            carrierRegistry,
+            isTransportBusy: (carrierId: number) => isTransportBusy(carrierId),
+            unitReservation: ctx.unitReservation,
+        });
+
         return {
-            exports: { carrierRegistry } satisfies CarrierFeatureExports,
+            exports: {
+                carrierRegistry,
+                idleCarrierPool,
+                setIsTransportBusy(fn: (carrierId: number) => boolean) {
+                    isTransportBusy = fn;
+                },
+            } satisfies CarrierFeatureExports,
             persistence: [carrierRegistry],
         };
     },

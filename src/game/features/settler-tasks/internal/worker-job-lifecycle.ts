@@ -159,7 +159,12 @@ export class WorkerJobLifecycle {
         runtime.job = null;
 
         if (this.locationManager.isInside(settler.id)) {
-            this.locationManager.exitBuilding(settler.id);
+            // Workers with a home assignment exit to search for new work.
+            // Units placed inside by dispatch jobs (garrison, worker dispatch)
+            // stay inside — the job intentionally placed them there.
+            if (runtime.homeAssignment) {
+                this.locationManager.exitBuilding(settler.id);
+            }
         } else {
             settler.hidden = false;
         }
@@ -237,9 +242,18 @@ export class WorkerJobLifecycle {
         homeBuilding: Entity,
         reason?: 'output_full' | 'cant_work' | 'first_visit'
     ): void {
+        // Settler is already inside their building — nothing to do.
+        // This can happen when enterBuilding() removed the movement controller
+        // but the settler hasn't marked hasVisited yet on the next idle tick.
+        if (this.locationManager.isInside(settler.id)) return;
+
         const controller = this.gameState.movement.getController(settler.id);
         if (!controller) {
-            throw new Error(`Settler ${settler.id} has no movement controller`);
+            this.handlerErrorLogger.error(
+                `Settler ${settler.id} has no movement controller in returnHomeAndWait`,
+                new Error(`Settler ${settler.id} has no movement controller`)
+            );
+            return;
         }
 
         const door = getBuildingDoorPos(

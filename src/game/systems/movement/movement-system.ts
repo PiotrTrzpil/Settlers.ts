@@ -232,6 +232,38 @@ export class MovementSystem implements TickSystem {
         return true;
     }
 
+    /**
+     * Push any unit standing at (x, y) to a free passable neighbor tile.
+     * Used when spawning a unit at a specific tile (e.g. building door).
+     * Returns true if the tile is now free (was empty or push succeeded).
+     */
+    pushUnitAt(x: number, y: number): boolean {
+        const key = tileKey(x, y);
+        const occupantId = this.unitPositions.get(key);
+        if (occupantId === undefined) return true; // no unit here
+
+        const occupant = this.controllers.get(occupantId);
+        if (!occupant) return true;
+
+        const neighbors = getAllNeighbors({ x, y });
+        for (const n of neighbors) {
+            if (!this.isTilePassableForBump(n.x, n.y)) continue;
+            if (this.getUnitAt(tileKey(n.x, n.y), occupantId) !== undefined) continue;
+
+            // Push the occupant to the free neighbor
+            const oldKey = tileKey(occupant.tileX, occupant.tileY);
+            if (this.unitPositions.get(oldKey) === occupantId) {
+                this.unitPositions.delete(oldKey);
+            }
+            occupant.handlePush(n.x, n.y);
+            this.unitPositions.set(tileKey(n.x, n.y), occupantId);
+            this.updatePositionFn(occupantId, n.x, n.y);
+            this.repathBumpedOccupant(occupant, n);
+            return true;
+        }
+        return false; // no free neighbor
+    }
+
     // -------------------------------------------------------------------------
     // Tick
     // -------------------------------------------------------------------------
@@ -355,6 +387,13 @@ export class MovementSystem implements TickSystem {
     private resolveCollision(controller: MovementController, occupantId: number, deltaSec: number): boolean {
         controller.addWaitTime(deltaSec);
 
+        // Always try bump first — even after repath timeout
+        if (this.tryBump(controller, occupantId)) {
+            this.stepForward(controller);
+            return true;
+        }
+
+        // Bump failed — escalate based on how long we've been waiting
         if (controller.waitTime > GIVEUP_WAIT_TIMEOUT) {
             if (this._verbose) {
                 this.eventBus.emit('movement:escalation', {
@@ -375,11 +414,6 @@ export class MovementSystem implements TickSystem {
             }
             this.repathFromCurrent(controller);
             return false;
-        }
-
-        if (this.tryBump(controller, occupantId)) {
-            this.stepForward(controller);
-            return true;
         }
 
         // Can't bump — wait this tick, halt progress to prevent accumulation
@@ -459,6 +493,10 @@ export class MovementSystem implements TickSystem {
 
         const dest = this.findBumpDestination(occupant, bumper, depth);
         if (!dest) {
+            // Last resort: swap tiles (only at top level, not during recursive chain bumps)
+            if (depth === 0 && this.trySwap(bumper, occupant, occupantId)) {
+                return true;
+            }
             this.emitBumpFailed(bumper.entityId, occupantId, 'no_destination', {
                 occupantPos: `${occupant.tileX},${occupant.tileY}`,
             });
@@ -498,6 +536,18 @@ export class MovementSystem implements TickSystem {
         this.unitPositions.set(tileKey(dest.x, dest.y), occupantId);
         this.updatePositionFn(occupantId, dest.x, dest.y);
         this.repathBumpedOccupant(occupant, dest);
+    }
+
+    /**
+     * Last-resort swap: move the occupant to the bumper's tile.
+     * Only valid when the bumper's tile is passable for the occupant.
+     */
+    private trySwap(bumper: MovementController, occupant: MovementController, occupantId: number): boolean {
+        const bumperTile: TileCoord = { x: bumper.tileX, y: bumper.tileY };
+        if (!this.isTilePassableForBump(bumperTile.x, bumperTile.y)) return false;
+
+        this.executeBump(bumper.entityId, occupant, occupantId, bumperTile);
+        return true;
     }
 
     /** If the bumped unit has a goal, repath it from its new position. */

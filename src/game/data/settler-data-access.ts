@@ -6,8 +6,8 @@
 
 import { getGameDataLoader, type RaceId, type SettlerValueInfo } from '@/resources/game-data';
 import { Race } from '../core/race';
-import { UnitType } from '../core/unit-types';
-import { SearchType, type SettlerConfig } from '../features/settler-tasks/types';
+import { UnitType, UNIT_TYPE_CONFIG, isUnitTypeMilitary } from '../core/unit-types';
+import { SearchType, DISPATCH_ONLY_CONFIG, type SettlerConfig } from '../features/settler-tasks/types';
 import { raceToRaceId, xmlIdToBuildingTypes } from './game-data-access';
 
 /**
@@ -121,6 +121,12 @@ function deriveSettlerConfig(info: SettlerValueInfo, settlerXmlId: string): Sett
     if (workJobs.length === 0) {
         const { allJobs, buildingJobs } = collectBuildingAnimLists(settlerXmlId);
         workJobs = allJobs;
+        if (buildingJobs.size > 0) buildingJobsMap = buildingJobs;
+    } else {
+        // Settlers that serve multiple building types (e.g. smelter → IronSmelter + SmeltGold,
+        // smith → ToolSmith + WeaponSmith) list all jobs in their own animLists. We still need
+        // the per-building job map so selectJob picks only the correct building's jobs.
+        const { buildingJobs } = collectBuildingAnimLists(settlerXmlId);
         if (buildingJobs.size > 1) buildingJobsMap = buildingJobs;
     }
 
@@ -204,6 +210,8 @@ export function getSettlerConfig(race: Race, unitType: UnitType): SettlerConfig 
 
 /**
  * Build a Map of all managed settler configs (across all races).
+ * Military units get DISPATCH_ONLY_CONFIG so they can execute
+ * externally-assigned choreo jobs (garrison dispatch, etc.).
  */
 export function buildAllSettlerConfigs(): Map<UnitType, SettlerConfig> {
     const configs = new Map<UnitType, SettlerConfig>();
@@ -216,6 +224,14 @@ export function buildAllSettlerConfigs(): Map<UnitType, SettlerConfig> {
 
         const config = deriveSettlerConfig(info, xmlId);
         if (config) configs.set(unitType, config);
+    }
+
+    // Military units: no autonomous work, but can execute dispatch jobs.
+    for (const unitType of Object.keys(UNIT_TYPE_CONFIG)) {
+        const ut = Number(unitType) as UnitType;
+        if (!configs.has(ut) && isUnitTypeMilitary(ut)) {
+            configs.set(ut, DISPATCH_ONLY_CONFIG);
+        }
     }
 
     return configs;

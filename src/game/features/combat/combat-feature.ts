@@ -7,7 +7,13 @@
 
 import type { FeatureDefinition } from '../feature';
 import { EntityType, isUnitTypeMilitary, UnitType } from '../../entity';
+import { xmlKey } from '../../animation/animation';
+import { UNIT_XML_PREFIX } from '../../renderer/sprite-metadata';
 import { CombatSystem } from './combat-system';
+import { DeathAngelSystem } from './death-angel-system';
+import { createLogger } from '@/utilities/logger';
+
+const log = createLogger('CombatFeature');
 
 export interface CombatExports {
     combatSystem: CombatSystem;
@@ -42,8 +48,37 @@ export const CombatFeature: FeatureDefinition = {
         // Clean up on removal
         ctx.cleanupRegistry.onEntityRemoved(combatSystem.unregister.bind(combatSystem));
 
+        // ── Death Angel (visual effect on unit death) ──────────────────────
+        const deathAngelSystem = new DeathAngelSystem({
+            visualService: ctx.visualService,
+            executeCommand: ctx.executeCommand,
+        });
+
+        ctx.on('combat:unitDefeated', ({ entityId }) => {
+            const entity = ctx.gameState.getEntity(entityId);
+            if (!entity) {
+                log.debug(`combat:unitDefeated for entity ${entityId} but entity already gone`);
+                return;
+            }
+
+            const angel = ctx.gameState.addUnit(UnitType.Angel, entity.x, entity.y, entity.player, {
+                race: entity.race,
+                selectable: false,
+                occupancy: false,
+            });
+
+            const prefix = UNIT_XML_PREFIX[UnitType.Angel];
+            if (!prefix) throw new Error('No XML prefix for UnitType.Angel');
+            ctx.visualService.play(angel.id, xmlKey(prefix, 'WALK'), { loop: false, direction: 0 });
+
+            deathAngelSystem.register(angel.id, UnitType.Angel);
+            log.debug(`Spawned death angel ${angel.id} at (${entity.x}, ${entity.y}) for unit ${entityId}`);
+        });
+
+        ctx.cleanupRegistry.onEntityRemoved(deathAngelSystem.unregister.bind(deathAngelSystem));
+
         return {
-            systems: [combatSystem],
+            systems: [combatSystem, deathAngelSystem],
             exports: { combatSystem } satisfies CombatExports,
         };
     },

@@ -24,21 +24,3 @@ export const BUILDING_SPAWN_ON_COMPLETE: Record<number, BuildingSpawnConfig | un
     [BuildingType.ResidenceBig]: { unitType: UnitType.Carrier, count: 6, spawnInterval: RESIDENCE_SPAWN_INTERVAL },
 };
 
-/**
- * Construction worker units spawned immediately on residence completion (one-time, no interval).
- * Diggers and builders are roaming workers that self-assign to construction sites via the task system.
- * Each residence spawns a mix of construction workers in addition to the interval-based carriers above.
- *
- * These are spawned via `spawn_building_units` alongside the carrier interval registration.
- */
-export const RESIDENCE_CONSTRUCTION_WORKER_SPAWNS: Record<number, readonly BuildingSpawnConfig[]> = {
-    [BuildingType.ResidenceSmall]: [{ unitType: UnitType.Builder, count: 1 }],
-    [BuildingType.ResidenceMedium]: [
-        { unitType: UnitType.Builder, count: 1 },
-        { unitType: UnitType.Digger, count: 1 },
-    ],
-    [BuildingType.ResidenceBig]: [
-        { unitType: UnitType.Builder, count: 2 },
-        { unitType: UnitType.Digger, count: 1 },
-    ],
-};

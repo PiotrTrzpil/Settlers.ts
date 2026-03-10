@@ -30,9 +30,6 @@ const ARRIVAL_DIST = 1;
 /** Arrival threshold for "roughly" movement tasks — settler doesn't need to be adjacent. */
 const ARRIVAL_DIST_ROUGH = 2;
 
-/** Arrival threshold for pile movements — carrier must step onto the exact pile tile. */
-const ARRIVAL_DIST_EXACT = 0;
-
 /** Ticks to wait before retrying pathfinding after a failed attempt. */
 const PATH_RETRY_COOLDOWN = 10;
 
@@ -146,6 +143,17 @@ function findMaterialInAdjacentNode(job: ChoreoJobState, taskType: ChoreoTaskTyp
 /** GO_TO_TARGET / GO_TO_TARGET_ROUGHLY — move to entity or position target. */
 function makeGoToTarget(arrivalDist: number): MovementExecutorFn {
     return (settler, job, node, _dt, ctx) => {
+        // Consume waypoint for multi-destination jobs
+        if (job.waypoints) {
+            let wpIndex = 0;
+            for (let i = 0; i < job.nodeIndex; i++) {
+                if (job.nodes[i]!.task === ChoreoTaskType.GO_TO_TARGET) wpIndex++;
+            }
+            const wp = job.waypoints[wpIndex]!;
+            job.targetPos = { x: wp.x, y: wp.y };
+            job.targetId = wp.entityId ?? null;
+        }
+
         if (job.targetId !== null) {
             const target = ctx.gameState.getEntityOrThrow(job.targetId, 'GO_TO_TARGET target');
 
@@ -204,19 +212,12 @@ export const executeGoHome: MovementExecutorFn = (settler, job, node, _dt, ctx) 
 };
 
 /**
- * GO_TO_SOURCE_PILE — move to a source pile position for pickup.
+ * GO_TO_SOURCE_PILE — move to a source pile position for pickup (regular workers only).
  *
- * For carrier transport jobs: reads the source position directly from
- * transportData.sourcePos, pre-resolved by TransportJobBuilder.
- * For regular workers: resolves from the pile registry using the material
- * from the next GET_GOOD node in the choreography.
+ * Resolves from the pile registry using the material from the next GET_GOOD node.
+ * Carrier transport uses TRANSPORT_GO_TO_SOURCE instead.
  */
 export const executeGoToSourcePile: MovementExecutorFn = (settler, job, node, _dt, ctx) => {
-    if (job.transportData) {
-        return moveToPosition(settler, job.transportData.sourcePos.x, job.transportData.sourcePos.y,
-            node, ctx, ARRIVAL_DIST_EXACT, job);
-    }
-
     if (!job.targetPos) {
         const material = findMaterialInAdjacentNode(job, ChoreoTaskType.GET_GOOD)!;
         const buildingId = resolveAssignedBuildingId(settler, ctx);
@@ -226,18 +227,12 @@ export const executeGoToSourcePile: MovementExecutorFn = (settler, job, node, _d
 };
 
 /**
- * GO_TO_DESTINATION_PILE — move to a destination pile position for delivery.
+ * GO_TO_DESTINATION_PILE — move to a destination pile position for delivery (regular workers only).
  *
- * For carrier transport jobs: reads the destination position directly from
- * transportData.destPos, making the data flow explicit (no cross-node targetPos coupling).
- * For regular workers: resolves from the pile registry using the settler's carried material.
+ * Resolves from the pile registry using the settler's carried material.
+ * Carrier transport uses TRANSPORT_GO_TO_DEST instead.
  */
 export const executeGoToDestinationPile: MovementExecutorFn = (settler, job, node, _dt, ctx) => {
-    if (job.transportData) {
-        return moveToPosition(settler, job.transportData.destPos.x, job.transportData.destPos.y,
-            node, ctx, ARRIVAL_DIST_EXACT, job);
-    }
-
     if (!job.targetPos) {
         const material = findMaterialInAdjacentNode(job, ChoreoTaskType.PUT_GOOD)!;
         const buildingId = resolveAssignedBuildingId(settler, ctx);

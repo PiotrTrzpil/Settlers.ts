@@ -21,18 +21,13 @@ import { UnitType } from '@/game/core/unit-types';
 import { type EMaterialType } from '@/game/economy/material-type';
 import { BuildingType } from '@/game/buildings/building-type';
 import { getBuildingDoorPos } from '@/game/data/game-data-access';
-import {
-    ChoreoTaskType,
-    createChoreoJobState,
-    type ChoreoNode,
-    type ChoreoJobState,
-} from '@/game/features/settler-tasks/choreo-types';
+import { choreo, type ChoreoJobState } from '@/game/features/settler-tasks/choreo-types';
 import { getTrainingRecipeSet, getTrainingRecipes } from './training-recipes';
 import type { TrainingRecipe, BarracksTrainingState } from './types';
 import { createLogger } from '@/utilities/logger';
+import type { IdleCarrierPool } from '@/game/features/carriers';
 import type { UnitReservationRegistry } from '@/game/systems/unit-reservation';
 import { sortedEntries } from '@/utilities/collections';
-import { query } from '@/game/ecs';
 import type { Persistable } from '@/game/persistence';
 import type { SerializedBarracksTraining } from '@/game/state/game-state-persistence';
 
@@ -44,10 +39,10 @@ export const TRAINING_DURATION_FRAMES = 30;
 export interface BarracksTrainingManagerConfig extends CoreDeps {
     inventoryManager: BuildingInventoryManager;
     carrierRegistry: CarrierRegistry;
+    idleCarrierPool: IdleCarrierPool;
     settlerTaskSystem: SettlerTaskSystem;
     productionControlManager: ProductionControlManager;
     unitReservation: UnitReservationRegistry;
-    isCarrierBusy: (carrierId: number) => boolean;
 }
 
 export class BarracksTrainingManager implements Persistable<SerializedBarracksTraining> {
@@ -58,8 +53,8 @@ export class BarracksTrainingManager implements Persistable<SerializedBarracksTr
     private readonly settlerTaskSystem: SettlerTaskSystem;
     private readonly pcm: ProductionControlManager;
     private readonly eventBus: EventBus;
+    private readonly idleCarrierPool: IdleCarrierPool;
     private readonly unitReservation: UnitReservationRegistry;
-    private readonly isCarrierBusy: (carrierId: number) => boolean;
 
     /** Per-barracks race mapping (set at initBarracks). */
     private readonly barracksRaces = new Map<number, Race>();
@@ -74,8 +69,8 @@ export class BarracksTrainingManager implements Persistable<SerializedBarracksTr
         this.settlerTaskSystem = config.settlerTaskSystem;
         this.pcm = config.productionControlManager;
         this.eventBus = config.eventBus;
+        this.idleCarrierPool = config.idleCarrierPool;
         this.unitReservation = config.unitReservation;
-        this.isCarrierBusy = config.isCarrierBusy;
     }
 
     // =========================================================================
@@ -156,7 +151,7 @@ export class BarracksTrainingManager implements Persistable<SerializedBarracksTr
 
         // 3. Locate an idle carrier for this player
         const barracks = this.gameState.getEntityOrThrow(buildingId, 'barracks for training');
-        const carrierId = this.findIdleCarrier(barracks.player, barracks.x, barracks.y);
+        const carrierId = this.idleCarrierPool.findNearest(barracks.x, barracks.y, barracks.player);
         if (carrierId === null) return;
 
         // 4. All conditions met — now commit the recipe (consume from queue in manual mode)
@@ -167,7 +162,7 @@ export class BarracksTrainingManager implements Persistable<SerializedBarracksTr
 
         // 6. Build and assign training choreography job
         const doorPos = getBuildingDoorPos(barracks.x, barracks.y, barracks.race, BuildingType.Barrack);
-        const job = buildTrainingJob(buildingId, barracks.x, barracks.y, TRAINING_DURATION_FRAMES);
+        const job = buildTrainingJob(buildingId, doorPos.x, doorPos.y, TRAINING_DURATION_FRAMES);
         const assigned = this.settlerTaskSystem.assignJob(carrierId, job, doorPos);
         if (!assigned) {
             log.debug(`Barracks ${buildingId}: assignJob failed for carrier ${carrierId}, reverting`);
@@ -218,32 +213,6 @@ export class BarracksTrainingManager implements Persistable<SerializedBarracksTr
         for (const { material, count } of recipe.inputs) {
             this.inventoryManager.withdrawInput(buildingId, material, count);
         }
-    }
-
-    /**
-     * Find the nearest idle carrier belonging to `player` near the given position.
-     * Iterates all carriers managed by CarrierRegistry, filters by player entity lookup
-     * and busy state, then selects the closest by Euclidean distance squared.
-     */
-    private findIdleCarrier(player: number, nearX: number, nearY: number): number | null {
-        let bestId: number | null = null;
-        let bestDistSq = Infinity;
-
-        for (const [id, , entity] of query(this.carrierRegistry.store, this.gameState.store)) {
-            if (this.isCarrierBusy(id)) continue;
-            if (entity.player !== player) continue;
-
-            const dx = entity.x - nearX;
-            const dy = entity.y - nearY;
-            const distSq = dx * dx + dy * dy;
-
-            if (distSq < bestDistSq) {
-                bestDistSq = distSq;
-                bestId = id;
-            }
-        }
-
-        return bestId;
     }
 
     // =========================================================================
@@ -376,54 +345,14 @@ export class BarracksTrainingManager implements Persistable<SerializedBarracksTr
  */
 function buildTrainingJob(
     barracksId: number,
-    barracksX: number,
-    barracksY: number,
+    doorX: number,
+    doorY: number,
     durationFrames: number
 ): ChoreoJobState {
-    const nodes: ChoreoNode[] = [
-        {
-            task: ChoreoTaskType.GO_TO_TARGET,
-            jobPart: '',
-            x: 0,
-            y: 0,
-            duration: 0,
-            dir: -1,
-            forward: true,
-            visible: true,
-            useWork: false,
-            entity: '',
-            trigger: '',
-        },
-        {
-            task: ChoreoTaskType.WAIT_VIRTUAL,
-            jobPart: '',
-            x: 0,
-            y: 0,
-            duration: durationFrames,
-            dir: -1,
-            forward: true,
-            visible: false,
-            useWork: false,
-            entity: '',
-            trigger: 'BARRACKS_TRAINING',
-        },
-        {
-            task: ChoreoTaskType.CHANGE_TYPE_AT_BARRACKS,
-            jobPart: '',
-            x: 0,
-            y: 0,
-            duration: 0,
-            dir: -1,
-            forward: true,
-            visible: true,
-            useWork: false,
-            entity: '',
-            trigger: '',
-        },
-    ];
-
-    const job = createChoreoJobState('BARRACKS_TRAINING', nodes);
-    job.targetId = barracksId;
-    job.targetPos = { x: barracksX, y: barracksY };
-    return job;
+    return choreo('BARRACKS_TRAINING')
+        .goTo(doorX, doorY)
+        .hidden(durationFrames, 'BARRACKS_TRAINING')
+        .changeTypeAtBarracks()
+        .target(barracksId)
+        .build();
 }

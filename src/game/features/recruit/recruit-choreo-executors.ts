@@ -50,7 +50,7 @@ export function createTransformRecruitExecutor(
             return TaskResult.DONE;
         }
 
-        const targetUnitType = job.carryingGood as unknown as UnitType;
+        const targetUnitType = job.metadata!['unitType'] as number as UnitType;
         eventBus.emit('recruitment:completed', { carrierId: settler.id, targetUnitType });
         log.debug(
             `TRANSFORM_RECRUIT: settler ${settler.id} picked up ${material} from pile ${pileEntityId}, ` +
@@ -68,7 +68,7 @@ export function createTransformRecruitExecutor(
  */
 export function createTransformDirectExecutor(eventBus: EventBus): ChoreoExecutor {
     return (settler: Entity, job: ChoreoJobState) => {
-        const targetUnitType = job.carryingGood as unknown as UnitType;
+        const targetUnitType = job.metadata!['unitType'] as number as UnitType;
         eventBus.emit('recruitment:completed', { carrierId: settler.id, targetUnitType });
         log.debug(`TRANSFORM_DIRECT: settler ${settler.id} transforming directly into ${UnitType[targetUnitType]}`);
         return TaskResult.DONE;

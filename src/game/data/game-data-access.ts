@@ -102,6 +102,10 @@ const BUILDING_TYPE_TO_XML_ID: Partial<Record<BuildingType, string>> = {
     [BuildingType.DarkTemple]: 'BUILDING_DARKTEMPLE',
     [BuildingType.Fortress]: 'BUILDING_FORTRESS',
     [BuildingType.ManaCopterHall]: 'BUILDING_MANACOPTERHALL',
+    // Infrastructure buildings
+    [BuildingType.CharcoalMaker]: 'BUILDING_CHARCOALMAKER',
+    [BuildingType.Port]: 'BUILDING_PORTA',
+    [BuildingType.Marketplace]: 'BUILDING_MARKETPLACE',
     // Eyecatchers (decorative monuments, 01-12)
     [BuildingType.Eyecatcher01]: 'BUILDING_EYECATCHER01',
     [BuildingType.Eyecatcher02]: 'BUILDING_EYECATCHER02',
@@ -125,11 +129,39 @@ export function hasBuildingXmlMapping(buildingType: BuildingType): boolean {
 /** Reverse map: XML building ID → BuildingType(s). Lazy-initialized. */
 let xmlIdToBuildingTypeMap: Map<string, BuildingType[]> | null = null;
 
+/**
+ * Orientation variants — race-specific rotations of the same building type.
+ * Shipyard (A-H) and Port (A-H) each have 8 coastal orientation variants in XML
+ * but all map to a single BuildingType. The primary variant (A) is in BUILDING_TYPE_TO_XML_ID;
+ * the remaining B-H variants are registered here.
+ */
+const ORIENTATION_VARIANTS: [string, BuildingType][] = [
+    ['BUILDING_SHIPYARDB', BuildingType.Shipyard],
+    ['BUILDING_SHIPYARDC', BuildingType.Shipyard],
+    ['BUILDING_SHIPYARDD', BuildingType.Shipyard],
+    ['BUILDING_SHIPYARDE', BuildingType.Shipyard],
+    ['BUILDING_SHIPYARDF', BuildingType.Shipyard],
+    ['BUILDING_SHIPYARDG', BuildingType.Shipyard],
+    ['BUILDING_SHIPYARDH', BuildingType.Shipyard],
+    ['BUILDING_PORTB', BuildingType.Port],
+    ['BUILDING_PORTC', BuildingType.Port],
+    ['BUILDING_PORTD', BuildingType.Port],
+    ['BUILDING_PORTE', BuildingType.Port],
+    ['BUILDING_PORTF', BuildingType.Port],
+    ['BUILDING_PORTG', BuildingType.Port],
+    ['BUILDING_PORTH', BuildingType.Port],
+];
+
 function ensureXmlIdMap(): Map<string, BuildingType[]> {
     if (!xmlIdToBuildingTypeMap) {
         xmlIdToBuildingTypeMap = new Map();
         for (const [btStr, xmlId] of Object.entries(BUILDING_TYPE_TO_XML_ID)) {
             const bt = Number(btStr) as BuildingType;
+            const arr = xmlIdToBuildingTypeMap.get(xmlId);
+            if (arr) arr.push(bt);
+            else xmlIdToBuildingTypeMap.set(xmlId, [bt]);
+        }
+        for (const [xmlId, bt] of ORIENTATION_VARIANTS) {
             const arr = xmlIdToBuildingTypeMap.get(xmlId);
             if (arr) arr.push(bt);
             else xmlIdToBuildingTypeMap.set(xmlId, [bt]);
@@ -144,6 +176,7 @@ export function xmlIdToBuildingTypes(xmlId: string): BuildingType[] {
     if (!types) throw new Error(`No BuildingType mapping for XML ID: ${xmlId}`);
     return types;
 }
+
 
 // ============ Typed game data lookups ============
 

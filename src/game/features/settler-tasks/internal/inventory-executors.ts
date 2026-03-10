@@ -21,8 +21,6 @@ import {
     type InventoryExecutorContext,
     type InventoryContext,
 } from '../choreo-types';
-import { executeTransportPickup, executeTransportDelivery } from './transport-executors';
-
 const log = createLogger('InventoryExecutors');
 
 // ─────────────────────────────────────────────────────────────
@@ -117,8 +115,7 @@ function resolveInventoryDuration(node: ChoreoNode): number {
  * for the animation duration (duration=0 → one full animation cycle) so the
  * pickup animation plays before advancing to the next node.
  *
- * When transportData is present (carrier transport job), uses TransportJob.pickup()
- * instead of direct inventory withdrawal and emits carrier events.
+ * Carrier transport uses TRANSPORT_PICKUP instead.
  */
 export const executeGetGood: InventoryExecutorFn = (
     settler: Entity,
@@ -127,37 +124,28 @@ export const executeGetGood: InventoryExecutorFn = (
     dt: number,
     ctx: InventoryExecutorContext
 ): TaskResult => {
-    // Inventory transfer on first tick only
     if (!job.workStarted) {
         job.workStarted = true;
 
-        // ── Carrier transport branch (delegated to transport-executors) ──
-        if (job.transportData) {
-            const result = executeTransportPickup(settler, job, job.transportData, ctx);
-            if (result === TaskResult.FAILED) return TaskResult.FAILED;
-        } else {
-            // ── Regular worker branch ──
-            const material = requireMaterial(node, settler.id);
-            const buildingId = requireHomeBuilding(settler, ctx);
+        const material = requireMaterial(node, settler.id);
+        const buildingId = requireHomeBuilding(settler, ctx);
 
-            const withdrawn = ctx.materialTransfer.pickUp(settler.id, buildingId, material, 1, false);
-            if (withdrawn === 0) {
-                log.warn(
-                    `GET_GOOD: settler ${settler.id} — building ${buildingId} has no ` +
-                        `${EMaterialType[material]} in input inventory`
-                );
-                return TaskResult.FAILED;
-            }
-
-            job.carryingGood = material;
-
-            log.debug(
-                `GET_GOOD: settler ${settler.id} withdrew ${EMaterialType[material]} from building ${buildingId}`
+        const withdrawn = ctx.materialTransfer.pickUp(settler.id, buildingId, material, 1, false);
+        if (withdrawn === 0) {
+            log.warn(
+                `GET_GOOD: settler ${settler.id} — building ${buildingId} has no `
+                    + `${EMaterialType[material]} in input inventory`
             );
+            return TaskResult.FAILED;
         }
+
+        job.carryingGood = material;
+
+        log.debug(
+            `GET_GOOD: settler ${settler.id} withdrew ${EMaterialType[material]} from building ${buildingId}`
+        );
     }
 
-    // Wait for the animation to complete
     return tickDuration(job, dt, resolveInventoryDuration(node));
 };
 
@@ -171,10 +159,9 @@ export const executeGetGood: InventoryExecutorFn = (
  * for the animation duration (duration=0 → one full animation cycle) so the
  * dropoff animation plays before advancing to the next node.
  *
- * When transportData is present (carrier transport job), uses TransportJob.complete()
- * to deposit at destination, manages fatigue/status, and emits carrier events.
+ * Carrier transport uses TRANSPORT_DELIVER instead.
  */
-/** Deposit carried material into the building's output inventory (regular worker path). */
+/** Deposit carried material into the building's output inventory. */
 function depositWorkerGood(
     settler: Entity,
     job: ChoreoJobState,
@@ -226,22 +213,12 @@ export const executePutGood: InventoryExecutorFn = (
     dt: number,
     ctx: InventoryExecutorContext
 ): TaskResult => {
-    // Inventory deposit on first tick only
     if (!job.workStarted) {
         job.workStarted = true;
-
-        if (job.transportData) {
-            const result = executeTransportDelivery(settler, job, job.transportData, ctx);
-            if (result === TaskResult.FAILED) return TaskResult.FAILED;
-        } else {
-            depositWorkerGood(settler, job, node, ctx);
-        }
+        depositWorkerGood(settler, job, node, ctx);
     }
 
-    // Wait for the animation to complete
-    const result = tickDuration(job, dt, resolveInventoryDuration(node));
-
-    return result;
+    return tickDuration(job, dt, resolveInventoryDuration(node));
 };
 
 /**

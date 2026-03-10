@@ -9,7 +9,6 @@ import type { Entity } from '../../entity';
 import type { CoreDeps } from '../feature';
 import { UnitType } from '../../entity';
 import type { ThrottledLogger } from '@/utilities/throttled-logger';
-import { hexDistance } from '../../systems/hex-directions';
 import {
     TaskResult,
     SettlerState,
@@ -43,10 +42,8 @@ import type { MaterialTransfer } from '../material-transfer';
 import type { BarracksTrainingManager } from '../barracks';
 import type { Command, CommandResult } from '../../commands';
 import { EMaterialType } from '../../economy';
-import { getBuildingDoorPos, getWorkerBuildingTypes } from '../../data/game-data-access';
-import { BuildingType } from '../../buildings/building-type';
+import { getWorkerBuildingTypes } from '../../data/game-data-access';
 import type { ISettlerBuildingLocationManager } from '../settler-location';
-import { findNearestWorkplace } from './work-handlers';
 import { JobSelector } from './job-selector';
 import { safeCall } from './safe-call';
 import { WorkerJobLifecycle } from './internal/worker-job-lifecycle';
@@ -58,9 +55,6 @@ export interface WorkerRuntimeState {
     homeAssignment: HomeAssignment | null;
 }
 
-/** Building occupancy map (read-only view for finding workplaces). */
-export type OccupancyMap = ReadonlyMap<number, number>;
-
 export interface WorkerTaskExecutorConfig extends CoreDeps {
     choreoSystem: ChoreoSystem;
     choreographyStore: JobChoreographyStore;
@@ -68,7 +62,6 @@ export interface WorkerTaskExecutorConfig extends CoreDeps {
     animController: IdleAnimationController;
     handlerErrorLogger: ThrottledLogger;
     missingHandlerLogger: ThrottledLogger;
-    isBuildingAvailable?: (buildingId: number) => boolean;
     inventoryManager: BuildingInventoryManager;
     buildingPositionResolver: BuildingPositionResolver;
     triggerSystem: TriggerSystem;
@@ -87,12 +80,12 @@ export class WorkerTaskExecutor {
     private readonly handlerRegistry: WorkHandlerRegistry;
     private readonly handlerErrorLogger: ThrottledLogger;
     private readonly missingHandlerLogger: ThrottledLogger;
-    private readonly isBuildingAvailable?: (buildingId: number) => boolean;
     private readonly jobSelector: JobSelector;
     private readonly eventBus: EventBus;
     private readonly inventoryManager: BuildingInventoryManager;
     private readonly getWorkerHomeBuilding: (settlerId: number) => number | null;
     private readonly buildingPositionResolver: BuildingPositionResolver;
+    private readonly locationManager: ISettlerBuildingLocationManager;
 
     // Pre-built context objects — handler fields updated in-place per tick (no allocation)
     private readonly movementCtx: MovementContext;
@@ -111,12 +104,12 @@ export class WorkerTaskExecutor {
         this.handlerRegistry = cfg.handlerRegistry;
         this.handlerErrorLogger = cfg.handlerErrorLogger;
         this.missingHandlerLogger = cfg.missingHandlerLogger;
-        this.isBuildingAvailable = cfg.isBuildingAvailable;
         this.jobSelector = new JobSelector(cfg.choreographyStore);
         this.eventBus = cfg.eventBus;
         this.inventoryManager = cfg.inventoryManager;
         this.getWorkerHomeBuilding = cfg.getWorkerHomeBuilding;
         this.buildingPositionResolver = cfg.buildingPositionResolver;
+        this.locationManager = cfg.locationManager;
 
         // Pre-built context objects — handler fields mutated in-place each tick (zero allocation)
         this.movementCtx = {
@@ -186,10 +179,7 @@ export class WorkerTaskExecutor {
     handleIdle(
         settler: Entity,
         config: SettlerConfig,
-        runtime: WorkerRuntimeState,
-        buildingOccupants: OccupancyMap,
-        claimBuilding: (runtime: WorkerRuntimeState, buildingId: number) => void,
-        releaseBuilding: (runtime: WorkerRuntimeState) => void
+        runtime: WorkerRuntimeState
     ): boolean {
         const entityHandler = this.handlerRegistry.getEntityHandler(config.search);
         // Position handler may be registered under a separate plantSearch type (e.g. GRAIN_SEED_POS)
@@ -203,15 +193,12 @@ export class WorkerTaskExecutor {
             return false;
         }
 
-        const homeBuilding = this.resolveHomeBuilding(
-            settler,
-            runtime,
-            buildingOccupants,
-            claimBuilding,
-            releaseBuilding
-        );
+        // Resolve home building from existing assignment (push-based — no scanning)
+        const homeBuilding = runtime.homeAssignment
+            ? this.gameState.getEntity(runtime.homeAssignment.buildingId) ?? null
+            : null;
 
-        // Workers with workplace buildings must have an assigned workplace before starting work
+        // WORKPLACE settlers without an assignment skip work search — assignment comes from push only
         if (!homeBuilding && getWorkerBuildingTypes(settler.race, settler.subType as UnitType)) {
             this.emitIdleSkipped(settler.id, 'no_home', null);
             return false;
@@ -222,14 +209,7 @@ export class WorkerTaskExecutor {
         // If not, they stay inside (returnHomeAndWait is a no-op when already inside).
 
         // First visit: worker must walk to their building before starting work
-        if (homeBuilding && !runtime.homeAssignment!.hasVisited) {
-            if (this.isAtHomeBuilding(settler, homeBuilding)) {
-                runtime.homeAssignment!.hasVisited = true;
-            } else {
-                this.lifecycle.returnHomeAndWait(settler, homeBuilding, 'first_visit');
-                return false;
-            }
-        }
+        if (homeBuilding && !this.ensureFirstVisit(settler, runtime, homeBuilding)) return false;
 
         const targets = this.findTargets(settler, entityHandler, positionHandler, homeBuilding);
         if (!targets) return false; // error already logged
@@ -245,6 +225,17 @@ export class WorkerTaskExecutor {
 
         this.lifecycle.startJob(settler, runtime, selected, targets.entity, homeBuilding, targets.position);
         return true;
+    }
+
+    /** Ensure a worker has visited their home building. Returns true if ready to work. */
+    private ensureFirstVisit(settler: Entity, runtime: WorkerRuntimeState, home: Entity): boolean {
+        if (runtime.homeAssignment!.hasVisited) return true;
+        if (this.locationManager.isInside(settler.id, home.id)) {
+            runtime.homeAssignment!.hasVisited = true;
+            return true;
+        }
+        this.lifecycle.returnHomeAndWait(settler, home, 'first_visit');
+        return false;
     }
 
     /** Emit choreo:idleSkipped if verbose logging is on. */
@@ -399,41 +390,6 @@ export class WorkerTaskExecutor {
     // ─────────────────────────────────────────────────────────────
     // Private helpers
     // ─────────────────────────────────────────────────────────────
-
-    /** Check whether a settler is at their home building's door. */
-    private isAtHomeBuilding(settler: Entity, homeBuilding: Entity): boolean {
-        const door = getBuildingDoorPos(
-            homeBuilding.x,
-            homeBuilding.y,
-            homeBuilding.race,
-            homeBuilding.subType as BuildingType
-        );
-        return hexDistance(settler.x, settler.y, door.x, door.y) <= 1;
-    }
-
-    /**
-     * Resolve the home building for a settler: reuse existing assignment or find a new one.
-     * Claims the building immediately so no other worker can take it.
-     */
-    private resolveHomeBuilding(
-        settler: Entity,
-        runtime: WorkerRuntimeState,
-        buildingOccupants: OccupancyMap,
-        claimBuilding: (runtime: WorkerRuntimeState, buildingId: number) => void,
-        releaseBuilding: (runtime: WorkerRuntimeState) => void
-    ): Entity | null {
-        if (runtime.homeAssignment !== null) {
-            const existing = this.gameState.getEntity(runtime.homeAssignment.buildingId);
-            if (existing) return existing;
-            // Building was destroyed — release stale assignment
-            releaseBuilding(runtime);
-        }
-        const building = findNearestWorkplace(this.gameState, settler, buildingOccupants, this.isBuildingAvailable);
-        if (building) {
-            claimBuilding(runtime, building.id);
-        }
-        return building;
-    }
 
     /**
      * Check if a building's output is full for the goods produced by this choreo job.

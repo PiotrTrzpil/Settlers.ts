@@ -24,7 +24,7 @@ import type { MapLoadTimings } from './debug/debug-stats';
 import { debugStats } from './debug/debug-stats';
 import type { SystemState } from './game-loop';
 import { loadInitialState, restoreFromSnapshot, restoreInitialTerrain } from './state/game-state-persistence';
-import type { PlacementFilter } from './features/placement';
+import type { PlacementFilter } from './systems/placement';
 import {
     createTerritoryPlacementFilter,
     createTerritoryMatchFilter,

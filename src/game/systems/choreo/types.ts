@@ -60,6 +60,17 @@ export enum ChoreoTaskType {
     // Recruit
     TRANSFORM_RECRUIT,
     TRANSFORM_DIRECT = 'TRANSFORM_DIRECT',
+
+    // Carrier transport (built dynamically via ChoreoBuilder, not parsed from XML)
+    TRANSPORT_GO_TO_SOURCE = 'TRANSPORT_GO_TO_SOURCE',
+    TRANSPORT_GO_TO_DEST = 'TRANSPORT_GO_TO_DEST',
+    TRANSPORT_PICKUP = 'TRANSPORT_PICKUP',
+    TRANSPORT_DELIVER = 'TRANSPORT_DELIVER',
+
+    // Feature-layer dynamic tasks (registered at runtime, not parsed from XML)
+    ENTER_BUILDING = 'ENTER_BUILDING',
+    DIG_TILE = 'DIG_TILE',
+    BUILD_STEP = 'BUILD_STEP',
 }
 
 /** Map task string (prefix-stripped at parse time) → ChoreoTaskType enum. */
@@ -185,6 +196,10 @@ export interface ChoreoJobState {
     transportData?: TransportData;
     /** Ticks to wait before retrying a failed pathfinding attempt (0 = try now). */
     pathRetryCountdown: number;
+    /** Per-node waypoints for multi-destination jobs. Each GO_TO_TARGET consumes the next entry. */
+    waypoints?: Array<{ x: number; y: number; entityId?: number }>;
+    /** Typed metadata bag — replaces carryingGood hacks for stashing domain data. */
+    metadata?: Record<string, number | string>;
 }
 
 /** Create a fresh ChoreoJobState for starting a job. */

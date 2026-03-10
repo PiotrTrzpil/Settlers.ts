@@ -13,7 +13,6 @@
  * - inventory: Building input/output material slots
  * - logistics: Resource request and fulfillment matching
  * - building-construction: Building construction phases
- * - placement: Building placement validation
  * - trees: Tree lifecycle (growth, cutting, decay)
  * - stones: Stone mining depletion and visual variants
  */
@@ -33,9 +32,6 @@ export * from './logistics';
 
 // Building construction
 export * from './building-construction';
-
-// Building placement
-export * from './placement';
 
 // Trees (first feature using self-registration)
 export * from './trees';

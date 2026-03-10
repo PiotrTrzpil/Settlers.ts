@@ -46,7 +46,7 @@ export const BuildingConstructionFeature: FeatureDefinition = {
 
         const residenceSpawner = new ResidenceSpawnerSystem({
             gameState: ctx.gameState,
-            executeCommand: ctx.executeCommand,
+            eventBus: ctx.eventBus,
         });
         constructionSystem.setResidenceSpawner(residenceSpawner);
 
@@ -84,7 +84,7 @@ export const BuildingConstructionFeature: FeatureDefinition = {
                     terrain,
                     onTerrainModified: () => ctx.eventBus.emit('terrain:modified', {}),
                 });
-                residenceSpawner.setTerrain(terrain);
+
             },
             destroy: () => buildingLifecycle.unregisterEvents(),
         };

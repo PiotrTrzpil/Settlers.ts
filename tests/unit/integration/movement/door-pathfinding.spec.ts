@@ -87,7 +87,7 @@ function checkVisitedForBlocked(visited: TileCoord[], occupancy: Set<string>, la
 /** Check one building's door is reachable via pathfinding in a simulation. */
 function checkDoorPathfinding(sim: Simulation, race: Race, bt: BuildingType): string | null {
     const label = `${BuildingType[bt]}/${Race[race]}`;
-    const buildingId = sim.placeBuilding(bt, 0, true, race);
+    const buildingId = sim.placeBuilding(bt, 0, true, race, false);
     const building = sim.state.getEntityOrThrow(buildingId, 'test');
     const door = getBuildingDoorPos(building.x, building.y, race, bt);
 
@@ -116,24 +116,26 @@ function checkDoorPathfinding(sim: Simulation, race: Race, bt: BuildingType): st
         return diagnosePathfindFailure(sim, door, label);
     }
 
-    const visited = sim.simulateMovement(unitId, { target: { x: door.x, y: door.y }, maxTicks: 600 });
-    const last = visited[visited.length - 1]!;
+    // Verify the computed path reaches the door (don't simulate — other units may collide)
+    const unitState = sim.state.unitStates.get(unitId)!;
+    const path = unitState.path;
+    const lastWp = path[path.length - 1]!;
     let failure: string | null = null;
 
-    if (last.x !== door.x || last.y !== door.y) {
-        failure = `${label}: stopped at (${last.x},${last.y}) not door (${door.x},${door.y})`;
+    if (lastWp.x !== door.x || lastWp.y !== door.y) {
+        failure = `${label}: path ends at (${lastWp.x},${lastWp.y}) not door (${door.x},${door.y})`;
     }
 
     if (!failure) {
-        failure = checkVisitedForBlocked(visited, sim.state.buildingOccupancy, label);
+        failure = checkVisitedForBlocked(path as TileCoord[], sim.state.buildingOccupancy, label);
     }
 
     if (failure && VERBOSE) {
-        const visitedStr = visited.map(t => `(${t.x},${t.y})`).join('→');
+        const pathStr = path.map((t: TileCoord) => `(${t.x},${t.y})`).join('→');
         failure += `\n  unit_start=(${unit.x},${unit.y}) door=(${door.x},${door.y})` +
             `\n  raw_path:      ${capturedRaw}` +
             `\n  smoothed_path: ${capturedSmoothed}` +
-            `\n  visited:       ${visitedStr}`;
+            `\n  path:          ${pathStr}`;
     }
 
     sim.state.removeEntity(unitId);

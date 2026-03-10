@@ -10,7 +10,7 @@
 
 import type { BuildingType } from '../../buildings/types';
 import type { Race } from '../../core/race';
-import type { TileOffset } from '../building-adjust/types';
+import type { TileOffset } from '../../input/building-adjust/types';
 import { WORK_AREA_BUILDINGS } from './types';
 import { getBuildingInfo } from '../../data/game-data-access';
 import type { Persistable } from '@/game/persistence';

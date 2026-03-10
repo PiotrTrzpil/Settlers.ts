@@ -29,7 +29,10 @@ export function parseSettlerValues(xmlContent: string): Map<RaceId, RaceSettlerV
             const searchEl = child.getElementsByTagName('search')[0];
             const searchTypes = searchEl ? getTextArray(searchEl, 'searchType') : [];
 
-            settlers.set(id, { id, role, searchTypes, tool, animLists });
+            // XML bug: Geologist's tool is GOOD_HAMMER but should be GOOD_PICKAXE
+            // (geologists prospect ore with a pickaxe, not a hammer)
+            const fixedTool = id === 'SETTLER_GEOLOGIST' ? 'GOOD_PICKAXE' : tool;
+            settlers.set(id, { id, role, searchTypes, tool: fixedTool, animLists });
         }
 
         result.set(raceId, { settlers });

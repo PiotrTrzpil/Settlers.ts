@@ -20,9 +20,27 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { createGameState, addUnit, addUnitWithPath } from '../helpers/test-game';
 import type { GameState } from '@/game/game-state';
 import { tileKey, type TileCoord } from '@/game/entity';
-import { hexDistance } from '@/game/systems/hex-directions';
+import { hexDistance, getAllNeighbors } from '@/game/systems/hex-directions';
 
 // ─── Helpers ──────────────────────────────────────────────────────────
+
+/** Shorthand for TileCoord literal. */
+function pos(x: number, y: number): TileCoord {
+    return { x, y };
+}
+
+/** Build a waypoint array from [x,y] pairs. */
+function path(...points: [number, number][]): TileCoord[] {
+    return points.map(([x, y]) => ({ x, y }));
+}
+
+/** Advance the movement system for `seconds` (default dt=0.1s per tick). */
+function tickFor(state: GameState, seconds: number, dt = 0.1): void {
+    const ticks = Math.round(seconds / dt);
+    for (let i = 0; i < ticks; i++) {
+        state.movement.update(dt);
+    }
+}
 
 /** Track entity position and controller visual position every tick. */
 function trackPositions(
@@ -117,9 +135,7 @@ describe('Movement System – bump/wait collision', () => {
 
         expect(unitA.id).toBeLessThan(unitB.id);
 
-        for (let i = 0; i < 30; i++) {
-            state.movement.update(0.1);
-        }
+        tickFor(state, 3);
 
         // A should have passed through (11,10)
         expect(unitA.x).toBeGreaterThanOrEqual(11);
@@ -128,25 +144,20 @@ describe('Movement System – bump/wait collision', () => {
         assertOccupancyConsistent(state, [unitA.id, unitB.id]);
     });
 
-    it('lower ID bumps higher ID, higher ID waits', () => {
-        // A (lower) heading east, B (higher) heading west — meet at same tile
-        const { entity: unitA } = addUnitWithPath(state, 10, 10, [
-            { x: 11, y: 10 },
-            { x: 12, y: 10 },
-        ]);
-        const { entity: unitB } = addUnitWithPath(state, 12, 10, [
-            { x: 11, y: 10 },
-            { x: 10, y: 10 },
-        ]);
+    it('head-on: both units eventually reach their destinations', () => {
+        // Two units walking straight at each other using pathfinding (like diggers)
+        const { entity: unitA } = addUnit(state, 10, 10);
+        const { entity: unitB } = addUnit(state, 14, 10);
+        state.movement.moveUnit(unitA.id, 14, 10);
+        state.movement.moveUnit(unitB.id, 10, 10);
 
-        expect(unitA.id).toBeLessThan(unitB.id);
+        // 6s is well past the repath timeout — both must still resolve
+        tickFor(state, 6);
 
-        for (let i = 0; i < 40; i++) {
-            state.movement.update(0.1);
-        }
-
-        // A must have made forward progress (it has priority)
-        expect(unitA.x).toBeGreaterThanOrEqual(11);
+        expect(unitA.x).toBe(14);
+        expect(unitA.y).toBe(10);
+        expect(unitB.x).toBe(10);
+        expect(unitB.y).toBe(10);
         assertOccupancyConsistent(state, [unitA.id, unitB.id]);
     });
 
@@ -161,9 +172,7 @@ describe('Movement System – bump/wait collision', () => {
             { x: 11, y: 12 },
         ]);
 
-        for (let i = 0; i < 30; i++) {
-            state.movement.update(0.1);
-        }
+        tickFor(state, 3);
 
         // A should have passed through, B should be displaced southward (toward its goal)
         expect(unitA.x).toBeGreaterThanOrEqual(11);
@@ -188,9 +197,7 @@ describe('Movement System – bump/wait collision', () => {
             { x: 12, y: 10 },
         ]);
 
-        for (let i = 0; i < 30; i++) {
-            state.movement.update(0.1);
-        }
+        tickFor(state, 3);
 
         // B should have continued moving east undisturbed
         expect(unitB.x).toBeGreaterThan(11);
@@ -312,9 +319,7 @@ describe('Movement System – bump/wait collision', () => {
         ]);
         const controller = state.movement.getController(unitA.id)!;
 
-        for (let i = 0; i < 20; i++) {
-            state.movement.update(0.1);
-        }
+        tickFor(state, 2);
 
         // Open terrain — wait time should always be 0
         expect(controller.waitTime).toBe(0);
@@ -336,9 +341,7 @@ describe('Movement System – bump/wait collision', () => {
         addUnit(state, 10, 11);
 
         // Tick for 0.6s — past REPATH_WAIT_TIMEOUT
-        for (let i = 0; i < 6; i++) {
-            state.movement.update(0.1);
-        }
+        tickFor(state, 0.6);
 
         // After repath, waitTime should have been reset
         expect(controller.waitTime).toBeLessThan(0.5);
@@ -362,9 +365,7 @@ describe('Movement System – bump/wait collision', () => {
         addUnit(state, 10, 9);
 
         // Tick for over 2.0s
-        for (let i = 0; i < 25; i++) {
-            state.movement.update(0.1);
-        }
+        tickFor(state, 2.5);
 
         const controller = state.movement.getController(unitA.id)!;
         expect(controller.state).toBe('idle');
@@ -389,9 +390,7 @@ describe('Movement System – bump/wait collision', () => {
             { x: 15, y: 10 },
         ]);
 
-        for (let i = 0; i < 60; i++) {
-            state.movement.update(0.1);
-        }
+        tickFor(state, 6);
 
         // Both should have reached their destinations or close
         expect(unitA.x).toBeGreaterThanOrEqual(13);
@@ -465,9 +464,7 @@ describe('Movement System – bump/wait collision', () => {
             units.push(result);
         }
 
-        for (let i = 0; i < 100; i++) {
-            state.movement.update(0.1);
-        }
+        tickFor(state, 10);
 
         // All should have advanced significantly
         for (const { entity } of units) {
@@ -490,9 +487,7 @@ describe('Movement System – bump/wait collision', () => {
 
         // The mover has higher ID than B (created after), so it cannot bump B
         // Verify B stays in bounds regardless
-        for (let i = 0; i < 20; i++) {
-            state.movement.update(0.1);
-        }
+        tickFor(state, 2);
 
         // B should still be in bounds
         expect(unitB.x).toBeGreaterThanOrEqual(0);
@@ -511,9 +506,7 @@ describe('Movement System – bump/wait collision', () => {
             { x: 11, y: 13 },
         ]);
 
-        for (let i = 0; i < 60; i++) {
-            state.movement.update(0.1);
-        }
+        tickFor(state, 6);
 
         // A should have passed through (11,10)
         expect(unitA.x).toBeGreaterThanOrEqual(11);
@@ -525,6 +518,79 @@ describe('Movement System – bump/wait collision', () => {
             const dist = hexDistance(unitB.x, unitB.y, bGoal.x, bGoal.y);
             expect(dist).toBeLessThan(5); // Should be getting closer
         }
+    });
+
+    // ═════════════════════════════════════════════════════════════════
+    // Tile swap (last-resort)
+    // ═════════════════════════════════════════════════════════════════
+
+    /** Block all hex neighbors of a tile with buildings, optionally excluding some. */
+    function blockNeighbors(pos: TileCoord, except?: TileCoord[]): void {
+        const skip = new Set(except?.map(p => tileKey(p.x, p.y)) ?? []);
+        for (const n of getAllNeighbors(pos)) {
+            if (!skip.has(tileKey(n.x, n.y))) {
+                state.buildingOccupancy.add(tileKey(n.x, n.y));
+            }
+        }
+    }
+
+    it('swaps tiles when no other bump destination exists', () => {
+        const target = pos(11, 10);
+        const bumperStart = pos(10, 10);
+        blockNeighbors(target, [bumperStart]);
+
+        const { entity: unitA } = addUnitWithPath(state, 10, 10, [target]);
+        const { entity: unitB } = addUnit(state, 11, 10);
+
+        tickFor(state, 2);
+
+        expect(unitA.x).toBe(target.x);
+        expect(unitA.y).toBe(target.y);
+        expect(unitB.x).toBe(bumperStart.x);
+        expect(unitB.y).toBe(bumperStart.y);
+        assertOccupancyConsistent(state, [unitA.id, unitB.id]);
+    });
+
+    it('swap maintains occupancy consistency every tick', () => {
+        blockNeighbors(pos(11, 10), [pos(10, 10)]);
+
+        const { entity: unitA } = addUnitWithPath(state, 10, 10, [pos(11, 10)]);
+        const { entity: unitB } = addUnit(state, 11, 10);
+
+        for (let i = 0; i < 20; i++) {
+            state.movement.update(0.1);
+            assertOccupancyConsistent(state, [unitA.id, unitB.id]);
+        }
+    });
+
+    it('swap repaths the displaced unit toward its goal', () => {
+        blockNeighbors(pos(11, 10), [pos(10, 10)]);
+
+        const { entity: unitA } = addUnitWithPath(state, 10, 10, [pos(11, 10)]);
+        const { entity: unitB } = addUnit(state, 11, 10);
+        state.movement.moveUnit(unitB.id, 20, 10);
+
+        tickFor(state, 2);
+
+        expect(unitA.x).toBe(11);
+        expect(unitA.y).toBe(10);
+        const controllerB = state.movement.getController(unitB.id)!;
+        expect(controllerB.state).toBe('moving');
+        expect(controllerB.goal).toEqual(pos(20, 10));
+    });
+
+    it('no swap when bumper tile is impassable for occupant', () => {
+        blockNeighbors(pos(11, 10)); // ALL neighbors blocked
+
+        const { entity: unitA } = addUnitWithPath(state, 10, 10, [pos(11, 10)]);
+        const { entity: unitB } = addUnit(state, 11, 10);
+
+        tickFor(state, 2.5);
+
+        // B stays put — swap impossible
+        expect(unitB.x).toBe(11);
+        expect(unitB.y).toBe(10);
+        expect(unitA.x === 11 && unitA.y === 10).toBe(false);
     });
 
     it('haltProgress snaps transit so visual matches tile position', () => {

@@ -26,7 +26,7 @@ export interface BuildingSiegeExports {
 
 export const BuildingSiegeFeature: FeatureDefinition = {
     id: 'building-siege',
-    dependencies: ['combat', 'tower-garrison', 'movement', 'settler-location', 'settler-tasks'],
+    dependencies: ['combat', 'tower-garrison', 'settler-location', 'settler-tasks'],
 
     create(ctx: FeatureContext): FeatureInstance {
         const { garrisonManager } = ctx.getFeature<TowerGarrisonExports>('tower-garrison');

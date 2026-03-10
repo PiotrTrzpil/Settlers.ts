@@ -155,6 +155,50 @@ function propagateResourceGatheringEntity(nodes: JobNode[]): void {
     }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// XML data fix: JOB_VINTNER_HARVEST missing WORK_ON_ENTITY node
+//
+// The original jobInfo.xml has the vintner harvest job using RESOURCE_GATHERING
+// directly (like a waterworker), but all other crop farmers (grain, sunflower,
+// agave, beekeeper) use WORK_ON_ENTITY → RESOURCE_GATHERING. Without the
+// WORK_ON_ENTITY node, the crop harvest handler never fires and vines are
+// never actually harvested through the crop system.
+//
+// Fix: split the RESOURCE_GATHERING node into WORK_ON_ENTITY (invokes crop
+// harvest handler) + RESOURCE_GATHERING (picks up the material).
+// ─────────────────────────────────────────────────────────────────────────────
+
+function fixVintnerHarvestJob(nodes: JobNode[]): void {
+    // Find the RESOURCE_GATHERING node with GOOD_WINE after GO_TO_TARGET
+    const resIdx = nodes.findIndex(
+        (n, i) => i > 0 && n.task === 'RESOURCE_GATHERING' && n.entity === 'GOOD_WINE'
+    );
+    if (resIdx === -1) return;
+
+    const resNode = nodes[resIdx]!;
+
+    // Insert WORK_ON_ENTITY before the RESOURCE_GATHERING node
+    const workNode: JobNode = {
+        task: 'WORK_ON_ENTITY',
+        jobPart: resNode.jobPart,
+        x: resNode.x,
+        y: resNode.y,
+        duration: resNode.duration,
+        dir: resNode.dir,
+        forward: resNode.forward,
+        visible: resNode.visible,
+        useWork: true,
+        entity: '',
+        trigger: '',
+    };
+
+    // Make the RESOURCE_GATHERING instant (material pickup only, like grain farmer)
+    resNode.duration = 0;
+    resNode.useWork = true;
+
+    nodes.splice(resIdx, 0, workNode);
+}
+
 function parseJob(jobEl: Element): JobInfo {
     const id = jobEl.getAttribute('id') ?? '';
     const nodes: JobNode[] = [];
@@ -167,6 +211,10 @@ function parseJob(jobEl: Element): JobInfo {
     }
 
     propagateResourceGatheringEntity(nodes);
+
+    if (id === 'JOB_VINTNER_HARVEST') {
+        fixVintnerHarvestJob(nodes);
+    }
 
     return { id, nodes };
 }

@@ -120,6 +120,7 @@ implements ISettlerBuildingLocationManager, Persistable<SerializedSettlerLocatio
         this.ctx.gameState.movement.removeController(settlerId);
         this.ctx.gameState.clearTileOccupancy(settlerId);
 
+        this.ctx.eventBus.emit('settler-location:entered', { settlerId, buildingId });
         log.debug(`Settler ${settlerId} entered building ${buildingId}`);
     }
 
@@ -157,10 +158,11 @@ implements ISettlerBuildingLocationManager, Persistable<SerializedSettlerLocatio
         return this.locationMap.get(settlerId) ?? null;
     }
 
-    /** Returns true if settler is confirmed inside a building (hidden). */
-    isInside(settlerId: number): boolean {
+    /** Returns true if settler is confirmed inside a building (hidden). If buildingId is given, also checks it matches. */
+    isInside(settlerId: number, buildingId?: number): boolean {
         const location = this.locationMap.get(settlerId);
-        return location?.status === SettlerBuildingStatus.Inside;
+        if (location?.status !== SettlerBuildingStatus.Inside) return false;
+        return buildingId === undefined || location.buildingId === buildingId;
     }
 
     /** Returns true if settler is tracked (approaching or inside). */

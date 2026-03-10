@@ -14,8 +14,8 @@ import { Renderer } from '@/game/renderer/renderer';
 import { TilePicker } from '@/game/input/tile-picker';
 import { type TileCoord, BuildingType } from '@/game/entity';
 import { Race, AVAILABLE_RACES, saveSavedRace } from '@/game/renderer/sprite-metadata';
-import { canPlaceResource, canPlaceUnit, canPlaceBuildingFootprint } from '@/game/features/placement';
-import { ValidPositionGrid, type GridComputeRequest } from '@/game/features/placement/valid-position-grid';
+import { canPlaceResource, canPlaceUnit, canPlaceBuildingFootprint } from '@/game/systems/placement';
+import { ValidPositionGrid, type GridComputeRequest } from '@/game/systems/placement/valid-position-grid';
 import type { Command, CommandResult } from '@/game/commands';
 import { debugStats } from '@/game/debug/debug-stats';
 import {

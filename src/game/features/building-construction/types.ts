@@ -109,6 +109,8 @@ export interface MaterialsData {
     deliveredAmount: number;
     /** Materials consumed by builder work ticks */
     consumedAmount: number;
+    /** Per-material consumed tracking — how many of each material builders have used up. */
+    consumed: Map<EMaterialType, number>;
 }
 
 /**

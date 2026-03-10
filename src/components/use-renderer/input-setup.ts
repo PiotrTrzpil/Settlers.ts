@@ -4,9 +4,9 @@
 
 import { ref, type Ref } from 'vue';
 import type { Game } from '@/game/game';
-import type { BuildingAdjustHandler } from '@/game/features/building-adjust/types';
+import type { BuildingAdjustHandler } from '@/game/input/building-adjust/types';
 import { BuildingAdjustMode } from '@/game/input';
-import { WorkAreaAdjustHandler } from '@/game/features/building-adjust';
+import { WorkAreaAdjustHandler } from '@/game/input/building-adjust';
 import { debugStats } from '@/game/debug/debug-stats';
 
 /**
