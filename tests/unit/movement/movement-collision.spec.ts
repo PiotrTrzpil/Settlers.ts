@@ -29,11 +29,6 @@ function pos(x: number, y: number): TileCoord {
     return { x, y };
 }
 
-/** Build a waypoint array from [x,y] pairs. */
-function path(...points: [number, number][]): TileCoord[] {
-    return points.map(([x, y]) => ({ x, y }));
-}
-
 /** Advance the movement system for `seconds` (default dt=0.1s per tick). */
 function tickFor(state: GameState, seconds: number, dt = 0.1): void {
     const ticks = Math.round(seconds / dt);
