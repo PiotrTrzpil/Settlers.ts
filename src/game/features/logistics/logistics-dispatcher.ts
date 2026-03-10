@@ -24,7 +24,7 @@ import type { CarrierRegistry, IdleCarrierPool } from '../carriers';
 import type { RequestManager } from './request-manager';
 import { RequestStatus, type ResourceRequest } from './resource-request';
 import { InventoryReservationManager } from './inventory-reservation';
-import type { TransportJobRecord } from './transport-job-record';
+import { TransportPhase, type TransportJobRecord } from './transport-job-record';
 import * as TransportJobService from './transport-job-service';
 import { getNextJobId, setNextJobId } from './transport-job-service';
 import type { TransportJobDeps } from './transport-job-service';
@@ -33,6 +33,7 @@ import type { TransportJobOps } from '../settler-tasks/choreo-types';
 import type { BuildingInventoryManager } from '../inventory';
 import { RequestMatcher } from './request-matcher';
 import type { LogisticsMatchFilter, CarrierFilter } from './logistics-filter';
+import type { StorageFilterManager } from '../../systems/inventory/storage-filter-manager';
 import { CarrierAssigner, type AssignmentSuccess, type JobAssigner } from './carrier-assigner';
 import { PreAssignmentQueue } from './pre-assignment-queue';
 import { StallDetector } from './stall-detector';
@@ -56,6 +57,7 @@ export interface LogisticsDispatcherConfig extends CoreDeps {
     positionResolver: TransportPositionResolver;
     requestManager: RequestManager;
     inventoryManager: BuildingInventoryManager;
+    storageFilterManager?: StorageFilterManager;
     matchFilter?: LogisticsMatchFilter;
     carrierFilter?: CarrierFilter;
 }
@@ -131,6 +133,7 @@ export class LogisticsDispatcher implements TickSystem {
             gameState: config.gameState,
             inventoryManager: config.inventoryManager,
             reservationManager: this.reservationManager,
+            storageFilterManager: config.storageFilterManager,
             matchFilter: config.matchFilter,
         });
 
@@ -425,6 +428,10 @@ export class LogisticsDispatcher implements TickSystem {
                 this.activeJobs.delete(carrierId);
                 result.jobsCancelled++;
             } else if (job.sourceBuilding === buildingId) {
+                // Already picked up — source doesn't matter, let carrier deliver
+                if (job.phase === TransportPhase.PickedUp) {
+                    continue;
+                }
                 // Source destroyed — redirect to free pile if it exists
                 const pileEntityId = pileRedirects?.get(job.material);
                 if (

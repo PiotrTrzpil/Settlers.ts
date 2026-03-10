@@ -14,7 +14,7 @@ import type { InventoryExports } from '../../systems/inventory';
 import type { BuildingConstructionExports } from '../building-construction/building-construction-feature';
 import { getGameDataLoader } from '@/resources/game-data';
 import { BuildingPileRegistry } from '../../systems/inventory/building-pile-registry';
-import { PilePositionResolver } from '../../systems/inventory/pile-position-resolver';
+import { PilePositionResolver } from './pile-position-resolver';
 import { InventoryPileSync } from './inventory-pile-sync';
 
 export interface InventoryPileSyncExports {

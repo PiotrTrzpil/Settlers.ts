@@ -26,8 +26,10 @@ export const enum UnfulfilledReason {
     AllReserved = 1,
     /** No idle carrier available */
     NoCarrier = 4,
-    /** Carriers exist but all busy */
+    /** Carriers exist but all busy with transport jobs */
     CarriersBusy = 5,
+    /** Carriers exist and idle, but reserved by another feature (barracks, garrison, etc.) */
+    CarriersReserved = 6,
 }
 
 /** Display labels for each reason */
@@ -36,6 +38,7 @@ export const UNFULFILLED_REASON_LABELS: Record<UnfulfilledReason, string> = {
     [UnfulfilledReason.AllReserved]: 'All reserved',
     [UnfulfilledReason.NoCarrier]: 'No carrier',
     [UnfulfilledReason.CarriersBusy]: 'Carriers busy',
+    [UnfulfilledReason.CarriersReserved]: 'Carriers reserved',
 };
 
 export interface DiagnosticConfig {
@@ -45,6 +48,8 @@ export interface DiagnosticConfig {
     reservationManager: InventoryReservationManager;
     /** Returns the active job ID for an entity, or null if idle. */
     getActiveJobId: (entityId: number) => string | null;
+    /** Returns true if the carrier is reserved by a feature (barracks, garrison, etc.). */
+    isReserved: (entityId: number) => boolean;
 }
 
 /**
@@ -56,7 +61,7 @@ export interface DiagnosticConfig {
  * 3. Is a carrier available? → NoCarrier / CarriersBusy
  */
 export function diagnoseUnfulfilledRequest(request: ResourceRequest, config: DiagnosticConfig): UnfulfilledReason {
-    const { gameState, inventoryManager, carrierRegistry, reservationManager, getActiveJobId } = config;
+    const { gameState, inventoryManager, carrierRegistry, reservationManager, getActiveJobId, isReserved } = config;
 
     const destBuilding = gameState.getEntity(request.buildingId);
     if (!destBuilding) return UnfulfilledReason.NoSupply;
@@ -88,22 +93,27 @@ export function diagnoseUnfulfilledRequest(request: ResourceRequest, config: Dia
         return UnfulfilledReason.AllReserved;
     }
 
-    // Step 3: Check carrier availability
+    // Step 3: Check carrier availability (mirrors IdleCarrierPool.isAvailable checks)
     let hasCarrier = false;
+    let hasIdleButReserved = false;
 
     for (const [id, , entity] of query(carrierRegistry.store, gameState.store)) {
         if (entity.player !== playerId) continue;
 
         hasCarrier = true;
 
-        if (getActiveJobId(id) === null) {
-            // An idle carrier exists but still can't fulfill
-            return UnfulfilledReason.CarriersBusy;
+        const hasJob = getActiveJobId(id) !== null;
+        if (!hasJob && isReserved(id)) {
+            hasIdleButReserved = true;
         }
     }
 
     if (!hasCarrier) {
         return UnfulfilledReason.NoCarrier;
+    }
+
+    if (hasIdleButReserved) {
+        return UnfulfilledReason.CarriersReserved;
     }
 
     return UnfulfilledReason.CarriersBusy;

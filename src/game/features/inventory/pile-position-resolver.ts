@@ -14,11 +14,11 @@ import { EntityType, BuildingType } from '../../entity';
 import type { EMaterialType } from '../../economy/material-type';
 import type { GameState } from '../../game-state';
 import { LogHandler } from '@/utilities/log-handler';
-import type { BuildingPileRegistry } from './building-pile-registry';
+import type { BuildingPileRegistry } from '../../systems/inventory/building-pile-registry';
 import type { LinkedSlotKind } from '../../core/pile-kind';
 import { SlotKind } from '../../core/pile-kind';
-import { getConstructionCandidates } from './construction-pile-positions';
-import type { ConstructionSiteManager } from '../../features/building-construction/construction-site-manager';
+import { getConstructionCandidates } from '../../systems/inventory/construction-pile-positions';
+import type { ConstructionSiteManager } from '../building-construction/construction-site-manager';
 
 export class PilePositionResolver {
     private readonly log = new LogHandler('PilePositionResolver');
@@ -90,9 +90,13 @@ export class PilePositionResolver {
         }
 
         case SlotKind.Construction: {
-            return this.constructionSiteManager.getConstructionPilePosition(
-                params.buildingId, material, params.pileIndex ?? 0
-            ) ?? null;
+            return (
+                this.constructionSiteManager.getConstructionPilePosition(
+                    params.buildingId,
+                    material,
+                    params.pileIndex ?? 0
+                ) ?? null
+            );
         }
 
         case SlotKind.Storage: {

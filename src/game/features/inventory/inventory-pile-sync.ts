@@ -21,7 +21,7 @@ import { createLogger } from '@/utilities/logger';
 import type { ConstructionSiteManager } from '../building-construction/construction-site-manager';
 import type { PileRegistry } from '../../systems/inventory/pile-registry';
 import type { PileSlotKey } from '../../systems/inventory/pile-registry';
-import type { PilePositionResolver } from '../../systems/inventory/pile-position-resolver';
+import type { PilePositionResolver } from './pile-position-resolver';
 import type { PileKind, LinkedSlotKind } from '../../core/pile-kind';
 import { SlotKind } from '../../core/pile-kind';
 import type { EntityCleanupRegistry } from '../../systems/entity-cleanup-registry';

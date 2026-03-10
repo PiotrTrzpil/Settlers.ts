@@ -1,21 +1,33 @@
 /**
  * Composable for storage filter UI on StorageArea buildings.
- * Provides reactive state for per-material allow-lists and a toggle action.
+ * Provides reactive state for per-material direction settings and a cycle action.
  */
 import { computed, type ComputedRef, type Ref } from 'vue';
 import type { Game } from '@/game/game';
 import type { Entity } from '@/game/entity';
 import { BuildingType, EntityType } from '@/game/entity';
 import { EMaterialType, DROPPABLE_MATERIALS } from '@/game/economy/material-type';
+import { StorageDirection } from '@/game/systems/inventory/storage-filter-manager';
+
+export { StorageDirection } from '@/game/systems/inventory/storage-filter-manager';
 
 export interface StorageFilterItem {
     material: EMaterialType;
     name: string;
-    allowed: boolean;
+    /** null = disabled, otherwise the active direction */
+    direction: StorageDirection | null;
 }
 
+/** Cycle order: null → Both → Import → Export → null */
+const DIRECTION_CYCLE: ReadonlyArray<StorageDirection | null> = [
+    null,
+    StorageDirection.Both,
+    StorageDirection.Import,
+    StorageDirection.Export,
+];
+
 /**
- * Returns reactive storage-filter state and a toggle action for the selected StorageArea building.
+ * Returns reactive storage-filter state and a cycle action for the selected StorageArea building.
  *
  * @param game - Ref to the current Game instance (may be null)
  * @param entity - Ref to the currently selected entity (may be null or undefined)
@@ -28,7 +40,8 @@ export function useStorageFilter(
 ): {
     isStorageArea: ComputedRef<boolean>;
     storageFilter: ComputedRef<StorageFilterItem[]>;
-    toggleMaterial: (material: EMaterialType) => void;
+    cycleDirection: (material: EMaterialType) => void;
+    setDirection: (material: EMaterialType, direction: StorageDirection | null) => void;
 } {
     const isStorageArea = computed<boolean>(() => {
         const e = entity.value;
@@ -52,21 +65,31 @@ export function useStorageFilter(
         return DROPPABLE_MATERIALS.map(m => ({
             material: m,
             name: EMaterialType[m],
-            allowed: sfm ? sfm.isAllowed(e.id, m) : false,
+            direction: sfm ? sfm.getDirection(e.id, m) : null,
         }));
     });
 
-    function toggleMaterial(material: EMaterialType): void {
+    function setDirection(material: EMaterialType, direction: StorageDirection | null): void {
         const e = entity.value;
         const g = game.value;
         if (!e || !g) return;
-        const currentAllowed = g.services.storageFilterManager.isAllowed(e.id, material);
-        g.execute({ type: 'set_storage_filter', buildingId: e.id, material, allowed: !currentAllowed });
+        g.execute({ type: 'set_storage_filter', buildingId: e.id, material, direction });
+    }
+
+    function cycleDirection(material: EMaterialType): void {
+        const e = entity.value;
+        const g = game.value;
+        if (!e || !g) return;
+        const current = g.services.storageFilterManager.getDirection(e.id, material);
+        const idx = DIRECTION_CYCLE.indexOf(current);
+        const next = DIRECTION_CYCLE[(idx + 1) % DIRECTION_CYCLE.length]!;
+        g.execute({ type: 'set_storage_filter', buildingId: e.id, material, direction: next });
     }
 
     return {
         isStorageArea,
         storageFilter,
-        toggleMaterial,
+        cycleDirection,
+        setDirection,
     };
 }

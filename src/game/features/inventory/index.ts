@@ -44,7 +44,7 @@ export { PileRegistry } from '../../systems/inventory/pile-registry';
 export type { PileSlotKey } from '../../systems/inventory/pile-registry';
 export { InventoryPileSync } from './inventory-pile-sync';
 export { StorageFilterManager } from '../../systems/inventory/storage-filter-manager';
-export { PilePositionResolver } from '../../systems/inventory/pile-position-resolver';
+export { PilePositionResolver } from './pile-position-resolver';
 export type { PileKind, LinkedPileKind, LinkedSlotKind } from '../../core/pile-kind';
 export { SlotKind, isLinkedPile, getOwnerBuildingId } from '../../core/pile-kind';
 

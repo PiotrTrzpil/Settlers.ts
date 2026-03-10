@@ -10,6 +10,7 @@ import type { GameState } from '../../game-state';
 import type { BuildingInventoryManager } from '../inventory';
 import { matchRequestToSupply, findAllMatches, type FulfillmentMatch } from './fulfillment-matcher';
 import type { InventoryReservationManager } from './inventory-reservation';
+import type { StorageFilterManager } from '../../systems/inventory/storage-filter-manager';
 import type { ResourceRequest } from './resource-request';
 import type { LogisticsMatchFilter } from './logistics-filter';
 
@@ -17,6 +18,7 @@ export interface RequestMatcherConfig {
     gameState: GameState;
     inventoryManager: BuildingInventoryManager;
     reservationManager: InventoryReservationManager;
+    storageFilterManager?: StorageFilterManager;
     matchFilter?: LogisticsMatchFilter;
 }
 
@@ -38,6 +40,7 @@ export class RequestMatcher {
     private readonly gameState: GameState;
     private readonly inventoryManager: BuildingInventoryManager;
     private readonly reservationManager: InventoryReservationManager;
+    private readonly storageFilterManager: StorageFilterManager | null;
 
     matchFilter: LogisticsMatchFilter | null;
 
@@ -45,6 +48,7 @@ export class RequestMatcher {
         this.gameState = config.gameState;
         this.inventoryManager = config.inventoryManager;
         this.reservationManager = config.reservationManager;
+        this.storageFilterManager = config.storageFilterManager ?? null;
         this.matchFilter = config.matchFilter ?? null;
     }
 
@@ -60,6 +64,7 @@ export class RequestMatcher {
         const match = matchRequestToSupply(request, this.gameState, this.inventoryManager, {
             playerId,
             reservationManager: this.reservationManager,
+            storageFilterManager: this.storageFilterManager ?? undefined,
         });
 
         if (!match) {
@@ -91,6 +96,7 @@ export class RequestMatcher {
         const allMatches = findAllMatches(request, this.gameState, this.inventoryManager, {
             playerId,
             reservationManager: this.reservationManager,
+            storageFilterManager: this.storageFilterManager ?? undefined,
         });
 
         const results: RequestMatchResult[] = [];

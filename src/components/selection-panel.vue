@@ -144,26 +144,7 @@
                     />
 
                     <!-- Storage filter (shown only for StorageArea buildings, not under construction) -->
-                    <template v-if="isStorageArea">
-                        <div class="info-section storage-section">
-                            <div class="section-label">Storage</div>
-                            <div class="storage-filter-grid">
-                                <label
-                                    v-for="item in storageFilter"
-                                    :key="item.material"
-                                    class="storage-filter-item"
-                                    :class="{ allowed: item.allowed }"
-                                >
-                                    <input
-                                        type="checkbox"
-                                        :checked="item.allowed"
-                                        @change="toggleMaterial(item.material)"
-                                    />
-                                    {{ item.name }}
-                                </label>
-                            </div>
-                        </div>
-                    </template>
+                    <StorageFilterPanel :game="props.game" />
                 </template>
 
                 <!-- Destroy button (shown for both construction sites and operational buildings) -->
@@ -311,7 +292,7 @@ import { useBuildingAdjustments } from '@/composables/useBuildingAdjustments';
 import { useWorkAreaAdjustment } from '@/composables/useWorkAreaAdjustment';
 import { useProductionControl } from '@/composables/useProductionControl';
 import { useConstructionInfo } from '@/composables/useConstructionInfo';
-import { useStorageFilter } from '@/composables/useStorageFilter';
+import StorageFilterPanel from './StorageFilterPanel.vue';
 import { ProductionMode } from '@/game/features/production-control';
 import GarrisonPanel from './GarrisonPanel.vue';
 
@@ -344,7 +325,6 @@ const { hasWorkArea, isWorkAreaActive, toggleWorkArea } = useWorkAreaAdjustment(
 const { productionControl, setProductionMode, setRecipeProportion, addToProductionQueue, removeFromProductionQueue } =
     useProductionControl(gameRef, selectedEntity, tick);
 const { constructionInfo } = useConstructionInfo(gameRef, selectedEntity, tick);
-const { isStorageArea, storageFilter, toggleMaterial } = useStorageFilter(gameRef, selectedEntity, tick);
 
 const selectedBuildingId = computed<number | null>(() => {
     const entity = selectedEntity.value;
@@ -887,30 +867,5 @@ const showDebugInfo = computed(() => debugStats.state.debugPanelOpen);
     font-style: italic;
     padding: 3px 4px;
     margin-bottom: 4px;
-}
-
-/* Storage Filter */
-.storage-section {
-    border-top-color: var(--border-soft);
-}
-
-.storage-filter-grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 2px;
-    padding: 4px 0;
-}
-
-.storage-filter-item {
-    display: flex;
-    align-items: center;
-    gap: 4px;
-    font-size: 11px;
-    cursor: pointer;
-    padding: 1px 2px;
-}
-
-.storage-filter-item.allowed {
-    color: #c8ff90;
 }
 </style>

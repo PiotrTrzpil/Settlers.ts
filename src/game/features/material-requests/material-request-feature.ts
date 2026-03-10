@@ -11,7 +11,7 @@
 import type { FeatureDefinition, FeatureContext } from '../feature';
 import { MaterialRequestSystem } from './material-request-system';
 import type { ConstructionSiteManager } from '../building-construction';
-import type { BuildingInventoryManager } from '../inventory';
+import type { BuildingInventoryManager, StorageFilterManager } from '../inventory';
 import type { RequestManager } from '../logistics';
 
 export interface MaterialRequestExports {
@@ -26,7 +26,10 @@ export const MaterialRequestFeature: FeatureDefinition = {
         const { constructionSiteManager } = ctx.getFeature<{ constructionSiteManager: ConstructionSiteManager }>(
             'building-construction'
         );
-        const { inventoryManager } = ctx.getFeature<{ inventoryManager: BuildingInventoryManager }>('inventory');
+        const { inventoryManager, storageFilterManager } = ctx.getFeature<{
+            inventoryManager: BuildingInventoryManager;
+            storageFilterManager: StorageFilterManager;
+        }>('inventory');
         const { requestManager } = ctx.getFeature<{ requestManager: RequestManager }>('logistics');
 
         const system = new MaterialRequestSystem({
@@ -35,6 +38,7 @@ export const MaterialRequestFeature: FeatureDefinition = {
             constructionSiteManager,
             inventoryManager,
             requestManager,
+            storageFilterManager,
         });
 
         return {

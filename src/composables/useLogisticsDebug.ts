@@ -7,6 +7,7 @@
 
 import { ref, onUnmounted, type Ref } from 'vue';
 import type { Game } from '@/game/game';
+import type { GameState } from '@/game/game-state';
 import type { ResourceRequest } from '@/game/features/logistics/resource-request';
 import { RequestPriority, RequestStatus } from '@/game/features/logistics/resource-request';
 import type { InventoryReservation } from '@/game/features/logistics/inventory-reservation';
@@ -121,13 +122,18 @@ function formatMaterial(materialType: number): string {
 function gatherRequests(
     requests: Iterable<ResourceRequest>,
     now: number,
-    stats: LogisticsStats
+    stats: LogisticsStats,
+    gameState: GameState,
+    player: number
 ): { pending: RequestSummary[]; rawPending: ResourceRequest[]; inProgress: RequestSummary[] } {
     const pending: RequestSummary[] = [];
     const rawPending: ResourceRequest[] = [];
     const inProgress: RequestSummary[] = [];
 
     for (const request of requests) {
+        const building = gameState.getEntity(request.buildingId);
+        if (!building || building.player !== player) continue;
+
         const summary: RequestSummary = {
             id: request.id,
             buildingId: request.buildingId,
@@ -171,11 +177,14 @@ function gatherCarriers(
     carrierStore: ComponentStore<{ entityId: number }>,
     entityStore: ComponentStore<Entity>,
     getActiveJobId: (entityId: number) => string | null,
-    stats: LogisticsStats
+    stats: LogisticsStats,
+    player: number
 ): CarrierSummary[] {
     const carriers: CarrierSummary[] = [];
 
     for (const [id, , entity] of query(carrierStore, entityStore)) {
+        if (entity.player !== player) continue;
+
         const carrying = entity.carrying;
         const activeJobId = getActiveJobId(id);
         const hasJob = activeJobId !== null;
@@ -203,11 +212,16 @@ function gatherCarriers(
 
 function gatherReservations(
     allReservations: Iterable<InventoryReservation>,
-    stats: LogisticsStats
+    stats: LogisticsStats,
+    gameState: GameState,
+    player: number
 ): ReservationSummary[] {
     const reservations: ReservationSummary[] = [];
 
     for (const reservation of allReservations) {
+        const building = gameState.getEntity(reservation.buildingId);
+        if (!building || building.player !== player) continue;
+
         reservations.push({
             buildingId: reservation.buildingId,
             material: formatMaterial(reservation.materialType),
@@ -227,7 +241,17 @@ function gatherReservations(
  * @param getGame Function to retrieve the current Game instance
  * @returns Reactive state with logistics debug data
  */
-export function useLogisticsDebug(getGame: () => Game | null): {
+/**
+ * Composable for gathering logistics debug data, filtered by player.
+ *
+ * @param getGame Function to retrieve the current Game instance
+ * @param getPlayer Function to retrieve the current player to filter by
+ * @returns Reactive state with logistics debug data
+ */
+export function useLogisticsDebug(
+    getGame: () => Game | null,
+    getPlayer: () => number
+): {
     state: Ref<LogisticsDebugState>;
     refresh: () => void;
 } {
@@ -244,16 +268,24 @@ export function useLogisticsDebug(getGame: () => Game | null): {
         const gameState = game.state;
         const stats = createEmptyStats();
         const now = Date.now();
+        const player = getPlayer();
 
-        // Gather requests
-        const { pending, rawPending, inProgress } = gatherRequests(svc.requestManager.getAllRequests(), now, stats);
+        // Gather requests (filtered by player via building ownership)
+        const { pending, rawPending, inProgress } = gatherRequests(
+            svc.requestManager.getAllRequests(),
+            now,
+            stats,
+            gameState,
+            player
+        );
 
-        // Gather carriers
+        // Gather carriers (filtered by player)
         const carriers = gatherCarriers(
             svc.carrierRegistry.store,
             gameState.store,
             svc.settlerTaskSystem.getActiveJobId.bind(svc.settlerTaskSystem),
-            stats
+            stats,
+            player
         );
 
         // Count unregistered carriers (carrier units without carrier state in manager)
@@ -261,16 +293,19 @@ export function useLogisticsDebug(getGame: () => Game | null): {
             if (
                 entity.type === EntityType.Unit &&
                 entity.subType === UnitType.Carrier &&
+                entity.player === player &&
                 !svc.carrierRegistry.has(entity.id)
             ) {
                 stats.unregisteredCarriers++;
             }
         }
 
-        // Gather reservations
+        // Gather reservations (filtered by player via building ownership)
         const reservations = gatherReservations(
             svc.logisticsDispatcher.getReservationManager().getAllReservations(),
-            stats
+            stats,
+            gameState,
+            player
         );
 
         // Diagnose why pending requests are unfulfilled (limit to displayed items to avoid perf issues)
@@ -280,6 +315,7 @@ export function useLogisticsDebug(getGame: () => Game | null): {
             carrierRegistry: svc.carrierRegistry,
             reservationManager: svc.logisticsDispatcher.getReservationManager(),
             getActiveJobId: svc.settlerTaskSystem.getActiveJobId.bind(svc.settlerTaskSystem),
+            isReserved: svc.unitReservation.isReserved.bind(svc.unitReservation),
         };
         const diagnosticLimit = Math.min(rawPending.length, MAX_LIST_ITEMS);
         for (let i = 0; i < diagnosticLimit; i++) {

@@ -22,7 +22,7 @@ export const RequestManagerFeature: FeatureDefinition = {
 
         return {
             exports: { requestManager } satisfies RequestManagerExports,
-            persistence: 'none',
+            persistence: [{ persistable: requestManager, after: ['constructionSites'] }],
         };
     },
 };

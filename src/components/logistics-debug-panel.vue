@@ -1,9 +1,17 @@
 <template>
     <OverlayPanel v-model:open="open" label="Logistics" title="Logistics Debug Panel">
-        <!-- Settings (always visible, no toggle) -->
-        <section class="settings-section">
-            <Checkbox v-model="selectAllUnits" label="All units selectable" />
-        </section>
+        <!-- Player sub-tabs -->
+        <div v-if="playerIds.length > 1" class="player-tabs">
+            <button
+                v-for="pid in playerIds"
+                :key="pid"
+                class="player-tab"
+                :class="{ active: selectedPlayer === pid }"
+                @click="selectedPlayer = pid"
+            >
+                P{{ pid }}
+            </button>
+        </div>
 
         <!-- Overview (always open) -->
         <CollapseSection title="Overview">
@@ -88,13 +96,10 @@
 </template>
 
 <script setup lang="ts">
-import { computed, watch } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { debugStats } from '@/game/debug/debug-stats';
 import { useLogisticsDebug } from '@/composables/useLogisticsDebug';
 import type { Game } from '@/game/game';
-import { EntityType } from '@/game/entity';
-import { isUnitTypeSelectable, UnitType } from '@/game/core/unit-types';
-import Checkbox from './Checkbox.vue';
 import CollapseSection from './CollapseSection.vue';
 import StatRow from './StatRow.vue';
 import OverlayPanel from './OverlayPanel.vue';
@@ -103,7 +108,29 @@ const props = defineProps<{
     game: Game | null;
 }>();
 
-const { state } = useLogisticsDebug(() => props.game);
+// Player tabs — derive available players from game.playerRaces
+const playerIds = computed(() => {
+    if (!props.game) return [0];
+    return [...props.game.playerRaces.keys()].sort((a, b) => a - b);
+});
+
+const selectedPlayer = ref(0);
+
+// Sync selectedPlayer when game loads or player list changes
+watch(
+    playerIds,
+    ids => {
+        if (ids.length > 0 && !ids.includes(selectedPlayer.value)) {
+            selectedPlayer.value = ids[0]!;
+        }
+    },
+    { immediate: true }
+);
+
+const { state } = useLogisticsDebug(
+    () => props.game,
+    () => selectedPlayer.value
+);
 
 const stats = computed(() => state.value.stats);
 
@@ -114,25 +141,6 @@ const open = computed({
         debugStats.state.logisticsPanelOpen = value;
     },
 });
-
-// Debug setting: allow selecting all units (including workers)
-const selectAllUnits = computed({
-    get: () => debugStats.state.selectAllUnits,
-    set: (value: boolean) => {
-        debugStats.state.selectAllUnits = value;
-    },
-});
-
-// When "select all units" is turned off, deselect any non-selectable units
-watch(
-    () => debugStats.state.selectAllUnits,
-    newValue => {
-        if (newValue || !props.game) return;
-        props.game.state.selection.deselectWhere(
-            e => e.type === EntityType.Unit && !isUnitTypeSelectable(e.subType as UnitType)
-        );
-    }
-);
 
 // Combine pending and in-progress requests for display
 const allRequests = computed(() => {
@@ -156,21 +164,31 @@ const activeJobCount = computed(() => carriersWithJobs.value.length);
 </script>
 
 <style scoped>
-/* Settings section (no header, always visible) */
-.settings-section {
-    padding: 4px 10px;
+/* Player sub-tabs */
+.player-tabs {
+    display: flex;
     border-bottom: 1px solid var(--border-faint);
     background: rgba(30, 20, 10, 0.5);
 }
-
-/* Style Checkbox component to match the debug panel context */
-.settings-section :deep(.control-row) {
-    color: var(--text);
-    padding: 2px 0;
+.player-tab {
+    flex: 1;
+    padding: 4px 6px;
+    background: none;
+    border: none;
+    border-bottom: 2px solid transparent;
+    color: var(--text-muted);
+    font-size: 10px;
+    font-family: monospace;
+    font-weight: bold;
+    cursor: pointer;
 }
-
-.settings-section :deep(.control-row:hover) {
-    color: var(--text-emphasis);
+.player-tab:hover {
+    color: var(--text-bright);
+    background: var(--bg-raised);
+}
+.player-tab.active {
+    color: var(--text-bright);
+    border-bottom-color: var(--text-accent, #d4a030);
 }
 
 /* Inline value variants for StatRow slot */

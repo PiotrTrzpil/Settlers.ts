@@ -25,10 +25,11 @@ export const LogisticsDispatcherFeature: FeatureDefinition = {
     dependencies: ['carriers', 'settler-tasks', 'logistics', 'inventory', 'building-construction'],
 
     create(ctx: FeatureContext) {
-        const { carrierRegistry, idleCarrierPool, setIsTransportBusy } = ctx.getFeature<CarrierFeatureExports>('carriers');
+        const { carrierRegistry, idleCarrierPool, setIsTransportBusy } =
+            ctx.getFeature<CarrierFeatureExports>('carriers');
         const { settlerTaskSystem } = ctx.getFeature<SettlerTaskExports>('settler-tasks');
         const { requestManager } = ctx.getFeature<RequestManagerExports>('logistics');
-        const { inventoryManager } = ctx.getFeature<InventoryExports>('inventory');
+        const { inventoryManager, storageFilterManager } = ctx.getFeature<InventoryExports>('inventory');
 
         const logisticsDispatcher = new LogisticsDispatcher({
             gameState: ctx.gameState,
@@ -39,6 +40,7 @@ export const LogisticsDispatcherFeature: FeatureDefinition = {
             positionResolver: settlerTaskSystem.getPositionResolver(),
             requestManager,
             inventoryManager,
+            storageFilterManager,
         });
         logisticsDispatcher.registerEvents(ctx.eventBus, ctx.cleanupRegistry);
 
@@ -53,7 +55,8 @@ export const LogisticsDispatcherFeature: FeatureDefinition = {
         constructionRequestSystem.setInFlightTracker(logisticsDispatcher.inFlightTracker);
 
         // Collect persistence stores from sub-managers
-        const inFlightTracker = logisticsDispatcher.inFlightTracker as import('./in-flight-tracker').InFlightTrackerImpl;
+        const inFlightTracker =
+            logisticsDispatcher.inFlightTracker as import('./in-flight-tracker').InFlightTrackerImpl;
         const reservationManager = logisticsDispatcher.getReservationManager();
 
         return {

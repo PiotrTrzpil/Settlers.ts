@@ -452,8 +452,42 @@ export class BuildingInventoryManager implements Persistable<SerializedBuildingI
      * Check whether a building is a StorageArea.
      * Used to gate dynamic-slot logic in depositOutput / withdrawOutput.
      */
-    private isStorageArea(buildingId: number): boolean {
+    isStorageArea(buildingId: number): boolean {
         return this.inventories.get(buildingId)?.buildingType === BuildingType.StorageArea;
+    }
+
+    /**
+     * Get remaining capacity for a material in a StorageArea.
+     * Accounts for existing assigned slots and free (NO_MATERIAL) slots.
+     * Returns 0 for non-StorageArea buildings.
+     */
+    getStorageOutputSpace(buildingId: number, materialType: EMaterialType): number {
+        const inventory = this.inventories.get(buildingId);
+        if (!inventory || inventory.buildingType !== BuildingType.StorageArea) return 0;
+        let space = 0;
+        for (const slot of inventory.outputSlots) {
+            if (slot.materialType === materialType) {
+                space += slot.maxCapacity - slot.currentAmount;
+            } else if (slot.materialType === EMaterialType.NO_MATERIAL && slot.currentAmount === 0) {
+                space += slot.maxCapacity;
+            }
+        }
+        return space;
+    }
+
+    /**
+     * Free any empty StorageArea output slots assigned to the given material.
+     * Called when a material direction is disabled so the slot can be reused.
+     * Slots with material still in them are left untouched.
+     */
+    freeEmptyStorageSlots(buildingId: number, materialType: EMaterialType): void {
+        const inventory = this.inventories.get(buildingId);
+        if (!inventory || inventory.buildingType !== BuildingType.StorageArea) return;
+        for (const slot of inventory.outputSlots) {
+            if (slot.materialType === materialType && slot.currentAmount === 0) {
+                slot.materialType = EMaterialType.NO_MATERIAL;
+            }
+        }
     }
 
     /**

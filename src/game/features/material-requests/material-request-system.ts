@@ -20,6 +20,7 @@ import { EMaterialType } from '../../economy';
 import { RequestPriority, type RequestManager } from '../logistics';
 import { getInventoryConfig, type InventoryConfig, type BuildingInventoryManager } from '../inventory';
 import { type ConstructionSiteManager } from '../building-construction';
+import type { StorageFilterManager } from '../../systems/inventory/storage-filter-manager';
 import { EventSubscriptionManager } from '../../event-bus';
 
 /** Minimum input threshold before requesting more materials */
@@ -30,6 +31,7 @@ export interface MaterialRequestSystemConfig extends CoreDeps {
     constructionSiteManager: ConstructionSiteManager;
     inventoryManager: BuildingInventoryManager;
     requestManager: RequestManager;
+    storageFilterManager: StorageFilterManager;
 }
 
 /**
@@ -43,10 +45,14 @@ export class MaterialRequestSystem implements TickSystem {
     private constructionSiteManager: ConstructionSiteManager;
     private inventoryManager: BuildingInventoryManager;
     private requestManager: RequestManager;
+    private storageFilterManager: StorageFilterManager;
     private subscriptions = new EventSubscriptionManager();
 
     /** Buildings that need re-evaluation this tick */
     private dirtyBuildings = new Set<number>();
+
+    /** StorageArea buildings that need re-evaluation this tick */
+    private dirtyStorageAreas = new Set<number>();
 
     /** True on first tick — seeds the dirty set with all operational buildings */
     private needsFullScan = true;
@@ -56,27 +62,40 @@ export class MaterialRequestSystem implements TickSystem {
         this.constructionSiteManager = config.constructionSiteManager;
         this.inventoryManager = config.inventoryManager;
         this.requestManager = config.requestManager;
+        this.storageFilterManager = config.storageFilterManager;
 
         this.subscriptions.subscribe(config.eventBus, 'building:completed', ({ entityId }) => {
             this.dirtyBuildings.add(entityId);
+            this.dirtyStorageAreas.add(entityId);
         });
 
         this.subscriptions.subscribe(config.eventBus, 'building:removed', ({ entityId }) => {
             this.dirtyBuildings.delete(entityId);
+            this.dirtyStorageAreas.delete(entityId);
         });
 
         this.subscriptions.subscribe(config.eventBus, 'inventory:changed', ({ buildingId, slotType }) => {
             if (slotType === 'input') {
                 this.dirtyBuildings.add(buildingId);
             }
+            // StorageArea output changes affect import capacity
+            if (slotType === 'output') {
+                this.dirtyStorageAreas.add(buildingId);
+            }
         });
 
         this.subscriptions.subscribe(config.eventBus, 'logistics:requestFulfilled', ({ buildingId }) => {
             this.dirtyBuildings.add(buildingId);
+            this.dirtyStorageAreas.add(buildingId);
         });
 
         this.subscriptions.subscribe(config.eventBus, 'logistics:requestReset', ({ buildingId }) => {
             this.dirtyBuildings.add(buildingId);
+            this.dirtyStorageAreas.add(buildingId);
+        });
+
+        this.subscriptions.subscribe(config.eventBus, 'storage:directionChanged', ({ buildingId }) => {
+            this.dirtyStorageAreas.add(buildingId);
         });
 
         this.subscriptions.subscribe(config.eventBus, 'logistics:requestRemoved', _payload => {
@@ -106,20 +125,34 @@ export class MaterialRequestSystem implements TickSystem {
             this.requestMaterials(entity, config);
         }
 
+        for (const buildingId of this.dirtyStorageAreas) {
+            const entity = this.gameState.getEntity(buildingId);
+            if (!entity || entity.type !== EntityType.Building) continue;
+            if ((entity.subType as BuildingType) !== BuildingType.StorageArea) continue;
+            if (this.constructionSiteManager.hasSite(entity.id)) continue;
+            this.requestStorageImports(entity.id);
+        }
+
         this.dirtyBuildings.clear();
+        this.dirtyStorageAreas.clear();
     }
 
     destroy(): void {
         this.subscriptions.unsubscribeAll();
     }
 
-    /** Seed the dirty set with all operational buildings that have input slots. */
+    /** Seed the dirty set with all operational buildings that have input slots or are StorageAreas. */
     private markAllOperationalDirty(): void {
         for (const entity of this.gameState.entities) {
             if (entity.type !== EntityType.Building) continue;
-            const config = getInventoryConfig(entity.subType as BuildingType, entity.race);
-            if (config.inputSlots.length === 0) continue;
             if (this.constructionSiteManager.hasSite(entity.id)) continue;
+            const buildingType = entity.subType as BuildingType;
+            if (buildingType === BuildingType.StorageArea) {
+                this.dirtyStorageAreas.add(entity.id);
+                continue;
+            }
+            const config = getInventoryConfig(buildingType, entity.race);
+            if (config.inputSlots.length === 0) continue;
             this.dirtyBuildings.add(entity.id);
         }
     }
@@ -141,9 +174,33 @@ export class MaterialRequestSystem implements TickSystem {
         }
     }
 
+    /**
+     * Create Low-priority import requests for a StorageArea.
+     * Requests the full available capacity so multiple carriers can work in parallel.
+     */
+    private requestStorageImports(buildingId: number): void {
+        const directions = this.storageFilterManager.getDirections(buildingId);
+        for (const [material] of directions) {
+            if (!this.storageFilterManager.isImportAllowed(buildingId, material)) continue;
+            const space = this.inventoryManager.getStorageOutputSpace(buildingId, material);
+            if (space <= 0) continue;
+            const activeCount = this.countActiveRequests(buildingId, material);
+            const needed = space - activeCount;
+            for (let i = 0; i < needed; i++) {
+                this.requestManager.addRequest(buildingId, material, 1, RequestPriority.Low);
+            }
+        }
+    }
+
     /** Check if there's already an active (pending or in-progress) request for this building+material */
     private hasActiveRequest(buildingId: number, materialType: EMaterialType): boolean {
         const requests = this.requestManager.getRequestsForBuilding(buildingId);
         return requests.some(r => r.materialType === materialType);
+    }
+
+    /** Count active requests for a building+material. */
+    private countActiveRequests(buildingId: number, materialType: EMaterialType): number {
+        const requests = this.requestManager.getRequestsForBuilding(buildingId);
+        return requests.filter(r => r.materialType === materialType).length;
     }
 }

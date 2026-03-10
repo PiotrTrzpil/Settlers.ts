@@ -54,5 +54,4 @@ export type { PileSlot, StoragePilePosition } from './building-pile-registry';
 // Pile system
 export { PileRegistry } from './pile-registry';
 export type { PileSlotKey } from './pile-registry';
-export { StorageFilterManager } from './storage-filter-manager';
-export { PilePositionResolver } from './pile-position-resolver';
+export { StorageFilterManager, StorageDirection } from './storage-filter-manager';

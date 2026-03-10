@@ -7,10 +7,13 @@
 
 import { hexDistance } from '../../systems/hex-directions';
 import type { GameState } from '../../game-state';
+import { EntityType } from '../../entity';
+import type { EMaterialType } from '../../economy/material-type';
 import type { ResourceRequest } from './resource-request';
 import { getAvailableSupplies } from './resource-supply';
 import type { InventoryReservationManager } from './inventory-reservation';
 import type { BuildingInventoryManager } from '../inventory';
+import type { StorageFilterManager } from '../../systems/inventory/storage-filter-manager';
 
 /**
  * Result of a successful match between a request and a supply.
@@ -48,6 +51,11 @@ export interface MatchOptions {
      * If provided, reserved amounts are subtracted from available supply.
      */
     reservationManager?: InventoryReservationManager;
+    /**
+     * Storage filter manager for StorageArea export filtering.
+     * If provided, StorageArea buildings without export enabled are skipped as sources.
+     */
+    storageFilterManager?: StorageFilterManager;
 }
 
 interface MatchCandidate {
@@ -56,10 +64,24 @@ interface MatchCandidate {
     distance: number;
 }
 
+/** Check if a StorageArea source is allowed to supply material. */
+function isStorageSourceAllowed(
+    sourceId: number,
+    destIsStorage: boolean,
+    materialType: EMaterialType,
+    storageFilterManager: StorageFilterManager | undefined
+): boolean {
+    // No StorageArea↔StorageArea transfers
+    if (destIsStorage) return false;
+    // Must have export enabled
+    if (storageFilterManager && !storageFilterManager.isExportAllowed(sourceId, materialType)) return false;
+    return true;
+}
+
 /**
  * Iterate over all valid supply candidates for a request.
  *
- * Filters by: self-reference, entity existence, and reservations.
+ * Filters by: self-reference, entity existence, storage direction, and reservations.
  * Yields candidates in supply order (unsorted).
  */
 function* iterateMatchCandidates(
@@ -68,12 +90,15 @@ function* iterateMatchCandidates(
     inventoryManager: BuildingInventoryManager,
     options: MatchOptions
 ): Generator<MatchCandidate> {
-    const { playerId, reservationManager } = options;
+    const { playerId, reservationManager, storageFilterManager } = options;
 
     const destBuilding = gameState.getEntity(request.buildingId);
     if (!destBuilding) {
         return;
     }
+
+    const destIsStorageBuilding =
+        destBuilding.type === EntityType.Building && inventoryManager.isStorageArea(request.buildingId);
 
     const supplies = getAvailableSupplies(gameState, inventoryManager, request.materialType, {
         playerId,
@@ -87,6 +112,21 @@ function* iterateMatchCandidates(
 
         const sourceBuilding = gameState.getEntity(supply.buildingId);
         if (!sourceBuilding) {
+            continue;
+        }
+
+        // Only apply storage direction filtering to actual StorageArea buildings (not free piles)
+        const sourceIsStorage =
+            sourceBuilding.type === EntityType.Building && inventoryManager.isStorageArea(supply.buildingId);
+        const sourceAllowed =
+            !sourceIsStorage ||
+            isStorageSourceAllowed(
+                supply.buildingId,
+                destIsStorageBuilding,
+                request.materialType,
+                storageFilterManager
+            );
+        if (!sourceAllowed) {
             continue;
         }
 
