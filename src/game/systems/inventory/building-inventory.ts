@@ -712,13 +712,9 @@ export class BuildingInventoryManager implements Persistable<SerializedBuildingI
     }
 
     deserialize(data: SerializedBuildingInventory[]): void {
-        // Reset reservations to 0 since in-progress requests are reset to pending on restore
+        // Reservations are now fully persisted — restore exact slot state including reserved counts
         for (const inv of data) {
-            this.restoreInventory({
-                ...inv,
-                inputSlots: inv.inputSlots.map(s => ({ ...s, reserved: 0 })),
-                outputSlots: inv.outputSlots.map(s => ({ ...s, reserved: 0 })),
-            });
+            this.restoreInventory(inv);
         }
     }
 

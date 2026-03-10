@@ -22,6 +22,7 @@
  *         return {
  *             systems: [treeSystem],
  *             exports: { treeSystem },
+ *             persistence: [treeSystem],  // or 'none' if no persistent state
  *         };
  *     },
  * };
@@ -168,8 +169,12 @@ export interface FeatureInstance {
      * Persistable managers owned by this feature.
      * Registered with PersistenceRegistry automatically.
      * Ordering derived from feature dependencies.
+     *
+     * Use 'none' for features that have no persistent state.
+     * This field is required so that omitting it is a compile error —
+     * preventing the "forgot to persist" bug.
      */
-    persistence?: Persistable[];
+    persistence: Persistable[] | 'none';
 
     /**
      * Command handlers owned by this feature.
@@ -196,6 +201,13 @@ export interface FeatureInstance {
      * Called on-demand (not every frame).
      */
     diagnostics?: () => FeatureDiagnostics;
+
+    /**
+     * Called after all entities and feature stores have been restored from a snapshot.
+     * Use this to rebuild derived state (spatial indices, caches, etc.) that is not
+     * persisted independently. Called in feature-load (dependency) order.
+     */
+    onRestoreComplete?(): void;
 }
 
 /**

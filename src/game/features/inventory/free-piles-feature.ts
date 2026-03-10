@@ -27,6 +27,7 @@ export const FreePilesFeature: FeatureDefinition = {
         freePileHandler.registerEvents();
 
         return {
+            persistence: 'none',
             destroy: () => freePileHandler.unregisterEvents(),
         };
     },

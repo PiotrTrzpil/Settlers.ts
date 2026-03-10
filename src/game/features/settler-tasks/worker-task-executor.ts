@@ -98,6 +98,13 @@ export class WorkerTaskExecutor {
     /** Enable verbose choreography events (nodeStarted, nodeCompleted, animationApplied, waitingAtHome) */
     verbose = false;
 
+    /** Accumulated idle-search sub-timings for the current tick (reset externally). */
+    idleTimings = { selectJob: 0, canWork: 0, startJob: 0 } as Record<string, number>;
+    /** Count of handleIdle calls per tick (reset externally). */
+    idleSearchCount = 0;
+    /** Count of early exits (no handler or no home) per tick. */
+    idleEarlyExitCount = 0;
+
     constructor(cfg: WorkerTaskExecutorConfig) {
         this.gameState = cfg.gameState;
         this.choreographyStore = cfg.choreographyStore;
@@ -181,11 +188,13 @@ export class WorkerTaskExecutor {
         config: SettlerConfig,
         runtime: WorkerRuntimeState
     ): boolean {
+        this.idleSearchCount++;
         const entityHandler = this.handlerRegistry.getEntityHandler(config.search);
         // Position handler may be registered under a separate plantSearch type (e.g. GRAIN_SEED_POS)
         const positionHandler = this.handlerRegistry.getPositionHandler(config.plantSearch ?? config.search);
 
         if (!entityHandler && !positionHandler) {
+            this.idleEarlyExitCount++;
             this.missingHandlerLogger.warn(
                 `No work handler registered for search type: ${config.search}. ` +
                     `Settler ${settler.id} (${UnitType[settler.subType]}) will stay idle until feature is implemented.`
@@ -200,6 +209,7 @@ export class WorkerTaskExecutor {
 
         // WORKPLACE settlers without an assignment skip work search — assignment comes from push only
         if (!homeBuilding && getWorkerBuildingTypes(settler.race, settler.subType as UnitType)) {
+            this.idleEarlyExitCount++;
             this.emitIdleSkipped(settler.id, 'no_home', null);
             return false;
         }
@@ -211,19 +221,31 @@ export class WorkerTaskExecutor {
         // First visit: worker must walk to their building before starting work
         if (homeBuilding && !this.ensureFirstVisit(settler, runtime, homeBuilding)) return false;
 
+        const searchKey = `find:${config.search}`;
+        let t0 = performance.now();
         const targets = this.findTargets(settler, entityHandler, positionHandler, homeBuilding);
+        this.idleTimings[searchKey] = (this.idleTimings[searchKey] ?? 0) + performance.now() - t0;
         if (!targets) return false; // error already logged
 
+        t0 = performance.now();
         const selected = this.jobSelector.selectJob(settler, config, targets.entity, homeBuilding, targets.position);
+        this.idleTimings['selectJob'] = (this.idleTimings['selectJob'] ?? 0) + performance.now() - t0;
         if (!selected) {
             const reason = !targets.entity && !targets.position ? 'no_target' : 'no_job';
             this.emitIdleSkipped(settler.id, reason, homeBuilding);
             return false;
         }
 
-        if (this.shouldWaitBeforeStarting(settler, homeBuilding, selected, entityHandler, targets.entity)) return false;
+        t0 = performance.now();
+        if (this.shouldWaitBeforeStarting(settler, homeBuilding, selected, entityHandler, targets.entity)) {
+            this.idleTimings['canWork'] = (this.idleTimings['canWork'] ?? 0) + performance.now() - t0;
+            return false;
+        }
+        this.idleTimings['canWork'] = (this.idleTimings['canWork'] ?? 0) + performance.now() - t0;
 
+        t0 = performance.now();
         this.lifecycle.startJob(settler, runtime, selected, targets.entity, homeBuilding, targets.position);
+        this.idleTimings['startJob'] = (this.idleTimings['startJob'] ?? 0) + performance.now() - t0;
         return true;
     }
 

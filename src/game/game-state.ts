@@ -6,6 +6,7 @@ import {
     BuildingType,
     getBuildingFootprint,
     isUnitTypeSelectable,
+    type CarryingState,
 } from './entity';
 import { Race } from './core/race';
 import { getBuildingBlockArea, getBuildingPassableTiles } from './buildings/types';
@@ -298,6 +299,56 @@ export class GameState {
             player,
             variation: variation ?? 0,
         });
+
+        return entity;
+    }
+
+    /**
+     * Restore an entity from a snapshot — populates entity table and occupancy maps
+     * WITHOUT emitting entity:created events.
+     *
+     * Used during snapshot restoration so features restore their own state from
+     * serialized data rather than reacting to creation events.
+     * The caller must set nextId appropriately before/after calling this.
+     */
+    public restoreEntity(data: {
+        id: number;
+        type: EntityType;
+        subType: number;
+        x: number;
+        y: number;
+        player: number;
+        race?: Race;
+        carrying?: CarryingState;
+        hidden?: boolean;
+    }): Entity {
+        const race = data.race ?? this.playerRaces.get(data.player) ?? Race.Roman;
+        const resolvedSelectable = resolveEntitySelectable(data.type, data.subType);
+
+        const entity: Entity = {
+            id: data.id,
+            type: data.type,
+            x: data.x,
+            y: data.y,
+            player: data.player,
+            subType: data.subType,
+            race,
+            selectable: resolvedSelectable,
+        };
+
+        if (data.carrying) entity.carrying = data.carrying;
+        if (data.hidden) entity.hidden = data.hidden;
+
+        this.entities.push(entity);
+        this.entityMap.set(entity.id, entity);
+        this.entityIndex.add(entity.id, data.type, data.player);
+
+        // Update nextId to stay ahead of restored entity IDs
+        if (data.id >= this.nextId) {
+            this.nextId = data.id + 1;
+        }
+
+        this.addSpatialAndOccupancy(entity, data.type, data.subType, data.x, data.y);
 
         return entity;
     }

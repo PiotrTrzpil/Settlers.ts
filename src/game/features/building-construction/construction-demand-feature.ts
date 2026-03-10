@@ -90,6 +90,7 @@ export const ConstructionDemandFeature: FeatureDefinition = {
             exports: {
                 constructionDemandSystem,
             } satisfies ConstructionDemandExports,
+            persistence: 'none',
             destroy: () => {
                 constructionDemandSystem.unregisterEvents();
             },

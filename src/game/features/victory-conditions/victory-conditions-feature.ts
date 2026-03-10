@@ -46,6 +46,7 @@ export const VictoryConditionsFeature: FeatureDefinition = {
             systems: [victorySystem],
             systemGroup: 'Victory',
             exports,
+            persistence: 'none',
             diagnostics: (): FeatureDiagnostics => {
                 const result: GameResult = victorySystem.getResult();
                 const active = victorySystem.getActivePlayers();

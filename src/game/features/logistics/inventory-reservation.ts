@@ -14,6 +14,7 @@
 
 import { EMaterialType } from '../../economy/material-type';
 import type { BuildingInventoryManager } from '../inventory';
+import { PersistentValue, type StoreSerializer } from '../../persistence/persistent-store';
 
 /**
  * A reservation of inventory at a building.
@@ -40,6 +41,42 @@ export interface InventoryReservation {
  *
  * Delegates to BuildingInventoryManager for slot-level enforcement.
  */
+/** Type alias for the primary store's nested map structure. */
+type ReservationStore = Map<number, Map<EMaterialType, Map<number, InventoryReservation>>>;
+
+/** Custom serializer: nested maps ↔ flat array of InventoryReservation records. */
+const reservationSerializer: StoreSerializer<ReservationStore> = {
+    serialize(store: ReservationStore): InventoryReservation[] {
+        const entries: InventoryReservation[] = [];
+        for (const byMaterial of store.values()) {
+            for (const byReq of byMaterial.values()) {
+                for (const reservation of byReq.values()) {
+                    entries.push(reservation);
+                }
+            }
+        }
+        return entries;
+    },
+    deserialize(raw: unknown): ReservationStore {
+        const entries = raw as InventoryReservation[];
+        const store: ReservationStore = new Map();
+        for (const r of entries) {
+            let byMaterial = store.get(r.buildingId);
+            if (!byMaterial) {
+                byMaterial = new Map();
+                store.set(r.buildingId, byMaterial);
+            }
+            let byReq = byMaterial.get(r.materialType);
+            if (!byReq) {
+                byReq = new Map();
+                byMaterial.set(r.materialType, byReq);
+            }
+            byReq.set(r.requestId, r);
+        }
+        return store;
+    },
+};
+
 export class InventoryReservationManager {
     /** Source of truth: buildingId → materialType → requestId → Reservation */
     private store = new Map<number, Map<EMaterialType, Map<number, InventoryReservation>>>();
@@ -52,8 +89,34 @@ export class InventoryReservationManager {
 
     private readonly inventoryManager: BuildingInventoryManager;
 
+    /** Persistence store — add to feature's persistence array. */
+    readonly persistenceStore: PersistentValue<ReservationStore>;
+
     constructor(inventoryManager: BuildingInventoryManager) {
         this.inventoryManager = inventoryManager;
+        this.persistenceStore = new PersistentValue<ReservationStore>('inventoryReservations', this.store, {
+            serialize: () => reservationSerializer.serialize(this.store),
+            deserialize: (raw: unknown) => {
+                const restored = reservationSerializer.deserialize(raw);
+                // Replace primary store
+                this.store.clear();
+                for (const [k, v] of restored) {
+                    this.store.set(k, v);
+                }
+                // Rebuild secondary index from restored primary store
+                this.byRequest.clear();
+                this._size = 0;
+                for (const byMaterial of this.store.values()) {
+                    for (const byReq of byMaterial.values()) {
+                        for (const reservation of byReq.values()) {
+                            this.byRequest.set(reservation.requestId, reservation);
+                            this._size++;
+                        }
+                    }
+                }
+                return this.store;
+            },
+        });
     }
 
     // --- Single mutation point ---

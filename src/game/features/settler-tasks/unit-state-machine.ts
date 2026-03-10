@@ -66,6 +66,17 @@ export interface UnitStateMachineConfig {
     idleSearchCooldown: number;
 }
 
+/** Category of work performed by updateUnit — used for sub-timing breakdown. */
+export const enum TickCategory {
+    MOVE_TASK = 0,
+    IDLE_SEARCH = 1,
+    JOB_EXEC = 2,
+    IDLE_ANIM = 3,
+    COMBAT_SKIP = 4,
+    /** Idle settler that skipped search (cooldown, carrier, military) */
+    IDLE_SKIP = 5,
+}
+
 export class UnitStateMachine {
     private readonly gameState: GameState;
     private readonly visualService: EntityVisualService;
@@ -87,15 +98,16 @@ export class UnitStateMachine {
 
     /**
      * Process one tick for a single unit.
+     * Returns a TickCategory indicating what kind of work was performed (for sub-timing breakdown).
      */
-    updateUnit(unit: Entity, runtime: UnitRuntime, dt: number): void {
+    updateUnit(unit: Entity, runtime: UnitRuntime, dt: number): TickCategory {
         const config = this.settlerConfigs.get(unit.subType as UnitType);
 
         // Handle move task first (takes priority)
         if (runtime.moveTask) {
             this.updateDirectionTracking(unit, runtime);
             this.updateMoveTask(unit, runtime);
-            return;
+            return TickCategory.MOVE_TASK;
         }
 
         // Handle choreography-based jobs for configured settlers
@@ -103,16 +115,19 @@ export class UnitStateMachine {
             if (runtime.state !== SettlerState.WORKING) {
                 this.updateDirectionTracking(unit, runtime);
             }
-            this.updateSettler(unit, config, runtime, dt);
-            return;
+            const wasWorking = runtime.state === SettlerState.WORKING;
+            const didSearch = this.updateSettler(unit, config, runtime, dt);
+            if (wasWorking) return TickCategory.JOB_EXEC;
+            return didSearch ? TickCategory.IDLE_SEARCH : TickCategory.IDLE_SKIP;
         }
 
         // Skip idle updates for units actively in combat (combat system manages their animation)
-        if (this.isInCombat(unit.id)) return;
+        if (this.isInCombat(unit.id)) return TickCategory.COMBAT_SKIP;
 
         // Handle idle state for non-configured units
         const controller = this.gameState.movement.getController(unit.id);
         this.animController.updateIdleUnit(unit, runtime.idleState, dt, controller?.state, controller?.direction);
+        return TickCategory.IDLE_ANIM;
     }
 
     // ─────────────────────────────────────────────────────────────
@@ -179,7 +194,9 @@ export class UnitStateMachine {
     // Settler state dispatch
     // ─────────────────────────────────────────────────────────────
 
-    private updateSettler(settler: Entity, config: SettlerConfig, runtime: UnitRuntime, dt: number): void {
+    /** Returns true if idle-search was actually performed (not skipped due to cooldown/type). */
+    private updateSettler(settler: Entity, config: SettlerConfig, runtime: UnitRuntime, dt: number): boolean {
+        let didSearch = false;
         switch (runtime.state) {
         case SettlerState.IDLE:
             // Dispatch-only units (military) and carriers skip idle work search.
@@ -187,6 +204,7 @@ export class UnitStateMachine {
                 if (runtime.idleSearchCooldown > 0) {
                     runtime.idleSearchCooldown--;
                 } else {
+                    didSearch = true;
                     this.handleIdle(settler, config, runtime);
                 }
             }
@@ -215,6 +233,7 @@ export class UnitStateMachine {
             runtime.idleSearchCooldown = 0;
             break;
         }
+        return didSearch;
     }
 
     private handleIdle(settler: Entity, config: SettlerConfig, runtime: UnitRuntime): void {

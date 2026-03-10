@@ -57,6 +57,7 @@ export const StoneFeature: FeatureDefinition = {
         return {
             systems: [],
             exports: { stoneSystem } satisfies StoneFeatureExports,
+            persistence: 'none',
         };
     },
 };

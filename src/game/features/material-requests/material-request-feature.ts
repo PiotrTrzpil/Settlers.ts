@@ -40,6 +40,7 @@ export const MaterialRequestFeature: FeatureDefinition = {
         return {
             systems: [system],
             exports: { materialRequestSystem: system } satisfies MaterialRequestExports,
+            persistence: 'none',
             destroy: () => system.destroy(),
         };
     },

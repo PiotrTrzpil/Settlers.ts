@@ -50,7 +50,15 @@ export type RequestResetReason =
  * Provides methods to add, remove, query, and fulfill requests.
  * Maintains requests sorted by priority and timestamp.
  */
-export class RequestManager implements Persistable<SerializedRequest[]> {
+
+/** Wrapper for the full serialized state of RequestManager. */
+export interface SerializedRequestManagerState {
+    requests: SerializedRequest[];
+    nextId: number;
+    gameTime: number;
+}
+
+export class RequestManager implements Persistable<SerializedRequestManagerState> {
     readonly persistKey = 'requests' as const;
     /** All requests indexed by ID */
     private requests: Map<number, ResourceRequest> = new Map();
@@ -418,10 +426,10 @@ export class RequestManager implements Persistable<SerializedRequest[]> {
 
     // ── Persistable implementation ──
 
-    serialize(): SerializedRequest[] {
-        const result: SerializedRequest[] = [];
+    serialize(): SerializedRequestManagerState {
+        const requests: SerializedRequest[] = [];
         for (const req of this.getAllRequests()) {
-            result.push({
+            requests.push({
                 id: req.id,
                 buildingId: req.buildingId,
                 materialType: req.materialType,
@@ -434,13 +442,13 @@ export class RequestManager implements Persistable<SerializedRequest[]> {
                 assignedAt: req.assignedAt,
             });
         }
-        return result;
+        return { requests, nextId: this.nextId, gameTime: this.gameTime };
     }
 
-    deserialize(data: SerializedRequest[]): void {
-        // Reset in-progress requests to pending since carriers restart idle on restore
-        for (const req of data) {
-            const wasInProgress = req.status === RequestStatus.InProgress;
+    deserialize(data: SerializedRequestManagerState): void {
+        // Restore requests exactly as saved — InProgress requests keep their
+        // assignedCarrier/sourceBuilding so carriers resume mid-transport.
+        for (const req of data.requests) {
             this.restoreRequest({
                 id: req.id,
                 buildingId: req.buildingId,
@@ -448,12 +456,14 @@ export class RequestManager implements Persistable<SerializedRequest[]> {
                 amount: req.amount,
                 priority: req.priority,
                 timestamp: req.timestamp,
-                status: wasInProgress ? RequestStatus.Pending : req.status,
-                assignedCarrier: wasInProgress ? null : req.assignedCarrier,
-                sourceBuilding: wasInProgress ? null : req.sourceBuilding,
-                assignedAt: wasInProgress ? null : req.assignedAt,
+                status: req.status,
+                assignedCarrier: req.assignedCarrier,
+                sourceBuilding: req.sourceBuilding,
+                assignedAt: req.assignedAt,
             });
         }
+        this.nextId = data.nextId;
+        this.gameTime = data.gameTime;
     }
 
     /**

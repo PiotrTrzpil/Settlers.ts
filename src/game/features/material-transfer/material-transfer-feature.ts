@@ -32,6 +32,7 @@ export const MaterialTransferFeature: FeatureDefinition = {
 
         return {
             exports: { materialTransfer } satisfies MaterialTransferExports,
+            persistence: 'none',
         };
     },
 };

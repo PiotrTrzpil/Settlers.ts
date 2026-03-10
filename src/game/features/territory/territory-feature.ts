@@ -28,6 +28,7 @@ export const TerritoryFeature: FeatureDefinition = {
 
         return {
             exports,
+            persistence: 'none',
             onTerrainReady(terrain: TerrainData) {
                 const territoryManager = new TerritoryManager(terrain.width, terrain.height);
                 exports.territoryManager = territoryManager;

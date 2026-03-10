@@ -1,195 +1,39 @@
 /**
  * Game state persistence - auto-saves to localStorage every few seconds.
- * Uses a simple approach: serialize state, reload via existing create methods.
+ *
+ * Snapshot format: metadata + entity table + terrain + dynamic feature data.
+ * All feature state is stored via PersistenceRegistry under dynamic keys —
+ * no typed fields for individual features.
  */
 
 import type { Game } from '../game';
 import { EntityType } from '../entity';
-import type { CarryingState, Entity } from '../entity';
+import type { CarryingState } from '../entity';
 import type { Race } from '../core/race';
 import type { EMaterialType } from '../economy/material-type';
 import type { TreeStage } from '../features/trees/tree-system';
 import type { StoneStage } from '../features/stones/stone-system';
 import type { RequestPriority, RequestStatus } from '../features/logistics/resource-request';
-import type { SerializedConstructionSite } from '../features/building-construction';
 
 const STORAGE_KEY = 'settlers_game_state';
 const INITIAL_STATE_KEY = 'settlers_initial_state';
 const LAST_MAP_KEY = 'settlers_last_map';
 const AUTO_SAVE_INTERVAL_MS = 5000; // Save every 5 seconds
-// Bumped: persistence for crops, storage filters, production control, residence spawns,
-// resource signs, combat, barracks training, auto-recruit
-const SNAPSHOT_VERSION = 11;
+// Bumped: snapshot simplification — removed typed feature fields, event-free entity restore
+const SNAPSHOT_VERSION = 12;
 
 /**
- * Serialized inventory slot state.
- */
-export interface SerializedInventorySlot {
-    materialType: EMaterialType;
-    current: number;
-    max: number;
-    reserved: number;
-}
-
-/**
- * Serialized building inventory state.
- */
-export interface SerializedBuildingInventory {
-    entityId: number;
-    buildingType: number;
-    inputSlots: SerializedInventorySlot[];
-    outputSlots: SerializedInventorySlot[];
-}
-
-/**
- * Serialized carrier state.
- */
-export interface SerializedCarrier {
-    entityId: number;
-}
-
-/**
- * Serialized tree state.
- */
-export interface SerializedTree {
-    entityId: number;
-    stage: TreeStage;
-    progress: number;
-    stumpTimer: number;
-    currentOffset: number;
-    variant?: number;
-}
-
-/**
- * Serialized stone state.
- */
-export interface SerializedStone {
-    entityId: number;
-    stage: StoneStage;
-    variant: number;
-    level: number;
-}
-
-/**
- * Serialized crop state.
- */
-export interface SerializedCrop {
-    entityId: number;
-    stage: number; // CropStage enum
-    cropType: number; // MapObjectType enum
-    progress: number;
-    decayTimer: number;
-    currentOffset: number;
-}
-
-/**
- * Serialized storage filter state.
- */
-export interface SerializedStorageFilter {
-    buildingId: number;
-    materials: number[]; // EMaterialType values
-}
-
-/**
- * Serialized production control state.
- */
-export interface SerializedProductionControl {
-    buildingId: number;
-    mode: string; // ProductionMode string
-    recipeCount: number;
-    roundRobinIndex: number;
-    proportions: Array<{ index: number; weight: number }>;
-    queue: number[];
-    productionCounts: Array<{ index: number; count: number }>;
-}
-
-/**
- * Serialized pending spawn state for residence buildings.
- */
-export interface SerializedPendingSpawn {
-    buildingEntityId: number;
-    remaining: number;
-    timer: number;
-    unitType: number;
-    count: number;
-    spawnInterval: number;
-}
-
-/**
- * Serialized resource sign state.
- */
-export interface SerializedResourceSign {
-    elapsed: number;
-    signs: Array<{ entityId: number; x: number; y: number; expiresAt: number }>;
-}
-
-/**
- * Serialized combat unit state.
- */
-export interface SerializedCombatUnit {
-    entityId: number;
-    health: number;
-    maxHealth: number;
-}
-
-/**
- * Serialized barracks training state.
- */
-export interface SerializedBarracksTraining {
-    races: Array<{ buildingId: number; race: number }>;
-    activeTrainings: Array<{
-        buildingId: number;
-        carrierId: number;
-        recipe: { inputs: Array<{ material: number; count: number }>; unitType: number; level: number };
-    }>;
-}
-
-/**
- * Serialized unit-transformer state (pending carrier → specialist transformations).
- */
-export interface SerializedUnitTransformer {
-    pendingTransforms: Array<{
-        carrierId: number;
-        targetUnitType: number;
-        toolMaterial: number;
-        pileEntityId: number;
-    }>;
-}
-
-/**
- * Serialized resource request.
- */
-export interface SerializedRequest {
-    id: number;
-    buildingId: number;
-    materialType: EMaterialType;
-    amount: number;
-    priority: RequestPriority;
-    timestamp: number;
-    status: RequestStatus;
-    assignedCarrier: number | null;
-    sourceBuilding: number | null;
-    assignedAt: number | null;
-}
-
-/**
- * Serialized production state for a building.
- * @deprecated Kept for backward compatibility with saved snapshots (v5).
- * Production progress is now tracked by SettlerTaskSystem workers.
- */
-interface SerializedProduction {
-    entityId: number;
-    progress: number;
-}
-
-/**
- * Minimal snapshot - entities, positions, and critical game state.
+ * Snapshot format: metadata + entity table + terrain + dynamic feature data.
+ *
+ * All feature-specific state lives under dynamic keys populated by
+ * `persistenceRegistry.serializeAll()`. No typed fields for individual features.
  */
 export interface GameStateSnapshot {
     version: number;
     timestamp: number;
-    /** Map identifier - only restore if loading the same map */
+    /** Map identifier — only restore if loading the same map */
     mapId: string;
+    /** Full entity table (structural data only) */
     entities: Array<{
         id: number;
         type: EntityType;
@@ -202,41 +46,10 @@ export interface GameStateSnapshot {
         carrying?: CarryingState;
         hidden?: boolean;
     }>;
+    /** Entity ID counter — ensures new entities don't collide with restored ones */
     nextId: number;
+    /** RNG state for deterministic replay */
     rngSeed: number;
-    /** Resource stack quantities and building ownership */
-    resourceQuantities: Array<{ entityId: number; quantity: number; buildingId?: number }>;
-    /** Active construction sites (buildings currently under construction) */
-    constructionSites?: SerializedConstructionSite[];
-    /** Building inventory states (input/output slot amounts) */
-    buildingInventories?: SerializedBuildingInventory[];
-    /** Carrier states (status, carrying) */
-    carriers?: SerializedCarrier[];
-    /** Tree states (stage, progress, stump timer) */
-    trees?: SerializedTree[];
-    /** Stone states (depletion level, variant) */
-    stones?: SerializedStone[];
-    /** Crop states (stage, progress, decay) */
-    crops?: SerializedCrop[];
-    /** Storage filter configurations per building */
-    storageFilters?: SerializedStorageFilter[];
-    /** Production control states per building */
-    productionControl?: SerializedProductionControl[];
-    /** Pending residence spawns */
-    residenceSpawns?: SerializedPendingSpawn[];
-    /** Resource sign state (elapsed timer + active signs) */
-    resourceSigns?: SerializedResourceSign;
-    /** Combat unit health states */
-    combat?: SerializedCombatUnit[];
-    /** Barracks training state (races + active trainings) */
-    barracksTraining?: SerializedBarracksTraining;
-    /** Unit transformer state (pending carrier → specialist transformations) */
-    unitTransformer?: SerializedUnitTransformer;
-    /** Resource requests (pending and in-progress) */
-    requests?: SerializedRequest[];
-    /** Production cycle progress per building (deprecated v5 field, kept for backward compat) */
-    // eslint-disable-next-line @typescript-eslint/no-deprecated, sonarjs/deprecation -- backward compat with saved snapshots (v5)
-    productions?: SerializedProduction[];
     /** Modified terrain ground types (base64-encoded Uint8Array) — full copy, used in initial state */
     terrainGroundType?: string;
     /** Modified terrain ground heights (base64-encoded Uint8Array) — full copy, used in initial state */
@@ -245,8 +58,123 @@ export interface GameStateSnapshot {
     terrainGroundTypeDiff?: string;
     /** Sparse terrain ground height diff vs initial state (base64 Uint32 pairs: [index, value, ...]) */
     terrainGroundHeightDiff?: string;
-    /** Per-building work area center overrides (entityId → tile offset) */
-    workAreaOffsets?: Array<{ entityId: number; dx: number; dy: number }>;
+    /** Dynamic feature data from PersistenceRegistry — each key is a persistKey */
+    [key: string]: unknown;
+}
+
+// ─── Feature serialization types ─────────────────────────────────────────────
+// These types are used by individual feature Persistable implementations.
+// They are NOT fields on GameStateSnapshot — feature data lives under dynamic
+// persist keys via the PersistenceRegistry.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface SerializedInventorySlot {
+    materialType: EMaterialType;
+    current: number;
+    max: number;
+    reserved: number;
+}
+
+export interface SerializedBuildingInventory {
+    entityId: number;
+    buildingType: number;
+    inputSlots: SerializedInventorySlot[];
+    outputSlots: SerializedInventorySlot[];
+}
+
+export interface SerializedCarrier {
+    entityId: number;
+}
+
+export interface SerializedTree {
+    entityId: number;
+    stage: TreeStage;
+    progress: number;
+    stumpTimer: number;
+    currentOffset: number;
+    variant?: number;
+}
+
+export interface SerializedStone {
+    entityId: number;
+    stage: StoneStage;
+    variant: number;
+    level: number;
+}
+
+export interface SerializedCrop {
+    entityId: number;
+    stage: number;
+    cropType: number;
+    progress: number;
+    decayTimer: number;
+    currentOffset: number;
+}
+
+export interface SerializedStorageFilter {
+    buildingId: number;
+    materials: number[];
+}
+
+export interface SerializedProductionControl {
+    buildingId: number;
+    mode: string;
+    recipeCount: number;
+    roundRobinIndex: number;
+    proportions: Array<{ index: number; weight: number }>;
+    queue: number[];
+    productionCounts: Array<{ index: number; count: number }>;
+}
+
+export interface SerializedPendingSpawn {
+    buildingEntityId: number;
+    remaining: number;
+    timer: number;
+    unitType: number;
+    count: number;
+    spawnInterval: number;
+}
+
+export interface SerializedResourceSign {
+    elapsed: number;
+    signs: Array<{ entityId: number; x: number; y: number; expiresAt: number }>;
+}
+
+export interface SerializedCombatUnit {
+    entityId: number;
+    health: number;
+    maxHealth: number;
+}
+
+export interface SerializedBarracksTraining {
+    races: Array<{ buildingId: number; race: number }>;
+    activeTrainings: Array<{
+        buildingId: number;
+        carrierId: number;
+        recipe: { inputs: Array<{ material: number; count: number }>; unitType: number; level: number };
+    }>;
+}
+
+export interface SerializedUnitTransformer {
+    pendingTransforms: Array<{
+        carrierId: number;
+        targetUnitType: number;
+        toolMaterial: number;
+        pileEntityId: number;
+    }>;
+}
+
+export interface SerializedRequest {
+    id: number;
+    buildingId: number;
+    materialType: EMaterialType;
+    amount: number;
+    priority: RequestPriority;
+    timestamp: number;
+    status: RequestStatus;
+    assignedCarrier: number | null;
+    sourceBuilding: number | null;
+    assignedAt: number | null;
 }
 
 /** Current map identifier for save/load matching */
@@ -355,7 +283,9 @@ function terrainSnapshotFields(
 }
 
 /**
- * Serialize game state to a minimal snapshot.
+ * Serialize game state to a snapshot.
+ * Entity table and terrain are assembled here; all feature state comes
+ * from the PersistenceRegistry via serializeAll() (dynamic keys).
  */
 export function createSnapshot(game: Game): GameStateSnapshot {
     const gameState = game.state;
@@ -380,9 +310,7 @@ export function createSnapshot(game: Game): GameStateSnapshot {
         entities,
         nextId: gameState.nextId,
         rngSeed: gameState.rng.getState(),
-        // Terrain snapshot
         ...terrainSnapshotFields(game),
-        // Feature state from registry
         ...game.services.persistenceRegistry.serializeAll(),
     } as GameStateSnapshot;
 }
@@ -401,32 +329,49 @@ export function saveGameState(game: Game): boolean {
     }
 }
 
+/** Result of checking saved snapshot compatibility. */
+export type SnapshotCheckResult =
+    | { status: 'none' }
+    | { status: 'valid'; snapshot: GameStateSnapshot }
+    | { status: 'stale'; savedVersion: number; expectedVersion: number }
+    | { status: 'wrong-map'; savedMapId: string };
+
+/**
+ * Check saved snapshot compatibility WITHOUT loading it.
+ * Returns status so the UI can show appropriate warnings.
+ */
+export function checkSavedSnapshot(): SnapshotCheckResult {
+    try {
+        const stored = localStorage.getItem(STORAGE_KEY);
+        if (!stored) return { status: 'none' };
+
+        const snapshot = JSON.parse(stored) as GameStateSnapshot;
+        if (snapshot.version !== SNAPSHOT_VERSION) {
+            return { status: 'stale', savedVersion: snapshot.version, expectedVersion: SNAPSHOT_VERSION };
+        }
+        if (snapshot.mapId !== currentMapId) {
+            return { status: 'wrong-map', savedMapId: snapshot.mapId };
+        }
+        return { status: 'valid', snapshot };
+    } catch {
+        return { status: 'none' };
+    }
+}
+
 /**
  * Load saved snapshot from localStorage.
  * Only returns snapshot if it matches the current map.
  */
 export function loadSnapshot(): GameStateSnapshot | null {
-    try {
-        const stored = localStorage.getItem(STORAGE_KEY);
-        if (!stored) return null;
+    const result = checkSavedSnapshot();
+    if (result.status === 'valid') return result.snapshot;
 
-        const snapshot = JSON.parse(stored) as GameStateSnapshot;
-        if (snapshot.version !== SNAPSHOT_VERSION) {
-            console.warn(`Snapshot version mismatch: ${snapshot.version} !== ${SNAPSHOT_VERSION}`);
-            return null;
-        }
-
-        // Only restore if same map
-        if (snapshot.mapId !== currentMapId) {
-            console.log(`Snapshot is for different map (${snapshot.mapId}), not restoring`);
-            return null;
-        }
-
-        return snapshot;
-    } catch (e) {
-        console.warn('Failed to load game state:', e);
-        return null;
+    if (result.status === 'stale') {
+        console.warn(`Snapshot version mismatch: ${result.savedVersion} !== ${result.expectedVersion}`);
+    } else if (result.status === 'wrong-map') {
+        console.log(`Snapshot is for different map (${result.savedMapId}), not restoring`);
     }
+    return null;
 }
 
 /**
@@ -437,7 +382,7 @@ export function clearSavedGameState(): void {
 }
 
 /**
- * Strip MapObject entities and tree states from the saved snapshot.
+ * Strip MapObject entities and tree/stone state from the saved snapshot.
  * Used when the tree expansion setting changes so the next reload
  * re-populates trees from map data with the new setting.
  */
@@ -447,12 +392,11 @@ export function clearSavedTreeState(): void {
         if (!stored) return;
 
         const snapshot = JSON.parse(stored) as GameStateSnapshot;
-        const treeIds = new Set(snapshot.entities.filter(e => e.type === EntityType.MapObject).map(e => e.id));
         snapshot.entities = snapshot.entities.filter(e => e.type !== EntityType.MapObject);
-        snapshot.trees = [];
-        snapshot.stones = [];
-        // Drop resource quantities that belonged to map object entities
-        snapshot.resourceQuantities = snapshot.resourceQuantities.filter(r => !treeIds.has(r.entityId));
+        // Clear feature-specific tree/stone data stored under dynamic keys
+        delete snapshot['trees'];
+        delete snapshot['stones'];
+        delete snapshot['resourceQuantities'];
         localStorage.setItem(STORAGE_KEY, JSON.stringify(snapshot));
     } catch {
         // If anything fails, just clear the whole thing
@@ -469,29 +413,17 @@ export function hasSavedGameState(): boolean {
 
 // === Restore Helpers ===
 
-/** Restore entity properties that addEntity doesn't set (race, carrying, hidden). */
-function restoreEntityProps(entity: Entity, saved: GameStateSnapshot['entities'][number]): void {
-    if (saved.race !== undefined) entity.race = saved.race;
-    if (saved.carrying) entity.carrying = saved.carrying;
-    if (saved.hidden) entity.hidden = saved.hidden;
-}
-
 function restoreEntities(game: Game, snapshot: GameStateSnapshot): void {
     const state = game.state;
 
-    // Recreate entities using the normal addEntity path.
-    // This emits entity:created events — subscribers handle type-specific initialization
-    // (e.g., TreeSystem registers fresh tree state, MovementSystem creates controllers).
-    // Feature state (trees, stones, carriers, etc.) is overwritten later by deserializeAll().
+    // Recreate entities via addEntity — emits entity:created events so systems
+    // (movement controllers, visual service, territory, combat) initialize state.
+    // Feature persistables then overwrite default state with snapshot data via deserializeAll().
     for (const e of snapshot.entities) {
-        const savedNextId = state.nextId;
-        state.nextId = e.id;
-
-        const entity = state.addEntity(e.type, e.subType, e.x, e.y, e.player, { variation: e.variation, race: e.race });
-        state.nextId = Math.max(savedNextId, e.id + 1);
-
-        // Restore per-entity properties not covered by addEntity
-        restoreEntityProps(entity, e);
+        state.nextId = e.id; // ensure addEntity produces the correct ID
+        const entity = state.addEntity(e.type, e.subType, e.x, e.y, e.player, { race: e.race });
+        if (e.carrying) entity.carrying = e.carrying;
+        if (e.hidden) entity.hidden = e.hidden;
     }
 }
 
@@ -510,10 +442,23 @@ function restoreTerrain(game: Game, snapshot: GameStateSnapshot): void {
 }
 
 /**
- * Restore game state from a snapshot using normal entity creation.
+ * Restore game state from a snapshot.
+ *
+ * Entities are recreated via addEntity (emitting entity:created events) so systems
+ * initialize default state. Then deserializeAll() overwrites with snapshot data.
+ *
  * Must be called on a fresh Game instance (entities array should be empty or will be cleared).
  */
 export function restoreFromSnapshot(game: Game, snapshot: GameStateSnapshot): void {
+    // 0. Reject snapshots with incompatible version — callers should use loadSnapshot()
+    //    which already checks, but guard here too for direct callers.
+    if (snapshot.version !== SNAPSHOT_VERSION) {
+        throw new Error(
+            `restoreFromSnapshot: snapshot version ${snapshot.version} !== expected ${SNAPSHOT_VERSION}. ` +
+                `Saved data is incompatible — discard and start fresh.`
+        );
+    }
+
     // 1. Clear existing entities via the normal removal path.
     const existingIds = game.state.entities.map(e => e.id);
     for (const id of existingIds) {
@@ -528,18 +473,17 @@ export function restoreFromSnapshot(game: Game, snapshot: GameStateSnapshot): vo
     game.state.rng.setState(snapshot.rngSeed);
     game.state.nextId = snapshot.nextId;
 
-    // 3. Recreate entities with their per-entity state overrides (triggers entity:created events)
+    // 3. Recreate entities (emits entity:created → systems create default state).
     restoreEntities(game, snapshot);
 
     // 4. Restore terrain modifications (raw ground, leveling)
     restoreTerrain(game, snapshot);
 
-    // 5. Restore all feature state via registry (topological order handles dependencies)
+    // 5. Restore all feature state via registry (topological order handles dependencies).
+    // deserializeAll() overwrites default state created by entity:created events.
     game.services.persistenceRegistry.deserializeAll(snapshot as unknown as Record<string, unknown>);
 
-    // 6. Rebuild derived state that is not persisted independently.
-    // Pile registry reconnects StackedPile entities to building inventories.
-    // Building overlays recreate animation instances for completed buildings.
+    // 6. Rebuild derived state that is not owned by features.
     game.services.inventoryPileSync?.rebuildFromExistingEntities();
     game.services.buildingOverlayManager.rebuildFromExistingEntities(game.services.constructionSiteManager);
 

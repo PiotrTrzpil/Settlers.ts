@@ -26,7 +26,9 @@ import { RequestStatus, type ResourceRequest } from './resource-request';
 import { InventoryReservationManager } from './inventory-reservation';
 import type { TransportJobRecord } from './transport-job-record';
 import * as TransportJobService from './transport-job-service';
+import { getNextJobId, setNextJobId } from './transport-job-service';
 import type { TransportJobDeps } from './transport-job-service';
+import { PersistentMap, PersistentValue } from '../../persistence/persistent-store';
 import type { TransportJobOps } from '../settler-tasks/choreo-types';
 import type { BuildingInventoryManager } from '../inventory';
 import { RequestMatcher } from './request-matcher';
@@ -79,7 +81,17 @@ export class LogisticsDispatcher implements TickSystem {
     readonly inFlightTracker: InFlightTracker;
 
     /** Active transport jobs indexed by carrier ID. Exposed read-only for testing/diagnostics. */
-    readonly activeJobs: Map<number, TransportJobRecord> = new Map();
+    readonly activeJobs = new PersistentMap<TransportJobRecord>('transportJobs');
+
+    /** Persisted next job ID counter — syncs with TransportJobService's module-level counter. */
+    readonly nextJobIdStore = new PersistentValue<number>('transportNextJobId', 1, {
+        serialize: () => getNextJobId(),
+        deserialize: (raw: unknown) => {
+            const id = raw as number;
+            setNextJobId(id);
+            return id;
+        },
+    });
 
     /** Dependencies for TransportJobService lifecycle operations. */
     private readonly transportJobDeps: TransportJobDeps;
@@ -137,7 +149,7 @@ export class LogisticsDispatcher implements TickSystem {
             requestManager: config.requestManager,
             inFlightTracker: this.inFlightTracker,
             preAssignmentQueue: this.preAssignmentQueue,
-            activeJobs: this.activeJobs,
+            activeJobs: this.activeJobs.raw,
             carrierFilter: config.carrierFilter,
         });
 
@@ -229,7 +241,7 @@ export class LogisticsDispatcher implements TickSystem {
         this.matchDiagnostics.tick(dt);
         this.assignPendingRequests();
         this.matchDiagnostics.markConsumed();
-        this.stallDetector.tick(dt, this.activeJobs);
+        this.stallDetector.tick(dt, this.activeJobs.raw);
     }
 
     /**
@@ -367,7 +379,7 @@ export class LogisticsDispatcher implements TickSystem {
      */
     private handleConstructionCompleted(buildingId: number): void {
         let jobsCancelled = 0;
-        for (const [carrierId, job] of sortedEntries(this.activeJobs)) {
+        for (const [carrierId, job] of sortedEntries(this.activeJobs.raw)) {
             if (job.destBuilding === buildingId) {
                 TransportJobService.cancel(job, 'construction_completed', this.transportJobDeps);
                 this.activeJobs.delete(carrierId);
@@ -406,7 +418,7 @@ export class LogisticsDispatcher implements TickSystem {
         this.pendingPileRedirects.delete(buildingId);
 
         // Handle active TransportJobs referencing this building
-        for (const [carrierId, job] of sortedEntries(this.activeJobs)) {
+        for (const [carrierId, job] of sortedEntries(this.activeJobs.raw)) {
             if (job.destBuilding === buildingId) {
                 // Destination destroyed — must cancel, carrier has nowhere to deliver
                 TransportJobService.cancel(job, 'building_destroyed', this.transportJobDeps);
@@ -461,7 +473,7 @@ export interface BuildingCleanupResult {
 
 /** Find a job record by ID across all active jobs, or return undefined. */
 function findJobById(
-    activeJobs: ReadonlyMap<number, TransportJobRecord>,
+    activeJobs: { values(): Iterable<TransportJobRecord> },
     jobId: number
 ): TransportJobRecord | undefined {
     for (const record of activeJobs.values()) {

@@ -45,6 +45,7 @@ export const OreSignFeature: FeatureDefinition = {
         return {
             systems: [signSystem],
             exports,
+            persistence: 'none',
             onTerrainReady(terrain: TerrainData, resourceData?: Uint8Array) {
                 const oreVeinData = new OreVeinData(terrain.width, terrain.height);
                 if (resourceData) {

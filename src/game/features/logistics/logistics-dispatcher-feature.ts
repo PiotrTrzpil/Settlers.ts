@@ -52,9 +52,19 @@ export const LogisticsDispatcherFeature: FeatureDefinition = {
         const { constructionRequestSystem } = ctx.getFeature<BuildingConstructionExports>('building-construction');
         constructionRequestSystem.setInFlightTracker(logisticsDispatcher.inFlightTracker);
 
+        // Collect persistence stores from sub-managers
+        const inFlightTracker = logisticsDispatcher.inFlightTracker as import('./in-flight-tracker').InFlightTrackerImpl;
+        const reservationManager = logisticsDispatcher.getReservationManager();
+
         return {
             systems: [logisticsDispatcher],
             systemGroup: 'Logistics',
+            persistence: [
+                logisticsDispatcher.activeJobs,
+                logisticsDispatcher.nextJobIdStore,
+                inFlightTracker.persistenceStore,
+                reservationManager.persistenceStore,
+            ],
             exports: { logisticsDispatcher } satisfies LogisticsDispatcherExports,
         };
     },

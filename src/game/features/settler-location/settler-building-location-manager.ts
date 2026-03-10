@@ -100,12 +100,15 @@ implements ISettlerBuildingLocationManager, Persistable<SerializedSettlerLocatio
                         `building ${existing.buildingId}`
                 );
             }
-            // Status is Approaching — validate it's the same building
+            // Status is Approaching — if targeting a different building, cancel stale approach and proceed.
+            // This can happen after restore: approaching state is transient and the settler's choreo
+            // may have been redirected to a different building.
             if (existing.buildingId !== buildingId) {
-                throw new Error(
-                    `SettlerBuildingLocationManager.enterBuilding: settler ${settlerId} is Approaching ` +
-                        `building ${existing.buildingId} but enterBuilding called for ${buildingId}`
+                log.debug(
+                    `Settler ${settlerId} was Approaching building ${existing.buildingId} ` +
+                        `but entering ${buildingId} — cancelling stale approach`
                 );
+                this.locationMap.delete(settlerId);
             }
             // Transition Approaching → Inside
         }
@@ -199,27 +202,46 @@ implements ISettlerBuildingLocationManager, Persistable<SerializedSettlerLocatio
     serialize(): SerializedSettlerLocations {
         const entries: SerializedSettlerLocations['entries'] = [];
         for (const [settlerId, location] of this.locationMap) {
-            entries.push({ settlerId, buildingId: location.buildingId, status: location.status });
+            // Only persist "Inside" entries — "Approaching" is transient movement state
+            // that cannot be reliably reconstructed (the settler's choreo may target a
+            // different building after restore).
+            if (location.status === SettlerBuildingStatus.Inside) {
+                entries.push({ settlerId, buildingId: location.buildingId, status: location.status });
+            }
         }
         return { entries };
     }
 
     deserialize(data: SerializedSettlerLocations): void {
         this.locationMap.clear();
+        let skipped = 0;
         for (const entry of data.entries) {
+            // Validate both settler and building still exist — stale data from
+            // version mismatches or partial saves must not crash.
+            const settler = this.ctx.gameState.getEntity(entry.settlerId);
+            const building = this.ctx.gameState.getEntity(entry.buildingId);
+            if (!settler || !building) {
+                log.debug(
+                    `Skipping stale location entry: settler ${entry.settlerId} ` +
+                        `(exists=${!!settler}), building ${entry.buildingId} (exists=${!!building})`
+                );
+                skipped++;
+                continue;
+            }
+
             this.locationMap.set(entry.settlerId, {
                 buildingId: entry.buildingId,
                 status: entry.status,
             });
             if (entry.status === SettlerBuildingStatus.Inside) {
-                const entity = this.ctx.gameState.getEntityOrThrow(entry.settlerId, 'settler-location restore');
-                entity.hidden = true;
+                settler.hidden = true;
                 // Remove controller + tileOccupancy (entity:created may have added them)
                 this.ctx.gameState.movement.removeController(entry.settlerId);
                 this.ctx.gameState.clearTileOccupancy(entry.settlerId);
             }
             // Approaching: entity stays visible; feature will re-issue movement on its own onTerrainReady
         }
+        if (skipped > 0) log.debug(`Skipped ${skipped} stale settler location entries`);
         log.debug(`Deserialized: ${this.locationMap.size} settler location entries`);
     }
 

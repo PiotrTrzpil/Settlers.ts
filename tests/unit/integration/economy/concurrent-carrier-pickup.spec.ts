@@ -148,7 +148,7 @@ describe.skipIf(!hasRealData)('Concurrent carrier pickup (real game data)', { ti
         sim.waitForConstructionComplete(s.siteId);
 
         // Continue running so any un-cancelled carriers would crash on deposit
-        sim.runUntil(() => false, { maxTicks: 5_000, label: 'post-construction settle' });
+        sim.runTicks(5_000);
 
         // No errors — if in-flight jobs weren't cancelled, depositInput would throw
         expect(sim.errors).toHaveLength(0);

@@ -414,6 +414,11 @@ export class GameServices {
         return this.featureRegistry.getDiagnosticsRegistry();
     }
 
+    /** Notify all features that snapshot restoration is complete (dependency order). */
+    public notifyRestoreComplete(): void {
+        this.featureRegistry.notifyRestoreComplete();
+    }
+
     /** Clean up all event subscriptions and system state. */
     public destroy(): void {
         this.featureRegistry.destroy();

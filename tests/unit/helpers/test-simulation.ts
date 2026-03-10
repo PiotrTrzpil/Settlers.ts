@@ -647,6 +647,21 @@ export class Simulation {
         return this.resultEntityId(result);
     }
 
+    placeGoodsAt(x: number, y: number, material: EMaterialType, amount: number): number {
+        if (amount > 8) throw new Error(`placeGoodsAt: amount ${amount} exceeds max pile size of 8`);
+        const result = this.execute({
+            type: 'place_pile',
+            materialType: material,
+            amount,
+            x,
+            y,
+        });
+        if (!result.success) {
+            throw new Error(`Failed to place ${EMaterialType[material]} at (${x}, ${y}): ${result.error}`);
+        }
+        return this.resultEntityId(result);
+    }
+
     placeGoodsNear(buildingId: number, material: EMaterialType, amount: number) {
         if (amount > 8) throw new Error(`placeGoodsNear: amount ${amount} exceeds max pile size of 8`);
         const tiles = this.tilesNearBuilding(buildingId, 1);

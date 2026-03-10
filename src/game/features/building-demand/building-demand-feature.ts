@@ -58,6 +58,7 @@ export const BuildingDemandFeature: FeatureDefinition = {
             exports: {
                 buildingDemandSystem,
             } satisfies BuildingDemandExports,
+            persistence: 'none',
             destroy: () => {
                 buildingDemandSystem.unregisterEvents();
             },

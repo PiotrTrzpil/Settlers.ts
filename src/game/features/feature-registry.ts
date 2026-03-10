@@ -83,7 +83,7 @@ export class FeatureRegistry {
         if (this.instances.has(featureId)) {
             throw new Error(`Feature '${featureId}' already registered`);
         }
-        this.instances.set(featureId, { exports });
+        this.instances.set(featureId, { exports, persistence: 'none' });
         this.exports.set(featureId, exports);
         this.loadedIds.push(featureId);
     }
@@ -213,6 +213,19 @@ export class FeatureRegistry {
     }
 
     /**
+     * Notify all features that snapshot restoration is complete.
+     * Called after entity table + all feature stores have been deserialized.
+     * Features use this to rebuild derived state (spatial indices, caches, etc.).
+     * Invoked in feature-load (dependency) order.
+     */
+    notifyRestoreComplete(): void {
+        for (const id of this.loadedIds) {
+            const instance = this.instances.get(id);
+            instance?.onRestoreComplete?.();
+        }
+    }
+
+    /**
      * Get exports from a loaded feature.
      */
     getFeatureExports<T>(featureId: string): T {
@@ -255,7 +268,7 @@ export class FeatureRegistry {
      * Extracted from load() to keep complexity under the limit.
      */
     private collectPluginHooks(featureId: string, instance: FeatureInstance): void {
-        if (instance.persistence) {
+        if (instance.persistence !== 'none') {
             for (const persistable of instance.persistence) {
                 this.persistables.push(persistable);
             }

@@ -26,9 +26,9 @@ import { loadBuildingIcons, loadResourceIcons, loadUnitIcons, type IconEntry } f
 import { debugStats } from '@/game/debug/debug-stats';
 import {
     gameStatePersistence,
-    loadSnapshot,
     restoreFromSnapshot,
     clearSavedGameState,
+    checkSavedSnapshot,
     setCurrentMapId,
     saveInitialState,
 } from '@/game/state/game-state-persistence';
@@ -119,14 +119,153 @@ async function loadMapFile(
 /** Resources available in the UI (re-exported from palette-data) */
 const availableResources = ALL_RESOURCES;
 
-/** Try to restore saved game state, recording timing in mapLoadTimings. */
-function tryRestoreGameState(game: Game): void {
-    const snapshot = loadSnapshot();
-    if (!snapshot) return;
-    const t0 = performance.now();
-    log.info('Restoring saved game state...');
-    restoreFromSnapshot(game, snapshot);
-    debugStats.state.mapLoadTimings.stateRestore = Math.round(performance.now() - t0);
+/**
+ * Try to restore saved game state, recording timing in mapLoadTimings.
+ * If saved data is stale (version mismatch), pauses ticks and shows a warning
+ * so the user can decide to discard. Returns true if stale data was detected.
+ */
+/**
+ * Try to restore saved game state, then start auto-saving.
+ * If saved data is stale (version mismatch), pauses ticks and fires onStaleDetected.
+ */
+function restoreAndStartPersistence(game: Game, onStaleDetected: () => void): void {
+    const check = checkSavedSnapshot();
+
+    if (check.status === 'stale') {
+        log.info(`Stale save detected: version ${check.savedVersion} !== ${check.expectedVersion}`);
+        game.settings.state.paused = true;
+        onStaleDetected();
+    } else if (check.status === 'valid') {
+        const t0 = performance.now();
+        log.info('Restoring saved game state...');
+        restoreFromSnapshot(game, check.snapshot);
+        debugStats.state.mapLoadTimings.stateRestore = Math.round(performance.now() - t0);
+    }
+
+    gameStatePersistence.start(game);
+}
+
+/** Dismiss stale snapshot warning — discards saved data and unpauses ticks. */
+function dismissStaleSnapshotWarning(warning: Ref<boolean>, game: ShallowRef<Game | null>): void {
+    clearSavedGameState();
+    warning.value = false;
+    if (game.value) {
+        game.value.settings.state.paused = false;
+    }
+}
+
+/** State container passed to the extracted loadMap logic. */
+interface MapLoadContext {
+    game: ShallowRef<Game | null>;
+    fileName: Ref<string | null>;
+    mapInfo: Ref<string>;
+    staleSnapshotWarning: Ref<boolean>;
+    mapLoadState: { isLoading: boolean; currentFile: string | null; initialized: boolean };
+    getFileManager: () => FileManager;
+    wireFeatureToggles: (g: Game) => void;
+}
+
+/**
+ * Central map loading function. All map loads go through here.
+ * Handles guards, cleanup, and state management in one place.
+ */
+async function loadMap(
+    ctx: MapLoadContext,
+    file: IFileSource | null,
+    options: { isTestMap?: boolean; isEmptyMap?: boolean } = {}
+): Promise<boolean> {
+    const fm = ctx.getFileManager();
+    const { mapLoadState } = ctx;
+
+    // Guard: prevent concurrent loads
+    if (mapLoadState.isLoading) {
+        log.debug(`Skipping map load${file ? ' for ' + file.name : ''} - already loading`);
+        return false;
+    }
+
+    // Guard: don't reload same file
+    if (file && mapLoadState.currentFile === file.name) {
+        log.debug(`Skipping map load for ${file.name} - already loaded`);
+        return false;
+    }
+
+    mapLoadState.isLoading = true;
+    debugStats.startMapLoad();
+    console.log(`[${performance.now().toFixed(0)}ms] [perf] Map load started`);
+
+    // Ensure game data XML is loaded before creating the Game.
+    await getGameDataLoader().load();
+
+    try {
+        // Destroy old game first to prevent multiple game loops
+        if (ctx.game.value) {
+            gameStatePersistence.stop();
+            ctx.game.value.destroy();
+            ctx.game.value = null;
+        }
+
+        gameStatePersistence.resetForNewMap();
+        const onStale = () => {
+            ctx.staleSnapshotWarning.value = true;
+        };
+
+        if (options.isTestMap) {
+            ctx.mapInfo.value = 'Test map (synthetic 256x256)';
+            ctx.fileName.value = null;
+            mapLoadState.currentFile = '__test_map__';
+            setCurrentMapId('__test_map__');
+
+            ctx.game.value = createTestGame(fm);
+            ctx.wireFeatureToggles(ctx.game.value);
+            saveInitialState(ctx.game.value);
+            restoreAndStartPersistence(ctx.game.value, onStale);
+            return true;
+        }
+
+        if (options.isEmptyMap) {
+            ctx.mapInfo.value = 'Empty map (flat 256x256 grass)';
+            ctx.fileName.value = null;
+            mapLoadState.currentFile = '__empty_map__';
+            setCurrentMapId('__empty_map__');
+
+            ctx.game.value = createEmptyMapGame(fm);
+            ctx.wireFeatureToggles(ctx.game.value);
+            saveInitialState(ctx.game.value);
+            gameStatePersistence.start(ctx.game.value);
+            return true;
+        }
+
+        if (!file) {
+            log.debug('No map file provided');
+            return false;
+        }
+
+        const result = await loadMapFile(file, fm);
+        if (!result.game) {
+            log.error(`Failed to load map: ${file.name}`);
+            return false;
+        }
+
+        ctx.fileName.value = file.name;
+        mapLoadState.currentFile = file.name;
+        ctx.mapInfo.value = result.mapInfo;
+        ctx.game.value = result.game;
+        ctx.wireFeatureToggles(result.game);
+
+        setCurrentMapId(file.name);
+        saveInitialState(result.game);
+        restoreAndStartPersistence(result.game, onStale);
+
+        if (isLuaEnabled()) {
+            void result.game.loadScript(file.name).then(scriptResult => {
+                if (scriptResult.success) log.info(`Script loaded: ${scriptResult.scriptPath}`);
+            });
+        }
+
+        return true;
+    } finally {
+        mapLoadState.isLoading = false;
+    }
 }
 
 /** Create mode toggle handler */
@@ -297,163 +436,33 @@ export function useMapView(
     const fileName = ref<string | null>(null);
     const mapInfo = ref('');
     const game = shallowRef<Game | null>(null);
-
-    /** Tracks map loading state to prevent race conditions */
+    const staleSnapshotWarning = ref(false);
     const mapLoadState = reactive({
         isLoading: false,
         currentFile: null as string | null,
         initialized: false,
     });
 
-    /**
-     * Central map loading function. All map loads go through here.
-     * Handles guards, cleanup, and state management in one place.
-     */
-    async function loadMap(
-        file: IFileSource | null,
-        options: { isTestMap?: boolean; isEmptyMap?: boolean } = {}
-    ): Promise<boolean> {
-        const fm = getFileManager();
+    const mapLoadCtx: MapLoadContext = {
+        game,
+        fileName,
+        mapInfo,
+        staleSnapshotWarning,
+        mapLoadState,
+        getFileManager,
+        wireFeatureToggles,
+    };
 
-        // Guard: prevent concurrent loads
-        if (mapLoadState.isLoading) {
-            const fileDesc = file ? ' for ' + file.name : '';
-            log.debug(`Skipping map load${fileDesc} - already loading`);
-            return false;
-        }
-
-        // Guard: don't reload same file
-        if (file && mapLoadState.currentFile === file.name) {
-            log.debug(`Skipping map load for ${file.name} - already loaded`);
-            return false;
-        }
-
-        mapLoadState.isLoading = true;
-        debugStats.startMapLoad();
-        console.log(`[${performance.now().toFixed(0)}ms] [perf] Map load started`);
-
-        // Ensure game data XML is loaded before creating the Game.
-        // load() is idempotent — returns cached data if already loaded.
-        await getGameDataLoader().load();
-
-        try {
-            // Destroy old game first to prevent multiple game loops
-            if (game.value) {
-                // Stop auto-saving before destroying
-                gameStatePersistence.stop();
-                game.value.destroy();
-                game.value = null;
-            }
-
-            // Reset initial state tracking for new map
-            gameStatePersistence.resetForNewMap();
-
-            if (options.isTestMap) {
-                // Load synthetic test map
-                mapInfo.value = 'Test map (synthetic 256x256)';
-                fileName.value = null;
-                mapLoadState.currentFile = '__test_map__';
-
-                // Set map ID for persistence BEFORE loading snapshot
-                setCurrentMapId('__test_map__');
-
-                game.value = createTestGame(fm);
-                wireFeatureToggles(game.value);
-
-                // Save initial state BEFORE checking for saved game state
-                saveInitialState(game.value);
-
-                tryRestoreGameState(game.value);
-
-                // Start auto-saving (won't save initial state again since we already did)
-                gameStatePersistence.start(game.value);
-                return true;
-            }
-
-            if (options.isEmptyMap) {
-                // Load flat empty map with real sprite assets (for entity catalog tests)
-                mapInfo.value = 'Empty map (flat 256x256 grass)';
-                fileName.value = null;
-                mapLoadState.currentFile = '__empty_map__';
-                setCurrentMapId('__empty_map__');
-
-                game.value = createEmptyMapGame(fm);
-                wireFeatureToggles(game.value);
-                saveInitialState(game.value);
-                gameStatePersistence.start(game.value);
-                return true;
-            }
-
-            if (!file) {
-                log.debug('No map file provided');
-                return false;
-            }
-
-            // Load real map file
-            const result = await loadMapFile(file, fm);
-            if (!result.game) {
-                log.error(`Failed to load map: ${file.name}`);
-                return false;
-            }
-
-            fileName.value = file.name;
-            mapLoadState.currentFile = file.name;
-            mapInfo.value = result.mapInfo;
-            game.value = result.game;
-            wireFeatureToggles(result.game);
-
-            // Set map ID for persistence BEFORE loading snapshot
-            setCurrentMapId(file.name);
-
-            // Save initial state BEFORE checking for saved game state
-            saveInitialState(result.game);
-
-            tryRestoreGameState(result.game);
-
-            // Start auto-saving (won't save initial state again since we already did)
-            gameStatePersistence.start(result.game);
-
-            // Load mission script (non-blocking, only if Lua enabled)
-            if (isLuaEnabled()) {
-                void result.game.loadScript(file.name).then(scriptResult => {
-                    if (scriptResult.success) {
-                        log.info(`Script loaded: ${scriptResult.scriptPath}`);
-                    }
-                });
-            }
-
-            return true;
-        } finally {
-            mapLoadState.isLoading = false;
-        }
-    }
-
-    /**
-     * Initialize map on first load. Called once from onMounted.
-     * Subsequent file selections go through onFileSelect.
-     */
     function initializeMap(): void {
-        // Only initialize once
         if (mapLoadState.initialized) return;
         mapLoadState.initialized = true;
-
-        if (isTestMap.value) {
-            void loadMap(null, { isTestMap: true });
-        } else if (isEmptyMap.value) {
-            void loadMap(null, { isEmptyMap: true });
-        }
-        // For real maps, the file-browser component handles selection
-        // and emits 'select' which calls onFileSelect → loadMap
+        if (isTestMap.value) void loadMap(mapLoadCtx, null, { isTestMap: true });
+        else if (isEmptyMap.value) void loadMap(mapLoadCtx, null, { isEmptyMap: true });
     }
 
-    /**
-     * Handle user file selection from file browser.
-     */
     function onFileSelect(file: IFileSource): void {
-        // In test/empty map mode, ignore file browser selections
         if (isTestMap.value || isEmptyMap.value) return;
-
-        void loadMap(file);
+        void loadMap(mapLoadCtx, file);
     }
 
     // =========================================================================
@@ -586,6 +595,8 @@ export function useMapView(
     const togglePause = gameActions.togglePause;
     const resetGameState = gameActions.resetGameState;
 
+    const dismissStaleSnapshot = () => dismissStaleSnapshotWarning(staleSnapshotWarning, game);
+
     // Load icons from GFX files when game becomes available / race changes
     setupIconLoading(game, getFileManager, currentPlayerRace, resourceIcons, buildingIcons, unitIcons, specialistIcons);
 
@@ -623,5 +634,7 @@ export function useMapView(
         togglePause,
         resetGameState,
         updateLayerVisibility,
+        staleSnapshotWarning,
+        dismissStaleSnapshot,
     };
 }

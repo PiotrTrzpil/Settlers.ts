@@ -2,7 +2,13 @@
     <CollapseSection title="Frame Timings" :default-open="false">
         <StatRow label="Frame" :value="`${rt.frame} ms`" total />
         <StatRow label="Ticks" :value="`${rt.ticks} ms`" />
-        <StatRow v-for="(ms, name) in rt.tickSystems" :key="name" :label="name" :value="`${ms} ms`" :depth="1" />
+        <StatRow
+            v-for="(ms, name) in rt.tickSystems"
+            :key="name"
+            :label="String(name).trimStart()"
+            :value="`${ms} ms`"
+            :depth="1 + Math.floor((String(name).length - String(name).trimStart().length) / 2)"
+        />
         <StatRow label="Animations" :value="`${rt.animations} ms`" />
         <StatRow label="Update" :value="`${rt.update} ms`" />
         <StatRow label="Callback" :value="`${rt.callback} ms`" />

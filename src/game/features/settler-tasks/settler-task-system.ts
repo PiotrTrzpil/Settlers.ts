@@ -38,7 +38,7 @@ import type { EntityVisualService } from '../../animation/entity-visual-service'
 import { WorkHandlerRegistry } from './work-handler-registry';
 import { IdleAnimationController } from './idle-animation-controller';
 import { WorkerTaskExecutor } from './worker-task-executor';
-import { UnitStateMachine, type UnitRuntime } from './unit-state-machine';
+import { UnitStateMachine, TickCategory, type UnitRuntime } from './unit-state-machine';
 import { JobChoreographyStore } from './job-choreography-store';
 import { BuildingPositionResolverImpl } from './building-position-resolver';
 import { JobPartResolverImpl } from './job-part-resolver';
@@ -116,6 +116,8 @@ export class SettlerTaskSystem implements TickSystem, Persistable<SerializedUnit
     private oreVeinData: OreVeinData | undefined;
     /** Tick counter for throttling the orphan-runtime safety net */
     private ticksSinceOrphanCheck = 0;
+    /** Sub-timing breakdown from the last tick (ms per category). */
+    private lastSubTimings: Record<string, number> = {};
     /** Late-bound transport job ops — set by LogisticsDispatcherFeature after construction. */
     private _transportJobOps: TransportJobOps | null = null;
     /** Location manager — owns approaching/inside state and entity.hidden transitions. */
@@ -794,6 +796,13 @@ export class SettlerTaskSystem implements TickSystem, Persistable<SerializedUnit
 
     /** TickSystem interface */
     tick(dt: number): void {
+        // Per-category timing accumulators (indexed by TickCategory)
+        const cats: [number, number, number, number, number, number] = [0, 0, 0, 0, 0, 0];
+        // Reset idle-search sub-timings for this tick
+        const it = this.workerExecutor.idleTimings;
+        for (const k of Object.keys(it)) it[k] = 0;
+        this.workerExecutor.idleSearchCount = 0;
+
         const unitIds = this.gameState.entityIndex.idsOfType(EntityType.Unit);
         for (const id of unitIds) {
             const entity = this.gameState.getEntity(id);
@@ -801,16 +810,42 @@ export class SettlerTaskSystem implements TickSystem, Persistable<SerializedUnit
             // Skip ephemeral visual-only units (death angels)
             if (isAngelUnitType(entity.subType as UnitType)) continue;
 
+            const start = performance.now();
             try {
                 const runtime = this.getRuntime(entity.id);
-                this.stateMachine.updateUnit(entity, runtime, dt);
+                const cat = this.stateMachine.updateUnit(entity, runtime, dt);
+                cats[cat] += performance.now() - start;
             } catch (e) {
                 const err = e instanceof Error ? e : new Error(String(e));
                 log.error(`Unhandled error updating unit ${entity.id}`, err);
+                cats[TickCategory.JOB_EXEC] += performance.now() - start;
             }
         }
 
+        const orphanStart = performance.now();
         this.cleanOrphanedRuntimes();
+        const orphanTime = performance.now() - orphanStart;
+
+        const sub: Record<string, number> = {
+            'idle-search': cats[TickCategory.IDLE_SEARCH],
+            '  searches': this.workerExecutor.idleSearchCount,
+            '  runtimes': this.runtimes.size,
+        };
+        // Add per-search-type and other idle sub-timings as nested entries
+        for (const [k, v] of Object.entries(it)) {
+            sub[`  ${k}`] = v;
+        }
+        sub['idle-skip'] = cats[TickCategory.IDLE_SKIP];
+        sub['job-exec'] = cats[TickCategory.JOB_EXEC];
+        sub['move-task'] = cats[TickCategory.MOVE_TASK];
+        sub['idle-anim'] = cats[TickCategory.IDLE_ANIM];
+        sub['orphan-cleanup'] = orphanTime;
+        this.lastSubTimings = sub;
+    }
+
+    /** Return sub-timing breakdown from the last tick for debug panel display. */
+    getSubTimings(): Record<string, number> {
+        return this.lastSubTimings;
     }
 
     /** Safety net: clean up runtimes for entities removed without onEntityRemoved signal. */

@@ -24,11 +24,15 @@ export function createGeologistHandler(
     // Spiral always originates from this point so prospecting fans out from
     // the mountain the player originally clicked, not the settler's current tile.
     const originBySettler = new Map<number, { x: number; y: number }>();
+    /** Settlers that exhausted their area — skip search until reassigned (player moves them). */
+    const exhaustedSettlers = new Set<number>();
 
     return {
         type: WorkHandlerType.POSITION,
 
         findPosition: (x: number, y: number, settlerId?: number) => {
+            if (settlerId !== undefined && exhaustedSettlers.has(settlerId)) return null;
+
             // Resolve (or record) the fixed origin for this geologist
             let cx = x;
             let cy = y;
@@ -43,15 +47,13 @@ export function createGeologistHandler(
             }
 
             const result = spiralSearch(cx, cy, terrain.width, terrain.height, (tx, ty) => {
-                if (Math.abs(tx - cx) > GEOLOGIST_SEARCH_RADIUS || Math.abs(ty - cy) > GEOLOGIST_SEARCH_RADIUS) {
-                    return false;
-                }
                 return terrain.isRock(tx, ty) && !oreVeinData.isProspected(tx, ty);
-            });
+            }, GEOLOGIST_SEARCH_RADIUS);
 
-            // No more tiles — clear so the geologist can be reassigned to a new area
+            // No more tiles — mark exhausted so we don't re-search every cooldown
             if (!result && settlerId !== undefined) {
                 originBySettler.delete(settlerId);
+                exhaustedSettlers.add(settlerId);
             }
 
             return result;
@@ -64,6 +66,7 @@ export function createGeologistHandler(
 
         onSettlerRemoved: (settlerId: number) => {
             originBySettler.delete(settlerId);
+            exhaustedSettlers.delete(settlerId);
         },
     };
 }

@@ -22,6 +22,7 @@ export const RequestManagerFeature: FeatureDefinition = {
 
         return {
             exports: { requestManager } satisfies RequestManagerExports,
+            persistence: 'none',
         };
     },
 };

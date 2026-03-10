@@ -139,11 +139,11 @@ export class StackedPileManager implements Persistable<SerializedResourceQuantit
     }
 
     deserialize(data: SerializedResourceQuantity[]): void {
+        this.states.clear();
         for (const rq of data) {
-            const state = this.states.get(rq.entityId);
-            if (state) {
-                state.quantity = rq.quantity;
-            }
+            // Create state with default Free kind — InventoryPileSync.rebuildFromExistingEntities()
+            // will assign the correct PileKind after all persistables are restored.
+            this.states.set(rq.entityId, { entityId: rq.entityId, quantity: rq.quantity, kind: { kind: SlotKind.Free } });
         }
     }
 

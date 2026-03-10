@@ -5,6 +5,7 @@
             'total-row': total,
             'sub-1': depth === 1,
             'sub-2': depth === 2,
+            'sub-3': depth >= 3,
         }"
     >
         <span class="stat-label" :class="{ dim }">{{ label }}</span>
@@ -81,6 +82,21 @@ withDefaults(
 }
 
 .sub-2 .stat-value {
+    color: var(--text-secondary);
+    font-size: 10px;
+}
+
+/* Sub-rows (depth 3) */
+.sub-3 {
+    padding-left: 36px;
+}
+
+.sub-3 .stat-label {
+    color: var(--text-ghost);
+    font-size: 10px;
+}
+
+.sub-3 .stat-value {
     color: var(--text-secondary);
     font-size: 10px;
 }

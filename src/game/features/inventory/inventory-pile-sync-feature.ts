@@ -51,6 +51,7 @@ export const InventoryPileSyncFeature: FeatureDefinition = {
 
         return {
             exports: { inventoryPileSync, pileRegistry } satisfies InventoryPileSyncExports,
+            persistence: 'none',
             destroy: () => inventoryPileSync.dispose(),
         };
     },

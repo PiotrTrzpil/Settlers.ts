@@ -44,6 +44,7 @@ export const BuildingOverlayFeature: FeatureDefinition = {
         return {
             systems: [buildingOverlayManager],
             exports: { buildingOverlayManager, overlayRegistry } satisfies BuildingOverlayFeatureExports,
+            persistence: 'none',
         };
     },
 };

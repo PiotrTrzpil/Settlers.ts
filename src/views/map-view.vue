@@ -202,7 +202,23 @@
                 />
 
                 <!-- "Ticks paused" overlay — visible when game loop runs but ticks don't -->
-                <div v-if="ticksPaused" class="ticks-paused-overlay">TICKS PAUSED</div>
+                <div v-if="ticksPaused && !staleSnapshotWarning" class="ticks-paused-overlay">TICKS PAUSED</div>
+
+                <!-- Stale save data warning — blocks interaction until user decides -->
+                <div v-if="staleSnapshotWarning" class="stale-save-backdrop">
+                    <div class="stale-save-dialog">
+                        <h2 class="stale-save-title">Incompatible Save Data</h2>
+                        <p class="stale-save-message">
+                            A saved game was found, but it was created with an older version
+                            and can no longer be loaded. The game is paused until you decide.
+                        </p>
+                        <div class="stale-save-actions">
+                            <button class="stale-save-btn stale-save-btn--discard" @click="dismissStaleSnapshot">
+                                Discard &amp; Start Fresh
+                            </button>
+                        </div>
+                    </div>
+                </div>
 
                 <!-- Left panel container (selection info) -->
                 <div class="left-panels">
@@ -306,6 +322,8 @@ const {
     buildingIcons,
     unitIcons,
     specialistIcons,
+    staleSnapshotWarning,
+    dismissStaleSnapshot,
 } = useMapView(
     () => props.fileManager,
     () => rendererRef.value?.getInputManager?.() ?? null,
@@ -769,6 +787,67 @@ onBeforeUnmount(() => {
     display: block;
     margin: 0;
     border: none;
+}
+
+/* Stale save data warning modal */
+.stale-save-backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.65);
+    z-index: 300;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.stale-save-dialog {
+    background: #1a1209;
+    border: 2px solid #c8a24e;
+    border-radius: 8px;
+    padding: 28px 36px;
+    max-width: 440px;
+    text-align: center;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
+}
+
+.stale-save-title {
+    color: #f0c040;
+    font-size: 20px;
+    font-weight: 700;
+    margin: 0 0 12px;
+}
+
+.stale-save-message {
+    color: #d4c4a0;
+    font-size: 14px;
+    line-height: 1.5;
+    margin: 0 0 20px;
+}
+
+.stale-save-actions {
+    display: flex;
+    justify-content: center;
+    gap: 12px;
+}
+
+.stale-save-btn {
+    padding: 8px 20px;
+    border-radius: 4px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    border: 1px solid transparent;
+    transition: background 0.15s;
+}
+
+.stale-save-btn--discard {
+    background: #c84040;
+    color: #fff;
+    border-color: #e05050;
+}
+
+.stale-save-btn--discard:hover {
+    background: #e04848;
 }
 
 /* Ticks-paused warning overlay */

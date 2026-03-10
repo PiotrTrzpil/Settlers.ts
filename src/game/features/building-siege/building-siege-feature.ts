@@ -67,6 +67,7 @@ export const BuildingSiegeFeature: FeatureDefinition = {
             systems: [siegeSystem],
             systemGroup: 'Military',
             exports: { siegeSystem } satisfies BuildingSiegeExports,
+            persistence: 'none',
             commands: {
                 capture_building: cmd => {
                     const capture = cmd as CaptureBuildingCommand;

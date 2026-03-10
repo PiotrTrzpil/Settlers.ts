@@ -120,3 +120,13 @@ export function redirectSource(record: TransportJobRecord, newBuildingId: number
 export function resetTransportJobIds(): void {
     nextJobId = 1;
 }
+
+/** Get the current next job ID counter (for persistence). */
+export function getNextJobId(): number {
+    return nextJobId;
+}
+
+/** Restore the next job ID counter from a persisted snapshot. */
+export function setNextJobId(id: number): void {
+    nextJobId = id;
+}
