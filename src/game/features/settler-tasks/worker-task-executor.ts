@@ -183,11 +183,7 @@ export class WorkerTaskExecutor {
      * Handle a worker in IDLE state: find a target and start a job.
      * @returns true if a job was started, false if the settler remains idle.
      */
-    handleIdle(
-        settler: Entity,
-        config: SettlerConfig,
-        runtime: WorkerRuntimeState
-    ): boolean {
+    handleIdle(settler: Entity, config: SettlerConfig, runtime: WorkerRuntimeState): boolean {
         this.idleSearchCount++;
         const entityHandler = this.handlerRegistry.getEntityHandler(config.search);
         // Position handler may be registered under a separate plantSearch type (e.g. GRAIN_SEED_POS)
@@ -204,7 +200,7 @@ export class WorkerTaskExecutor {
 
         // Resolve home building from existing assignment (push-based — no scanning)
         const homeBuilding = runtime.homeAssignment
-            ? this.gameState.getEntity(runtime.homeAssignment.buildingId) ?? null
+            ? (this.gameState.getEntity(runtime.homeAssignment.buildingId) ?? null)
             : null;
 
         // WORKPLACE settlers without an assignment skip work search — assignment comes from push only
@@ -224,12 +220,12 @@ export class WorkerTaskExecutor {
         const searchKey = `find:${config.search}`;
         let t0 = performance.now();
         const targets = this.findTargets(settler, entityHandler, positionHandler, homeBuilding);
-        this.idleTimings[searchKey] = (this.idleTimings[searchKey] ?? 0) + performance.now() - t0;
+        this.addTiming(searchKey, performance.now() - t0);
         if (!targets) return false; // error already logged
 
         t0 = performance.now();
         const selected = this.jobSelector.selectJob(settler, config, targets.entity, homeBuilding, targets.position);
-        this.idleTimings['selectJob'] = (this.idleTimings['selectJob'] ?? 0) + performance.now() - t0;
+        this.addTiming('selectJob', performance.now() - t0);
         if (!selected) {
             const reason = !targets.entity && !targets.position ? 'no_target' : 'no_job';
             this.emitIdleSkipped(settler.id, reason, homeBuilding);
@@ -237,16 +233,25 @@ export class WorkerTaskExecutor {
         }
 
         t0 = performance.now();
-        if (this.shouldWaitBeforeStarting(settler, homeBuilding, selected, entityHandler, targets.entity)) {
-            this.idleTimings['canWork'] = (this.idleTimings['canWork'] ?? 0) + performance.now() - t0;
-            return false;
-        }
-        this.idleTimings['canWork'] = (this.idleTimings['canWork'] ?? 0) + performance.now() - t0;
+        const shouldWait = this.shouldWaitBeforeStarting(
+            settler,
+            homeBuilding,
+            selected,
+            entityHandler,
+            targets.entity
+        );
+        this.addTiming('canWork', performance.now() - t0);
+        if (shouldWait) return false;
 
         t0 = performance.now();
         this.lifecycle.startJob(settler, runtime, selected, targets.entity, homeBuilding, targets.position);
-        this.idleTimings['startJob'] = (this.idleTimings['startJob'] ?? 0) + performance.now() - t0;
+        this.addTiming('startJob', performance.now() - t0);
         return true;
+    }
+
+    /** Accumulate elapsed time into the named idle timing bucket. */
+    private addTiming(key: string, elapsed: number): void {
+        this.idleTimings[key] = (this.idleTimings[key] ?? 0) + elapsed;
     }
 
     /** Ensure a worker has visited their home building. Returns true if ready to work. */

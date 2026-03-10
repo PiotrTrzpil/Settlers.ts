@@ -26,11 +26,7 @@ import { SearchType, SettlerState, type JobState, type WorkHandler, type Settler
 import type { TransportJobOps } from './choreo-types';
 import { buildAllSettlerConfigs } from '../../data/settler-data-access';
 import { assignInitialBuildingWorkers } from './initial-worker-assignment';
-import {
-    serializeRuntime,
-    deserializeJob,
-    type SerializedUnitRuntime,
-} from './settler-task-serialization';
+import { serializeRuntime, deserializeJob, type SerializedUnitRuntime } from './settler-task-serialization';
 import type { BuildingInventoryManager, BuildingPileRegistry } from '../inventory';
 import type { PileRegistry } from '../../systems/inventory/pile-registry';
 import { createWorkplaceHandler, createCarrierHandler } from './work-handlers';
@@ -122,7 +118,6 @@ export class SettlerTaskSystem implements TickSystem, Persistable<SerializedUnit
     private _transportJobOps: TransportJobOps | null = null;
     /** Location manager — owns approaching/inside state and entity.hidden transitions. */
     private readonly locationManager: ISettlerBuildingLocationManager;
-
 
     constructor(config: SettlerTaskSystemConfig) {
         this.gameState = config.gameState;
@@ -248,9 +243,7 @@ export class SettlerTaskSystem implements TickSystem, Persistable<SerializedUnit
                 runtime.job = null;
             }
 
-            if (runtime.moveTask) {
-                runtime.moveTask = null;
-            }
+            runtime.moveTask = null;
             this.gameState.movement.getController(settlerId)?.clearPath();
         });
 
@@ -532,12 +525,7 @@ export class SettlerTaskSystem implements TickSystem, Persistable<SerializedUnit
      * Find nearest idle specialist of given type with no home assignment.
      * Returns entity ID or null.
      */
-    findIdleSpecialist(
-        unitType: UnitType,
-        player: number,
-        nearX: number,
-        nearY: number,
-    ): number | null {
+    findIdleSpecialist(unitType: UnitType, player: number, nearX: number, nearY: number): number | null {
         let bestId: number | null = null;
         let bestDistSq = Infinity;
 
@@ -787,9 +775,7 @@ export class SettlerTaskSystem implements TickSystem, Persistable<SerializedUnit
             }
 
             // Cancel any in-progress movement (move tasks or raw movement toward building)
-            if (runtime.moveTask) {
-                runtime.moveTask = null;
-            }
+            runtime.moveTask = null;
             this.gameState.movement.getController(settlerId)?.clearPath();
         }
     }
@@ -830,15 +816,12 @@ export class SettlerTaskSystem implements TickSystem, Persistable<SerializedUnit
             'idle-search': cats[TickCategory.IDLE_SEARCH],
             '  searches': this.workerExecutor.idleSearchCount,
             '  runtimes': this.runtimes.size,
+            'idle-skip': cats[TickCategory.IDLE_SKIP],
+            'job-exec': cats[TickCategory.JOB_EXEC],
+            'move-task': cats[TickCategory.MOVE_TASK],
+            'idle-anim': cats[TickCategory.IDLE_ANIM],
         };
-        // Add per-search-type and other idle sub-timings as nested entries
-        for (const [k, v] of Object.entries(it)) {
-            sub[`  ${k}`] = v;
-        }
-        sub['idle-skip'] = cats[TickCategory.IDLE_SKIP];
-        sub['job-exec'] = cats[TickCategory.JOB_EXEC];
-        sub['move-task'] = cats[TickCategory.MOVE_TASK];
-        sub['idle-anim'] = cats[TickCategory.IDLE_ANIM];
+        for (const [k, v] of Object.entries(it)) sub[`  ${k}`] = v;
         sub['orphan-cleanup'] = orphanTime;
         this.lastSubTimings = sub;
     }
