@@ -68,6 +68,7 @@ export const SettlerTaskFeature: FeatureDefinition = {
         const choreoSystem = new ChoreoSystem();
 
         const settlerTaskSystem = new SettlerTaskSystem({
+            tickScheduler: ctx.tickScheduler,
             choreoSystem,
             gameState: ctx.gameState,
             visualService: ctx.visualService,

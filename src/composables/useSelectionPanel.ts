@@ -42,7 +42,7 @@ export function useSelectionPanel(game: Ref<Game | null>): {
     carriedMaterial: Ref<string | null>;
     buildingSize: Ref<string>;
     buildingStatus: Ref<string | null>;
-    buildingWorkerIds: Ref<readonly number[]>;
+    buildingWorkerIds: Ref<ReadonlySet<number>>;
     playerColor: Ref<string | undefined>;
 } {
     // Touch tick counter to force re-evaluation when entity properties change
@@ -141,11 +141,11 @@ export function useSelectionPanel(game: Ref<Game | null>): {
         return isUnderConstruction ? 'building' : 'completed';
     });
 
-    const buildingWorkerIds = computed<readonly number[]>(() => {
+    const buildingWorkerIds = computed<ReadonlySet<number>>(() => {
         // eslint-disable-next-line sonarjs/void-use -- intentionally touch reactive tick to trigger re-evaluation
         void tick.value;
         const entity = selectedEntity.value;
-        if (!entity || entity.type !== EntityType.Building || !game.value) return [];
+        if (!entity || entity.type !== EntityType.Building || !game.value) return new Set<number>();
         return game.value.services.settlerTaskSystem.getWorkersForBuilding(entity.id);
     });
 

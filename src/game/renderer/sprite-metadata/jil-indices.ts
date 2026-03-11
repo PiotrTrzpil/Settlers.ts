@@ -726,7 +726,7 @@ export const BUILDING_JOB_INDICES: Partial<Record<BuildingType, number>> = {
     // 30 = LANDSCAPEMAKERHUT — stone building with gate (not in BuildingType)
     [BuildingType.Shipyard]: 58, // S4BuildingType.SHIPYARD (base job 31 is empty; using first oriented variant)
     // 32 = PORT (base index; oriented variants at 52-57, 78-79; not in BuildingType)
-    // 33 = MARKETPLACE — circular trading area with goods (not in BuildingType)
+    [BuildingType.Marketplace]: 33, // S4BuildingType.MARKETPLACE
     [BuildingType.StorageArea]: 34, // S4BuildingType.STORAGEAREA
     [BuildingType.Vinyard]: 35, // S4BuildingType.VINYARD (Roman)
     [BuildingType.AgaveFarmerHut]: 36, // S4BuildingType.AGAVEFARMERHUT (Mayan)

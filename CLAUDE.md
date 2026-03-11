@@ -2,6 +2,8 @@
 
 A Settlers 4 (Siedler 4) browser-based remake using TypeScript, Vue 3, and WebGL.
 
+Read `docs/MECHANICS.md` for a full overview of how the game works — territory, economy, production chains, workers, logistics, military, and game flow.
+
 ## Project layout
 
 - `src/game/` — Core engine: commands, systems, renderer, input, economy, ai
@@ -26,6 +28,8 @@ pnpm test:unit tests/unit/path/to/file.spec.ts   # Run a single test file (deps 
 pnpm test:watch       # Vitest in watch mode
 npx playwright test   # Run Playwright e2e tests (uses dev server locally)
 pnpm format           # Prettier formatting
+pnpm timeline:record  # Record live game timeline to SQLite (connect to running dev server)
+pnpm timeline:live    # Query live timeline DBs (shorthand for --dir live)
 ```
 
 ## Key patterns
@@ -95,6 +99,19 @@ NEVER GIT STASH.
 - **Formatting**: Prettier (`.prettierrc`). Runs automatically via lint-staged on commit.
 - Playwright `outputDir` writes to `tests/e2e/.results/` (gitignored).
 - Screenshot baselines live in `tests/e2e/__screenshots__/` and are committed.
+
+## CRITICAL — Size Limits (MANDATORY)
+
+**Violations are treated as bugs. Plan BEFORE writing — never write a huge file then rewrite it.**
+
+ESLint enforces these hard limits (skip blank lines & comments):
+- **Function length**: max **250 lines** (TS), off in Vue — but aim for **≤80 lines**. Extract helpers early.
+- **File length**: max **600 lines** (TS), **1000** (Vue), **800** (tests) — but aim for **≤400 lines**.
+- **Complexity**: max **15** cyclomatic complexity per function.
+
+**When creating a new file:** outline the structure first (functions, responsibilities, rough line counts). If the outline exceeds limits, split into multiple files BEFORE writing any code. Do NOT write a huge file and refactor after.
+
+**When editing an existing file that's near/over the limit:** do NOT shave off small bits (removing comments, inlining trivial helpers) to squeeze under the limit. Instead, extract a coherent chunk — a logical group of related functions or a self-contained responsibility — into its own module.
 
 ## CRITICAL — Optimistic Programming (MANDATORY)
 
@@ -172,6 +189,21 @@ pnpm timeline -- --db <path> --sql "SELECT * FROM timeline WHERE category='movem
 ```
 
 Use `--sql` for custom queries when the built-in filters aren't enough. The DB schema has `timeline`, `test_runs`, and `console_log` tables.
+
+### 4. Live Timeline Recording
+
+**Timeline events are recorded automatically** whenever the dev server runs (`pnpm dev`). No extra setup needed. DBs are saved to `data/.timeline/`.
+
+```sh
+# Query live recordings (while dev server is running or after)
+pnpm timeline:live                                          # list live sessions
+pnpm timeline:live -- --sql "SELECT category, COUNT(*) AS n FROM timeline GROUP BY category ORDER BY n DESC"
+pnpm timeline -- --db data/.timeline/<file>.db --entity 42  # query specific DB
+
+# Standalone receiver (for remote servers or custom setups)
+pnpm timeline:record                                        # connects to ws://localhost:5173
+CLI_URL=ws://localhost:5174/__cli__ pnpm timeline:record     # custom port
+```
 
 ## E2E testing
 

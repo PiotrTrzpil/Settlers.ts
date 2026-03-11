@@ -337,7 +337,14 @@ export class WorkerJobLifecycle {
         job.workStarted = false;
         job.pathRetryCountdown = 0;
         const completedTask = nodes[job.nodeIndex - 1]!.task;
-        if (completedTask !== ChoreoTaskType.SEARCH) {
+        // Preserve targetPos when the next node is also GO_TO_TARGET — some choreographies
+        // (e.g. Viking JOB_FARMERGRAIN_PLANT) split the walk into multiple legs that all
+        // share the same target position set at job start.
+        const nextNode = nodes[job.nodeIndex];
+        const nextIsGoToTarget =
+            nextNode &&
+            (nextNode.task === ChoreoTaskType.GO_TO_TARGET || nextNode.task === ChoreoTaskType.GO_TO_TARGET_ROUGHLY);
+        if (completedTask !== ChoreoTaskType.SEARCH && !nextIsGoToTarget) {
             job.targetPos = null;
         }
     }

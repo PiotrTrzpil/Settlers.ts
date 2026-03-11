@@ -25,6 +25,7 @@ import type { IdleCarrierPool } from '../carriers';
 import type { InFlightTracker } from './in-flight-tracker';
 import type { PreAssignmentQueue } from './pre-assignment-queue';
 import { TransportPhase } from './transport-job-record';
+import type { Index } from '@/game/utils/indexed-map';
 
 /** Assigns a job to a settler and optionally starts movement. */
 export interface JobAssigner {
@@ -50,6 +51,7 @@ export interface CarrierAssignerConfig extends CoreDeps {
     inFlightTracker: InFlightTracker;
     preAssignmentQueue: PreAssignmentQueue;
     activeJobs: ReadonlyMap<number, TransportJobRecord>;
+    byPhase: Index<TransportPhase, number>;
     carrierFilter?: CarrierFilter;
 }
 
@@ -91,6 +93,7 @@ export class CarrierAssigner {
     private readonly transportJobDeps: TransportJobDeps;
     private readonly preAssignmentQueue: PreAssignmentQueue;
     private readonly activeJobs: ReadonlyMap<number, TransportJobRecord>;
+    private readonly byPhase: Index<TransportPhase, number>;
     carrierFilter: CarrierFilter | null;
 
     constructor(config: CarrierAssignerConfig) {
@@ -103,6 +106,7 @@ export class CarrierAssigner {
         this.requestManager = config.requestManager;
         this.preAssignmentQueue = config.preAssignmentQueue;
         this.activeJobs = config.activeJobs;
+        this.byPhase = config.byPhase;
         this.transportJobDeps = {
             reservationManager: this.reservationManager,
             requestManager: this.requestManager,
@@ -270,13 +274,14 @@ export class CarrierAssigner {
     private findBestBusyCarrier(sourceX: number, sourceY: number, playerId: number): BusyCarrierCandidate | null {
         let best: BusyCarrierCandidate | null = null;
 
-        for (const [carrierId, record] of this.activeJobs) {
-            if (record.phase !== TransportPhase.PickedUp) continue;
+        const pickedUpCarriers = this.byPhase.get(TransportPhase.PickedUp);
+        for (const carrierId of pickedUpCarriers) {
             if (this.preAssignmentQueue.has(carrierId)) continue;
 
             const carrier = this.gameState.getEntity(carrierId);
             if (!carrier || carrier.player !== playerId) continue;
 
+            const record = this.activeJobs.get(carrierId)!;
             const dest = this.gameState.getEntity(record.destBuilding);
             if (!dest) continue;
 

@@ -27,6 +27,7 @@ import { DiagnosticsRegistry } from './features/diagnostics-registry';
 import { PersistenceRegistry, type Persistable } from './persistence';
 
 import { MovementSystem } from './systems/movement';
+import { TickScheduler } from './systems/tick-scheduler';
 
 // Feature definitions
 import { WorkAreaFeature, type WorkAreaExports } from './features/work-areas/work-areas-feature';
@@ -72,6 +73,7 @@ import { FreePilesFeature } from './features/inventory/free-piles-feature';
 import { TerritoryFeature, type TerritoryExports } from './features/territory/territory-feature';
 import { VictoryConditionsFeature, type VictoryConditionsExports } from './features/victory-conditions';
 import { BuildingSiegeFeature } from './features/building-siege';
+import { AiPlayerFeature, type AiPlayerExports } from './features/ai-player';
 
 // Re-export types that external code imports transitively via GameServices
 import type { CarrierRegistry } from './features/carriers';
@@ -101,13 +103,15 @@ import type { OreVeinData, ResourceSignSystem } from './features/ore-veins';
 import type { SettlerTaskSystem } from './features/settler-tasks';
 import type { ISettlerBuildingLocationManager } from './features/settler-location/types';
 import type { VictoryConditionsSystem } from './features/victory-conditions';
+import type { AiPlayerSystem } from './features/ai-player/types';
 
 export class GameServices {
     // ===== Kernel services =====
+    public readonly tickScheduler: TickScheduler;
     public readonly visualService: EntityVisualService;
 
     // ===== Managers & systems (extracted from feature exports) =====
-    private readonly movement: MovementSystem;
+    public readonly movement: MovementSystem;
     public readonly carrierRegistry: CarrierRegistry;
     public readonly inventoryManager: BuildingInventoryManager;
     public readonly storageFilterManager: StorageFilterManager;
@@ -133,6 +137,7 @@ export class GameServices {
     public readonly unitTransformer: UnitTransformer;
     public readonly recruitSystem: RecruitSystem;
     public readonly inventoryPileSync: InventoryPileSync | null;
+    public readonly aiSystem: AiPlayerSystem;
     public readonly persistenceRegistry: PersistenceRegistry;
 
     /** Territory manager — available after setTerrainData(). */
@@ -172,6 +177,9 @@ export class GameServices {
             this.visualService.clearAnimation(unitId)
         );
 
+        // 1a. Tick scheduler — no dependencies, must tick before movement.
+        this.tickScheduler = new TickScheduler();
+
         // 2. Inventory system — instantiated directly (not a feature).
         this.inventoryManager = new BuildingInventoryManager();
         const pileSlotRegistry = new PileRegistry();
@@ -203,6 +211,7 @@ export class GameServices {
             cleanupRegistry: this.cleanupRegistry,
             unitReservation: this.unitReservation,
             executeCommand,
+            tickScheduler: this.tickScheduler,
         });
 
         // Register inventory exports so features can access via ctx.getFeature('inventory')
@@ -243,6 +252,9 @@ export class GameServices {
             this.movement.removeController(entityId);
         });
 
+        // Register tick scheduler before movement so deferred callbacks fire first
+        this.featureRegistry.registerSystem(this.tickScheduler, 'Core');
+
         // Register movement as a tick system
         this.featureRegistry.registerSystem(this.movement, 'Units');
 
@@ -277,6 +289,8 @@ export class GameServices {
             ConstructionDemandFeature,
             // Independent chains
             VictoryConditionsFeature,
+            // AI — depends on combat, territory, victory-conditions, inventory
+            AiPlayerFeature,
             InventoryPileSyncFeature,
             FreePilesFeature,
         ]);
@@ -307,6 +321,7 @@ export class GameServices {
         const arExports = this.feat<RecruitExports>('recruit');
 
         this.unitTransformer = arExports.unitTransformer;
+        this.aiSystem = this.feat<AiPlayerExports>('ai-player').aiSystem;
         this.recruitSystem = arExports.recruitSystem;
         const pileSyncExports = this.feat<InventoryPileSyncExports>('inventory-pile-sync');
         this.inventoryPileSync = pileSyncExports.inventoryPileSync;

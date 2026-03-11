@@ -20,15 +20,18 @@ import type { IdleAnimationController, IdleAnimationState } from './idle-animati
 import type { WorkerTaskExecutor, WorkerRuntimeState } from './worker-task-executor';
 import type { GameState } from '../../game-state';
 import type { EntityVisualService } from '../../animation/entity-visual-service';
+import type { TickScheduler } from '../../systems/tick-scheduler';
 
 /** Settler configs keyed by UnitType (from settler-data-access.ts). */
 type SettlerConfigs = Map<UnitType, SettlerConfig>;
 
 const log = createLogger('UnitStateMachine');
 
+/** Ticks between idle work searches when no work is found. */
+const IDLE_SEARCH_COOLDOWN = 10;
+
 /** Ticks to rest after completing a job before searching for new work (~1 second at 30 tps). */
 const POST_JOB_REST_TICKS = 30;
-
 
 /** Simple move task state (for user-initiated movement) */
 export interface MoveTaskState {
@@ -50,8 +53,8 @@ export interface UnitRuntime {
     idleState: IdleAnimationState;
     /** Workplace building assignment — null when unassigned or building destroyed. */
     homeAssignment: HomeAssignment | null;
-    /** Ticks remaining before next idle work search (0 = search now). */
-    idleSearchCooldown: number;
+    /** Whether this unit is ready for an idle work search (set by TickScheduler callback). */
+    idleSearchReady: boolean;
 }
 
 export interface UnitStateMachineConfig {
@@ -62,8 +65,8 @@ export interface UnitStateMachineConfig {
     workerExecutor: WorkerTaskExecutor;
     /** Returns true if the entity is actively in combat (fighting or pursuing). */
     isInCombat: (entityId: number) => boolean;
-    /** Ticks to wait between idle work searches (0 = every tick). */
-    idleSearchCooldown: number;
+    /** TickScheduler for deferred idle search scheduling. */
+    tickScheduler: TickScheduler;
 }
 
 /** Category of work performed by updateUnit — used for sub-timing breakdown. */
@@ -84,7 +87,7 @@ export class UnitStateMachine {
     private readonly animController: IdleAnimationController;
     private readonly workerExecutor: WorkerTaskExecutor;
     private readonly isInCombat: (entityId: number) => boolean;
-    private readonly idleSearchCooldown: number;
+    private readonly tickScheduler: TickScheduler;
 
     constructor(cfg: UnitStateMachineConfig) {
         this.gameState = cfg.gameState;
@@ -93,7 +96,7 @@ export class UnitStateMachine {
         this.animController = cfg.animController;
         this.workerExecutor = cfg.workerExecutor;
         this.isInCombat = cfg.isInCombat;
-        this.idleSearchCooldown = cfg.idleSearchCooldown;
+        this.tickScheduler = cfg.tickScheduler;
     }
 
     /**
@@ -201,9 +204,7 @@ export class UnitStateMachine {
         case SettlerState.IDLE:
             // Dispatch-only units (military) and carriers skip idle work search.
             if (config.search !== SearchType.GOOD && config.search !== SearchType.NONE) {
-                if (runtime.idleSearchCooldown > 0) {
-                    runtime.idleSearchCooldown--;
-                } else {
+                if (runtime.idleSearchReady) {
                     didSearch = true;
                     this.handleIdle(settler, config, runtime);
                 }
@@ -230,20 +231,19 @@ export class UnitStateMachine {
             // Return to idle after interruption — search immediately on next tick
             runtime.state = SettlerState.IDLE;
             runtime.job = null;
-            runtime.idleSearchCooldown = 0;
+            runtime.idleSearchReady = true;
             break;
         }
         return didSearch;
     }
 
     private handleIdle(settler: Entity, config: SettlerConfig, runtime: UnitRuntime): void {
-        const found = this.workerExecutor.handleIdle(
-            settler,
-            config,
-            runtime as WorkerRuntimeState
-        );
+        const found = this.workerExecutor.handleIdle(settler, config, runtime as WorkerRuntimeState);
         if (!found) {
-            runtime.idleSearchCooldown = this.idleSearchCooldown;
+            runtime.idleSearchReady = false;
+            this.tickScheduler.schedule(IDLE_SEARCH_COOLDOWN, () => {
+                runtime.idleSearchReady = true;
+            });
         }
     }
 
@@ -258,7 +258,14 @@ export class UnitStateMachine {
             // Job completed → brief rest for home-building workers (matches S4 pacing).
             // Roaming workers (diggers, builders) work continuously — no rest between cycles.
             const hasHome = !!(runtime as WorkerRuntimeState).homeAssignment;
-            runtime.idleSearchCooldown = runtime.state === SettlerState.IDLE && hasHome ? POST_JOB_REST_TICKS : 0;
+            if (runtime.state === SettlerState.IDLE && hasHome) {
+                runtime.idleSearchReady = false;
+                this.tickScheduler.schedule(POST_JOB_REST_TICKS, () => {
+                    runtime.idleSearchReady = true;
+                });
+            } else {
+                runtime.idleSearchReady = true;
+            }
         }
     }
 }

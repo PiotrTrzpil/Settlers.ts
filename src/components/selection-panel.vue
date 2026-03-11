@@ -28,8 +28,8 @@
                     <span class="status-badge" :class="buildingStatus">{{ buildingStatus }}</span>
                 </StatRow>
 
-                <StatRow v-if="buildingWorkerIds.length > 0" label="Worker">
-                    {{ buildingWorkerIds.map(id => '#' + id).join(', ') }}
+                <StatRow v-if="buildingWorkerIds.size > 0" label="Worker">
+                    {{ [...buildingWorkerIds].map(id => '#' + id).join(', ') }}
                 </StatRow>
 
                 <!-- Construction info (shown only while building is under construction) -->

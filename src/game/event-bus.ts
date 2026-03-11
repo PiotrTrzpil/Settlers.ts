@@ -138,6 +138,20 @@ export interface GameEvents {
         toX: number;
         toY: number;
         level: 'warn';
+        /** Whether start tile terrain is passable */
+        startPassable: boolean;
+        /** Whether goal tile terrain is passable */
+        goalPassable: boolean;
+        /** Whether start tile is in building occupancy */
+        startInBuilding: boolean;
+        /** Whether goal tile is in building occupancy */
+        goalInBuilding: boolean;
+        /** Number of A* nodes searched before failure */
+        nodesSearched: number;
+        /** Whether the search hit the max node limit */
+        exhausted: boolean;
+        /** Neighbor diagnostic string (only when nodesSearched <= 1) */
+        neighborInfo: string;
     };
 
     /** Unit stepped onto a new tile */

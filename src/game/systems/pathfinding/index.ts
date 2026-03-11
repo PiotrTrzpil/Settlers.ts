@@ -13,7 +13,12 @@
  */
 
 // Core A* algorithm
-export { findPathAStar, type PathfindingTerrain } from './astar';
+export {
+    findPathAStar,
+    type PathfindingTerrain,
+    type PathfindingFailureInfo,
+    consumeLastPathfindingFailure,
+} from './astar';
 
 // Data structures
 export { BucketPriorityQueue } from './bucket-priority-queue';

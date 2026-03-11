@@ -25,6 +25,7 @@ import type { Command, CommandResult, CommandType } from '../commands';
 import type { Persistable } from '../persistence';
 import type { TerrainData } from '../terrain';
 import type { RenderPassDefinition } from '../renderer/render-passes/types';
+import type { TickScheduler } from '../systems/tick-scheduler';
 import { RenderDataRegistry } from './render-data-registry';
 import { DiagnosticsRegistry } from './diagnostics-registry';
 import { createLogger } from '@/utilities/logger';
@@ -39,6 +40,7 @@ export interface FeatureRegistryConfig extends CoreDeps {
     cleanupRegistry: EntityCleanupRegistry;
     unitReservation: UnitReservationRegistry;
     executeCommand: (cmd: Command) => CommandResult;
+    tickScheduler: TickScheduler;
 }
 
 /**
@@ -336,6 +338,7 @@ export class FeatureRegistry {
             cleanupRegistry: this.config.cleanupRegistry,
             unitReservation: this.config.unitReservation,
             executeCommand: this.config.executeCommand,
+            tickScheduler: this.config.tickScheduler,
 
             getFeature: <T>(featureId: string): T => {
                 if (!allowedSet.has(featureId)) {

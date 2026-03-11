@@ -44,7 +44,12 @@ export {
 } from './terrain';
 
 // Map building population (for loading buildings from map files)
-export { type PopulateBuildingsOptions, populateMapBuildings, mapS4BuildingType } from './map-buildings';
+export {
+    type MapBuildingEntry,
+    type PopulateBuildingsOptions,
+    populateMapBuildings,
+    mapS4BuildingType,
+} from './map-buildings';
 
 // Construction site manager, types, and request system (for game-services wiring)
 export { ConstructionSiteManager, type SerializedConstructionSite } from './construction-site-manager';

@@ -47,7 +47,10 @@ export const EventFmt = {
         `(${e.fromX},${e.fromY})→(${e.toX},${e.toY}) len=${e.pathLength}${e.redirect ? ' redirect' : ''}`,
 
     'movement:pathFailed': (e: GameEvents['movement:pathFailed']) =>
-        `(${e.fromX},${e.fromY})→(${e.toX},${e.toY}) NO PATH`,
+        `(${e.fromX},${e.fromY})→(${e.toX},${e.toY}) NO PATH ` +
+        `searched=${e.nodesSearched} ${e.exhausted ? 'EXHAUSTED' : 'EMPTY_QUEUE'} ` +
+        `start[pass=${e.startPassable},bld=${e.startInBuilding}] ` +
+        `goal[pass=${e.goalPassable},bld=${e.goalInBuilding}]${e.neighborInfo}`,
 
     'movement:teleport': (e: GameEvents['movement:teleport']) =>
         `jumped ${e.distance.toFixed(2)} tiles | state=${e.state} prevState=${e.prevState}`,

@@ -570,13 +570,21 @@ export class Simulation {
         buildings: MapBuildingData[],
         settlers: MapSettlerData[]
     ): { buildingCount: number; settlerCount: number } {
-        const buildingCount = populateMapBuildings(this.state, buildings, {
-            eventBus: this.eventBus,
+        // POPULATE — create entities without lifecycle events
+        const mapBuildings = populateMapBuildings(this.state, buildings, {
             terrain: this.map.terrain,
         });
         const settlerCount = populateMapSettlers(this.state, settlers, this.eventBus);
+
+        // RECONCILE — assign workers to buildings before activation
         this.services.settlerTaskSystem.assignInitialBuildingWorkers();
-        return { buildingCount, settlerCount };
+
+        // ACTIVATE — emit building:completed now that workers are assigned
+        for (const { buildingId, buildingType, race } of mapBuildings) {
+            this.eventBus.emit('building:completed', { buildingId, buildingType, race });
+        }
+
+        return { buildingCount: mapBuildings.length, settlerCount };
     }
 
     // ─── Map object placement ─────────────────────────────────────

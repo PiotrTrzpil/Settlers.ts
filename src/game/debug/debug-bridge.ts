@@ -16,6 +16,8 @@ import type { EntityRenderer } from '../renderer/entity-renderer';
 import type { InputManager } from '../input/input-manager';
 import type { SoundManager } from '../audio/sound-manager';
 import type { spiralSearch } from '../utils/spiral-search';
+import type { GameCli } from '../cli/cli';
+import type { TimelineCapture } from './timeline-capture';
 
 /**
  * Bridge shape — all properties are optional because different modules
@@ -24,6 +26,12 @@ import type { spiralSearch } from '../utils/spiral-search';
 export interface SettlersBridge {
     // Game core (set by debug-stats.ts on game start)
     game?: Game;
+
+    // CLI engine (set by Game constructor in dev mode)
+    cli?: GameCli;
+
+    // Timeline capture (set by Game constructor in dev mode)
+    timelineCapture?: TimelineCapture;
     settings?: GameSettingsManager;
 
     // Debug stats (set by debug-stats.ts constructor)

@@ -49,6 +49,7 @@ export class MovementController {
     // --- Teleport detection ---
     private _lastVisualX = 0;
     private _lastVisualY = 0;
+    private _stepsTakenThisTick = 0;
 
     constructor(entityId: number, x: number, y: number, speed: number) {
         this.entityId = entityId;
@@ -116,6 +117,11 @@ export class MovementController {
     /** Unit has more path waypoints to follow. */
     get hasPath(): boolean {
         return this._phase.tag !== 'idle' && this._phase.pathIndex < this._phase.path.length;
+    }
+
+    /** Number of executeMove steps taken since last advanceProgress. */
+    get stepsTakenThisTick(): number {
+        return this._stepsTakenThisTick;
     }
 
     get nextWaypoint(): TileCoord | null {
@@ -202,10 +208,12 @@ export class MovementController {
 
     /** Replace entire remaining path. */
     replacePath(newPath: TileCoord[]): void {
+        const visualBefore = this.computeVisualPosition();
         const p = this.activePathPhase();
         p.path = [...newPath];
         p.pathIndex = 0;
         p.waitTime = 0;
+        this.warnIfTeleported(visualBefore, 'replacePath');
     }
 
     /** Clear the current path and transition to idle. */
@@ -252,6 +260,7 @@ export class MovementController {
 
     /** Advance movement progress by delta time. */
     advanceProgress(deltaSec: number, maxProgress?: number): number {
+        this._stepsTakenThisTick = 0;
         if (this._phase.tag !== 'idle' || this.isInTransit) {
             this._progress += (this._speed * deltaSec) / this._distanceFactor;
             if (maxProgress !== undefined && this._progress > maxProgress) {
@@ -283,6 +292,7 @@ export class MovementController {
 
         p.pathIndex++;
         this._progress -= 1;
+        this._stepsTakenThisTick++;
 
         // Successful move → reset wait time (both per-repath and cumulative)
         p.waitTime = 0;
@@ -333,19 +343,16 @@ export class MovementController {
      * IMPORTANT: Caller must ensure unit is NOT mid-transit to prevent teleporting.
      */
     handlePush(newX: number, newY: number): void {
-        if (this.isInTransit) {
-            console.warn(
-                `[MovementController] handlePush called mid-transit for entity ${this.entityId}! ` +
-                    `Visual pos: (${this._prevTileX},${this._prevTileY}) -> (${this._tileX},${this._tileY})` +
-                    ` @ ${this._progress.toFixed(2)}`
-            );
-        }
+        const visualBefore = this.computeVisualPosition();
 
         this._prevTileX = this._tileX;
         this._prevTileY = this._tileY;
         this._tileX = newX;
         this._tileY = newY;
         this._progress = 0;
+        this._stepsTakenThisTick++;
+
+        this.warnIfTeleported(visualBefore, 'handlePush');
 
         this._direction = getStepDirection(this._tileX - this._prevTileX, this._tileY - this._prevTileY);
         this._distanceFactor = getStepDistanceFactor(this._tileX - this._prevTileX, this._tileY - this._prevTileY);

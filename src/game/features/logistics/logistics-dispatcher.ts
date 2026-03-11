@@ -16,7 +16,6 @@
 import type { TickSystem } from '../../core/tick-system';
 import type { CoreDeps } from '../feature';
 import type { EMaterialType } from '../../economy/material-type';
-import { sortedEntries } from '@/utilities/collections';
 import { type EventBus, EventSubscriptionManager } from '../../event-bus';
 import { CLEANUP_PRIORITY } from '../../systems/entity-cleanup-registry';
 import type { EntityCleanupRegistry } from '../../systems/entity-cleanup-registry';
@@ -28,7 +27,8 @@ import { TransportPhase, type TransportJobRecord } from './transport-job-record'
 import * as TransportJobService from './transport-job-service';
 import { getNextJobId, setNextJobId } from './transport-job-service';
 import type { TransportJobDeps } from './transport-job-service';
-import { PersistentMap, PersistentValue } from '../../persistence/persistent-store';
+import { PersistentIndexedMap, PersistentValue } from '../../persistence/persistent-store';
+import type { Index } from '@/game/utils/indexed-map';
 import type { TransportJobOps } from '../settler-tasks/choreo-types';
 import type { BuildingInventoryManager } from '../inventory';
 import { RequestMatcher } from './request-matcher';
@@ -83,7 +83,13 @@ export class LogisticsDispatcher implements TickSystem {
     readonly inFlightTracker: InFlightTracker;
 
     /** Active transport jobs indexed by carrier ID. Exposed read-only for testing/diagnostics. */
-    readonly activeJobs = new PersistentMap<TransportJobRecord>('transportJobs');
+    readonly activeJobs = new PersistentIndexedMap<TransportJobRecord>('transportJobs');
+
+    /** Index: building ID → carrier IDs with jobs involving that building (source or dest). */
+    private readonly byBuilding: Index<number, number>;
+
+    /** Index: transport phase → carrier IDs in that phase. */
+    private readonly byPhase: Index<TransportPhase, number>;
 
     /** Persisted next job ID counter — syncs with TransportJobService's module-level counter. */
     readonly nextJobIdStore = new PersistentValue<number>('transportNextJobId', 1, {
@@ -120,6 +126,12 @@ export class LogisticsDispatcher implements TickSystem {
         this.inFlightTracker = new InFlightTrackerImpl();
         this.jobAssigner = config.jobAssigner;
 
+        // Multi-value index: a job appears under both its source and dest building
+        this.byBuilding = this.activeJobs.addIndex((_carrierId, job) => [job.sourceBuilding, job.destBuilding]);
+
+        // Phase index: partition jobs by transport phase (for PickedUp scanning)
+        this.byPhase = this.activeJobs.addIndex((_carrierId, job) => job.phase);
+
         this.transportJobDeps = {
             reservationManager: this.reservationManager,
             requestManager: this.requestManager,
@@ -153,6 +165,7 @@ export class LogisticsDispatcher implements TickSystem {
             inFlightTracker: this.inFlightTracker,
             preAssignmentQueue: this.preAssignmentQueue,
             activeJobs: this.activeJobs.raw,
+            byPhase: this.byPhase,
             carrierFilter: config.carrierFilter,
         });
 
@@ -298,9 +311,9 @@ export class LogisticsDispatcher implements TickSystem {
         this.activeJobs.set(result.carrierId, result.record);
     }
 
-    /** Emit `logistics:noMatch` at most once per cooldown per (building, material) pair. */
+    /** Emit `logistics:noMatch` at most once per cooldown per material type. */
     private emitNoMatchThrottled(request: ResourceRequest): void {
-        const key = `${request.buildingId}:${request.materialType}`;
+        const key = `${request.materialType}`;
         this.noMatchEmitter.tryEmit(key, {
             requestId: request.id,
             buildingId: request.buildingId,
@@ -308,9 +321,9 @@ export class LogisticsDispatcher implements TickSystem {
         });
     }
 
-    /** Emit `logistics:noCarrier` at most once per cooldown per (building, material) pair. */
+    /** Emit `logistics:noCarrier` at most once per cooldown per material type. */
     private emitNoCarrierThrottled(request: ResourceRequest, sourceBuilding: number): void {
-        const key = `${request.buildingId}:${request.materialType}`;
+        const key = `${request.materialType}`;
         this.noCarrierEmitter.tryEmit(key, {
             requestId: request.id,
             buildingId: request.buildingId,
@@ -388,7 +401,9 @@ export class LogisticsDispatcher implements TickSystem {
      */
     private handleConstructionCompleted(buildingId: number): void {
         let jobsCancelled = 0;
-        for (const [carrierId, job] of sortedEntries(this.activeJobs.raw)) {
+        const affectedCarriers = this.byBuilding.get(buildingId);
+        for (const carrierId of [...affectedCarriers]) {
+            const job = this.activeJobs.get(carrierId)!;
             if (job.destBuilding === buildingId) {
                 TransportJobService.cancel(job, 'construction_completed', this.transportJobDeps);
                 this.activeJobs.delete(carrierId);
@@ -426,8 +441,10 @@ export class LogisticsDispatcher implements TickSystem {
         const pileRedirects = this.pendingPileRedirects.get(buildingId);
         this.pendingPileRedirects.delete(buildingId);
 
-        // Handle active TransportJobs referencing this building
-        for (const [carrierId, job] of sortedEntries(this.activeJobs.raw)) {
+        // Handle active TransportJobs referencing this building (via byBuilding index)
+        const affectedCarriers = this.byBuilding.get(buildingId);
+        for (const carrierId of [...affectedCarriers]) {
+            const job = this.activeJobs.get(carrierId)!;
             if (job.destBuilding === buildingId) {
                 // Destination destroyed — must cancel, carrier has nowhere to deliver
                 TransportJobService.cancel(job, 'building_destroyed', this.transportJobDeps);
@@ -444,7 +461,8 @@ export class LogisticsDispatcher implements TickSystem {
                     pileEntityId !== undefined &&
                     TransportJobService.redirectSource(job, pileEntityId, this.transportJobDeps)
                 ) {
-                    // sourceBuilding already updated by redirectSource
+                    // sourceBuilding mutated by redirectSource — reindex to update byBuilding
+                    this.activeJobs.reindex(carrierId);
                 } else {
                     TransportJobService.cancel(job, 'building_destroyed', this.transportJobDeps);
                     this.activeJobs.delete(carrierId);

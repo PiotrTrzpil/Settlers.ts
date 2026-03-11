@@ -5,6 +5,7 @@ import wasm from 'vite-plugin-wasm';
 import { resolve } from 'path';
 import { computeSourceHash } from './tests/e2e/source-hash';
 import { devWriteFilePlugin } from './vite-plugins/dev-write-file';
+import { cliWsPlugin } from './vite-plugins/cli-ws-plugin';
 
 // Only include polyfills in browser builds, not in test environment
 const isTest = process.env['VITEST'] === 'true';
@@ -15,13 +16,13 @@ const isFastBuild = process.env['FAST_BUILD'] === '1';
 const timelineRunId = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
 if (isTest) {
     const dbPath = `tests/unit/.timeline/run_${timelineRunId}.db`;
-     
+
     console.log(`Timeline DB: ${dbPath}`);
 }
 
 // Load node polyfills plugin only when needed (full build + non-test)
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-const plugins: any[] = [vue(), glsl(), wasm(), devWriteFilePlugin(resolve(__dirname))];
+const plugins: any[] = [vue(), glsl(), wasm(), devWriteFilePlugin(resolve(__dirname)), cliWsPlugin()];
 if (!isTest && !isFastBuild) {
     const { nodePolyfills } = await import('vite-plugin-node-polyfills');
     plugins.push(

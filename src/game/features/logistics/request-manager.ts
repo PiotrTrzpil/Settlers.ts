@@ -17,6 +17,8 @@ import {
     isRequestActive,
 } from './resource-request';
 import type { Persistable } from '@/game/persistence';
+import { IndexedMap } from '@/game/utils/indexed-map';
+import type { Index } from '@/game/utils/indexed-map';
 
 // ── Serialization types ──
 
@@ -61,7 +63,10 @@ export interface SerializedRequestManagerState {
 export class RequestManager implements Persistable<SerializedRequestManagerState> {
     readonly persistKey = 'requests' as const;
     /** All requests indexed by ID */
-    private requests: Map<number, ResourceRequest> = new Map();
+    private requests = new IndexedMap<number, ResourceRequest>();
+
+    /** Secondary index: buildingId → set of request IDs */
+    private readonly byBuilding: Index<number, number> = this.requests.addIndex((_id, req) => req.buildingId);
 
     /** Next request ID */
     private nextId = 1;
@@ -173,8 +178,8 @@ export class RequestManager implements Persistable<SerializedRequestManagerState
     getRequestsForBuilding(buildingId: number, activeOnly: boolean = true): ResourceRequest[] {
         const result: ResourceRequest[] = [];
 
-        for (const request of this.requests.values()) {
-            if (request.buildingId !== buildingId) continue;
+        for (const requestId of this.byBuilding.get(buildingId)) {
+            const request = this.requests.get(requestId)!;
             if (activeOnly && !isRequestActive(request)) continue;
             result.push(request);
         }
@@ -266,13 +271,7 @@ export class RequestManager implements Persistable<SerializedRequestManagerState
      * @returns Number of requests cancelled
      */
     cancelRequestsForBuilding(buildingId: number): number {
-        const toRemove: number[] = [];
-
-        for (const request of this.requests.values()) {
-            if (request.buildingId === buildingId) {
-                toRemove.push(request.id);
-            }
-        }
+        const toRemove = Array.from(this.byBuilding.get(buildingId));
 
         // Sort for deterministic event emission order
         toRemove.sort((a, b) => a - b);

@@ -40,6 +40,9 @@ playwright-report/
 # Script output
 output/
 
+# Live timeline recordings
+data/.timeline/
+
 # Backup files
 *.bak
 

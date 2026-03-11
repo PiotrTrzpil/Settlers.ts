@@ -101,6 +101,35 @@ describe.skipIf(!hasRealData)('Crop system (real game data)', { timeout: 10_000 
         expect(sim.getOutput(farmId, EMaterialType.GRAIN)).toBeGreaterThanOrEqual(3);
     });
 
+    // ── Grain (Viking) — regression: 2 consecutive GO_TO_TARGET nodes ──
+
+    it('grain farm (Viking): farmer plants grain despite multi-step walk choreography', () => {
+        sim = createSimulation({ ...SIM_256, race: Race.Viking });
+
+        let planted = 0;
+        let failCount = 0;
+        sim.eventBus.on('crop:planted', () => planted++);
+        sim.eventBus.on('settler:taskFailed', e => {
+            if (e.jobId === 'JOB_FARMERGRAIN_PLANT') failCount++;
+        });
+
+        sim.placeBuilding(BuildingType.ResidenceSmall);
+        const farmId = sim.placeBuilding(BuildingType.GrainFarm);
+
+        sim.runUntil(() => planted >= 1, { maxTicks: 3000 * 30 });
+        expect(planted).toBeGreaterThanOrEqual(1);
+
+        // The Viking choreography has 2 GO_TO_TARGET nodes — the farmer should NOT
+        // get stuck in a fail/restart loop at the second GO_TO_TARGET.
+        expect(
+            failCount,
+            `Farmer stuck in fail loop: ${failCount} task failures on JOB_FARMERGRAIN_PLANT. ` +
+                'Likely targetPos cleared between consecutive GO_TO_TARGET nodes.'
+        ).toBe(0);
+
+        expect(sim.getOutput(farmId, EMaterialType.GRAIN)).toBeGreaterThanOrEqual(0);
+    });
+
     // ── Sunflower (Trojan) ───────────────────────────────────────
 
     it('sunflower farm: farmer plants sunflowers → SUNFLOWER output', () => {

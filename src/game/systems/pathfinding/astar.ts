@@ -37,7 +37,6 @@ let _flags = new Uint8Array(0);
 let _buildingBitmap = new Uint8Array(0);
 const _openQueue = new BucketPriorityQueue();
 
-
 function prepareBuffers(totalTiles: number): void {
     if (totalTiles > _bufferSize) {
         _gCost = new Float32Array(totalTiles);
@@ -74,12 +73,35 @@ function populateBuildingBitmap(buildingOccupancy: Set<string>, mapWidth: number
  *  Needs to be high enough to route around building footprints in dense settlements. */
 const MAX_SEARCH_NODES = 50_000;
 
+// ═══════════════════════════════════════════════════════════════════════════
+// FAILURE DIAGNOSTICS (module-level side-channel, safe in single-threaded JS)
+// ═══════════════════════════════════════════════════════════════════════════
+
+/** Diagnostic info from the most recent pathfinding failure. */
+export interface PathfindingFailureInfo {
+    startPassable: boolean;
+    goalPassable: boolean;
+    startInBuilding: boolean;
+    goalInBuilding: boolean;
+    nodesSearched: number;
+    exhausted: boolean;
+    neighborInfo: string;
+}
+
+let _lastFailure: PathfindingFailureInfo | null = null;
+
+/** Read and clear the last pathfinding failure diagnostics. */
+export function consumeLastPathfindingFailure(): PathfindingFailureInfo | null {
+    const f = _lastFailure;
+    _lastFailure = null;
+    return f;
+}
+
 /** Cost multiplier for integer arithmetic (10 = 0.1 precision) */
 const COST_SCALE = 10;
 
 /** Base movement cost per tile (uniform for Settlers-style games) */
 const MOVE_COST = 10;
-
 
 // ═══════════════════════════════════════════════════════════════════════════
 // TYPES
@@ -256,7 +278,7 @@ function diagnoseNeighbor(
     return pos + ':closed';
 }
 
-/** Log detailed diagnostic info when pathfinding fails. */
+/** Log detailed diagnostic info when pathfinding fails, and store it for callers. */
 function logPathfindingFailure(
     startX: number,
     startY: number,
@@ -286,6 +308,17 @@ function logPathfindingFailure(
         }
         neighborInfo = ' neighbors=[' + reasons.join(', ') + ']';
     }
+
+    _lastFailure = {
+        startPassable,
+        goalPassable,
+        startInBuilding,
+        goalInBuilding,
+        nodesSearched,
+        exhausted,
+        neighborInfo,
+    };
+
     console.warn(
         `[A*] No path (${startX},${startY})->(${goalX},${goalY}): ` +
             `searched=${nodesSearched}/${MAX_SEARCH_NODES} ${exhausted ? 'EXHAUSTED' : 'EMPTY_QUEUE'} ` +
@@ -300,9 +333,14 @@ function logPathfindingFailure(
 
 /** Reconstruct, smooth, and return the final path once the goal is reached. */
 function buildFinalPath(
-    goalIdx: number, startX: number, startY: number,
-    parent: Int32Array, mapWidth: number,
-    groundType: Uint8Array, mapHeight: number, buildingOccupancy: Set<string>
+    goalIdx: number,
+    startX: number,
+    startY: number,
+    parent: Int32Array,
+    mapWidth: number,
+    groundType: Uint8Array,
+    mapHeight: number,
+    buildingOccupancy: Set<string>
 ): TileCoord[] {
     const rawPath = reconstructPath(goalIdx, parent, mapWidth);
     const smoothed = smoothPath(rawPath, startX, startY, { groundType, mapWidth, mapHeight, buildingOccupancy });
@@ -344,6 +382,15 @@ export function findPathAStar(
     const { mapWidth, mapHeight, groundType } = terrain;
     const goalIdx = goalX + goalY * mapWidth;
     if (!isPassable(groundType[goalIdx]!)) {
+        _lastFailure = {
+            startPassable: isPassable(groundType[startX + startY * mapWidth]!),
+            goalPassable: false,
+            startInBuilding: false,
+            goalInBuilding: false,
+            nodesSearched: 0,
+            exhausted: false,
+            neighborInfo: '',
+        };
         return null;
     }
 
@@ -392,7 +439,16 @@ export function findPathAStar(
 
         // Goal reached?
         if (cx === goalX && cy === goalY) {
-            return buildFinalPath(currentIdx, startX, startY, parent, mapWidth, groundType, mapHeight, buildingOccupancy);
+            return buildFinalPath(
+                currentIdx,
+                startX,
+                startY,
+                parent,
+                mapWidth,
+                groundType,
+                mapHeight,
+                buildingOccupancy
+            );
         }
 
         // Expand all 6 neighbors

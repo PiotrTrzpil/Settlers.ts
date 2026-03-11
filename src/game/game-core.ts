@@ -13,7 +13,7 @@ import { type Command, type CommandResult, CommandHandlerRegistry, registerAllHa
 import { TerrainData } from './terrain';
 import { populateMapObjectsFromEntityData } from './systems/map-objects';
 import { expandTrees } from './features/trees/tree-expansion';
-import { populateMapBuildings } from './features/building-construction';
+import { populateMapBuildings, type MapBuildingEntry } from './features/building-construction';
 import { populateMapSettlers } from './systems/map-settlers';
 import { populateMapStacks } from './systems/map-stacks';
 import { Race, s4TribeToRace } from './core/race';
@@ -62,6 +62,13 @@ export class GameCore {
     /** Per-player race mapping (player index → Race enum value), populated from map data */
     public readonly playerRaces: Map<number, Race> = new Map();
 
+    /**
+     * Setup phases — order matters:
+     *  1. WIRE      — create services, register command handlers
+     *  2. POPULATE  — create all entities as raw data, no lifecycle events
+     *  3. RECONCILE — assign workers to buildings (tile-exact + proximity)
+     *  4. ACTIVATE  — emit lifecycle events; listeners see correct occupancy
+     */
     public constructor(mapLoader: IMapLoader) {
         this.mapLoader = mapLoader;
         this.terrain = new TerrainData(
@@ -76,12 +83,21 @@ export class GameCore {
 
         setDirectionRunLength(this.settings.state.pathStraightness);
 
-        // Command registry is populated after GameServices creates all systems.
         this.commandRegistry = new CommandHandlerRegistry();
         this.services = new GameServices(this.state, this.eventBus, cmd => this.commandRegistry.execute(cmd));
+
+        this.wireCommandHandlers(mapLoader);
+        const mapBuildings = this.populate(mapLoader);
+        this.reconcile();
+        this.activate(mapBuildings);
+    }
+
+    // ─── Setup phases ─────────────────────────────────────────
+
+    /** WIRE — register terrain data, feature command handlers, and central handlers. */
+    private wireCommandHandlers(mapLoader: IMapLoader): void {
         this.services.setTerrainData(this.terrain, mapLoader.landscape.getResourceData?.());
 
-        // Register feature-provided command handlers first, then central handlers.
         for (const [type, handler] of this.services.getFeatureCommandHandlers()) {
             this.commandRegistry.register(type, handler);
         }
@@ -100,22 +116,12 @@ export class GameCore {
             recruitSystem: this.services.recruitSystem,
             unitTransformer: this.services.unitTransformer,
         });
-
-        this.populateMapEntities(mapLoader);
-
-        // Assign workers that are positioned inside their matching building's footprint
-        this.services.settlerTaskSystem.assignInitialBuildingWorkers();
-
-        // Set local player for victory conditions after map populates currentPlayer
-        this.services.victorySystem.setLocalPlayer(this.currentPlayer);
     }
 
-    // ─── Entity population ──────────────────────────────────────
-
-    /** Load players, objects, buildings, settlers, and pile stacks from parsed map data. */
-    private populateMapEntities(mapLoader: IMapLoader): void {
+    /** POPULATE — create all entities (buildings, settlers, stacks) as raw data. No lifecycle events. */
+    private populate(mapLoader: IMapLoader): MapBuildingEntry[] {
         const entityData = mapLoader.entityData;
-        if (!entityData) return;
+        if (!entityData) return [];
 
         // Build per-player race mapping
         for (const p of entityData.players) {
@@ -123,33 +129,43 @@ export class GameCore {
         }
         this.state.playerRaces = this.playerRaces;
 
-        // Default to first player from map data
         if (entityData.players.length > 0) {
             this.currentPlayer = entityData.players[0]!.playerIndex;
         }
 
-        // Trees + decorations
         if (entityData.objects.length) {
             this.populateMapTrees(entityData.objects);
         }
 
-        // Buildings
+        let mapBuildings: MapBuildingEntry[] = [];
         if (entityData.buildings.length) {
-            populateMapBuildings(this.state, entityData.buildings, {
-                eventBus: this.eventBus,
+            mapBuildings = populateMapBuildings(this.state, entityData.buildings, {
                 terrain: this.terrain,
             });
         }
 
-        // Settlers (units)
         if (entityData.settlers.length) {
             populateMapSettlers(this.state, entityData.settlers, this.eventBus);
         }
 
-        // Resource stacks
         if (entityData.stacks.length) {
             populateMapStacks(this.state, entityData.stacks, this.eventBus);
         }
+
+        return mapBuildings;
+    }
+
+    /** RECONCILE — assign workers to buildings before lifecycle events fire. */
+    private reconcile(): void {
+        this.services.settlerTaskSystem.assignInitialBuildingWorkers();
+    }
+
+    /** ACTIVATE — emit building:completed for each map building. Listeners see correct occupancy. */
+    private activate(mapBuildings: MapBuildingEntry[]): void {
+        for (const { buildingId, buildingType, race } of mapBuildings) {
+            this.eventBus.emit('building:completed', { buildingId, buildingType, race });
+        }
+        this.services.victorySystem.setLocalPlayer(this.currentPlayer);
     }
 
     /** Load trees/decorations from map objects and optionally expand forests. */

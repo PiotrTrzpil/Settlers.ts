@@ -8,7 +8,7 @@
 
 import { BuildingType, EntityType, UnitType } from '../../entity';
 import type { GameState } from '../../game-state';
-import { getWorkerBuildingTypes } from '../../data/game-data-access';
+import { getWorkerBuildingTypes, getBuildingDoorPos } from '../../data/game-data-access';
 import { getBuildingMaxOccupants } from '../../buildings/types';
 import { createLogger } from '@/utilities/logger';
 import type { ISettlerBuildingLocationManager } from '../settler-location/types';
@@ -25,7 +25,7 @@ export function assignInitialBuildingWorkers(
     buildingOccupants: Map<number, number>,
     locationManager: ISettlerBuildingLocationManager,
     getRuntime: (entityId: number) => UnitRuntime,
-    claimBuilding: (runtime: UnitRuntime, buildingId: number) => void
+    claimBuilding: (settlerId: number, runtime: UnitRuntime, buildingId: number) => void
 ): void {
     let assigned = 0;
     for (const entity of gameState.entities) {
@@ -47,9 +47,22 @@ export function assignInitialBuildingWorkers(
         const currentOccupants = buildingOccupants.get(buildingAtTile.id) ?? 0;
         if (currentOccupants >= getBuildingMaxOccupants(buildingAtTile.subType as BuildingType)) continue;
 
+        // Move worker to the building's door position before entering.
+        // Map data places workers at the building anchor, which is deep inside the
+        // blocked footprint. The door is at the footprint edge — matching what
+        // spawnWorkerInsideBuilding does for construction-spawned workers.
+        const door = getBuildingDoorPos(
+            buildingAtTile.x,
+            buildingAtTile.y,
+            buildingAtTile.race,
+            buildingAtTile.subType as BuildingType
+        );
+        entity.x = door.x;
+        entity.y = door.y;
+
         // Assign: claim building, mark as inside, skip the approaching phase
         const runtime = getRuntime(entity.id);
-        claimBuilding(runtime, buildingAtTile.id);
+        claimBuilding(entity.id, runtime, buildingAtTile.id);
         runtime.homeAssignment!.hasVisited = true;
         locationManager.enterBuilding(entity.id, buildingAtTile.id);
 

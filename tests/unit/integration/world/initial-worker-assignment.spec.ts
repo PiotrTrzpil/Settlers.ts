@@ -36,9 +36,7 @@ describe.skipIf(!hasRealData)('initial building worker assignment (map load)', (
         const building = sim.state.entities.find(
             e => e.type === EntityType.Building && e.subType === BuildingType.WoodcutterHut
         )!;
-        const unit = sim.state.entities.find(
-            e => e.type === EntityType.Unit && e.subType === UnitType.Woodcutter
-        )!;
+        const unit = sim.state.entities.find(e => e.type === EntityType.Unit && e.subType === UnitType.Woodcutter)!;
         expect(building).toBeDefined();
         expect(unit).toBeDefined();
 
@@ -70,9 +68,7 @@ describe.skipIf(!hasRealData)('initial building worker assignment (map load)', (
         const building = sim.state.entities.find(
             e => e.type === EntityType.Building && e.subType === BuildingType.StonecutterHut
         )!;
-        const unit = sim.state.entities.find(
-            e => e.type === EntityType.Unit && e.subType === UnitType.Stonecutter
-        )!;
+        const unit = sim.state.entities.find(e => e.type === EntityType.Unit && e.subType === UnitType.Stonecutter)!;
 
         expect(sim.services.settlerTaskSystem.getAssignedBuilding(unit.id)).toBe(building.id);
         expect(unit.hidden).toBe(true);
@@ -90,9 +86,7 @@ describe.skipIf(!hasRealData)('initial building worker assignment (map load)', (
             [{ x: cx, y: cy, settlerType: S4SettlerType.CARRIER, player: 0 }]
         );
 
-        const unit = sim.state.entities.find(
-            e => e.type === EntityType.Unit && e.subType === UnitType.Carrier
-        )!;
+        const unit = sim.state.entities.find(e => e.type === EntityType.Unit && e.subType === UnitType.Carrier)!;
 
         // Carrier has no workplace — should not be assigned
         expect(sim.services.settlerTaskSystem.getAssignedBuilding(unit.id)).toBeNull();
@@ -111,9 +105,7 @@ describe.skipIf(!hasRealData)('initial building worker assignment (map load)', (
             [{ x: cx, y: cy, settlerType: S4SettlerType.WOODCUTTER, player: 0 }]
         );
 
-        const unit = sim.state.entities.find(
-            e => e.type === EntityType.Unit && e.subType === UnitType.Woodcutter
-        )!;
+        const unit = sim.state.entities.find(e => e.type === EntityType.Unit && e.subType === UnitType.Woodcutter)!;
 
         // Woodcutter works in WoodcutterHut, not Sawmill
         expect(sim.services.settlerTaskSystem.getAssignedBuilding(unit.id)).toBeNull();
@@ -132,9 +124,7 @@ describe.skipIf(!hasRealData)('initial building worker assignment (map load)', (
             [{ x: cx, y: cy, settlerType: S4SettlerType.WOODCUTTER, player: 1 }]
         );
 
-        const unit = sim.state.entities.find(
-            e => e.type === EntityType.Unit && e.subType === UnitType.Woodcutter
-        )!;
+        const unit = sim.state.entities.find(e => e.type === EntityType.Unit && e.subType === UnitType.Woodcutter)!;
 
         expect(sim.services.settlerTaskSystem.getAssignedBuilding(unit.id)).toBeNull();
 
@@ -158,9 +148,7 @@ describe.skipIf(!hasRealData)('initial building worker assignment (map load)', (
             ]
         );
 
-        const units = sim.state.entities.filter(
-            e => e.type === EntityType.Unit && e.subType === UnitType.Woodcutter
-        );
+        const units = sim.state.entities.filter(e => e.type === EntityType.Unit && e.subType === UnitType.Woodcutter);
 
         // Only one should be assigned (default max occupants is 1)
         const assigned = units.filter(u => sim.services.settlerTaskSystem.getAssignedBuilding(u.id) !== null);
@@ -203,5 +191,57 @@ describe.skipIf(!hasRealData)('initial building worker assignment (map load)', (
         expect(sim.errors.length).toBe(0);
 
         sim.destroy();
+    });
+
+    it('worker completes a full work cycle without pathfinding failures', () => {
+        const sim = createSimulation();
+        const cx = sim.mapWidth >> 1;
+        const cy = sim.mapHeight >> 1;
+
+        sim.populateMapData(
+            [{ x: cx, y: cy, buildingType: S4BuildingType.WOODCUTTERHUT, player: 0 }],
+            [{ x: cx, y: cy, settlerType: S4SettlerType.WOODCUTTER, player: 0 }]
+        );
+
+        const building = sim.state.entities.find(
+            e => e.type === EntityType.Building && e.subType === BuildingType.WoodcutterHut
+        )!;
+
+        // Place trees nearby so the woodcutter has work to do
+        sim.plantTreesNear(building.id, 5);
+
+        // Collect pathfinding failures with full diagnostics
+        const pathFailures: {
+            unitId: number;
+            from: string;
+            to: string;
+            startPassable: boolean;
+            goalPassable: boolean;
+            startInBuilding: boolean;
+            goalInBuilding: boolean;
+            nodesSearched: number;
+            exhausted: boolean;
+            neighborInfo: string;
+        }[] = [];
+        sim.eventBus.on('movement:pathFailed', evt => {
+            pathFailures.push({
+                unitId: evt.unitId,
+                from: `${evt.fromX},${evt.fromY}`,
+                to: `${evt.toX},${evt.toY}`,
+                startPassable: evt.startPassable,
+                goalPassable: evt.goalPassable,
+                startInBuilding: evt.startInBuilding,
+                goalInBuilding: evt.goalInBuilding,
+                nodesSearched: evt.nodesSearched,
+                exhausted: evt.exhausted,
+                neighborInfo: evt.neighborInfo,
+            });
+        });
+
+        // Run enough ticks for a full work cycle: exit building → walk to tree → cut → return home
+        sim.runTicks(600);
+
+        expect(sim.errors.length).toBe(0);
+        expect(pathFailures).toEqual([]);
     });
 });

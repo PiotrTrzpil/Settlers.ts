@@ -42,6 +42,9 @@ import type { MaterialTransfer } from '../material-transfer';
 import type { ChoreoSystem } from '../../systems/choreo';
 import type { ISettlerBuildingLocationManager } from '../settler-location/types';
 import { BuildingWorkerTracker } from './building-worker-tracker';
+import { IndexedMap } from '@/game/utils/indexed-map';
+import type { TickScheduler, ScheduleHandle } from '../../systems/tick-scheduler';
+import { NO_HANDLE } from '../../systems/tick-scheduler';
 
 const log = createLogger('SettlerTaskSystem');
 const ORPHAN_CHECK_INTERVAL = 60;
@@ -49,6 +52,7 @@ const IDLE_SEARCH_COOLDOWN = 10;
 type SettlerConfigs = Map<UnitType, SettlerConfig>;
 
 export interface SettlerTaskSystemConfig extends CoreDeps {
+    tickScheduler: TickScheduler;
     choreoSystem: ChoreoSystem;
     visualService: EntityVisualService;
     inventoryManager: BuildingInventoryManager;
@@ -76,10 +80,12 @@ export class SettlerTaskSystem implements TickSystem, Persistable<SerializedUnit
     private readonly buildingPositionResolver: BuildingPositionResolverImpl;
     private readonly workerExecutor: WorkerTaskExecutor;
     private readonly stateMachine: UnitStateMachine;
-    private readonly runtimes = new Map<number, UnitRuntime>();
+    private readonly runtimes = new IndexedMap<number, UnitRuntime>();
     private readonly workerTracker: BuildingWorkerTracker;
+    private readonly tickScheduler: TickScheduler;
+    private orphanHandle: ScheduleHandle = NO_HANDLE;
+    private readonly idleCooldownHandles = new Map<number, ScheduleHandle>();
     private oreVeinData: OreVeinData | undefined;
-    private ticksSinceOrphanCheck = 0;
     private lastSubTimings: Record<string, number> = {};
     private _transportJobOps: TransportJobOps | null = null;
     private readonly locationManager: ISettlerBuildingLocationManager;
@@ -89,16 +95,20 @@ export class SettlerTaskSystem implements TickSystem, Persistable<SerializedUnit
         this.eventBus = config.eventBus;
         this.inventoryManager = config.inventoryManager;
         this.locationManager = config.locationManager;
+        this.tickScheduler = config.tickScheduler;
 
         this.settlerConfigs = buildAllSettlerConfigs();
         this.choreographyStore = new JobChoreographyStore();
+
+        const byBuilding = this.runtimes.addIndex<number>((_id, runtime) => runtime.homeAssignment?.buildingId ?? null);
 
         this.workerTracker = new BuildingWorkerTracker(
             this.runtimes,
             id => this.getRuntime(id),
             this.locationManager,
             this.gameState,
-            this.eventBus
+            this.eventBus,
+            byBuilding
         );
 
         const handlerErrorLogger = new ThrottledLogger(log, 2000);
@@ -158,8 +168,10 @@ export class SettlerTaskSystem implements TickSystem, Persistable<SerializedUnit
             animController: this.animController,
             workerExecutor: this.workerExecutor,
             isInCombat: config.isInCombat ?? (() => false),
-            idleSearchCooldown: IDLE_SEARCH_COOLDOWN,
+            tickScheduler: this.tickScheduler,
         });
+
+        this.orphanHandle = this.tickScheduler.schedule(ORPHAN_CHECK_INTERVAL, () => this.orphanCheckAndReschedule());
 
         this.handlerRegistry.register(
             SearchType.WORKPLACE,
@@ -194,6 +206,7 @@ export class SettlerTaskSystem implements TickSystem, Persistable<SerializedUnit
             if (runtime.homeAssignment?.buildingId !== buildingId) return;
 
             runtime.homeAssignment = null;
+            this.runtimes.reindex(settlerId);
 
             if (runtime.job) {
                 const entity = this.gameState.getEntity(settlerId);
@@ -241,7 +254,7 @@ export class SettlerTaskSystem implements TickSystem, Persistable<SerializedUnit
             runtime.lastDirection = entry.lastDirection;
 
             if (entry.homeAssignment) {
-                this.workerTracker.claim(runtime, entry.homeAssignment.buildingId, true);
+                this.workerTracker.claim(entity.id, runtime, entry.homeAssignment.buildingId, true);
                 runtime.homeAssignment!.hasVisited = entry.homeAssignment.hasVisited;
             }
 
@@ -322,7 +335,7 @@ export class SettlerTaskSystem implements TickSystem, Persistable<SerializedUnit
         return this.workerTracker.getAssignedBuilding(settlerId);
     }
 
-    getWorkersForBuilding(buildingId: number): readonly number[] {
+    getWorkersForBuilding(buildingId: number): ReadonlySet<number> {
         return this.workerTracker.getWorkersForBuilding(buildingId);
     }
 
@@ -382,7 +395,7 @@ export class SettlerTaskSystem implements TickSystem, Persistable<SerializedUnit
             posHandler?.onSettlerRemoved?.(entityId);
         }
 
-        this.workerTracker.release(runtime);
+        this.workerTracker.release(entityId, runtime);
 
         if (!this.locationManager.isCommitted(entity.id)) {
             entity.hidden = false;
@@ -462,7 +475,13 @@ export class SettlerTaskSystem implements TickSystem, Persistable<SerializedUnit
             }
         }
 
-        this.workerTracker.release(runtime);
+        const idleHandle = this.idleCooldownHandles.get(entityId);
+        if (idleHandle !== undefined) {
+            this.tickScheduler.cancel(idleHandle);
+            this.idleCooldownHandles.delete(entityId);
+        }
+
+        this.workerTracker.release(entityId, runtime);
         this.runtimes.delete(entityId);
     }
 
@@ -476,10 +495,11 @@ export class SettlerTaskSystem implements TickSystem, Persistable<SerializedUnit
 
     private onBuildingRemoved(buildingId: number): void {
         this.workerTracker.clearBuilding(buildingId);
-        for (const [settlerId, runtime] of sortedEntries(this.runtimes)) {
+        for (const [settlerId, runtime] of sortedEntries(this.runtimes.raw as Map<number, UnitRuntime>)) {
             if (runtime.homeAssignment?.buildingId !== buildingId) continue;
 
             runtime.homeAssignment = null;
+            this.runtimes.reindex(settlerId);
 
             if (runtime.job) {
                 const entity = this.gameState.getEntity(settlerId);
@@ -521,10 +541,6 @@ export class SettlerTaskSystem implements TickSystem, Persistable<SerializedUnit
             }
         }
 
-        const orphanStart = performance.now();
-        this.cleanOrphanedRuntimes();
-        const orphanTime = performance.now() - orphanStart;
-
         const sub: Record<string, number> = {
             'idle-search': cats[TickCategory.IDLE_SEARCH],
             '  searches': this.workerExecutor.idleSearchCount,
@@ -535,7 +551,6 @@ export class SettlerTaskSystem implements TickSystem, Persistable<SerializedUnit
             'idle-anim': cats[TickCategory.IDLE_ANIM],
         };
         for (const [k, v] of Object.entries(it)) sub[`  ${k}`] = v;
-        sub['orphan-cleanup'] = orphanTime;
         this.lastSubTimings = sub;
     }
 
@@ -543,15 +558,30 @@ export class SettlerTaskSystem implements TickSystem, Persistable<SerializedUnit
         return this.lastSubTimings;
     }
 
-    private cleanOrphanedRuntimes(): void {
-        if (++this.ticksSinceOrphanCheck >= ORPHAN_CHECK_INTERVAL) {
-            this.ticksSinceOrphanCheck = 0;
-            for (const id of this.runtimes.keys()) {
-                if (!this.gameState.getEntity(id)) {
-                    this.onEntityRemoved(id);
-                }
+    private orphanCheckAndReschedule(): void {
+        for (const id of this.runtimes.keys()) {
+            if (!this.gameState.getEntity(id)) {
+                this.onEntityRemoved(id);
             }
         }
+        this.orphanHandle = this.tickScheduler.schedule(ORPHAN_CHECK_INTERVAL, () => this.orphanCheckAndReschedule());
+    }
+
+    markReadyForSearch(entityId: number): void {
+        const runtime = this.runtimes.get(entityId);
+        if (runtime) {
+            runtime.idleSearchReady = true;
+        }
+        this.idleCooldownHandles.delete(entityId);
+    }
+
+    scheduleIdleCooldown(entityId: number, delay: number): void {
+        const existingHandle = this.idleCooldownHandles.get(entityId);
+        if (existingHandle !== undefined) {
+            this.tickScheduler.cancel(existingHandle);
+        }
+        const handle = this.tickScheduler.schedule(delay, () => this.markReadyForSearch(entityId));
+        this.idleCooldownHandles.set(entityId, handle);
     }
 
     private getRuntime(entityId: number): UnitRuntime {
@@ -564,9 +594,11 @@ export class SettlerTaskSystem implements TickSystem, Persistable<SerializedUnit
                 lastDirection: 0,
                 idleState: this.animController.createIdleState(),
                 homeAssignment: null,
-                idleSearchCooldown: entityId % IDLE_SEARCH_COOLDOWN,
+                idleSearchReady: false,
             };
             this.runtimes.set(entityId, runtime);
+            const stagger = Math.max(1, entityId % IDLE_SEARCH_COOLDOWN);
+            this.scheduleIdleCooldown(entityId, stagger);
         }
         return runtime;
     }

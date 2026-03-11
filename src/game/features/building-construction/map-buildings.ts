@@ -10,8 +10,8 @@ import { GameState } from '../../game-state';
 import { createLogger } from '@/utilities/logger';
 import type { MapBuildingData } from '@/resources/map/map-entity-data';
 import { S4BuildingType } from '@/resources/map/s4-types';
-import type { EventBus } from '../../event-bus';
 import type { TerrainData } from '../../terrain';
+import type { Race } from '../../core/race';
 
 const log = createLogger('MapBuildings');
 
@@ -87,14 +87,19 @@ const S4_TO_BUILDING_TYPE: Partial<Record<S4BuildingType, BuildingType>> = {
     [S4BuildingType.DARKTEMPLE]: BuildingType.DarkTemple,
 };
 
+/** Info returned per building created — caller emits lifecycle events later. */
+export interface MapBuildingEntry {
+    buildingId: number;
+    buildingType: BuildingType;
+    race: Race;
+}
+
 /**
  * Options for populating map buildings.
  */
 export interface PopulateBuildingsOptions {
     /** Only populate buildings for this player (undefined = all players) */
     player?: number;
-    /** Event bus for emitting building:completed events */
-    eventBus: EventBus;
     /** Terrain data for terrain modification (required) */
     terrain: TerrainData;
 }
@@ -106,15 +111,15 @@ export interface PopulateBuildingsOptions {
  * @param state - Game state to add entities to
  * @param buildings - Building data from map parser
  * @param options - Filtering and terrain options
- * @returns Number of buildings spawned
+ * @returns Array of created buildings (caller emits lifecycle events after reconciliation)
  */
 export function populateMapBuildings(
     state: GameState,
     buildings: MapBuildingData[],
     options: PopulateBuildingsOptions
-): number {
-    const { player, eventBus } = options;
-    let count = 0;
+): MapBuildingEntry[] {
+    const { player } = options;
+    const result: MapBuildingEntry[] = [];
     let skipped = 0;
     const perPlayer = new Map<number, string[]>();
 
@@ -159,32 +164,21 @@ export function populateMapBuildings(
         applyTerrainLeveling(terrainParams, groundType, groundHeight, mapSize, 1.0, originalTerrain);
 
         // Mark the building's footprint as movement-blocking (completed buildings block tiles).
-        // This must happen before building:completed so listeners see correct occupancy.
         state.restoreBuildingFootprintBlock(entity.id);
 
-        // Emit building:completed so that systems (like CarrierSystem) can register state
-        // and spawn units (handled by BuildingConstructionSystem listener)
-        // Map-loaded buildings get their workers from map data + assignInitialBuildingWorkers.
-        // Do NOT set spawnWorker — that would spawn a duplicate worker at the door.
-        eventBus.emit('building:completed', {
-            buildingId: entity.id,
-            buildingType,
-            race: entity.race,
-            level: 'info',
-        });
+        result.push({ buildingId: entity.id, buildingType, race: entity.race });
 
         const entries = perPlayer.get(buildingData.player) ?? [];
         entries.push(`${BuildingType[buildingType]}@(${buildingData.x},${buildingData.y})`);
         perPlayer.set(buildingData.player, entries);
-        count++;
     }
 
-    if (count > 0) {
+    if (result.length > 0) {
         const parts = [...perPlayer.entries()].map(([p, entries]) => `P${p}: ${entries.join(', ')}`).join(' | ');
-        log.debug(`Populated ${count} buildings (${skipped} skipped) — ${parts}`);
+        log.debug(`Populated ${result.length} buildings (${skipped} skipped) — ${parts}`);
     }
 
-    return count;
+    return result;
 }
 
 /**

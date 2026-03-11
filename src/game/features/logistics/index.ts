@@ -116,6 +116,35 @@ export { LogisticsDispatcher, type LogisticsDispatcherConfig } from './logistics
 // Logistics filter types (pluggable policy enforcement)
 export type { LogisticsMatchFilter, CarrierFilter } from './logistics-filter';
 
+// Logistics snapshot (CLI + debug panel data gathering)
+export type {
+    SnapshotConfig,
+    LogisticsStats,
+    LogisticsDebugState,
+    RequestSummary,
+    CarrierSummary,
+    ReservationSummary,
+    ProductionBuildingSummary,
+    SlotSummary,
+    PileSummary,
+    WorkerSummary,
+    TransportJobSummary,
+    BottleneckDiag,
+} from './logistics-snapshot';
+export {
+    gatherLogisticsSnapshot,
+    gatherRequests,
+    gatherCarriers,
+    gatherReservations,
+    gatherProductionBuildings,
+    gatherPiles,
+    gatherWorkers,
+    gatherTransportJobs,
+    detectBottlenecks,
+    formatMaterial,
+    createEmptyState,
+} from './logistics-snapshot';
+
 // Feature definition (self-registering via FeatureRegistry)
 export { RequestManagerFeature, type RequestManagerExports } from './request-manager-feature';
 export { LogisticsDispatcherFeature, type LogisticsDispatcherExports } from './logistics-dispatcher-feature';

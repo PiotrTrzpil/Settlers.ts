@@ -19,7 +19,10 @@
     "lint:fix": "eslint src tests --fix",
     "format": "prettier --write \"src/**/*.{ts,vue}\"",
     "format:check": "prettier --check \"src/**/*.{ts,vue}\"",
+    "cli": "tsx scripts/cli.ts",
     "timeline": "node scripts/timeline.mjs",
+    "timeline:record": "tsx scripts/timeline-receiver.ts",
+    "timeline:live": "pnpm timeline -- --dir live",
     "analyze:circular": "madge --circular --extensions ts src/",
     "analyze:type-coverage": "type-coverage --project tsconfig.json --detail --strict",
     "analyze:unused": "knip",
@@ -58,6 +61,7 @@
     "@types/howler": "^2.2.12",
     "@types/jsdom": "^27.0.0",
     "@types/node": "^25.3.0",
+    "@types/ws": "^8.18.1",
     "@vitejs/plugin-vue": "^6.0.4",
     "@vitest/ui": "^4.0.18",
     "@vue/test-utils": "^2.4.6",
@@ -91,6 +95,8 @@
     "vue-tsc": "^3.2.5"
   },
   "pnpm": {
-    "onlyBuiltDependencies": ["better-sqlite3"]
+    "onlyBuiltDependencies": [
+      "better-sqlite3"
+    ]
   }
 }

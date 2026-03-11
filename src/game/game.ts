@@ -10,8 +10,12 @@ import { setDirectionRunLength } from './systems/pathfinding';
 import { watch } from 'vue';
 import type { FrameRenderTiming } from './renderer/renderer';
 import { debugStats } from './debug/debug-stats';
+import { getBridge } from './debug/debug-bridge';
 import type { SystemState } from './game-loop';
 import { loadInitialState, restoreFromSnapshot, restoreInitialTerrain } from './state/game-state-persistence';
+import { createCli } from '@/game/cli';
+import { connectCliWs } from '@/game/cli/ws-client';
+import { TimelineCapture } from '@/game/debug/timeline-capture';
 
 // Scripting is loaded dynamically to avoid bundling Lua when disabled
 type ScriptLoadResult = { success: boolean; scriptPath: string | null; error?: string };
@@ -43,6 +47,9 @@ export class Game extends GameCore {
 
     /** Stop handle for the pathStraightness watcher — must be called in destroy() */
     private readonly _stopPathWatcher: () => void;
+
+    /** Timeline capture instance (dev-only, null in production). */
+    private _timelineCapture: TimelineCapture | null = null;
 
     /** Current interaction mode */
     public mode: string = 'select';
@@ -118,6 +125,20 @@ export class Game extends GameCore {
             console.log('Current Music ID:', this.soundManager.currentMusicId);
             console.log('Audio Context State:', Howler.ctx.state);
         };
+
+        // Wire CLI engine and expose on debug bridge
+        const cli = createCli(this);
+        getBridge().cli = cli;
+        connectCliWs(cli);
+
+        // Wire timeline capture (dev-only) — captures EventBus.emit() calls
+        // and flushes batches to any WS subscriber via the debug bridge.
+        if (import.meta.env.DEV) {
+            const capture = new TimelineCapture();
+            capture.start(this.eventBus, () => debugStats.state.tickCount);
+            this._timelineCapture = capture;
+            getBridge().timelineCapture = capture;
+        }
 
         mlt.gameConstructor = Math.round(performance.now() - start);
         mlt.mapSize = `${this.terrain.width}x${this.terrain.height}`;
@@ -274,6 +295,7 @@ export class Game extends GameCore {
 
     /** Destroy the game and clean up all resources */
     public override destroy(): void {
+        this._timelineCapture?.stop();
         this._stopPathWatcher();
         this.soundManager.unload();
         this.scriptService?.destroy();

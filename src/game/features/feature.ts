@@ -39,6 +39,7 @@ import type { Command, CommandResult, CommandType } from '../commands';
 import type { Persistable } from '../persistence';
 import type { TerrainData } from '../terrain';
 import type { RenderPassDefinition } from '../renderer/render-passes/types';
+import type { TickScheduler } from '../systems/tick-scheduler';
 
 /**
  * Minimal shared dependencies injected into almost every system and manager.
@@ -79,6 +80,9 @@ export interface FeatureContext extends CoreDeps {
 
     /** Execute a game command. Available to all features at creation time. */
     executeCommand: (cmd: Command) => CommandResult;
+
+    /** Shared tick scheduler for deferred callbacks. */
+    tickScheduler: TickScheduler;
 
     /**
      * Get exports from another feature.

@@ -323,7 +323,15 @@ export function createSnapshot(game: GameCore): GameStateSnapshot {
 export function saveGameState(game: GameCore): boolean {
     try {
         const snapshot = createSnapshot(game);
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(snapshot));
+        const json = JSON.stringify(snapshot);
+        try {
+            localStorage.setItem(STORAGE_KEY, json);
+        } catch {
+            // Quota exceeded — free space by removing stale keys and retry
+            localStorage.removeItem(STORAGE_KEY);
+            localStorage.removeItem(INITIAL_STATE_KEY);
+            localStorage.setItem(STORAGE_KEY, json);
+        }
         return true;
     } catch (e) {
         console.warn('Failed to save game state:', e);

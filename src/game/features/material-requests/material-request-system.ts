@@ -23,9 +23,6 @@ import { type ConstructionSiteManager } from '../building-construction';
 import type { StorageFilterManager } from '../../systems/inventory/storage-filter-manager';
 import { EventSubscriptionManager } from '../../event-bus';
 
-/** Minimum input threshold before requesting more materials */
-const REQUEST_THRESHOLD = 4;
-
 /** Maximum concurrent import requests per material per StorageArea (parallel carrier cap). */
 const MAX_ACTIVE_IMPORTS_PER_MATERIAL = 20;
 
@@ -169,9 +166,12 @@ export class MaterialRequestSystem implements TickSystem {
 
         for (const inputSlot of config.inputSlots) {
             const currentAmount = this.inventoryManager.getInputAmount(entity.id, inputSlot.materialType);
+            const space = inputSlot.maxCapacity - currentAmount;
+            if (space <= 0) continue;
 
-            // Request more if below threshold and no active request in the RequestManager
-            if (currentAmount < REQUEST_THRESHOLD && !this.hasActiveRequest(entity.id, inputSlot.materialType)) {
+            const activeCount = this.countActiveRequests(entity.id, inputSlot.materialType);
+            const needed = space - activeCount;
+            for (let i = 0; i < needed; i++) {
                 this.requestManager.addRequest(entity.id, inputSlot.materialType, 1, RequestPriority.Normal);
             }
         }
@@ -193,12 +193,6 @@ export class MaterialRequestSystem implements TickSystem {
                 this.requestManager.addRequest(buildingId, material, 1, RequestPriority.Low);
             }
         }
-    }
-
-    /** Check if there's already an active (pending or in-progress) request for this building+material */
-    private hasActiveRequest(buildingId: number, materialType: EMaterialType): boolean {
-        const requests = this.requestManager.getRequestsForBuilding(buildingId);
-        return requests.some(r => r.materialType === materialType);
     }
 
     /** Count active requests for a building+material. */

@@ -13,6 +13,7 @@
  *   pnpm timeline --tick 1000-2000              # filter by tick range
  *   pnpm timeline --sql "SELECT ..."            # raw SQL
  *   pnpm timeline --db <path>                   # use specific DB file
+ *   pnpm timeline --dir live                    # read from live recording dir (data/.timeline/)
  *   pnpm timeline --clean                       # delete all timeline DBs
  *   pnpm timeline --console                     # console output from failed/auto-picked test
  *   pnpm timeline --console --test <id>         # console output from specific test
@@ -26,7 +27,7 @@ import Database from 'better-sqlite3';
 
 // ─── Constants & CLI ─────────────────────────────────────────────
 
-const TIMELINE_DIR = 'tests/unit/.timeline';
+const TIMELINE_DIRS = { test: 'tests/unit/.timeline', live: 'data/.timeline' };
 const ENTRY_COLS = 'tick, category, entity_id AS entityId, event, detail';
 
 // Strip bare '--' inserted by pnpm when forwarding args
@@ -43,11 +44,17 @@ const { values: args } = parseArgs({
         sql:    { type: 'string' },
         db:     { type: 'string' },
         console: { type: 'boolean', default: false },
+        dir:    { type: 'string', default: 'test' },
         clean:  { type: 'boolean', default: false },
         help:   { type: 'boolean', short: 'h', default: false },
     },
     strict: false,
 });
+
+if (args.dir !== 'test' && args.dir !== 'live') {
+    die(`Invalid --dir value '${args.dir}'. Must be 'test' or 'live'.`);
+}
+const TIMELINE_DIR = TIMELINE_DIRS[args.dir];
 
 // ─── Helpers ─────────────────────────────────────────────────────
 
@@ -297,6 +304,7 @@ Options:
   --tick <from-to>      Filter by tick range (e.g. 1000-2000)
   --sql <query>         Run raw SQL query against the DB
   --db <path>           Use a specific DB file (recommended when multiple sessions run tests)
+  --dir <test|live>     Timeline directory: 'test' (default) or 'live' (data/.timeline/)
   --console             Show captured console output for a test
   --console --list      List all tests that have console output
   --console --level <l> Filter console output by level (log, warn, error)
@@ -316,6 +324,12 @@ Example SQL queries:
   --sql "SELECT event, COUNT(*) AS n FROM timeline WHERE test_id='<id>' GROUP BY event ORDER BY n DESC"
   --sql "SELECT * FROM timeline WHERE entity_id=42 AND test_id='<id>' ORDER BY tick"
   --sql "SELECT * FROM console_log WHERE test_id='<id>' AND level='error'"
+
+Live recording (from a running dev server):
+  pnpm timeline:record                                      # start recording (Ctrl-C to stop)
+  CLI_URL=ws://localhost:5174/__cli__ pnpm timeline:record   # custom port
+  pnpm timeline:live                                        # query live recordings (--dir live)
+  pnpm timeline -- --dir live --sql "SELECT category, COUNT(*) AS n FROM timeline GROUP BY category ORDER BY n DESC"
 `);
     process.exit(0);
 }

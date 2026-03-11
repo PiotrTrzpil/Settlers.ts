@@ -7,6 +7,7 @@ import { type ComponentStore, mapStore } from '../../ecs';
 import { LogHandler } from '@/utilities/log-handler';
 import { getAllNeighbors } from '../hex-directions';
 import { isPassable } from '../../terrain';
+import { consumeLastPathfindingFailure } from '../pathfinding';
 
 const log = new LogHandler('MovementSystem');
 
@@ -222,16 +223,7 @@ export class MovementSystem implements TickSystem {
         const path = this.pathfinder.findPath(fromX, fromY, targetX, targetY);
 
         if (!path || path.length === 0) {
-            this.eventBus.emit('movement:pathFailed', {
-                unitId: entityId,
-                fromX,
-                fromY,
-                toX: targetX,
-                toY: targetY,
-                x: fromX,
-                y: fromY,
-                level: 'warn',
-            });
+            this.emitPathFailed(entityId, fromX, fromY, targetX, targetY);
             return false;
         }
 
@@ -255,6 +247,27 @@ export class MovementSystem implements TickSystem {
         }
 
         return true;
+    }
+
+    private emitPathFailed(unitId: number, fromX: number, fromY: number, toX: number, toY: number): void {
+        const diag = consumeLastPathfindingFailure();
+        this.eventBus.emit('movement:pathFailed', {
+            unitId,
+            fromX,
+            fromY,
+            toX,
+            toY,
+            x: fromX,
+            y: fromY,
+            level: 'warn',
+            startPassable: diag?.startPassable ?? true,
+            goalPassable: diag?.goalPassable ?? true,
+            startInBuilding: diag?.startInBuilding ?? false,
+            goalInBuilding: diag?.goalInBuilding ?? false,
+            nodesSearched: diag?.nodesSearched ?? -1,
+            exhausted: diag?.exhausted ?? false,
+            neighborInfo: diag?.neighborInfo ?? '',
+        });
     }
 
     /**
@@ -355,15 +368,20 @@ export class MovementSystem implements TickSystem {
 
         controller.finalizeTick();
 
-        // Detect visual position discontinuity (teleport guard)
+        // Detect visual position discontinuity (teleport guard).
+        // Multi-step ticks (2+ steps in one tick at high game speed) naturally produce
+        // larger visual jumps — scale the threshold by steps taken.
         const teleportDist = controller.detectTeleport();
-        if (teleportDist > 1.5) {
+        const steps = Math.max(1, controller.stepsTakenThisTick);
+        const threshold = 1.5 * steps + 0.01;
+        if (teleportDist > threshold) {
             console.warn(
                 `[MovementSystem] TELEPORT DETECTED! Entity ${controller.entityId} jumped ${teleportDist.toFixed(2)} tiles` +
                     ` | state=${controller.state} prevState=${prevState}` +
                     ` | tile=(${controller.tileX},${controller.tileY}) prev=(${controller.prevTileX},${controller.prevTileY})` +
                     ` | progress=${controller.progress.toFixed(2)} inTransit=${controller.isInTransit}` +
-                    ` | pathLen=${controller.path.length} pathIdx=${controller.pathIndex}`
+                    ` | pathLen=${controller.path.length} pathIdx=${controller.pathIndex}` +
+                    ` | steps=${steps}`
             );
             this.eventBus.emit('movement:teleport', {
                 unitId: controller.entityId,

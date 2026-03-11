@@ -15,6 +15,7 @@ import { SettlerState } from './types';
 import type { UnitRuntime } from './unit-state-machine';
 import { assignInitialBuildingWorkers } from './initial-worker-assignment';
 import type { ISettlerBuildingLocationManager } from '../settler-location/types';
+import type { IndexedMap, Index } from '@/game/utils/indexed-map';
 
 const log = createLogger('BuildingWorkerTracker');
 
@@ -22,13 +23,18 @@ export class BuildingWorkerTracker {
     /** Tracks how many workers are assigned to each building (for occupancy limits). */
     readonly occupants = new Map<number, number>();
 
+    private readonly byBuilding: Index<number, number>;
+
     constructor(
-        private readonly runtimes: Map<number, UnitRuntime>,
+        private readonly runtimes: IndexedMap<number, UnitRuntime>,
         private readonly getOrCreateRuntime: (entityId: number) => UnitRuntime,
         private readonly locationManager: ISettlerBuildingLocationManager,
         private readonly gameState: GameState,
-        private readonly eventBus: EventBus
-    ) {}
+        private readonly eventBus: EventBus,
+        byBuilding: Index<number, number>
+    ) {
+        this.byBuilding = byBuilding;
+    }
 
     /** Get the assigned building ID for a settler, or null if unassigned. */
     getAssignedBuilding(settlerId: number): number | null {
@@ -36,14 +42,8 @@ export class BuildingWorkerTracker {
     }
 
     /** Get all settler IDs assigned to work at the given building. */
-    getWorkersForBuilding(buildingId: number): readonly number[] {
-        const result: number[] = [];
-        for (const [settlerId, runtime] of this.runtimes) {
-            if (runtime.homeAssignment?.buildingId === buildingId) {
-                result.push(settlerId);
-            }
-        }
-        return result;
+    getWorkersForBuilding(buildingId: number): ReadonlySet<number> {
+        return this.byBuilding.get(buildingId);
     }
 
     /**
@@ -51,23 +51,17 @@ export class BuildingWorkerTracker {
      * @param skipApproaching When true (deserialization), skips markApproaching — the location
      *   manager restores its own state from its own persistence entry.
      */
-    claim(runtime: UnitRuntime, buildingId: number, skipApproaching = false): void {
+    claim(settlerId: number, runtime: UnitRuntime, buildingId: number, skipApproaching = false): void {
         runtime.homeAssignment = { buildingId, hasVisited: false };
+        this.runtimes.reindex(settlerId);
         this.occupants.set(buildingId, (this.occupants.get(buildingId) ?? 0) + 1);
         if (!skipApproaching) {
-            // Locate the settler ID by reverse-lookup in the runtimes map.
-            // claim is called infrequently (once per assignment), so O(n) is acceptable.
-            for (const [id, r] of this.runtimes) {
-                if (r === runtime) {
-                    this.locationManager.markApproaching(id, buildingId);
-                    break;
-                }
-            }
+            this.locationManager.markApproaching(settlerId, buildingId);
         }
     }
 
     /** Release a worker's building assignment, decrementing its occupant count. */
-    release(runtime: UnitRuntime): void {
+    release(settlerId: number, runtime: UnitRuntime): void {
         if (!runtime.homeAssignment) return;
         const buildingId = runtime.homeAssignment.buildingId;
         const count = this.occupants.get(buildingId);
@@ -79,21 +73,16 @@ export class BuildingWorkerTracker {
             this.occupants.set(buildingId, count - 1);
         }
 
-        // Locate settler ID by reverse-lookup so we can clean up location state.
-        for (const [settlerId, r] of this.runtimes) {
-            if (r === runtime) {
-                if (this.locationManager.isInside(settlerId)) {
-                    this.locationManager.exitBuilding(settlerId);
-                } else if (this.locationManager.isCommitted(settlerId)) {
-                    this.locationManager.cancelApproach(settlerId);
-                }
-
-                this.emitWorkerLost(buildingId, settlerId);
-                break;
-            }
+        if (this.locationManager.isInside(settlerId)) {
+            this.locationManager.exitBuilding(settlerId);
+        } else if (this.locationManager.isCommitted(settlerId)) {
+            this.locationManager.cancelApproach(settlerId);
         }
 
+        this.emitWorkerLost(buildingId, settlerId);
+
         runtime.homeAssignment = null;
+        this.runtimes.reindex(settlerId);
     }
 
     /** Emit building:workerLost if the building still exists (not being destroyed). */
@@ -120,7 +109,7 @@ export class BuildingWorkerTracker {
             this.occupants,
             this.locationManager,
             id => this.getOrCreateRuntime(id),
-            (runtime, buildingId) => this.claim(runtime, buildingId, true)
+            (settlerId, runtime, buildingId) => this.claim(settlerId, runtime, buildingId, true)
         );
     }
 
@@ -160,13 +149,13 @@ export class BuildingWorkerTracker {
     /** Assign a settler to a building externally (from recruit system). */
     assignWorker(settlerId: number, buildingId: number): void {
         const runtime = this.getOrCreateRuntime(settlerId);
-        this.claim(runtime, buildingId);
+        this.claim(settlerId, runtime, buildingId);
     }
 
     /** Assign a worker that was spawned already inside its building (hidden, no movement needed). */
     assignWorkerInside(settlerId: number, buildingId: number): void {
         const runtime = this.getOrCreateRuntime(settlerId);
-        this.claim(runtime, buildingId, true);
+        this.claim(settlerId, runtime, buildingId, true);
         runtime.homeAssignment!.hasVisited = true;
         this.locationManager.enterBuilding(settlerId, buildingId);
     }
@@ -189,6 +178,7 @@ export class BuildingWorkerTracker {
             }
         }
         runtime.homeAssignment = null;
+        this.runtimes.reindex(settlerId);
     }
 
     /** Remove occupant tracking for a destroyed building (caller handles worker job interruption). */

@@ -10,7 +10,6 @@ import type { MapBuildingData } from '@/resources/map/map-entity-data';
 function createPopulateOptions(sim: Simulation, player?: number) {
     return {
         player,
-        eventBus: sim.eventBus,
         terrain: sim.map.terrain,
     };
 }
@@ -28,9 +27,9 @@ describe('populateMapBuildings', () => {
             { x: 20, y: 20, buildingType: S4BuildingType.SAWMILL, player: 1 },
         ];
 
-        const count = populateMapBuildings(sim.state, buildings, createPopulateOptions(sim));
+        const result = populateMapBuildings(sim.state, buildings, createPopulateOptions(sim));
 
-        expect(count).toBe(2);
+        expect(result).toHaveLength(2);
         expect(sim.state.entities).toHaveLength(2); // 2 buildings (workers come from map settler data)
 
         const entity1 = sim.state.getGroundEntityAt(10, 10)!;
@@ -55,9 +54,9 @@ describe('populateMapBuildings', () => {
             { x: 30, y: 30, buildingType: S4BuildingType.SAWMILL, player: 0 }, // Valid
         ];
 
-        const count = populateMapBuildings(sim.state, buildings, createPopulateOptions(sim));
+        const result = populateMapBuildings(sim.state, buildings, createPopulateOptions(sim));
 
-        expect(count).toBe(1);
+        expect(result).toHaveLength(1);
         expect(sim.state.getGroundEntityAt(10, 10)!.type).toBe(EntityType.MapObject); // unchanged
         expect(sim.state.getGroundEntityAt(20, 20)).toBeUndefined();
         expect(sim.state.getGroundEntityAt(30, 30)).toBeDefined();
@@ -70,32 +69,32 @@ describe('populateMapBuildings', () => {
             { x: 30, y: 30, buildingType: S4BuildingType.MILL, player: 0 },
         ];
 
-        const count = populateMapBuildings(sim.state, buildings, createPopulateOptions(sim, 0));
+        const result = populateMapBuildings(sim.state, buildings, createPopulateOptions(sim, 0));
 
-        expect(count).toBe(2);
+        expect(result).toHaveLength(2);
         expect(sim.state.getGroundEntityAt(10, 10)).toBeDefined();
         expect(sim.state.getGroundEntityAt(20, 20)).toBeUndefined();
         expect(sim.state.getGroundEntityAt(30, 30)).toBeDefined();
     });
 
-    it('should spawn carriers for residence buildings and emit correct events', () => {
+    it('should return building entries without emitting lifecycle events', () => {
         const completedEvents: Array<{ buildingType: BuildingType; race: Race }> = [];
-        const spawnedEvents: number[] = [];
         sim.eventBus.on('building:completed', ({ buildingType, race }) => completedEvents.push({ buildingType, race }));
-        sim.eventBus.on('unit:spawned', ({ unitId }) => spawnedEvents.push(unitId));
 
         const buildings: MapBuildingData[] = [{ x: 10, y: 10, buildingType: S4BuildingType.RESIDENCESMALL, player: 0 }];
 
-        populateMapBuildings(sim.state, buildings, createPopulateOptions(sim));
+        const result = populateMapBuildings(sim.state, buildings, createPopulateOptions(sim));
 
-        // ResidenceSmall spawns 2 carriers (1 building + 2 carriers)
-        expect(sim.state.entities).toHaveLength(3);
+        // Only the building entity — no carriers spawned (lifecycle events deferred)
+        expect(sim.state.entities).toHaveLength(1);
 
-        expect(completedEvents).toHaveLength(1);
-        expect(completedEvents[0]!.race).toBe(Race.Roman);
+        // No events emitted — caller is responsible for activation after reconciliation
+        expect(completedEvents).toHaveLength(0);
 
-        // 2 carriers = 2 unit:spawned events
-        expect(spawnedEvents).toHaveLength(2);
+        // Returns building info for deferred activation
+        expect(result).toHaveLength(1);
+        expect(result[0]!.buildingType).toBe(BuildingType.ResidenceSmall);
+        expect(result[0]!.race).toBe(Race.Roman);
     });
 });
 
