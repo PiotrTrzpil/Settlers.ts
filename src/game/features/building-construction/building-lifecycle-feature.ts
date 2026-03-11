@@ -63,19 +63,19 @@ export class BuildingLifecycleHandler {
         this.subscriptions.unsubscribeAll();
     }
 
-    private onBuildingPlaced({ entityId, buildingType, x, y, player }: GameEvents['building:placed']): void {
-        const entity = this.gameState.getEntity(entityId);
+    private onBuildingPlaced({ buildingId, buildingType, x, y, player }: GameEvents['building:placed']): void {
+        const entity = this.gameState.getEntity(buildingId);
         if (!entity) return;
-        this.constructionSiteManager.registerSite(entityId, buildingType, entity.race, player, x, y);
+        this.constructionSiteManager.registerSite(buildingId, buildingType, entity.race, player, x, y);
         const constructionConfig = getConstructionInventoryConfig(buildingType, entity.race);
         if (constructionConfig.inputSlots.length > 0) {
-            this.inventoryManager.createInventoryFromConfig(entityId, buildingType, constructionConfig);
+            this.inventoryManager.createInventoryFromConfig(buildingId, buildingType, constructionConfig);
         }
     }
 
-    private onBuildingCompleted({ entityId, buildingType, race }: GameEvents['building:completed']): void {
-        this.inventoryManager.swapInventoryPhase(entityId, buildingType, race);
-        this.constructionSiteManager.removeSite(entityId);
+    private onBuildingCompleted({ buildingId, buildingType, race }: GameEvents['building:completed']): void {
+        this.inventoryManager.swapInventoryPhase(buildingId, buildingType, race);
+        this.constructionSiteManager.removeSite(buildingId);
     }
 
     private onMaterialOverflowed({

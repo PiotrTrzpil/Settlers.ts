@@ -58,8 +58,7 @@ export const TowerGarrisonFeature: FeatureDefinition = {
             eventBus: ctx.eventBus,
             unitReservation: ctx.unitReservation,
             locationManager,
-            releaseWorkerAssignment: (settlerId: number) =>
-                settlerTaskSystem.releaseWorkerAssignment(settlerId),
+            releaseWorkerAssignment: (settlerId: number) => settlerTaskSystem.releaseWorkerAssignment(settlerId),
         });
 
         const autoSystem = new AutoGarrisonSystem({
@@ -76,12 +75,12 @@ export const TowerGarrisonFeature: FeatureDefinition = {
             eventBus: ctx.eventBus,
         });
 
-        ctx.on('building:completed', ({ entityId, buildingType }) => {
-            if (isGarrisonBuildingType(buildingType)) manager.initTower(entityId, buildingType);
+        ctx.on('building:completed', ({ buildingId, buildingType }) => {
+            if (isGarrisonBuildingType(buildingType)) manager.initTower(buildingId, buildingType);
         });
 
-        ctx.on('building:removed', ({ entityId }) => {
-            manager.removeTower(entityId); // no-op for non-garrison buildings
+        ctx.on('building:removed', ({ buildingId }) => {
+            manager.removeTower(buildingId); // no-op for non-garrison buildings
         });
 
         // Clean up when a dispatch job fails for a garrison-bound unit
@@ -105,8 +104,7 @@ export const TowerGarrisonFeature: FeatureDefinition = {
                     id: 'tower-bowman',
                     layer: RenderLayer.AboveEntities,
                     needs: { sprites: true },
-                    create: () =>
-                        new TowerBowmanRenderPass(manager, ctx.gameState, towerBowmanTargets),
+                    create: () => new TowerBowmanRenderPass(manager, ctx.gameState, towerBowmanTargets),
                 },
             ],
             persistence: [manager],
@@ -131,28 +129,28 @@ export const TowerGarrisonFeature: FeatureDefinition = {
                             // reservation auto-released by registry
                         },
                     });
-                    const job = choreo('WORKER_DISPATCH')
-                        .goToDoorAndEnter(towerId)
-                        .build();
+                    const job = choreo('WORKER_DISPATCH').goToDoorAndEnter(towerId).build();
                     settlerTaskSystem.assignJob(unitId, job);
                 }
             },
             commands: {
                 garrison_units: cmd => {
                     const cmdCtx: GarrisonCommandContext = {
-                        manager, settlerTaskSystem, locationManager,
+                        manager,
+                        settlerTaskSystem,
+                        locationManager,
                         gameState: ctx.gameState,
                         unitReservation: ctx.unitReservation,
                     };
-                    return executeGarrisonUnitsCommand(
-                        cmd as GarrisonUnitsCommand, cmdCtx
-                    )
+                    return executeGarrisonUnitsCommand(cmd as GarrisonUnitsCommand, cmdCtx)
                         ? commandSuccess()
                         : commandFailed('no units fit available garrison slots');
                 },
                 garrison_selected_units: cmd => {
                     const cmdCtx: GarrisonCommandContext = {
-                        manager, settlerTaskSystem, locationManager,
+                        manager,
+                        settlerTaskSystem,
+                        locationManager,
                         gameState: ctx.gameState,
                         unitReservation: ctx.unitReservation,
                     };

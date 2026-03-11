@@ -85,12 +85,7 @@ export class ResidenceSpawnerSystem implements TickSystem, Persistable<Serialize
         const building = this.gameState.getEntity(buildingEntityId);
         if (!building) return false;
 
-        const door = getBuildingDoorPos(
-            building.x,
-            building.y,
-            building.race,
-            building.subType as BuildingType
-        );
+        const door = getBuildingDoorPos(building.x, building.y, building.race, building.subType as BuildingType);
 
         // Push any unit blocking the door
         this.gameState.movement.pushUnitAt(door.x, door.y);
@@ -104,7 +99,7 @@ export class ResidenceSpawnerSystem implements TickSystem, Persistable<Serialize
         entity.level = getUnitLevel(config.unitType);
 
         this.eventBus.emit('unit:spawned', {
-            entityId: entity.id,
+            unitId: entity.id,
             unitType: config.unitType,
             x: door.x,
             y: door.y,

@@ -206,7 +206,6 @@ export class WorkerTaskExecutor {
         // WORKPLACE settlers without an assignment skip work search — assignment comes from push only
         if (!homeBuilding && getWorkerBuildingTypes(settler.race, settler.subType as UnitType)) {
             this.idleEarlyExitCount++;
-            this.emitIdleSkipped(settler.id, 'no_home', null);
             return false;
         }
 
@@ -227,8 +226,6 @@ export class WorkerTaskExecutor {
         const selected = this.jobSelector.selectJob(settler, config, targets.entity, homeBuilding, targets.position);
         this.addTiming('selectJob', performance.now() - t0);
         if (!selected) {
-            const reason = !targets.entity && !targets.position ? 'no_target' : 'no_job';
-            this.emitIdleSkipped(settler.id, reason, homeBuilding);
             return false;
         }
 
@@ -263,16 +260,6 @@ export class WorkerTaskExecutor {
         }
         this.lifecycle.returnHomeAndWait(settler, home, 'first_visit');
         return false;
-    }
-
-    /** Emit choreo:idleSkipped if verbose logging is on. */
-    private emitIdleSkipped(
-        unitId: number,
-        reason: 'inside_building' | 'no_home' | 'no_target' | 'no_job',
-        homeBuilding: Entity | null
-    ): void {
-        if (!this.verbose) return;
-        this.eventBus.emit('choreo:idleSkipped', { unitId, reason, homeBuilding: homeBuilding?.id ?? null });
     }
 
     /** Find entity and position targets for a settler. Returns null if a handler errored. */

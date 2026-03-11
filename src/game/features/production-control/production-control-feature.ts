@@ -32,10 +32,10 @@ export const ProductionControlFeature: FeatureDefinition = {
     create(ctx: FeatureContext) {
         const productionControlManager = new ProductionControlManager();
 
-        ctx.on('building:completed', ({ entityId, buildingType }) => {
+        ctx.on('building:completed', ({ buildingId, buildingType }) => {
             const recipeSet = getRecipeSet(buildingType);
             if (recipeSet) {
-                productionControlManager.initBuilding(entityId, recipeSet.recipes.length);
+                productionControlManager.initBuilding(buildingId, recipeSet.recipes.length);
             }
         });
 

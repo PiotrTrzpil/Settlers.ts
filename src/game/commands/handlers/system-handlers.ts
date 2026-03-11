@@ -74,7 +74,7 @@ export function executePlacePile(deps: PlacePileDeps, cmd: PlacePileCommand): Co
         return commandFailed(`Position (${cmd.x}, ${cmd.y}) is not passable`);
     }
 
-    if (state.getEntityAt(cmd.x, cmd.y)) {
+    if (state.getGroundEntityAt(cmd.x, cmd.y)) {
         return commandFailed(`Position (${cmd.x}, ${cmd.y}) is already occupied`);
     }
 
@@ -145,8 +145,7 @@ export function executeSetStorageFilter(deps: SetStorageFilterDeps, cmd: SetStor
 export function executePlantTree(deps: PlantTreeDeps, cmd: PlantTreeCommand): CommandResult {
     const { state } = deps;
 
-    const existing = state.getEntityAt(cmd.x, cmd.y);
-    if (existing && existing.type !== EntityType.Unit) {
+    if (state.getGroundEntityAt(cmd.x, cmd.y)) {
         return commandFailed(`Tile (${cmd.x}, ${cmd.y}) is occupied, cannot plant tree`);
     }
 
@@ -169,8 +168,7 @@ export function executePlantTreesArea(deps: PlantTreesAreaDeps, cmd: PlantTreesA
 export function executePlantCrop(deps: PlantCropDeps, cmd: PlantCropCommand): CommandResult {
     const { state } = deps;
 
-    const existing = state.getEntityAt(cmd.x, cmd.y);
-    if (existing && existing.type !== EntityType.Unit) {
+    if (state.getGroundEntityAt(cmd.x, cmd.y)) {
         return commandFailed(`Tile (${cmd.x}, ${cmd.y}) is occupied, cannot plant crop`);
     }
 

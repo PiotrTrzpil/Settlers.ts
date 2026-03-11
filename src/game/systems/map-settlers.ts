@@ -32,17 +32,17 @@ export function populateMapSettlers(state: GameState, settlers: MapSettlerData[]
             continue;
         }
 
-        // Skip if tile is occupied by another unit (not a building).
+        // Skip if tile is occupied by another unit.
         // Settlers placed inside building footprints are valid — they become workers.
-        const existingEntity = state.getEntityAt(settlerData.x, settlerData.y);
-        if (existingEntity && existingEntity.type !== EntityType.Building) {
+        if (state.getUnitAt(settlerData.x, settlerData.y)) {
             log.debug(`Skipping settler at occupied tile (${settlerData.x}, ${settlerData.y})`);
             skipped++;
             continue;
         }
 
-        // If placed on a building footprint, skip tile occupancy to preserve building's tile ownership
-        const onBuilding = existingEntity?.type === EntityType.Building;
+        // If placed on a building footprint, skip unit occupancy to preserve building's tile ownership
+        const groundEntity = state.getGroundEntityAt(settlerData.x, settlerData.y);
+        const onBuilding = groundEntity?.type === EntityType.Building;
         const entity = state.addUnit(unitType, settlerData.x, settlerData.y, settlerData.player, {
             occupancy: !onBuilding,
         });
@@ -50,7 +50,7 @@ export function populateMapSettlers(state: GameState, settlers: MapSettlerData[]
 
         // Register the unit with carrier/combat/task systems (same event as spawn_unit command)
         eventBus?.emit('unit:spawned', {
-            entityId: entity.id,
+            unitId: entity.id,
             unitType,
             x: settlerData.x,
             y: settlerData.y,

@@ -6,7 +6,6 @@
  * is all that's needed.
  */
 
-import type { EventBus } from '../event-bus';
 import type { EntityProvider } from '../entity';
 import { type ComponentStore, setStore } from '../ecs';
 import { createLogger } from '@/utilities/logger';
@@ -17,14 +16,12 @@ const log = createLogger('CarrierRegistry');
 
 export interface CarrierRegistryConfig {
     entityProvider: EntityProvider;
-    eventBus: EventBus;
 }
 
 export class CarrierRegistry implements Persistable<SerializedCarrier[]> {
     readonly persistKey = 'carriers' as const;
 
     private readonly entityProvider: EntityProvider;
-    private readonly eventBus: EventBus;
     private readonly ids = new Set<number>();
 
     /** ComponentStore for ECS-style queries (e.g. `query(carrierRegistry.store, gameState.store)`). */
@@ -32,7 +29,6 @@ export class CarrierRegistry implements Persistable<SerializedCarrier[]> {
 
     constructor(config: CarrierRegistryConfig) {
         this.entityProvider = config.entityProvider;
-        this.eventBus = config.eventBus;
     }
 
     register(entityId: number): void {
@@ -43,14 +39,11 @@ export class CarrierRegistry implements Persistable<SerializedCarrier[]> {
             throw new Error(`Carrier ${entityId} already registered`);
         }
         this.ids.add(entityId);
-        this.eventBus.emit('carrier:created', { entityId });
         log.debug(`Registered carrier ${entityId}`);
     }
 
     remove(entityId: number): boolean {
-        if (!this.ids.delete(entityId)) return false;
-        this.eventBus.emit('carrier:removed', { entityId });
-        return true;
+        return this.ids.delete(entityId);
     }
 
     has(entityId: number): boolean {

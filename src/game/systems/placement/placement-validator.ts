@@ -14,6 +14,7 @@ import type {
 import { PlacementStatus } from './types';
 import { validateBuildingPlacement, canPlaceBuildingFootprint, canPlaceBuilding } from './internal/building-validator';
 import { validateResourcePlacement, canPlaceResource } from './internal/resource-validator';
+import type { UnitPlacementContext } from './internal/unit-validator';
 import { validateUnitPlacement, canPlaceUnit } from './internal/unit-validator';
 
 // Re-export convenience validators as part of the public API.
@@ -36,7 +37,7 @@ export function validatePlacement(
     subType: number,
     x: number,
     y: number,
-    ctx: PlacementContext
+    ctx: PlacementContext | UnitPlacementContext
 ): PlacementResult {
     switch (entityType) {
     case 'building':
@@ -46,7 +47,7 @@ export function validatePlacement(
         return validateResourcePlacement(x, y, ctx);
 
     case 'unit':
-        return validateUnitPlacement(x, y, ctx);
+        return validateUnitPlacement(x, y, ctx as UnitPlacementContext);
 
     default:
         // Unknown entity type - reject

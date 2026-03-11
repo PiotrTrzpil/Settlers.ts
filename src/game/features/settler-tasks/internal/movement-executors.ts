@@ -9,7 +9,7 @@
  * Each executor matches the MovementExecutorFn signature defined in choreo-types.ts.
  */
 
-import { EntityType, BuildingType, type Entity } from '../../../entity';
+import { EntityType, BuildingType, tileKey, type Entity } from '../../../entity';
 import { getBuildingDoorPos } from '../../../data/game-data-access';
 import { hexDistance } from '../../../systems/hex-directions';
 import { createLogger } from '@/utilities/logger';
@@ -346,6 +346,11 @@ export const executeGoVirtual: MovementExecutorFn = (settler, job, node, _dt, ct
         if (!job.targetPos) {
             job.targetPos = { x: target.x + node.x, y: target.y + node.y };
         }
+        // If the resolved position is inside a building footprint, it's unreachable via pathfinding.
+        // Skip movement entirely — the exact sub-position around the work target is cosmetic.
+        if (ctx.gameState.buildingOccupancy.has(tileKey(job.targetPos.x, job.targetPos.y))) {
+            return TaskResult.DONE;
+        }
         return moveToPosition(settler, job.targetPos.x, job.targetPos.y, node, ctx, ARRIVAL_DIST, job);
     }
 
@@ -357,6 +362,15 @@ export const executeGoVirtual: MovementExecutorFn = (settler, job, node, _dt, ct
 
     settler.x = pos.x;
     settler.y = pos.y;
+
+    // Sync the movement controller position so the renderer shows the settler at the
+    // teleported position (not interpolating from a stale controller position).
+    // Visible GO_VIRTUAL nodes (e.g. sawmill worker) need this so the worker appears
+    // at the correct building-interior position rather than stuck at the door.
+    const controller = ctx.gameState.movement.getController(settler.id);
+    if (controller) {
+        controller.syncPosition(pos.x, pos.y);
+    }
 
     log.debug(`executeGoVirtual: settler ${settler.id} moved to (${pos.x}, ${pos.y}) inside building ${buildingId}`);
     return TaskResult.DONE;

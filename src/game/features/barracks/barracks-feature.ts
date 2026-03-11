@@ -44,9 +44,9 @@ export const BarracksFeature: FeatureDefinition = {
         settlerTaskExports.setBarracksTrainingManager(() => barracksTrainingManager);
 
         // Handle barracks lifecycle events
-        ctx.on('building:completed', ({ entityId, buildingType, race }) => {
+        ctx.on('building:completed', ({ buildingId, buildingType, race }) => {
             if (buildingType === BuildingType.Barrack) {
-                barracksTrainingManager.initBarracks(entityId, race);
+                barracksTrainingManager.initBarracks(buildingId, race);
             }
         });
 

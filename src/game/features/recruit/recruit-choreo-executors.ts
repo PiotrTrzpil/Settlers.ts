@@ -38,7 +38,12 @@ export function createTransformRecruitExecutor(
         const pile = gameState.getEntity(pileEntityId);
         if (!pile) {
             log.warn(`TRANSFORM_RECRUIT: pile ${pileEntityId} no longer exists for settler ${settler.id}`);
-            eventBus.emit('recruitment:failed', { carrierId: settler.id, reason: 'pile_gone' });
+            eventBus.emit('recruitment:failed', {
+                unitId: settler.id,
+                unitType: settler.subType as UnitType,
+                reason: 'pile_gone',
+                level: 'warn',
+            });
             return TaskResult.DONE;
         }
 
@@ -46,12 +51,22 @@ export function createTransformRecruitExecutor(
         const withdrawn = inventoryManager.withdrawOutput(pileEntityId, material, 1);
         if (withdrawn < 1) {
             log.warn(`TRANSFORM_RECRUIT: pile ${pileEntityId} has no ${material} for settler ${settler.id}`);
-            eventBus.emit('recruitment:failed', { carrierId: settler.id, reason: 'pile_empty' });
+            eventBus.emit('recruitment:failed', {
+                unitId: settler.id,
+                unitType: settler.subType as UnitType,
+                reason: 'pile_empty',
+                level: 'warn',
+            });
             return TaskResult.DONE;
         }
 
         const targetUnitType = job.metadata!['unitType'] as number as UnitType;
-        eventBus.emit('recruitment:completed', { carrierId: settler.id, targetUnitType });
+        eventBus.emit('recruitment:completed', {
+            unitId: settler.id,
+            unitType: settler.subType as UnitType,
+            targetUnitType,
+            level: 'info',
+        });
         log.debug(
             `TRANSFORM_RECRUIT: settler ${settler.id} picked up ${material} from pile ${pileEntityId}, ` +
                 `target type ${UnitType[targetUnitType]}`
@@ -69,7 +84,12 @@ export function createTransformRecruitExecutor(
 export function createTransformDirectExecutor(eventBus: EventBus): ChoreoExecutor {
     return (settler: Entity, job: ChoreoJobState) => {
         const targetUnitType = job.metadata!['unitType'] as number as UnitType;
-        eventBus.emit('recruitment:completed', { carrierId: settler.id, targetUnitType });
+        eventBus.emit('recruitment:completed', {
+            unitId: settler.id,
+            unitType: settler.subType as UnitType,
+            targetUnitType,
+            level: 'info',
+        });
         log.debug(`TRANSFORM_DIRECT: settler ${settler.id} transforming directly into ${UnitType[targetUnitType]}`);
         return TaskResult.DONE;
     };

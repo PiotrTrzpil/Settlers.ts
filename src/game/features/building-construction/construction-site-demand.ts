@@ -256,8 +256,8 @@ export class ConstructionSiteDemandSystem implements TickSystem {
             this.onLevelingComplete(buildingId);
         });
 
-        this.subscriptions.subscribe(this.eventBus, 'building:removed', ({ entityId }) => {
-            this.onSiteRemoved(entityId);
+        this.subscriptions.subscribe(this.eventBus, 'building:removed', ({ buildingId }) => {
+            this.onSiteRemoved(buildingId);
         });
     }
 

@@ -19,7 +19,7 @@ import type { TrainingRecipe, TrainingRecipeSet } from './types';
 /** Swordsman L1–L3, Bowman L1–L3, SquadLeader — shared by all races. */
 export const COMMON_TRAINING_RECIPES: readonly TrainingRecipe[] = [
     // Swordsman L1
-    { inputs: [{ material: EMaterialType.SWORD, count: 1 }], unitType: UnitType.Swordsman1, level: 1 },
+    { inputs: [{ material: EMaterialType.SWORD, count: 1 }], unitType: UnitType.Swordsman1, soldierLevel: 1 },
     // Swordsman L2
     {
         inputs: [
@@ -27,7 +27,7 @@ export const COMMON_TRAINING_RECIPES: readonly TrainingRecipe[] = [
             { material: EMaterialType.GOLDBAR, count: 1 },
         ],
         unitType: UnitType.Swordsman1,
-        level: 2,
+        soldierLevel: 2,
     },
     // Swordsman L3
     {
@@ -36,10 +36,10 @@ export const COMMON_TRAINING_RECIPES: readonly TrainingRecipe[] = [
             { material: EMaterialType.GOLDBAR, count: 2 },
         ],
         unitType: UnitType.Swordsman1,
-        level: 3,
+        soldierLevel: 3,
     },
     // Bowman L1
-    { inputs: [{ material: EMaterialType.BOW, count: 1 }], unitType: UnitType.Bowman1, level: 1 },
+    { inputs: [{ material: EMaterialType.BOW, count: 1 }], unitType: UnitType.Bowman1, soldierLevel: 1 },
     // Bowman L2
     {
         inputs: [
@@ -47,7 +47,7 @@ export const COMMON_TRAINING_RECIPES: readonly TrainingRecipe[] = [
             { material: EMaterialType.GOLDBAR, count: 1 },
         ],
         unitType: UnitType.Bowman1,
-        level: 2,
+        soldierLevel: 2,
     },
     // Bowman L3
     {
@@ -56,7 +56,7 @@ export const COMMON_TRAINING_RECIPES: readonly TrainingRecipe[] = [
             { material: EMaterialType.GOLDBAR, count: 2 },
         ],
         unitType: UnitType.Bowman1,
-        level: 3,
+        soldierLevel: 3,
     },
     // SquadLeader
     {
@@ -65,7 +65,7 @@ export const COMMON_TRAINING_RECIPES: readonly TrainingRecipe[] = [
             { material: EMaterialType.ARMOR, count: 1 },
         ],
         unitType: UnitType.SquadLeader,
-        level: 1,
+        soldierLevel: 1,
     },
 ];
 
@@ -96,14 +96,14 @@ export type TrainingRecipeIndexValue = (typeof TrainingRecipeIndex)[keyof typeof
 
 function makeSpecialistRecipes(unitType: UnitType, weapon: EMaterialType): readonly TrainingRecipe[] {
     return [
-        { inputs: [{ material: weapon, count: 1 }], unitType, level: 1 },
+        { inputs: [{ material: weapon, count: 1 }], unitType, soldierLevel: 1 },
         {
             inputs: [
                 { material: weapon, count: 1 },
                 { material: EMaterialType.GOLDBAR, count: 1 },
             ],
             unitType,
-            level: 2,
+            soldierLevel: 2,
         },
         {
             inputs: [
@@ -111,7 +111,7 @@ function makeSpecialistRecipes(unitType: UnitType, weapon: EMaterialType): reado
                 { material: EMaterialType.GOLDBAR, count: 2 },
             ],
             unitType,
-            level: 3,
+            soldierLevel: 3,
         },
     ];
 }

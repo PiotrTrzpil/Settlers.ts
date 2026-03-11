@@ -40,7 +40,7 @@ export function populateMapStacks(state: GameState, stacks: MapStackData[], even
             continue;
         }
 
-        if (state.getEntityAt(stackData.x, stackData.y)) {
+        if (state.getGroundEntityAt(stackData.x, stackData.y)) {
             log.debug(`Skipping stack at occupied tile (${stackData.x}, ${stackData.y})`);
             skipped++;
             continue;

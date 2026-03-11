@@ -39,7 +39,7 @@ export interface PlacementContext {
     groundType: Uint8Array;
     groundHeight: Uint8Array;
     mapSize: MapSize;
-    tileOccupancy: Map<string, number>;
+    groundOccupancy: Map<string, number>;
     /**
      * All building footprint tiles (including door corridors).
      * Used to enforce a 1-tile gap between building footprints for pathfinding.

@@ -27,12 +27,12 @@ export const VictoryConditionsFeature: FeatureDefinition = {
         // Track castle counts via events instead of per-tick scanning
         ctx.on('building:completed', ({ buildingType, ...rest }) => {
             // building:completed has no 'player' directly — look up entity
-            const entity = ctx.gameState.getEntity(rest.entityId);
+            const entity = ctx.gameState.getEntity(rest.buildingId);
             if (entity) victorySystem.onBuildingCompleted(buildingType, entity.player);
         });
 
-        ctx.on('building:removed', ({ entityId, buildingType }) => {
-            const entity = ctx.gameState.getEntity(entityId);
+        ctx.on('building:removed', ({ buildingId, buildingType }) => {
+            const entity = ctx.gameState.getEntity(buildingId);
             if (entity) victorySystem.onBuildingRemoved(buildingType, entity.player);
         });
 

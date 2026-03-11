@@ -139,9 +139,9 @@ export interface BuildingInfo {
     flag: PositionOffset;
     /** Door position offset */
     door: PositionOffset;
-    /** Working position offset (pixel coords) */
+    /** Working position offset (tile coords, same as door) */
     workingPos: PositionOffset;
-    /** Mini flag position offset (pixel coords) */
+    /** Mini flag position offset */
     miniFlag: PositionOffset;
     /** Number of resource piles */
     pileNumber: number;

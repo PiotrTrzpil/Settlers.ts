@@ -26,6 +26,9 @@ import { EventSubscriptionManager } from '../../event-bus';
 /** Minimum input threshold before requesting more materials */
 const REQUEST_THRESHOLD = 4;
 
+/** Maximum concurrent import requests per material per StorageArea (parallel carrier cap). */
+const MAX_ACTIVE_IMPORTS_PER_MATERIAL = 20;
+
 /** Configuration for MaterialRequestSystem dependencies */
 export interface MaterialRequestSystemConfig extends CoreDeps {
     constructionSiteManager: ConstructionSiteManager;
@@ -64,14 +67,14 @@ export class MaterialRequestSystem implements TickSystem {
         this.requestManager = config.requestManager;
         this.storageFilterManager = config.storageFilterManager;
 
-        this.subscriptions.subscribe(config.eventBus, 'building:completed', ({ entityId }) => {
-            this.dirtyBuildings.add(entityId);
-            this.dirtyStorageAreas.add(entityId);
+        this.subscriptions.subscribe(config.eventBus, 'building:completed', ({ buildingId }) => {
+            this.dirtyBuildings.add(buildingId);
+            this.dirtyStorageAreas.add(buildingId);
         });
 
-        this.subscriptions.subscribe(config.eventBus, 'building:removed', ({ entityId }) => {
-            this.dirtyBuildings.delete(entityId);
-            this.dirtyStorageAreas.delete(entityId);
+        this.subscriptions.subscribe(config.eventBus, 'building:removed', ({ buildingId }) => {
+            this.dirtyBuildings.delete(buildingId);
+            this.dirtyStorageAreas.delete(buildingId);
         });
 
         this.subscriptions.subscribe(config.eventBus, 'inventory:changed', ({ buildingId, slotType }) => {
@@ -185,7 +188,7 @@ export class MaterialRequestSystem implements TickSystem {
             const space = this.inventoryManager.getStorageOutputSpace(buildingId, material);
             if (space <= 0) continue;
             const activeCount = this.countActiveRequests(buildingId, material);
-            const needed = space - activeCount;
+            const needed = Math.min(space - activeCount, MAX_ACTIVE_IMPORTS_PER_MATERIAL - activeCount);
             for (let i = 0; i < needed; i++) {
                 this.requestManager.addRequest(buildingId, material, 1, RequestPriority.Low);
             }

@@ -54,7 +54,7 @@ export const CropFeature: FeatureDefinition = {
         }
 
         // Register crop entities on creation (map-loaded crops start as Mature)
-        ctx.on('entity:created', ({ entityId, type, subType }) => {
+        ctx.on('entity:created', ({ entityId, entityType: type, subType }) => {
             if (
                 type === EntityType.MapObject &&
                 OBJECT_TYPE_CATEGORY[subType as MapObjectType] === MapObjectCategory.Crops

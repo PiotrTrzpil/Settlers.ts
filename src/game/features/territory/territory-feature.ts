@@ -52,7 +52,7 @@ export const TerritoryFeature: FeatureDefinition = {
                 };
 
                 // Register territory buildings when created
-                ctx.on('entity:created', ({ entityId, type, subType, x, y, player }) => {
+                ctx.on('entity:created', ({ entityId, entityType: type, subType, x, y, player }) => {
                     if (type === EntityType.Building && TERRITORY_BUILDINGS.has(subType as BuildingType)) {
                         territoryManager.addBuilding(entityId, x, y, player, subType as BuildingType);
                     }

@@ -54,7 +54,7 @@ export function executeScriptAddSettlers(deps: ScriptDeps, cmd: ScriptAddSettler
         const entity = state.addUnit(cmd.unitType, offsetX, offsetY, cmd.player, { race: cmd.race });
 
         eventBus.emit('unit:spawned', {
-            entityId: entity.id,
+            unitId: entity.id,
             unitType: cmd.unitType,
             x: offsetX,
             y: offsetY,

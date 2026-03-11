@@ -28,6 +28,10 @@
                     <span class="status-badge" :class="buildingStatus">{{ buildingStatus }}</span>
                 </StatRow>
 
+                <StatRow v-if="buildingWorkerIds.length > 0" label="Worker">
+                    {{ buildingWorkerIds.map(id => '#' + id).join(', ') }}
+                </StatRow>
+
                 <!-- Construction info (shown only while building is under construction) -->
                 <template v-if="constructionInfo">
                     <div class="info-section construction-section">
@@ -314,6 +318,7 @@ const {
     carriedMaterial,
     buildingSize,
     buildingStatus,
+    buildingWorkerIds,
     playerColor,
 } = useSelectionPanel(gameRef);
 

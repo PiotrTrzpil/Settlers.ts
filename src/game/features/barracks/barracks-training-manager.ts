@@ -181,6 +181,7 @@ export class BarracksTrainingManager implements Persistable<SerializedBarracksTr
                 this.eventBus.emit('barracks:trainingInterrupted', {
                     buildingId,
                     reason: 'carrier_killed',
+                    level: 'warn',
                 });
                 log.debug(`Barracks ${buildingId}: carrier ${carrierId} killed, training interrupted`);
             },
@@ -192,11 +193,12 @@ export class BarracksTrainingManager implements Persistable<SerializedBarracksTr
         this.eventBus.emit('barracks:trainingStarted', {
             buildingId,
             recipe,
-            carrierId,
+            unitId: carrierId,
+            level: 'info',
         });
 
         log.debug(
-            `Barracks ${buildingId}: started training ${UnitType[recipe.unitType]} L${recipe.level}, carrier ${carrierId}`
+            `Barracks ${buildingId}: started training ${UnitType[recipe.unitType]} L${recipe.soldierLevel}, carrier ${carrierId}`
         );
     }
 
@@ -286,7 +288,7 @@ export class BarracksTrainingManager implements Persistable<SerializedBarracksTr
                 recipe: {
                     inputs: state.recipe.inputs.map(i => ({ material: i.material as number, count: i.count })),
                     unitType: state.recipe.unitType as number,
-                    level: state.recipe.level,
+                    level: state.recipe.soldierLevel,
                 },
             });
         }
@@ -308,7 +310,7 @@ export class BarracksTrainingManager implements Persistable<SerializedBarracksTr
                     count: i.count,
                 })),
                 unitType: entry.recipe.unitType as UnitType,
-                level: entry.recipe.level,
+                soldierLevel: entry.recipe.level,
             };
             this.activeTrainings.set(entry.buildingId, {
                 recipe,
@@ -324,6 +326,7 @@ export class BarracksTrainingManager implements Persistable<SerializedBarracksTr
                     this.eventBus.emit('barracks:trainingInterrupted', {
                         buildingId,
                         reason: 'carrier_killed',
+                        level: 'warn',
                     });
                 },
             });
@@ -343,12 +346,7 @@ export class BarracksTrainingManager implements Persistable<SerializedBarracksTr
  *   2. WAIT_VIRTUAL   — carrier waits inside barracks for durationFrames
  *   3. CHANGE_TYPE_AT_BARRACKS — choreography executor converts carrier to soldier
  */
-function buildTrainingJob(
-    barracksId: number,
-    doorX: number,
-    doorY: number,
-    durationFrames: number
-): ChoreoJobState {
+function buildTrainingJob(barracksId: number, doorX: number, doorY: number, durationFrames: number): ChoreoJobState {
     return choreo('BARRACKS_TRAINING')
         .goTo(doorX, doorY)
         .hidden(durationFrames, 'BARRACKS_TRAINING')

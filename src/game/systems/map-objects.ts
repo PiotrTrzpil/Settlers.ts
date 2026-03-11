@@ -216,7 +216,7 @@ function addMapObject(
     mapSize: MapSize
 ): 'tree' | 'deco' | null {
     if (x < 0 || x >= mapSize.width || y < 0 || y >= mapSize.height) return null;
-    if (state.getEntityAt(x, y)) return null;
+    if (state.getGroundEntityAt(x, y)) return null;
 
     const entry = lookupRawObject(rawType);
     if (entry?.type != null) {
@@ -280,7 +280,7 @@ export function spawnTestObjects(
 
         // Skip unbuildable or occupied
         if (!isBuildable(groundType[idx]!)) continue;
-        if (state.getEntityAt(x, y)) continue;
+        if (state.getGroundEntityAt(x, y)) continue;
 
         // Cycle through types in category
         const objectType = types[i % types.length]!;

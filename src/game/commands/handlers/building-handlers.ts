@@ -49,7 +49,7 @@ function isSpawnableTile(deps: SpawnBuildingUnitsDeps, x: number, y: number): bo
     return (
         deps.terrain.isInBounds(x, y) &&
         deps.terrain.isPassable(x, y) &&
-        !deps.state.getEntityAt(x, y) &&
+        !deps.state.getGroundEntityAt(x, y) &&
         !deps.state.buildingOccupancy.has(tileKey(x, y))
     );
 }
@@ -74,7 +74,7 @@ function spawnUnitsNear(
             const spawnedEntity = state.addUnit(unitType, tile.x, tile.y, player, { selectable });
 
             eventBus.emit('unit:spawned', {
-                entityId: spawnedEntity.id,
+                unitId: spawnedEntity.id,
                 unitType: unitType as UnitType,
                 x: tile.x,
                 y: tile.y,
@@ -106,13 +106,17 @@ function spawnWorkerInsideBuilding(
     const workerEntity = state.addUnit(workerInfo.unitType, door.x, door.y, entity.player, { occupancy: false });
 
     eventBus.emit('unit:spawned', {
-        entityId: workerEntity.id,
+        unitId: workerEntity.id,
         unitType: workerInfo.unitType,
         x: door.x,
         y: door.y,
         player: entity.player,
     });
-    eventBus.emit('building:workerSpawned', { buildingId: entity.id, settlerId: workerEntity.id });
+    eventBus.emit('building:workerSpawned', {
+        buildingId: entity.id,
+        unitId: workerEntity.id,
+        unitType: workerEntity.subType as UnitType,
+    });
 
     effects.push({
         type: 'unit_spawned',
@@ -130,7 +134,7 @@ export function executePlaceBuilding(deps: PlaceBuildingDeps, cmd: PlaceBuilding
         !cmd.trusted &&
         !canPlaceBuildingFootprint(
             terrain,
-            state.tileOccupancy,
+            state.groundOccupancy,
             cmd.x,
             cmd.y,
             cmd.buildingType,
@@ -155,14 +159,15 @@ export function executePlaceBuilding(deps: PlaceBuildingDeps, cmd: PlaceBuilding
         state.restoreBuildingFootprintBlock(entity.id);
     }
 
-    deps.eventBus.emit('terrain:modified', {});
+    deps.eventBus.emit('terrain:modified', { reason: 'placement', x: cmd.x, y: cmd.y });
 
     deps.eventBus.emit('building:placed', {
-        entityId: entity.id,
+        buildingId: entity.id,
         buildingType: cmd.buildingType,
         x: cmd.x,
         y: cmd.y,
         player: cmd.player,
+        level: 'info',
     });
 
     // Assign captured terrain after building:placed (which creates the site via registerSite),
@@ -175,11 +180,12 @@ export function executePlaceBuilding(deps: PlaceBuildingDeps, cmd: PlaceBuilding
 
     if (cmd.completed) {
         deps.eventBus.emit('building:completed', {
-            entityId: entity.id,
+            buildingId: entity.id,
             buildingType: cmd.buildingType,
             race: entity.race,
             placedCompleted: true,
             spawnWorker: cmd.spawnWorker,
+            level: 'info',
         });
     }
 
@@ -199,8 +205,9 @@ export function executeRemoveEntity(deps: RemoveEntityDeps, cmd: RemoveEntityCom
 
     if (entity.type === EntityType.Building) {
         deps.eventBus.emit('building:removed', {
-            entityId: cmd.entityId,
+            buildingId: cmd.entityId,
             buildingType: entity.subType as BuildingType,
+            level: 'info',
         });
     }
 

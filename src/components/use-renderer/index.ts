@@ -115,7 +115,7 @@ function canPlaceBuilding(getGame: () => Game | null, x: number, y: number, buil
     if (race === undefined) return false;
     return canPlaceBuildingFootprint(
         game.terrain,
-        game.state.tileOccupancy,
+        game.state.groundOccupancy,
         x,
         y,
         buildingType,
@@ -141,7 +141,7 @@ function createPlacementGrid(game: Game, buildingType: number, viewX: number, vi
         game.terrain.mapSize,
         game.terrain.groundType,
         game.terrain.groundHeight,
-        game.state.tileOccupancy,
+        game.state.groundOccupancy,
         game.state.buildingFootprint
     );
 }
@@ -218,13 +218,15 @@ function buildInputManager(deps: InputManagerDeps): InputManager {
     manager.registerMode(
         new PlaceResourceMode((x, y) => {
             const game = getGame();
-            return game ? canPlaceResource(game.terrain, game.state.tileOccupancy, x, y) : false;
+            return game ? canPlaceResource(game.terrain, game.state.groundOccupancy, x, y) : false;
         }, tileHover)
     );
     manager.registerMode(
         new PlaceUnitMode((x, y) => {
             const game = getGame();
-            return game ? canPlaceUnit(game.terrain, game.state.tileOccupancy, x, y) : false;
+            return game
+                ? canPlaceUnit(game.terrain, game.state.groundOccupancy, game.state.unitOccupancy, x, y)
+                : false;
         }, tileHover)
     );
     manager.registerMode(createBuildingAdjustMode(getGame));

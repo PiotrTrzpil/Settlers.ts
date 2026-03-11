@@ -351,6 +351,7 @@ export class BuildingSiegeSystem implements TickSystem {
         this.eventBus.emit('siege:started', {
             buildingId: building.id,
             attackerPlayer,
+            level: 'info',
         });
 
         log.debug(`Siege started on building ${building.id} by player ${attackerPlayer}`);
@@ -399,7 +400,8 @@ export class BuildingSiegeSystem implements TickSystem {
 
         this.eventBus.emit('siege:defenderEjected', {
             buildingId,
-            defenderId: nextDefenderId,
+            unitId: nextDefenderId,
+            level: 'info',
         });
 
         log.debug(`Defender ${nextDefenderId} ejected from building ${buildingId}`);
@@ -501,6 +503,7 @@ export class BuildingSiegeSystem implements TickSystem {
             buildingId,
             oldPlayer,
             newPlayer,
+            level: 'info',
         });
 
         log.debug(`Building ${buildingId} captured by player ${newPlayer} (was player ${oldPlayer})`);

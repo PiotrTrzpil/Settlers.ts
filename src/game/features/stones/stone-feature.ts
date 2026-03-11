@@ -42,7 +42,7 @@ export const StoneFeature: FeatureDefinition = {
 
         // Register for map object creation events to auto-register stones.
         // The variation from map data encodes the initial depletion level (1-12).
-        ctx.on('entity:created', ({ entityId, type, subType, variation }) => {
+        ctx.on('entity:created', ({ entityId, entityType: type, subType, variation }) => {
             if (type === EntityType.MapObject) {
                 stoneSystem.register(entityId, subType as MapObjectType, variation || undefined);
             }

@@ -151,7 +151,8 @@ export class TowerCombatSystem implements TickSystem {
 
             this.eventBus.emit('garrison:bowmanFired', {
                 buildingId: building.id,
-                bowmanId,
+                unitId: bowmanId,
+                unitType: bowmanEntity.subType as UnitType,
                 targetId: target.id,
                 damage: stats.attackPower,
             });

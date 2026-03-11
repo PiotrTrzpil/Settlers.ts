@@ -146,10 +146,11 @@ export class BuildingConstructionSystem implements TickSystem {
         if (!isConstructionDone && !isTerminalPhase) return false;
 
         this.eventBus.emit('building:completed', {
-            entityId: site.buildingId,
+            buildingId: site.buildingId,
             buildingType: site.buildingType,
             race: site.race,
             spawnWorker: false, // workers already spawned before save
+            level: 'info',
         });
         return true;
     }
@@ -159,9 +160,9 @@ export class BuildingConstructionSystem implements TickSystem {
         if (!site.terrain.complete) {
             this.eventBus.emit('construction:workerNeeded', {
                 role: 'digger' as const,
-                siteId: site.buildingId,
-                tileX: site.tileX,
-                tileY: site.tileY,
+                buildingId: site.buildingId,
+                x: site.tileX,
+                y: site.tileY,
                 player: site.player,
             });
         } else if (
@@ -170,9 +171,9 @@ export class BuildingConstructionSystem implements TickSystem {
         ) {
             this.eventBus.emit('construction:workerNeeded', {
                 role: 'builder' as const,
-                siteId: site.buildingId,
-                tileX: site.tileX,
-                tileY: site.tileY,
+                buildingId: site.buildingId,
+                x: site.tileX,
+                y: site.tileY,
                 player: site.player,
             });
         }
@@ -185,8 +186,8 @@ export class BuildingConstructionSystem implements TickSystem {
 
     /** Register event handlers with the event bus */
     registerEvents(): void {
-        this.subscriptions.subscribe(this.eventBus, 'building:removed', ({ entityId }) =>
-            this.onBuildingRemoved(entityId)
+        this.subscriptions.subscribe(this.eventBus, 'building:removed', ({ buildingId }) =>
+            this.onBuildingRemoved(buildingId)
         );
 
         // Listen for building:completed to spawn units.
@@ -195,16 +196,16 @@ export class BuildingConstructionSystem implements TickSystem {
         this.subscriptions.subscribe(
             this.eventBus,
             'building:completed',
-            ({ entityId, buildingType, placedCompleted, spawnWorker }) => {
+            ({ buildingId, buildingType, placedCompleted, spawnWorker }) => {
                 this.executeCommand({
                     type: 'spawn_building_units',
-                    buildingEntityId: entityId,
+                    buildingEntityId: buildingId,
                     placedCompleted,
                     spawnWorker,
                 });
                 const spawnDef = BUILDING_SPAWN_ON_COMPLETE[buildingType];
                 if (spawnDef?.spawnInterval && this.residenceSpawner) {
-                    this.residenceSpawner.register(entityId, spawnDef);
+                    this.residenceSpawner.register(buildingId, spawnDef);
                 }
             }
         );
@@ -220,12 +221,12 @@ export class BuildingConstructionSystem implements TickSystem {
         this.subscriptions.subscribe(
             this.eventBus,
             'construction:tileCompleted',
-            ({ tileX, tileY, targetHeight, isFootprint }) => {
+            ({ x, y, targetHeight, isFootprint }) => {
                 if (!this.terrainContext) return;
                 const { groundType, groundHeight, mapSize } = this.terrainContext.terrain;
                 const modified = applySingleTileLeveling(
-                    tileX,
-                    tileY,
+                    x,
+                    y,
                     targetHeight,
                     isFootprint,
                     groundType,
@@ -233,7 +234,7 @@ export class BuildingConstructionSystem implements TickSystem {
                     mapSize
                 );
                 if (modified && this.terrainContext.onTerrainModified) {
-                    this.terrainContext.onTerrainModified();
+                    this.terrainContext.onTerrainModified('leveling', x, y);
                 }
             }
         );
@@ -290,7 +291,13 @@ export class BuildingConstructionSystem implements TickSystem {
             const site = this.constructionSiteManager.getSite(buildingId);
             if (!site) return;
             const { buildingType, race } = site;
-            this.eventBus.emit('building:completed', { entityId: buildingId, buildingType, race, spawnWorker: true });
+            this.eventBus.emit('building:completed', {
+                buildingId,
+                buildingType,
+                race,
+                spawnWorker: true,
+                level: 'info',
+            });
         });
     }
 
@@ -387,10 +394,10 @@ export class BuildingConstructionSystem implements TickSystem {
             for (const tile of ringTiles(cx, cy, radius)) {
                 const key = tileKey(tile.x, tile.y);
                 if (footprintKeys.has(key)) continue;
-                // Check tileOccupancy but ignore buildings (their footprint tiles are
-                // always "occupied" in tileOccupancy even when walkable)
-                const occupant = this.state.getEntityAt(tile.x, tile.y);
-                if (occupant && occupant.type !== EntityType.Building) continue;
+                // Check ground occupancy — buildings own footprint tiles in groundOccupancy
+                // but those are filtered by footprintKeys above, so any remaining
+                // ground occupant (map object, pile) is a real blocker.
+                if (this.state.getGroundEntityAt(tile.x, tile.y)) continue;
                 return tile;
             }
         }
@@ -442,7 +449,7 @@ export class BuildingConstructionSystem implements TickSystem {
         const { groundType, groundHeight, mapSize } = this.terrainContext.terrain;
         const modified = restoreOriginalTerrain(site.terrain.originalTerrain, groundType, groundHeight, mapSize);
         if (modified && this.terrainContext.onTerrainModified) {
-            this.terrainContext.onTerrainModified();
+            this.terrainContext.onTerrainModified('restore', site.tileX, site.tileY);
         }
     }
 }

@@ -62,7 +62,7 @@ export class ValidPositionGrid {
         mapSize: MapSize,
         groundType: Uint8Array,
         groundHeight: Uint8Array,
-        tileOccupancy: Map<string, number>,
+        groundOccupancy: Map<string, number>,
         buildingFootprint: ReadonlySet<string>
     ) {
         this.request = request;
@@ -75,7 +75,7 @@ export class ValidPositionGrid {
             groundType,
             groundHeight,
             mapSize,
-            tileOccupancy,
+            groundOccupancy,
             buildingFootprint,
             race: request.race,
             placementFilter: request.placementFilter,

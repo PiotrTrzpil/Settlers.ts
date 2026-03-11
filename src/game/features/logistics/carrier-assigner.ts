@@ -165,9 +165,7 @@ export class CarrierAssigner {
             const sourceToDestSq = dx2 * dx2 + dy2 * dy2;
 
             // Check idle carriers
-            const idleResult = this.idleCarrierPool.findNearestWithCost(
-                source.x, source.y, candidate.playerId, filter,
-            );
+            const idleResult = this.idleCarrierPool.findNearestWithCost(source.x, source.y, candidate.playerId, filter);
             if (idleResult) {
                 const total = idleResult.distSq + sourceToDestSq;
                 if (total < bestTotal) {
@@ -198,7 +196,10 @@ export class CarrierAssigner {
 
         // Compare idle vs busy carrier for single-candidate path
         const idleResult = this.idleCarrierPool.findNearestWithCost(
-            sourceBuilding.x, sourceBuilding.y, match.playerId, this.buildFilter(),
+            sourceBuilding.x,
+            sourceBuilding.y,
+            match.playerId,
+            this.buildFilter()
         );
         const busyResult = this.findBestBusyCarrier(sourceBuilding.x, sourceBuilding.y, match.playerId);
 
@@ -228,7 +229,8 @@ export class CarrierAssigner {
                 sourceBuilding: match.sourceBuilding,
                 destBuilding: request.buildingId,
                 material: request.materialType,
-                carrierId,
+                unitId: carrierId,
+                level: 'warn',
             });
             return null;
         }
@@ -239,7 +241,7 @@ export class CarrierAssigner {
         if (success) {
             this.eventBus.emit('carrier:assigned', {
                 requestId: request.id,
-                carrierId,
+                unitId: carrierId,
                 sourceBuilding: match.sourceBuilding,
                 destBuilding: request.buildingId,
                 material: request.materialType,
@@ -253,7 +255,8 @@ export class CarrierAssigner {
             sourceBuilding: match.sourceBuilding,
             destBuilding: request.buildingId,
             material: request.materialType,
-            carrierId,
+            unitId: carrierId,
+            level: 'warn',
         });
         TransportJobService.cancel(record, 'assignment_failed', this.transportJobDeps);
         return null;
@@ -264,11 +267,7 @@ export class CarrierAssigner {
      * compute estimated cost to reach sourceX/sourceY after finishing their current delivery,
      * and return the best candidate.
      */
-    private findBestBusyCarrier(
-        sourceX: number,
-        sourceY: number,
-        playerId: number
-    ): BusyCarrierCandidate | null {
+    private findBestBusyCarrier(sourceX: number, sourceY: number, playerId: number): BusyCarrierCandidate | null {
         let best: BusyCarrierCandidate | null = null;
 
         for (const [carrierId, record] of this.activeJobs) {
@@ -327,7 +326,8 @@ export class CarrierAssigner {
                 sourceBuilding: match.sourceBuilding,
                 destBuilding: request.buildingId,
                 material: request.materialType,
-                carrierId: busyCandidate.carrierId,
+                unitId: busyCandidate.carrierId,
+                level: 'warn',
             });
             return null;
         }
@@ -342,7 +342,7 @@ export class CarrierAssigner {
 
         this.eventBus.emit('carrier:assigned', {
             requestId: request.id,
-            carrierId: busyCandidate.carrierId,
+            unitId: busyCandidate.carrierId,
             sourceBuilding: match.sourceBuilding,
             destBuilding: request.buildingId,
             material: request.materialType,

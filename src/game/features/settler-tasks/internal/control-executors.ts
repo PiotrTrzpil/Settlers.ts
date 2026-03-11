@@ -119,14 +119,14 @@ export function executeChangeTypeAtBarracks(
     }
 
     const { buildingId, recipe } = training;
-    const unitType = getUnitTypeAtLevel(recipe.unitType, recipe.level);
+    const unitType = getUnitTypeAtLevel(recipe.unitType, recipe.soldierLevel);
 
     // Find a free tile near the carrier (at the door = footprint edge).
     // Uses the same ringTiles pattern as spawnUnitsNear for building completion.
     let spawnPos: { x: number; y: number } | null = null;
     for (let r = 1; r <= 4 && !spawnPos; r++) {
         for (const tile of ringTiles(settler.x, settler.y, r)) {
-            if (!ctx.gameState.getEntityAt(tile.x, tile.y)) {
+            if (!ctx.gameState.getGroundEntityAt(tile.x, tile.y)) {
                 spawnPos = tile;
                 break;
             }
@@ -163,13 +163,13 @@ export function executeChangeTypeAtBarracks(
     ctx.eventBus.emit('barracks:trainingCompleted', {
         buildingId,
         unitType: recipe.unitType,
-        level: recipe.level,
-        soldierId,
+        soldierLevel: recipe.soldierLevel,
+        unitId: soldierId,
     });
 
     log.debug(
         `CHANGE_TYPE_AT_BARRACKS: carrier ${settler.id} converted to soldier ${soldierId} ` +
-            `(${UnitType[unitType]} L${recipe.level}) at barracks ${buildingId}`
+            `(${UnitType[unitType]} L${recipe.soldierLevel}) at barracks ${buildingId}`
     );
 
     return TaskResult.DONE;

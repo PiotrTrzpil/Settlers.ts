@@ -83,10 +83,7 @@ function filterAcceptedUnits(
  * 6. For each accepted unit: reserve → assign worker to building → assign WORKER_DISPATCH choreo job.
  * 7. Return true.
  */
-export function executeGarrisonUnitsCommand(
-    cmd: GarrisonUnitsCommand,
-    ctx: GarrisonCommandContext
-): boolean {
+export function executeGarrisonUnitsCommand(cmd: GarrisonUnitsCommand, ctx: GarrisonCommandContext): boolean {
     const { manager, settlerTaskSystem, gameState, unitReservation, locationManager } = ctx;
     const building = gameState.getEntity(cmd.buildingId);
     if (!building) {
@@ -139,6 +136,8 @@ export function executeGarrisonUnitsCommand(
         return false;
     }
 
+    let anyDispatched = false;
+
     for (const unitId of acceptedUnitIds) {
         unitReservation.reserve(unitId, {
             purpose: 'garrison-en-route',
@@ -147,39 +146,33 @@ export function executeGarrisonUnitsCommand(
             },
         });
         settlerTaskSystem.assignWorkerToBuilding(unitId, cmd.buildingId);
-        const job = choreo('WORKER_DISPATCH')
-            .goToDoorAndEnter(cmd.buildingId)
-            .build();
+        const job = choreo('WORKER_DISPATCH').goToDoorAndEnter(cmd.buildingId).build();
         // Pass targetPos for eager movement — but if pathfinding fails
         // (same tile or unreachable), handle both cases.
-        const assigned = settlerTaskSystem.assignJob(
-            unitId, job, job.targetPos ?? undefined
-        );
+        const assigned = settlerTaskSystem.assignJob(unitId, job, job.targetPos ?? undefined);
         if (!assigned) {
-            const unit = gameState.getEntityOrThrow(
-                unitId, 'garrison dispatch'
-            );
-            const atDoor = job.targetPos
-                && unit.x === job.targetPos.x
-                && unit.y === job.targetPos.y;
+            const unit = gameState.getEntityOrThrow(unitId, 'garrison dispatch');
+            const atDoor = job.targetPos && unit.x === job.targetPos.x && unit.y === job.targetPos.y;
             if (atDoor) {
                 // Unit already at door — enter directly via choreo
                 // without the GO_TO_TARGET movement step.
                 settlerTaskSystem.assignJob(unitId, job);
+                anyDispatched = true;
             } else {
-                // Genuinely unreachable. Clean up.
+                // Genuinely unreachable. Clean up and blacklist so
+                // auto-garrison doesn't retry the same pair.
                 settlerTaskSystem.releaseWorkerAssignment(unitId);
                 locationManager.cancelApproach(unitId);
                 unitReservation.release(unitId);
-                log.warn(
-                    `garrison_units: path failed for unit `
-                    + `${unitId} to tower ${cmd.buildingId}`
-                );
+                manager.recordDispatchFailure(unitId, cmd.buildingId);
+                log.warn(`garrison_units: path failed for unit ` + `${unitId} to tower ${cmd.buildingId}`);
             }
+        } else {
+            anyDispatched = true;
         }
     }
 
-    return true;
+    return anyDispatched;
 }
 
 /**
@@ -203,7 +196,7 @@ export function executeGarrisonSelectedUnitsCommand(
     ctx: GarrisonCommandContext
 ): GarrisonSelectedResult {
     // Silent: user right-clicks on any tile — most won't be garrison buildings.
-    const building = ctx.gameState.getEntityAt(cmd.tileX, cmd.tileY);
+    const building = ctx.gameState.getGroundEntityAt(cmd.tileX, cmd.tileY);
     if (!building || building.type !== EntityType.Building) return 'not_garrison_building';
     if (!getGarrisonCapacity(building.subType as BuildingType)) return 'not_garrison_building';
 
@@ -211,10 +204,7 @@ export function executeGarrisonSelectedUnitsCommand(
     if (selectedUnits.length === 0) return 'garrison_building_blocked';
 
     const unitIds = selectedUnits.map(u => u.id);
-    const ok = executeGarrisonUnitsCommand(
-        { type: 'garrison_units', buildingId: building.id, unitIds },
-        ctx
-    );
+    const ok = executeGarrisonUnitsCommand({ type: 'garrison_units', buildingId: building.id, unitIds }, ctx);
     if (ok) {
         ctx.gameState.selection.select(null);
         return 'success';

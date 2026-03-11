@@ -146,11 +146,14 @@ function collectSeedTrees(
     const occupied = new Set<number>();
 
     for (const entity of state.entities) {
+        // Track ALL ground-layer entities as occupied (MapObjects, StackedPiles, Buildings)
+        // so tree expansion never tries to place on an occupied tile.
+        occupied.add(mapSize.toIndex(entity.x, entity.y));
+
         if (entity.type !== EntityType.MapObject) continue;
         const cat = OBJECT_TYPE_CATEGORY[entity.subType as MapObjectType];
         if (cat !== MapObjectCategory.Trees) continue;
         seeds.push({ x: entity.x, y: entity.y, type: entity.subType as MapObjectType });
-        occupied.add(mapSize.toIndex(entity.x, entity.y));
     }
     return { seeds, occupied };
 }

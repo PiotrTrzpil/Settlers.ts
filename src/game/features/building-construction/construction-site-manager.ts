@@ -174,7 +174,7 @@ export class ConstructionSiteManager implements Persistable<SerializedConstructi
         };
 
         this.sites.set(buildingId, site);
-        this.eventBus.emit('construction:workerNeeded', { role: 'digger', siteId: buildingId, tileX, tileY, player });
+        this.eventBus.emit('construction:workerNeeded', { role: 'digger', buildingId, x: tileX, y: tileY, player });
     }
 
     private emitBuilderNeededIfRequired(site: ConstructionSite): void {
@@ -185,9 +185,9 @@ export class ConstructionSiteManager implements Persistable<SerializedConstructi
         ) {
             this.eventBus.emit('construction:workerNeeded', {
                 role: 'builder',
-                siteId: site.buildingId,
-                tileX: site.tileX,
-                tileY: site.tileY,
+                buildingId: site.buildingId,
+                x: site.tileX,
+                y: site.tileY,
                 player: site.player,
             });
         }
@@ -197,9 +197,9 @@ export class ConstructionSiteManager implements Persistable<SerializedConstructi
         if (!site.terrain.complete && site.terrain.slots.assigned.size < site.terrain.slots.required) {
             this.eventBus.emit('construction:workerNeeded', {
                 role: 'digger',
-                siteId: site.buildingId,
-                tileX: site.tileX,
-                tileY: site.tileY,
+                buildingId: site.buildingId,
+                x: site.tileX,
+                y: site.tileY,
                 player: site.player,
             });
         }
@@ -249,7 +249,7 @@ export class ConstructionSiteManager implements Persistable<SerializedConstructi
     claimDiggerSlot(buildingId: number, diggerId: number): void {
         const site = this.getSiteOrThrow(buildingId, 'claimDiggerSlot');
         site.terrain.slots.assigned.add(diggerId);
-        this.eventBus.emit('construction:workerAssigned', { buildingId, workerId: diggerId, role: 'digger' });
+        this.eventBus.emit('construction:workerAssigned', { buildingId, unitId: diggerId, role: 'digger' });
         if (!site.terrain.slots.started) {
             site.terrain.slots.started = true;
             this.eventBus.emit('construction:diggingStarted', { buildingId });
@@ -260,7 +260,7 @@ export class ConstructionSiteManager implements Persistable<SerializedConstructi
     releaseDiggerSlot(buildingId: number, diggerId: number): void {
         const site = this.getSiteOrThrow(buildingId, 'releaseDiggerSlot');
         site.terrain.slots.assigned.delete(diggerId);
-        this.eventBus.emit('construction:workerReleased', { buildingId, workerId: diggerId, role: 'digger' });
+        this.eventBus.emit('construction:workerReleased', { buildingId, unitId: diggerId, role: 'digger' });
         this.emitDiggerNeededIfRequired(site);
     }
 
@@ -344,8 +344,8 @@ export class ConstructionSiteManager implements Persistable<SerializedConstructi
         // Emit per-tile event for terrain modification
         this.eventBus.emit('construction:tileCompleted', {
             buildingId,
-            tileX: tile.x,
-            tileY: tile.y,
+            x: tile.x,
+            y: tile.y,
             targetHeight: site.terrain.originalTerrain!.targetHeight,
             isFootprint: tile.isFootprint,
         });
@@ -380,7 +380,7 @@ export class ConstructionSiteManager implements Persistable<SerializedConstructi
     claimBuilderSlot(buildingId: number, builderId: number): void {
         const site = this.getSiteOrThrow(buildingId, 'claimBuilderSlot');
         site.building.slots.assigned.add(builderId);
-        this.eventBus.emit('construction:workerAssigned', { buildingId, workerId: builderId, role: 'builder' });
+        this.eventBus.emit('construction:workerAssigned', { buildingId, unitId: builderId, role: 'builder' });
         if (!site.building.slots.started) {
             site.building.slots.started = true;
             this.eventBus.emit('construction:buildingStarted', { buildingId });
@@ -391,7 +391,7 @@ export class ConstructionSiteManager implements Persistable<SerializedConstructi
     releaseBuilderSlot(buildingId: number, builderId: number): void {
         const site = this.getSiteOrThrow(buildingId, 'releaseBuilderSlot');
         site.building.slots.assigned.delete(builderId);
-        this.eventBus.emit('construction:workerReleased', { buildingId, workerId: builderId, role: 'builder' });
+        this.eventBus.emit('construction:workerReleased', { buildingId, unitId: builderId, role: 'builder' });
         this.emitBuilderNeededIfRequired(site);
     }
 
@@ -494,7 +494,11 @@ export class ConstructionSiteManager implements Persistable<SerializedConstructi
      * Get the pre-computed pile position for a material at a specific pile index.
      * Returns undefined if the site/material/index doesn't exist.
      */
-    getConstructionPilePosition(buildingId: number, material: EMaterialType, pileIndex: number = 0): TileCoord | undefined {
+    getConstructionPilePosition(
+        buildingId: number,
+        material: EMaterialType,
+        pileIndex: number = 0
+    ): TileCoord | undefined {
         return this.sites.get(buildingId)?.pilePositions.get(material)?.[pileIndex];
     }
 

@@ -32,7 +32,7 @@ function checkTileBasics(tile: TileCoord, ctx: PlacementContext, isMine: boolean
     const idx = ctx.mapSize.toIndex(tile.x, tile.y);
     const terrainOk = isMine ? isMineBuildable(ctx.groundType[idx]!) : isBuildable(ctx.groundType[idx]!);
     if (!terrainOk) return PlacementStatus.InvalidTerrain;
-    if (ctx.tileOccupancy.has(tileKey(tile.x, tile.y))) return PlacementStatus.Occupied;
+    if (ctx.groundOccupancy.has(tileKey(tile.x, tile.y))) return PlacementStatus.Occupied;
     return null;
 }
 
@@ -106,7 +106,7 @@ export function validateBuildingPlacement(
  */
 export function canPlaceBuildingFootprint(
     terrain: TerrainData,
-    tileOccupancy: Map<string, number>,
+    groundOccupancy: Map<string, number>,
     x: number,
     y: number,
     buildingType: BuildingType,
@@ -119,7 +119,7 @@ export function canPlaceBuildingFootprint(
         groundType: terrain.groundType,
         groundHeight: terrain.groundHeight,
         mapSize: terrain.mapSize,
-        tileOccupancy,
+        groundOccupancy,
         buildingFootprint,
         race,
         placementFilter: placementFilter ?? null,
@@ -135,7 +135,7 @@ export function canPlaceBuildingFootprint(
  */
 export function canPlaceBuilding(
     terrain: TerrainData,
-    tileOccupancy: Map<string, number>,
+    groundOccupancy: Map<string, number>,
     x: number,
     y: number
 ): boolean {
@@ -145,7 +145,7 @@ export function canPlaceBuilding(
         return false;
     }
 
-    if (tileOccupancy.has(tileKey(x, y))) {
+    if (groundOccupancy.has(tileKey(x, y))) {
         return false;
     }
 

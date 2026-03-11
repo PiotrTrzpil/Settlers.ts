@@ -21,23 +21,12 @@ export interface ConstructionDemandExports {
 
 export const ConstructionDemandFeature: FeatureDefinition = {
     id: 'construction-demand',
-    dependencies: [
-        'building-construction',
-        'inventory',
-        'settler-tasks',
-        'recruit',
-    ],
+    dependencies: ['building-construction', 'inventory', 'settler-tasks', 'recruit'],
 
     create(ctx: FeatureContext) {
-        const {
-            constructionSiteManager,
-        } = ctx.getFeature<BuildingConstructionExports>('building-construction');
-        const {
-            inventoryManager,
-        } = ctx.getFeature<InventoryExports>('inventory');
-        const {
-            settlerTaskSystem, choreoSystem,
-        } = ctx.getFeature<SettlerTaskExports>('settler-tasks');
+        const { constructionSiteManager } = ctx.getFeature<BuildingConstructionExports>('building-construction');
+        const { inventoryManager } = ctx.getFeature<InventoryExports>('inventory');
+        const { settlerTaskSystem, choreoSystem } = ctx.getFeature<SettlerTaskExports>('settler-tasks');
         const { recruitSystem } = ctx.getFeature<RecruitExports>('recruit');
 
         const constructionDemandSystem = new ConstructionSiteDemandSystem({
@@ -45,13 +34,9 @@ export const ConstructionDemandFeature: FeatureDefinition = {
             eventBus: ctx.eventBus,
             siteManager: constructionSiteManager,
             findIdleSpecialist: (unitType, player, nearX, nearY) =>
-                settlerTaskSystem.findIdleSpecialist(
-                    unitType, player, nearX, nearY,
-                ),
-            assignJob: (unitId, job, moveTo) =>
-                settlerTaskSystem.assignJob(unitId, job, moveTo),
-            dispatchRecruitment: (unitType, player, opts) =>
-                recruitSystem.dispatchRecruitment(unitType, player, opts),
+                settlerTaskSystem.findIdleSpecialist(unitType, player, nearX, nearY),
+            assignJob: (unitId, job, moveTo) => settlerTaskSystem.assignJob(unitId, job, moveTo),
+            dispatchRecruitment: (unitType, player, opts) => recruitSystem.dispatchRecruitment(unitType, player, opts),
         });
 
         // Register DIG_TILE and BUILD_STEP executors on shared ChoreoSystem
@@ -71,11 +56,11 @@ export const ConstructionDemandFeature: FeatureDefinition = {
         settlerTaskSystem.registerWorkHandler(SearchType.CONSTRUCTION_DIG, noopHandler);
 
         // Wire site lifecycle → demand system
-        ctx.eventBus.on('construction:workerNeeded', ({ siteId, role }) => {
+        ctx.eventBus.on('construction:workerNeeded', ({ buildingId, role }) => {
             if (role === 'digger') {
-                constructionDemandSystem.onSiteRegistered(siteId);
+                constructionDemandSystem.onSiteRegistered(buildingId);
             } else {
-                constructionDemandSystem.onMaterialsDelivered(siteId);
+                constructionDemandSystem.onMaterialsDelivered(buildingId);
             }
         });
 

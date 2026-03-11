@@ -18,6 +18,7 @@ import { Entity, TileCoord, UnitType } from '@/game/entity';
 import { isUnitAvailableForRace, isBuildingAvailableForRace } from '@/game/data/race-availability';
 import { Race } from '@/game/core/race';
 import type { EMaterialType } from '@/game/economy';
+import { BinaryReader } from '@/resources/file/binary-reader';
 import { FileManager, IFileSource } from '@/utilities/file-manager';
 import { LogHandler } from '@/utilities/log-handler';
 import { LayerVisibility, loadLayerVisibility, saveLayerVisibility } from '@/game/renderer/layer-visibility';
@@ -429,6 +430,8 @@ export function useMapView(
         return param === 'true' || param === '';
     });
 
+    const mapFileParam = computed(() => route.query['mapFile'] as string | undefined);
+
     // =========================================================================
     // Map Loading State
     // =========================================================================
@@ -458,6 +461,20 @@ export function useMapView(
         mapLoadState.initialized = true;
         if (isTestMap.value) void loadMap(mapLoadCtx, null, { isTestMap: true });
         else if (isEmptyMap.value) void loadMap(mapLoadCtx, null, { isEmptyMap: true });
+        else if (mapFileParam.value) {
+            const mapPath = mapFileParam.value;
+            const file: IFileSource = {
+                name: mapPath,
+                path: mapPath,
+                readBinary: async() => {
+                    const resp = await fetch(`/Siedler4/Map/${mapPath}`);
+                    if (!resp.ok) throw new Error(`Failed to fetch map: ${resp.status} ${resp.statusText}`);
+                    const buf = await resp.arrayBuffer();
+                    return new BinaryReader(buf, 0, null, mapPath);
+                },
+            };
+            void loadMap(mapLoadCtx, file);
+        }
     }
 
     function onFileSelect(file: IFileSource): void {

@@ -225,7 +225,7 @@ export class RequestManager implements Persistable<SerializedRequestManagerState
 
         this.eventBus?.emit('logistics:requestAssigned', {
             requestId: request.id,
-            carrierId,
+            unitId: carrierId,
             sourceBuilding,
         });
 

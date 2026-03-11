@@ -51,6 +51,13 @@ export class TowerGarrisonManager implements Persistable<SerializedTowerGarrison
     /** Per-tower garrison state. Keyed by building entity ID. */
     private readonly garrisons = new Map<number, BuildingGarrisonState>();
 
+    /**
+     * Tracks unit→tower pairs where pathfinding failed, preventing repeated
+     * dispatch attempts to unreachable towers. Keyed by `${unitId}:${towerId}`.
+     * Cleared on terrain changes (paths may open up).
+     */
+    private readonly failedDispatches = new Set<string>();
+
     constructor(config: TowerGarrisonManagerConfig) {
         this.gameState = config.gameState;
         this.eventBus = config.eventBus;
@@ -58,7 +65,7 @@ export class TowerGarrisonManager implements Persistable<SerializedTowerGarrison
         this.locationManager = config.locationManager;
         this.releaseWorkerAssignment = config.releaseWorkerAssignment;
 
-        this.eventBus.on('settler-location:entered', ({ settlerId, buildingId }) => {
+        this.eventBus.on('settler-location:entered', ({ unitId: settlerId, buildingId }) => {
             const garrison = this.garrisons.get(buildingId);
             if (!garrison) return;
 
@@ -70,7 +77,7 @@ export class TowerGarrisonManager implements Persistable<SerializedTowerGarrison
             this.finalizeGarrison(settlerId, buildingId);
         });
 
-        this.eventBus.on('settler-location:approachInterrupted', ({ settlerId }) => {
+        this.eventBus.on('settler-location:approachInterrupted', ({ unitId: settlerId }) => {
             if (!this.unitReservation.isReserved(settlerId)) return;
             this.unitReservation.release(settlerId);
             log.debug(`Unit ${settlerId} approach interrupted — reservation released`);
@@ -79,6 +86,17 @@ export class TowerGarrisonManager implements Persistable<SerializedTowerGarrison
 
     setTerrain(terrain: TerrainData): void {
         this.terrain = terrain;
+        this.failedDispatches.clear();
+    }
+
+    /** Record that pathfinding failed for a unit→tower dispatch. */
+    recordDispatchFailure(unitId: number, towerId: number): void {
+        this.failedDispatches.add(`${unitId}:${towerId}`);
+    }
+
+    /** Check if a unit→tower dispatch previously failed (pathfinding unreachable). */
+    hasDispatchFailed(unitId: number, towerId: number): boolean {
+        return this.failedDispatches.has(`${unitId}:${towerId}`);
     }
 
     // =========================================================================
@@ -119,8 +137,9 @@ export class TowerGarrisonManager implements Persistable<SerializedTowerGarrison
 
         // Eject all garrisoned units — location manager already unhid them (it fires first)
         for (const unitId of [...garrison.swordsmanSlots.unitIds, ...garrison.bowmanSlots.unitIds]) {
+            const unit = this.gameState.getEntityOrThrow(unitId, 'TowerGarrisonManager.removeTower');
             this.releaseGarrisonedUnit(unitId, tower);
-            this.eventBus.emit('garrison:unitExited', { buildingId, unitId });
+            this.eventBus.emit('garrison:unitExited', { buildingId, unitId, unitType: unit.subType as UnitType });
         }
 
         // En-route units are handled by settler-location:approachInterrupted (emitted by location manager)
@@ -242,22 +261,15 @@ export class TowerGarrisonManager implements Persistable<SerializedTowerGarrison
             },
         });
 
-        const unit = this.gameState.getEntityOrThrow(
-            unitId,
-            'TowerGarrisonManager.finalizeGarrison',
-        );
+        const unit = this.gameState.getEntityOrThrow(unitId, 'TowerGarrisonManager.finalizeGarrison');
         const garrison = this.garrisons.get(towerId);
         if (!garrison) {
-            throw new Error(
-                `TowerGarrisonManager.finalizeGarrison: tower ${towerId} not registered`,
-            );
+            throw new Error(`TowerGarrisonManager.finalizeGarrison: tower ${towerId} not registered`);
         }
 
         const role = getGarrisonRole(unit.subType as UnitType);
         if (!role) {
-            throw new Error(
-                `TowerGarrisonManager.finalizeGarrison: unit ${unitId} has no garrison role`,
-            );
+            throw new Error(`TowerGarrisonManager.finalizeGarrison: unit ${unitId} has no garrison role`);
         }
 
         const slots = role === 'swordsman' ? garrison.swordsmanSlots : garrison.bowmanSlots;
@@ -267,7 +279,7 @@ export class TowerGarrisonManager implements Persistable<SerializedTowerGarrison
         // This prevents completeJob from exiting the building.
         this.releaseWorkerAssignment(unitId);
 
-        this.eventBus.emit('garrison:unitEntered', { buildingId: towerId, unitId });
+        this.eventBus.emit('garrison:unitEntered', { buildingId: towerId, unitId, unitType: unit.subType as UnitType });
         log.debug(`Unit ${unitId} garrisoned in tower ${towerId} (${role} slot)`);
     }
 
@@ -299,7 +311,7 @@ export class TowerGarrisonManager implements Persistable<SerializedTowerGarrison
         this.locationManager.exitBuilding(unitId);
         this.placeAtApproach(unit, tower);
 
-        this.eventBus.emit('garrison:unitExited', { buildingId: towerId, unitId });
+        this.eventBus.emit('garrison:unitExited', { buildingId: towerId, unitId, unitType: unit.subType as UnitType });
         log.debug(`Unit ${unitId} ejected from tower ${towerId}`);
     }
 

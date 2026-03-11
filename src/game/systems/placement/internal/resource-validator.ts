@@ -29,9 +29,9 @@ export function validateResourcePlacement(x: number, y: number, ctx: PlacementCo
  */
 export function canPlaceResource(
     terrain: TerrainData,
-    tileOccupancy: Map<string, number>,
+    groundOccupancy: Map<string, number>,
     x: number,
     y: number
 ): boolean {
-    return canPlaceSingleTile(terrain, tileOccupancy, x, y);
+    return canPlaceSingleTile(terrain, groundOccupancy, x, y);
 }

@@ -250,7 +250,7 @@ export class CombatSystem implements TickSystem, Persistable<SerializedCombatUni
         targetState.health -= damage;
 
         this.eventBus.emit('combat:unitAttacked', {
-            attackerId,
+            unitId: attackerId,
             targetId,
             damage,
             remainingHealth: Math.max(0, targetState.health),
@@ -268,7 +268,7 @@ export class CombatSystem implements TickSystem, Persistable<SerializedCombatUni
         targetState.health -= damage;
 
         this.eventBus.emit('combat:unitAttacked', {
-            attackerId: attacker.entityId,
+            unitId: attacker.entityId,
             targetId: targetEntity.id,
             damage,
             remainingHealth: Math.max(0, targetState.health),
@@ -283,8 +283,9 @@ export class CombatSystem implements TickSystem, Persistable<SerializedCombatUni
         log.debug(`Unit ${state.entityId} killed by ${killedBy}`);
 
         this.eventBus.emit('combat:unitDefeated', {
-            entityId: state.entityId,
+            unitId: state.entityId,
             defeatedBy: killedBy,
+            level: 'info',
         });
 
         // Clear any combatants targeting the dead unit

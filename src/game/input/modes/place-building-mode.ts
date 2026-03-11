@@ -9,7 +9,7 @@ import type { ValidPositionGrid } from '../../systems/placement/valid-position-g
 /** Everything PlaceBuildingMode needs from the game. */
 export interface BuildingPlacementContext {
     readonly terrain: TerrainData;
-    readonly tileOccupancy: Map<string, number>;
+    readonly groundOccupancy: Map<string, number>;
     readonly currentPlayer: number;
     readonly playerRace: Race;
     readonly placeBuildingsCompleted: boolean;

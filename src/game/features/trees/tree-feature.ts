@@ -49,7 +49,7 @@ export const TreeFeature: FeatureDefinition = {
         settlerTaskSystem.registerWorkHandler(SearchType.TREE_SEED_POS, createForesterHandler(treeSystem));
 
         // Register for map object creation events to auto-register trees
-        ctx.on('entity:created', ({ entityId, type, subType }) => {
+        ctx.on('entity:created', ({ entityId, entityType: type, subType }) => {
             if (type === EntityType.MapObject) {
                 treeSystem.register(entityId, subType as MapObjectType);
             }

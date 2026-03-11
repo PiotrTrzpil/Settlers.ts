@@ -83,7 +83,7 @@ export const BuildingConstructionFeature: FeatureDefinition = {
             onTerrainReady(terrain: TerrainData) {
                 constructionSystem.setTerrainContext({
                     terrain,
-                    onTerrainModified: () => ctx.eventBus.emit('terrain:modified', {}),
+                    onTerrainModified: (reason, x, y) => ctx.eventBus.emit('terrain:modified', { reason, x, y }),
                 });
             },
             onRestoreComplete() {

@@ -35,8 +35,8 @@ export function assignInitialBuildingWorkers(
         const workplaceTypes = getWorkerBuildingTypes(entity.race, unitType);
         if (!workplaceTypes) continue;
 
-        // Check if this unit is on a building footprint tile
-        const buildingAtTile = gameState.getEntityAt(entity.x, entity.y);
+        // Check if this unit is on a building footprint tile (ground layer has buildings)
+        const buildingAtTile = gameState.getGroundEntityAt(entity.x, entity.y);
         if (!buildingAtTile || buildingAtTile.type !== EntityType.Building) continue;
         if (buildingAtTile.player !== entity.player) continue;
 

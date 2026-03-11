@@ -33,10 +33,10 @@ export const BuildingOverlayFeature: FeatureDefinition = {
             entityProvider: ctx.gameState,
         });
 
-        ctx.on('building:completed', ({ entityId, buildingType }) => {
-            const entity = ctx.gameState.getEntity(entityId);
+        ctx.on('building:completed', ({ buildingId, buildingType }) => {
+            const entity = ctx.gameState.getEntity(buildingId);
             if (!entity) return;
-            buildingOverlayManager.addBuilding(entityId, buildingType, entity.race);
+            buildingOverlayManager.addBuilding(buildingId, buildingType, entity.race);
         });
 
         ctx.cleanupRegistry.onEntityRemoved(buildingOverlayManager.removeBuilding.bind(buildingOverlayManager));

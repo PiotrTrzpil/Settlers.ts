@@ -5,7 +5,7 @@
  * the max-lines limit while preserving the same logic.
  */
 
-import type { Entity } from '../../../entity';
+import { type Entity, UnitType } from '../../../entity';
 import { createLogger } from '@/utilities/logger';
 import { hexDistance } from '../../../systems/hex-directions';
 import { TaskResult, SettlerState, type SettlerConfig } from '../types';
@@ -127,6 +127,7 @@ export class WorkerJobLifecycle {
 
         this.eventBus.emit('settler:taskStarted', {
             unitId: settler.id,
+            unitType: settler.subType as UnitType,
             jobId: selected.id,
             targetId: entityTarget?.entityId ?? null,
             targetPos: jobState.targetPos,
@@ -150,13 +151,16 @@ export class WorkerJobLifecycle {
 
         log.debug(`Settler ${settler.id} completed job ${job.jobId}`);
 
-        this.eventBus.emit('settler:taskCompleted', {
-            unitId: settler.id,
-            jobId: job.jobId,
-        });
-
+        // Clear job reference and state BEFORE emitting, so that listeners calling
+        // assignJob won't see a stale job and recurse into interruptJobForCleanup.
         runtime.state = SettlerState.IDLE;
         runtime.job = null;
+
+        this.eventBus.emit('settler:taskCompleted', {
+            unitId: settler.id,
+            unitType: settler.subType as UnitType,
+            jobId: job.jobId,
+        });
 
         if (this.locationManager.isInside(settler.id)) {
             // Workers with a home assignment exit to search for new work.
@@ -172,8 +176,11 @@ export class WorkerJobLifecycle {
 
         if (runtime.homeAssignment) {
             const home = this.gameState.getEntity(runtime.homeAssignment.buildingId);
-            if (home && hexDistance(settler.x, settler.y, home.x, home.y) <= 1) {
-                this.locationManager.enterBuilding(settler.id, home.id);
+            if (home) {
+                const door = getBuildingDoorPos(home.x, home.y, home.race, home.subType as BuildingType);
+                if (hexDistance(settler.x, settler.y, door.x, door.y) <= 1) {
+                    this.locationManager.enterBuilding(settler.id, home.id);
+                }
             }
         }
     }
@@ -184,16 +191,16 @@ export class WorkerJobLifecycle {
         const entityHandler = this.handlerRegistry.getEntityHandler(config.search);
         const job = runtime.job;
 
+        if (job.transportData) {
+            this.transportJobOps.cancel(job.transportData.jobId);
+        }
+
         if (entityHandler && job.targetId && job.workStarted) {
             safeCall(
                 () => entityHandler.onWorkInterrupt?.(job.targetId!, settler.id),
                 this.handlerErrorLogger,
                 `onWorkInterrupt failed for target ${job.targetId}`
             );
-        }
-
-        if (job.transportData) {
-            this.transportJobOps.cancel(job.transportData.jobId);
         }
 
         this.materialTransfer.drop(settler.id);
@@ -215,22 +222,18 @@ export class WorkerJobLifecycle {
         log.debug(`Settler ${settler.id} interrupted job ${job.jobId}`);
 
         const failedNode = job.nodes[job.nodeIndex];
-        let failedStep: string;
-        if (failedNode) {
-            failedStep = ChoreoTaskType[failedNode.task];
-        } else if (job.nodeIndex >= job.nodes.length) {
-            failedStep = 'END';
-        } else {
-            failedStep = 'unknown';
-        }
+        const failedStep = failedNode ? ChoreoTaskType[failedNode.task] : 'unknown';
+
         this.eventBus.emit('settler:taskFailed', {
             unitId: settler.id,
+            unitType: settler.subType as UnitType,
             jobId: job.jobId,
             nodeIndex: job.nodeIndex,
             failedStep,
             targetId: job.targetId ?? null,
             workStarted: job.workStarted,
             wasCarrying: !!settler.carrying,
+            level: 'warn',
         });
 
         runtime.state = SettlerState.INTERRUPTED;

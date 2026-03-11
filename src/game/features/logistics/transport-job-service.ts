@@ -96,9 +96,10 @@ export function cancel(record: TransportJobRecord, reason: RequestResetReason, d
     deps.requestManager.resetRequest(record.requestId, reason);
     record.phase = TransportPhase.Cancelled;
     deps.eventBus.emit('carrier:transportCancelled', {
-        carrierId: record.carrierId,
+        unitId: record.carrierId,
         requestId: record.requestId,
         reason,
+        level: 'warn',
     });
 }
 

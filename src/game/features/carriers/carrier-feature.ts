@@ -25,12 +25,11 @@ export const CarrierFeature: FeatureDefinition = {
     create(ctx: FeatureContext) {
         const carrierRegistry = new CarrierRegistry({
             entityProvider: ctx.gameState,
-            eventBus: ctx.eventBus,
         });
 
         ctx.on('unit:spawned', payload => {
             if (payload.unitType === UnitType.Carrier) {
-                carrierRegistry.register(payload.entityId);
+                carrierRegistry.register(payload.unitId);
             }
         });
 

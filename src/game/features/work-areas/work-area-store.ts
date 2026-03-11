@@ -5,7 +5,7 @@
  * Lives in GameServices so both the UI layer (adjust handler) and
  * gameplay systems (settler tasks, worker search) can access it.
  *
- * Falls back to DEFAULT_WORK_AREA_CENTER for buildings with no instance override.
+ * Uses XML workingPos as the default, with per-instance overrides from user adjustment.
  */
 
 import type { BuildingType } from '../../buildings/types';
@@ -15,9 +15,6 @@ import { hasWorkArea } from './types';
 import { getBuildingInfo } from '../../data/game-data-access';
 import type { Persistable } from '@/game/persistence';
 
-/** Default work area center offset from the building tile anchor (tiles). Easy to change. */
-export const DEFAULT_WORK_AREA_CENTER: TileOffset = { dx: 0, dy: 4 };
-
 type SerializedWorkAreaOffset = { entityId: number; dx: number; dy: number };
 
 export class WorkAreaStore implements Persistable<SerializedWorkAreaOffset[]> {
@@ -25,13 +22,21 @@ export class WorkAreaStore implements Persistable<SerializedWorkAreaOffset[]> {
     /** Per-instance overrides (entityId → offset) */
     private readonly instanceOffsets = new Map<number, TileOffset>();
 
-    /** Get the tile offset for a building (instance override → hardcoded default) */
+    /** Get the tile offset for a building (instance override → XML workingPos) */
     getOffset(buildingType: BuildingType, race: Race, buildingId?: number): TileOffset {
         if (buildingId !== undefined) {
             const inst = this.instanceOffsets.get(buildingId);
             if (inst) return inst;
         }
-        return DEFAULT_WORK_AREA_CENTER;
+        return this.getDefaultOffset(buildingType, race);
+    }
+
+    /** Get the default work area offset from XML workingPos data. */
+    private getDefaultOffset(buildingType: BuildingType, race: Race): TileOffset {
+        const info = getBuildingInfo(race, buildingType);
+        if (!info) throw new Error(`No BuildingInfo for ${buildingType} / race ${race}`);
+        const { xOffset, yOffset } = info.workingPos;
+        return { dx: xOffset, dy: yOffset };
     }
 
     /** Get the work area radius (in tiles) for a building type+race from XML data. */

@@ -46,16 +46,16 @@ export const BuildingSiegeFeature: FeatureDefinition = {
 
         // --- Event subscriptions ---
 
-        ctx.on('unit:movementStopped', ({ entityId }) => {
-            siegeSystem.onMovementStopped(entityId);
+        ctx.on('unit:movementStopped', ({ unitId }) => {
+            siegeSystem.onMovementStopped(unitId);
         });
 
-        ctx.on('combat:unitDefeated', ({ entityId, defeatedBy }) => {
-            siegeSystem.onUnitDefeated(entityId, defeatedBy);
+        ctx.on('combat:unitDefeated', ({ unitId, defeatedBy }) => {
+            siegeSystem.onUnitDefeated(unitId, defeatedBy);
         });
 
-        ctx.on('building:removed', ({ entityId }) => {
-            siegeSystem.cancelSiege(entityId);
+        ctx.on('building:removed', ({ buildingId }) => {
+            siegeSystem.cancelSiege(buildingId);
         });
 
         // Clean up dead attackers from siege state

@@ -103,7 +103,7 @@ export class AutoGarrisonSystem implements TickSystem {
         const building = this.gameState.getEntityOrThrow(buildingId, 'AutoGarrisonSystem.scanBuilding');
         const door = getBuildingDoorPos(building.x, building.y, building.race, building.subType as BuildingType);
 
-        const candidateId = this.findNearestIdleSoldier(building.player, door.x, door.y);
+        const candidateId = this.findNearestIdleSoldier(building.player, door.x, door.y, buildingId);
         if (candidateId === null) return;
 
         this.executeCommand({
@@ -115,25 +115,30 @@ export class AutoGarrisonSystem implements TickSystem {
         log.debug(`Auto-garrison: dispatched unit ${candidateId} to tower ${buildingId}`);
     }
 
+    /** Check if a unit is eligible for auto-garrison dispatch to a specific tower. */
+    private isEligibleCandidate(entityId: number, unitType: UnitType, buildingId: number): boolean {
+        if (!getGarrisonRole(unitType)) return false;
+        if (this.unitReservation.isReserved(entityId)) return false;
+        if (this.manager.hasDispatchFailed(entityId, buildingId)) return false;
+        return true;
+    }
+
     /**
      * Find the nearest idle garrison-eligible unit for the given player.
      * Prefers Swordsman-role units; falls back to Bowman-role if none found.
-     * "Idle" means not reserved in UnitReservationRegistry.
      * Distance metric: Chebyshev distance to the tower door.
      */
-    private findNearestIdleSoldier(player: number, doorX: number, doorY: number): number | null {
+    private findNearestIdleSoldier(player: number, doorX: number, doorY: number, buildingId: number): number | null {
         let bestSwordsmanId: number | null = null;
         let bestSwordsmanDist = Infinity;
         let bestBowmanId: number | null = null;
         let bestBowmanDist = Infinity;
 
         for (const entity of this.gameState.entityIndex.ofTypeAndPlayer(EntityType.Unit, player)) {
-            const unitType = entity.subType as UnitType;
-            const role = getGarrisonRole(unitType);
-            if (role === undefined) continue;
-            if (this.unitReservation.isReserved(entity.id)) continue;
+            if (!this.isEligibleCandidate(entity.id, entity.subType as UnitType, buildingId)) continue;
 
             const dist = Math.max(Math.abs(entity.x - doorX), Math.abs(entity.y - doorY));
+            const role = getGarrisonRole(entity.subType as UnitType)!;
 
             if (role === 'swordsman') {
                 if (dist < bestSwordsmanDist) {

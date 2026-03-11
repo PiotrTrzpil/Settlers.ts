@@ -32,14 +32,14 @@ export const CombatFeature: FeatureDefinition = {
         });
 
         // Auto-register military units when they spawn
-        ctx.on('unit:spawned', ({ entityId, unitType, player }) => {
+        ctx.on('unit:spawned', ({ unitId, unitType, player }) => {
             if (isUnitTypeMilitary(unitType)) {
-                combatSystem.register(entityId, player, unitType);
+                combatSystem.register(unitId, player, unitType);
             }
         });
 
         // Also catch units created via entity:created (e.g., map loading)
-        ctx.on('entity:created', ({ entityId, type, subType, player }) => {
+        ctx.on('entity:created', ({ entityId, entityType: type, subType, player }) => {
             if (type === EntityType.Unit && isUnitTypeMilitary(subType as UnitType)) {
                 combatSystem.register(entityId, player, subType as UnitType);
             }
@@ -54,10 +54,10 @@ export const CombatFeature: FeatureDefinition = {
             executeCommand: ctx.executeCommand,
         });
 
-        ctx.on('combat:unitDefeated', ({ entityId }) => {
-            const entity = ctx.gameState.getEntity(entityId);
+        ctx.on('combat:unitDefeated', ({ unitId }) => {
+            const entity = ctx.gameState.getEntity(unitId);
             if (!entity) {
-                log.debug(`combat:unitDefeated for entity ${entityId} but entity already gone`);
+                log.debug(`combat:unitDefeated for entity ${unitId} but entity already gone`);
                 return;
             }
 
@@ -72,7 +72,7 @@ export const CombatFeature: FeatureDefinition = {
             ctx.visualService.play(angel.id, xmlKey(prefix, 'WALK'), { loop: false, direction: 0 });
 
             deathAngelSystem.register(angel.id, UnitType.Angel);
-            log.debug(`Spawned death angel ${angel.id} at (${entity.x}, ${entity.y}) for unit ${entityId}`);
+            log.debug(`Spawned death angel ${angel.id} at (${entity.x}, ${entity.y}) for unit ${unitId}`);
         });
 
         ctx.cleanupRegistry.onEntityRemoved(deathAngelSystem.unregister.bind(deathAngelSystem));

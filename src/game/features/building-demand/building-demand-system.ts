@@ -34,27 +34,11 @@ const TICK_INTERVAL = 1.0; // seconds between demand scans
 export interface BuildingDemandSystemConfig {
     gameState: GameState;
     eventBus: EventBus;
-    findIdleSpecialist: (
-        unitType: UnitType,
-        player: number,
-        nearX: number,
-        nearY: number,
-    ) => number | null;
-    assignJob: (
-        unitId: number,
-        job: ChoreoJobState,
-        moveTo?: { x: number; y: number },
-    ) => boolean;
-    assignWorkerToBuilding: (
-        settlerId: number,
-        buildingId: number,
-    ) => void;
+    findIdleSpecialist: (unitType: UnitType, player: number, nearX: number, nearY: number) => number | null;
+    assignJob: (unitId: number, job: ChoreoJobState, moveTo?: { x: number; y: number }) => boolean;
+    assignWorkerToBuilding: (settlerId: number, buildingId: number) => void;
     /** Full recruitment dispatch — find candidate, build choreo, assign job, register transform. */
-    dispatchRecruitment: (
-        unitType: UnitType,
-        player: number,
-        opts?: DispatchRecruitmentOpts,
-    ) => number | null;
+    dispatchRecruitment: (unitType: UnitType, player: number, opts?: DispatchRecruitmentOpts) => number | null;
 }
 
 // ─── System ──────────────────────────────────────────────────
@@ -104,54 +88,34 @@ export class BuildingDemandSystem implements TickSystem {
         this.subscriptions.subscribe(
             this.eventBus,
             'building:completed',
-            ({ entityId, buildingType, race, spawnWorker }) => {
+            ({ buildingId, buildingType, race, spawnWorker }) => {
                 if (spawnWorker) return;
-                this.addDemandFromBuilding(entityId, buildingType, race);
-            }
-        );
-
-        this.subscriptions.subscribe(
-            this.eventBus,
-            'building:workerLost',
-            ({ buildingId, buildingType, race }) => {
                 this.addDemandFromBuilding(buildingId, buildingType, race);
             }
         );
 
-        this.subscriptions.subscribe(
-            this.eventBus,
-            'building:removed',
-            ({ entityId }) => {
-                this.demands.delete(entityId);
-            }
-        );
+        this.subscriptions.subscribe(this.eventBus, 'building:workerLost', ({ buildingId, buildingType, race }) => {
+            this.addDemandFromBuilding(buildingId, buildingType, race);
+        });
+
+        this.subscriptions.subscribe(this.eventBus, 'building:removed', ({ buildingId }) => {
+            this.demands.delete(buildingId);
+        });
 
         // When a carrier transforms into a specialist, assign the new worker to its building.
         // The carrier recruitment path (dispatchCarrier) doesn't call assignWorkerToBuilding
         // at dispatch time — the assignment happens here after the transformation completes.
-        this.subscriptions.subscribe(
-            this.eventBus,
-            'unit:transformed',
-            ({ entityId }) => {
-                this.handleUnitTransformed(entityId);
-            }
-        );
+        this.subscriptions.subscribe(this.eventBus, 'unit:transformed', ({ unitId }) => {
+            this.handleUnitTransformed(unitId);
+        });
 
-        this.subscriptions.subscribe(
-            this.eventBus,
-            'settler:taskCompleted',
-            ({ unitId, jobId }) => {
-                this.handleJobFinished(unitId, jobId);
-            }
-        );
+        this.subscriptions.subscribe(this.eventBus, 'settler:taskCompleted', ({ unitId, jobId }) => {
+            this.handleJobFinished(unitId, jobId);
+        });
 
-        this.subscriptions.subscribe(
-            this.eventBus,
-            'settler:taskFailed',
-            ({ unitId, jobId }) => {
-                this.handleJobFailed(unitId, jobId);
-            }
-        );
+        this.subscriptions.subscribe(this.eventBus, 'settler:taskFailed', ({ unitId, jobId }) => {
+            this.handleJobFailed(unitId, jobId);
+        });
     }
 
     unregisterEvents(): void {
@@ -173,11 +137,7 @@ export class BuildingDemandSystem implements TickSystem {
     // Internal — demand creation
     // ================================================================
 
-    private addDemandFromBuilding(
-        buildingId: number,
-        buildingType: number,
-        race: Race,
-    ): void {
+    private addDemandFromBuilding(buildingId: number, buildingType: number, race: Race): void {
         if (this.demands.has(buildingId)) return; // already pending
 
         const entity = this.gameState.getEntity(buildingId);
@@ -196,10 +156,7 @@ export class BuildingDemandSystem implements TickSystem {
         };
 
         this.demands.set(buildingId, demand);
-        log.debug(
-            `Demand added: building ${buildingId} needs`
-            + ` unit type ${demand.unitType}`
-        );
+        log.debug(`Demand added: building ${buildingId} needs` + ` unit type ${demand.unitType}`);
     }
 
     // ================================================================
@@ -222,17 +179,10 @@ export class BuildingDemandSystem implements TickSystem {
     }
 
     private tryFulfill(demand: BuildingDemand): void {
-        const building = this.gameState.getEntityOrThrow(
-            demand.buildingId, 'BuildingDemand.tryFulfill'
-        );
+        const building = this.gameState.getEntityOrThrow(demand.buildingId, 'BuildingDemand.tryFulfill');
 
         // 1. Try idle specialist
-        const specialistId = this.findIdleSpecialist(
-            demand.unitType,
-            demand.player,
-            building.x,
-            building.y,
-        );
+        const specialistId = this.findIdleSpecialist(demand.unitType, demand.player, building.x, building.y);
 
         if (specialistId !== null) {
             this.dispatchSpecialist(specialistId, demand);
@@ -240,23 +190,17 @@ export class BuildingDemandSystem implements TickSystem {
         }
 
         // 2. Try carrier recruitment — RecruitSystem handles everything
-        const carrierId = this.dispatchRecruitment(
-            demand.unitType, demand.player,
-            { target: { x: building.x, y: building.y } },
-        );
+        const carrierId = this.dispatchRecruitment(demand.unitType, demand.player, {
+            target: { x: building.x, y: building.y },
+        });
         if (carrierId === null) return; // retry next tick
 
         demand.committedUnitId = carrierId;
         log.debug(`Carrier ${carrierId} recruiting for building ${demand.buildingId}`);
     }
 
-    private dispatchSpecialist(
-        unitId: number,
-        demand: BuildingDemand,
-    ): void {
-        const job = choreo('WORKER_DISPATCH')
-            .goToDoorAndEnter(demand.buildingId)
-            .build();
+    private dispatchSpecialist(unitId: number, demand: BuildingDemand): void {
+        const job = choreo('WORKER_DISPATCH').goToDoorAndEnter(demand.buildingId).build();
 
         const assigned = this.assignJob(unitId, job);
         if (!assigned) return;
@@ -264,10 +208,7 @@ export class BuildingDemandSystem implements TickSystem {
         this.assignWorkerToBuilding(unitId, demand.buildingId);
         demand.committedUnitId = unitId;
 
-        log.debug(
-            `Specialist ${unitId} dispatched to`
-            + ` building ${demand.buildingId}`
-        );
+        log.debug(`Specialist ${unitId} dispatched to` + ` building ${demand.buildingId}`);
     }
 
     // ================================================================
@@ -279,10 +220,7 @@ export class BuildingDemandSystem implements TickSystem {
             if (demand.committedUnitId === entityId) {
                 this.assignWorkerToBuilding(entityId, buildingId);
                 this.demands.delete(buildingId);
-                log.debug(
-                    `Recruited unit ${entityId} assigned`
-                    + ` to building ${buildingId}`
-                );
+                log.debug(`Recruited unit ${entityId} assigned` + ` to building ${buildingId}`);
                 return;
             }
         }
@@ -295,10 +233,7 @@ export class BuildingDemandSystem implements TickSystem {
         for (const [buildingId, demand] of this.demands) {
             if (demand.committedUnitId === unitId) {
                 this.demands.delete(buildingId);
-                log.debug(
-                    `Demand fulfilled: unit ${unitId}`
-                    + ` entered building ${buildingId}`
-                );
+                log.debug(`Demand fulfilled: unit ${unitId}` + ` entered building ${buildingId}`);
                 return;
             }
         }
@@ -311,19 +246,18 @@ export class BuildingDemandSystem implements TickSystem {
         for (const demand of this.demands.values()) {
             if (demand.committedUnitId === unitId) {
                 demand.committedUnitId = null;
-                log.debug(
-                    `Dispatch failed: unit ${unitId}, will retry`
-                    + ` building ${demand.buildingId}`
-                );
+                log.debug(`Dispatch failed: unit ${unitId}, will retry` + ` building ${demand.buildingId}`);
                 return;
             }
         }
     }
 
     private isDispatchJob(jobId: string): boolean {
-        return jobId === 'WORKER_DISPATCH'
-            || jobId === 'RECRUIT_TO_WORKPLACE'
-            || jobId === 'DIRECT_RECRUIT_TO_WORKPLACE'
-            || jobId === 'AUTO_RECRUIT';
+        return (
+            jobId === 'WORKER_DISPATCH' ||
+            jobId === 'RECRUIT_TO_WORKPLACE' ||
+            jobId === 'DIRECT_RECRUIT_TO_WORKPLACE' ||
+            jobId === 'AUTO_RECRUIT'
+        );
     }
 }

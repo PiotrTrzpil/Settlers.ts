@@ -188,29 +188,35 @@ export class LogisticsDispatcher implements TickSystem {
      * before inventory removal (inventory data must exist when releasing reservations).
      */
     registerEvents(eventBus: EventBus, cleanupRegistry: EntityCleanupRegistry): void {
-        this.subscriptions.subscribe(eventBus, 'carrier:deliveryComplete', ({ entityId }) => {
-            this.activeJobs.delete(entityId);
-            this.flushQueuedAssignment(entityId);
+        // Don't delete activeJobs or flush pre-assignments on deliveryComplete — the
+        // carrier's choreography is still running its delivery animation. Cleaning up here
+        // makes the carrier appear idle to the carrier-assigner tick, which would reassign
+        // it immediately, interrupting the active job and emitting a false settler:taskFailed.
+        // Instead, both cleanup and flush happen on settler:taskCompleted when the job ends
+        // naturally.
+        this.subscriptions.subscribe(eventBus, 'settler:taskCompleted', ({ unitId }) => {
+            this.activeJobs.delete(unitId);
+            this.flushQueuedAssignment(unitId);
         });
 
-        this.subscriptions.subscribe(eventBus, 'carrier:pickupFailed', ({ entityId }) => {
-            this.activeJobs.delete(entityId);
-            this.preAssignmentQueue.cancel(entityId);
+        this.subscriptions.subscribe(eventBus, 'carrier:pickupFailed', ({ unitId }) => {
+            this.activeJobs.delete(unitId);
+            this.preAssignmentQueue.cancel(unitId);
         });
 
         // Unified cleanup: TransportJob.cancel() emits this event regardless of which path cancelled.
         // This ensures activeJobs is always cleaned up — even when cancellation comes from
         // WorkerTaskExecutor.interruptJob() (the "dual path" that previously left stale entries).
-        this.subscriptions.subscribe(eventBus, 'carrier:transportCancelled', ({ carrierId }) => {
-            this.activeJobs.delete(carrierId);
-            this.preAssignmentQueue.cancel(carrierId);
+        this.subscriptions.subscribe(eventBus, 'carrier:transportCancelled', ({ unitId }) => {
+            this.activeJobs.delete(unitId);
+            this.preAssignmentQueue.cancel(unitId);
         });
 
         // When a construction site completes, cancel all in-flight jobs and pending requests
         // targeting it. The inventory is swapped from construction → production, so carriers
         // can no longer deposit construction materials there.
-        this.subscriptions.subscribe(eventBus, 'building:completed', ({ entityId }) =>
-            this.handleConstructionCompleted(entityId)
+        this.subscriptions.subscribe(eventBus, 'building:completed', ({ buildingId }) =>
+            this.handleConstructionCompleted(buildingId)
         );
 
         // Store pile redirect info when building piles are converted to free piles.

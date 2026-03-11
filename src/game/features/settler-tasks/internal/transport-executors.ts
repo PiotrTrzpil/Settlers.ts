@@ -114,10 +114,11 @@ export function executeTransportPickup(
         if (withdrawn === 0) {
             log.warn(`Carrier ${settler.id}: pickup failed at building ${sourceBuildingId}`);
             ctx.eventBus.emit('carrier:pickupFailed', {
-                entityId: settler.id,
+                unitId: settler.id,
                 material,
                 fromBuilding: sourceBuildingId,
                 requestedAmount,
+                level: 'warn',
             });
             return TaskResult.FAILED;
         }
@@ -129,7 +130,7 @@ export function executeTransportPickup(
         );
 
         ctx.eventBus.emit('carrier:pickupComplete', {
-            entityId: settler.id,
+            unitId: settler.id,
             material,
             amount: withdrawn,
             fromBuilding: sourceBuildingId,
@@ -186,6 +187,7 @@ export function executeTransportDeliver(
                 buildingId: destBuildingId,
                 material,
                 amount: overflow,
+                level: 'warn',
             });
         }
 
@@ -196,7 +198,7 @@ export function executeTransportDeliver(
         );
 
         ctx.eventBus.emit('carrier:deliveryComplete', {
-            entityId: settler.id,
+            unitId: settler.id,
             material,
             amount: deposited,
             toBuilding: destBuildingId,

@@ -184,6 +184,7 @@ export class VictoryConditionsSystem implements TickSystem {
             this.eventBus.emit('game:ended', {
                 winner: null,
                 reason: GameEndReason.LocalPlayerEliminated,
+                level: 'info',
             });
             return;
         }
@@ -199,12 +200,13 @@ export class VictoryConditionsSystem implements TickSystem {
             this.eventBus.emit('game:ended', {
                 winner: this.localPlayer,
                 reason: GameEndReason.AllEnemiesEliminated,
+                level: 'info',
             });
         }
     }
 
     private eliminatePlayer(player: number): void {
         this.playerStatus.set(player, PlayerStatus.Eliminated);
-        this.eventBus.emit('game:playerEliminated', { player });
+        this.eventBus.emit('game:playerEliminated', { player, level: 'info' });
     }
 }

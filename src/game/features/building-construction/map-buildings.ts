@@ -167,9 +167,10 @@ export function populateMapBuildings(
         // Map-loaded buildings get their workers from map data + assignInitialBuildingWorkers.
         // Do NOT set spawnWorker — that would spawn a duplicate worker at the door.
         eventBus.emit('building:completed', {
-            entityId: entity.id,
+            buildingId: entity.id,
             buildingType,
             race: entity.race,
+            level: 'info',
         });
 
         const entries = perPlayer.get(buildingData.player) ?? [];

@@ -102,7 +102,7 @@ export class UnitTransformer implements Persistable<SerializedUnitTransformer> {
         job: ChoreoJobState,
         targetUnitType: UnitType,
         toolMaterial: EMaterialType,
-        toolPile: { pileEntityId: number; x: number; y: number },
+        toolPile: { pileEntityId: number; x: number; y: number }
     ): boolean {
         const assigned = this.assignJob(carrierId, job, { x: toolPile.x, y: toolPile.y });
         if (!assigned) return false;
@@ -124,16 +124,17 @@ export class UnitTransformer implements Persistable<SerializedUnitTransformer> {
      * Returns true if the transformation was successfully initiated.
      * Returns false if the job could not be assigned.
      */
-    requestDirectTransform(
-        carrierId: number, targetUnitType: UnitType, _player: number
-    ): boolean {
+    requestDirectTransform(carrierId: number, targetUnitType: UnitType, _player: number): boolean {
         const job = createDirectTransformJob(targetUnitType);
         // No moveTo — carrier transforms in place; passing own position causes moveUnit to fail
         const assigned = this.assignJob(carrierId, job);
         if (!assigned) return false;
 
         const record: PendingTransform = {
-            carrierId, targetUnitType, toolMaterial: null, pileEntityId: -1,
+            carrierId,
+            targetUnitType,
+            toolMaterial: null,
+            pileEntityId: -1,
         };
         this.pending.set(carrierId, record);
         this.unitReservation.reserve(carrierId, {
@@ -164,7 +165,7 @@ export class UnitTransformer implements Persistable<SerializedUnitTransformer> {
         carrierId: number,
         targetUnitType: UnitType,
         toolMaterial: EMaterialType,
-        pileEntityId: number,
+        pileEntityId: number
     ): void {
         const record: PendingTransform = {
             carrierId,
@@ -220,7 +221,7 @@ export class UnitTransformer implements Persistable<SerializedUnitTransformer> {
         const { id, x, y } = target;
         target.subType = UnitType.Carrier;
         this.carrierRegistry.register(id);
-        this.eventBus.emit('unit:transformed', { entityId: id, fromType, toType: UnitType.Carrier });
+        this.eventBus.emit('unit:transformed', { unitId: id, fromType, toType: UnitType.Carrier, level: 'info' });
         log.debug(`Dismissed ${UnitType[fromType]} (entity ${id}), returned to carrier pool`);
 
         if (toolMaterial !== null) {
@@ -249,17 +250,25 @@ export class UnitTransformer implements Persistable<SerializedUnitTransformer> {
     // =========================================================================
 
     registerEvents(): void {
-        this.subscriptions.subscribe(this.eventBus, 'recruitment:completed', ({ carrierId, targetUnitType }) => {
-            this.handleCompleted(carrierId, targetUnitType);
-        });
+        this.subscriptions.subscribe(
+            this.eventBus,
+            'recruitment:completed',
+            ({ unitId: carrierId, targetUnitType }) => {
+                this.handleCompleted(carrierId, targetUnitType);
+            }
+        );
 
-        this.subscriptions.subscribe(this.eventBus, 'recruitment:failed', ({ carrierId }) => {
+        this.subscriptions.subscribe(this.eventBus, 'recruitment:failed', ({ unitId: carrierId }) => {
             this.handleFailed(carrierId);
         });
 
         this.subscriptions.subscribe(this.eventBus, 'settler:taskFailed', payload => {
             if (this.pending.has(payload.unitId)) {
-                this.eventBus.emit('recruitment:failed', { carrierId: payload.unitId, reason: payload.failedStep });
+                this.eventBus.emit('recruitment:failed', {
+                    unitId: payload.unitId,
+                    reason: payload.failedStep,
+                    level: 'warn',
+                });
             }
         });
     }
@@ -289,7 +298,7 @@ export class UnitTransformer implements Persistable<SerializedUnitTransformer> {
         this.carrierRegistry.remove(carrierId);
         entity.carrying = undefined;
 
-        this.eventBus.emit('unit:transformed', { entityId: carrierId, fromType, toType: targetUnitType });
+        this.eventBus.emit('unit:transformed', { unitId: carrierId, fromType, toType: targetUnitType, level: 'info' });
         log.debug(`Carrier ${carrierId} transformed from ${UnitType[fromType]} to ${UnitType[targetUnitType]}`);
     }
 

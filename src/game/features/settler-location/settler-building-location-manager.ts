@@ -44,7 +44,7 @@ implements ISettlerBuildingLocationManager, Persistable<SerializedSettlerLocatio
 
         ctx.cleanupRegistry.onEntityRemoved(entityId => this.onEntityRemoved(entityId), CLEANUP_PRIORITY.DEFAULT);
 
-        ctx.on('building:removed', ({ entityId: buildingId }) => this.onBuildingRemoved(buildingId));
+        ctx.on('building:removed', ({ buildingId }) => this.onBuildingRemoved(buildingId));
     }
 
     // =========================================================================
@@ -118,12 +118,16 @@ implements ISettlerBuildingLocationManager, Persistable<SerializedSettlerLocatio
         const entity = this.ctx.gameState.getEntityOrThrow(settlerId, 'SettlerBuildingLocationManager.enterBuilding');
         entity.hidden = true;
 
-        // Remove movement controller and tileOccupancy so the hidden unit
+        // Remove movement controller and unitOccupancy so the hidden unit
         // doesn't ghost-block the tile for other units trying to reach the building.
         this.ctx.gameState.movement.removeController(settlerId);
         this.ctx.gameState.clearTileOccupancy(settlerId);
 
-        this.ctx.eventBus.emit('settler-location:entered', { settlerId, buildingId });
+        this.ctx.eventBus.emit('settler-location:entered', {
+            unitId: settlerId,
+            unitType: entity.subType as UnitType,
+            buildingId,
+        });
         log.debug(`Settler ${settlerId} entered building ${buildingId}`);
     }
 
@@ -146,7 +150,7 @@ implements ISettlerBuildingLocationManager, Persistable<SerializedSettlerLocatio
         const entity = this.ctx.gameState.getEntityOrThrow(settlerId, 'SettlerBuildingLocationManager.exitBuilding');
         entity.hidden = false;
 
-        // Restore movement controller and tileOccupancy (removed on enterBuilding)
+        // Restore movement controller and unitOccupancy (removed on enterBuilding)
         if (entity.type === EntityType.Unit) {
             const speed = getUnitTypeSpeed(entity.subType as UnitType);
             this.ctx.gameState.movement.createController(settlerId, entity.x, entity.y, speed);
@@ -235,7 +239,7 @@ implements ISettlerBuildingLocationManager, Persistable<SerializedSettlerLocatio
             });
             if (entry.status === SettlerBuildingStatus.Inside) {
                 settler.hidden = true;
-                // Remove controller + tileOccupancy (entity:created may have added them)
+                // Remove controller + unitOccupancy (entity:created may have added them)
                 this.ctx.gameState.movement.removeController(entry.settlerId);
                 this.ctx.gameState.clearTileOccupancy(entry.settlerId);
             }
@@ -269,7 +273,7 @@ implements ISettlerBuildingLocationManager, Persistable<SerializedSettlerLocatio
             const entity = this.ctx.gameState.getEntity(settlerId);
             if (entity) {
                 entity.hidden = false;
-                // Restore movement controller + tileOccupancy (removed on enterBuilding)
+                // Restore movement controller + unitOccupancy (removed on enterBuilding)
                 if (entity.type === EntityType.Unit) {
                     const speed = getUnitTypeSpeed(entity.subType as UnitType);
                     this.ctx.gameState.movement.createController(settlerId, entity.x, entity.y, speed);
@@ -282,7 +286,7 @@ implements ISettlerBuildingLocationManager, Persistable<SerializedSettlerLocatio
         // Emit approachInterrupted for approaching settlers
         for (const settlerId of approachingSettlers) {
             this.locationMap.delete(settlerId);
-            this.ctx.eventBus.emit('settler-location:approachInterrupted', { settlerId, buildingId });
+            this.ctx.eventBus.emit('settler-location:approachInterrupted', { unitId: settlerId, buildingId });
             log.debug(`Settler ${settlerId} approach interrupted — building ${buildingId} removed`);
         }
     }

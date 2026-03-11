@@ -43,7 +43,7 @@ export function validateSingleTilePlacement(x: number, y: number, ctx: Placement
     }
 
     // Must not be occupied
-    if (ctx.tileOccupancy.has(tileKey(x, y))) {
+    if (ctx.groundOccupancy.has(tileKey(x, y))) {
         return { canPlace: false, status: PlacementStatus.Occupied };
     }
 
@@ -57,7 +57,7 @@ export function validateSingleTilePlacement(x: number, y: number, ctx: Placement
  */
 export function canPlaceSingleTile(
     terrain: TerrainData,
-    tileOccupancy: Map<string, number>,
+    groundOccupancy: Map<string, number>,
     x: number,
     y: number
 ): boolean {
@@ -65,7 +65,7 @@ export function canPlaceSingleTile(
         groundType: terrain.groundType,
         groundHeight: terrain.groundHeight,
         mapSize: terrain.mapSize,
-        tileOccupancy,
+        groundOccupancy,
     };
     return validateSingleTilePlacement(x, y, ctx).canPlace;
 }

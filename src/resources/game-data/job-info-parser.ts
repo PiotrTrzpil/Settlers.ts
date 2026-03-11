@@ -100,7 +100,7 @@ const KNOWN_MATERIAL_NAMES: ReadonlySet<string> = new Set([
  * Only fires when the jobPart suffix is a known material name — generic suffixes
  * like ANIMAL, FIRSTGOOD, STEEL, PLANT are left untouched.
  */
-function fixJobPartEntityMismatch(node: JobNode, jobId: string): void {
+function fixJobPartEntityMismatch(node: JobNode, _jobId: string): void {
     if (!node.entity.startsWith(GOOD_PREFIX)) return;
 
     const entityMaterial = node.entity.slice(GOOD_PREFIX.length); // e.g., 'IRONORE'
@@ -120,9 +120,6 @@ function fixJobPartEntityMismatch(node: JobNode, jobId: string): void {
         if (!KNOWN_MATERIAL_NAMES.has(jobPartMaterial)) return;
 
         const fixed = `${prefix}${actionPrefix}${entityMaterial}`;
-        console.info(
-            `[jobInfo fix] ${jobId}: corrected jobPart '${node.jobPart}' → '${fixed}' ` + `(entity says ${node.entity})`
-        );
         node.jobPart = fixed;
         return;
     }
@@ -170,9 +167,7 @@ function propagateResourceGatheringEntity(nodes: JobNode[]): void {
 
 function fixVintnerHarvestJob(nodes: JobNode[]): void {
     // Find the RESOURCE_GATHERING node with GOOD_WINE after GO_TO_TARGET
-    const resIdx = nodes.findIndex(
-        (n, i) => i > 0 && n.task === 'RESOURCE_GATHERING' && n.entity === 'GOOD_WINE'
-    );
+    const resIdx = nodes.findIndex((n, i) => i > 0 && n.task === 'RESOURCE_GATHERING' && n.entity === 'GOOD_WINE');
     if (resIdx === -1) return;
 
     const resNode = nodes[resIdx]!;

@@ -94,8 +94,8 @@ export class InventoryPileSync {
      */
     registerEvents(eventBus: EventBus, cleanupRegistry: EntityCleanupRegistry): void {
         this.eventBus = eventBus;
-        this.subscriptions.subscribe(eventBus, 'building:completed', ({ entityId }) => {
-            this.onBuildingCompleted(entityId);
+        this.subscriptions.subscribe(eventBus, 'building:completed', ({ buildingId }) => {
+            this.onBuildingCompleted(buildingId);
         });
 
         cleanupRegistry.onEntityRemoved((entityId: number) => {

@@ -54,11 +54,14 @@ export function executeSpawnUnit(deps: SpawnUnitDeps, cmd: SpawnUnitCommand): Co
 
     const isTileValid = (x: number, y: number) => {
         if (!terrain.isInBounds(x, y) || !terrain.isPassable(x, y)) return false;
-        const occupant = state.getEntityAt(x, y);
-        if (!occupant) return true;
-        // Allow spawning on construction site footprint tiles (not yet blocked for movement)
-        if (occupant.type === EntityType.Building && !state.buildingOccupancy.has(tileKey(x, y))) return true;
-        return false;
+        // Units can't overlap other units
+        if (state.getUnitAt(x, y)) return false;
+        // Ground entities block spawning, except construction sites (not yet blocked for movement)
+        const ground = state.getGroundEntityAt(x, y);
+        if (ground && (ground.type !== EntityType.Building || state.buildingOccupancy.has(tileKey(x, y)))) {
+            return false;
+        }
+        return true;
     };
 
     let spawnX = cmd.x;
@@ -77,7 +80,7 @@ export function executeSpawnUnit(deps: SpawnUnitDeps, cmd: SpawnUnitCommand): Co
     entity.level = getUnitLevel(cmd.unitType);
 
     deps.eventBus.emit('unit:spawned', {
-        entityId: entity.id,
+        unitId: entity.id,
         unitType: cmd.unitType,
         x: spawnX,
         y: spawnY,
