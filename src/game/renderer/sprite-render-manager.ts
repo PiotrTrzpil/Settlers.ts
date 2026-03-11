@@ -302,6 +302,11 @@ export class SpriteRenderManager {
         return this._spriteRegistry?.getFlagFrameCount(playerIndex) ?? 0;
     }
 
+    /** Check if territory dot sprites have been loaded. */
+    public hasTerritoryDotSprites(): boolean {
+        return this._spriteRegistry?.hasTerritoryDotSprites() ?? false;
+    }
+
     /** Get the territory dot sprite for a player index (0-7). */
     public getTerritoryDot(playerIndex: number): SpriteEntry | null {
         return this._spriteRegistry?.getTerritoryDot(playerIndex) ?? null;

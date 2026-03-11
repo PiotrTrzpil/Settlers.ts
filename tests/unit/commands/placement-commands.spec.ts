@@ -149,7 +149,7 @@ describe('Building Placement Terrain Modification', () => {
     it('should change ground and level heights instantly in completed mode', () => {
         const tile = { x: 32, y: 32 };
 
-        // Set varying heights within slope tolerance (MAX_SLOPE_DIFF = 8)
+        // Set varying heights within slope tolerance (MAX_SLOPE_DIFF = 12)
         setHeightAt(sim.map, tile.x, tile.y, 10);
         setHeightAt(sim.map, tile.x + 1, tile.y, 14);
         setHeightAt(sim.map, tile.x, tile.y + 1, 12);

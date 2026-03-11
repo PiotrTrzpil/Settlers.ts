@@ -6,6 +6,7 @@
 
 import type { IViewPoint } from '../i-view-point';
 import type { IRenderPass, TerritoryDotContext } from './types';
+import type { TerritoryDotRenderData } from '../render-context';
 import { TilePicker } from '@/game/input/tile-picker';
 import { PALETTE_TEXTURE_WIDTH } from '../palette-texture';
 import { scaleSprite } from '../entity-renderer-constants';
@@ -27,6 +28,7 @@ export class TerritoryDotPass implements IRenderPass {
         const { ctx } = this;
         if (ctx.territoryDots.length === 0 && ctx.workAreaDots.length === 0) return;
         if (!ctx.spriteManager?.hasSprites || !ctx.spriteBatchRenderer.isInitialized) return;
+        if (!ctx.spriteManager.hasTerritoryDotSprites()) return;
 
         ctx.spriteManager.spriteAtlas!.bindForRendering(gl);
         ctx.spriteManager.paletteManager.bind(gl);
@@ -41,8 +43,21 @@ export class TerritoryDotPass implements IRenderPass {
             ctx.renderSettings.antialias
         );
 
-        for (const dot of ctx.territoryDots) {
-            const sprite = ctx.spriteManager.getTerritoryDot(dot.player);
+        this.renderDots(gl, ctx.territoryDots, 2.25, viewPoint);
+        this.renderDots(gl, ctx.workAreaDots, 1.5, viewPoint);
+
+        this.lastDrawCalls = ctx.spriteBatchRenderer.endSpriteBatch(gl);
+    }
+
+    private renderDots(
+        gl: WebGL2RenderingContext,
+        dots: readonly TerritoryDotRenderData[],
+        scale: number,
+        viewPoint: IViewPoint
+    ): void {
+        const { ctx } = this;
+        for (const dot of dots) {
+            const sprite = ctx.spriteManager!.getTerritoryDot(dot.player);
             if (!sprite) {
                 if (!this.warnedMissingSprite) {
                     console.warn(
@@ -60,31 +75,8 @@ export class TerritoryDotPass implements IRenderPass {
                 viewPoint.x,
                 viewPoint.y
             );
-            const scaled = scaleSprite(sprite, 2.25);
+            const scaled = scaleSprite(sprite, scale);
             ctx.spriteBatchRenderer.addSprite(gl, worldPos.worldX, worldPos.worldY, scaled, 0, 1, 1, 1, 1);
         }
-
-        for (const dot of ctx.workAreaDots) {
-            const sprite = ctx.spriteManager.getTerritoryDot(dot.player);
-            if (!sprite) {
-                if (!this.warnedMissingSprite) {
-                    console.warn(`[TerritoryDotPass] work area dot: getTerritoryDot(${dot.player}) returned null`);
-                    this.warnedMissingSprite = true;
-                }
-                continue;
-            }
-            const worldPos = TilePicker.tileToWorld(
-                dot.x,
-                dot.y,
-                ctx.groundHeight,
-                ctx.mapSize,
-                viewPoint.x,
-                viewPoint.y
-            );
-            const scaled = scaleSprite(sprite, 1.5);
-            ctx.spriteBatchRenderer.addSprite(gl, worldPos.worldX, worldPos.worldY, scaled, 0, 1, 1, 1, 1);
-        }
-
-        this.lastDrawCalls = ctx.spriteBatchRenderer.endSpriteBatch(gl);
     }
 }

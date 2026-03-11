@@ -65,7 +65,7 @@ describe('canPlaceBuildingFootprint – per-tile gradient slope check', () => {
 
     it('should reject building when adjacent tiles in footprint have steep slope', () => {
         setHeightAt(map, 10, 10, 10);
-        setHeightAt(map, 11, 10, 20); // diff = 10 from (10,10), exceeds MAX_SLOPE_DIFF of 8
+        setHeightAt(map, 11, 10, 23); // diff = 13 from (10,10), exceeds MAX_SLOPE_DIFF of 12
         setHeightAt(map, 10, 11, 10);
         setHeightAt(map, 11, 11, 10);
         expect(
@@ -152,20 +152,25 @@ describe('computeSlopeDifficulty', () => {
         // Flat terrain -> Easy
         expect(computeSlopeDifficulty(tiles2x2, map.groundHeight, map.mapSize)).toBe(PlacementStatus.Easy);
 
-        // Gentle slope (diff 1) -> Medium
+        // Gentle slope (diff 1) -> Easy (≤2)
         setHeightAt(map, 10, 10, 10);
         setHeightAt(map, 11, 10, 11);
         setHeightAt(map, 10, 11, 10);
         setHeightAt(map, 11, 11, 11);
+        expect(computeSlopeDifficulty(tiles2x2, map.groundHeight, map.mapSize)).toBe(PlacementStatus.Easy);
+
+        // Medium slope (diff 4) -> Medium (3-5)
+        setHeightAt(map, 11, 10, 14);
+        setHeightAt(map, 11, 11, 14);
         expect(computeSlopeDifficulty(tiles2x2, map.groundHeight, map.mapSize)).toBe(PlacementStatus.Medium);
 
-        // Moderate slope (diff 8) -> Difficult
-        setHeightAt(map, 11, 10, 18);
-        setHeightAt(map, 11, 11, 18);
+        // Steep slope (diff 10) -> Difficult (6-12)
+        setHeightAt(map, 11, 10, 20);
+        setHeightAt(map, 11, 11, 20);
         expect(computeSlopeDifficulty(tiles2x2, map.groundHeight, map.mapSize)).toBe(PlacementStatus.Difficult);
 
-        // Steep slope (diff 10 > MAX_SLOPE_DIFF of 8) -> TooSteep
-        setHeightAt(map, 11, 10, 20);
+        // Too steep (diff 13 > MAX_SLOPE_DIFF of 12) -> TooSteep
+        setHeightAt(map, 11, 10, 23);
         setHeightAt(map, 11, 11, 10);
         expect(computeSlopeDifficulty(tiles2x2, map.groundHeight, map.mapSize)).toBe(PlacementStatus.TooSteep);
     });

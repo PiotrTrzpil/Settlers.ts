@@ -25,18 +25,19 @@ const UNBUILDABLE_COLORS: Record<number, number[]> = {
 /**
  * 10-color gradient from deep green (flat) to deep cherry (steep).
  * Index 0 = flattest (deep green), Index 9 = steepest buildable (deep cherry/red).
+ * Weighted toward green — most buildable terrain should look green/yellow.
  */
 const SLOPE_GRADIENT: number[][] = [
     [0.0, 0.5, 0.1, 0.9], // 0: Deep forest green - perfectly flat
-    [0.0, 0.7, 0.1, 0.9], // 1: Dark green
-    [0.2, 0.8, 0.1, 0.9], // 2: Green
-    [0.4, 0.8, 0.0, 0.9], // 3: Yellow-green
-    [0.6, 0.7, 0.0, 0.9], // 4: Olive/yellow
-    [0.8, 0.6, 0.0, 0.9], // 5: Gold/orange
-    [0.9, 0.4, 0.0, 0.9], // 6: Orange
-    [0.9, 0.2, 0.1, 0.9], // 7: Red-orange
-    [0.8, 0.1, 0.1, 0.9], // 8: Red
-    [0.6, 0.0, 0.15, 0.9], // 9: Deep cherry - steepest buildable
+    [0.0, 0.6, 0.1, 0.9], // 1: Forest green
+    [0.0, 0.7, 0.1, 0.9], // 2: Dark green
+    [0.1, 0.75, 0.1, 0.9], // 3: Green
+    [0.2, 0.8, 0.0, 0.9], // 4: Bright green
+    [0.4, 0.8, 0.0, 0.9], // 5: Yellow-green
+    [0.6, 0.7, 0.0, 0.9], // 6: Olive/yellow
+    [0.8, 0.5, 0.0, 0.9], // 7: Gold/orange
+    [0.9, 0.3, 0.0, 0.9], // 8: Orange-red
+    [0.7, 0.1, 0.1, 0.9], // 9: Deep cherry - steepest buildable
 ];
 
 /** Legacy STATUS_COLORS for compatibility with tests */
@@ -44,8 +45,8 @@ const STATUS_COLORS: Record<PlacementStatus, number[]> = {
     [PlacementStatus.InvalidTerrain]: UNBUILDABLE_COLORS[PlacementStatus.InvalidTerrain]!,
     [PlacementStatus.Occupied]: UNBUILDABLE_COLORS[PlacementStatus.Occupied]!,
     [PlacementStatus.TooSteep]: UNBUILDABLE_COLORS[PlacementStatus.TooSteep]!,
-    [PlacementStatus.Difficult]: SLOPE_GRADIENT[7]!,
-    [PlacementStatus.Medium]: SLOPE_GRADIENT[4]!,
+    [PlacementStatus.Difficult]: SLOPE_GRADIENT[8]!,
+    [PlacementStatus.Medium]: SLOPE_GRADIENT[5]!,
     [PlacementStatus.Easy]: SLOPE_GRADIENT[0]!,
     [PlacementStatus.OutOfTerritory]: UNBUILDABLE_COLORS[PlacementStatus.InvalidTerrain]!,
 };
