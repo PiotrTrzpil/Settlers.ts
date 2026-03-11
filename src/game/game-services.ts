@@ -168,8 +168,8 @@ export class GameServices {
         // When any unit changes type (carrier↔specialist, soldier→death-angel, etc.),
         // clear the stale animation so the idle/task controller re-derives the correct
         // sequence key for the new unit type on the next tick.
-        this.subscriptions.subscribe(eventBus, 'unit:transformed', ({ entityId }) =>
-            this.visualService.clearAnimation(entityId)
+        this.subscriptions.subscribe(eventBus, 'unit:transformed', ({ unitId }) =>
+            this.visualService.clearAnimation(unitId)
         );
 
         // 2. Inventory system — instantiated directly (not a feature).
@@ -224,14 +224,14 @@ export class GameServices {
                 return true;
             },
             getEntity: gameState.getEntity.bind(gameState),
-            tileOccupancy: gameState.tileOccupancy,
+            unitOccupancy: gameState.unitOccupancy,
             buildingOccupancy: gameState.buildingOccupancy,
             buildingFootprint: gameState.buildingFootprint,
         });
         gameState.initMovement(this.movement);
 
         // Create movement controllers for units on spawn (skip ephemeral angels)
-        this.subscriptions.subscribe(eventBus, 'entity:created', ({ entityId, type, subType, x, y }) => {
+        this.subscriptions.subscribe(eventBus, 'entity:created', ({ entityId, entityType: type, subType, x, y }) => {
             if (type === EntityType.Unit && !isAngelUnitType(subType as UnitType)) {
                 const speed = getUnitTypeSpeed(subType as UnitType);
                 this.movement.createController(entityId, x, y, speed);
@@ -325,7 +325,7 @@ export class GameServices {
         }
 
         // 7. Core entity lifecycle — too small to be a feature.
-        this.subscriptions.subscribe(eventBus, 'entity:created', ({ entityId, type }) => {
+        this.subscriptions.subscribe(eventBus, 'entity:created', ({ entityId, entityType: type }) => {
             if (type === EntityType.StackedPile) {
                 gameState.piles.createState(entityId);
             }

@@ -86,20 +86,14 @@ export interface FindEmptySpotConfig {
     proximityEntities?: Iterable<Entity>;
     /** If true, all 4 cardinal neighbors must also be free (no entity occupying them). */
     requireFreeNeighbors?: boolean;
-    /** When provided, tiles within each ring are shuffled for natural-looking placement. */
+    /** When provided, used as tiebreaker among equidistant valid spots. */
     rng?: SeededRng;
 }
 
-/**
- * Find an empty tile in expanding rings around a center position.
- * Ensures minimum distance to similar entities (e.g., trees for foresters, grain for farmers).
- *
- * The search expands outward ring-by-ring so nearer spots are preferred.
- */
 /** Check whether a tile is a valid empty spot given the config constraints. */
 function isValidSpot(tile: { x: number; y: number }, config: FindEmptySpotConfig): boolean {
     if (tile.x < 0 || tile.y < 0) return false;
-    if (config.gameState.getEntityAt(tile.x, tile.y)) return false;
+    if (config.gameState.getGroundEntityAt(tile.x, tile.y)) return false;
     if (config.requireFreeNeighbors && !hasFreNeighbors(config.gameState, tile.x, tile.y)) return false;
     if (
         config.minDistanceSq > 0 &&
@@ -115,39 +109,67 @@ function isValidSpot(tile: { x: number; y: number }, config: FindEmptySpotConfig
     return true;
 }
 
-/** Search a single ring for a valid spot, optionally shuffling tile order. */
-function searchRing(
-    cx: number,
-    cy: number,
-    radius: number,
-    config: FindEmptySpotConfig
-): { x: number; y: number } | null {
-    if (config.rng) {
-        const tiles = Array.from(ringTiles(cx, cy, radius));
-        config.rng.shuffle(tiles);
-        for (const tile of tiles) {
-            if (isValidSpot(tile, config)) return tile;
-        }
-    } else {
+type SpotCandidate = { x: number; y: number; distSq: number };
+
+/** Collect valid spots in expanding rings, stopping once no closer spots are possible. */
+function collectCandidates(cx: number, cy: number, config: FindEmptySpotConfig): SpotCandidate[] {
+    const minRadius = config.minRadius ?? 2;
+    const candidates: SpotCandidate[] = [];
+
+    for (let radius = minRadius; radius <= config.searchRadius; radius++) {
         for (const tile of ringTiles(cx, cy, radius)) {
-            if (isValidSpot(tile, config)) return tile;
+            if (!isValidSpot(tile, config)) continue;
+            const dx = tile.x - cx;
+            const dy = tile.y - cy;
+            candidates.push({ x: tile.x, y: tile.y, distSq: dx * dx + dy * dy });
+        }
+
+        // Early exit: ring corners (distSq = 2r²) can be farther than next ring's
+        // edge midpoints (distSq = (r+1)²). Continue expanding until the next ring
+        // can only produce spots farther than all current candidates.
+        if (candidates.length > 0) {
+            const nextMinDistSq = (radius + 1) * (radius + 1);
+            const maxCandidateDistSq = candidates.reduce((max, c) => Math.max(max, c.distSq), 0);
+            if (nextMinDistSq > maxCandidateDistSq) break;
         }
     }
-    return null;
+
+    return candidates;
 }
 
+/** Pick the closest candidate, using RNG as tiebreaker among equidistant spots. */
+function pickClosest(candidates: SpotCandidate[], rng?: SeededRng): SpotCandidate {
+    candidates.sort((a, b) => a.distSq - b.distSq);
+
+    if (rng) {
+        const minDist = candidates[0]!.distSq;
+        let tieCount = 1;
+        while (tieCount < candidates.length && candidates[tieCount]!.distSq === minDist) {
+            tieCount++;
+        }
+        return candidates[rng.nextInt(tieCount)]!;
+    }
+
+    return candidates[0]!;
+}
+
+/**
+ * Find an empty tile nearest to the center, with RNG as tiebreaker among equidistant spots.
+ *
+ * Scans tiles in expanding rings, collects valid spots with their actual squared distance,
+ * then picks the closest one. When multiple spots share the minimum distance, RNG breaks the tie
+ * for natural-looking variation.
+ */
 export function findEmptySpot(
     cx: number,
     cy: number,
     config: FindEmptySpotConfig
 ): { entityId: null; x: number; y: number } | null {
-    const minRadius = config.minRadius ?? 2;
+    const candidates = collectCandidates(cx, cy, config);
+    if (candidates.length === 0) return null;
 
-    for (let radius = minRadius; radius <= config.searchRadius; radius++) {
-        const spot = searchRing(cx, cy, radius, config);
-        if (spot) return { entityId: null, x: spot.x, y: spot.y };
-    }
-    return null;
+    const pick = pickClosest(candidates, config.rng);
+    return { entityId: null, x: pick.x, y: pick.y };
 }
 
 function isTooClose(
@@ -176,7 +198,7 @@ const CARDINAL_OFFSETS = [
 
 function hasFreNeighbors(gameState: GameState, x: number, y: number): boolean {
     for (const { dx, dy } of CARDINAL_OFFSETS) {
-        if (gameState.getEntityAt(x + dx, y + dy)) return false;
+        if (gameState.getGroundEntityAt(x + dx, y + dy)) return false;
     }
     return true;
 }

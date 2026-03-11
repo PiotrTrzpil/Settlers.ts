@@ -15,6 +15,7 @@ import { BuildingType } from '../buildings/building-type';
 import { UnitType } from '../core/unit-types';
 import { EntityType } from '../entity';
 import { EMaterialType } from '../economy/material-type';
+import { MapObjectType } from '../types/map-object-types';
 import type { GameEvents } from '../event-bus';
 
 /** Join non-empty parts with spaces. */
@@ -34,7 +35,8 @@ export const EventFmt = {
 
     'building:removed': (e: GameEvents['building:removed']) => BuildingType[e.buildingType],
 
-    'terrain:modified': () => '',
+    'terrain:modified': (e: GameEvents['terrain:modified']) =>
+        e.x !== undefined ? `${e.reason} at (${e.x},${e.y})` : e.reason,
 
     'unit:spawned': (e: GameEvents['unit:spawned']) => `${UnitType[e.unitType]} at (${e.x},${e.y})`,
 
@@ -46,6 +48,9 @@ export const EventFmt = {
 
     'movement:pathFailed': (e: GameEvents['movement:pathFailed']) =>
         `(${e.fromX},${e.fromY})→(${e.toX},${e.toY}) NO PATH`,
+
+    'movement:teleport': (e: GameEvents['movement:teleport']) =>
+        `jumped ${e.distance.toFixed(2)} tiles | state=${e.state} prevState=${e.prevState}`,
 
     'movement:blocked': (e: GameEvents['movement:blocked']) =>
         `at (${e.x},${e.y}) by #${e.blockerId}${e.isBuilding ? ' (building)' : ''}`,
@@ -67,14 +72,16 @@ export const EventFmt = {
         ),
 
     'movement:bump': (e: GameEvents['movement:bump']) =>
-        `#${e.bumperId} pushed #${e.occupantId} (${e.fromX},${e.fromY})→(${e.toX},${e.toY})`,
+        `#${e.unitId} pushed #${e.occupantId} (${e.fromX},${e.fromY})→(${e.toX},${e.toY})`,
 
     // Entity lifecycle
     'entity:created': (e: GameEvents['entity:created']) => {
         let typeName = `sub=${e.subType}`;
-        if (e.type === EntityType.Building) typeName = BuildingType[e.subType]!;
-        else if (e.type === EntityType.Unit) typeName = UnitType[e.subType]!;
-        return `${EntityType[e.type]} ${typeName} at (${e.x},${e.y})`;
+        if (e.entityType === EntityType.Building) typeName = BuildingType[e.subType]!;
+        else if (e.entityType === EntityType.Unit) typeName = UnitType[e.subType]!;
+        else if (e.entityType === EntityType.StackedPile) typeName = EMaterialType[e.subType]!;
+        else if (e.entityType === EntityType.MapObject) typeName = MapObjectType[e.subType] ?? `sub=${e.subType}`;
+        return `${typeName} at (${e.x},${e.y})`;
     },
 
     'entity:removed': (e: GameEvents['entity:removed']) => `#${e.entityId}`,
@@ -93,9 +100,6 @@ export const EventFmt = {
         parts(e.jobPart, `→${e.sequenceKey}`, e.loop && 'loop'),
 
     'choreo:waitingAtHome': (e: GameEvents['choreo:waitingAtHome']) => `home=#${e.homeBuilding} ${e.reason}`,
-
-    'choreo:idleSkipped': (e: GameEvents['choreo:idleSkipped']) =>
-        parts(e.reason, e.homeBuilding !== null && `home=#${e.homeBuilding}`),
 
     'settler:taskStarted': (e: GameEvents['settler:taskStarted']) =>
         parts(
@@ -116,10 +120,6 @@ export const EventFmt = {
             e.wasCarrying && 'wasCarrying'
         ),
 
-    'carrier:created': (e: GameEvents['carrier:created']) => `#${e.entityId}`,
-
-    'carrier:removed': (e: GameEvents['carrier:removed']) => `#${e.entityId}`,
-
     'carrier:arrivedForPickup': (e: GameEvents['carrier:arrivedForPickup']) => `at #${e.buildingId}`,
 
     'carrier:arrivedForDelivery': (e: GameEvents['carrier:arrivedForDelivery']) => `at #${e.buildingId}`,
@@ -137,7 +137,7 @@ export const EventFmt = {
         parts(
             `${e.reason}:`,
             `${EMaterialType[e.material]} #${e.sourceBuilding}→#${e.destBuilding}`,
-            e.carrierId !== undefined && `carrier=#${e.carrierId}`
+            e.unitId !== undefined && `carrier=#${e.unitId}`
         ),
 
     'carrier:pickupFailed': (e: GameEvents['carrier:pickupFailed']) =>
@@ -173,15 +173,15 @@ export const EventFmt = {
 
     'construction:diggingStarted': () => '',
     'construction:tileCompleted': (e: GameEvents['construction:tileCompleted']) =>
-        `(${e.tileX},${e.tileY}) h=${e.targetHeight}${e.isFootprint ? ' fp' : ' nb'}`,
+        `(${e.x},${e.y}) h=${e.targetHeight}${e.isFootprint ? ' fp' : ' nb'}`,
     'construction:levelingComplete': () => '',
 
-    'construction:workerAssigned': (e: GameEvents['construction:workerAssigned']) => `${e.role} #${e.workerId}`,
+    'construction:workerAssigned': (e: GameEvents['construction:workerAssigned']) => `${e.role} #${e.unitId}`,
 
-    'construction:workerReleased': (e: GameEvents['construction:workerReleased']) => `${e.role} #${e.workerId}`,
+    'construction:workerReleased': (e: GameEvents['construction:workerReleased']) => `${e.role} #${e.unitId}`,
 
     'construction:workerNeeded': (e: GameEvents['construction:workerNeeded']) =>
-        `${e.role} @ (${e.tileX},${e.tileY}) player=${e.player}`,
+        `${e.role} @ (${e.x},${e.y}) player=${e.player}`,
 
     'construction:materialDelivered': (e: GameEvents['construction:materialDelivered']) => EMaterialType[e.material],
 
@@ -196,10 +196,10 @@ export const EventFmt = {
 
     'combat:unitDefeated': (e: GameEvents['combat:unitDefeated']) => `by #${e.defeatedBy}`,
 
-    'barracks:trainingStarted': (e: GameEvents['barracks:trainingStarted']) => `carrier=#${e.carrierId}`,
+    'barracks:trainingStarted': (e: GameEvents['barracks:trainingStarted']) => `carrier=#${e.unitId}`,
 
     'barracks:trainingCompleted': (e: GameEvents['barracks:trainingCompleted']) =>
-        `${UnitType[e.unitType]} L${e.level} → #${e.soldierId}`,
+        `${UnitType[e.unitType]} L${e.soldierLevel} → #${e.unitId}`,
 
     'barracks:trainingInterrupted': (e: GameEvents['barracks:trainingInterrupted']) => e.reason,
 
@@ -208,7 +208,7 @@ export const EventFmt = {
     'logistics:requestRemoved': (e: GameEvents['logistics:requestRemoved']) => `req=${e.requestId}`,
 
     'logistics:requestAssigned': (e: GameEvents['logistics:requestAssigned']) =>
-        `req=${e.requestId} carrier=#${e.carrierId} src=#${e.sourceBuilding}`,
+        `req=${e.requestId} carrier=#${e.unitId} src=#${e.sourceBuilding}`,
 
     'logistics:requestFulfilled': (e: GameEvents['logistics:requestFulfilled']) =>
         `${EMaterialType[e.materialType]} req=${e.requestId}`,
@@ -223,38 +223,39 @@ export const EventFmt = {
         `building=#${e.buildingId} ${e.piles.size} piles`,
 
     'recruitment:started': (e: GameEvents['recruitment:started']) =>
-        `carrier=#${e.carrierId} → ${UnitType[e.targetUnitType]} pile=#${e.pileEntityId} site=#${e.siteId}`,
+        `carrier=#${e.unitId} → ${UnitType[e.targetUnitType]} pile=#${e.pileEntityId} site=#${e.buildingId}`,
 
     'recruitment:completed': (e: GameEvents['recruitment:completed']) =>
-        `carrier=#${e.carrierId} → ${UnitType[e.targetUnitType]}`,
+        `carrier=#${e.unitId} → ${UnitType[e.targetUnitType]}`,
 
-    'recruitment:failed': (e: GameEvents['recruitment:failed']) => `carrier=#${e.carrierId} ${e.reason}`,
+    'recruitment:failed': (e: GameEvents['recruitment:failed']) => `carrier=#${e.unitId} ${e.reason}`,
 
     'unit:transformed': (e: GameEvents['unit:transformed']) =>
-        `#${e.entityId} ${UnitType[e.fromType]} → ${UnitType[e.toType]}`,
+        `#${e.unitId} ${UnitType[e.fromType]} → ${UnitType[e.toType]}`,
 
     'garrison:unitEntered': (e: GameEvents['garrison:unitEntered']) =>
-        `unit=#${e.unitId} entered tower=#${e.buildingId}`,
-    'garrison:unitExited': (e: GameEvents['garrison:unitExited']) => `unit=#${e.unitId} exited tower=#${e.buildingId}`,
+        `${UnitType[e.unitType]} #${e.unitId} entered tower=#${e.buildingId}`,
+    'garrison:unitExited': (e: GameEvents['garrison:unitExited']) =>
+        `${UnitType[e.unitType]} #${e.unitId} exited tower=#${e.buildingId}`,
     'garrison:bowmanFired': (e: GameEvents['garrison:bowmanFired']) =>
-        `bowman=#${e.bowmanId} in tower=#${e.buildingId} fired at #${e.targetId} for ${e.damage} dmg`,
+        `bowman=#${e.unitId} in tower=#${e.buildingId} fired at #${e.targetId} for ${e.damage} dmg`,
     'settler-location:approachInterrupted': (e: GameEvents['settler-location:approachInterrupted']) =>
-        `settler=#${e.settlerId} approach interrupted by building=#${e.buildingId} removal`,
+        `settler=#${e.unitId} approach interrupted by building=#${e.buildingId} removal`,
     'settler-location:entered': (e: GameEvents['settler-location:entered']) =>
-        `settler=#${e.settlerId} entered building=#${e.buildingId}`,
+        `settler=#${e.unitId} entered building=#${e.buildingId}`,
 
     'siege:started': (e: GameEvents['siege:started']) => `building=#${e.buildingId} attacker=player${e.attackerPlayer}`,
     'siege:defenderEjected': (e: GameEvents['siege:defenderEjected']) =>
-        `defender=#${e.defenderId} from building=#${e.buildingId}`,
+        `defender=#${e.unitId} from building=#${e.buildingId}`,
     'siege:buildingCaptured': (e: GameEvents['siege:buildingCaptured']) =>
         `building=#${e.buildingId} player${e.oldPlayer}→player${e.newPlayer}`,
     'building:ownerChanged': (e: GameEvents['building:ownerChanged']) =>
-        `#${e.entityId} ${BuildingType[e.buildingType]} player${e.oldPlayer}→player${e.newPlayer}`,
+        `#${e.buildingId} ${BuildingType[e.buildingType]} player${e.oldPlayer}→player${e.newPlayer}`,
 
     'building:workerSpawned': (e: GameEvents['building:workerSpawned']) =>
-        `building=${e.buildingId} settler=${e.settlerId}`,
+        `building=${e.buildingId} settler=${e.unitId}`,
     'building:workerLost': (e: GameEvents['building:workerLost']) =>
-        `building=${e.buildingId} settler=${e.settlerId} player=${e.player}`,
+        `building=${e.buildingId} settler=${e.unitId} player=${e.player}`,
     'game:playerEliminated': (e: GameEvents['game:playerEliminated']) => `player ${e.player} eliminated`,
     'game:ended': (e: GameEvents['game:ended']) => `winner=${e.winner ?? 'none'} reason=${e.reason}`,
 } satisfies { [K in keyof GameEvents]: (e: GameEvents[K]) => string };

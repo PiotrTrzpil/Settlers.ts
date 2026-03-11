@@ -1,38 +1,19 @@
 import { FileManager } from '@/utilities/file-manager';
 import { IMapLoader } from '@/resources/map/imap-loader';
-import { GameState } from './game-state';
+import { GameCore } from './game-core';
 import { GameLoop } from './game-loop';
-import { GameServices } from './game-services';
-import { type Command, type CommandResult, CommandHandlerRegistry, registerAllHandlers } from './commands';
-import { TerrainData } from './terrain';
-import { populateMapObjectsFromEntityData } from './systems/map-objects';
-import { expandTrees } from './features/trees/tree-expansion';
-import { populateMapBuildings } from './features/building-construction';
-import { populateMapSettlers } from './systems/map-settlers';
-import { populateMapStacks } from './systems/map-stacks';
 import { SoundManager } from './audio';
-import { Race, s4TribeToRace, loadSavedRace } from './core/race';
-import { EventBus } from './event-bus';
+import { loadSavedRace } from './core/race';
 import { toastError } from './ui/toast-notifications';
-import { GameSettingsManager } from './game-settings';
 import { GameViewState } from './ui/game-view-state';
 import { setDirectionRunLength } from './systems/pathfinding';
 import { watch } from 'vue';
 import type { FrameRenderTiming } from './renderer/renderer';
-import type { MapObjectData } from '@/resources/map/map-entity-data';
-import type { MapLoadTimings } from './debug/debug-stats';
 import { debugStats } from './debug/debug-stats';
 import type { SystemState } from './game-loop';
 import { loadInitialState, restoreFromSnapshot, restoreInitialTerrain } from './state/game-state-persistence';
-import type { PlacementFilter } from './systems/placement';
-import {
-    createTerritoryPlacementFilter,
-    createTerritoryMatchFilter,
-    createTerritoryCarrierFilter,
-} from './features/territory';
 
 // Scripting is loaded dynamically to avoid bundling Lua when disabled
-// import { ScriptService, type ScriptLoadResult } from './scripting';
 type ScriptLoadResult = { success: boolean; scriptPath: string | null; error?: string };
 
 /**
@@ -44,23 +25,12 @@ interface IScriptService {
     destroy(): void;
 }
 
-/** contains the game state */
-export class Game {
-    /** Terrain data — single owner for ground type, ground height, and map dimensions */
-    public readonly terrain: TerrainData;
+/** Browser-facing game class — extends GameCore with UI, audio, and render loop. */
+export class Game extends GameCore {
     public fileManager: FileManager;
-    public readonly mapLoader: IMapLoader;
-    public state: GameState;
-    public readonly eventBus: EventBus;
-
-    /** Game settings — user preferences (camera, audio, graphics, debug) */
-    public readonly settings: GameSettingsManager;
 
     /** Reactive bridge between GameState and Vue components */
     public readonly viewState: GameViewState;
-
-    /** All game managers and domain systems (composition root) */
-    public readonly services: GameServices;
 
     /** Frame loop — private; use delegation methods on Game instead */
     private readonly _gameLoop: GameLoop;
@@ -71,19 +41,8 @@ export class Game {
     /** Callback to sync Territory feature toggle with visual layer visibility */
     private _onTerritoryToggle: ((enabled: boolean) => void) | null = null;
 
-    /** Whether territory boundary dots are visible (toggled by debug panel) */
-    private _territoryVisible = false;
-
     /** Stop handle for the pathStraightness watcher — must be called in destroy() */
     private readonly _stopPathWatcher: () => void;
-
-    /** Territory-based placement filter — created after terrain data is available */
-    private _placementFilter: PlacementFilter | null = null;
-
-    /** Public accessor for the current placement filter (used by renderer/UI) */
-    get placementFilter(): PlacementFilter | null {
-        return this._placementFilter;
-    }
 
     /** Current interaction mode */
     public mode: string = 'select';
@@ -91,68 +50,29 @@ export class Game {
     /** Building type to place (when mode === 'place_building') */
     public placeBuildingType = 0;
 
-    /** Current player index */
-    public currentPlayer = 0;
-
     /** When true, renderers use procedural textures instead of loading game assets */
     public useProceduralTextures = false;
-
-    /** Per-player race mapping (player index → Race enum value), populated from map data */
-    public readonly playerRaces: Map<number, Race> = new Map();
 
     public constructor(fileManager: FileManager, mapLoader: IMapLoader) {
         const start = performance.now();
         const mlt = debugStats.state.mapLoadTimings;
-        this.fileManager = fileManager;
-        this.mapLoader = mapLoader;
-        this.terrain = new TerrainData(
-            mapLoader.landscape.getGroundType(),
-            mapLoader.landscape.getGroundHeight(),
-            mapLoader.mapSize
-        );
+
+        super(mapLoader);
+
         mlt.terrain = Math.round(performance.now() - start);
 
-        const initStart = performance.now();
-        this.eventBus = new EventBus();
+        this.fileManager = fileManager;
         this.eventBus.onHandlerError = (event, err) => toastError('EventBus', `${event}: ${err.message}`);
-        this.state = new GameState(this.eventBus);
-        this.settings = new GameSettingsManager();
         this.viewState = new GameViewState();
 
         // Sync pathfinding direction run length from settings (initial + reactive).
         // Store stop handle so the watcher is cleaned up in destroy(), preventing leaks.
-        setDirectionRunLength(this.settings.state.pathStraightness);
         this._stopPathWatcher = watch(
             () => this.settings.state.pathStraightness,
             v => setDirectionRunLength(v)
         );
 
-        // Command registry is populated after GameServices creates all systems.
-        // GameServices receives a lazy executeCommand that delegates to the registry.
-        this.commandRegistry = new CommandHandlerRegistry();
-        this.services = new GameServices(this.state, this.eventBus, cmd => this.commandRegistry.execute(cmd));
-        this.services.setTerrainData(this.terrain, mapLoader.landscape.getResourceData?.());
-
-        // Register feature-provided command handlers first, then central handlers.
-        for (const [type, handler] of this.services.getFeatureCommandHandlers()) {
-            this.commandRegistry.register(type, handler);
-        }
-        registerAllHandlers(this.commandRegistry, {
-            state: this.state,
-            terrain: this.terrain,
-            eventBus: this.eventBus,
-            settings: this.settings.state,
-            settlerTaskSystem: this.services.settlerTaskSystem,
-            constructionSiteManager: this.services.constructionSiteManager,
-            combatSystem: this.services.combatSystem,
-            storageFilterManager: this.services.storageFilterManager,
-            inventoryManager: this.services.inventoryManager,
-            unitReservation: this.services.unitReservation,
-            getPlacementFilter: () => this._placementFilter,
-            recruitSystem: this.services.recruitSystem,
-            unitTransformer: this.services.unitTransformer,
-        });
-        // Territory filters start as null (off). Enabled via the Territory feature toggle.
+        const initStart = performance.now();
 
         // Create frame loop and register tick systems
         this._gameLoop = new GameLoop(this.state, this.services.visualService, this.settings.state, this.viewState);
@@ -161,19 +81,13 @@ export class Game {
         }
 
         // Register feature toggles
-        const dispatcher = this.services.logisticsDispatcher;
         this._gameLoop.registerFeatureToggle({
             name: 'Territory',
             group: 'World',
-            get: () => this._territoryVisible,
+            get: () => this.territoryEnabled,
             set: v => {
-                this._territoryVisible = v;
+                this.setTerritoryEnabled(v);
                 this._onTerritoryToggle?.(v);
-                // Toggle territory enforcement for placement and logistics
-                const tm = this.services.territoryManager;
-                this._placementFilter = v ? createTerritoryPlacementFilter(tm) : null;
-                dispatcher.setMatchFilter(v ? createTerritoryMatchFilter(tm) : null);
-                dispatcher.setCarrierFilter(v ? createTerritoryCarrierFilter(tm) : null);
             },
         });
 
@@ -185,17 +99,6 @@ export class Game {
             this._gameLoop.notifyEntityRemoved(entityId);
         });
         mlt.gameInit = Math.round(performance.now() - initStart);
-
-        // Scripting system is initialized lazily when loadScript is called
-        // This avoids bundling Lua/wasmoon when scripting is disabled
-
-        this.populateMapEntities(mapLoader);
-
-        // Assign workers that are positioned inside their matching building's footprint
-        this.services.settlerTaskSystem.assignInitialBuildingWorkers();
-
-        // Set local player for victory conditions after map populates currentPlayer
-        this.services.victorySystem.setLocalPlayer(this.currentPlayer);
 
         // Initialize Audio (async init called from constructor — sonarjs/no-async-constructor)
         // eslint-disable-next-line sonarjs/no-async-constructor -- fire-and-forget audio init, failure is non-fatal
@@ -224,134 +127,8 @@ export class Game {
         );
     }
 
-    /** Load players, objects, buildings, settlers, and pile stacks from parsed map data. */
-    private populateMapEntities(mapLoader: IMapLoader): void {
-        const mlt = debugStats.state.mapLoadTimings;
-        const entityData = mapLoader.entityData;
-        if (!entityData) return;
-
-        // Build per-player race mapping
-        for (const p of entityData.players) {
-            this.playerRaces.set(p.playerIndex, s4TribeToRace(p.tribe));
-        }
-        this.state.playerRaces = this.playerRaces;
-
-        // Default to first player from map data
-        if (entityData.players.length > 0) {
-            this.currentPlayer = entityData.players[0]!.playerIndex;
-        }
-
-        // Trees + decorations
-        if (entityData.objects.length) {
-            const t0 = performance.now();
-            this.populateMapTrees(entityData.objects, mlt);
-            // populateMapTrees records its own timings for trees + expansion
-            mlt.populateTrees += Math.round(performance.now() - t0);
-        }
-
-        // Buildings
-        if (entityData.buildings.length) {
-            const t0 = performance.now();
-            const count = populateMapBuildings(this.state, entityData.buildings, {
-                eventBus: this.eventBus,
-                terrain: this.terrain,
-            });
-            mlt.populateBuildings = Math.round(performance.now() - t0);
-            if (count > 0)
-                console.log(`[${performance.now().toFixed(0)}ms] Game: Loaded ${count} buildings from map data`);
-        }
-
-        // Settlers (units)
-        if (entityData.settlers.length) {
-            const t0 = performance.now();
-            const count = populateMapSettlers(this.state, entityData.settlers, this.eventBus);
-            mlt.populateUnits = Math.round(performance.now() - t0);
-            if (count > 0)
-                console.log(`[${performance.now().toFixed(0)}ms] Game: Loaded ${count} settlers from map data`);
-        }
-
-        // Resource stacks
-        if (entityData.stacks.length) {
-            const t0 = performance.now();
-            const count = populateMapStacks(this.state, entityData.stacks, this.eventBus);
-            mlt.populateStacks = Math.round(performance.now() - t0);
-            if (count > 0)
-                console.log(`[${performance.now().toFixed(0)}ms] Game: Loaded ${count} pile stacks from map data`);
-        }
-    }
-
     public get soundManager(): SoundManager {
         return SoundManager.getInstance();
-    }
-
-    /** Load trees/decorations from map objects and optionally expand forests. */
-    private populateMapTrees(objects: MapObjectData[], mlt: MapLoadTimings): void {
-        const beforeCount = this.state.entities.length;
-        const seedCount = populateMapObjectsFromEntityData(this.state, objects, this.terrain);
-        const totalAdded = this.state.entities.length - beforeCount;
-        const decoCount = totalAdded - seedCount;
-        console.log(
-            `[${performance.now().toFixed(0)}ms] Game: Loaded ${seedCount} seed trees + ${decoCount} decorations from map data`
-        );
-
-        const expandRaw = localStorage.getItem('settlers_treeExpansion');
-        const expandEnabled = expandRaw !== 'false';
-        if (seedCount > 0 && expandEnabled) {
-            const t0 = performance.now();
-            const expandedCount = expandTrees(this.state, this.terrain, {
-                radius: 10,
-                density: 0.04,
-                minSpacing: 1,
-            });
-            mlt.treeExpansion = Math.round(performance.now() - t0);
-            console.log(
-                `[${performance.now().toFixed(0)}ms] Game: Expanded into ${expandedCount} additional trees (from ${seedCount} seeds)`
-            );
-        } else if (!expandEnabled) {
-            console.log(
-                `Game: Tree expansion DISABLED (localStorage=${expandRaw}), showing ${seedCount} seed trees only`
-            );
-        }
-    }
-
-    /** Command handler registry — handlers bound with specific deps at init */
-    private readonly commandRegistry: CommandHandlerRegistry;
-
-    /** Execute a command against the game state */
-    public execute(cmd: Command): CommandResult {
-        return this.commandRegistry.execute(cmd);
-    }
-
-    /** Find the starting position for the current player from map data */
-    public findPlayerStartPosition(): { x: number; y: number } | null {
-        const playerInfo = this.mapLoader.entityData?.players.find(p => p.playerIndex === this.currentPlayer);
-        if (playerInfo?.startX != null && playerInfo.startY != null) {
-            return { x: playerInfo.startX, y: playerInfo.startY };
-        }
-        return null;
-    }
-
-    /** Find the first buildable land tile, spiraling out from map center */
-    // eslint-disable-next-line sonarjs/cognitive-complexity -- spiral search with per-tile boundary checks
-    public findLandTile(): { x: number; y: number } | null {
-        const { width: w, height: h } = this.terrain;
-        const cx = Math.floor(w / 2);
-        const cy = Math.floor(h / 2);
-
-        for (let r = 0; r < Math.max(w, h) / 2; r++) {
-            for (let dx = -r; dx <= r; dx++) {
-                for (let dy = -r; dy <= r; dy++) {
-                    if (Math.abs(dx) !== r && Math.abs(dy) !== r) continue;
-                    const tx = cx + dx;
-                    const ty = cy + dy;
-                    if (tx < 0 || ty < 0 || tx >= w || ty >= h) continue;
-                    if (this.terrain.isBuildable(tx, ty)) {
-                        return { x: tx, y: ty };
-                    }
-                }
-            }
-        }
-        return null;
     }
 
     /**
@@ -476,7 +253,7 @@ export class Game {
     public onTerritoryToggle(callback: (enabled: boolean) => void): void {
         this._onTerritoryToggle = callback;
         // Fire immediately with current state so visual matches on connect
-        callback(this._territoryVisible);
+        callback(this.territoryEnabled);
     }
 
     private static readonly FEATURE_STORAGE_KEY = 'settlers-feature-toggles';
@@ -496,12 +273,11 @@ export class Game {
     }
 
     /** Destroy the game and clean up all resources */
-    public destroy(): void {
+    public override destroy(): void {
         this._stopPathWatcher();
-        this.settings.destroy();
         this.soundManager.unload();
         this.scriptService?.destroy();
-        this.services.destroy();
         this._gameLoop.destroy();
+        super.destroy();
     }
 }

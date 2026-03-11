@@ -43,6 +43,9 @@ export class MovementController {
     // --- Busy state (pick/put animation — unbumpable) ---
     private _busy = false;
 
+    // --- Cumulative wait time (not reset by repath, only by successful steps) ---
+    private _cumulativeWaitTime = 0;
+
     // --- Teleport detection ---
     private _lastVisualX = 0;
     private _lastVisualY = 0;
@@ -140,6 +143,14 @@ export class MovementController {
         return this._phase.tag === 'moving' ? this._phase.waitTime : 0;
     }
 
+    /**
+     * Cumulative wait time across repaths. Unlike waitTime, this is NOT reset by repath —
+     * only by successful steps or new paths. Used for giveup decisions.
+     */
+    get cumulativeWaitTime(): number {
+        return this._cumulativeWaitTime;
+    }
+
     /** True when the unit has a path but is blocked waiting for an occupied tile. */
     get isWaiting(): boolean {
         return this._phase.tag === 'moving' && this._phase.waitTime > 0 && !this.isInTransit;
@@ -165,6 +176,7 @@ export class MovementController {
         const visualBefore = this.computeVisualPosition();
 
         this._phase = { tag: 'moving', path: [...path], pathIndex: 0, waitTime: 0 };
+        this._cumulativeWaitTime = 0;
 
         if (!this.isInTransit) {
             this._prevTileX = this._tileX;
@@ -184,6 +196,7 @@ export class MovementController {
 
         const visualBefore = this.computeVisualPosition();
         this._phase = { tag: 'moving', path: [...path], pathIndex: 0, waitTime: 0 };
+        this._cumulativeWaitTime = 0;
         this.warnIfTeleported(visualBefore, 'redirectPath');
     }
 
@@ -222,6 +235,7 @@ export class MovementController {
     addWaitTime(deltaSec: number): void {
         if (this._phase.tag === 'moving') {
             this._phase.waitTime += deltaSec;
+            this._cumulativeWaitTime += deltaSec;
         }
     }
 
@@ -270,8 +284,9 @@ export class MovementController {
         p.pathIndex++;
         this._progress -= 1;
 
-        // Successful move → reset wait time
+        // Successful move → reset wait time (both per-repath and cumulative)
         p.waitTime = 0;
+        this._cumulativeWaitTime = 0;
 
         return wp;
     }

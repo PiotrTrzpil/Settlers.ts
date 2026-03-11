@@ -27,7 +27,7 @@ export interface TrainingRecipe {
     /** Base soldier type produced (e.g. Swordsman, not Swordsman2). */
     unitType: UnitType;
     /** Soldier level (1, 2, or 3). */
-    level: number;
+    soldierLevel: number;
 }
 
 /** Controls how the next recipe is selected for a multi-recipe building. */
@@ -37,11 +37,37 @@ export enum ProductionMode {
     Manual = 'manual',
 }
 
+/**
+ * Common optional fields for timeline extraction.
+ * Events that carry entity/player/position data should extend this.
+ */
+/** Timeline log level — controls filtering in `pnpm timeline --level`. */
+export type GameEventLevel = 'debug' | 'info' | 'warn' | 'error';
+
+export interface GameEventBase {
+    player?: number;
+    x?: number;
+    y?: number;
+    /** Optional severity level for timeline filtering. Defaults to 'debug' when omitted. */
+    level?: GameEventLevel;
+    /**
+     * Generic entity ID — only for events where the primary entity is NOT a unit or building
+     * (e.g. tree, crop, stone, pile). Unit events use `unitId`, building events use `buildingId`.
+     */
+    entityId?: number;
+    /** Entity type tag for timeline enrichment (e.g. EntityType.Tree, EntityType.StackedPile). */
+    entityType?: EntityType;
+    /** Optional unit type for timeline enrichment. */
+    unitType?: number;
+    /** Optional building type for timeline enrichment. */
+    buildingType?: number;
+}
+
 /** Event map defining all game events and their payloads */
 export interface GameEvents {
     /** Emitted when a building is successfully placed (construction begins) */
-    'building:placed': {
-        entityId: number;
+    'building:placed': GameEventBase & {
+        buildingId: number;
         buildingType: BuildingType;
         x: number;
         y: number;
@@ -49,7 +75,7 @@ export interface GameEvents {
     };
     /** Emitted when building construction completes */
     'building:completed': {
-        entityId: number;
+        buildingId: number;
         buildingType: BuildingType;
         race: Race;
         /** True when the building was placed as instantly completed (no construction). */
@@ -59,19 +85,24 @@ export interface GameEvents {
     };
     /** Emitted when a building is removed/cancelled */
     'building:removed': {
-        entityId: number;
+        buildingId: number;
         buildingType: BuildingType;
     };
     /** Emitted when a unit is spawned */
-    'unit:spawned': {
-        entityId: number;
+    'unit:spawned': GameEventBase & {
+        unitId: number;
         unitType: UnitType;
         x: number;
         y: number;
         player: number;
     };
     /** Emitted when terrain is modified (e.g., during building construction leveling) */
-    'terrain:modified': Record<string, never>;
+    'terrain:modified': {
+        reason: 'leveling' | 'restore' | 'placement' | 'snapshot';
+        /** Tile coordinates (absent for bulk operations like snapshot restore). */
+        x?: number;
+        y?: number;
+    };
 
     // === Movement Events ===
 
@@ -82,7 +113,7 @@ export interface GameEvents {
      * is now handled by SettlerTaskSystem directly, not via events.
      */
     'unit:movementStopped': {
-        entityId: number;
+        unitId: number;
         direction: number;
     };
 
@@ -90,7 +121,7 @@ export interface GameEvents {
 
     /** A path was requested and found */
     'movement:pathFound': {
-        entityId: number;
+        unitId: number;
         fromX: number;
         fromY: number;
         toX: number;
@@ -100,17 +131,18 @@ export interface GameEvents {
     };
 
     /** A path was requested but no route exists */
-    'movement:pathFailed': {
-        entityId: number;
+    'movement:pathFailed': GameEventBase & {
+        unitId: number;
         fromX: number;
         fromY: number;
         toX: number;
         toY: number;
+        level: 'warn';
     };
 
     /** Unit stepped onto a new tile */
-    'movement:step': {
-        entityId: number;
+    'movement:step': GameEventBase & {
+        unitId: number;
         x: number;
         y: number;
         pathIdx: number;
@@ -118,8 +150,8 @@ export interface GameEvents {
     };
 
     /** Unit's next waypoint is blocked — waiting this tick */
-    'movement:blocked': {
-        entityId: number;
+    'movement:blocked': GameEventBase & {
+        unitId: number;
         x: number;
         y: number;
         blockerId: number;
@@ -128,13 +160,13 @@ export interface GameEvents {
 
     /** Blocked unit escalated (repath or gave up) */
     'movement:escalation': {
-        entityId: number;
+        unitId: number;
         result: 'repath' | 'gave_up';
     };
 
     /** Bump attempt started */
     'movement:bumpAttempt': {
-        entityId: number;
+        unitId: number;
         occupantId: number;
         hasController: boolean;
         occupantState?: string;
@@ -143,7 +175,7 @@ export interface GameEvents {
 
     /** Bump attempt failed — includes reason */
     'movement:bumpFailed': {
-        entityId: number;
+        unitId: number;
         occupantId: number;
         reason: string;
         occupantState?: string;
@@ -153,7 +185,7 @@ export interface GameEvents {
 
     /** Unit bumped an occupant to a neighboring tile */
     'movement:bump': {
-        bumperId: number;
+        unitId: number;
         occupantId: number;
         fromX: number;
         fromY: number;
@@ -161,33 +193,32 @@ export interface GameEvents {
         toY: number;
     };
 
+    /** Visual position jumped discontinuously — likely a bug */
+    'movement:teleport': GameEventBase & {
+        unitId: number;
+        distance: number;
+        state: string;
+        prevState: string;
+        level: 'warn';
+    };
+
     // === Carrier Events ===
-
-    /** Emitted when a carrier is registered */
-    'carrier:created': {
-        entityId: number;
-    };
-
-    /** Emitted when a carrier is removed from the system */
-    'carrier:removed': {
-        entityId: number;
-    };
 
     /** Emitted when a carrier arrives at a building for pickup */
     'carrier:arrivedForPickup': {
-        entityId: number;
+        unitId: number;
         buildingId: number;
     };
 
     /** Emitted when a carrier arrives at a building for delivery */
     'carrier:arrivedForDelivery': {
-        entityId: number;
+        unitId: number;
         buildingId: number;
     };
 
     /** Emitted when a carrier completes a pickup (material transferred) */
     'carrier:pickupComplete': {
-        entityId: number;
+        unitId: number;
         fromBuilding: number;
         material: number;
         amount: number;
@@ -195,7 +226,7 @@ export interface GameEvents {
 
     /** Emitted when a carrier pickup fails (material not available) */
     'carrier:pickupFailed': {
-        entityId: number;
+        unitId: number;
         fromBuilding: number;
         material: number;
         /** Amount that was requested but not available */
@@ -204,7 +235,7 @@ export interface GameEvents {
 
     /** Emitted when a carrier completes a delivery (material transferred) */
     'carrier:deliveryComplete': {
-        entityId: number;
+        unitId: number;
         toBuilding: number;
         material: number;
         amount: number;
@@ -215,7 +246,7 @@ export interface GameEvents {
     /** Emitted when a carrier is successfully assigned to a transport job */
     'carrier:assigned': {
         requestId: number;
-        carrierId: number;
+        unitId: number;
         sourceBuilding: number;
         destBuilding: number;
         material: EMaterialType;
@@ -223,7 +254,7 @@ export interface GameEvents {
 
     /** Emitted when a transport job is cancelled (from any path — task interruption, carrier removal, etc.) */
     'carrier:transportCancelled': {
-        carrierId: number;
+        unitId: number;
         requestId: number;
         reason: string;
     };
@@ -235,7 +266,7 @@ export interface GameEvents {
         sourceBuilding: number;
         destBuilding: number;
         material: EMaterialType;
-        carrierId?: number;
+        unitId?: number;
     };
 
     /**
@@ -283,7 +314,7 @@ export interface GameEvents {
     /** Emitted when a resource request is assigned to a carrier */
     'logistics:requestAssigned': {
         requestId: number;
-        carrierId: number;
+        unitId: number;
         sourceBuilding: number;
     };
 
@@ -330,7 +361,7 @@ export interface GameEvents {
     // === Tree Events ===
 
     /** Emitted when a tree is planted by a forester */
-    'tree:planted': {
+    'tree:planted': GameEventBase & {
         entityId: number;
         treeType: MapObjectType;
         x: number;
@@ -350,7 +381,7 @@ export interface GameEvents {
     // === Crop Events ===
 
     /** Emitted when a crop is planted by a farmer */
-    'crop:planted': {
+    'crop:planted': GameEventBase & {
         entityId: number;
         cropType: MapObjectType;
         x: number;
@@ -372,16 +403,16 @@ export interface GameEvents {
     // === Combat Events ===
 
     /** Emitted when a unit takes damage from combat */
-    'combat:unitAttacked': {
-        attackerId: number;
+    'combat:unitAttacked': GameEventBase & {
+        unitId: number;
         targetId: number;
         damage: number;
         remainingHealth: number;
     };
 
     /** Emitted when a unit is killed in combat */
-    'combat:unitDefeated': {
-        entityId: number;
+    'combat:unitDefeated': GameEventBase & {
+        unitId: number;
         defeatedBy: number;
     };
 
@@ -392,9 +423,9 @@ export interface GameEvents {
      * Systems subscribe to handle type-specific initialization
      * (e.g., MovementSystem creates controllers for units).
      */
-    'entity:created': {
+    'entity:created': GameEventBase & {
         entityId: number;
-        type: EntityType;
+        entityType: EntityType;
         subType: number;
         x: number;
         y: number;
@@ -434,10 +465,10 @@ export interface GameEvents {
         buildingId: number;
     };
     /** Emitted when a single tile's terrain is leveled during construction */
-    'construction:tileCompleted': {
+    'construction:tileCompleted': GameEventBase & {
         buildingId: number;
-        tileX: number;
-        tileY: number;
+        x: number;
+        y: number;
         targetHeight: number;
         isFootprint: boolean;
     };
@@ -465,26 +496,26 @@ export interface GameEvents {
         buildingId: number;
     };
     /** Emitted when a digger or builder claims a slot on a construction site. */
-    'construction:workerAssigned': {
+    'construction:workerAssigned': GameEventBase & {
         buildingId: number;
-        workerId: number;
+        unitId: number;
         role: 'digger' | 'builder';
     };
     /** Emitted when a digger or builder releases their slot (finished or interrupted). */
-    'construction:workerReleased': {
+    'construction:workerReleased': GameEventBase & {
         buildingId: number;
-        workerId: number;
+        unitId: number;
         role: 'digger' | 'builder';
     };
     /**
      * Emitted by ConstructionSiteManager when a site needs a worker it doesn't have.
      * RecruitSystem subscribes to this instead of polling ConstructionSiteManager.
      */
-    'construction:workerNeeded': {
+    'construction:workerNeeded': GameEventBase & {
         role: 'digger' | 'builder';
-        siteId: number;
-        tileX: number;
-        tileY: number;
+        buildingId: number;
+        x: number;
+        y: number;
         player: number;
     };
 
@@ -532,15 +563,8 @@ export interface GameEvents {
         reason: 'output_full' | 'cant_work' | 'first_visit';
     };
 
-    /** Verbose: idle search skipped or failed (gated by WorkerTaskExecutor.verbose) */
-    'choreo:idleSkipped': {
-        unitId: number;
-        reason: 'inside_building' | 'no_home' | 'no_target' | 'no_job';
-        homeBuilding: number | null;
-    };
-
     /** Emitted when a settler starts a choreography job (walking to target, gathering, etc.) */
-    'settler:taskStarted': {
+    'settler:taskStarted': GameEventBase & {
         unitId: number;
         jobId: string;
         targetId: number | null;
@@ -549,13 +573,13 @@ export interface GameEvents {
     };
 
     /** Emitted when a settler completes a choreography job and returns to idle. */
-    'settler:taskCompleted': {
+    'settler:taskCompleted': GameEventBase & {
         unitId: number;
         jobId: string;
     };
 
     /** Emitted when a settler's job is interrupted (target lost, pathfinding failure, etc.) */
-    'settler:taskFailed': {
+    'settler:taskFailed': GameEventBase & {
         unitId: number;
         jobId: string;
         /** Index of the choreography node that was executing when the failure occurred. */
@@ -573,18 +597,18 @@ export interface GameEvents {
     // === Barracks Training Events ===
 
     /** Emitted when a barracks begins a training cycle (inputs consumed, carrier recruited). */
-    'barracks:trainingStarted': {
+    'barracks:trainingStarted': GameEventBase & {
         buildingId: number;
         recipe: TrainingRecipe;
-        carrierId: number;
+        unitId: number;
     };
 
     /** Emitted when a barracks completes training — soldier spawned */
-    'barracks:trainingCompleted': {
+    'barracks:trainingCompleted': GameEventBase & {
         buildingId: number;
         unitType: UnitType;
-        level: number;
-        soldierId: number;
+        soldierLevel: number;
+        unitId: number;
     };
 
     /** Emitted when a training cycle is interrupted (e.g. carrier killed en route). */
@@ -596,28 +620,28 @@ export interface GameEvents {
     // === Auto-Recruit Events ===
 
     /** Emitted when a carrier is dispatched to pick up a tool for recruitment. */
-    'recruitment:started': {
-        carrierId: number;
+    'recruitment:started': GameEventBase & {
+        unitId: number;
         targetUnitType: UnitType;
         pileEntityId: number;
-        siteId: number;
+        buildingId: number;
     };
 
     /** Emitted when a carrier completes tool pickup and is ready for transformation. */
-    'recruitment:completed': {
-        carrierId: number;
+    'recruitment:completed': GameEventBase & {
+        unitId: number;
         targetUnitType: UnitType;
     };
 
     /** Emitted when a recruitment fails (pile gone, path blocked, etc.). */
-    'recruitment:failed': {
-        carrierId: number;
+    'recruitment:failed': GameEventBase & {
+        unitId: number;
         reason: string;
     };
 
     /** Emitted when a carrier is transformed into a different unit type. */
-    'unit:transformed': {
-        entityId: number;
+    'unit:transformed': GameEventBase & {
+        unitId: number;
         fromType: UnitType;
         toType: UnitType;
     };
@@ -629,35 +653,37 @@ export interface GameEvents {
      * intent to enter. Features identify whether the settler is theirs via their own
      * data structures (garrison via UnitReservationRegistry, settler-tasks via runtimes map).
      */
-    'settler-location:approachInterrupted': {
-        settlerId: number;
+    'settler-location:approachInterrupted': GameEventBase & {
+        unitId: number;
         buildingId: number;
     };
 
     /** Emitted when a settler enters a building (transitions to Inside). */
-    'settler-location:entered': {
-        settlerId: number;
+    'settler-location:entered': GameEventBase & {
+        unitId: number;
         buildingId: number;
     };
 
     // === Garrison Events ===
 
     /** Emitted when a unit enters a tower garrison (becomes hidden). */
-    'garrison:unitEntered': {
+    'garrison:unitEntered': GameEventBase & {
         buildingId: number;
         unitId: number;
+        unitType: UnitType;
     };
 
     /** Emitted when a unit is ejected from a tower garrison (becomes visible at door). */
-    'garrison:unitExited': {
+    'garrison:unitExited': GameEventBase & {
         buildingId: number;
         unitId: number;
+        unitType: UnitType;
     };
 
     /** Emitted when a garrisoned bowman fires at an enemy. */
-    'garrison:bowmanFired': {
+    'garrison:bowmanFired': GameEventBase & {
         buildingId: number;
-        bowmanId: number;
+        unitId: number;
         targetId: number;
         damage: number;
     };
@@ -665,17 +691,17 @@ export interface GameEvents {
     // === Worker Assignment Events ===
 
     /** Emitted when a building spawns its dedicated worker at the door. */
-    'building:workerSpawned': {
+    'building:workerSpawned': GameEventBase & {
         buildingId: number;
-        settlerId: number;
+        unitId: number;
     };
 
     /** Emitted when a building's worker is lost (died, reassigned by player move command).
      *  NOT emitted when the building itself is destroyed. */
-    'building:workerLost': {
+    'building:workerLost': GameEventBase & {
         buildingId: number;
         buildingType: BuildingType;
-        settlerId: number;
+        unitId: number;
         player: number;
         race: Race;
     };
@@ -689,9 +715,9 @@ export interface GameEvents {
     };
 
     /** Emitted when a defender is ejected from a besieged building to fight. */
-    'siege:defenderEjected': {
+    'siege:defenderEjected': GameEventBase & {
         buildingId: number;
-        defenderId: number;
+        unitId: number;
     };
 
     /** Emitted when an attacker captures an enemy building (all defenders dead). */
@@ -703,7 +729,7 @@ export interface GameEvents {
 
     /** Emitted when a building changes ownership (e.g. via siege capture). */
     'building:ownerChanged': {
-        entityId: number;
+        buildingId: number;
         buildingType: BuildingType;
         oldPlayer: number;
         newPlayer: number;
@@ -712,7 +738,7 @@ export interface GameEvents {
     // === Victory Condition Events ===
 
     /** Emitted when a player is eliminated (last castle destroyed). */
-    'game:playerEliminated': {
+    'game:playerEliminated': GameEventBase & {
         player: number;
     };
 
@@ -771,7 +797,7 @@ export class EventBus {
      * Each handler is called in isolation - if one throws, others still run.
      * Errors are logged with throttling, and a toast is shown on first failure.
      */
-    emit<K extends keyof GameEvents>(event: K, payload: GameEvents[K]): void {
+    emit<K extends keyof GameEvents>(event: K, payload: GameEvents[K] & { level?: GameEventLevel }): void {
         const handlers = this.handlers.get(event as string);
         if (!handlers) return;
 

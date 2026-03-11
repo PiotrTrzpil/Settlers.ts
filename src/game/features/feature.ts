@@ -91,7 +91,7 @@ export interface FeatureContext extends CoreDeps {
      * Replaces manual EventSubscriptionManager boilerplate.
      *
      * @example
-     * ctx.on('unit:spawned', ({ entityId }) => manager.register(entityId));
+     * ctx.on('unit:spawned', ({ unitId }) => manager.register(unitId));
      */
     on<K extends keyof GameEvents>(event: K, handler: EventHandler<GameEvents[K]>): void;
 }

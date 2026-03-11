@@ -6,7 +6,7 @@
  * no typed fields for individual features.
  */
 
-import type { Game } from '../game';
+import type { GameCore } from '../game-core';
 import { EntityType } from '../entity';
 import type { CarryingState } from '../entity';
 import type { Race } from '../core/race';
@@ -266,7 +266,7 @@ function applyTerrainDiff(terrain: Uint8Array, diffBase64: string): void {
 
 /** Build terrain fields for the snapshot — sparse diff when initial state is cached, full copy otherwise. */
 function terrainSnapshotFields(
-    game: Game
+    game: GameCore
 ): Pick<
     GameStateSnapshot,
     'terrainGroundType' | 'terrainGroundHeight' | 'terrainGroundTypeDiff' | 'terrainGroundHeightDiff'
@@ -289,7 +289,7 @@ function terrainSnapshotFields(
  * Entity table and terrain are assembled here; all feature state comes
  * from the PersistenceRegistry via serializeAll() (dynamic keys).
  */
-export function createSnapshot(game: Game): GameStateSnapshot {
+export function createSnapshot(game: GameCore): GameStateSnapshot {
     const gameState = game.state;
 
     const entities = gameState.entities.map(e => ({
@@ -320,7 +320,7 @@ export function createSnapshot(game: Game): GameStateSnapshot {
 /**
  * Save game state to localStorage.
  */
-export function saveGameState(game: Game): boolean {
+export function saveGameState(game: GameCore): boolean {
     try {
         const snapshot = createSnapshot(game);
         localStorage.setItem(STORAGE_KEY, JSON.stringify(snapshot));
@@ -415,22 +415,31 @@ export function hasSavedGameState(): boolean {
 
 // === Restore Helpers ===
 
-function restoreEntities(game: Game, snapshot: GameStateSnapshot): void {
+function restoreEntities(game: GameCore, snapshot: GameStateSnapshot): void {
     const state = game.state;
+
+    // Extract construction site IDs so we can distinguish completed buildings from sites.
+    // Completed buildings need buildingOccupancy set at creation time (via completed flag).
+    const constructionSiteIds = new Set<number>();
+    const sites = snapshot['constructionSites'] as Array<{ buildingId: number }> | undefined;
+    if (sites) {
+        for (const site of sites) constructionSiteIds.add(site.buildingId);
+    }
 
     // Recreate entities via addEntity — emits entity:created events so systems
     // (movement controllers, visual service, territory, combat) initialize state.
     // Feature persistables then overwrite default state with snapshot data via deserializeAll().
     for (const e of snapshot.entities) {
         state.nextId = e.id; // ensure addEntity produces the correct ID
-        const entity = state.addEntity(e.type, e.subType, e.x, e.y, e.player, { race: e.race });
+        const completed = e.type === EntityType.Building && !constructionSiteIds.has(e.id);
+        const entity = state.addEntity(e.type, e.subType, e.x, e.y, e.player, { race: e.race, completed });
         if (e.carrying) entity.carrying = e.carrying;
         if (e.hidden) entity.hidden = e.hidden;
     }
 }
 
 /** Apply terrain arrays/diffs from a snapshot to the live terrain. Auto-saves use diffs; initial state uses full arrays. */
-function restoreTerrain(game: Game, snapshot: GameStateSnapshot): void {
+function restoreTerrain(game: GameCore, snapshot: GameStateSnapshot): void {
     if (snapshot.terrainGroundType) game.terrain.groundType.set(base64ToUint8Array(snapshot.terrainGroundType));
     if (snapshot.terrainGroundHeight) game.terrain.groundHeight.set(base64ToUint8Array(snapshot.terrainGroundHeight));
     if (snapshot.terrainGroundTypeDiff) applyTerrainDiff(game.terrain.groundType, snapshot.terrainGroundTypeDiff);
@@ -440,7 +449,7 @@ function restoreTerrain(game: Game, snapshot: GameStateSnapshot): void {
         snapshot.terrainGroundHeight ||
         snapshot.terrainGroundTypeDiff ||
         snapshot.terrainGroundHeightDiff;
-    if (modified) game.eventBus.emit('terrain:modified', {});
+    if (modified) game.eventBus.emit('terrain:modified', { reason: 'snapshot' });
 }
 
 /**
@@ -451,7 +460,7 @@ function restoreTerrain(game: Game, snapshot: GameStateSnapshot): void {
  *
  * Must be called on a fresh Game instance (entities array should be empty or will be cleared).
  */
-export function restoreFromSnapshot(game: Game, snapshot: GameStateSnapshot): void {
+export function restoreFromSnapshot(game: GameCore, snapshot: GameStateSnapshot): void {
     // 0. Reject snapshots with incompatible version — callers should use loadSnapshot()
     //    which already checks, but guard here too for direct callers.
     if (snapshot.version !== SNAPSHOT_VERSION) {
@@ -503,7 +512,7 @@ export function restoreFromSnapshot(game: Game, snapshot: GameStateSnapshot): vo
  * Save initial map state (called once after map loads, before auto-save).
  * Used to restore to the original map state when resetting.
  */
-export function saveInitialState(game: Game): boolean {
+export function saveInitialState(game: GameCore): boolean {
     try {
         const snapshot = createSnapshot(game);
         // Always keep in-memory copy so reset works even if localStorage is full
@@ -558,13 +567,13 @@ export function loadInitialState(): GameStateSnapshot | null {
  * Uses the in-memory cache from saveInitialState.
  * Emits terrain:modified so renderers refresh.
  */
-export function restoreInitialTerrain(game: Game): void {
+export function restoreInitialTerrain(game: GameCore): void {
     if (!_cachedInitialGroundType || !_cachedInitialGroundHeight) {
         throw new Error('restoreInitialTerrain: no initial terrain cached — saveInitialState must be called first');
     }
     game.terrain.groundType.set(_cachedInitialGroundType);
     game.terrain.groundHeight.set(_cachedInitialGroundHeight);
-    game.eventBus.emit('terrain:modified', {});
+    game.eventBus.emit('terrain:modified', { reason: 'restore' });
 }
 
 /**
@@ -581,7 +590,7 @@ export function clearInitialState(): void {
  * Auto-save manager that periodically saves game state.
  */
 class GameStatePersistence {
-    private game: Game | null = null;
+    private game: GameCore | null = null;
     private saveIntervalId: ReturnType<typeof setInterval> | null = null;
     private enabled = true;
 
@@ -589,7 +598,7 @@ class GameStatePersistence {
      * Start auto-saving.
      * Note: Initial state should be saved BEFORE calling this (via saveInitialState).
      */
-    start(game: Game): void {
+    start(game: GameCore): void {
         this.game = game;
 
         if (this.saveIntervalId) {

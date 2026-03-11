@@ -432,7 +432,9 @@ export class SelectionOverlayRenderer {
             try {
                 const blockArea = getBuildingBlockArea(entity.x, entity.y, buildingType, entity.race);
                 for (const t of blockArea) blockKeys.add(tileKey(t.x, t.y));
-            } catch { /* no block data — treat all as block area */ }
+            } catch {
+                /* no block data — treat all as block area */
+            }
 
             for (const tile of footprint) {
                 const color = this.getFootprintTileColor(tile, doorPos, blockKeys);
@@ -670,8 +672,8 @@ export class SelectionOverlayRenderer {
     }
 
     /**
-     * Draw ring highlights at tile positions (for debug tools like stack-adjust).
-     * Each highlight is a circle ring with the configured color and alpha.
+     * Draw diamond highlights at tile positions (matching isometric tile shape).
+     * Uses solid fill or outline depending on the highlight style.
      */
     public drawTileHighlights(
         gl: WebGL2RenderingContext,
@@ -684,98 +686,29 @@ export class SelectionOverlayRenderer {
         if (highlights.length === 0) return;
         gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
 
-        const segments = 16;
-        const radius = 0.5;
-        const lineWidth = 0.12;
-        const invScale = 1 / SHADER_VERTEX_SCALE;
-        const segmentVerts = new Float32Array(12);
+        const diamondVerts = new Float32Array(12);
 
         for (const h of highlights) {
-            const idx = ctx.mapSize.toIndex(Math.round(h.x), Math.round(h.y));
+            const tx = Math.round(h.x);
+            const ty = Math.round(h.y);
+            const idx = ctx.mapSize.toIndex(tx, ty);
             const hWorld = heightToWorld(ctx.groundHeight[idx]!);
             const alpha = h.alpha ?? 0.5;
             const [r, g, b] = parseHexColor(h.color);
 
-            const centerTileX = h.x + 0.5;
-            const centerTileY = h.y + 0.5;
-
-            const points = this.generateCirclePoints(segments, centerTileX, centerTileY, radius, hWorld, ctx);
-
-            let cx = 0;
-            let cy = 0;
-            for (const p of points) {
-                cx += p.worldX;
-                cy += p.worldY;
-            }
-            cx /= points.length;
-            cy /= points.length;
-
-            gl.vertexAttrib2f(aEntityPos, cx, cy);
             gl.vertexAttrib4f(aColor, r, g, b, alpha);
 
-            for (let i = 0; i < points.length - 1; i++) {
-                this.buildRingSegment(segmentVerts, points[i]!, points[i + 1]!, cx, cy, lineWidth, invScale);
-                gl.bufferData(gl.ARRAY_BUFFER, segmentVerts, gl.DYNAMIC_DRAW);
-                gl.drawArrays(gl.TRIANGLES, 0, 6);
-            }
+            const top = shiftBuildingWorldPos(tileToWorld(tx, ty, hWorld, ctx.viewPoint.x, ctx.viewPoint.y));
+            const right = shiftBuildingWorldPos(tileToWorld(tx + 1, ty, hWorld, ctx.viewPoint.x, ctx.viewPoint.y));
+            const bottom = shiftBuildingWorldPos(tileToWorld(tx + 1, ty + 1, hWorld, ctx.viewPoint.x, ctx.viewPoint.y));
+            const left = shiftBuildingWorldPos(tileToWorld(tx, ty + 1, hWorld, ctx.viewPoint.x, ctx.viewPoint.y));
+
+            const center = this.fillDiamondFromWorldPositions(diamondVerts, top, right, bottom, left);
+            gl.vertexAttrib2f(aEntityPos, center.centerX, center.centerY);
+
+            gl.bufferData(gl.ARRAY_BUFFER, diamondVerts, gl.DYNAMIC_DRAW);
+            gl.drawArrays(gl.TRIANGLES, 0, 6);
         }
-    }
-
-    /** Generate circle points in world space around a tile center. */
-    private generateCirclePoints(
-        segments: number,
-        centerTileX: number,
-        centerTileY: number,
-        radius: number,
-        hWorld: number,
-        ctx: SelectionRenderContext
-    ): { worldX: number; worldY: number }[] {
-        const points: { worldX: number; worldY: number }[] = [];
-        for (let i = 0; i <= segments; i++) {
-            const angle = (i / segments) * Math.PI * 2;
-            points.push(
-                tileToWorld(
-                    centerTileX + Math.cos(angle) * radius,
-                    centerTileY + Math.sin(angle) * radius,
-                    hWorld,
-                    ctx.viewPoint.x,
-                    ctx.viewPoint.y
-                )
-            );
-        }
-        return points;
-    }
-
-    /** Build two-triangle quad for one ring segment between two adjacent circle points. */
-    private buildRingSegment(
-        verts: Float32Array,
-        p0: { worldX: number; worldY: number },
-        p1: { worldX: number; worldY: number },
-        cx: number,
-        cy: number,
-        lineWidth: number,
-        invScale: number
-    ): void {
-        const dx = p1.worldX - p0.worldX;
-        const dy = p1.worldY - p0.worldY;
-        const len = Math.sqrt(dx * dx + dy * dy);
-        if (len < 0.001) return;
-
-        const nx = (-dy / len) * lineWidth * 0.5;
-        const ny = (dx / len) * lineWidth * 0.5;
-
-        verts[0] = (p0.worldX + nx - cx) * invScale;
-        verts[1] = (p0.worldY + ny - cy) * invScale;
-        verts[2] = (p0.worldX - nx - cx) * invScale;
-        verts[3] = (p0.worldY - ny - cy) * invScale;
-        verts[4] = (p1.worldX - nx - cx) * invScale;
-        verts[5] = (p1.worldY - ny - cy) * invScale;
-        verts[6] = (p0.worldX + nx - cx) * invScale;
-        verts[7] = (p0.worldY + ny - cy) * invScale;
-        verts[8] = (p1.worldX - nx - cx) * invScale;
-        verts[9] = (p1.worldY - ny - cy) * invScale;
-        verts[10] = (p1.worldX + nx - cx) * invScale;
-        verts[11] = (p1.worldY + ny - cy) * invScale;
     }
 }
 
