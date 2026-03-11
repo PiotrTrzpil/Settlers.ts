@@ -74,7 +74,7 @@ function assertOccupancyConsistent(state: GameState, entityIds: number[]): void 
         const e = state.getEntity(id);
         if (!e) continue;
         const key = tileKey(e.x, e.y);
-        const occupant = state.tileOccupancy.get(key);
+        const occupant = state.unitOccupancy.get(key);
         expect(occupant, `tile (${e.x},${e.y}) should be occupied by ${id}`).toBe(id);
     }
     // No two entities should share a tile
@@ -586,6 +586,67 @@ describe('Movement System – bump/wait collision', () => {
         expect(unitB.x).toBe(11);
         expect(unitB.y).toBe(10);
         expect(unitA.x === 11 && unitA.y === 10).toBe(false);
+    });
+
+    // ═════════════════════════════════════════════════════════════════
+    // Deadlock resolution
+    // ═════════════════════════════════════════════════════════════════
+
+    it('circular bump chain resolves via swap fallback', () => {
+        // Setup: A moving toward B, B's only bump dest is C, C has no bump dest.
+        // clearTileForBump fails (C can't be pushed), but swap should rescue at depth=0.
+        //
+        // Hex neighbors (dx,dy): (1,1),(1,0),(0,1),(-1,-1),(-1,0),(0,-1)
+        // B at (11,10) neighbors: (12,11),(12,10),(11,11),(10,9),(10,10),(11,9)
+        // C at (12,11) neighbors: (13,12),(13,11),(12,12),(11,10),(11,11),(12,10)
+
+        const { entity: unitA } = addUnitWithPath(state, 10, 10, [pos(11, 10)]);
+        const { entity: unitB } = addUnit(state, 11, 10);
+        addUnit(state, 12, 11); // C — occupies B's only non-blocked bump dest
+
+        // Wall off B's neighbors except A's tile (10,10) and C's tile (12,11)
+        for (const key of ['12,10', '11,11', '10,9', '11,9']) {
+            state.buildingOccupancy.add(key);
+        }
+        // Wall off C's neighbors except B's tile (11,10)
+        for (const key of ['13,12', '13,11', '12,12', '11,11', '12,10']) {
+            state.buildingOccupancy.add(key);
+        }
+
+        tickFor(state, 2);
+
+        // A should have swapped with B and reached (11,10)
+        expect(unitA.x).toBe(11);
+        expect(unitA.y).toBe(10);
+        // B should be at A's old position (10,10)
+        expect(unitB.x).toBe(10);
+        expect(unitB.y).toBe(10);
+        assertOccupancyConsistent(state, [unitA.id, unitB.id]);
+    });
+
+    it('unit gives up after persistent blocking despite successful repaths', () => {
+        // A busy (unbumpable) blocker at (11,10) prevents all bump attempts.
+        // Repath finds a valid path through (11,10) (A* ignores units) → waitTime resets.
+        // Without cumulative tracking, the unit loops repath every 0.5s forever.
+        // With cumulative tracking, giveup fires after 2.0s total wait.
+        const { entity: unitA } = addUnitWithPath(
+            state,
+            10,
+            10,
+            [
+                { x: 11, y: 10 },
+                { x: 12, y: 10 },
+            ],
+            20 // high speed so progress reaches 1.0 every tick (addWaitTime fires each tick)
+        );
+        const { entity: unitB } = addUnit(state, 11, 10);
+        const controllerB = state.movement.getController(unitB.id)!;
+        controllerB.busy = true; // unbumpable — bump always fails
+
+        tickFor(state, 3); // well past GIVEUP_WAIT_TIMEOUT (2.0s)
+
+        const controllerA = state.movement.getController(unitA.id)!;
+        expect(controllerA.state).toBe('idle'); // should have given up
     });
 
     it('haltProgress snaps transit so visual matches tile position', () => {

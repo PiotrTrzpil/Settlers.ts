@@ -73,7 +73,7 @@ regardless of any reasonable implementation — skip it.
   what you must (rendering, assets). The integration surface is where bugs live.
 - **Event/state assertions over call assertions** — assert on observable events and state changes,
   not internal calls. This makes tests resilient to refactoring while still catching behavioral
-  regressions. The `DUMP_TIMELINE` pattern is ideal for this.
+  regressions. The timeline DB (query with `pnpm timeline`) is ideal for this.
 
 ---
 

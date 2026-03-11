@@ -97,14 +97,15 @@ describe.skipIf(!hasRealData)('StorageArea logistics (real game data)', { timeou
         expect(boardReqs[0]!.priority).toBe(2);
     });
 
-    it('import creates one request per unit of available capacity', () => {
+    it('import requests are capped per material to avoid request flooding', () => {
         sim = createSimulation();
         sim.placeBuilding(BuildingType.ResidenceSmall);
         const storageId = sim.placeBuilding(BuildingType.StorageArea);
 
-        // Get total capacity
+        // Get total capacity — should exceed the cap
         const inv = sim.services.inventoryManager.getInventory(storageId)!;
         const totalCapacity = inv.outputSlots.reduce((sum, s) => sum + s.maxCapacity, 0);
+        expect(totalCapacity).toBeGreaterThan(20);
 
         // Enable import for LOG
         sim.services.storageFilterManager.setDirection(storageId, EMaterialType.LOG, StorageDirection.Import);
@@ -112,8 +113,8 @@ describe.skipIf(!hasRealData)('StorageArea logistics (real game data)', { timeou
 
         const requests = sim.services.requestManager.getRequestsForBuilding(storageId);
         const logReqs = requests.filter(r => r.materialType === EMaterialType.LOG);
-        // One request per unit — carriers carry 1 item per trip
-        expect(logReqs).toHaveLength(totalCapacity);
+        // Capped at MAX_ACTIVE_IMPORTS_PER_MATERIAL (20), not totalCapacity
+        expect(logReqs).toHaveLength(20);
         for (const req of logReqs) {
             expect(req.amount).toBe(1);
         }

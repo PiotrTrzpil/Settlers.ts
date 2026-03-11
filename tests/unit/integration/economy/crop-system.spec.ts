@@ -17,7 +17,13 @@
  */
 
 import { describe, it, expect, afterEach } from 'vitest';
-import { createSimulation, cleanupSimulation, type Simulation } from '../../helpers/test-simulation';
+import {
+    createSimulation,
+    cleanupSimulation,
+    type Simulation,
+    scanFreeTiles,
+    printBuildingDiagnosticMap,
+} from '../../helpers/test-simulation';
 import { installRealGameData } from '../../helpers/test-game-data';
 import { BuildingType } from '@/game/buildings/building-type';
 import { EMaterialType } from '@/game/economy/material-type';
@@ -196,6 +202,68 @@ describe.skipIf(!hasRealData)('Crop system (real game data)', { timeout: 10_000 
         // All early crops should cluster tightly around center, not off to one side
         for (let i = 0; i < 3; i++) {
             expect(chebyshev(planted[i]!, center)).toBeLessThanOrEqual(2);
+        }
+    });
+
+    it('grain farm: first crop is planted at closest valid tile to work area center', () => {
+        sim = createSimulation(SIM_256);
+
+        sim.placeBuilding(BuildingType.ResidenceSmall);
+        const farmId = sim.placeBuilding(BuildingType.GrainFarm);
+
+        const farm = sim.state.getEntity(farmId)!;
+        const race = sim.state.playerRaces.get(farm.player)!;
+        const center = getWorkAreaCenter(sim, farmId);
+
+        // Scan free tiles BEFORE planting starts
+        const candidates = scanFreeTiles(sim.state, center, 8, 20);
+        const top5 = candidates.slice(0, 5);
+        printBuildingDiagnosticMap(farm, BuildingType.GrainFarm, race, center, top5);
+
+        // Run and verify the farmer picks the closest
+        const planted = collectPlantedPositions(sim);
+        sim.runUntil(() => planted.length >= 5, { maxTicks: 3000 * 30 });
+
+        const minFreeDistSq = top5[0]!.distSq;
+        const cropDx = planted[0]!.x - center.x;
+        const cropDy = planted[0]!.y - center.y;
+        const cropDistSq = cropDx * cropDx + cropDy * cropDy;
+
+        expect(
+            cropDistSq,
+            `First crop at (${planted[0]!.x},${planted[0]!.y}) should be at closest ` +
+                `free tile to center (${center.x},${center.y}). ` +
+                `Got distSq=${cropDistSq}, expected=${minFreeDistSq}`
+        ).toBe(minFreeDistSq);
+    });
+
+    it('grain farm: early crops fill outward from work area center', () => {
+        sim = createSimulation(SIM_256);
+
+        const planted = collectPlantedPositions(sim);
+
+        sim.placeBuilding(BuildingType.ResidenceSmall);
+        const farmId = sim.placeBuilding(BuildingType.GrainFarm);
+
+        sim.runUntil(() => planted.length >= 8, { maxTicks: 3000 * 30 });
+        expect(planted.length).toBeGreaterThanOrEqual(8);
+
+        const center = getWorkAreaCenter(sim, farmId);
+
+        // Each successive crop should be at equal or greater distance from center
+        // (the search always picks closest valid tile)
+        const distances = planted.map(p => {
+            const dx = p.x - center.x;
+            const dy = p.y - center.y;
+            return dx * dx + dy * dy;
+        });
+
+        for (let i = 1; i < distances.length; i++) {
+            expect(
+                distances[i]!,
+                `Crop ${i} (distSq=${distances[i]}) should not be closer than ` +
+                    `crop ${i - 1} (distSq=${distances[i - 1]})`
+            ).toBeGreaterThanOrEqual(distances[i - 1]!);
         }
     });
 

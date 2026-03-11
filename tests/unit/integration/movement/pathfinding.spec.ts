@@ -13,7 +13,7 @@
  * ──────────────
  * Two separate maps control movement:
  *
- *   tileOccupancy (Map<string, entityId>)
+ *   unitOccupancy (Map<string, entityId>)
  *     — Tracks which entity "owns" each tile. Updated when units move.
  *     — Pathfinder always ignores unit occupancy; collisions are resolved
  *       locally via bump-or-wait.
@@ -106,7 +106,7 @@ describe.skipIf(!hasRealData)('Movement & Pathfinding simulation (real game data
 
         const unitId = sim.spawnUnit(20, 60);
         const startKey = tileKey(20, 60);
-        expect(sim.state.tileOccupancy.get(startKey)).toBe(unitId);
+        expect(sim.state.unitOccupancy.get(startKey)).toBe(unitId);
 
         const target = { x: 30, y: 60 };
         sim.moveUnit(unitId, target.x, target.y);
@@ -116,11 +116,11 @@ describe.skipIf(!hasRealData)('Movement & Pathfinding simulation (real game data
         const endKey = tileKey(unit.x, unit.y);
 
         // Start freed, end occupied, exactly one entry for this unit
-        expect(sim.state.tileOccupancy.has(startKey)).toBe(false);
-        expect(sim.state.tileOccupancy.get(endKey)).toBe(unitId);
+        expect(sim.state.unitOccupancy.has(startKey)).toBe(false);
+        expect(sim.state.unitOccupancy.get(endKey)).toBe(unitId);
 
         let count = 0;
-        for (const id of sim.state.tileOccupancy.values()) {
+        for (const id of sim.state.unitOccupancy.values()) {
             if (id === unitId) count++;
         }
         expect(count).toBe(1);
@@ -352,8 +352,8 @@ describe.skipIf(!hasRealData)('Movement & Pathfinding simulation (real game data
         expect(entity2.y).toBe(70);
 
         // Distinct occupancy
-        expect(sim.state.tileOccupancy.get(tileKey(40, 50))).toBe(u1);
-        expect(sim.state.tileOccupancy.get(tileKey(40, 70))).toBe(u2);
+        expect(sim.state.unitOccupancy.get(tileKey(40, 50))).toBe(u1);
+        expect(sim.state.unitOccupancy.get(tileKey(40, 70))).toBe(u2);
     });
 
     // ─── Group collision (two squads passing through each other) ──────

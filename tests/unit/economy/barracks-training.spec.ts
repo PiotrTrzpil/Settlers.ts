@@ -39,15 +39,15 @@ describe('Training Recipes', () => {
                 specialistBlock.every(r => r.unitType === specialistType),
                 `${Race[race]} specialist block`
             ).toBe(true);
-            expect(specialistBlock.map(r => r.level).sort()).toEqual([1, 2, 3]);
+            expect(specialistBlock.map(r => r.soldierLevel).sort()).toEqual([1, 2, 3]);
         }
     });
 
     it('Swordsman L1 needs SWORD, L2 needs SWORD+1 GOLDBAR, L3 needs SWORD+2 GOLDBAR', () => {
         const recipes = getTrainingRecipes(Race.Roman);
-        const sw1 = recipes.find(r => r.unitType === UnitType.Swordsman1 && r.level === 1)!;
-        const sw2 = recipes.find(r => r.unitType === UnitType.Swordsman1 && r.level === 2)!;
-        const sw3 = recipes.find(r => r.unitType === UnitType.Swordsman1 && r.level === 3)!;
+        const sw1 = recipes.find(r => r.unitType === UnitType.Swordsman1 && r.soldierLevel === 1)!;
+        const sw2 = recipes.find(r => r.unitType === UnitType.Swordsman1 && r.soldierLevel === 2)!;
+        const sw3 = recipes.find(r => r.unitType === UnitType.Swordsman1 && r.soldierLevel === 3)!;
 
         expect(sw1.inputs).toEqual([{ material: EMaterialType.SWORD, count: 1 }]);
         expect(sw2.inputs).toEqual([
@@ -74,7 +74,7 @@ describe('Training Recipes', () => {
 
             // Verify L1 recipe uses the weapon
             const recipes = getTrainingRecipes(race);
-            const l1 = recipes.find(r => r.unitType === unitType && r.level === 1)!;
+            const l1 = recipes.find(r => r.unitType === unitType && r.soldierLevel === 1)!;
             expect(l1.inputs[0]!.material, `${Race[race]} L1 weapon`).toBe(weapon);
         }
 
@@ -84,8 +84,8 @@ describe('Training Recipes', () => {
 
     it('specialist L2 adds 1 GOLDBAR, L3 adds 2 GOLDBAR on top of weapon', () => {
         const recipes = getTrainingRecipes(Race.Viking);
-        const axeL2 = recipes.find(r => r.unitType === UnitType.AxeWarrior1 && r.level === 2)!;
-        const axeL3 = recipes.find(r => r.unitType === UnitType.AxeWarrior1 && r.level === 3)!;
+        const axeL2 = recipes.find(r => r.unitType === UnitType.AxeWarrior1 && r.soldierLevel === 2)!;
+        const axeL3 = recipes.find(r => r.unitType === UnitType.AxeWarrior1 && r.soldierLevel === 3)!;
 
         expect(axeL2.inputs).toEqual([
             { material: EMaterialType.BATTLEAXE, count: 1 },
@@ -111,7 +111,7 @@ describe('Training Recipes', () => {
         for (const unitType of [UnitType.Swordsman1, UnitType.Bowman1, UnitType.Medic1]) {
             const unitRecipes = recipes.filter(r => r.unitType === unitType);
             for (let i = 1; i < unitRecipes.length; i++) {
-                expect(unitRecipes[i]!.level).toBeGreaterThan(unitRecipes[i - 1]!.level);
+                expect(unitRecipes[i]!.soldierLevel).toBeGreaterThan(unitRecipes[i - 1]!.soldierLevel);
             }
         }
     });

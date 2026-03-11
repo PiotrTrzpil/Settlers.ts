@@ -457,6 +457,37 @@ describe.skipIf(!hasRealData)('Tower garrison (integration)', { timeout: 30_000 
         expect(isHidden(sim, unitId)).toBe(false);
     });
 
+    it('garrison pathfinding failure does not retry — gives up after 1 attempt', () => {
+        sim = createSimulation();
+        sim.state.movement.verbose = true;
+
+        const towerId = sim.placeBuilding(BuildingType.GuardTowerSmall);
+        const tower = sim.state.getEntityOrThrow(towerId, 'test');
+
+        // Water wall blocks all paths
+        const wallY = tower.y + 8;
+        for (let dy = 0; dy < 3; dy++) {
+            for (let x = 0; x < sim.mapWidth; x++) {
+                sim.fillTerrain(x, wallY + dy, 0, 0);
+            }
+        }
+
+        const unitId = sim.spawnUnit(tower.x, wallY + 10, UnitType.Swordsman1);
+
+        // Count pathfinding failures for this unit
+        let pathFailCount = 0;
+        sim.eventBus.on('movement:pathFailed', ({ unitId: id }) => {
+            if (id === unitId) pathFailCount++;
+        });
+
+        garrisonUnits(sim, towerId, [unitId]);
+        sim.runTicks(100);
+
+        // Should only attempt pathfinding once — auto-garrison must not retry
+        // the same unreachable unit→tower pair repeatedly
+        expect(pathFailCount).toBe(1);
+    });
+
     it('Mayan GuardTowerBig: second soldier from right garrisons (first already inside)', () => {
         sim = createSimulation();
         (sim.state.playerRaces as Map<number, number>).set(0, Race.Mayan);
@@ -476,8 +507,8 @@ describe.skipIf(!hasRealData)('Tower garrison (integration)', { timeout: 30_000 
 
         // Capture stop position for diagnostics
         let stoppedPos: { x: number; y: number } | null = null;
-        sim.eventBus.on('unit:movementStopped', ({ entityId }) => {
-            if (entityId === secondId) {
+        sim.eventBus.on('unit:movementStopped', ({ unitId }) => {
+            if (unitId === secondId) {
                 const u = sim.state.getEntity(secondId);
                 if (u) stoppedPos = { x: u.x, y: u.y };
             }
@@ -499,8 +530,8 @@ describe.skipIf(!hasRealData)('Tower garrison (integration)', { timeout: 30_000 
             console.log(`[DIAG] isEnRoute=${sim.services.garrisonManager.isEnRoute(secondId)}`);
             console.log(`[DIAG] hidden=${u.hidden}`);
             // Check what's on the door tile
-            const doorOccupant = sim.state.tileOccupancy.get(tileKey(door.x, door.y));
-            console.log(`[DIAG] door tileOccupancy=${doorOccupant} (tower=${towerId}, first=${firstId})`);
+            const doorOccupant = sim.state.unitOccupancy.get(tileKey(door.x, door.y));
+            console.log(`[DIAG] door unitOccupancy=${doorOccupant} (tower=${towerId}, first=${firstId})`);
         }
 
         expect(garrisonedCount(sim, towerId)).toBe(2);
@@ -522,8 +553,8 @@ describe.skipIf(!hasRealData)('Tower garrison (integration)', { timeout: 30_000 
         // After garrisoning: movement controller must be removed
         expect(sim.state.movement.hasController(firstId)).toBe(false);
 
-        // After garrisoning: tileOccupancy at door must NOT show the garrisoned unit
-        const doorOccupant = sim.state.tileOccupancy.get(tileKey(door.x, door.y));
+        // After garrisoning: unitOccupancy at door must NOT show the garrisoned unit
+        const doorOccupant = sim.state.unitOccupancy.get(tileKey(door.x, door.y));
         expect(doorOccupant).not.toBe(firstId);
 
         // Second soldier must still be able to garrison

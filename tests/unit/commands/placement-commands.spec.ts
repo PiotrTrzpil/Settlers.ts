@@ -12,54 +12,56 @@ import { BuildingType, getBuildingFootprint } from '@/game/buildings';
 import { Race } from '@/game/core/race';
 import { EMaterialType } from '@/game/economy/material-type';
 import { CONSTRUCTION_SITE_GROUND_TYPE } from '@/game/features/building-construction';
-import {
-    createTestContext,
-    placeBuilding,
-    placeResource,
-    findPassableTile,
-    findBuildableTile,
-    type TestContext,
-} from '../helpers/test-game';
 import { TERRAIN, setHeightAt } from '../helpers/test-map';
+import { Simulation } from '../helpers/test-simulation';
 
 describe('Resource Placement Commands', () => {
-    let ctx: TestContext;
+    let sim: Simulation;
 
     beforeEach(() => {
-        ctx = createTestContext();
+        sim = new Simulation({ useStubData: true, mapWidth: 64, mapHeight: 64 });
     });
 
     it('place_pile creates entity with correct attributes and stores quantity', () => {
-        const tile = findPassableTile(ctx.map);
-        expect(tile).not.toBeNull();
-
         const amount = 5;
-        const result = placeResource(ctx, tile!.x, tile!.y, EMaterialType.LOG, amount);
+        const result = sim.execute({
+            type: 'place_pile',
+            materialType: EMaterialType.LOG,
+            amount,
+            x: 32,
+            y: 32,
+        });
         expect(result.success).toBe(true);
 
-        const resources = ctx.state.entities.filter(e => e.type === EntityType.StackedPile);
+        const resources = sim.state.entities.filter(e => e.type === EntityType.StackedPile);
         expect(resources.length).toBe(1);
 
         const resource = resources[0]!;
         expect(resource.type).toBe(EntityType.StackedPile);
         expect(resource.subType).toBe(EMaterialType.LOG);
-        expect(resource.x).toBe(tile!.x);
-        expect(resource.y).toBe(tile!.y);
+        expect(resource.x).toBe(32);
+        expect(resource.y).toBe(32);
 
-        const resourceState = ctx.state.piles.states.get(resource.id);
+        const resourceState = sim.state.piles.states.get(resource.id);
         expect(resourceState).toBeDefined();
         expect(resourceState!.quantity).toBe(amount);
     });
 
     it('place_pile fails on water terrain', () => {
-        const cx = Math.floor(ctx.map.mapSize.width / 2);
-        const cy = Math.floor(ctx.map.mapSize.height / 2);
-        ctx.map.groundType[ctx.map.mapSize.toIndex(cx, cy)] = TERRAIN.WATER;
+        const cx = Math.floor(sim.map.mapSize.width / 2);
+        const cy = Math.floor(sim.map.mapSize.height / 2);
+        sim.map.groundType[sim.map.mapSize.toIndex(cx, cy)] = TERRAIN.WATER;
 
-        const result = placeResource(ctx, cx, cy, EMaterialType.LOG);
+        const result = sim.execute({
+            type: 'place_pile',
+            materialType: EMaterialType.LOG,
+            amount: 1,
+            x: cx,
+            y: cy,
+        });
         expect(result.success).toBe(false);
 
-        const resources = ctx.state.entities.filter(e => e.type === EntityType.StackedPile);
+        const resources = sim.state.entities.filter(e => e.type === EntityType.StackedPile);
         expect(resources.length).toBe(0);
     });
 
@@ -70,11 +72,17 @@ describe('Resource Placement Commands', () => {
         for (let i = 0; i < materials.length; i++) {
             const x = 10 + i * 3;
             const y = 10 + i * 3;
-            const result = placeResource(ctx, x, y, materials[i]!, amounts[i]);
+            const result = sim.execute({
+                type: 'place_pile',
+                materialType: materials[i]!,
+                amount: amounts[i]!,
+                x,
+                y,
+            });
             expect(result.success).toBe(true);
         }
 
-        const resources = ctx.state.entities.filter(e => e.type === EntityType.StackedPile);
+        const resources = sim.state.entities.filter(e => e.type === EntityType.StackedPile);
         expect(resources.length).toBe(3);
         expect(resources.map(r => r.subType)).toContain(EMaterialType.LOG);
         expect(resources.map(r => r.subType)).toContain(EMaterialType.BOARD);
@@ -87,71 +95,90 @@ describe('Resource Placement Commands', () => {
 // ---------------------------------------------------------------------------
 
 describe('Building Placement Terrain Modification', () => {
-    let ctx: TestContext;
+    let sim: Simulation;
 
     beforeEach(() => {
-        ctx = createTestContext();
+        sim = new Simulation({ useStubData: true, mapWidth: 64, mapHeight: 64 });
     });
 
     it('should change ground to raw immediately on placement (normal mode)', () => {
-        const tile = findBuildableTile(ctx.map);
-        expect(tile).not.toBeNull();
+        const tile = { x: 32, y: 32 };
 
         // Verify ground is grass before placement
-        const footprint = getBuildingFootprint(tile!.x, tile!.y, BuildingType.WoodcutterHut, Race.Roman);
+        const footprint = getBuildingFootprint(tile.x, tile.y, BuildingType.WoodcutterHut, Race.Roman);
         for (const ft of footprint) {
-            expect(ctx.map.groundType[ctx.map.mapSize.toIndex(ft.x, ft.y)]).toBe(TERRAIN.GRASS);
+            expect(sim.map.groundType[sim.map.mapSize.toIndex(ft.x, ft.y)]).toBe(TERRAIN.GRASS);
         }
 
-        const result = placeBuilding(ctx, tile!.x, tile!.y, BuildingType.WoodcutterHut);
+        const result = sim.execute({
+            type: 'place_building',
+            buildingType: BuildingType.WoodcutterHut,
+            x: tile.x,
+            y: tile.y,
+            player: 0,
+            race: 10,
+        });
         expect(result.success).toBe(true);
 
         // Ground type should be raw (DustyWay) immediately after placement - no tick needed
         for (const ft of footprint) {
-            expect(ctx.map.groundType[ctx.map.mapSize.toIndex(ft.x, ft.y)]).toBe(CONSTRUCTION_SITE_GROUND_TYPE);
+            expect(sim.map.groundType[sim.map.mapSize.toIndex(ft.x, ft.y)]).toBe(CONSTRUCTION_SITE_GROUND_TYPE);
         }
     });
 
     it('should capture original terrain at placement time (normal mode)', () => {
-        const tile = findBuildableTile(ctx.map);
-        expect(tile).not.toBeNull();
+        const tile = { x: 32, y: 32 };
 
-        const result = placeBuilding(ctx, tile!.x, tile!.y, BuildingType.WoodcutterHut);
+        const result = sim.execute({
+            type: 'place_building',
+            buildingType: BuildingType.WoodcutterHut,
+            x: tile.x,
+            y: tile.y,
+            player: 0,
+            race: 10,
+        });
         expect(result.success).toBe(true);
 
-        const building = ctx.state.entities.find(e => e.type === EntityType.Building)!;
-        const site = ctx.constructionSiteManager.getSite(building.id);
+        const building = sim.state.entities.find(e => e.type === EntityType.Building)!;
+        const site = sim.services.constructionSiteManager.getSite(building.id);
         expect(site).toBeDefined();
         expect(site!.terrain.originalTerrain).not.toBeNull();
         expect(site!.terrain.originalTerrain!.tiles.length).toBeGreaterThan(0);
     });
 
     it('should change ground and level heights instantly in completed mode', () => {
-        const tile = findBuildableTile(ctx.map);
-        expect(tile).not.toBeNull();
+        const tile = { x: 32, y: 32 };
 
         // Set varying heights within slope tolerance (MAX_SLOPE_DIFF = 8)
-        setHeightAt(ctx.map, tile!.x, tile!.y, 10);
-        setHeightAt(ctx.map, tile!.x + 1, tile!.y, 14);
-        setHeightAt(ctx.map, tile!.x, tile!.y + 1, 12);
-        setHeightAt(ctx.map, tile!.x + 1, tile!.y + 1, 8);
+        setHeightAt(sim.map, tile.x, tile.y, 10);
+        setHeightAt(sim.map, tile.x + 1, tile.y, 14);
+        setHeightAt(sim.map, tile.x, tile.y + 1, 12);
+        setHeightAt(sim.map, tile.x + 1, tile.y + 1, 8);
 
-        const result = placeBuilding(ctx, tile!.x, tile!.y, BuildingType.WoodcutterHut, 0, { completed: true });
+        const result = sim.execute({
+            type: 'place_building',
+            buildingType: BuildingType.WoodcutterHut,
+            x: tile.x,
+            y: tile.y,
+            player: 0,
+            race: 10,
+            completed: true,
+        });
         expect(result.success).toBe(true);
 
         // Ground type should be raw
-        const footprint = getBuildingFootprint(tile!.x, tile!.y, BuildingType.WoodcutterHut, Race.Roman);
+        const footprint = getBuildingFootprint(tile.x, tile.y, BuildingType.WoodcutterHut, Race.Roman);
         for (const ft of footprint) {
-            expect(ctx.map.groundType[ctx.map.mapSize.toIndex(ft.x, ft.y)]).toBe(CONSTRUCTION_SITE_GROUND_TYPE);
+            expect(sim.map.groundType[sim.map.mapSize.toIndex(ft.x, ft.y)]).toBe(CONSTRUCTION_SITE_GROUND_TYPE);
         }
 
         // Heights should be leveled (all the same target height)
-        const heights = footprint.map(ft => ctx.map.groundHeight[ctx.map.mapSize.toIndex(ft.x, ft.y)]);
+        const heights = footprint.map(ft => sim.map.groundHeight[sim.map.mapSize.toIndex(ft.x, ft.y)]);
         const uniqueHeights = new Set(heights);
         expect(uniqueHeights.size).toBe(1);
 
         // Building should be completed (no construction site = operational)
-        const building = ctx.state.entities.find(e => e.type === EntityType.Building)!;
-        expect(ctx.constructionSiteManager.hasSite(building.id)).toBe(false);
+        const building = sim.state.entities.find(e => e.type === EntityType.Building)!;
+        expect(sim.services.constructionSiteManager.hasSite(building.id)).toBe(false);
     });
 });

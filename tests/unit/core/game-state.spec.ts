@@ -42,7 +42,7 @@ describe('GameState – edge cases', () => {
 
         expect(entity.x).toBe(10);
         expect(entity.y).toBe(10);
-        expect(state.tileOccupancy.has('5,5')).toBe(false);
-        expect(state.tileOccupancy.get('10,10')).toBe(entity.id);
+        expect(state.unitOccupancy.has('5,5')).toBe(false);
+        expect(state.unitOccupancy.get('10,10')).toBe(entity.id);
     });
 });

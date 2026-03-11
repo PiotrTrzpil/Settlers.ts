@@ -40,13 +40,13 @@ describe('Unit Placement, Selection & Movement', () => {
                 return true;
             },
             getEntity: id => state.getEntity(id),
-            tileOccupancy: state.tileOccupancy,
+            unitOccupancy: state.unitOccupancy,
             buildingOccupancy: state.buildingOccupancy,
             buildingFootprint: state.buildingFootprint,
         });
         state.initMovement(movement);
 
-        eventBus.on('entity:created', ({ entityId, type, subType, x, y }) => {
+        eventBus.on('entity:created', ({ entityId, entityType: type, subType, x, y }) => {
             if (type === EntityType.Unit) {
                 const speed = getUnitTypeSpeed(subType as UnitType);
                 movement.createController(entityId, x, y, speed);
@@ -301,8 +301,8 @@ describe('Unit Placement, Selection & Movement', () => {
             state.movement.update(0.5);
 
             expect(unit.x).toBe(7);
-            expect(state.getEntityAt(5, 5)).toBeUndefined();
-            expect(state.getEntityAt(7, 5)!.id).toBe(unit.id);
+            expect(state.getUnitAt(5, 5)).toBeUndefined();
+            expect(state.getUnitAt(7, 5)!.id).toBe(unit.id);
             expect(unitState.prevX).toBe(6);
             expect(unitState.prevY).toBe(5);
         });

@@ -190,8 +190,7 @@ describe.skipIf(!hasRealData)('Building worker auto-recruitment (integration)', 
         // The idle woodcutter should be assigned directly (no carrier needed)
         sim.runUntil(
             () => {
-                const assigned = sim.services.settlerTaskSystem
-                    .getAssignedBuilding(findUnit(sim, UnitType.Woodcutter));
+                const assigned = sim.services.settlerTaskSystem.getAssignedBuilding(findUnit(sim, UnitType.Woodcutter));
                 return assigned !== null;
             },
             {
@@ -218,10 +217,10 @@ describe.skipIf(!hasRealData)('Building worker auto-recruitment (integration)', 
         sim.spawnUnit(64, 60, UnitType.Carrier);
 
         // Wait for initial baker to be recruited
-        sim.runUntil(
-            () => sim.countEntities(EntityType.Unit, UnitType.Baker) === 1,
-            { maxTicks: 3_000, label: 'Initial baker recruited' }
-        );
+        sim.runUntil(() => sim.countEntities(EntityType.Unit, UnitType.Baker) === 1, {
+            maxTicks: 3_000,
+            label: 'Initial baker recruited',
+        });
 
         const bakerId = findUnit(sim, UnitType.Baker);
         expect(sim.services.settlerTaskSystem.getAssignedBuilding(bakerId)).toBe(buildingId);
@@ -233,20 +232,17 @@ describe.skipIf(!hasRealData)('Building worker auto-recruitment (integration)', 
         sim.eventBus.emit('building:workerLost', {
             buildingId,
             buildingType: BuildingType.Bakery,
-            settlerId: bakerId,
+            unitId: bakerId,
             player: 0,
             race: sim.state.playerRaces.get(0)!,
         });
 
         // Demand should recruit the carrier into a new baker
-        sim.runUntil(
-            () => sim.countEntities(EntityType.Unit, UnitType.Baker) === 2,
-            {
-                maxTicks: 3_000,
-                label: 'New baker recruited after workerLost event',
-                diagnose: () => diagnoseWorker(sim, UnitType.Baker),
-            }
-        );
+        sim.runUntil(() => sim.countEntities(EntityType.Unit, UnitType.Baker) === 2, {
+            maxTicks: 3_000,
+            label: 'New baker recruited after workerLost event',
+            diagnose: () => diagnoseWorker(sim, UnitType.Baker),
+        });
 
         expect(sim.countEntities(EntityType.Unit, UnitType.Baker)).toBe(2);
         expect(sim.countEntities(EntityType.Unit, UnitType.Carrier)).toBe(0);

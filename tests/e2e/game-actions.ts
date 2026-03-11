@@ -380,7 +380,7 @@ export async function findPassableTile(page: Page): Promise<{ x: number; y: numb
             const gt = game.terrain.groundType[idx]!;
             const isPassable = gt > 8 && gt !== 32;
             const key = `${tx},${ty}`;
-            const isOccupied = game.state.tileOccupancy?.has(key);
+            const isOccupied = game.state.groundOccupancy?.has(key);
             return isPassable && !isOccupied;
         });
     });

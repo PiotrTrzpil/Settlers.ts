@@ -502,7 +502,7 @@ describe.skipIf(!hasRealData)('Economy simulation (real game data)', { timeout: 
 
         const trained: { unitType: number; level: number }[] = [];
         sim.eventBus.on('barracks:trainingCompleted', e => {
-            trained.push({ unitType: e.unitType, level: e.level });
+            trained.push({ unitType: e.unitType, level: e.soldierLevel });
         });
 
         const storageId = sim.placeBuilding(BuildingType.StorageArea);

@@ -28,28 +28,12 @@ npx playwright test   # Run Playwright e2e tests (uses dev server locally)
 pnpm format           # Prettier formatting
 ```
 
-### Test environment variables
-
-```sh
-DUMP_TIMELINE=1 pnpm test:unit      # Dump timeline diagnostics for every test
-VERBOSE_MOVEMENT=1 pnpm test:unit   # Include detailed pathfinding/movement events in timeline
-VERBOSE_CHOREO=1 pnpm test:unit     # Include detailed choreography events in timeline
-```
-
 ## Key patterns
 
 - **Debug bridge**: Game exposes `window.__settlers_debug__` for e2e tests and the debug panel
 - **Test map**: `?testMap=true` query param loads a synthetic map (no game assets needed)
 - **Feature modules**: Follow patterns in `docs/architecture/feature-modules.md`
 - **Architecture rules**: Read `docs/design-rules.md` for invariants and naming conventions
-
-## Exploration
-**ALWAYS prefer Codebase Memory (MCP) or cclsp mcp over manual grep if possible:**
-
-cclsp:
-| Find usages | `find_references` |
-| Go to definition | `find_definition` |
-
 
 ## Codebase Memory (MCP)
 
@@ -99,11 +83,7 @@ If you are doing some editing patterns that are similar in many files:
 
 ALWAYS prefer mass approaches, e.g. `sd` and others. (but carefully, first think deeper if your pattern to find will not miss some similar cases (maybe do some fuzzy search first), and do a dry run of replace somehow first or a limited run before running on all needed files.)
 
-- **Validate after your changes**: Run `pnpm lint` (NOT `pnpm build`) after changes — lint runs both type-check and ESLint. `pnpm build` only type-checks and misses ESLint errors.
 
-- **NEVER run `pnpm lint` more than once per validation cycle.** Capture output to a file and grep/read from it: `pnpm lint 2>&1 | tee /tmp/lint.txt`. Do NOT re-run lint just to narrow output — read the file instead.
-
-- **NEVER run tests more than once per validation cycle.** Capture output to a file and grep/read from it: `pnpm test:unit 2>&1 | tee /tmp/test.txt`. Do NOT re-run tests just to see different output — read the file instead.
 
 
 ## Notes
@@ -156,6 +136,42 @@ pnpm test:unit 2>&1 | tee /tmp/test.txt   # run ONCE
 grep "FAIL\|error" /tmp/test.txt           # then filter from the file
 ```
 Re-running tests just to see different output is forbidden. Read `/tmp/test.txt` instead.
+
+If some tests fail, ALWAYS RUN JUST ONE FAILING TEST to investigate, then after fixing it, run another failing tests. only run all if you have fixed the failing test.
+
+## Testing Approach — MANDATORY
+
+### 1. Prefer Integration Tests
+
+**Always write integration tests over unit tests.** Integration tests exercise real game systems together (construction, logistics, movement, combat) and catch bugs that unit tests miss. Place them in `tests/unit/integration/`. Only write isolated unit tests when testing pure logic with no system dependencies.
+
+### 2. TDD for Bug Fixes
+
+**Always use TDD when fixing bugs.** Before writing any fix:
+1. Write a failing test that reproduces the bug
+2. Confirm the test fails for the right reason
+3. Implement the fix
+4. Confirm the test passes
+
+Never fix a bug without a reproducing test first. The test is proof the bug existed and proof it's fixed.
+
+### 3. Use Timeline DB to Investigate
+
+**Always query the timeline SQLite DB to understand what happened in a test.** Do not guess or add `console.log` — the timeline already captures all events, entity state changes, and console output. All timelines are saved to `tests/unit/.timeline/*.db` (SQLite), one DB per run.
+
+**IMPORTANT:** Multiple sessions may run tests concurrently. Always use `--db <path>` with the specific DB from your run, not the default (which picks the latest and may belong to another session). The DB path is printed at the start of each test run.
+
+```sh
+pnpm timeline -- --db <path>                              # show failed tests
+pnpm timeline -- --db <path> --entity 42                  # entity history
+pnpm timeline -- --db <path> --cat logistics --test <id>  # filter by category
+pnpm timeline -- --db <path> --console --test <id>        # console output
+pnpm timeline -- --db <path> --console --list             # list tests with console output
+pnpm timeline -- --db <path> --console --level error      # only console.error
+pnpm timeline -- --db <path> --sql "SELECT * FROM timeline WHERE category='movement' AND test_id=<id> ORDER BY tick"
+```
+
+Use `--sql` for custom queries when the built-in filters aren't enough. The DB schema has `timeline`, `test_runs`, and `console_log` tables.
 
 ## E2E testing
 

@@ -19,11 +19,7 @@ import { EntityType } from '@/game/entity';
 import { EMaterialType } from '@/game/economy/material-type';
 import { BuildingConstructionPhase } from '@/game/features/building-construction/types';
 import { TreeStage } from '@/game/features/trees/tree-system';
-import {
-    createSnapshot,
-    restoreFromSnapshot,
-    type GameStateSnapshot,
-} from '@/game/state/game-state-persistence';
+import { createSnapshot, restoreFromSnapshot, type GameStateSnapshot } from '@/game/state/game-state-persistence';
 import type { Game } from '@/game/game';
 
 const hasRealData = installRealGameData();
@@ -115,8 +111,7 @@ function assertInventoriesMatch(original: Simulation, restored: Simulation): voi
 function countTotalMaterials(sim: Simulation): Map<EMaterialType, number> {
     const totals = new Map<EMaterialType, number>();
 
-    const add = (mat: EMaterialType, amount: number) =>
-        totals.set(mat, (totals.get(mat) ?? 0) + amount);
+    const add = (mat: EMaterialType, amount: number) => totals.set(mat, (totals.get(mat) ?? 0) + amount);
 
     // Inventory slots (inputs + outputs for all buildings)
     for (const inv of sim.services.inventoryManager.getAllInventories()) {
@@ -219,10 +214,10 @@ describe.skipIf(!hasRealData)('Persistence: save/load round-trip', { timeout: 30
             restored = saveAndRestore(sim);
 
             // Restored sim should eventually produce LOGs from remaining trees
-            restored.runUntil(
-                () => restored!.getOutput(woodcutterId, EMaterialType.LOG) >= 1,
-                { maxTicks: 15_000, label: 'restored woodcutter produces LOG' }
-            );
+            restored.runUntil(() => restored!.getOutput(woodcutterId, EMaterialType.LOG) >= 1, {
+                maxTicks: 15_000,
+                label: 'restored woodcutter produces LOG',
+            });
             expect(restored.getOutput(woodcutterId, EMaterialType.LOG)).toBeGreaterThanOrEqual(1);
         });
 
@@ -234,10 +229,10 @@ describe.skipIf(!hasRealData)('Persistence: save/load round-trip', { timeout: 30
             sim.plantTreesNear(woodcutterId, 3);
 
             // Wait for at least 1 LOG in woodcutter output (carrier will pick it up)
-            sim.runUntil(
-                () => sim.getOutput(woodcutterId, EMaterialType.LOG) >= 1,
-                { maxTicks: 15_000, label: 'first LOG produced' }
-            );
+            sim.runUntil(() => sim.getOutput(woodcutterId, EMaterialType.LOG) >= 1, {
+                maxTicks: 15_000,
+                label: 'first LOG produced',
+            });
 
             // Run a bit more — carrier should be in transit
             sim.runTicks(120);
@@ -245,10 +240,10 @@ describe.skipIf(!hasRealData)('Persistence: save/load round-trip', { timeout: 30
             restored = saveAndRestore(sim);
 
             // Restored sim should eventually produce at least 1 BOARD
-            restored.runUntil(
-                () => restored!.getOutput(sawmillId, EMaterialType.BOARD) >= 1,
-                { maxTicks: 20_000, label: 'restored chain produces BOARD' }
-            );
+            restored.runUntil(() => restored!.getOutput(sawmillId, EMaterialType.BOARD) >= 1, {
+                maxTicks: 20_000,
+                label: 'restored chain produces BOARD',
+            });
             expect(restored.getOutput(sawmillId, EMaterialType.BOARD)).toBeGreaterThanOrEqual(1);
         });
 
@@ -261,18 +256,18 @@ describe.skipIf(!hasRealData)('Persistence: save/load round-trip', { timeout: 30
             sim.injectInput(sawmillId, EMaterialType.LOG, 3);
 
             // Let sawmill worker start processing
-            sim.runUntil(
-                () => sim.getInput(sawmillId, EMaterialType.LOG) < 3,
-                { maxTicks: 10_000, label: 'sawmill starts consuming LOG' }
-            );
+            sim.runUntil(() => sim.getInput(sawmillId, EMaterialType.LOG) < 3, {
+                maxTicks: 10_000,
+                label: 'sawmill starts consuming LOG',
+            });
 
             restored = saveAndRestore(sim);
 
             // Should eventually produce BOARD from remaining LOGs
-            restored.runUntil(
-                () => restored!.getOutput(sawmillId, EMaterialType.BOARD) >= 1,
-                { maxTicks: 15_000, label: 'restored sawmill produces BOARD' }
-            );
+            restored.runUntil(() => restored!.getOutput(sawmillId, EMaterialType.BOARD) >= 1, {
+                maxTicks: 15_000,
+                label: 'restored sawmill produces BOARD',
+            });
             expect(restored.getOutput(sawmillId, EMaterialType.BOARD)).toBeGreaterThanOrEqual(1);
         });
     });
@@ -302,10 +297,10 @@ describe.skipIf(!hasRealData)('Persistence: save/load round-trip', { timeout: 30
             restored = saveAndRestore(sim);
 
             // Construction should complete after restore
-            restored.runUntil(
-                () => !restored!.services.constructionSiteManager.hasSite(siteId),
-                { maxTicks: 80_000, label: 'restored construction completes' }
-            );
+            restored.runUntil(() => !restored!.services.constructionSiteManager.hasSite(siteId), {
+                maxTicks: 80_000,
+                label: 'restored construction completes',
+            });
             expect(restored.services.constructionSiteManager.hasSite(siteId)).toBe(false);
         });
 
@@ -326,10 +321,10 @@ describe.skipIf(!hasRealData)('Persistence: save/load round-trip', { timeout: 30
             restored = saveAndRestore(sim);
 
             // Should complete
-            restored.runUntil(
-                () => !restored!.services.constructionSiteManager.hasSite(siteId),
-                { maxTicks: 50_000, label: 'restored construction completes' }
-            );
+            restored.runUntil(() => !restored!.services.constructionSiteManager.hasSite(siteId), {
+                maxTicks: 50_000,
+                label: 'restored construction completes',
+            });
             expect(restored.services.constructionSiteManager.hasSite(siteId)).toBe(false);
         });
     });
@@ -410,10 +405,9 @@ describe.skipIf(!hasRealData)('Persistence: save/load round-trip', { timeout: 30
             // Every material type should have the same total
             const allMats = new Set([...materialsBefore.keys(), ...materialsAfter.keys()]);
             for (const mat of allMats) {
-                expect(
-                    materialsAfter.get(mat) ?? 0,
-                    `material ${EMaterialType[mat]} count mismatch`
-                ).toBe(materialsBefore.get(mat) ?? 0);
+                expect(materialsAfter.get(mat) ?? 0, `material ${EMaterialType[mat]} count mismatch`).toBe(
+                    materialsBefore.get(mat) ?? 0
+                );
             }
         });
 
@@ -470,19 +464,19 @@ describe.skipIf(!hasRealData)('Persistence: save/load round-trip', { timeout: 30
             sim.plantTreesNear(woodcutterId, 5);
 
             // Wait for first LOG
-            sim.runUntil(
-                () => sim.getOutput(woodcutterId, EMaterialType.LOG) >= 1,
-                { maxTicks: 15_000, label: 'first LOG produced' }
-            );
+            sim.runUntil(() => sim.getOutput(woodcutterId, EMaterialType.LOG) >= 1, {
+                maxTicks: 15_000,
+                label: 'first LOG produced',
+            });
             const logsAtSave = sim.getOutput(woodcutterId, EMaterialType.LOG);
 
             restored = saveAndRestore(sim);
 
             // Run until all 5 trees are cut
-            restored.runUntil(
-                () => restored!.getOutput(woodcutterId, EMaterialType.LOG) >= 5,
-                { maxTicks: 300 * 30, label: 'all 5 trees cut' }
-            );
+            restored.runUntil(() => restored!.getOutput(woodcutterId, EMaterialType.LOG) >= 5, {
+                maxTicks: 300 * 30,
+                label: 'all 5 trees cut',
+            });
 
             // Should have exactly 5 LOGs total (no duplication, no loss)
             // Allow for logs that may have been picked up by carriers
@@ -505,10 +499,10 @@ describe.skipIf(!hasRealData)('Persistence: save/load round-trip', { timeout: 30
             sim.plantTreesNear(woodcutterId, 5);
 
             // Wait for production to be active
-            sim.runUntil(
-                () => sim.getOutput(woodcutterId, EMaterialType.LOG) >= 1,
-                { maxTicks: 15_000, label: 'LOG produced' }
-            );
+            sim.runUntil(() => sim.getOutput(woodcutterId, EMaterialType.LOG) >= 1, {
+                maxTicks: 15_000,
+                label: 'LOG produced',
+            });
             sim.runTicks(120);
 
             restored = saveAndRestore(sim);
@@ -517,10 +511,10 @@ describe.skipIf(!hasRealData)('Persistence: save/load round-trip', { timeout: 30
             // TODO: Once transport persistence is complete, carrier should continue mid-delivery
             // without going idle. For now, even if carrier goes idle and re-matches, boards
             // should still be produced.
-            restored.runUntil(
-                () => restored!.getOutput(sawmillId, EMaterialType.BOARD) >= 1,
-                { maxTicks: 20_000, label: 'boards produced after restore' }
-            );
+            restored.runUntil(() => restored!.getOutput(sawmillId, EMaterialType.BOARD) >= 1, {
+                maxTicks: 20_000,
+                label: 'boards produced after restore',
+            });
             expect(restored.getOutput(sawmillId, EMaterialType.BOARD)).toBeGreaterThanOrEqual(1);
         });
 
@@ -544,10 +538,10 @@ describe.skipIf(!hasRealData)('Persistence: save/load round-trip', { timeout: 30
 
             // Worker should resume and eventually cut all remaining trees
             const logsBefore = restored.getOutput(woodcutterId, EMaterialType.LOG);
-            restored.runUntil(
-                () => restored!.getOutput(woodcutterId, EMaterialType.LOG) > logsBefore,
-                { maxTicks: 15_000, label: 'worker resumes production after restore' }
-            );
+            restored.runUntil(() => restored!.getOutput(woodcutterId, EMaterialType.LOG) > logsBefore, {
+                maxTicks: 15_000,
+                label: 'worker resumes production after restore',
+            });
             expect(restored.getOutput(woodcutterId, EMaterialType.LOG)).toBeGreaterThan(logsBefore);
         });
 
@@ -581,6 +575,54 @@ describe.skipIf(!hasRealData)('Persistence: save/load round-trip', { timeout: 30
             }
         });
 
+        it('building occupancy restored — completed buildings block pathfinding', () => {
+            // Regression: After save/restore, completed buildings don't have their
+            // footprint tiles in buildingOccupancy. addEntity sets buildingFootprint
+            // but NOT buildingOccupancy (by design — construction sites start walkable).
+            // For completed buildings, restoreBuildingFootprintBlock must be called
+            // during restore, but it was missing — only construction sites got it.
+            //
+            // Without occupancy, carriers path through building interiors, the
+            // pathfinder can't find routes to blocked entrance tiles, and transport
+            // jobs fail with "No path" or crash with double-deliver attempts.
+            sim = createSimulation();
+            sim.placeBuilding(BuildingType.ResidenceSmall);
+            const woodcutterId = sim.placeBuilding(BuildingType.WoodcutterHut);
+            const sawmillId = sim.placeBuilding(BuildingType.Sawmill);
+            sim.plantTreesNear(woodcutterId, 3);
+
+            // Let economy run so buildings are active
+            sim.runTicks(500);
+
+            // Capture buildingOccupancy before save
+            const occupancyBefore = new Set(sim.state.buildingOccupancy);
+            expect(occupancyBefore.size).toBeGreaterThan(0);
+
+            restored = saveAndRestore(sim);
+
+            // buildingOccupancy must be restored for completed buildings
+            const occupancyAfter = new Set(restored.state.buildingOccupancy);
+            expect(
+                occupancyAfter.size,
+                `buildingOccupancy lost after restore: before=${occupancyBefore.size} after=${occupancyAfter.size}`
+            ).toBe(occupancyBefore.size);
+
+            // Every tile that was blocked before must be blocked after
+            for (const key of occupancyBefore) {
+                expect(
+                    occupancyAfter.has(key),
+                    `tile ${key} was in buildingOccupancy before save but missing after restore`
+                ).toBe(true);
+            }
+
+            // The restored sim should function — carriers should deliver materials
+            restored.runUntil(() => restored!.getOutput(sawmillId, EMaterialType.BOARD) >= 1, {
+                maxTicks: 20_000,
+                label: 'restored chain produces BOARD',
+            });
+            expect(restored.errors.length).toBe(0);
+        });
+
         it('inventory state survives restore — amounts match exactly', () => {
             sim = createSimulation();
             sim.placeBuilding(BuildingType.ResidenceSmall);
@@ -591,10 +633,10 @@ describe.skipIf(!hasRealData)('Persistence: save/load round-trip', { timeout: 30
             sim.injectOutput(sawmillId, EMaterialType.BOARD, 2);
 
             // Let the sawmill process one LOG
-            sim.runUntil(
-                () => sim.getInput(sawmillId, EMaterialType.LOG) < 5,
-                { maxTicks: 10_000, label: 'sawmill starts processing' }
-            );
+            sim.runUntil(() => sim.getInput(sawmillId, EMaterialType.LOG) < 5, {
+                maxTicks: 10_000,
+                label: 'sawmill starts processing',
+            });
 
             const logsBefore = sim.getInput(sawmillId, EMaterialType.LOG);
             const boardsBefore = sim.getOutput(sawmillId, EMaterialType.BOARD);

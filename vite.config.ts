@@ -11,6 +11,14 @@ const isTest = process.env['VITEST'] === 'true';
 // Fast build skips fengari/node-polyfills (incompatible with rolldown-vite)
 const isFastBuild = process.env['FAST_BUILD'] === '1';
 
+// Deterministic run ID shared by all Vitest workers → single timeline DB per run
+const timelineRunId = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+if (isTest) {
+    const dbPath = `tests/unit/.timeline/run_${timelineRunId}.db`;
+     
+    console.log(`Timeline DB: ${dbPath}`);
+}
+
 // Load node polyfills plugin only when needed (full build + non-test)
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const plugins: any[] = [vue(), glsl(), wasm(), devWriteFilePlugin(resolve(__dirname))];
@@ -61,11 +69,21 @@ export default defineConfig({
     test: {
         environment: 'node',
         include: ['tests/unit/**/*.spec.ts'],
-        reporters: process.env['CI'] ? ['verbose', 'github-actions'] : ['verbose'],
+        reporters: process.env['CI'] ? ['verbose', 'github-actions'] : ['dot'],
+        setupFiles: ['tests/unit/helpers/silence-console.ts'],
+        disableConsoleIntercept: true,
         // Timeouts to prevent hung processes
         testTimeout: 10000,
         hookTimeout: 10000,
         teardownTimeout: 5000,
         passWithNoTests: true,
+        // Shared run ID so all workers write to the same timeline DB file
+        env: {
+            TIMELINE_RUN_ID: timelineRunId,
+        },
+        // Node v25+ exposes a global localStorage that warns when accessed without
+        // --localstorage-file. Game code accesses localStorage transitively during tests.
+        // Give each worker fork a unique temp file (PID-based) to avoid SQLite lock contention.
+        execArgv: ['--localstorage-file', `${process.env['TMPDIR'] ?? '/tmp'}/vitest-localstorage`],
     },
 });

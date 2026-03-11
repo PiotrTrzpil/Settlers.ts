@@ -27,10 +27,11 @@
  * See test-scenarios.ts for pre-configured simulation setups (createScenario).
  */
 
-import { onTestFailed } from 'vitest';
+import { onTestFinished } from 'vitest';
 import { installTestGameData, installRealGameData, resetTestGameData } from './test-game-data';
 import { createTestMap, TERRAIN, type TestMap } from './test-map';
-import { TimelineRecorder, type TimelineCategory } from './timeline-recorder';
+import { TimelineRecorder } from './timeline-recorder';
+import { wireSimulationTimeline, formatSlots } from './simulation-timeline';
 import { EventBus, type GameEvents } from '@/game/event-bus';
 import { GameState } from '@/game/game-state';
 import { GameServices } from '@/game/game-services';
@@ -50,23 +51,8 @@ import { populateMapBuildings } from '@/game/features/building-construction';
 import { populateMapSettlers } from '@/game/systems/map-settlers';
 import type { MapBuildingData, MapSettlerData } from '@/resources/map/map-entity-data';
 import { BuildingConstructionPhase } from '@/game/features/building-construction/types';
-import type { InventorySlot } from '@/game/systems/inventory/inventory-slot';
 import type { Entity } from '@/game/entity';
-import { EventFmt } from '@/game/debug/event-formatting';
 import { query } from '@/game/ecs';
-
-// ─── Formatting helpers ──────────────────────────────────────────
-
-function formatSlots(slots: InventorySlot[]): string {
-    const parts: string[] = [];
-    for (const slot of slots) {
-        if (slot.currentAmount > 0 || slot.reservedAmount > 0) {
-            const res = slot.reservedAmount > 0 ? `(r${slot.reservedAmount})` : '';
-            parts.push(`${EMaterialType[slot.materialType]}×${slot.currentAmount}${res}`);
-        }
-    }
-    return parts.join(',');
-}
 
 // ─── Types ───────────────────────────────────────────────────────
 
@@ -135,17 +121,24 @@ class SmartBuildingPlacer {
 
     /** Find the closest valid position to center. */
     findBuildingPosition(buildingType: BuildingType, race = Race.Roman): { x: number; y: number } {
-        const result = spiralSearch(this.centerX, this.centerY, this.mapWidth, this.mapHeight, (x, y) =>
-            canPlaceBuildingFootprint(
-                this.terrain,
-                this.state.tileOccupancy,
-                x,
-                y,
-                buildingType,
-                race,
-                this.state.buildingFootprint
+        const result = spiralSearch(this.centerX, this.centerY, this.mapWidth, this.mapHeight, (x, y) => {
+            if (
+                !canPlaceBuildingFootprint(
+                    this.terrain,
+                    this.state.groundOccupancy,
+                    x,
+                    y,
+                    buildingType,
+                    race,
+                    this.state.buildingFootprint
+                )
             )
-        );
+                return false;
+            // In tests, buildings are often placed as instantly completed.
+            // Avoid footprint tiles occupied by units to prevent trapping them.
+            const fp = getBuildingFootprint(x, y, buildingType, race);
+            return fp.every(t => !this.state.unitOccupancy.has(tileKey(t.x, t.y)));
+        });
         if (!result) throw new Error(`SmartBuildingPlacer: no valid position for ${BuildingType[buildingType]}`);
         return result;
     }
@@ -157,7 +150,7 @@ class SmartBuildingPlacer {
             this.centerY,
             this.mapWidth,
             this.mapHeight,
-            (x, y) => !this.state.tileOccupancy.has(tileKey(x, y))
+            (x, y) => !this.state.groundOccupancy.has(tileKey(x, y)) && !this.state.unitOccupancy.has(tileKey(x, y))
         );
         if (!result) throw new Error('SmartBuildingPlacer: no open position found');
         return result;
@@ -170,7 +163,8 @@ class SmartBuildingPlacer {
             if (y - clearance < 0 || y + clearance >= this.mapHeight) return false;
             for (let dy = -clearance; dy <= clearance; dy++) {
                 for (let dx = -clearance; dx <= clearance; dx++) {
-                    if (this.state.tileOccupancy.has(tileKey(x + dx, y + dy))) return false;
+                    const k = tileKey(x + dx, y + dy);
+                    if (this.state.groundOccupancy.has(k) || this.state.unitOccupancy.has(k)) return false;
                 }
             }
             return true;
@@ -189,45 +183,12 @@ export interface SimulationOptions {
     race?: Race;
 }
 
-// ─── Flags ──────────────────────────────────────────────────────
-
-/** Set DUMP_TIMELINE=1 to dump timeline on every test: `DUMP_TIMELINE=1 pnpm test:unit` */
-const DUMP_TIMELINE = !!process.env['DUMP_TIMELINE'];
-
-/** Set VERBOSE_MOVEMENT=1 to enable detailed pathfinding/movement events in the timeline */
-const VERBOSE_MOVEMENT = !!process.env['VERBOSE_MOVEMENT'];
-
-/** Set VERBOSE_CHOREO=1 to enable detailed choreography events in the timeline */
-const VERBOSE_CHOREO = !!process.env['VERBOSE_CHOREO'];
-
-// ─── Timeline auto-wiring ────────────────────────────────────────
-
-/** Map event namespace to timeline category (unmapped namespaces use the namespace itself). */
-const CATEGORY_MAP: Record<string, TimelineCategory> = {
-    building: 'building',
-    unit: 'unit',
-    settler: 'unit',
-    carrier: 'carrier',
-    inventory: 'inventory',
-    logistics: 'logistics',
-    entity: 'world',
-    terrain: 'world',
-    tree: 'world',
-    crop: 'world',
-    movement: 'movement',
-    choreo: 'unit',
-    combat: 'combat',
-    construction: 'building',
-    production: 'building',
-    barracks: 'building',
-};
-
-/** Entity ID field priority — first match wins. */
-const ENTITY_ID_KEYS = ['entityId', 'unitId', 'buildingId', 'carrierId', 'attackerId'] as const;
-
 // ─── Invariant checking ─────────────────────────────────────────
 
 const INVARIANT_CHECK_INTERVAL = 30; // every ~1 simulated second
+
+/** Auto-incrementing counter for unique test IDs within a run. */
+let simulationCounter = 0;
 
 // ─── Simulation class ────────────────────────────────────────────────
 
@@ -240,6 +201,7 @@ export class Simulation {
     readonly timeline: TimelineRecorder;
     readonly mapWidth: number;
     readonly mapHeight: number;
+    readonly testId: string;
 
     private readonly tickSystems: ReturnType<GameServices['getTickSystems']>;
     private readonly placer: SmartBuildingPlacer;
@@ -250,7 +212,8 @@ export class Simulation {
         const { mapWidth = 128, mapHeight = 128, useStubData = false, race = Race.Roman } = opts;
         this.mapWidth = mapWidth;
         this.mapHeight = mapHeight;
-        this.timeline = new TimelineRecorder();
+        this.testId = `sim_${++simulationCounter}_${Date.now()}`;
+        this.timeline = new TimelineRecorder(this.testId);
 
         if (useStubData) {
             installTestGameData();
@@ -272,7 +235,7 @@ export class Simulation {
 
         // Subscribe timeline FIRST — before any other system registers handlers,
         // so every event is captured from the very first entity placement.
-        this.subscribeTimeline();
+        wireSimulationTimeline(this.eventBus, this.timeline, () => this.tickCount);
 
         const settings = new GameSettingsManager();
         settings.resetToDefaults();
@@ -315,70 +278,18 @@ export class Simulation {
         this.tickSystems = this.services.getTickSystems();
         this.placer = new SmartBuildingPlacer(this.state, this.map.terrain, mapWidth, mapHeight);
 
-        if (VERBOSE_MOVEMENT) {
-            this.state.movement.verbose = true;
-        }
-        if (VERBOSE_CHOREO) {
-            this.services.settlerTaskSystem.verbose = true;
-        }
+        // Always enable verbose subsystems — all data goes to timeline DB.
+        this.state.movement.verbose = true;
+        this.services.settlerTaskSystem.verbose = true;
 
-        // Dump timeline automatically when a test assertion fails
-        onTestFailed(() => {
-            if (!DUMP_TIMELINE && this.errors.length === 0) {
-                this.dumpDiagnostics();
-            }
+        // Finalize timeline DB record after test completes.
+        // Vitest hook order: afterEach → onTestFinished → onTestFailed.
+        // ctx.task.result.state is 'pass' | 'fail' at this point.
+        onTestFinished(ctx => {
+            const failed = ctx.task.result?.state === 'fail' || this.errors.length > 0;
+            this.timeline.finalize(failed ? 'failed' : 'passed', this.tickCount, this.errors.length);
+            this.timeline.close();
         });
-    }
-
-    // ─── Timeline event subscriptions ─────────────────────────────
-
-    /**
-     * Auto-wire ALL events from the EventBus to the timeline recorder.
-     *
-     * Wraps `eventBus.emit` so every event is captured automatically — no
-     * manual wiring needed when new events are added to GameEvents.
-     *
-     * Category, label, and entity ID are derived from the event name and payload:
-     *   - `building:placed`  → category=building, label=placed, entityId from payload
-     *   - `settler:taskStarted` → category=unit, label=task_started, unitId from payload
-     */
-    private subscribeTimeline() {
-        const origEmit = this.eventBus.emit.bind(this.eventBus);
-        this.eventBus.emit = (<K extends keyof GameEvents>(event: K, payload: GameEvents[K]) => {
-            this.recordTimelineEvent(event as string, payload as Record<string, unknown>);
-            return origEmit(event, payload);
-        }) as typeof this.eventBus.emit;
-    }
-
-    private recordTimelineEvent(event: string, payload: Record<string, unknown>) {
-        const colonIdx = event.indexOf(':');
-        const namespace = colonIdx >= 0 ? event.slice(0, colonIdx) : event;
-        const action = colonIdx >= 0 ? event.slice(colonIdx + 1) : event;
-
-        // Gate verbose events
-        if (namespace === 'movement' && !VERBOSE_MOVEMENT) return;
-        if (namespace === 'choreo' && !VERBOSE_CHOREO) return;
-
-        const category = (CATEGORY_MAP[namespace] ?? namespace) as TimelineCategory;
-        const label = action.replace(/[A-Z]/g, m => '_' + m.toLowerCase());
-
-        // Find primary entity ID from payload
-        let entityId: number | undefined;
-        for (const key of ENTITY_ID_KEYS) {
-            if (typeof payload[key] === 'number') {
-                entityId = payload[key] as number;
-                break;
-            }
-        }
-
-        // Use inventory slotType as label (preserves input/output distinction)
-        const finalLabel = event === 'inventory:changed' ? (payload['slotType'] as string) : label;
-
-        // Format using EventFmt when available, fall back to JSON
-        const formatter = EventFmt[event as keyof typeof EventFmt] as ((e: unknown) => string) | undefined;
-        const detail = formatter ? formatter(payload) : JSON.stringify(payload);
-
-        this.timeline.record(this.tickCount, category, entityId, finalLabel, detail);
     }
 
     // ─── Tick & run ───────────────────────────────────────────────
@@ -391,7 +302,7 @@ export class Simulation {
             } catch (e) {
                 const err = e instanceof Error ? e : new Error(String(e));
                 this.errors.push({ tick: this.tickCount, system: group, error: err });
-                this.timeline.record(this.tickCount, 'error', undefined, group, err.message);
+                this.timeline.record({ tick: this.tickCount, category: 'error', event: group, detail: err.message });
             }
         }
         if (this.tickCount % INVARIANT_CHECK_INTERVAL === 0) {
@@ -418,52 +329,12 @@ export class Simulation {
         return elapsed;
     }
 
-    /** Dump diagnostics on runUntil timeout using a smart summary to avoid OOM on long runs. */
-    private dumpTimeoutDiagnostics(opts: RunUntilOptions, maxTicks: number, errorsBefore: number) {
+    /** On runUntil timeout, print header + hint to query the timeline DB. */
+    private dumpTimeoutDiagnostics(opts: RunUntilOptions, maxTicks: number, _errorsBefore: number) {
         const label = opts.label ?? 'predicate';
         const header = `TIMEOUT: "${label}" not reached in ${maxTicks} ticks`;
-        const extra = opts.diagnose ? `\n[Diagnosis] ${opts.diagnose()}` : '';
-
-        const sep = '═'.repeat(70);
-        console.log(`\n${sep}`);
-        console.log(`  ${header}${extra}`);
-        console.log(sep);
-
-        this.dumpSnapshot();
-
-        console.log(`\n[Timeline Summary]`);
-        console.log(this.timeline.formatSummary(50, 200));
-
-        this.dumpNewErrors(errorsBefore);
-        console.log(`${sep}\n`);
-    }
-
-    private dumpSnapshot(): void {
-        const snap = this.snapshot();
-        console.log(`\n[Snapshot at tick ${snap.tick}]`);
-        console.log(`  Entities: ${JSON.stringify(snap.entityCounts)}`);
-        for (const b of snap.buildings) {
-            const parts = [b.inputs, b.outputs].filter(Boolean);
-            console.log(`    #${b.id} ${b.type}${parts.length ? ': ' + parts.join(' | ') : ''}`);
-        }
-        for (const c of snap.carriers) {
-            console.log(`    #${c.id} ${c.status} ${c.pos}${c.carrying ? ' ' + c.carrying : ''}`);
-        }
-    }
-
-    private dumpNewErrors(errorsBefore: number): void {
-        if (this.errors.length <= errorsBefore) return;
-        const newErrors = this.errors.slice(errorsBefore);
-        const unique = new Map<string, { count: number; tick: number; system: string }>();
-        for (const e of newErrors) {
-            const existing = unique.get(e.error.message);
-            if (existing) existing.count++;
-            else unique.set(e.error.message, { count: 1, tick: e.tick, system: e.system });
-        }
-        console.log(`\n[Errors] ${newErrors.length} error(s) during run (${unique.size} unique):`);
-        for (const [msg, info] of unique) {
-            console.log(`  [tick ${info.tick}, ${info.system}] (×${info.count}) ${msg}`);
-        }
+        const extra = opts.diagnose ? `\n  [Diagnosis] ${opts.diagnose()}` : '';
+        console.log(`\n  ${header}${extra}`);
     }
 
     // ─── Snapshot ─────────────────────────────────────────────────
@@ -879,51 +750,6 @@ export class Simulation {
 
     // ─── Diagnostics dump ──────────────────────────────────────────
 
-    /** Print timeline and snapshot to console. Call from afterEach or onTestFailed. */
-    dumpDiagnostics(lastEntries = 100) {
-        this.dumpDiagnosticsBody(
-            `DIAGNOSTICS at tick ${this.tickCount} (${this.errors.length} errors)`,
-            lastEntries,
-            0
-        );
-    }
-
-    private dumpDiagnosticsBody(header: string, lastEntries: number, errorsBefore: number) {
-        const sep = '═'.repeat(70);
-        console.log(`\n${sep}`);
-        console.log(`  ${header}`);
-        console.log(sep);
-
-        const snap = this.snapshot();
-        console.log(`\n[Snapshot at tick ${snap.tick}]`);
-        console.log(`  Entities: ${JSON.stringify(snap.entityCounts)}`);
-        for (const b of snap.buildings) {
-            const parts = [b.inputs, b.outputs].filter(Boolean);
-            console.log(`    #${b.id} ${b.type}${parts.length ? ': ' + parts.join(' | ') : ''}`);
-        }
-        for (const c of snap.carriers) {
-            console.log(`    #${c.id} ${c.status} ${c.pos}${c.carrying ? ' ' + c.carrying : ''}`);
-        }
-
-        console.log(`\n[Timeline — last ${lastEntries} entries]`);
-        console.log(this.timeline.format(lastEntries));
-
-        if (this.errors.length > errorsBefore) {
-            const newErrors = this.errors.slice(errorsBefore);
-            const unique = new Map<string, { count: number; tick: number; system: string }>();
-            for (const e of newErrors) {
-                const existing = unique.get(e.error.message);
-                if (existing) existing.count++;
-                else unique.set(e.error.message, { count: 1, tick: e.tick, system: e.system });
-            }
-            console.log(`\n[Errors] ${newErrors.length} error(s) during run (${unique.size} unique):`);
-            for (const [msg, info] of unique) {
-                console.log(`  [tick ${info.tick}, ${info.system}] (×${info.count}) ${msg}`);
-            }
-        }
-        console.log(`${sep}\n`);
-    }
-
     /**
      * Register a virtual territory-generating building so the entire map
      * belongs to a player. Workers use territory-aware spatial queries,
@@ -940,9 +766,6 @@ export class Simulation {
     // ─── Lifecycle ────────────────────────────────────────────────
 
     destroy() {
-        if (DUMP_TIMELINE || this.errors.length > 0) {
-            this.dumpDiagnostics();
-        }
         this.services.destroy();
     }
 
@@ -1032,3 +855,6 @@ export function cleanupSimulation(): void {
 
 // Re-export scenario builders for convenience
 export { createScenario, type SingleBuildingSim, type ChainSim } from './test-scenarios';
+
+// Re-export diagnostic helpers for convenience
+export { scanFreeTiles, printBuildingDiagnosticMap, type TileCandidate } from './simulation-diagnostics';

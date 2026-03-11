@@ -19,6 +19,7 @@
     "lint:fix": "eslint src tests --fix",
     "format": "prettier --write \"src/**/*.{ts,vue}\"",
     "format:check": "prettier --check \"src/**/*.{ts,vue}\"",
+    "timeline": "node scripts/timeline.mjs",
     "analyze:circular": "madge --circular --extensions ts src/",
     "analyze:type-coverage": "type-coverage --project tsconfig.json --detail --strict",
     "analyze:unused": "knip",
@@ -53,12 +54,14 @@
     "@eslint/js": "^10.0.1",
     "@playwright/test": "^1.58.2",
     "@rollup/pluginutils": "^5.3.0",
+    "@types/better-sqlite3": "^7.6.13",
     "@types/howler": "^2.2.12",
     "@types/jsdom": "^27.0.0",
     "@types/node": "^25.3.0",
     "@vitejs/plugin-vue": "^6.0.4",
     "@vitest/ui": "^4.0.18",
     "@vue/test-utils": "^2.4.6",
+    "better-sqlite3": "^12.6.2",
     "dependency-cruiser": "^17.3.8",
     "eslint": "^10.0.1",
     "eslint-import-resolver-typescript": "^4.4.4",
@@ -86,5 +89,8 @@
     "vitest": "^4.0.18",
     "vue-eslint-parser": "^10.4.0",
     "vue-tsc": "^3.2.5"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": ["better-sqlite3"]
   }
 }

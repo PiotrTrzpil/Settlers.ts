@@ -15,52 +15,52 @@ Also, you may be working concurrently with other workers or the user. do not sta
 
 $ARGUMENTS
 
-## Investigation Process
+## Process: Test First, Then Fix
 
-### 1. Reproduce & Understand
+### 1. Speed Explore (MINIMAL — under 1 minute, minimize context usage)
 
-- Read any stack traces, error messages, or symptoms described
-- Locate the failing code path
-- Understand what the code *should* do vs what it actually does
-- Identify the exact point where behavior diverges from expectations
+**Goal: Get just enough context to write a failing test. Do NOT fully understand the bug yet.**
 
-### 2. Root Cause Analysis
+- Read the bug description / stack trace / symptoms
+- 1-2 targeted lookups max (`find_definition`, `search_graph`, or a single file read of the relevant lines)
+- Form a rough hypothesis — it's OK to be wrong, the test will tell you
+- **Do NOT read entire files. Do NOT deep-dive. Stop as soon as you can write a test.**
 
-Go deeper than the immediate fix. Ask yourself:
+### 2. Write a Failing Test IMMEDIATELY
 
-- **Why did this bug exist in the first place?**
-  - Was there a missing invariant or contract?
-  - Was the API confusing or easy to misuse?
-  - Was there insufficient type safety?
-  - Was there a missing test that would have caught this?
+**Write a failing test before doing any more investigation.** This is non-negotiable.
 
-- **What made this bug hard to notice?**
-  - Silent failures (swallowed errors, fallback values)
-  - Missing validation at boundaries
-  - Insufficient logging or observability
-  - Test gaps
+1. Create an integration test in `tests/unit/integration/` that reproduces the bug (or as close as you can get)
+2. Run it — confirm it fails
+3. If it fails for the wrong reason or doesn't reproduce the bug, use the **timeline DB** to understand what happened:
+   ```sh
+   pnpm timeline -- --db <path> --entity <id>
+   pnpm timeline -- --db <path> --cat <category> --test <id>
+   pnpm timeline -- --db <path> --sql "SELECT ..."
+   ```
+4. Adjust the test and re-run. Iterate until you have a test that fails for the right reason.
 
-- **Could this same class of bug exist elsewhere?**
-  - Search for similar patterns in the codebase
-  - Look for copy-pasted code that might have the same issue
-  - Check if other callers of the same API might have the same misunderstanding
+**It's OK if the first test isn't perfect** — you can refine it after understanding more. What matters is having a concrete, runnable reproduction as early as possible. A wrong test that runs is more valuable than 20 minutes of exploration.
 
-### 3. Systemic Improvements
+### 3. Deep Investigation (now with a test harness)
 
-Before writing the fix, identify preventive measures:
+Now that you have a failing test, investigate properly:
 
-- **Type-level prevention**: Can we make this bug impossible with better types? (branded types, discriminated unions, non-optional fields)
-- **API design**: Should the function signature be changed to prevent misuse?
-- **Validation**: Should we add runtime checks that fail loudly?
-- **Abstraction**: Would a helper function or pattern make the correct usage obvious?
-- **Documentation**: If the gotcha is unavoidable, should it be documented?
+- Use the timeline DB to trace exactly what happened during the test
+- Use `trace_call_path`, `find_references`, `query_graph` to understand the code flow
+- Read targeted code sections as needed
+
+Ask yourself:
+- **Why does this bug exist?** Missing invariant? Confusing API? Insufficient types? Copy-paste error?
+- **Could this same class of bug exist elsewhere?** Search for similar patterns.
+- **Can we prevent this class of bug?** Better types, API redesign, runtime validation?
 
 ### 4. Fix the Bug
 
-Apply the minimal correct fix:
-- Fix the immediate issue
-- Add a regression test that would have caught this
-- Apply any systemic improvements identified above (if scoped and safe)
+1. Implement the minimal correct fix
+2. Run the failing test — confirm it passes
+3. Apply any scoped systemic improvements (better types, validation, API clarification)
+4. Run `pnpm lint` to validate
 
 ### 5. Sweep for Similar Issues
 

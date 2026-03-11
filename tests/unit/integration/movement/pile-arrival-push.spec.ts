@@ -22,11 +22,9 @@ function findTileViolations(sim: Simulation, tick: number): string[] {
         const eType = UnitType[e.subType] ?? `?${e.subType}`;
         const existing = tileToUnit.get(key);
         if (existing) {
-            const occupant = sim.state.tileOccupancy.get(key);
+            const occupant = sim.state.unitOccupancy.get(key);
             const occupantEntity = occupant !== undefined ? sim.state.getEntity(occupant) : undefined;
-            const occupantDesc = occupantEntity
-                ? `${EntityType[occupantEntity.type]}#${occupant}`
-                : `none`;
+            const occupantDesc = occupantEntity ? `${EntityType[occupantEntity.type]}#${occupant}` : `none`;
             violations.push(
                 `tick ${tick}: ${existing.type}#${existing.id} and ${eType}#${e.id} at (${e.x},${e.y}) occupancy=${occupantDesc}`
             );

@@ -39,10 +39,10 @@ describe.skipIf(!hasRealData)('Concurrent carrier pickup (real game data)', { ti
             taskFailures.push({ unitId: e.unitId, failedStep: e.failedStep, nodeIndex: e.nodeIndex });
         });
         sim.eventBus.on('carrier:transportCancelled', e => {
-            transportCancellations.push({ carrierId: e.carrierId, reason: e.reason });
+            transportCancellations.push({ carrierId: e.unitId, reason: e.reason });
         });
         sim.eventBus.on('carrier:pickupFailed', e => {
-            pickupFailures.push({ entityId: e.entityId, material: e.material });
+            pickupFailures.push({ entityId: e.unitId, material: e.material });
         });
 
         // Wait for construction to finish (all materials delivered)
@@ -82,10 +82,10 @@ describe.skipIf(!hasRealData)('Concurrent carrier pickup (real game data)', { ti
             taskFailures.push({ unitId: e.unitId, failedStep: e.failedStep, nodeIndex: e.nodeIndex });
         });
         sim.eventBus.on('carrier:transportCancelled', e => {
-            transportCancellations.push({ carrierId: e.carrierId, reason: e.reason });
+            transportCancellations.push({ carrierId: e.unitId, reason: e.reason });
         });
         sim.eventBus.on('carrier:pickupFailed', e => {
-            pickupFailures.push({ entityId: e.entityId, material: e.material });
+            pickupFailures.push({ entityId: e.unitId, material: e.material });
         });
         sim.eventBus.on('carrier:deliveryComplete', () => {
             deliveryCount++;

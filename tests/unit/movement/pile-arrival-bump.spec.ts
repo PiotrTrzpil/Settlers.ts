@@ -22,7 +22,7 @@ function assertOccupancyConsistent(state: GameState, entityIds: number[]): void 
         const e = state.getEntity(id);
         if (!e) continue;
         const key = tileKey(e.x, e.y);
-        const occupant = state.tileOccupancy.get(key);
+        const occupant = state.unitOccupancy.get(key);
         expect(occupant, `tile (${e.x},${e.y}) should be occupied by ${id}`).toBe(id);
     }
     // No two entities should share a tile
@@ -162,8 +162,11 @@ describe('Pile arrival – bump and busy behavior', () => {
 
         for (let i = 0; i < 60; i++) {
             state.movement.update(0.1);
-            const occupant = state.tileOccupancy.get(pileKey);
-            if (occupant !== undefined && (pileOccupants.length === 0 || pileOccupants[pileOccupants.length - 1] !== occupant)) {
+            const occupant = state.unitOccupancy.get(pileKey);
+            if (
+                occupant !== undefined &&
+                (pileOccupants.length === 0 || pileOccupants[pileOccupants.length - 1] !== occupant)
+            ) {
                 pileOccupants.push(occupant);
             }
             assertOccupancyConsistent(state, [c1.id, c2.id, c3.id]);

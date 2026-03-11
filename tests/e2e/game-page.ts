@@ -76,9 +76,15 @@ export class GamePage {
 
     // ── Navigation ──────────────────────────────────────────
 
-    /** Navigate to the map view with an optional test/empty map. */
-    async goto(options: { testMap?: boolean; emptyMap?: boolean } = {}): Promise<void> {
-        const query = options.testMap ? '?testMap=true' : options.emptyMap ? '?emptyMap=true' : '';
+    /** Navigate to the map view with an optional test/empty map or specific map file. */
+    async goto(options: { testMap?: boolean; emptyMap?: boolean; mapFile?: string } = {}): Promise<void> {
+        const query = options.testMap
+            ? '?testMap=true'
+            : options.emptyMap
+              ? '?emptyMap=true'
+              : options.mapFile
+                ? `?mapFile=${encodeURIComponent(options.mapFile)}`
+                : '';
         await this.page.goto(`/map-view${query}`);
     }
 

@@ -229,7 +229,7 @@ describe('placement filter integration', () => {
             groundType: map.terrain.groundType,
             groundHeight: map.terrain.groundHeight,
             mapSize: map.terrain.mapSize,
-            tileOccupancy: map.occupancy,
+            groundOccupancy: map.occupancy,
             race: Race.Roman,
             placementFilter: filter,
             player: 1,

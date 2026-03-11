@@ -116,7 +116,7 @@ describe.skipIf(!hasRealData)('Pile System Integration', { timeout: 10_000 }, ()
 
             // Emit building:completed — InventoryPileSync.onBuildingCompleted clears construction piles
             sim.eventBus.emit('building:completed', {
-                entityId: buildingId,
+                buildingId,
                 buildingType: BuildingType.WoodcutterHut,
                 race: sim.state.getEntityOrThrow(buildingId, 'test').race,
             });
