@@ -1,7 +1,7 @@
 /**
  * Composable for building debug info displayed in the selection panel.
  *
- * Aggregates construction state, inventory, and material request data for a selected building.
+ * Aggregates construction state, inventory, and demand/job data for a selected building.
  */
 
 import { computed, type Ref } from 'vue';
@@ -9,7 +9,6 @@ import type { Entity } from '@/game/entity';
 import { EntityType } from '@/game/entity';
 import { EMaterialType } from '@/game/economy';
 import { BuildingConstructionPhase } from '@/game/features/building-construction';
-import { RequestStatus } from '@/game/features/logistics/resource-request';
 import type { Game } from '@/game/game';
 
 export interface InventorySlotInfo {
@@ -71,7 +70,8 @@ export function useBuildingDebugInfo(
         const svc = game.value.services;
         const site = svc.constructionSiteManager.getSite(entity.id);
         const inventory = svc.inventoryManager.getInventory(entity.id);
-        const requests = [...svc.requestManager.getRequestsForBuilding(entity.id, false)];
+        const activeJobs = svc.logisticsDispatcher.jobStore.getJobsForBuilding(entity.id);
+        const demands = [...svc.demandQueue.getAllDemands()].filter(d => d.buildingId === entity.id);
 
         // Construction info
         const isConstructing = site !== undefined && site.phase !== BuildingConstructionPhase.Completed;
@@ -90,21 +90,18 @@ export function useBuildingDebugInfo(
             }
         }
 
-        // Material request info - derive from RequestManager (source of truth)
-        const activeRequests = requests.filter(
-            r => r.status !== RequestStatus.Fulfilled && r.status !== RequestStatus.Cancelled
-        );
-        const hasProduction = activeRequests.length > 0 || inventory !== undefined;
-        const pendingInputs = activeRequests.map(r => EMaterialType[r.materialType]);
+        // Material demand info — derive from demand queue and active jobs
+        const hasProduction = demands.length > 0 || activeJobs.length > 0 || inventory !== undefined;
+        const pendingInputs = demands.map(d => EMaterialType[d.materialType]);
 
         // Inventory info
         const hasInventory = inventory !== undefined;
         const inventorySlots: InventorySlotInfo[] = [];
 
         if (inventory) {
-            const reservationManager = svc.logisticsDispatcher.getReservationManager();
+            const jobStore = svc.logisticsDispatcher.jobStore;
             for (const slot of inventory.inputSlots) {
-                const reserved = reservationManager.getReservedAmount(entity.id, slot.materialType);
+                const reserved = jobStore.getReservedAmount(entity.id, slot.materialType);
                 inventorySlots.push({
                     type: 'In',
                     material: EMaterialType[slot.materialType],
@@ -113,7 +110,7 @@ export function useBuildingDebugInfo(
                 });
             }
             for (const slot of inventory.outputSlots) {
-                const reserved = reservationManager.getReservedAmount(entity.id, slot.materialType);
+                const reserved = jobStore.getReservedAmount(entity.id, slot.materialType);
                 inventorySlots.push({
                     type: 'Out',
                     material: EMaterialType[slot.materialType],
@@ -123,12 +120,12 @@ export function useBuildingDebugInfo(
             }
         }
 
-        // Request info
-        const requestInfos: RequestInfo[] = requests.slice(0, 5).map(req => ({
-            id: req.id,
-            material: EMaterialType[req.materialType],
-            status: req.status === RequestStatus.InProgress ? 'progress' : 'pending',
-            statusLabel: req.status === RequestStatus.InProgress ? '⚙' : '⏳',
+        // Request info — show active transport jobs targeting this building
+        const requestInfos: RequestInfo[] = activeJobs.slice(0, 5).map(job => ({
+            id: job.id,
+            material: EMaterialType[job.material],
+            status: job.phase,
+            statusLabel: job.phase === 'picked-up' ? '⚙' : '⏳',
         }));
 
         return {
@@ -139,7 +136,7 @@ export function useBuildingDebugInfo(
             pendingInputs,
             hasInventory,
             inventorySlots,
-            requestCount: requests.length,
+            requestCount: activeJobs.length + demands.length,
             requests: requestInfos,
         };
     });

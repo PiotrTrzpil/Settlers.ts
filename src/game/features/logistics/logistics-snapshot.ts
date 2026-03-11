@@ -6,20 +6,19 @@
  */
 
 import type { GameState } from '../../game-state';
-import type { RequestManager } from './request-manager';
+import type { DemandQueue, DemandEntry } from './demand-queue';
 import type { CarrierRegistry } from '../../systems/carrier-registry';
 import type { LogisticsDispatcher } from './logistics-dispatcher';
 import type { SettlerTaskSystem } from '../settler-tasks/settler-task-system';
 import type { BuildingInventoryManager } from '../../systems/inventory/building-inventory';
 import type { UnitReservationRegistry } from '../../systems/unit-reservation';
 import type { ConstructionSiteManager } from '../building-construction/construction-site-manager';
-import type { ResourceRequest } from './resource-request';
-import { RequestPriority, RequestStatus } from './resource-request';
+import { DemandPriority } from './demand-queue';
 import { EMaterialType } from '../../economy/material-type';
 import { EntityType } from '../../entity';
 import { UnitType, UNIT_TYPE_CONFIG, isUnitTypeMilitary } from '../../core/unit-types';
 import { BuildingType } from '../../buildings/building-type';
-import { SlotKind, type PileKind } from '../../core/pile-kind';
+import { SlotKind } from '../../core/pile-kind';
 import { SettlerState } from '../settler-tasks/types';
 import { query } from '../../ecs';
 import {
@@ -33,7 +32,7 @@ import {
 /** All service references needed by snapshot functions. */
 export interface SnapshotConfig {
     gameState: GameState;
-    requestManager: RequestManager;
+    demandQueue: DemandQueue;
     carrierRegistry: CarrierRegistry;
     logisticsDispatcher: LogisticsDispatcher;
     settlerTaskSystem: SettlerTaskSystem;
@@ -42,20 +41,19 @@ export interface SnapshotConfig {
     constructionSiteManager: ConstructionSiteManager;
 }
 
-// ─── Logistics interfaces (extracted from useLogisticsDebug) ─────────────────
+// ─── Logistics interfaces ────────────────────────────────────────────────────
 
 export interface LogisticsStats {
-    pendingCount: number;
-    inProgressCount: number;
+    demandCount: number;
+    activeJobCount: number;
     stalledCount: number;
     carrierCount: number;
     unregisteredCarriers: number;
     idleCarriers: number;
     busyCarriers: number;
-    reservationCount: number;
 }
 
-export interface RequestSummary {
+export interface DemandSummary {
     id: number;
     buildingId: number;
     buildingType: string;
@@ -63,9 +61,6 @@ export interface RequestSummary {
     materialType: number;
     priority: 'High' | 'Normal' | 'Low';
     age: number;
-    inProgress: boolean;
-    carrierId: number | null;
-    sourceBuildingId: number | null;
     reason: string | null;
 }
 
@@ -87,19 +82,10 @@ export interface CarrierSummary {
     jobDest: number | null;
 }
 
-export interface ReservationSummary {
-    buildingId: number;
-    material: string;
-    amount: number;
-    requestId: number;
-}
-
 export interface LogisticsDebugState {
     stats: LogisticsStats;
-    pendingRequests: RequestSummary[];
-    inProgressRequests: RequestSummary[];
+    demands: DemandSummary[];
     carriers: CarrierSummary[];
-    reservations: ReservationSummary[];
 }
 
 // ─── Economy-wide interfaces ─────────────────────────────────────────────────
@@ -160,10 +146,10 @@ export interface BottleneckDiag {
 
 const STALL_THRESHOLD_SEC = 30;
 
-const PRIORITY_NAMES: Record<RequestPriority, 'High' | 'Normal' | 'Low'> = {
-    [RequestPriority.High]: 'High',
-    [RequestPriority.Normal]: 'Normal',
-    [RequestPriority.Low]: 'Low',
+const PRIORITY_NAMES: Record<DemandPriority, 'High' | 'Normal' | 'Low'> = {
+    [DemandPriority.High]: 'High',
+    [DemandPriority.Normal]: 'Normal',
+    [DemandPriority.Low]: 'Low',
 };
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -181,34 +167,23 @@ function unitTypeNameSafe(subType: number): string {
     return UNIT_TYPE_CONFIG[subType as UnitType]?.name ?? `#${subType}`;
 }
 
-function pileKindName(kind: PileKind): string {
-    return kind.kind;
-}
-
-function pileOwnerBuilding(kind: PileKind): number | null {
-    return kind.kind !== SlotKind.Free ? kind.buildingId : null;
-}
-
 export function createEmptyStats(): LogisticsStats {
     return {
-        pendingCount: 0,
-        inProgressCount: 0,
+        demandCount: 0,
+        activeJobCount: 0,
         stalledCount: 0,
         carrierCount: 0,
         unregisteredCarriers: 0,
         idleCarriers: 0,
         busyCarriers: 0,
-        reservationCount: 0,
     };
 }
 
 export function createEmptyState(): LogisticsDebugState {
     return {
         stats: createEmptyStats(),
-        pendingRequests: [],
-        inProgressRequests: [],
+        demands: [],
         carriers: [],
-        reservations: [],
     };
 }
 
@@ -221,7 +196,7 @@ function buildDiagConfig(config: SnapshotConfig): DiagnosticConfig {
         gameState: config.gameState,
         inventoryManager: config.inventoryManager,
         carrierRegistry: config.carrierRegistry,
-        reservationManager: config.logisticsDispatcher.getReservationManager(),
+        jobStore: config.logisticsDispatcher.jobStore,
         getActiveJobId: config.settlerTaskSystem.getActiveJobId.bind(config.settlerTaskSystem),
         isReserved: config.unitReservation.isReserved.bind(config.unitReservation),
     };
@@ -236,106 +211,64 @@ function isNonCarrierWorker(subType: number): boolean {
     return subType !== UnitType.Carrier && !isUnitTypeMilitary(subType as UnitType);
 }
 
-// ─── Request sorting ─────────────────────────────────────────────────────────
-
 const PRIORITY_ORDER = { High: 0, Normal: 1, Low: 2 } as const;
-
-function sortPendingIndices(pending: RequestSummary[]): number[] {
-    const indices = pending.map((_, i) => i);
-    indices.sort((a, b) => {
-        const pDiff = PRIORITY_ORDER[pending[a]!.priority] - PRIORITY_ORDER[pending[b]!.priority];
-        return pDiff !== 0 ? pDiff : pending[b]!.age - pending[a]!.age;
-    });
-    return indices;
-}
 
 // ─── Core logistics snapshot functions ───────────────────────────────────────
 
-export interface GatherRequestsResult {
-    pending: RequestSummary[];
-    rawPending: ResourceRequest[];
-    inProgress: RequestSummary[];
-}
-
-function categorizeRequest(
-    request: ResourceRequest,
-    gameState: GameState,
-    player: number,
-    now: number,
-    pending: RequestSummary[],
-    rawPending: ResourceRequest[],
-    inProgress: RequestSummary[],
-    stats: LogisticsStats
-): void {
-    const building = gameState.getEntity(request.buildingId);
-    if (!building || building.player !== player) return;
-
-    const summary: RequestSummary = {
-        id: request.id,
-        buildingId: request.buildingId,
-        buildingType: buildingTypeNameSafe(building.subType),
-        material: formatMaterial(request.materialType),
-        materialType: request.materialType,
-        priority: PRIORITY_NAMES[request.priority],
-        age: Math.max(0, Math.floor(now - request.timestamp)),
-        inProgress: request.assignedCarrier !== null,
-        carrierId: request.assignedCarrier,
-        sourceBuildingId: request.sourceBuilding,
-        reason: null,
-    };
-
-    if (request.assignedCarrier !== null) {
-        inProgress.push(summary);
-        stats.inProgressCount++;
-        if (request.assignedAt !== null && now - request.assignedAt > STALL_THRESHOLD_SEC) {
-            stats.stalledCount++;
-        }
-    } else if (request.status === RequestStatus.Pending) {
-        pending.push(summary);
-        rawPending.push(request);
-        stats.pendingCount++;
-    }
-}
-
 /**
- * Gather and categorize all resource requests for a player.
- * Optionally runs fulfillment diagnostics on pending requests.
+ * Gather and summarize all demands from the demand queue for a player.
+ * Optionally runs fulfillment diagnostics on demands.
  */
-export function gatherRequests(
+export function gatherDemands(
     config: SnapshotConfig,
     player: number,
     stats: LogisticsStats,
     options?: { limit?: number; diagnose?: boolean }
-): GatherRequestsResult {
-    const { gameState, requestManager } = config;
-    const now = requestManager.getGameTime();
+): { demands: DemandSummary[]; rawDemands: DemandEntry[] } {
+    const { demandQueue, gameState } = config;
+    const now = demandQueue.getGameTime();
     const limit = options?.limit ?? 0;
 
-    const pending: RequestSummary[] = [];
-    const rawPending: ResourceRequest[] = [];
-    const inProgress: RequestSummary[] = [];
+    const summaries: DemandSummary[] = [];
+    const rawDemands: DemandEntry[] = [];
 
-    for (const request of requestManager.getAllRequests()) {
-        categorizeRequest(request, gameState, player, now, pending, rawPending, inProgress, stats);
+    for (const demand of demandQueue.getAllDemands()) {
+        const building = gameState.getEntity(demand.buildingId);
+        if (!building || building.player !== player) continue;
+        summaries.push({
+            id: demand.id,
+            buildingId: demand.buildingId,
+            buildingType: buildingTypeNameSafe(building.subType),
+            material: formatMaterial(demand.materialType),
+            materialType: demand.materialType,
+            priority: PRIORITY_NAMES[demand.priority],
+            age: Math.max(0, Math.floor(now - demand.timestamp)),
+            reason: null,
+        });
+        rawDemands.push(demand);
+        stats.demandCount++;
     }
 
-    const indices = sortPendingIndices(pending);
-    const sortedPending = indices.map(i => pending[i]!);
-    const sortedRawPending = indices.map(i => rawPending[i]!);
+    const indices = summaries.map((_, i) => i);
+    indices.sort((a, b) => {
+        const pd = PRIORITY_ORDER[summaries[a]!.priority] - PRIORITY_ORDER[summaries[b]!.priority];
+        return pd !== 0 ? pd : summaries[b]!.age - summaries[a]!.age;
+    });
+    const sortedSummaries = indices.map(i => summaries[i]!);
+    const sortedRaw = indices.map(i => rawDemands[i]!);
 
     if (options?.diagnose !== false) {
         const diagConfig = buildDiagConfig(config);
-        const diagLimit = limit > 0 ? Math.min(sortedRawPending.length, limit) : sortedRawPending.length;
+        const diagLimit = limit > 0 ? Math.min(sortedRaw.length, limit) : sortedRaw.length;
         for (let i = 0; i < diagLimit; i++) {
-            sortedPending[i]!.reason =
-                UNFULFILLED_REASON_LABELS[diagnoseUnfulfilledRequest(sortedRawPending[i]!, diagConfig)];
+            sortedSummaries[i]!.reason =
+                UNFULFILLED_REASON_LABELS[diagnoseUnfulfilledRequest(sortedRaw[i]!, diagConfig)];
         }
     }
 
     return {
-        pending: applyLimit(sortedPending, limit),
-        rawPending: applyLimit(sortedRawPending, limit),
-        inProgress: applyLimit(inProgress, limit),
+        demands: applyLimit(sortedSummaries, limit),
+        rawDemands: applyLimit(sortedRaw, limit),
     };
 }
 
@@ -347,7 +280,7 @@ function buildCarrierSummary(
 ): CarrierSummary {
     const carrying = entity.carrying;
     const activeJobId = settlerTaskSystem.getActiveJobId(id);
-    const job = logisticsDispatcher.activeJobs.get(id);
+    const job = logisticsDispatcher.jobStore.jobs.raw.get(id);
 
     return {
         entityId: id,
@@ -400,35 +333,6 @@ export function gatherCarriers(
 }
 
 /**
- * Gather inventory reservations for a player.
- */
-export function gatherReservations(
-    config: SnapshotConfig,
-    player: number,
-    stats: LogisticsStats,
-    options?: { limit?: number }
-): ReservationSummary[] {
-    const { gameState, logisticsDispatcher } = config;
-    const reservations: ReservationSummary[] = [];
-
-    for (const reservation of logisticsDispatcher.getReservationManager().getAllReservations()) {
-        const building = gameState.getEntity(reservation.buildingId);
-        if (!building || building.player !== player) continue;
-
-        reservations.push({
-            buildingId: reservation.buildingId,
-            material: formatMaterial(reservation.materialType),
-            amount: reservation.amount,
-            requestId: reservation.requestId,
-        });
-    }
-
-    stats.reservationCount = reservations.length;
-    reservations.sort((a, b) => a.requestId - b.requestId);
-    return applyLimit(reservations, options?.limit ?? 0);
-}
-
-/**
  * Full logistics snapshot — convenience wrapper used by Vue composable.
  */
 export function gatherLogisticsSnapshot(
@@ -438,10 +342,20 @@ export function gatherLogisticsSnapshot(
 ): LogisticsDebugState {
     const limit = options?.limit ?? 15;
     const stats = createEmptyStats();
-    const { pending, inProgress } = gatherRequests(config, player, stats, { limit, diagnose: true });
+    const { demands } = gatherDemands(config, player, stats, { limit, diagnose: true });
     const carriers = gatherCarriers(config, player, stats, { limit });
-    const reservations = gatherReservations(config, player, stats, { limit });
-    return { stats, pendingRequests: pending, inProgressRequests: inProgress, carriers, reservations };
+
+    // Count active jobs and stalled jobs from job store
+    for (const [carrierId, job] of config.logisticsDispatcher.jobStore.jobs.raw) {
+        const carrier = config.gameState.getEntity(carrierId);
+        if (!carrier || carrier.player !== player) continue;
+        stats.activeJobCount++;
+        if (config.demandQueue.getGameTime() - job.createdAt > STALL_THRESHOLD_SEC) {
+            stats.stalledCount++;
+        }
+    }
+
+    return { stats, demands, carriers };
 }
 
 // ─── Economy-wide snapshot functions ─────────────────────────────────────────
@@ -511,7 +425,7 @@ export function gatherPiles(
         const pileState = gameState.piles.states.get(entity.id);
         if (!pileState) continue;
 
-        const kind = pileKindName(pileState.kind);
+        const kind = pileState.kind.kind;
         if (kindFilter && kind !== kindFilter) continue;
 
         result.push({
@@ -519,7 +433,7 @@ export function gatherPiles(
             material: formatMaterial(entity.subType),
             quantity: pileState.quantity,
             kind,
-            buildingId: pileOwnerBuilding(pileState.kind),
+            buildingId: pileState.kind.kind !== SlotKind.Free ? pileState.kind.buildingId : null,
             x: entity.x,
             y: entity.y,
         });
@@ -592,7 +506,7 @@ export function gatherTransportJobs(
     const { gameState, logisticsDispatcher } = config;
     const result: TransportJobSummary[] = [];
 
-    for (const [carrierId, job] of logisticsDispatcher.activeJobs) {
+    for (const [carrierId, job] of logisticsDispatcher.jobStore.jobs.raw) {
         const carrier = gameState.getEntity(carrierId);
         if (!carrier || carrier.player !== player) continue;
         result.push({
@@ -656,10 +570,10 @@ export function detectBottlenecks(config: SnapshotConfig, player: number): Bottl
 
     const { fullOutputBuildings } = scanBuildings(gameState, inventoryManager, player);
     const carriers = countCarrierStatus(config, player);
-    const pendingCount = config.requestManager.getPendingCount();
+    const demandCount = config.demandQueue.size;
     const idleWorkers = findIdleWorkers(gameState, settlerTaskSystem, player);
 
-    emitBottleneckDiags(diags, gameState, fullOutputBuildings, carriers, pendingCount, idleWorkers);
+    emitBottleneckDiags(diags, gameState, fullOutputBuildings, carriers, demandCount, idleWorkers);
     return diags;
 }
 
@@ -668,7 +582,7 @@ function emitBottleneckDiags(
     gameState: GameState,
     fullOutputBuildings: number[],
     carriers: { total: number; idle: number },
-    pendingCount: number,
+    demandCount: number,
     idleWorkers: number[]
 ): void {
     if (fullOutputBuildings.length > 0) {
@@ -686,10 +600,10 @@ function emitBottleneckDiags(
             message: 'No carriers registered — logistics cannot operate',
             relatedEntities: [],
         });
-    } else if (carriers.idle > 0 && pendingCount > 0) {
+    } else if (carriers.idle > 0 && demandCount > 0) {
         diags.push({
             severity: 'warning',
-            message: `${carriers.idle} idle carrier(s) but ${pendingCount} pending request(s) — check supply/territory`,
+            message: `${carriers.idle} idle carrier(s) but ${demandCount} pending demand(s) — check supply/territory`,
             relatedEntities: [],
         });
     }

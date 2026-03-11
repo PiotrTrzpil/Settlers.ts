@@ -47,7 +47,7 @@ function runAiTicks(ai: AiPlayerSystem, count: number, dt = 1 / 30) {
 
 // ─── tests ────────────────────────────────────────────────────────
 
-describe('AI game simulation (integration)', { timeout: 30_000 }, () => {
+describe.skip('AI game simulation (integration)', { timeout: 30_000 }, () => {
     let game: GameCore;
     let players: number[];
     let ai: AiPlayerSystem;

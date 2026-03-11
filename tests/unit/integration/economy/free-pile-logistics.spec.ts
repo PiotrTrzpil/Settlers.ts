@@ -126,12 +126,15 @@ describe.skipIf(!hasRealData)('Free pile logistics (real game data)', { timeout:
 
         // Run until a carrier is assigned a transport job from the sawmill
         sim.runUntil(
-            () => [...sim.services.logisticsDispatcher.activeJobs.values()].some(j => j.sourceBuilding === sawmillId),
+            () =>
+                [...sim.services.logisticsDispatcher.jobStore.jobs.raw.values()].some(
+                    j => j.sourceBuilding === sawmillId
+                ),
             { maxTicks: 50_000, label: 'carrier assigned transport from sawmill' }
         );
 
         // Get the active job before destroying
-        const jobsBefore = [...sim.services.logisticsDispatcher.activeJobs.values()];
+        const jobsBefore = [...sim.services.logisticsDispatcher.jobStore.jobs.raw.values()];
         const jobFromSawmill = jobsBefore.find(j => j.sourceBuilding === sawmillId)!;
         const jobId = jobFromSawmill.id;
 
@@ -145,7 +148,7 @@ describe.skipIf(!hasRealData)('Free pile logistics (real game data)', { timeout:
         sim.state.removeEntity(sawmillId);
 
         // The transport job should still be active, redirected to the pile entity
-        const jobsAfter = [...sim.services.logisticsDispatcher.activeJobs.values()];
+        const jobsAfter = [...sim.services.logisticsDispatcher.jobStore.jobs.raw.values()];
         const redirectedJob = jobsAfter.find(j => j.id === jobId);
         expect(redirectedJob).toBeDefined();
         expect(redirectedJob!.sourceBuilding).toBe(pileId);

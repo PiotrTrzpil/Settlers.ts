@@ -21,11 +21,13 @@ export enum TransportPhase {
 /** Flat, serializable transport job record. No closures, no manager refs. */
 export interface TransportJobRecord {
     readonly id: number;
-    readonly requestId: number;
+    readonly demandId: number;
     sourceBuilding: number; // mutable: can be redirected
     readonly destBuilding: number;
     readonly material: EMaterialType;
     readonly amount: number;
     readonly carrierId: number;
     phase: TransportPhase;
+    /** Game time when job was created (seconds, for stall detection). */
+    readonly createdAt: number;
 }

@@ -6,13 +6,13 @@
  * - ConstructionSiteManager (construction site state)
  * - BuildingConstructionSystem (terrain modification, phase transitions)
  * - ResidenceSpawnerSystem (carrier spawning from residences)
- * - ConstructionRequestSystem (material delivery requests for construction)
+ * - ConstructionRequestSystem (material delivery demands for construction)
  * - BuildingLifecycleHandler (event-driven domain handlers)
  */
 
 import type { FeatureDefinition, FeatureContext } from '../feature';
 import type { InventoryExports } from '../inventory';
-import type { RequestManagerExports } from '../logistics';
+import type { DemandQueueExports } from '../logistics/demand-queue-feature';
 import type { TerrainData } from '../../terrain';
 import { ConstructionSiteManager } from './construction-site-manager';
 import { BuildingConstructionSystem } from './construction-system';
@@ -33,7 +33,7 @@ export const BuildingConstructionFeature: FeatureDefinition = {
 
     create(ctx: FeatureContext) {
         const { inventoryManager } = ctx.getFeature<InventoryExports>('inventory');
-        const { requestManager } = ctx.getFeature<RequestManagerExports>('logistics');
+        const { demandQueue, jobStore } = ctx.getFeature<DemandQueueExports>('logistics');
 
         const constructionSiteManager = new ConstructionSiteManager(ctx.eventBus, ctx.gameState.rng);
 
@@ -50,7 +50,7 @@ export const BuildingConstructionFeature: FeatureDefinition = {
         });
         constructionSystem.setResidenceSpawner(residenceSpawner);
 
-        const constructionRequestSystem = new ConstructionRequestSystem(constructionSiteManager, requestManager);
+        const constructionRequestSystem = new ConstructionRequestSystem(constructionSiteManager, demandQueue, jobStore);
 
         // BuildingLifecycleHandler manages construction site registration,
         // inventory swaps on completion, and material delivery tracking.

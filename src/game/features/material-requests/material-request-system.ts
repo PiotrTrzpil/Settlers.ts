@@ -1,41 +1,42 @@
 /**
- * Material Request System - creates transport requests for buildings that need input materials.
+ * Material Request System - creates transport demands for buildings that need input materials.
  *
  * All production is handled by SettlerTaskSystem via the WORKPLACE work handler.
  * This system's only job is to ensure buildings request materials when their
  * input slots are running low.
  *
  * Uses a dirty-set approach: only re-evaluates buildings whose inventory changed,
- * were just completed, or had a request fulfilled/removed. This avoids iterating
+ * were just completed, or had a demand fulfilled/cancelled. This avoids iterating
  * all buildings every tick (O(n) → O(dirty)).
  *
- * Active request tracking is delegated to the RequestManager (single source of truth).
+ * Active demand tracking is delegated to DemandQueue + TransportJobStore (single source of truth).
  */
 
 import type { TickSystem } from '../../core/tick-system';
 import type { CoreDeps } from '../feature';
 import type { GameState } from '../../game-state';
 import { EntityType, BuildingType } from '../../entity';
-import { EMaterialType } from '../../economy';
-import { RequestPriority, type RequestManager } from '../logistics';
+import { DemandPriority, type DemandQueue } from '../logistics/demand-queue';
+import type { TransportJobStore } from '../logistics/transport-job-store';
 import { getInventoryConfig, type InventoryConfig, type BuildingInventoryManager } from '../inventory';
 import { type ConstructionSiteManager } from '../building-construction';
 import type { StorageFilterManager } from '../../systems/inventory/storage-filter-manager';
 import { EventSubscriptionManager } from '../../event-bus';
 
-/** Maximum concurrent import requests per material per StorageArea (parallel carrier cap). */
+/** Maximum concurrent import demands per material per StorageArea (parallel carrier cap). */
 const MAX_ACTIVE_IMPORTS_PER_MATERIAL = 20;
 
 /** Configuration for MaterialRequestSystem dependencies */
 export interface MaterialRequestSystemConfig extends CoreDeps {
     constructionSiteManager: ConstructionSiteManager;
     inventoryManager: BuildingInventoryManager;
-    requestManager: RequestManager;
+    demandQueue: DemandQueue;
+    jobStore: TransportJobStore;
     storageFilterManager: StorageFilterManager;
 }
 
 /**
- * System that creates material transport requests for buildings with input slots.
+ * System that creates material transport demands for buildings with input slots.
  * Production cycles are handled entirely by SettlerTaskSystem workers.
  *
  * Event-driven dirty-set: buildings are only re-evaluated when their state changes.
@@ -44,7 +45,8 @@ export class MaterialRequestSystem implements TickSystem {
     private gameState: GameState;
     private constructionSiteManager: ConstructionSiteManager;
     private inventoryManager: BuildingInventoryManager;
-    private requestManager: RequestManager;
+    private demandQueue: DemandQueue;
+    private jobStore: TransportJobStore;
     private storageFilterManager: StorageFilterManager;
     private subscriptions = new EventSubscriptionManager();
 
@@ -61,7 +63,8 @@ export class MaterialRequestSystem implements TickSystem {
         this.gameState = config.gameState;
         this.constructionSiteManager = config.constructionSiteManager;
         this.inventoryManager = config.inventoryManager;
-        this.requestManager = config.requestManager;
+        this.demandQueue = config.demandQueue;
+        this.jobStore = config.jobStore;
         this.storageFilterManager = config.storageFilterManager;
 
         this.subscriptions.subscribe(config.eventBus, 'building:completed', ({ buildingId }) => {
@@ -84,25 +87,20 @@ export class MaterialRequestSystem implements TickSystem {
             }
         });
 
-        this.subscriptions.subscribe(config.eventBus, 'logistics:requestFulfilled', ({ buildingId }) => {
+        this.subscriptions.subscribe(config.eventBus, 'logistics:demandConsumed', ({ buildingId }) => {
             this.dirtyBuildings.add(buildingId);
             this.dirtyStorageAreas.add(buildingId);
         });
 
-        this.subscriptions.subscribe(config.eventBus, 'logistics:requestReset', ({ buildingId }) => {
-            this.dirtyBuildings.add(buildingId);
-            this.dirtyStorageAreas.add(buildingId);
+        // When a transport job is cancelled, the building may need new demands.
+        // We don't have the destination building readily available from this event,
+        // so trigger a full scan (cancellation is rare).
+        this.subscriptions.subscribe(config.eventBus, 'carrier:transportCancelled', _payload => {
+            this.needsFullScan = true;
         });
 
         this.subscriptions.subscribe(config.eventBus, 'storage:directionChanged', ({ buildingId }) => {
             this.dirtyStorageAreas.add(buildingId);
-        });
-
-        this.subscriptions.subscribe(config.eventBus, 'logistics:requestRemoved', _payload => {
-            // We don't know which building this was for, but the RequestManager tracks that.
-            // Mark all buildings with active requests dirty — this is rare (cancellation).
-            // A more targeted approach would require storing requestId→buildingId mapping.
-            this.markAllOperationalDirty();
         });
     }
 
@@ -169,16 +167,17 @@ export class MaterialRequestSystem implements TickSystem {
             const space = inputSlot.maxCapacity - currentAmount;
             if (space <= 0) continue;
 
-            const activeCount = this.countActiveRequests(entity.id, inputSlot.materialType);
-            const needed = space - activeCount;
+            const activeDemands = this.demandQueue.countDemands(entity.id, inputSlot.materialType);
+            const activeJobs = this.jobStore.getActiveJobCountForDest(entity.id, inputSlot.materialType);
+            const needed = space - activeDemands - activeJobs;
             for (let i = 0; i < needed; i++) {
-                this.requestManager.addRequest(entity.id, inputSlot.materialType, 1, RequestPriority.Normal);
+                this.demandQueue.addDemand(entity.id, inputSlot.materialType, 1, DemandPriority.Normal);
             }
         }
     }
 
     /**
-     * Create Low-priority import requests for a StorageArea.
+     * Create Low-priority import demands for a StorageArea.
      * Requests the full available capacity so multiple carriers can work in parallel.
      */
     private requestStorageImports(buildingId: number): void {
@@ -187,17 +186,13 @@ export class MaterialRequestSystem implements TickSystem {
             if (!this.storageFilterManager.isImportAllowed(buildingId, material)) continue;
             const space = this.inventoryManager.getStorageOutputSpace(buildingId, material);
             if (space <= 0) continue;
-            const activeCount = this.countActiveRequests(buildingId, material);
+            const activeDemands = this.demandQueue.countDemands(buildingId, material);
+            const activeJobs = this.jobStore.getActiveJobCountForDest(buildingId, material);
+            const activeCount = activeDemands + activeJobs;
             const needed = Math.min(space - activeCount, MAX_ACTIVE_IMPORTS_PER_MATERIAL - activeCount);
             for (let i = 0; i < needed; i++) {
-                this.requestManager.addRequest(buildingId, material, 1, RequestPriority.Low);
+                this.demandQueue.addDemand(buildingId, material, 1, DemandPriority.Low);
             }
         }
-    }
-
-    /** Count active requests for a building+material. */
-    private countActiveRequests(buildingId: number, materialType: EMaterialType): number {
-        const requests = this.requestManager.getRequestsForBuilding(buildingId);
-        return requests.filter(r => r.materialType === materialType).length;
     }
 }

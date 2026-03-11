@@ -132,16 +132,14 @@ function invCommand(): CliCommand {
             const rows: string[][] = [];
             for (const slot of inv.inputSlots) {
                 if (slot.materialType === EMaterialType.NO_MATERIAL) continue;
-                const rsv = slot.reservedAmount > 0 ? `(${slot.reservedAmount} rsv)` : '';
-                rows.push(['in', EMaterialType[slot.materialType], `${slot.currentAmount}/${slot.maxCapacity}`, rsv]);
+                rows.push(['in', EMaterialType[slot.materialType], `${slot.currentAmount}/${slot.maxCapacity}`]);
             }
             for (const slot of inv.outputSlots) {
                 if (slot.materialType === EMaterialType.NO_MATERIAL) continue;
-                const rsv = slot.reservedAmount > 0 ? `(${slot.reservedAmount} rsv)` : '';
-                rows.push(['out', EMaterialType[slot.materialType], `${slot.currentAmount}/${slot.maxCapacity}`, rsv]);
+                rows.push(['out', EMaterialType[slot.materialType], `${slot.currentAmount}/${slot.maxCapacity}`]);
             }
             if (rows.length === 0) return ok('inventory empty');
-            return ok(ctx.fmt.table(rows, ['dir', 'material', 'amt', 'reserved']));
+            return ok(ctx.fmt.table(rows, ['dir', 'material', 'amt']));
         },
     };
 }
@@ -382,7 +380,7 @@ function buildJsScope(ctx: CliContext): Record<string, unknown> {
         territory: s.territoryManager,
         recruit: s.recruitSystem,
         logistics: s.logisticsDispatcher,
-        requests: s.requestManager,
+        demands: s.demandQueue,
         carriers: s.carrierRegistry,
         storage: s.storageFilterManager,
     };

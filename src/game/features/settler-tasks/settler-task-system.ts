@@ -227,6 +227,27 @@ export class SettlerTaskSystem implements TickSystem, Persistable<SerializedUnit
             this.workerTracker.assignWorkerInside(settlerId, buildingId);
         });
 
+        // When a specialist is dismissed back to carrier, clear the stale choreo job.
+        // The old job's animation nodes (e.g. SW_WALK) don't exist for the Carrier type.
+        // Carrier→specialist transforms are fine — the choreo continues with new-type nodes.
+        config.eventBus.on('unit:transformed', ({ unitId, toType }) => {
+            if (toType !== UnitType.Carrier) return;
+            const runtime = this.runtimes.get(unitId);
+            if (!runtime) return;
+
+            const entity = this.gameState.getEntity(unitId);
+            if (entity && runtime.job) {
+                const unitConfig = this.settlerConfigs.get(toType);
+                if (unitConfig) {
+                    this.interruptJobForCleanup(entity, unitConfig, runtime);
+                }
+                runtime.job = null;
+            }
+            this.workerTracker.release(unitId, runtime);
+            runtime.state = SettlerState.IDLE;
+            runtime.moveTask = null;
+        });
+
         log.debug(
             `Loaded ${this.settlerConfigs.size} settler configs, ${this.choreographyStore.cacheSize} cached jobs`
         );

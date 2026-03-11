@@ -9,7 +9,7 @@
 import { createLogger } from '@/utilities/logger';
 import type { BuildingInventoryManager } from '../inventory';
 import type { GameState } from '../../game-state';
-import type { ResourceRequest } from './resource-request';
+import type { DemandEntry } from './demand-queue';
 import { PeriodicTimer } from './periodic-timer';
 
 /** How often to log match failure diagnostics (in seconds). */
@@ -75,7 +75,7 @@ export class MatchDiagnostics {
      *
      * @param request The unmatched request.
      */
-    logFailure(request: ResourceRequest): void {
+    logFailure(request: DemandEntry): void {
         const destBuilding = this.gameState.getEntity(request.buildingId);
         if (!destBuilding) return;
 

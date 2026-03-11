@@ -8,7 +8,8 @@
 import type { CliArgs, CliCommand, CliContext, CliResult } from '../types';
 import {
     type SnapshotConfig,
-    gatherRequests,
+    type DemandSummary,
+    gatherDemands,
     gatherCarriers,
     gatherProductionBuildings,
     gatherPiles,
@@ -31,7 +32,7 @@ function buildSnapshotConfig(ctx: CliContext): SnapshotConfig {
     const svc = ctx.game.services;
     return {
         gameState: ctx.game.state,
-        requestManager: svc.requestManager,
+        demandQueue: svc.demandQueue,
         carrierRegistry: svc.carrierRegistry,
         logisticsDispatcher: svc.logisticsDispatcher,
         settlerTaskSystem: svc.settlerTaskSystem,
@@ -95,24 +96,24 @@ function reqsCommand(): CliCommand {
         name: 'reqs',
         aliases: ['requests'],
         usage: 'reqs [--p N] [--n N]',
-        desc: 'Pending and in-progress material requests with diagnostics',
+        desc: 'Pending demands and active transport jobs',
         execute(args: CliArgs, ctx: CliContext): CliResult {
             const config = buildSnapshotConfig(ctx);
             const limit = limitArg(args);
             const stats = createEmptyStats();
-            const { pending, inProgress } = gatherRequests(config, ctx.player, stats, {
+            const { demands } = gatherDemands(config, ctx.player, stats, {
                 limit,
                 diagnose: true,
             });
 
             const lines: string[] = [];
-            lines.push(`=== Requests (${stats.pendingCount} pending, ${stats.inProgressCount} in-progress) ===`);
+            lines.push(`=== Demands (${stats.demandCount} pending, ${stats.activeJobCount} active jobs) ===`);
             if (stats.stalledCount > 0) lines.push(`stalled: ${stats.stalledCount}`);
             lines.push('');
 
-            if (pending.length > 0) {
-                lines.push('--- Pending ---');
-                const rows = pending.map(r => [
+            if (demands.length > 0) {
+                lines.push('--- Pending Demands ---');
+                const rows = demands.map((r: DemandSummary) => [
                     String(r.id),
                     `${r.buildingType}#${r.buildingId}`,
                     r.material,
@@ -121,23 +122,8 @@ function reqsCommand(): CliCommand {
                     r.reason ?? '-',
                 ]);
                 lines.push(ctx.fmt.table(rows, ['id', 'building', 'material', 'priority', 'age', 'reason']));
-                lines.push('');
-            }
-
-            if (inProgress.length > 0) {
-                lines.push('--- In Progress ---');
-                const rows = inProgress.map(r => [
-                    String(r.id),
-                    `${r.buildingType}#${r.buildingId}`,
-                    r.material,
-                    r.carrierId !== null ? String(r.carrierId) : '-',
-                    r.sourceBuildingId !== null ? String(r.sourceBuildingId) : '-',
-                ]);
-                lines.push(ctx.fmt.table(rows, ['id', 'building', 'material', 'carrier', 'source']));
-            }
-
-            if (pending.length === 0 && inProgress.length === 0) {
-                lines.push('no active requests');
+            } else {
+                lines.push('no active demands');
             }
 
             return ok(lines.join('\n'));

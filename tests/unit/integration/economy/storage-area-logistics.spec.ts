@@ -90,7 +90,7 @@ describe.skipIf(!hasRealData)('StorageArea logistics (real game data)', { timeou
         // Tick to trigger request creation
         sim.tick(100);
 
-        const requests = sim.services.requestManager.getRequestsForBuilding(storageId);
+        const requests = [...sim.services.demandQueue.getAllDemands()].filter(r => r.buildingId === storageId);
         const boardReqs = requests.filter(r => r.materialType === EMaterialType.BOARD);
         expect(boardReqs.length).toBeGreaterThan(0);
         // Import requests should be Low priority (2)
@@ -111,7 +111,7 @@ describe.skipIf(!hasRealData)('StorageArea logistics (real game data)', { timeou
         sim.services.storageFilterManager.setDirection(storageId, EMaterialType.LOG, StorageDirection.Import);
         sim.tick(100);
 
-        const requests = sim.services.requestManager.getRequestsForBuilding(storageId);
+        const requests = [...sim.services.demandQueue.getAllDemands()].filter(r => r.buildingId === storageId);
         const logReqs = requests.filter(r => r.materialType === EMaterialType.LOG);
         // Capped at MAX_ACTIVE_IMPORTS_PER_MATERIAL (20), not totalCapacity
         expect(logReqs).toHaveLength(20);
@@ -180,7 +180,7 @@ describe.skipIf(!hasRealData)('StorageArea logistics (real game data)', { timeou
         });
         sim.tick(100);
 
-        const requests = sim.services.requestManager.getRequestsForBuilding(storageId);
+        const requests = [...sim.services.demandQueue.getAllDemands()].filter(r => r.buildingId === storageId);
         const logReqs = requests.filter(r => r.materialType === EMaterialType.LOG);
         expect(logReqs.length).toBeGreaterThan(0);
     });
@@ -301,7 +301,7 @@ describe.skipIf(!hasRealData)('StorageArea logistics (real game data)', { timeou
         sim.tick(100);
 
         // No requests should be created (no capacity)
-        const requests = sim.services.requestManager.getRequestsForBuilding(storageId);
+        const requests = [...sim.services.demandQueue.getAllDemands()].filter(r => r.buildingId === storageId);
         const boardReqs = requests.filter(r => r.materialType === EMaterialType.BOARD);
         expect(boardReqs).toHaveLength(0);
     });

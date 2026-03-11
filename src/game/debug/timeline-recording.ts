@@ -20,9 +20,8 @@ import type { InventorySlot } from '@/game/systems/inventory/inventory-slot';
 export function formatSlots(slots: InventorySlot[]): string {
     const parts: string[] = [];
     for (const slot of slots) {
-        if (slot.currentAmount > 0 || slot.reservedAmount > 0) {
-            const res = slot.reservedAmount > 0 ? `(r${slot.reservedAmount})` : '';
-            parts.push(`${EMaterialType[slot.materialType]}×${slot.currentAmount}${res}`);
+        if (slot.currentAmount > 0) {
+            parts.push(`${EMaterialType[slot.materialType]}×${slot.currentAmount}`);
         }
     }
     return parts.join(',');

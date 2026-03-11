@@ -64,7 +64,7 @@ export class MaterialTransfer {
         const entity = this.gameState.getEntityOrThrow(carrierId, 'MaterialTransfer.pickUp');
 
         const withdrawn = reserved
-            ? this.inventoryManager.withdrawReservedOutput(fromBuilding, material, amount)
+            ? this.inventoryManager.withdrawOutput(fromBuilding, material, amount)
             : this.inventoryManager.withdrawInput(fromBuilding, material, amount);
 
         if (withdrawn === 0) return 0;

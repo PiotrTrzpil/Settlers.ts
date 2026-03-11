@@ -5,13 +5,13 @@
  * Tests verify that:
  * - Building placement triggers inventory and service area creation
  * - Entity removal triggers proper cleanup
- * - Resource requests are tracked correctly
+ * - Demands are tracked correctly via DemandQueue
  */
 
 import { describe, it, expect, afterEach } from 'vitest';
 import { BuildingType, UnitType } from '@/game/entity';
 import { EMaterialType } from '@/game/economy';
-import { RequestPriority, RequestStatus } from '@/game/features/logistics';
+import { DemandPriority } from '@/game/features/logistics/demand-queue';
 import { createSimulation, cleanupSimulation, type Simulation } from '../../helpers/test-simulation';
 
 describe('Carriers, Inventory & Service Areas (simulation)', { timeout: 5000 }, () => {
@@ -79,38 +79,33 @@ describe('Carriers, Inventory & Service Areas (simulation)', { timeout: 5000 }, 
     });
 
     // ---------------------------------------------------------------------------
-    // Resource Request Creation
+    // Demand Creation
     // ---------------------------------------------------------------------------
 
-    describe('Resource Request Creation', () => {
-        it('should create pending resource request with correct attributes', () => {
+    describe('Demand Creation', () => {
+        it('should create demand with correct attributes', () => {
             sim = createSimulation({ useStubData: true });
             const sawmillId = sim.placeBuilding(BuildingType.Sawmill);
 
-            const request = sim.services.requestManager.addRequest(
-                sawmillId,
-                EMaterialType.LOG,
-                4,
-                RequestPriority.Normal
-            );
+            const demand = sim.services.demandQueue.addDemand(sawmillId, EMaterialType.LOG, 4, DemandPriority.Normal);
 
-            expect(request).toBeDefined();
-            expect(request.materialType).toBe(EMaterialType.LOG);
-            expect(request.amount).toBe(4);
-            expect(request.status).toBe(RequestStatus.Pending);
-            expect(request.buildingId).toBe(sawmillId);
+            expect(demand).toBeDefined();
+            expect(demand.materialType).toBe(EMaterialType.LOG);
+            expect(demand.amount).toBe(4);
+            expect(demand.priority).toBe(DemandPriority.Normal);
+            expect(demand.buildingId).toBe(sawmillId);
         });
 
-        it('should track request in pending requests list', () => {
+        it('should track demand in sorted demands list', () => {
             sim = createSimulation({ useStubData: true });
             const sawmillId = sim.placeBuilding(BuildingType.Sawmill);
 
-            sim.services.requestManager.addRequest(sawmillId, EMaterialType.LOG, 4);
+            sim.services.demandQueue.addDemand(sawmillId, EMaterialType.LOG, 4, DemandPriority.Normal);
 
-            expect(sim.services.requestManager.getPendingCount()).toBe(1);
-            const pending = sim.services.requestManager.getPendingRequests();
-            expect(pending).toHaveLength(1);
-            expect(pending[0]!.materialType).toBe(EMaterialType.LOG);
+            expect(sim.services.demandQueue.size).toBe(1);
+            const demands = sim.services.demandQueue.getSortedDemands();
+            expect(demands).toHaveLength(1);
+            expect(demands[0]!.materialType).toBe(EMaterialType.LOG);
         });
     });
 

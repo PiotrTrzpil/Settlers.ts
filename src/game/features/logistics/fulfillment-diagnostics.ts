@@ -1,7 +1,7 @@
 /**
  * Fulfillment Diagnostics
  *
- * Analyzes why a pending resource request cannot currently be fulfilled.
+ * Analyzes why a pending demand cannot currently be fulfilled.
  * Used by the logistics debug panel to show actionable reasons.
  *
  * This is a read-only diagnostic — it mirrors the matching logic in
@@ -11,13 +11,22 @@
 import type { GameState } from '../../game-state';
 import type { BuildingInventoryManager } from '../inventory';
 import type { CarrierRegistry } from '../../systems/carrier-registry';
-import type { ResourceRequest } from './resource-request';
-import type { InventoryReservationManager } from './inventory-reservation';
+import type { TransportJobStore } from './transport-job-store';
+import type { EMaterialType } from '../../economy/material-type';
 import { getAvailableSupplies } from './resource-supply';
 import { query } from '../../ecs';
 
 /**
- * Reason why a pending request cannot be fulfilled right now.
+ * Minimal interface for a demand/request being diagnosed.
+ * Compatible with both DemandEntry and legacy ResourceRequest shapes.
+ */
+export interface DiagnosticRequest {
+    readonly buildingId: number;
+    readonly materialType: EMaterialType;
+}
+
+/**
+ * Reason why a pending demand cannot be fulfilled right now.
  */
 export const enum UnfulfilledReason {
     /** No building produces this material */
@@ -45,7 +54,7 @@ export interface DiagnosticConfig {
     gameState: GameState;
     inventoryManager: BuildingInventoryManager;
     carrierRegistry: CarrierRegistry;
-    reservationManager: InventoryReservationManager;
+    jobStore: TransportJobStore;
     /** Returns the active job ID for an entity, or null if idle. */
     getActiveJobId: (entityId: number) => string | null;
     /** Returns true if the carrier is reserved by a feature (barracks, garrison, etc.). */
@@ -53,15 +62,15 @@ export interface DiagnosticConfig {
 }
 
 /**
- * Diagnose why a pending request cannot be fulfilled.
+ * Diagnose why a pending demand cannot be fulfilled.
  *
  * Checks conditions in order from most fundamental to most specific:
  * 1. Does any building have this material? → NoSupply
  * 2. Is anything left after reservations? → AllReserved
  * 3. Is a carrier available? → NoCarrier / CarriersBusy
  */
-export function diagnoseUnfulfilledRequest(request: ResourceRequest, config: DiagnosticConfig): UnfulfilledReason {
-    const { gameState, inventoryManager, carrierRegistry, reservationManager, getActiveJobId, isReserved } = config;
+export function diagnoseUnfulfilledRequest(request: DiagnosticRequest, config: DiagnosticConfig): UnfulfilledReason {
+    const { gameState, inventoryManager, carrierRegistry, jobStore, getActiveJobId, isReserved } = config;
 
     const destBuilding = gameState.getEntity(request.buildingId);
     if (!destBuilding) return UnfulfilledReason.NoSupply;
@@ -79,10 +88,10 @@ export function diagnoseUnfulfilledRequest(request: ResourceRequest, config: Dia
         return UnfulfilledReason.NoSupply;
     }
 
-    // Step 2: Check if anything remains after reservations
+    // Step 2: Check if anything remains after reservations (from job store)
     let hasUnreserved = false;
     for (const supply of otherSupplies) {
-        const reserved = reservationManager.getReservedAmount(supply.buildingId, request.materialType);
+        const reserved = jobStore.getReservedAmount(supply.buildingId, request.materialType);
         if (supply.availableAmount - reserved > 0) {
             hasUnreserved = true;
             break;

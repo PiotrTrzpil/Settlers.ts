@@ -13,7 +13,6 @@ import type { Race } from '../core/race';
 import type { EMaterialType } from '../economy/material-type';
 import type { TreeStage } from '../features/trees/tree-system';
 import type { StoneStage } from '../features/stones/stone-system';
-import type { RequestPriority, RequestStatus } from '../features/logistics/resource-request';
 
 const STORAGE_KEY = 'settlers_game_state';
 const INITIAL_STATE_KEY = 'settlers_initial_state';
@@ -72,7 +71,6 @@ export interface SerializedInventorySlot {
     materialType: EMaterialType;
     current: number;
     max: number;
-    reserved: number;
 }
 
 export interface SerializedBuildingInventory {
@@ -171,9 +169,9 @@ export interface SerializedRequest {
     buildingId: number;
     materialType: EMaterialType;
     amount: number;
-    priority: RequestPriority;
+    priority: number;
     timestamp: number;
-    status: RequestStatus;
+    status: string;
     assignedCarrier: number | null;
     sourceBuilding: number | null;
     assignedAt: number | null;

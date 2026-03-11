@@ -9,11 +9,20 @@ import { hexDistance } from '../../systems/hex-directions';
 import type { GameState } from '../../game-state';
 import { EntityType } from '../../entity';
 import type { EMaterialType } from '../../economy/material-type';
-import type { ResourceRequest } from './resource-request';
 import { getAvailableSupplies } from './resource-supply';
-import type { InventoryReservationManager } from './inventory-reservation';
+import type { TransportJobStore } from './transport-job-store';
 import type { BuildingInventoryManager } from '../inventory';
 import type { StorageFilterManager } from '../../systems/inventory/storage-filter-manager';
+
+/**
+ * Minimal request shape needed by the matcher.
+ * Both ResourceRequest and DemandEntry satisfy this interface.
+ */
+export interface MatchableRequest {
+    readonly buildingId: number;
+    readonly materialType: EMaterialType;
+    amount: number;
+}
 
 /**
  * Result of a successful match between a request and a supply.
@@ -47,10 +56,10 @@ export interface MatchOptions {
      */
     fullSupplyDistanceFactor?: number;
     /**
-     * Reservation manager to account for already-reserved inventory.
+     * Job store to account for already-reserved inventory.
      * If provided, reserved amounts are subtracted from available supply.
      */
-    reservationManager?: InventoryReservationManager;
+    jobStore?: TransportJobStore;
     /**
      * Storage filter manager for StorageArea export filtering.
      * If provided, StorageArea buildings without export enabled are skipped as sources.
@@ -85,12 +94,12 @@ function isStorageSourceAllowed(
  * Yields candidates in supply order (unsorted).
  */
 function* iterateMatchCandidates(
-    request: ResourceRequest,
+    request: MatchableRequest,
     gameState: GameState,
     inventoryManager: BuildingInventoryManager,
     options: MatchOptions
 ): Generator<MatchCandidate> {
-    const { playerId, reservationManager, storageFilterManager } = options;
+    const { playerId, jobStore, storageFilterManager } = options;
 
     const destBuilding = gameState.getEntity(request.buildingId);
     if (!destBuilding) {
@@ -131,8 +140,8 @@ function* iterateMatchCandidates(
         }
 
         let effectiveAmount = supply.availableAmount;
-        if (reservationManager) {
-            const reserved = reservationManager.getReservedAmount(supply.buildingId, request.materialType);
+        if (jobStore) {
+            const reserved = jobStore.getReservedAmount(supply.buildingId, request.materialType);
             effectiveAmount = Math.max(0, effectiveAmount - reserved);
         }
 
@@ -176,7 +185,7 @@ function collectSortedMatches(candidates: Generator<MatchCandidate>, requestAmou
  * @returns The best match, or null if no suitable source found
  */
 export function matchRequestToSupply(
-    request: ResourceRequest,
+    request: MatchableRequest,
     gameState: GameState,
     inventoryManager: BuildingInventoryManager,
     options: MatchOptions = {}
@@ -218,7 +227,7 @@ export function matchRequestToSupply(
  * @returns Array of all possible matches, sorted by distance
  */
 export function findAllMatches(
-    request: ResourceRequest,
+    request: MatchableRequest,
     gameState: GameState,
     inventoryManager: BuildingInventoryManager,
     options: MatchOptions = {}
@@ -240,7 +249,7 @@ export function findAllMatches(
  * @returns True if fulfillment is potentially possible
  */
 export function canPotentiallyFulfill(
-    request: ResourceRequest,
+    request: MatchableRequest,
     gameState: GameState,
     inventoryManager: BuildingInventoryManager
 ): boolean {
@@ -268,7 +277,7 @@ export function canPotentiallyFulfill(
  * @returns The minimum distance, or Infinity if no supply exists
  */
 export function estimateFulfillmentDistance(
-    request: ResourceRequest,
+    request: MatchableRequest,
     gameState: GameState,
     inventoryManager: BuildingInventoryManager
 ): number {

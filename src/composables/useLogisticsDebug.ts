@@ -16,9 +16,8 @@ import {
 
 // Re-export types so existing consumers don't break
 export type {
-    RequestSummary,
+    DemandSummary,
     CarrierSummary,
-    ReservationSummary,
     LogisticsStats,
     LogisticsDebugState,
 } from '@/game/features/logistics/logistics-snapshot';
@@ -27,7 +26,7 @@ function buildSnapshotConfig(game: Game): SnapshotConfig {
     const svc = game.services;
     return {
         gameState: game.state,
-        requestManager: svc.requestManager,
+        demandQueue: svc.demandQueue,
         carrierRegistry: svc.carrierRegistry,
         logisticsDispatcher: svc.logisticsDispatcher,
         settlerTaskSystem: svc.settlerTaskSystem,

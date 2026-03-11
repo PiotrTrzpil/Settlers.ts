@@ -8,16 +8,20 @@
 
 import type { GameState } from '../../game-state';
 import type { BuildingInventoryManager } from '../inventory';
-import { matchRequestToSupply, findAllMatches, type FulfillmentMatch } from './fulfillment-matcher';
-import type { InventoryReservationManager } from './inventory-reservation';
+import {
+    matchRequestToSupply,
+    findAllMatches,
+    type FulfillmentMatch,
+    type MatchableRequest,
+} from './fulfillment-matcher';
+import type { TransportJobStore } from './transport-job-store';
 import type { StorageFilterManager } from '../../systems/inventory/storage-filter-manager';
-import type { ResourceRequest } from './resource-request';
 import type { LogisticsMatchFilter } from './logistics-filter';
 
 export interface RequestMatcherConfig {
     gameState: GameState;
     inventoryManager: BuildingInventoryManager;
-    reservationManager: InventoryReservationManager;
+    jobStore: TransportJobStore;
     storageFilterManager?: StorageFilterManager;
     matchFilter?: LogisticsMatchFilter;
 }
@@ -39,7 +43,7 @@ export interface RequestMatchResult extends FulfillmentMatch {
 export class RequestMatcher {
     private readonly gameState: GameState;
     private readonly inventoryManager: BuildingInventoryManager;
-    private readonly reservationManager: InventoryReservationManager;
+    private readonly jobStore: TransportJobStore;
     private readonly storageFilterManager: StorageFilterManager | null;
 
     matchFilter: LogisticsMatchFilter | null;
@@ -47,7 +51,7 @@ export class RequestMatcher {
     constructor(config: RequestMatcherConfig) {
         this.gameState = config.gameState;
         this.inventoryManager = config.inventoryManager;
-        this.reservationManager = config.reservationManager;
+        this.jobStore = config.jobStore;
         this.storageFilterManager = config.storageFilterManager ?? null;
         this.matchFilter = config.matchFilter ?? null;
     }
@@ -57,13 +61,13 @@ export class RequestMatcher {
      *
      * @returns A match result, or null if no suitable supply was found.
      */
-    matchRequest(request: ResourceRequest): RequestMatchResult | null {
+    matchRequest(request: MatchableRequest): RequestMatchResult | null {
         const destBuilding = this.gameState.getEntityOrThrow(request.buildingId, 'requesting building');
         const playerId = destBuilding.player;
 
         const match = matchRequestToSupply(request, this.gameState, this.inventoryManager, {
             playerId,
-            reservationManager: this.reservationManager,
+            jobStore: this.jobStore,
             storageFilterManager: this.storageFilterManager ?? undefined,
         });
 
@@ -89,13 +93,13 @@ export class RequestMatcher {
      * @param maxCandidates Maximum number of candidates to return.
      * @returns Array of match results (may be empty), filtered by policy.
      */
-    matchRequestCandidates(request: ResourceRequest, maxCandidates: number): RequestMatchResult[] {
+    matchRequestCandidates(request: MatchableRequest, maxCandidates: number): RequestMatchResult[] {
         const destBuilding = this.gameState.getEntityOrThrow(request.buildingId, 'requesting building');
         const playerId = destBuilding.player;
 
         const allMatches = findAllMatches(request, this.gameState, this.inventoryManager, {
             playerId,
-            reservationManager: this.reservationManager,
+            jobStore: this.jobStore,
             storageFilterManager: this.storageFilterManager ?? undefined,
         });
 

@@ -1,48 +1,14 @@
 /**
  * Logistics Feature Module
  *
- * Provides resource request and fulfillment matching for the carrier system.
+ * Provides demand queuing and transport job fulfillment for the carrier system.
  *
  * This module handles:
- * - Resource requests: Buildings request materials they need
+ * - Demand queue: Buildings declare material needs (stateless entries)
  * - Resource supply discovery: Finding buildings with available materials
- * - Request management: Tracking pending/in-progress/fulfilled requests
- * - Fulfillment matching: Matching requests to supplies by distance
- *
- * Usage:
- * ```typescript
- * import {
- *   RequestManager,
- *   RequestPriority,
- *   matchRequestToSupply,
- * } from '@/game/features/logistics';
- *
- * // Create a request for logs
- * const request = requestManager.addRequest(
- *   sawmillBuildingId,
- *   EMaterialType.LOG,
- *   4,
- *   RequestPriority.Normal,
- * );
- *
- * // Find a supply to fulfill it
- * const match = matchRequestToSupply(request, gameState, inventoryManager);
- * if (match) {
- *   // Assign a carrier to pick up from match.sourceBuilding
- * }
- * ```
+ * - Transport job store: Single source of truth for all active deliveries
+ * - Fulfillment matching: Matching demands to supplies by distance
  */
-
-// Resource request types and helpers
-export {
-    type ResourceRequest,
-    RequestPriority,
-    RequestStatus,
-    createResourceRequest,
-    compareRequests,
-    canAssignRequest,
-    isRequestActive,
-} from './resource-request';
 
 // Resource supply types and helpers
 export {
@@ -53,21 +19,19 @@ export {
     getTotalSupply,
 } from './resource-supply';
 
-// Request manager
-export { RequestManager, type RequestResetReason } from './request-manager';
+// Demand queue (replaces RequestManager)
+export { DemandQueue, type DemandEntry, DemandPriority } from './demand-queue';
 
 // Fulfillment matching
 export {
     type FulfillmentMatch,
     type MatchOptions,
+    type MatchableRequest,
     matchRequestToSupply,
     findAllMatches,
     canPotentiallyFulfill,
     estimateFulfillmentDistance,
 } from './fulfillment-matcher';
-
-// Inventory reservations (prevents race conditions)
-export { type InventoryReservation, InventoryReservationManager } from './inventory-reservation';
 
 // Fulfillment diagnostics (debug panel support)
 export {
@@ -82,9 +46,8 @@ export { TransportPhase, type TransportJobRecord } from './transport-job-record'
 export * as TransportJobService from './transport-job-service';
 export type { TransportJobDeps } from './transport-job-service';
 
-// In-flight tracking (destination-side material tracking)
-export type { InFlightTracker } from './in-flight-tracker';
-export { InFlightTrackerImpl } from './in-flight-tracker';
+// Transport job store (single source of truth for all active jobs)
+export { TransportJobStore } from './transport-job-store';
 
 // Request matcher (supply matching with territory filtering)
 export { RequestMatcher, type RequestMatcherConfig, type RequestMatchResult } from './request-matcher';
@@ -110,7 +73,7 @@ export { StallDetector, type StallDetectorConfig } from './stall-detector';
 // Match diagnostics (throttled logging of unmatched requests)
 export { MatchDiagnostics, type MatchDiagnosticsConfig } from './match-diagnostics';
 
-// Logistics dispatcher (connects requests to carriers)
+// Logistics dispatcher (connects demands to carriers)
 export { LogisticsDispatcher, type LogisticsDispatcherConfig } from './logistics-dispatcher';
 
 // Logistics filter types (pluggable policy enforcement)
@@ -121,9 +84,8 @@ export type {
     SnapshotConfig,
     LogisticsStats,
     LogisticsDebugState,
-    RequestSummary,
+    DemandSummary,
     CarrierSummary,
-    ReservationSummary,
     ProductionBuildingSummary,
     SlotSummary,
     PileSummary,
@@ -133,9 +95,8 @@ export type {
 } from './logistics-snapshot';
 export {
     gatherLogisticsSnapshot,
-    gatherRequests,
+    gatherDemands,
     gatherCarriers,
-    gatherReservations,
     gatherProductionBuildings,
     gatherPiles,
     gatherWorkers,
@@ -145,6 +106,6 @@ export {
     createEmptyState,
 } from './logistics-snapshot';
 
-// Feature definition (self-registering via FeatureRegistry)
-export { RequestManagerFeature, type RequestManagerExports } from './request-manager-feature';
+// Feature definitions (self-registering via FeatureRegistry)
+export { DemandQueueFeature, type DemandQueueExports } from './demand-queue-feature';
 export { LogisticsDispatcherFeature, type LogisticsDispatcherExports } from './logistics-dispatcher-feature';

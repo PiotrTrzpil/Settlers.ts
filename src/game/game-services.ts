@@ -36,7 +36,7 @@ import {
     type ProductionControlExports,
 } from './features/production-control/production-control-feature';
 import { CarrierFeature, type CarrierFeatureExports } from './features/carriers';
-import { RequestManagerFeature, type RequestManagerExports } from './features/logistics';
+import { DemandQueueFeature, type DemandQueueExports } from './features/logistics';
 import { BuildingOverlayFeature, type BuildingOverlayFeatureExports } from './features/building-overlays';
 import {
     BuildingConstructionFeature,
@@ -84,7 +84,7 @@ import {
     type InventoryChangeCallback,
 } from './systems/inventory';
 import type { InventoryPileSync } from './features/inventory';
-import type { RequestManager, LogisticsDispatcher } from './features/logistics';
+import type { DemandQueue, TransportJobStore, LogisticsDispatcher } from './features/logistics';
 import type { BuildingOverlayManager, OverlayRegistry } from './features/building-overlays';
 import type {
     ConstructionSiteManager,
@@ -115,7 +115,8 @@ export class GameServices {
     public readonly carrierRegistry: CarrierRegistry;
     public readonly inventoryManager: BuildingInventoryManager;
     public readonly storageFilterManager: StorageFilterManager;
-    public readonly requestManager: RequestManager;
+    public readonly demandQueue: DemandQueue;
+    public readonly jobStore: TransportJobStore;
     public readonly buildingOverlayManager: BuildingOverlayManager;
     public readonly overlayRegistry: OverlayRegistry;
     public readonly constructionSiteManager: ConstructionSiteManager;
@@ -263,7 +264,7 @@ export class GameServices {
             WorkAreaFeature,
             ProductionControlFeature,
             CarrierFeature,
-            RequestManagerFeature,
+            DemandQueueFeature,
             BuildingOverlayFeature,
             TreeFeature,
             StoneFeature,
@@ -297,7 +298,8 @@ export class GameServices {
 
         // 4. Extract commonly-accessed exports for external consumers.
         this.carrierRegistry = this.feat<CarrierFeatureExports>('carriers').carrierRegistry;
-        this.requestManager = this.feat<RequestManagerExports>('logistics').requestManager;
+        this.demandQueue = this.feat<DemandQueueExports>('logistics').demandQueue;
+        this.jobStore = this.feat<DemandQueueExports>('logistics').jobStore;
         const overlayExports = this.feat<BuildingOverlayFeatureExports>('building-overlays');
         this.buildingOverlayManager = overlayExports.buildingOverlayManager;
         this.overlayRegistry = overlayExports.overlayRegistry;

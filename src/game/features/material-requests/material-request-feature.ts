@@ -1,18 +1,18 @@
 /**
- * Material Request Feature - Self-registering feature module for material delivery requests.
+ * Material Request Feature - Self-registering feature module for material delivery demands.
  *
- * Creates transport requests for buildings that need input materials.
+ * Creates transport demands for buildings that need input materials.
  * Dependencies are accessed via the feature registry:
  * - building-construction: ConstructionSiteManager (checks construction status)
  * - inventory: BuildingInventoryManager (checks input slot levels)
- * - logistics: RequestManager (manages delivery requests)
+ * - logistics: DemandQueue + TransportJobStore (manages delivery demands)
  */
 
 import type { FeatureDefinition, FeatureContext } from '../feature';
 import { MaterialRequestSystem } from './material-request-system';
 import type { ConstructionSiteManager } from '../building-construction';
 import type { BuildingInventoryManager, StorageFilterManager } from '../inventory';
-import type { RequestManager } from '../logistics';
+import type { DemandQueueExports } from '../logistics/demand-queue-feature';
 
 export interface MaterialRequestExports {
     materialRequestSystem: MaterialRequestSystem;
@@ -30,14 +30,15 @@ export const MaterialRequestFeature: FeatureDefinition = {
             inventoryManager: BuildingInventoryManager;
             storageFilterManager: StorageFilterManager;
         }>('inventory');
-        const { requestManager } = ctx.getFeature<{ requestManager: RequestManager }>('logistics');
+        const { demandQueue, jobStore } = ctx.getFeature<DemandQueueExports>('logistics');
 
         const system = new MaterialRequestSystem({
             gameState: ctx.gameState,
             eventBus: ctx.eventBus,
             constructionSiteManager,
             inventoryManager,
-            requestManager,
+            demandQueue,
+            jobStore,
             storageFilterManager,
         });
 

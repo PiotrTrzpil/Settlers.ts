@@ -1,26 +1,23 @@
 // @vitest-environment jsdom
 /**
  * Unit tests for TransportJobService — stateless lifecycle operations
- * for TransportJobRecord (reservation, request status, and inventory operations).
+ * for TransportJobRecord (job store queries, demand consumption, and inventory operations).
  */
 
 import { describe, it, expect, beforeEach } from 'vitest';
 import * as TransportJobService from '@/game/features/logistics/transport-job-service';
-import { resetTransportJobIds } from '@/game/features/logistics/transport-job-service';
 import { TransportPhase, type TransportJobRecord } from '@/game/features/logistics/transport-job-record';
-import { RequestManager } from '@/game/features/logistics/request-manager';
-import { InventoryReservationManager } from '@/game/features/logistics/inventory-reservation';
+import { DemandQueue, DemandPriority } from '@/game/features/logistics/demand-queue';
+import { TransportJobStore } from '@/game/features/logistics/transport-job-store';
 import { EMaterialType } from '@/game/economy';
-import { RequestPriority, RequestStatus } from '@/game/features/logistics';
 import type { BuildingInventoryManager } from '@/game/features/inventory';
 import { EventBus } from '@/game/event-bus';
 import type { TransportJobDeps } from '@/game/features/logistics/transport-job-service';
-import { InFlightTrackerImpl } from '@/game/features/logistics/in-flight-tracker';
 
 // ─── Minimal BuildingInventoryManager stub ──────────────────────────
 
 function createInventoryStub(outputAmount = 5) {
-    const slots = new Map<string, { current: number; reserved: number }>();
+    const slots = new Map<string, { current: number }>();
 
     function key(buildingId: number, material: EMaterialType) {
         return `${buildingId}:${material}`;
@@ -29,39 +26,30 @@ function createInventoryStub(outputAmount = 5) {
     function getOrCreate(buildingId: number, material: EMaterialType) {
         const k = key(buildingId, material);
         if (!slots.has(k)) {
-            slots.set(k, { current: outputAmount, reserved: 0 });
+            slots.set(k, { current: outputAmount });
         }
         return slots.get(k)!;
     }
 
     return {
-        reserveOutput(buildingId: number, material: EMaterialType, amount: number): number {
-            const slot = getOrCreate(buildingId, material);
-            const available = slot.current - slot.reserved;
-            const reserved = Math.min(amount, available);
-            slot.reserved += reserved;
-            return reserved;
+        getOutputAmount(buildingId: number, material: EMaterialType): number {
+            return getOrCreate(buildingId, material).current;
         },
-        releaseOutputReservation(buildingId: number, material: EMaterialType, amount: number): void {
+        withdrawOutput(buildingId: number, material: EMaterialType, amount: number): void {
             const slot = getOrCreate(buildingId, material);
-            slot.reserved = Math.max(0, slot.reserved - amount);
+            slot.current -= amount;
         },
         getBuildingsWithOutput: () => [],
         getInventory: () => undefined,
-        getSlot,
         _slots: slots,
     };
-
-    function getSlot(buildingId: number, material: EMaterialType) {
-        return slots.get(key(buildingId, material));
-    }
 }
 
 // ─── Test setup ─────────────────────────────────────────────────────
 
 describe('TransportJobService', () => {
-    let requestManager: RequestManager;
-    let reservationManager: InventoryReservationManager;
+    let demandQueue: DemandQueue;
+    let jobStore: TransportJobStore;
     let inventoryManager: ReturnType<typeof createInventoryStub>;
     let eventBus: EventBus;
     let deps: TransportJobDeps;
@@ -72,28 +60,33 @@ describe('TransportJobService', () => {
     const MATERIAL = EMaterialType.LOG;
 
     beforeEach(() => {
-        resetTransportJobIds();
+        jobStore = new TransportJobStore();
+        jobStore.resetJobIds();
         eventBus = new EventBus();
-        requestManager = new RequestManager(eventBus);
+        demandQueue = new DemandQueue(eventBus);
         inventoryManager = createInventoryStub(5);
-        reservationManager = new InventoryReservationManager(inventoryManager as unknown as BuildingInventoryManager);
-        deps = { reservationManager, requestManager, eventBus, inFlightTracker: new InFlightTrackerImpl() };
+        deps = {
+            jobStore,
+            demandQueue,
+            eventBus,
+            inventoryManager: inventoryManager as unknown as BuildingInventoryManager,
+        };
     });
 
-    function addRequest() {
-        return requestManager.addRequest(DEST, MATERIAL, 1, RequestPriority.Normal);
+    function addDemand() {
+        return demandQueue.addDemand(DEST, MATERIAL, 1, DemandPriority.Normal);
     }
 
-    function createRecord(request = addRequest()): TransportJobRecord | null {
-        return TransportJobService.activate(request.id, SOURCE, DEST, MATERIAL, 1, CARRIER, deps);
+    function createRecord(demand = addDemand()): TransportJobRecord | null {
+        return TransportJobService.activate(demand.id, SOURCE, DEST, MATERIAL, 1, CARRIER, deps);
     }
 
     // ─── activate ───────────────────────────────────────────────────
 
     describe('activate', () => {
-        it('reserves inventory and marks request InProgress', () => {
-            const request = addRequest();
-            const record = createRecord(request);
+        it('creates job record at Reserved phase and consumes demand', () => {
+            const demand = addDemand();
+            const record = createRecord(demand);
 
             expect(record).not.toBeNull();
             expect(record!.phase).toBe(TransportPhase.Reserved);
@@ -101,43 +94,68 @@ describe('TransportJobService', () => {
             expect(record!.destBuilding).toBe(DEST);
             expect(record!.material).toBe(MATERIAL);
             expect(record!.amount).toBe(1);
+            expect(record!.demandId).toBe(demand.id);
 
-            // Request should be InProgress
-            expect(request.status).toBe(RequestStatus.InProgress);
-            expect(request.assignedCarrier).toBe(CARRIER);
-            expect(request.sourceBuilding).toBe(SOURCE);
+            // Demand should be consumed
+            expect(demandQueue.getDemand(demand.id)).toBeUndefined();
 
-            // Reservation should exist
-            expect(reservationManager.size).toBe(1);
+            // Job should be in the store
+            expect(jobStore.jobs.get(CARRIER)).toBe(record);
+            expect(jobStore.getReservedAmount(SOURCE, MATERIAL)).toBe(1);
         });
 
-        it('returns null if reservation fails (no inventory)', () => {
+        it('returns null if inventory supply is insufficient', () => {
             inventoryManager = createInventoryStub(0);
-            reservationManager = new InventoryReservationManager(
-                inventoryManager as unknown as BuildingInventoryManager
-            );
-            deps = { reservationManager, requestManager, eventBus, inFlightTracker: new InFlightTrackerImpl() };
+            deps = {
+                jobStore,
+                demandQueue,
+                eventBus,
+                inventoryManager: inventoryManager as unknown as BuildingInventoryManager,
+            };
 
-            const request = addRequest();
-            const record = TransportJobService.activate(request.id, SOURCE, DEST, MATERIAL, 1, CARRIER, deps);
+            const demand = addDemand();
+            const record = TransportJobService.activate(demand.id, SOURCE, DEST, MATERIAL, 1, CARRIER, deps);
 
             expect(record).toBeNull();
-            // Request should still be Pending (not assigned)
-            expect(request.status).toBe(RequestStatus.Pending);
+            // Demand should still be in the queue (not consumed)
+            expect(demandQueue.getDemand(demand.id)).toBeDefined();
+        });
+
+        it('returns null if all inventory is already reserved by another job', () => {
+            // Pre-fill with a reservation for the full amount
+            const existingRecord: TransportJobRecord = {
+                id: 999,
+                demandId: 999,
+                sourceBuilding: SOURCE,
+                destBuilding: 201,
+                material: MATERIAL,
+                amount: 5,
+                carrierId: 99,
+                phase: TransportPhase.Reserved,
+                createdAt: 0,
+            };
+            jobStore.jobs.set(99, existingRecord);
+
+            const demand = addDemand();
+            const record = TransportJobService.activate(demand.id, SOURCE, DEST, MATERIAL, 1, CARRIER, deps);
+
+            expect(record).toBeNull();
         });
     });
 
     // ─── pickUp ─────────────────────────────────────────────────────
 
     describe('pickUp', () => {
-        it('transitions to picked-up and consumes reservation', () => {
+        it('transitions to picked-up phase (withdrawal handled by choreography)', () => {
             const record = createRecord()!;
 
             TransportJobService.pickUp(record, deps);
 
             expect(record.phase).toBe(TransportPhase.PickedUp);
-            // Reservation bookkeeping should be cleaned up
-            expect(reservationManager.size).toBe(0);
+            // Reservation is gone (phase changed from Reserved)
+            expect(jobStore.getReservedAmount(SOURCE, MATERIAL)).toBe(0);
+            // Inventory is NOT reduced here — the choreography handles withdrawal via MaterialTransfer.pickUp()
+            expect(inventoryManager.getOutputAmount(SOURCE, MATERIAL)).toBe(5);
         });
 
         it('throws if called when not Reserved', () => {
@@ -158,15 +176,14 @@ describe('TransportJobService', () => {
     // ─── deliver ────────────────────────────────────────────────────
 
     describe('deliver', () => {
-        it('fulfills the request after pickup', () => {
-            const request = addRequest();
-            const record = createRecord(request)!;
+        it('transitions to Delivered phase after pickup', () => {
+            const demand = addDemand();
+            const record = createRecord(demand)!;
             TransportJobService.pickUp(record, deps);
 
             TransportJobService.deliver(record, deps);
 
-            // Request should be fulfilled (removed from manager)
-            expect(requestManager.getRequest(request.id)).toBeUndefined();
+            expect(record.phase).toBe(TransportPhase.Delivered);
         });
 
         it('throws if called when still Reserved (not picked up)', () => {
@@ -186,27 +203,23 @@ describe('TransportJobService', () => {
     // ─── cancel ─────────────────────────────────────────────────────
 
     describe('cancel', () => {
-        it('releases reservation and resets request when reserved', () => {
-            const request = addRequest();
-            const record = createRecord(request)!;
+        it('transitions to Cancelled phase and releases reservation when Reserved', () => {
+            const record = createRecord()!;
 
             TransportJobService.cancel(record, 'cancelled', deps);
 
             expect(record.phase).toBe(TransportPhase.Cancelled);
-            expect(reservationManager.size).toBe(0);
-            expect(request.status).toBe(RequestStatus.Pending);
+            // Reservation is released (no Reserved jobs in store)
+            expect(jobStore.getReservedAmount(SOURCE, MATERIAL)).toBe(0);
         });
 
-        it('resets request when picked-up (no reservation to release)', () => {
-            const request = addRequest();
-            const record = createRecord(request)!;
+        it('transitions to Cancelled phase when PickedUp (no reservation to release)', () => {
+            const record = createRecord()!;
             TransportJobService.pickUp(record, deps);
 
             TransportJobService.cancel(record, 'cancelled', deps);
 
             expect(record.phase).toBe(TransportPhase.Cancelled);
-            // Request was InProgress, now reset to Pending
-            expect(request.status).toBe(RequestStatus.Pending);
         });
 
         it('is a no-op if already cancelled', () => {
@@ -215,6 +228,15 @@ describe('TransportJobService', () => {
             TransportJobService.cancel(record, 'cancelled', deps); // second call should be fine
 
             expect(record.phase).toBe(TransportPhase.Cancelled);
+        });
+
+        it('is a no-op if already delivered', () => {
+            const record = createRecord()!;
+            TransportJobService.pickUp(record, deps);
+            TransportJobService.deliver(record, deps);
+            TransportJobService.cancel(record, 'cancelled', deps); // should be fine
+
+            expect(record.phase).toBe(TransportPhase.Delivered);
         });
     });
 });

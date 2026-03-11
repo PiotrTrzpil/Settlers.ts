@@ -159,8 +159,8 @@ export const EventFmt = {
     'logistics:buildingCleanedUp': (e: GameEvents['logistics:buildingCleanedUp']) =>
         `reqs=${e.requestsCancelled} jobs=${e.jobsCancelled}`,
 
-    'logistics:requestCreated': (e: GameEvents['logistics:requestCreated']) =>
-        `${EMaterialType[e.materialType]} ×${e.amount} pri=${e.priority}`,
+    'logistics:demandCreated': (e: GameEvents['logistics:demandCreated']) =>
+        `${EMaterialType[e.materialType]} ×${e.amount} pri=${e.priority} bld=#${e.buildingId}`,
 
     'production:modeChanged': (e: GameEvents['production:modeChanged']) => `${e.mode}`,
 
@@ -208,16 +208,11 @@ export const EventFmt = {
 
     'carrier:transportCancelled': (e: GameEvents['carrier:transportCancelled']) => `req=${e.requestId} ${e.reason}`,
 
-    'logistics:requestRemoved': (e: GameEvents['logistics:requestRemoved']) => `req=${e.requestId}`,
+    'logistics:demandConsumed': (e: GameEvents['logistics:demandConsumed']) =>
+        `${EMaterialType[e.materialType]} demand=#${e.demandId} bld=#${e.buildingId}`,
 
-    'logistics:requestAssigned': (e: GameEvents['logistics:requestAssigned']) =>
-        `req=${e.requestId} carrier=#${e.unitId} src=#${e.sourceBuilding}`,
-
-    'logistics:requestFulfilled': (e: GameEvents['logistics:requestFulfilled']) =>
-        `${EMaterialType[e.materialType]} req=${e.requestId}`,
-
-    'logistics:requestReset': (e: GameEvents['logistics:requestReset']) =>
-        `${EMaterialType[e.materialType]} req=${e.requestId} ${e.reason}`,
+    'logistics:demandFulfilled': (e: GameEvents['logistics:demandFulfilled']) =>
+        `${EMaterialType[e.materialType]} demand=#${e.demandId} bld=#${e.buildingId}`,
 
     'pile:freePilePlaced': (e: GameEvents['pile:freePilePlaced']) =>
         `#${e.entityId} ${EMaterialType[e.materialType]} ×${e.quantity}`,

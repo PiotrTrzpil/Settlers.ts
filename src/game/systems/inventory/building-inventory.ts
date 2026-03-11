@@ -8,18 +8,7 @@ import { EMaterialType } from '../../economy/material-type';
 import { Race } from '../../core/race';
 import { BUILDING_PRODUCTIONS, type Recipe } from '../../economy/building-production';
 import type { InventorySlot } from './inventory-slot';
-import {
-    createSlot,
-    deposit,
-    withdraw,
-    canAccept,
-    canProvide,
-    getAvailableSpace,
-    reserve,
-    releaseReservation,
-    withdrawReserved,
-    getUnreservedAmount,
-} from './inventory-slot';
+import { createSlot, deposit, withdraw, canAccept, canProvide, getAvailableSpace } from './inventory-slot';
 import { getInventoryConfig, type SlotConfig, type InventoryConfig } from './inventory-configs';
 import { type ComponentStore, mapStore } from '../../ecs';
 import { createLogger } from '@/utilities/logger';
@@ -47,7 +36,6 @@ export interface SerializedInventorySlot {
     materialType: EMaterialType;
     current: number;
     max: number;
-    reserved: number;
 }
 
 export interface SerializedBuildingInventory {
@@ -318,64 +306,6 @@ export class BuildingInventoryManager implements Persistable<SerializedBuildingI
         }
 
         return withdrawn;
-    }
-
-    /**
-     * Reserve material in a building's output slot for a pending carrier pickup.
-     * Prevents other carriers from claiming the same material.
-     * @param buildingId Entity ID of the building
-     * @param materialType Material type to reserve
-     * @param amount Amount to reserve
-     * @returns Amount actually reserved (may be less if not enough unreserved)
-     */
-    reserveOutput(buildingId: number, materialType: EMaterialType, amount: number): number {
-        const slot = this.getOutputSlotOrThrow(buildingId, materialType);
-        return reserve(slot, amount);
-    }
-
-    /**
-     * Release a reservation on a building's output slot (when pickup fails or is cancelled).
-     * @param buildingId Entity ID of the building
-     * @param materialType Material type to release
-     * @param amount Amount to release from reservation
-     * @returns Amount actually released
-     */
-    releaseOutputReservation(buildingId: number, materialType: EMaterialType, amount: number): number {
-        const slot = this.getOutputSlotOrThrow(buildingId, materialType);
-        return releaseReservation(slot, amount);
-    }
-
-    /**
-     * Withdraw from reserved output (for actual carrier pickup).
-     * Releases reservation and withdraws in one atomic operation.
-     * @param buildingId Entity ID of the building
-     * @param materialType Material type to withdraw
-     * @param amount Amount to withdraw from reserved
-     * @returns Actual amount withdrawn
-     */
-    withdrawReservedOutput(buildingId: number, materialType: EMaterialType, amount: number): number {
-        const slot = this.getOutputSlotOrThrow(buildingId, materialType);
-
-        const previousAmount = slot.currentAmount;
-        const withdrawn = withdrawReserved(slot, amount);
-
-        if (withdrawn > 0) {
-            this.emitChange(buildingId, materialType, 'output', previousAmount, slot.currentAmount);
-        }
-
-        return withdrawn;
-    }
-
-    /**
-     * Get unreserved amount in a building's output slot.
-     * @param buildingId Entity ID of the building
-     * @param materialType Material type to check
-     * @returns Amount available for new reservations
-     */
-    getUnreservedOutputAmount(buildingId: number, materialType: EMaterialType): number {
-        const slot = this.getOutputSlot(buildingId, materialType);
-        if (!slot) return 0;
-        return getUnreservedAmount(slot);
     }
 
     /**
@@ -746,7 +676,7 @@ export class BuildingInventoryManager implements Persistable<SerializedBuildingI
     }
 
     deserialize(data: SerializedBuildingInventory[]): void {
-        // Reservations are now fully persisted — restore exact slot state including reserved counts
+        // Reservations are derived from the TransportJobStore on demand — not persisted in slots
         for (const inv of data) {
             this.restoreInventory(inv);
         }
@@ -757,7 +687,6 @@ export class BuildingInventoryManager implements Persistable<SerializedBuildingI
             materialType: s.materialType,
             current: s.currentAmount,
             max: s.maxCapacity,
-            reserved: s.reservedAmount,
         }));
     }
 
@@ -767,19 +696,13 @@ export class BuildingInventoryManager implements Persistable<SerializedBuildingI
     restoreInventory(data: {
         entityId: number;
         buildingType: BuildingType;
-        inputSlots: Array<{ materialType: EMaterialType; current: number; max: number; reserved: number }>;
-        outputSlots: Array<{ materialType: EMaterialType; current: number; max: number; reserved: number }>;
+        inputSlots: Array<{ materialType: EMaterialType; current: number; max: number }>;
+        outputSlots: Array<{ materialType: EMaterialType; current: number; max: number }>;
     }): void {
-        const toSlot = (s: {
-            materialType: EMaterialType;
-            current: number;
-            max: number;
-            reserved: number;
-        }): InventorySlot => ({
+        const toSlot = (s: { materialType: EMaterialType; current: number; max: number }): InventorySlot => ({
             materialType: s.materialType,
             currentAmount: s.current,
             maxCapacity: s.max,
-            reservedAmount: s.reserved,
         });
 
         this.inventories.set(data.entityId, {

@@ -310,41 +310,27 @@ export interface GameEvents {
         jobsCancelled: number;
     };
 
-    /** Emitted when a new resource request is created */
-    'logistics:requestCreated': {
-        requestId: number;
+    /** Emitted when a new demand is added to the queue */
+    'logistics:demandCreated': {
+        demandId: number;
         buildingId: number;
         materialType: EMaterialType;
         amount: number;
-        /** RequestPriority enum value (0=High, 1=Normal, 2=Low) */
         priority: number;
     };
 
-    /** Emitted when a resource request is removed/cancelled */
-    'logistics:requestRemoved': {
-        requestId: number;
-    };
-
-    /** Emitted when a resource request is assigned to a carrier */
-    'logistics:requestAssigned': {
-        requestId: number;
-        unitId: number;
-        sourceBuilding: number;
-    };
-
-    /** Emitted when a resource request is fulfilled (delivery complete) */
-    'logistics:requestFulfilled': {
-        requestId: number;
+    /** Emitted when a demand is consumed (job created for it) */
+    'logistics:demandConsumed': {
+        demandId: number;
         buildingId: number;
         materialType: EMaterialType;
     };
 
-    /** Emitted when a resource request is reset to pending (carrier dropped it, timeout, etc.) */
-    'logistics:requestReset': {
-        requestId: number;
+    /** Emitted when a transport job fulfills delivery */
+    'logistics:demandFulfilled': {
+        demandId: number;
         buildingId: number;
         materialType: EMaterialType;
-        reason: string;
     };
 
     // === Inventory Events ===

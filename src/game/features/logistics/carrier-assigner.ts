@@ -14,18 +14,18 @@ import type { EventBus } from '../../event-bus';
 import type { TransportJobRecord } from './transport-job-record';
 import * as TransportJobService from './transport-job-service';
 import type { TransportJobDeps } from './transport-job-service';
-import type { InventoryReservationManager } from './inventory-reservation';
-import type { RequestManager } from './request-manager';
+import type { DemandEntry } from './demand-queue';
+import type { DemandQueue } from './demand-queue';
 import type { RequestMatchResult } from './request-matcher';
-import type { ResourceRequest } from './resource-request';
 import type { TransportJobBuilder } from './transport-job-builder';
 import type { JobState } from '../settler-tasks/types';
 import type { CarrierFilter } from './logistics-filter';
 import type { IdleCarrierPool } from '../carriers';
-import type { InFlightTracker } from './in-flight-tracker';
+import type { TransportJobStore } from './transport-job-store';
 import type { PreAssignmentQueue } from './pre-assignment-queue';
 import { TransportPhase } from './transport-job-record';
 import type { Index } from '@/game/utils/indexed-map';
+import type { BuildingInventoryManager } from '../inventory';
 
 /** Assigns a job to a settler and optionally starts movement. */
 export interface JobAssigner {
@@ -46,9 +46,9 @@ export interface CarrierAssignerConfig extends CoreDeps {
     idleCarrierPool: IdleCarrierPool;
     jobAssigner: JobAssigner;
     transportJobBuilder: TransportJobBuilder;
-    reservationManager: InventoryReservationManager;
-    requestManager: RequestManager;
-    inFlightTracker: InFlightTracker;
+    jobStore: TransportJobStore;
+    demandQueue: DemandQueue;
+    inventoryManager: BuildingInventoryManager;
     preAssignmentQueue: PreAssignmentQueue;
     activeJobs: ReadonlyMap<number, TransportJobRecord>;
     byPhase: Index<TransportPhase, number>;
@@ -63,7 +63,7 @@ export interface AssignmentSuccess {
     carrierId: number;
 }
 
-/** Result when a job was queued for a busy carrier (not yet in activeJobs). */
+/** Result when a job was queued for a busy carrier (not yet in jobStore). */
 export interface QueuedSuccess {
     /** The created transport job record (inventory reserved, but carrier still busy). */
     record: TransportJobRecord;
@@ -77,9 +77,9 @@ export interface QueuedSuccess {
 export type AssignResult = AssignmentSuccess | QueuedSuccess | 'no_carrier' | null;
 
 /**
- * Assigns available carriers to matched transport requests.
+ * Assigns available carriers to matched transport demands.
  *
- * Creates TransportJob instances that own the reservation and request lifecycle,
+ * Creates TransportJob records that own the reservation and demand lifecycle,
  * then assigns the carrier task to fulfill the job.
  */
 export class CarrierAssigner {
@@ -88,8 +88,6 @@ export class CarrierAssigner {
     private readonly idleCarrierPool: IdleCarrierPool;
     private readonly jobAssigner: JobAssigner;
     private readonly transportJobBuilder: TransportJobBuilder;
-    private readonly reservationManager: InventoryReservationManager;
-    private readonly requestManager: RequestManager;
     private readonly transportJobDeps: TransportJobDeps;
     private readonly preAssignmentQueue: PreAssignmentQueue;
     private readonly activeJobs: ReadonlyMap<number, TransportJobRecord>;
@@ -102,27 +100,25 @@ export class CarrierAssigner {
         this.idleCarrierPool = config.idleCarrierPool;
         this.jobAssigner = config.jobAssigner;
         this.transportJobBuilder = config.transportJobBuilder;
-        this.reservationManager = config.reservationManager;
-        this.requestManager = config.requestManager;
         this.preAssignmentQueue = config.preAssignmentQueue;
         this.activeJobs = config.activeJobs;
         this.byPhase = config.byPhase;
         this.transportJobDeps = {
-            reservationManager: this.reservationManager,
-            requestManager: this.requestManager,
-            eventBus: this.eventBus,
-            inFlightTracker: config.inFlightTracker,
+            jobStore: config.jobStore,
+            demandQueue: config.demandQueue,
+            eventBus: config.eventBus,
+            inventoryManager: config.inventoryManager,
         };
         this.carrierFilter = config.carrierFilter ?? null;
     }
 
     /**
-     * Try to assign a carrier to fulfill a matched request (single candidate).
+     * Try to assign a carrier to fulfill a matched demand (single candidate).
      *
      * @returns AssignmentSuccess on success, `'no_carrier'` when all carriers are busy, or null on hard failure.
      */
-    tryAssign(request: ResourceRequest, match: RequestMatchResult): AssignResult {
-        return this.tryAssignMatch(request, match);
+    tryAssign(demand: DemandEntry, match: RequestMatchResult): AssignResult {
+        return this.tryAssignMatch(demand, match);
     }
 
     /**
@@ -132,18 +128,18 @@ export class CarrierAssigner {
      * Falls back to single-match behavior if only one candidate.
      */
     // eslint-disable-next-line sonarjs/function-return-type -- discriminated union return is intentional
-    tryAssignBest(request: ResourceRequest, candidates: readonly RequestMatchResult[]): AssignResult {
+    tryAssignBest(demand: DemandEntry, candidates: readonly RequestMatchResult[]): AssignResult {
         if (candidates.length === 0) return null;
-        if (candidates.length === 1) return this.tryAssignMatch(request, candidates[0]!);
+        if (candidates.length === 1) return this.tryAssignMatch(demand, candidates[0]!);
 
-        const destBuilding = this.gameState.getEntityOrThrow(request.buildingId, 'dest building');
+        const destBuilding = this.gameState.getEntityOrThrow(demand.buildingId, 'dest building');
         const ranked = this.rankByTotalTrip(candidates, destBuilding.x, destBuilding.y);
         if (!ranked) return 'no_carrier';
 
         if (ranked.busyCarrier) {
-            return this.tryQueueForBusyCarrier(request, ranked.match, ranked.busyCarrier);
+            return this.tryQueueForBusyCarrier(demand, ranked.match, ranked.busyCarrier);
         }
-        return this.tryAssignMatch(request, ranked.match);
+        return this.tryAssignMatch(demand, ranked.match);
     }
 
     /**
@@ -195,7 +191,7 @@ export class CarrierAssigner {
     }
 
     // eslint-disable-next-line sonarjs/function-return-type -- discriminated union return is intentional
-    private tryAssignMatch(request: ResourceRequest, match: RequestMatchResult): AssignResult {
+    private tryAssignMatch(demand: DemandEntry, match: RequestMatchResult): AssignResult {
         const sourceBuilding = this.gameState.getEntityOrThrow(match.sourceBuilding, 'carrier source building');
 
         // Compare idle vs busy carrier for single-candidate path
@@ -211,16 +207,16 @@ export class CarrierAssigner {
 
         // If busy carrier beats idle, queue instead of assign
         if (busyResult && (!idleResult || busyResult.estimatedCostSq < idleResult.distSq)) {
-            return this.tryQueueForBusyCarrier(request, match, busyResult);
+            return this.tryQueueForBusyCarrier(demand, match, busyResult);
         }
 
         const carrierId = idleResult!.carrierId;
 
         const record = TransportJobService.activate(
-            request.id,
+            demand.id,
             match.sourceBuilding,
-            request.buildingId,
-            request.materialType,
+            demand.buildingId,
+            demand.materialType,
             match.amount,
             carrierId,
             this.transportJobDeps
@@ -228,11 +224,11 @@ export class CarrierAssigner {
 
         if (!record) {
             this.eventBus.emit('carrier:assignmentFailed', {
-                requestId: request.id,
+                requestId: demand.id,
                 reason: 'reservation_failed',
                 sourceBuilding: match.sourceBuilding,
-                destBuilding: request.buildingId,
-                material: request.materialType,
+                destBuilding: demand.buildingId,
+                material: demand.materialType,
                 unitId: carrierId,
                 level: 'warn',
             });
@@ -244,21 +240,21 @@ export class CarrierAssigner {
 
         if (success) {
             this.eventBus.emit('carrier:assigned', {
-                requestId: request.id,
+                requestId: demand.id,
                 unitId: carrierId,
                 sourceBuilding: match.sourceBuilding,
-                destBuilding: request.buildingId,
-                material: request.materialType,
+                destBuilding: demand.buildingId,
+                material: demand.materialType,
             });
             return { record, carrierId };
         }
 
         this.eventBus.emit('carrier:assignmentFailed', {
-            requestId: request.id,
+            requestId: demand.id,
             reason: 'movement_failed',
             sourceBuilding: match.sourceBuilding,
-            destBuilding: request.buildingId,
-            material: request.materialType,
+            destBuilding: demand.buildingId,
+            material: demand.materialType,
             unitId: carrierId,
             level: 'warn',
         });
@@ -310,32 +306,37 @@ export class CarrierAssigner {
      */
     // eslint-disable-next-line sonarjs/function-return-type -- discriminated union return is intentional
     private tryQueueForBusyCarrier(
-        request: ResourceRequest,
+        demand: DemandEntry,
         match: RequestMatchResult,
         busyCandidate: BusyCarrierCandidate
     ): AssignResult {
         const record = TransportJobService.activate(
-            request.id,
+            demand.id,
             match.sourceBuilding,
-            request.buildingId,
-            request.materialType,
+            demand.buildingId,
+            demand.materialType,
             match.amount,
             busyCandidate.carrierId,
-            this.transportJobDeps
+            this.transportJobDeps,
+            { skipStore: true }
         );
 
         if (!record) {
             this.eventBus.emit('carrier:assignmentFailed', {
-                requestId: request.id,
+                requestId: demand.id,
                 reason: 'reservation_failed',
                 sourceBuilding: match.sourceBuilding,
-                destBuilding: request.buildingId,
-                material: request.materialType,
+                destBuilding: demand.buildingId,
+                material: demand.materialType,
                 unitId: busyCandidate.carrierId,
                 level: 'warn',
             });
             return null;
         }
+
+        // Track the reservation in the store so supply calculations account for it,
+        // but don't add to the active jobs map (that would overwrite the carrier's current job).
+        this.transportJobDeps.jobStore.addPendingReservation(record);
 
         const job = this.transportJobBuilder.build(record);
         this.preAssignmentQueue.queue({
@@ -346,11 +347,11 @@ export class CarrierAssigner {
         });
 
         this.eventBus.emit('carrier:assigned', {
-            requestId: request.id,
+            requestId: demand.id,
             unitId: busyCandidate.carrierId,
             sourceBuilding: match.sourceBuilding,
-            destBuilding: request.buildingId,
-            material: request.materialType,
+            destBuilding: demand.buildingId,
+            material: demand.materialType,
         });
 
         return { record, carrierId: busyCandidate.carrierId, queued: true };
