@@ -16,9 +16,9 @@ import { EMaterialType } from '@/game/economy/material-type';
 import { BuildingConstructionPhase } from '@/game/features/building-construction';
 import { createSlope } from '../../helpers/test-map';
 
-const hasRealData = installRealGameData();
+installRealGameData();
 
-describe.skipIf(!hasRealData)('Construction worker top-up', { timeout: 30_000 }, () => {
+describe('Construction worker top-up', { timeout: 30_000 }, () => {
     let sim: Simulation;
 
     afterEach(() => {

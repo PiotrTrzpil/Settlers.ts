@@ -1,10 +1,12 @@
 /**
- * FreePileHandler — domain event handlers for free pile creation and depletion.
+ * FreePileHandler — domain event handlers for free pile creation.
  *
  * Extracted from GameServices to keep the composition root free of domain logic.
  * Purely event-driven (no tick). Subscribes to:
- *   - pile:freePilePlaced — territory ownership + inventory registration + initial deposit
- *   - inventory:changed — output decrease on StackedPile entities → quantity sync + removal
+ *   - pile:freePilePlaced — territory ownership + PileSlot registration
+ *
+ * In the new model, a free pile IS a PileSlot with kind=Free. The BuildingInventoryManager
+ * owns pile entity lifecycle (quantity updates and removal at zero) — no sync listener needed.
  */
 
 import { type EventBus, EventSubscriptionManager, type GameEvents } from '../../event-bus';
@@ -12,8 +14,6 @@ import type { CoreDeps } from '../feature';
 import type { BuildingInventoryManager } from '../../systems/inventory/building-inventory';
 import type { GameState } from '../../game-state';
 import type { TerritoryManager } from '../territory';
-import { EntityType } from '../../entity';
-import { BuildingType } from '../../buildings/types';
 
 export interface FreePileConfig extends CoreDeps {
     inventoryManager: BuildingInventoryManager;
@@ -36,7 +36,6 @@ export class FreePileHandler {
 
     registerEvents(): void {
         this.subscriptions.subscribe(this.eventBus, 'pile:freePilePlaced', this.onFreePilePlaced.bind(this));
-        this.subscriptions.subscribe(this.eventBus, 'inventory:changed', this.onInventoryChanged.bind(this));
     }
 
     unregisterEvents(): void {
@@ -54,29 +53,8 @@ export class FreePileHandler {
             }
         }
 
-        // Register an output-only inventory so the logistics system can discover and pick up free piles.
-        this.inventoryManager.createInventoryFromConfig(entityId, BuildingType.StorageArea, {
-            inputSlots: [],
-            outputSlots: [{ materialType, maxCapacity: quantity }],
-        });
-        this.inventoryManager.depositOutput(entityId, materialType, quantity);
-    }
-
-    private onInventoryChanged({
-        buildingId,
-        slotType,
-        newAmount,
-        previousAmount,
-    }: GameEvents['inventory:changed']): void {
-        // Free pile sync: when output is withdrawn, update pile quantity and remove if depleted
-        if (slotType === 'output' && newAmount < previousAmount) {
-            const entity = this.gameState.getEntity(buildingId);
-            if (entity?.type === EntityType.StackedPile) {
-                this.gameState.piles.setQuantity(buildingId, newAmount);
-                if (newAmount === 0) {
-                    this.gameState.removeEntity(buildingId);
-                }
-            }
-        }
+        // Register as a free PileSlot — the entity already exists, manager links it to the slot.
+        // The logistics system discovers free piles via getOutputAmount(entityId, material).
+        this.inventoryManager.registerFreePile(entityId, materialType, quantity, { x: entity.x, y: entity.y });
     }
 }

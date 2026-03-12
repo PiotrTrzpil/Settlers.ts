@@ -19,7 +19,6 @@ import type { TransportJobOps } from './choreo-types';
 import { buildAllSettlerConfigs } from '../../data/settler-data-access';
 import { serializeRuntime, deserializeJob, type SerializedUnitRuntime } from './settler-task-serialization';
 import type { BuildingInventoryManager, BuildingPileRegistry } from '../inventory';
-import type { PileRegistry } from '../../systems/inventory/pile-registry';
 import { createWorkplaceHandler, createCarrierHandler } from './work-handlers';
 import type { EntityVisualService } from '../../animation/entity-visual-service';
 import { WorkHandlerRegistry } from './work-handler-registry';
@@ -56,7 +55,6 @@ export interface SettlerTaskSystemConfig extends CoreDeps {
     choreoSystem: ChoreoSystem;
     visualService: EntityVisualService;
     inventoryManager: BuildingInventoryManager;
-    getPileSlotRegistry: () => PileRegistry | null;
     getPileRegistry: () => BuildingPileRegistry | null;
     workAreaStore: WorkAreaStore;
     buildingOverlayManager: BuildingOverlayManager;
@@ -123,7 +121,7 @@ export class SettlerTaskSystem implements TickSystem, Persistable<SerializedUnit
 
         this.buildingPositionResolver = new BuildingPositionResolverImpl({
             gameState: this.gameState,
-            getPileSlotRegistry: config.getPileSlotRegistry,
+            inventoryManager: this.inventoryManager,
             getPileRegistry: config.getPileRegistry,
             workAreaStore: config.workAreaStore,
             constructionSiteManager: config.constructionSiteManager,
@@ -156,6 +154,7 @@ export class SettlerTaskSystem implements TickSystem, Persistable<SerializedUnit
             jobPartResolver,
             materialTransfer: config.materialTransfer,
             transportJobOps,
+            constructionSiteManager: config.constructionSiteManager,
             getBarracksTrainingManager: config.getBarracksTrainingManager,
             executeCommand: config.executeCommand,
             locationManager: this.locationManager,

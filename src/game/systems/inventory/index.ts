@@ -6,13 +6,11 @@
  */
 
 import type { BuildingInventoryManager } from './building-inventory';
-import type { PileRegistry } from './pile-registry';
 import type { StorageFilterManager } from './storage-filter-manager';
 
 // Inventory exports interface (used by features that depend on 'inventory' via registerExports)
 export interface InventoryExports {
     inventoryManager: BuildingInventoryManager;
-    pileRegistry: PileRegistry;
     storageFilterManager: StorageFilterManager;
 }
 
@@ -33,8 +31,12 @@ export {
 } from './inventory-slot';
 
 // Building inventory manager
-export type { BuildingInventory, InventoryChangeCallback } from './building-inventory';
+export type { BuildingInventoryView, BuildingInventoryDeps } from './building-inventory';
+export type { SerializedBuildingInventory, SerializedPileSlot } from './building-inventory-helpers';
 export { BuildingInventoryManager } from './building-inventory';
+
+// PileSlot type (unified inventory+pile slot)
+export type { PileSlot } from './pile-slot';
 
 // Inventory configurations
 export type { SlotConfig, InventoryConfig } from './inventory-configs';
@@ -49,9 +51,6 @@ export {
 
 // Building pile registry (XML-derived pile positions)
 export { BuildingPileRegistry } from './building-pile-registry';
-export type { PileSlot, StoragePilePosition } from './building-pile-registry';
+export type { PileSlot as BuildingRegistryPileSlot, StoragePilePosition } from './building-pile-registry';
 
-// Pile system
-export { PileRegistry } from './pile-registry';
-export type { PileSlotKey } from './pile-registry';
 export { StorageFilterManager, StorageDirection } from './storage-filter-manager';

@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { Simulation } from '../helpers/test-simulation';
+import { Simulation } from '../../helpers/test-simulation';
 import { populateMapBuildings, mapS4BuildingType } from '@/game/features/building-construction';
 import { S4BuildingType } from '@/resources/map/s4-types';
 import { BuildingType } from '@/game/buildings/types';
@@ -18,7 +18,7 @@ describe('populateMapBuildings', () => {
     let sim: Simulation;
 
     beforeEach(() => {
-        sim = new Simulation({ useStubData: true, mapWidth: 64, mapHeight: 64 });
+        sim = new Simulation({ mapWidth: 64, mapHeight: 64 });
     });
 
     it('should create completed building entities from map data with correct type mapping', () => {

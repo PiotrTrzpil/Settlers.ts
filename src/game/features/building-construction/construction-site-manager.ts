@@ -27,6 +27,8 @@ import { BuildingConstructionPhase, type CapturedTerrainTile, type ConstructionS
 import type { Persistable } from '@/game/persistence';
 import type { TileCoord } from '../../core/coordinates';
 import { assignConstructionPilePositions } from '../../systems/inventory/construction-pile-positions';
+import type { BuildingInventoryManager } from '../../systems/inventory/building-inventory';
+import { SlotKind } from '../../core/pile-kind';
 
 // ── Serialization types ──
 
@@ -46,9 +48,8 @@ export interface SerializedConstructionSite {
     levelingProgress: number;
     levelingComplete: boolean;
     constructionProgress: number;
-    deliveredMaterials: Array<[EMaterialType, number]>;
-    /** Per-material consumed counts. Optional for backward compat with old saves. */
-    consumedMaterials?: Array<[EMaterialType, number]>;
+    /** Per-material consumed counts. */
+    consumedMaterials: Array<[EMaterialType, number]>;
     consumedAmount: number;
     terrainModified: boolean;
 }
@@ -98,10 +99,12 @@ export class ConstructionSiteManager implements Persistable<SerializedConstructi
 
     private readonly eventBus: EventBus;
     private readonly rng: SeededRng;
+    private readonly inventoryManager: BuildingInventoryManager;
 
-    constructor(eventBus: EventBus, rng: SeededRng) {
+    constructor(eventBus: EventBus, rng: SeededRng, inventoryManager: BuildingInventoryManager) {
         this.eventBus = eventBus;
         this.rng = rng;
+        this.inventoryManager = inventoryManager;
     }
 
     // ── Private helpers ──
@@ -160,9 +163,7 @@ export class ConstructionSiteManager implements Persistable<SerializedConstructi
             },
             materials: {
                 costs: constructionCosts,
-                delivered: new Map(),
                 totalCost,
-                deliveredAmount: 0,
                 consumedAmount: 0,
                 consumed: new Map(),
             },
@@ -181,7 +182,7 @@ export class ConstructionSiteManager implements Persistable<SerializedConstructi
         if (
             site.terrain.complete &&
             site.building.slots.assigned.size < site.building.slots.required &&
-            site.materials.deliveredAmount > site.materials.consumedAmount
+            this.hasAvailableMaterialsForSite(site)
         ) {
             this.eventBus.emit('construction:workerNeeded', {
                 role: 'builder',
@@ -191,6 +192,15 @@ export class ConstructionSiteManager implements Persistable<SerializedConstructi
                 player: site.player,
             });
         }
+    }
+
+    /**
+     * Query inventory directly: true when any input slot for this site has material available to consume.
+     */
+    private hasAvailableMaterialsForSite(site: ConstructionSite): boolean {
+        return this.inventoryManager
+            .getSlots(site.buildingId)
+            .some(s => s.kind === SlotKind.Input && s.currentAmount > 0);
     }
 
     private emitDiggerNeededIfRequired(site: ConstructionSite): void {
@@ -416,13 +426,13 @@ export class ConstructionSiteManager implements Persistable<SerializedConstructi
     }
 
     /**
-     * Advance construction by `amount` (0.0–1.0 fraction).
-     * Emits `construction:progressComplete` the first time `building.progress` reaches 1.0.
+     * Set construction progress to an absolute value (0.0–1.0).
+     * Emits `construction:progressComplete` the first time progress reaches 1.0.
      */
-    advanceConstruction(buildingId: number, amount: number): void {
-        const site = this.getSiteOrThrow(buildingId, 'advanceConstruction');
+    setConstructionProgress(buildingId: number, progress: number): void {
+        const site = this.getSiteOrThrow(buildingId, 'setConstructionProgress');
         const wasComplete = site.building.progress >= 1.0;
-        site.building.progress += amount;
+        site.building.progress = progress;
         if (!wasComplete && site.building.progress >= 1.0) {
             this.eventBus.emit('construction:progressComplete', { buildingId });
         }
@@ -431,39 +441,30 @@ export class ConstructionSiteManager implements Persistable<SerializedConstructi
     // ── Material tracking ──
 
     /**
-     * Record delivery of `amount` units of `material` to this site.
-     * Accumulates into `materials.delivered` and increments `materials.deliveredAmount`.
-     */
-    recordDelivery(buildingId: number, material: EMaterialType, amount: number): void {
-        const site = this.getSiteOrThrow(buildingId, 'recordDelivery');
-        const current = site.materials.delivered.get(material) ?? 0;
-        site.materials.delivered.set(material, current + amount);
-        site.materials.deliveredAmount += amount;
-        this.emitBuilderNeededIfRequired(site);
-    }
-
-    /**
-     * True when there are delivered materials not yet consumed by builders.
-     * Builders check this before each work tick.
+     * True when any input slot in the building's inventory has material for builders to consume.
+     * Queries inventory directly — no shadow delivered/consumed tracking.
      */
     hasAvailableMaterials(buildingId: number): boolean {
         const site = this.getSiteOrThrow(buildingId, 'hasAvailableMaterials');
-        return site.materials.deliveredAmount > site.materials.consumedAmount;
+        return this.hasAvailableMaterialsForSite(site);
     }
 
     /**
      * Pick the next material to consume and update per-material consumed tracking.
-     * Iterates costs in order, consuming from the first material that has
-     * delivered units not yet consumed. Returns the material type, or null
-     * if nothing is available.
+     * Iterates costs in order, finding the first material that has inventory available
+     * beyond what's already been consumed. Returns the material type, or null if none.
      */
     consumeNextMaterial(buildingId: number): EMaterialType | null {
         const site = this.sites.get(buildingId);
         if (!site) return null;
+        const slots = this.inventoryManager.getSlots(buildingId);
+
         for (const cost of site.materials.costs) {
-            const delivered = site.materials.delivered.get(cost.material) ?? 0;
-            const consumed = site.materials.consumed.get(cost.material) ?? 0;
-            if (consumed < delivered) {
+            const inSlots = slots
+                .filter(s => s.kind === SlotKind.Input && s.materialType === cost.material)
+                .reduce((sum, s) => sum + s.currentAmount, 0);
+            if (inSlots > 0) {
+                const consumed = site.materials.consumed.get(cost.material) ?? 0;
                 site.materials.consumed.set(cost.material, consumed + 1);
                 site.materials.consumedAmount += 1;
                 return cost.material;
@@ -473,16 +474,22 @@ export class ConstructionSiteManager implements Persistable<SerializedConstructi
     }
 
     /**
-     * Returns costs where delivery is still short of the required amount.
-     * Each entry reflects the remaining quantity still needed.
+     * Returns costs where remaining delivery is still short of the required amount.
+     * Remaining = cost - (currentInSlots + consumed). Each entry reflects what still needs delivery.
      */
     getRemainingCosts(buildingId: number): ConstructionCost[] {
         const site = this.getSiteOrThrow(buildingId, 'getRemainingCosts');
+        const slots = this.inventoryManager.getSlots(site.buildingId);
         const remaining: ConstructionCost[] = [];
+
         for (const cost of site.materials.costs) {
-            const delivered = site.materials.delivered.get(cost.material) ?? 0;
-            if (delivered < cost.count) {
-                remaining.push({ material: cost.material, count: cost.count - delivered });
+            const inSlots = slots
+                .filter(s => s.kind === SlotKind.Input && s.materialType === cost.material)
+                .reduce((sum, s) => sum + s.currentAmount, 0);
+            const consumed = site.materials.consumed.get(cost.material) ?? 0;
+            const total = inSlots + consumed;
+            if (total < cost.count) {
+                remaining.push({ material: cost.material, count: cost.count - total });
             }
         }
         return remaining;
@@ -554,7 +561,7 @@ export class ConstructionSiteManager implements Persistable<SerializedConstructi
             if (site.player !== player) continue;
             if (!site.terrain.complete) continue;
             if (site.building.slots.assigned.size >= site.building.slots.required) continue;
-            if (site.materials.deliveredAmount <= site.materials.consumedAmount) continue;
+            if (!this.hasAvailableMaterialsForSite(site)) continue;
 
             const dx = site.tileX - nearX;
             const dy = site.tileY - nearY;
@@ -592,7 +599,6 @@ export class ConstructionSiteManager implements Persistable<SerializedConstructi
                 levelingProgress: site.terrain.progress,
                 levelingComplete: site.terrain.complete,
                 constructionProgress: site.building.progress,
-                deliveredMaterials: [...site.materials.delivered.entries()],
                 consumedMaterials: [...site.materials.consumed.entries()],
                 consumedAmount: site.materials.consumedAmount,
                 terrainModified: site.terrain.modified,
@@ -629,8 +635,6 @@ export class ConstructionSiteManager implements Persistable<SerializedConstructi
         const totalCost = constructionCosts.reduce((sum, c) => sum + c.count, 0);
         const workerCount = getWorkerCount(data.buildingType, data.race);
 
-        const delivered = new Map<EMaterialType, number>(data.deliveredMaterials);
-        const deliveredAmount = [...delivered.values()].reduce((sum, v) => sum + v, 0);
         const pilePositions = assignConstructionPilePositions(data.buildingType, data.race, data.tileX, data.tileY);
 
         const site: ConstructionSite = {
@@ -663,11 +667,9 @@ export class ConstructionSiteManager implements Persistable<SerializedConstructi
             },
             materials: {
                 costs: constructionCosts,
-                delivered,
                 totalCost,
-                deliveredAmount,
                 consumedAmount: data.consumedAmount,
-                consumed: new Map<EMaterialType, number>(data.consumedMaterials ?? []),
+                consumed: new Map<EMaterialType, number>(data.consumedMaterials),
             },
             building: {
                 slots: {

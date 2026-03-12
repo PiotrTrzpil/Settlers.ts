@@ -21,6 +21,7 @@ import {
 import { EntityType } from '@/game/entity';
 import { BuildingType } from '@/game/buildings/building-type';
 import { EMaterialType } from '@/game/economy/material-type';
+import { SlotKind } from '@/game/core/pile-kind';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -323,6 +324,15 @@ function formatBuildingCounts(
     }
 }
 
+function isOutputSlotWithMaterial(slot: {
+    kind: SlotKind;
+    materialType: EMaterialType;
+    currentAmount: number;
+}): boolean {
+    if (slot.kind !== SlotKind.Output && slot.kind !== SlotKind.Storage) return false;
+    return slot.materialType !== EMaterialType.NO_MATERIAL && slot.currentAmount > 0;
+}
+
 function formatStorageMaterials(
     state: import('@/game/game-state').GameState,
     player: number,
@@ -333,10 +343,9 @@ function formatStorageMaterials(
     const invManager = ctx.game.services.inventoryManager;
     for (const e of state.entityIndex.ofTypeAndPlayer(EntityType.Building, player)) {
         if ((e.subType as BuildingType) !== BuildingType.StorageArea) continue;
-        const inv = invManager.getInventory(e.id);
-        if (!inv) continue;
-        for (const slot of inv.outputSlots) {
-            if (slot.materialType === EMaterialType.NO_MATERIAL || slot.currentAmount === 0) continue;
+        if (!invManager.hasSlots(e.id)) continue;
+        for (const slot of invManager.getSlots(e.id)) {
+            if (!isOutputSlotWithMaterial(slot)) continue;
             totals.set(slot.materialType, (totals.get(slot.materialType) ?? 0) + slot.currentAmount);
         }
     }

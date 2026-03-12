@@ -54,11 +54,11 @@ function chebyshev(a: { x: number; y: number }, b: { x: number; y: number }) {
     return Math.max(Math.abs(a.x - b.x), Math.abs(a.y - b.y));
 }
 
-const hasRealData = installRealGameData();
+installRealGameData();
 
 const SIM_256 = { mapWidth: 256, mapHeight: 256 } as const;
 
-describe.skipIf(!hasRealData)('Crop system (real game data)', { timeout: 10_000 }, () => {
+describe('Crop system (real game data)', { timeout: 10_000 }, () => {
     let sim: Simulation;
 
     afterEach(() => {

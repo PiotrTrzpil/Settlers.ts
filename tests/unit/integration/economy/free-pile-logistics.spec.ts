@@ -9,12 +9,13 @@
 import { describe, it, expect, afterEach } from 'vitest';
 import { BuildingType, EntityType, UnitType } from '@/game/entity';
 import { EMaterialType } from '@/game/economy';
+import { SlotKind } from '@/game/core/pile-kind';
 import { createSimulation, createScenario, cleanupSimulation, type Simulation } from '../../helpers/test-simulation';
 import { installRealGameData } from '../../helpers/test-game-data';
 
-const hasRealData = installRealGameData();
+installRealGameData();
 
-describe.skipIf(!hasRealData)('Free pile logistics (real game data)', { timeout: 30_000 }, () => {
+describe('Free pile logistics (real game data)', { timeout: 30_000 }, () => {
     let sim: Simulation;
 
     afterEach(() => {
@@ -29,11 +30,12 @@ describe.skipIf(!hasRealData)('Free pile logistics (real game data)', { timeout:
         const pileId = sim.placeGoods(EMaterialType.LOG, 3);
 
         // The free pile should be discoverable as output supply
-        const inventory = sim.services.inventoryManager.getInventory(pileId);
-        expect(inventory).toBeDefined();
-        expect(inventory!.outputSlots).toHaveLength(1);
-        expect(inventory!.outputSlots[0]!.materialType).toBe(EMaterialType.LOG);
-        expect(inventory!.outputSlots[0]!.currentAmount).toBe(3);
+        expect(sim.services.inventoryManager.hasSlots(pileId)).toBe(true);
+        const slots = sim.services.inventoryManager.getSlots(pileId);
+        const freeSlots = slots.filter(s => s.kind === SlotKind.Free);
+        expect(freeSlots).toHaveLength(1);
+        expect(freeSlots[0]!.materialType).toBe(EMaterialType.LOG);
+        expect(freeSlots[0]!.currentAmount).toBe(3);
     });
 
     it('free pile inventory is cleaned up when pile entity is removed', () => {
@@ -41,10 +43,10 @@ describe.skipIf(!hasRealData)('Free pile logistics (real game data)', { timeout:
         sim.placeBuilding(BuildingType.ResidenceSmall);
 
         const pileId = sim.placeGoods(EMaterialType.LOG, 3);
-        expect(sim.services.inventoryManager.getInventory(pileId)).toBeDefined();
+        expect(sim.services.inventoryManager.hasSlots(pileId)).toBe(true);
 
         sim.state.removeEntity(pileId);
-        expect(sim.services.inventoryManager.getInventory(pileId)).toBeUndefined();
+        expect(sim.services.inventoryManager.hasSlots(pileId)).toBe(false);
     });
 
     it('carrier picks up from free pile and delivers to construction site', () => {
@@ -60,13 +62,23 @@ describe.skipIf(!hasRealData)('Free pile logistics (real game data)', { timeout:
         sim.runUntil(
             () => {
                 const site = sim.services.constructionSiteManager.getSite(s.siteId);
-                return !!site && site.materials.deliveredAmount > 0;
+                return (
+                    !!site &&
+                    sim.services.inventoryManager
+                        .getSlots(s.siteId)
+                        .filter(slot => slot.kind === SlotKind.Input)
+                        .some(slot => slot.currentAmount > 0)
+                );
             },
             { maxTicks: 50_000, label: 'material delivered from free pile' }
         );
 
-        const site = sim.services.constructionSiteManager.getSite(s.siteId)!;
-        expect(site.materials.deliveredAmount).toBeGreaterThan(0);
+        expect(
+            sim.services.inventoryManager
+                .getSlots(s.siteId)
+                .filter(slot => slot.kind === SlotKind.Input)
+                .some(slot => slot.currentAmount > 0)
+        ).toBe(true);
         expect(sim.errors).toHaveLength(0);
     });
 
@@ -109,20 +121,22 @@ describe.skipIf(!hasRealData)('Free pile logistics (real game data)', { timeout:
         expect(sim.state.piles.getKind(pileId).kind).toBe('free');
 
         // Pile has its own output inventory (discoverable by logistics)
-        const inventory = sim.services.inventoryManager.getInventory(pileId);
-        expect(inventory).toBeDefined();
-        expect(inventory!.outputSlots[0]!.materialType).toBe(EMaterialType.BOARD);
-        expect(inventory!.outputSlots[0]!.currentAmount).toBe(3);
+        expect(sim.services.inventoryManager.hasSlots(pileId)).toBe(true);
+        const slots = sim.services.inventoryManager.getSlots(pileId);
+        const freeSlot = slots.find(s => s.kind === SlotKind.Free)!;
+        expect(freeSlot).toBeDefined();
+        expect(freeSlot.materialType).toBe(EMaterialType.BOARD);
+        expect(freeSlot.currentAmount).toBe(3);
     });
 
-    it('carrier transport job redirects to free pile when source building destroyed', () => {
+    it('destroyed building piles become free and carriers create new jobs from them', () => {
         sim = createSimulation();
         sim.placeBuilding(BuildingType.ResidenceSmall);
         const sawmillId = sim.placeBuilding(BuildingType.Sawmill);
         sim.injectOutput(sawmillId, EMaterialType.BOARD, 3);
 
         // Place a construction site that needs BOARDs
-        sim.placeBuilding(BuildingType.WoodcutterHut, 0, false);
+        const siteId = sim.placeBuilding(BuildingType.WoodcutterHut, 0, false);
 
         // Run until a carrier is assigned a transport job from the sawmill
         sim.runUntil(
@@ -133,26 +147,24 @@ describe.skipIf(!hasRealData)('Free pile logistics (real game data)', { timeout:
             { maxTicks: 50_000, label: 'carrier assigned transport from sawmill' }
         );
 
-        // Get the active job before destroying
-        const jobsBefore = [...sim.services.logisticsDispatcher.jobStore.jobs.raw.values()];
-        const jobFromSawmill = jobsBefore.find(j => j.sourceBuilding === sawmillId)!;
-        const jobId = jobFromSawmill.id;
-
         // Find the pile entity at the sawmill
         const piles = sim.state.entities.filter(
             e => e.type === EntityType.StackedPile && e.subType === EMaterialType.BOARD
         );
         const pileId = piles[0]!.id;
 
-        // Destroy the sawmill
+        // Destroy the sawmill — old job is cancelled, pile becomes free
         sim.state.removeEntity(sawmillId);
 
-        // The transport job should still be active, redirected to the pile entity
-        const jobsAfter = [...sim.services.logisticsDispatcher.jobStore.jobs.raw.values()];
-        const redirectedJob = jobsAfter.find(j => j.id === jobId);
-        expect(redirectedJob).toBeDefined();
-        expect(redirectedJob!.sourceBuilding).toBe(pileId);
-        expect(redirectedJob!.phase).toBe('reserved');
+        // Pile should still exist as a free pile
+        expect(sim.state.getEntity(pileId)).toBeDefined();
+        expect(sim.state.piles.getKind(pileId).kind).toBe('free');
+
+        // Logistics should create a new job from the free pile to the construction site
+        sim.runUntil(() => sim.services.inventoryManager.getSlots(siteId).some(s => s.currentAmount > 0), {
+            maxTicks: 50_000,
+            label: 'material delivered from free pile after building destroyed',
+        });
     });
 
     it('destroyed building piles are picked up by carriers for pending requests', () => {
@@ -167,7 +179,13 @@ describe.skipIf(!hasRealData)('Free pile logistics (real game data)', { timeout:
         sim.runUntil(
             () => {
                 const site = sim.services.constructionSiteManager.getSite(s.siteId);
-                return !!site && site.materials.deliveredAmount > 0;
+                return (
+                    !!site &&
+                    sim.services.inventoryManager
+                        .getSlots(s.siteId)
+                        .filter(slot => slot.kind === SlotKind.Input)
+                        .some(slot => slot.currentAmount > 0)
+                );
             },
             { maxTicks: 50_000, label: 'first delivery from storage' }
         );

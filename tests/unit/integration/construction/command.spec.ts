@@ -7,8 +7,8 @@ import {
 } from '@/game/features/building-construction';
 import { BuildingType, EntityType } from '@/game/entity';
 import { Race } from '@/game/core/race';
-import { TERRAIN, setTerrainAt, blockColumn } from '../helpers/test-map';
-import { Simulation } from '../helpers/test-simulation';
+import { TERRAIN, setTerrainAt, blockColumn } from '../../helpers/test-map';
+import { Simulation } from '../../helpers/test-simulation';
 
 // Note: Happy-path command tests (place_building, spawn_unit, select, deselect,
 // area select, remove entity) are covered by flow integration tests in flows/.
@@ -18,7 +18,7 @@ describe('Command System – edge cases', () => {
     let sim: Simulation;
 
     beforeEach(() => {
-        sim = new Simulation({ useStubData: true, mapWidth: 64, mapHeight: 64 });
+        sim = new Simulation({ mapWidth: 64, mapHeight: 64 });
     });
 
     describe('place_building', () => {

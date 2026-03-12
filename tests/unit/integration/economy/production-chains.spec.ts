@@ -95,9 +95,9 @@ import { TrainingRecipeIndex } from '@/game/features/barracks';
 import { ProductionMode } from '@/game/features/production-control';
 import { buildAllSettlerConfigs } from '@/game/data/settler-data-access';
 
-const hasRealData = installRealGameData();
+installRealGameData();
 
-describe.skipIf(!hasRealData)('Economy simulation (real game data)', { timeout: 5000 }, () => {
+describe('Economy simulation (real game data)', { timeout: 5000 }, () => {
     let sim: Simulation;
 
     afterEach(() => {

@@ -217,9 +217,6 @@ export const EventFmt = {
     'pile:freePilePlaced': (e: GameEvents['pile:freePilePlaced']) =>
         `#${e.entityId} ${EMaterialType[e.materialType]} ×${e.quantity}`,
 
-    'pile:buildingPilesConverted': (e: GameEvents['pile:buildingPilesConverted']) =>
-        `building=#${e.buildingId} ${e.piles.size} piles`,
-
     'recruitment:started': (e: GameEvents['recruitment:started']) =>
         `carrier=#${e.unitId} → ${UnitType[e.targetUnitType]} pile=#${e.pileEntityId} site=#${e.buildingId}`,
 

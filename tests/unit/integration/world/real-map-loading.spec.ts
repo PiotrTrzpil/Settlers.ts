@@ -34,7 +34,7 @@ function loadMapFile(relativePath: string) {
     return MapLoader.getLoader(reader);
 }
 
-const hasRealData = installRealGameData();
+installRealGameData();
 
 /** Run tick systems for ~10 simulated seconds and collect any errors. */
 function runAndCollectErrors(game: GameCore, mapName: string) {
@@ -113,7 +113,7 @@ describe('Real map loading', () => {
     for (const mapPath of MAPS_TO_TEST) {
         const mapName = mapPath.split('/').pop()!.replace('.map', '');
 
-        it.skipIf(!hasRealData)(`${mapName} loads and runs without errors`, () => {
+        it(`${mapName} loads and runs without errors`, () => {
             const mapLoader = loadMapFile(mapPath);
             if (!mapLoader) {
                 console.log(`Skipping: ${mapPath} not found at ${MAP_DIR}`);

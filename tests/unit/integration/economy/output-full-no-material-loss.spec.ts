@@ -15,9 +15,9 @@ import { installRealGameData } from '../../helpers/test-game-data';
 import { BuildingType } from '@/game/buildings/building-type';
 import { EMaterialType } from '@/game/economy/material-type';
 
-const hasRealData = installRealGameData();
+installRealGameData();
 
-describe.skipIf(!hasRealData)('Output full — no material loss', { timeout: 5000 }, () => {
+describe('Output full — no material loss', { timeout: 5000 }, () => {
     let sim: Simulation;
 
     afterEach(() => {

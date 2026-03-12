@@ -9,6 +9,9 @@
  * were just completed, or had a demand fulfilled/cancelled. This avoids iterating
  * all buildings every tick (O(n) → O(dirty)).
  *
+ * Demands are slot-agnostic — they express capacity need, not specific slots.
+ * Slot assignment happens at job creation time (TransportJobService.activate).
+ *
  * Active demand tracking is delegated to DemandQueue + TransportJobStore (single source of truth).
  */
 
@@ -16,6 +19,7 @@ import type { TickSystem } from '../../core/tick-system';
 import type { CoreDeps } from '../feature';
 import type { GameState } from '../../game-state';
 import { EntityType, BuildingType } from '../../entity';
+import { EMaterialType } from '../../economy';
 import { DemandPriority, type DemandQueue } from '../logistics/demand-queue';
 import type { TransportJobStore } from '../logistics/transport-job-store';
 import { getInventoryConfig, type InventoryConfig, type BuildingInventoryManager } from '../inventory';
@@ -155,21 +159,19 @@ export class MaterialRequestSystem implements TickSystem {
         }
     }
 
+    /**
+     * Estimate capacity for a regular building and create slot-agnostic demands.
+     * Capacity = sum of (maxCapacity - currentAmount) across typed input slots, minus active demands/jobs.
+     */
     private requestMaterials(entity: { id: number }, config: InventoryConfig): void {
-        // Buildings with input slots MUST have inventories by design
-        const inventory = this.inventoryManager.getInventory(entity.id);
-        if (!inventory) {
-            throw new Error(`Building ${entity.id} has input slots but no inventory`);
-        }
-
         for (const inputSlot of config.inputSlots) {
-            const currentAmount = this.inventoryManager.getInputAmount(entity.id, inputSlot.materialType);
-            const space = inputSlot.maxCapacity - currentAmount;
-            if (space <= 0) continue;
+            // Sum capacity across all input/construction slots for this material
+            const totalSpace = this.inventoryManager.getInputSpace(entity.id, inputSlot.materialType);
+            if (totalSpace <= 0) continue;
 
             const activeDemands = this.demandQueue.countDemands(entity.id, inputSlot.materialType);
             const activeJobs = this.jobStore.getActiveJobCountForDest(entity.id, inputSlot.materialType);
-            const needed = space - activeDemands - activeJobs;
+            const needed = totalSpace - activeDemands - activeJobs;
             for (let i = 0; i < needed; i++) {
                 this.demandQueue.addDemand(entity.id, inputSlot.materialType, 1, DemandPriority.Normal);
             }
@@ -184,15 +186,41 @@ export class MaterialRequestSystem implements TickSystem {
         const directions = this.storageFilterManager.getDirections(buildingId);
         for (const [material] of directions) {
             if (!this.storageFilterManager.isImportAllowed(buildingId, material)) continue;
-            const space = this.inventoryManager.getStorageOutputSpace(buildingId, material);
-            if (space <= 0) continue;
-            const activeDemands = this.demandQueue.countDemands(buildingId, material);
-            const activeJobs = this.jobStore.getActiveJobCountForDest(buildingId, material);
-            const activeCount = activeDemands + activeJobs;
-            const needed = Math.min(space - activeCount, MAX_ACTIVE_IMPORTS_PER_MATERIAL - activeCount);
-            for (let i = 0; i < needed; i++) {
-                this.demandQueue.addDemand(buildingId, material, 1, DemandPriority.Low);
+            this.requestStorageImportsForMaterial(buildingId, material);
+        }
+    }
+
+    /**
+     * Estimate StorageArea capacity for a material and create slot-agnostic demands.
+     *
+     * Capacity = (claimedSlots.freeSpace) + (freeSlotCount × SLOT_CAPACITY),
+     * capped by MAX_ACTIVE_IMPORTS minus active demands/jobs.
+     * Over-estimating is fine — excess demands just won't match at job creation
+     * if no slot is available.
+     */
+    private requestStorageImportsForMaterial(buildingId: number, material: EMaterialType): void {
+        const activeDemands = this.demandQueue.countDemands(buildingId, material);
+        const activeJobs = this.jobStore.getActiveJobCountForDest(buildingId, material);
+        const activeCount = activeDemands + activeJobs;
+        if (activeCount >= MAX_ACTIVE_IMPORTS_PER_MATERIAL) return;
+
+        // Estimate available capacity: claimed slots with space + free (NO_MATERIAL) slots
+        const slots = this.inventoryManager.getSlots(buildingId);
+        if (slots.length === 0) return;
+
+        let estimatedCapacity = 0;
+        for (const slot of slots) {
+            if (slot.materialType === material) {
+                estimatedCapacity += slot.maxCapacity - slot.currentAmount;
+            } else if (slot.materialType === EMaterialType.NO_MATERIAL) {
+                estimatedCapacity += slot.maxCapacity;
             }
+        }
+        if (estimatedCapacity <= 0) return;
+
+        const needed = Math.min(estimatedCapacity, MAX_ACTIVE_IMPORTS_PER_MATERIAL - activeCount);
+        for (let i = 0; i < needed; i++) {
+            this.demandQueue.addDemand(buildingId, material, 1, DemandPriority.Low);
         }
     }
 }

@@ -40,9 +40,9 @@ function grainFarmSite() {
     return s;
 }
 
-const hasRealData = installRealGameData();
+installRealGameData();
 
-describe.skipIf(!hasRealData)('Farmer movement after construction', { timeout: 60_000 }, () => {
+describe('Farmer movement after construction', { timeout: 60_000 }, () => {
     let sim: Simulation;
 
     afterEach(() => {

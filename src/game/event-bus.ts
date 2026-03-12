@@ -234,7 +234,7 @@ export interface GameEvents {
     'carrier:pickupComplete': {
         unitId: number;
         fromBuilding: number;
-        material: number;
+        material: EMaterialType;
         amount: number;
     };
 
@@ -242,7 +242,7 @@ export interface GameEvents {
     'carrier:pickupFailed': {
         unitId: number;
         fromBuilding: number;
-        material: number;
+        material: EMaterialType;
         /** Amount that was requested but not available */
         requestedAmount: number;
     };
@@ -251,7 +251,7 @@ export interface GameEvents {
     'carrier:deliveryComplete': {
         unitId: number;
         toBuilding: number;
-        material: number;
+        material: EMaterialType;
         amount: number;
         /** Amount that couldn't be delivered (destination full) */
         overflow: number;
@@ -449,13 +449,6 @@ export interface GameEvents {
         entityId: number;
         materialType: EMaterialType;
         quantity: number;
-    };
-
-    /** Emitted when a building's piles are converted to free piles (during building destruction). */
-    'pile:buildingPilesConverted': {
-        buildingId: number;
-        /** Maps material type → pile entity ID for each converted pile. */
-        piles: Map<EMaterialType, number>;
     };
 
     // === Construction Events ===

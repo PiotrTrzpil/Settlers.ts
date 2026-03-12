@@ -27,7 +27,7 @@ import { Race } from '@/game/core/race';
 import { getBuildingDoorPos } from '@/game/data/game-data-access';
 import type { BuildingGarrisonState } from '@/game/features/tower-garrison/types';
 
-const hasRealData = installRealGameData();
+installRealGameData();
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
@@ -73,7 +73,7 @@ function waitForGarrisoned(sim: Simulation, buildingId: number, count: number, l
 
 // ─── tests ───────────────────────────────────────────────────────────────────
 
-describe.skipIf(!hasRealData)('Tower garrison (integration)', { timeout: 30_000 }, () => {
+describe('Tower garrison (integration)', { timeout: 30_000 }, () => {
     let sim: Simulation;
 
     afterEach(() => {

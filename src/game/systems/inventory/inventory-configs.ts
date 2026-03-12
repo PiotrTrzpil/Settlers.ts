@@ -62,14 +62,25 @@ export function getInventoryConfig(buildingType: BuildingType, race: Race): Inve
 /**
  * Get inventory config for a building under construction.
  * Returns input-only slots matching the building's construction material costs.
- * Each slot's maxCapacity equals the total amount needed for that material.
+ * Each material gets ceil(count / SLOT_CAPACITY) slots, each capped at SLOT_CAPACITY.
+ * The last slot gets count % SLOT_CAPACITY capacity (or SLOT_CAPACITY if evenly divisible).
+ * Example: 12 logs → [{LOG, 8}, {LOG, 4}]
  */
 export function getConstructionInventoryConfig(buildingType: BuildingType, race: Race): InventoryConfig {
     const costs = getConstructionCosts(buildingType, race);
-    return {
-        inputSlots: costs.map(c => ({ materialType: c.material, maxCapacity: c.count })),
-        outputSlots: [],
-    };
+    const inputSlots: SlotConfig[] = [];
+
+    for (const cost of costs) {
+        const slotsNeeded = Math.ceil(cost.count / SLOT_CAPACITY);
+        for (let i = 0; i < slotsNeeded; i++) {
+            const isLastSlot = i === slotsNeeded - 1;
+            const remainder = cost.count % SLOT_CAPACITY;
+            const capacity = isLastSlot && remainder !== 0 ? remainder : SLOT_CAPACITY;
+            inputSlots.push({ materialType: cost.material, maxCapacity: capacity });
+        }
+    }
+
+    return { inputSlots, outputSlots: [] };
 }
 
 /**

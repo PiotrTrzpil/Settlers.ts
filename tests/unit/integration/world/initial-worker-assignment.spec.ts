@@ -16,11 +16,11 @@ import { Race } from '@/game/core/race';
 import { S4BuildingType, S4SettlerType } from '@/resources/map/s4-types';
 import { SettlerBuildingStatus } from '@/game/features/settler-location/types';
 
-const hasRealData = installRealGameData();
+installRealGameData();
 
 afterEach(() => cleanupSimulation());
 
-describe.skipIf(!hasRealData)('initial building worker assignment (map load)', () => {
+describe('initial building worker assignment (map load)', () => {
     it('assigns a woodcutter inside its hut via map data', () => {
         const sim = createSimulation();
         const cx = sim.mapWidth >> 1;

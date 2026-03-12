@@ -14,6 +14,7 @@ import { BuildingType } from '@/game/buildings/building-type';
 import { UnitType, UNIT_TYPE_CONFIG, isUnitTypeMilitary } from '@/game/core/unit-types';
 import { EMaterialType } from '@/game/economy/material-type';
 import { BuildingConstructionPhase } from '@/game/features/building-construction';
+import { SlotKind } from '@/game/core/pile-kind';
 import type { GameState } from '@/game/game-state';
 import { resolveViewport, parseLayers, type MapSizePreset } from '../map-symbols';
 import { renderMapText } from '../map-renderer';
@@ -126,17 +127,18 @@ function invCommand(): CliCommand {
             if (!entity) return fail(`entity ${id} not found`);
             if (entity.type !== EntityType.Building) return fail(`entity ${id} is not a building`);
 
-            const inv = ctx.game.services.inventoryManager.getInventory(id);
-            if (!inv) return ok('no inventory');
+            const invMgr = ctx.game.services.inventoryManager;
+            if (!invMgr.hasSlots(id)) return ok('no inventory');
+            const slots = invMgr.getSlots(id);
 
             const rows: string[][] = [];
-            for (const slot of inv.inputSlots) {
+            for (const slot of slots) {
                 if (slot.materialType === EMaterialType.NO_MATERIAL) continue;
-                rows.push(['in', EMaterialType[slot.materialType], `${slot.currentAmount}/${slot.maxCapacity}`]);
-            }
-            for (const slot of inv.outputSlots) {
-                if (slot.materialType === EMaterialType.NO_MATERIAL) continue;
-                rows.push(['out', EMaterialType[slot.materialType], `${slot.currentAmount}/${slot.maxCapacity}`]);
+                if (slot.kind === SlotKind.Input) {
+                    rows.push(['in', EMaterialType[slot.materialType], `${slot.currentAmount}/${slot.maxCapacity}`]);
+                } else if (slot.kind === SlotKind.Output || slot.kind === SlotKind.Storage) {
+                    rows.push(['out', EMaterialType[slot.materialType], `${slot.currentAmount}/${slot.maxCapacity}`]);
+                }
             }
             if (rows.length === 0) return ok('inventory empty');
             return ok(ctx.fmt.table(rows, ['dir', 'material', 'amt']));
@@ -341,7 +343,7 @@ function safeStringify(value: unknown, maxDepth = 10): string {
     let depth = 0;
     return JSON.stringify(
         value,
-        function(_key, val: unknown) {
+        function (_key, val: unknown) {
             if (typeof val === 'function') return '[Function]';
             if (val instanceof Map) {
                 if (depth >= maxDepth) return `[Map(${val.size})]`;

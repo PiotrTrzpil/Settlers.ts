@@ -27,6 +27,8 @@ export interface TransportJobRecord {
     readonly material: EMaterialType;
     readonly amount: number;
     readonly carrierId: number;
+    /** Target PileSlot ID at the destination (stable across inventory lifecycle). */
+    readonly slotId: number;
     phase: TransportPhase;
     /** Game time when job was created (seconds, for stall detection). */
     readonly createdAt: number;

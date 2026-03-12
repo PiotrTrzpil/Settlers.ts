@@ -41,6 +41,7 @@ import type { BuildingInventoryManager } from '../inventory';
 import type { MaterialTransfer } from '../material-transfer';
 import type { BarracksTrainingManager } from '../barracks';
 import type { Command, CommandResult } from '../../commands';
+import type { ConstructionSiteManager } from '../building-construction/construction-site-manager';
 import { EMaterialType } from '../../economy';
 import { getWorkerBuildingTypes } from '../../data/game-data-access';
 import type { ISettlerBuildingLocationManager } from '../settler-location';
@@ -70,6 +71,7 @@ export interface WorkerTaskExecutorConfig extends CoreDeps {
     materialTransfer: MaterialTransfer;
     transportJobOps: TransportJobOps;
     locationManager: ISettlerBuildingLocationManager;
+    constructionSiteManager: ConstructionSiteManager;
     getBarracksTrainingManager?: () => BarracksTrainingManager | undefined;
     executeCommand?: (cmd: Command) => CommandResult;
 }
@@ -143,6 +145,7 @@ export class WorkerTaskExecutor {
             materialTransfer: cfg.materialTransfer,
             eventBus: cfg.eventBus,
             transportJobOps: cfg.transportJobOps,
+            constructionSiteManager: cfg.constructionSiteManager,
         };
 
         const getBarracksTrainingManager = cfg.getBarracksTrainingManager;
@@ -333,14 +336,14 @@ export class WorkerTaskExecutor {
         }
 
         switch (result) {
-        case TaskResult.DONE:
-            this.lifecycle.advanceToNextNode(settler, job, nodes);
-            break;
-        case TaskResult.FAILED:
-            this.lifecycle.interruptJob(settler, config, runtime);
-            break;
-        case TaskResult.CONTINUE:
-            break;
+            case TaskResult.DONE:
+                this.lifecycle.advanceToNextNode(settler, job, nodes);
+                break;
+            case TaskResult.FAILED:
+                this.lifecycle.interruptJob(settler, config, runtime);
+                break;
+            case TaskResult.CONTINUE:
+                break;
         }
     }
 
@@ -429,7 +432,7 @@ export class WorkerTaskExecutor {
         const material = this.parseMaterial(outputNode.entity);
         if (material === null) return false;
 
-        const slot = this.inventoryManager.getOutputSlot(homeBuilding.id, material);
+        const slot = this.inventoryManager.findSlot(homeBuilding.id, material, 'output');
         return slot !== undefined && slot.currentAmount >= slot.maxCapacity;
     }
 

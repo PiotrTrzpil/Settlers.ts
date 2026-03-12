@@ -501,7 +501,6 @@ export function restoreFromSnapshot(game: GameCore, snapshot: GameStateSnapshot)
     game.services.persistenceRegistry.deserializeAll(snapshot as unknown as Record<string, unknown>);
 
     // 6. Rebuild derived state that is not owned by features.
-    game.services.inventoryPileSync?.rebuildFromExistingEntities();
     game.services.buildingOverlayManager.rebuildFromExistingEntities(game.services.constructionSiteManager);
 
     // 7. Notify features that restore is complete — features rebuild derived state,

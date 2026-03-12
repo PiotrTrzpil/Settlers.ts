@@ -73,6 +73,7 @@ describe('TransportJobStore derived queries', () => {
             material,
             amount,
             carrierId,
+            slotId: 0,
             phase,
             createdAt: 0,
         };

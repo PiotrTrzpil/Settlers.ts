@@ -12,9 +12,9 @@ import { EMaterialType } from '@/game/economy';
 import { Simulation, createScenario, cleanupSimulation } from '../../helpers/test-simulation';
 import { installRealGameData } from '../../helpers/test-game-data';
 
-const hasRealData = installRealGameData();
+installRealGameData();
 
-describe.skipIf(!hasRealData)('Concurrent carrier pickup (real game data)', { timeout: 60_000 }, () => {
+describe('Concurrent carrier pickup (real game data)', { timeout: 60_000 }, () => {
     let sim: Simulation;
 
     afterEach(() => {

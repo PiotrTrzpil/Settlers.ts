@@ -190,16 +190,62 @@ function tryPlaceTreeAt(
     return true;
 }
 
+/** Expand a single seed tree by placing new trees in a radius around it. */
+function expandSeedTree(
+    sx: number,
+    sy: number,
+    seedType: MapObjectType,
+    groundType: Uint8Array,
+    occupied: Set<number>,
+    state: GameState,
+    mapSize: MapSize,
+    radius: number,
+    density: number,
+    seed: number,
+    minSpacing: number
+): number {
+    const w = mapSize.width;
+    const h = mapSize.height;
+    let count = 0;
+
+    for (let dy = -radius; dy <= radius; dy++) {
+        for (let dx = -radius; dx <= radius; dx++) {
+            if (dx === 0 && dy === 0) continue;
+            const nx = sx + dx;
+            const ny = sy + dy;
+            if (nx < 0 || nx >= w || ny < 0 || ny >= h) continue;
+
+            if (
+                tryPlaceTreeAt(
+                    nx,
+                    ny,
+                    dx,
+                    dy,
+                    seedType,
+                    groundType,
+                    occupied,
+                    state,
+                    mapSize,
+                    radius,
+                    density,
+                    seed,
+                    minSpacing
+                )
+            ) {
+                count++;
+            }
+        }
+    }
+    return count;
+}
+
 /**
  * Expand existing trees by adding more trees around them.
  * Uses seed trees from map data as starting points for forest clusters.
  */
-// eslint-disable-next-line complexity, sonarjs/cognitive-complexity -- forest expansion algorithm has many steps
 export function expandTrees(state: GameState, terrain: TerrainData, options: ExpandTreesOptions = {}): number {
     const { groundType, mapSize } = terrain;
     const { seed = 12345, radius = 8, density = 0.3, minSpacing = 1 } = options;
-    const w = mapSize.width;
-    const h = mapSize.height;
 
     const { seeds: seedTrees, occupied } = collectSeedTrees(state, mapSize);
     if (seedTrees.length === 0) {
@@ -208,36 +254,20 @@ export function expandTrees(state: GameState, terrain: TerrainData, options: Exp
     }
 
     let count = 0;
-
-    for (const { x: sx, y: sy, type: seedType } of seedTrees) {
-        for (let dy = -radius; dy <= radius; dy++) {
-            for (let dx = -radius; dx <= radius; dx++) {
-                if (dx === 0 && dy === 0) continue;
-                const nx = sx + dx;
-                const ny = sy + dy;
-                if (nx < 0 || nx >= w || ny < 0 || ny >= h) continue;
-
-                if (
-                    tryPlaceTreeAt(
-                        nx,
-                        ny,
-                        dx,
-                        dy,
-                        seedType,
-                        groundType,
-                        occupied,
-                        state,
-                        mapSize,
-                        radius,
-                        density,
-                        seed,
-                        minSpacing
-                    )
-                ) {
-                    count++;
-                }
-            }
-        }
+    for (const { x, y, type: seedType } of seedTrees) {
+        count += expandSeedTree(
+            x,
+            y,
+            seedType,
+            groundType,
+            occupied,
+            state,
+            mapSize,
+            radius,
+            density,
+            seed,
+            minSpacing
+        );
     }
 
     log.debug(`Expanded ${seedTrees.length} seed trees into ${count} additional trees`);

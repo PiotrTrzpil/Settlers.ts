@@ -16,9 +16,9 @@ import { EMaterialType } from '@/game/economy/material-type';
 import { BuildingConstructionPhase, CONSTRUCTION_SITE_GROUND_TYPE } from '@/game/features/building-construction';
 import { TERRAIN, createSlope } from '../../helpers/test-map';
 
-const hasRealData = installRealGameData();
+installRealGameData();
 
-describe.skipIf(!hasRealData)('Building construction (real game data)', { timeout: 5000 }, () => {
+describe('Building construction (real game data)', { timeout: 5000 }, () => {
     let sim: Simulation;
 
     afterEach(() => {

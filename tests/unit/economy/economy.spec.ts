@@ -79,9 +79,9 @@ describe('getBuildingTypesRequestingMaterial', () => {
 });
 
 // Construction cost tests require real XML game data (buildingInfo.xml)
-const hasRealData = installRealGameData();
+installRealGameData();
 
-describe.skipIf(!hasRealData)('Construction Costs (XML)', () => {
+describe('Construction Costs (XML)', () => {
     afterAll(() => resetTestGameData());
 
     it('all mapped buildings have valid positive construction costs per race', () => {

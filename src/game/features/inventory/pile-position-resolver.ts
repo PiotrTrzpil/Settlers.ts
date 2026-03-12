@@ -2,9 +2,9 @@
  * Pile Position Resolver
  *
  * Dispatches pile position resolution to the correct strategy based on slotKind:
- * - 'output' / 'input'  → BuildingPileRegistry (XML-defined, always present)
- * - 'construction'      → ConstructionSiteManager.getConstructionPilePosition (pre-computed at site creation)
- * - 'storage'           → BuildingPileRegistry.getStoragePileWorldPositions (first free slot)
+ * - 'input' (construction) → ConstructionSiteManager.getConstructionPilePosition (when hasSite)
+ * - 'output' / 'input'     → BuildingPileRegistry (XML-defined, always present)
+ * - 'storage'              → BuildingPileRegistry.getStoragePileWorldPositions (first free slot)
  */
 
 import type { TileCoord } from '../../core/coordinates';
@@ -35,8 +35,8 @@ export class PilePositionResolver {
     /**
      * Resolve the tile coordinate where a pile for the given material and slotKind should be placed.
      *
-     * - 'output' / 'input': XML must define a position; throws if absent.
-     * - 'construction': returns door-adjacent tile, or null when all are occupied.
+     * - 'input' on a construction site: returns door-adjacent tile, or null when all occupied.
+     * - 'output' / 'input': XML must define a position; warns and returns null if absent.
      * - 'storage': picks first XML-defined storage slot not in use; throws if all occupied
      *   (inventory constraint guarantees a free slot exists).
      */
@@ -53,71 +53,54 @@ export class PilePositionResolver {
         const bt = building.subType as BuildingType;
 
         switch (slotKind) {
-        case SlotKind.Output: {
-            const pos = this.pileRegistry.getPilePositionForSlot(
-                bt,
-                building.race,
-                SlotKind.Output,
-                material,
-                building.x,
-                building.y
-            );
-            if (!pos) {
-                throw new Error(
-                    `PilePositionResolver: no XML output pile position for material ${material} ` +
-                            `on building ${building.id} (${BuildingType[bt]})`
-                );
-            }
-            return pos;
-        }
-
-        case SlotKind.Input: {
-            const pos = this.pileRegistry.getPilePositionForSlot(
-                bt,
-                building.race,
-                SlotKind.Input,
-                material,
-                building.x,
-                building.y
-            );
-            if (!pos) {
-                throw new Error(
-                    `PilePositionResolver: no XML input pile position for material ${material} ` +
-                            `on building ${building.id} (${BuildingType[bt]})`
-                );
-            }
-            return pos;
-        }
-
-        case SlotKind.Construction: {
-            return (
-                this.constructionSiteManager.getConstructionPilePosition(
-                    params.buildingId,
+            case SlotKind.Output:
+            case SlotKind.Input: {
+                // Construction sites: use door-adjacent positions instead of XML
+                if (slotKind === SlotKind.Input && this.constructionSiteManager.hasSite(params.buildingId)) {
+                    return (
+                        this.constructionSiteManager.getConstructionPilePosition(
+                            params.buildingId,
+                            material,
+                            params.pileIndex ?? 0
+                        ) ?? null
+                    );
+                }
+                const pos = this.pileRegistry.getPilePositionForSlot(
+                    bt,
+                    building.race,
+                    slotKind,
                     material,
-                    params.pileIndex ?? 0
-                ) ?? null
-            );
-        }
-
-        case SlotKind.Storage: {
-            const positions = this.pileRegistry.getStoragePileWorldPositions(
-                bt,
-                building.race,
-                building.x,
-                building.y
-            );
-            for (const pos of positions) {
-                const key = tileKey(pos.x, pos.y);
-                if (usedPositions.has(key)) continue;
-                const occupant = this.gameState.getGroundEntityAt(pos.x, pos.y);
-                if (occupant?.type === EntityType.StackedPile) continue;
-                return pos;
+                    building.x,
+                    building.y
+                );
+                if (!pos) {
+                    this.log.warn(
+                        `No XML ${slotKind} pile position for material ${material} ` +
+                            `on building ${building.id} (${BuildingType[bt]}); slot skipped`
+                    );
+                }
+                return pos ?? null;
             }
-            throw new Error(
-                `PilePositionResolver: no free storage pile position for building ${building.id} ` +
+
+            case SlotKind.Storage: {
+                const positions = this.pileRegistry.getStoragePileWorldPositions(
+                    bt,
+                    building.race,
+                    building.x,
+                    building.y
+                );
+                for (const pos of positions) {
+                    const key = tileKey(pos.x, pos.y);
+                    if (usedPositions.has(key)) continue;
+                    const occupant = this.gameState.getGroundEntityAt(pos.x, pos.y);
+                    if (occupant?.type === EntityType.StackedPile) continue;
+                    return pos;
+                }
+                throw new Error(
+                    `PilePositionResolver: no free storage pile position for building ${building.id} ` +
                         `(${BuildingType[bt]}); inventory constraint violated`
-            );
-        }
+                );
+            }
         }
     }
 

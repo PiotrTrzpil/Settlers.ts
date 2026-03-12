@@ -17,7 +17,7 @@ import { EntityType, UnitType } from '@/game/entity';
 import { EMaterialType } from '@/game/economy/material-type';
 import { Race } from '@/game/core/race';
 
-const hasRealData = installRealGameData();
+installRealGameData();
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
@@ -72,7 +72,7 @@ describe('Specialist recruitment (integration)', { timeout: 30_000 }, () => {
 
     // ─── Tool-based specialist ────────────────────────────────────────────────
 
-    it.skipIf(!hasRealData)('Geologist: carrier walks to pickaxe pile and transforms', () => {
+    it('Geologist: carrier walks to pickaxe pile and transforms', () => {
         sim = createSimulation();
 
         sim.spawnUnit(64, 64, UnitType.Carrier);
@@ -191,7 +191,7 @@ describe('Specialist recruitment (integration)', { timeout: 30_000 }, () => {
         expect(sim.errors).toHaveLength(0);
     });
 
-    it.skipIf(!hasRealData)('dismiss live Geologist drops pickaxe on the ground', () => {
+    it('dismiss live Geologist drops pickaxe on the ground', () => {
         sim = createSimulation();
 
         sim.spawnUnit(64, 64, UnitType.Carrier);

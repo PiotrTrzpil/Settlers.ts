@@ -44,11 +44,11 @@ export function createBuildStepExecutor(
         const site = constructionSiteManager.getSite(siteId);
         if (!site) return TaskResult.DONE;
 
-        const totalCycles = site.materials.totalCost * BUILD_CYCLES_PER_MATERIAL;
-        const progressPerCycle = 1.0 / totalCycles;
-        constructionSiteManager.advanceConstruction(siteId, progressPerCycle);
+        const progressPerMaterial = 1.0 / site.materials.totalCost;
+        const progressPerCycle = progressPerMaterial / BUILD_CYCLES_PER_MATERIAL;
 
-        // Consume one material unit every BUILD_CYCLES_PER_MATERIAL cycles
+        // Consume one material unit every BUILD_CYCLES_PER_MATERIAL cycles.
+        // Progress only advances when materials are available — no empty hammering.
         const count = (cycleCounters.get(siteId) ?? 0) + 1;
         if (count >= BUILD_CYCLES_PER_MATERIAL) {
             const material = constructionSiteManager.consumeNextMaterial(siteId);
@@ -59,6 +59,11 @@ export function createBuildStepExecutor(
         } else {
             cycleCounters.set(siteId, count);
         }
+
+        // Advance progress based on consumed materials — always in sync.
+        const targetProgress =
+            site.materials.consumedAmount * progressPerMaterial + (cycleCounters.get(siteId) ?? 0) * progressPerCycle;
+        constructionSiteManager.setConstructionProgress(siteId, targetProgress);
 
         return TaskResult.DONE;
     };
@@ -71,5 +76,8 @@ export function registerConstructionExecutors(
     inventoryManager: BuildingInventoryManager
 ): void {
     choreoSystem.register(ChoreoTaskType.DIG_TILE, createDigTileExecutor(constructionSiteManager));
-    choreoSystem.register(ChoreoTaskType.BUILD_STEP, createBuildStepExecutor(constructionSiteManager, inventoryManager));
+    choreoSystem.register(
+        ChoreoTaskType.BUILD_STEP,
+        createBuildStepExecutor(constructionSiteManager, inventoryManager)
+    );
 }

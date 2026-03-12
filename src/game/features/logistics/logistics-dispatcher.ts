@@ -15,7 +15,6 @@
 
 import type { TickSystem } from '../../core/tick-system';
 import type { CoreDeps } from '../feature';
-import type { EMaterialType } from '../../economy/material-type';
 import { type EventBus, EventSubscriptionManager } from '../../event-bus';
 import { CLEANUP_PRIORITY } from '../../systems/entity-cleanup-registry';
 import type { EntityCleanupRegistry } from '../../systems/entity-cleanup-registry';
@@ -90,9 +89,6 @@ export class LogisticsDispatcher implements TickSystem {
     /** Job assigner reference needed for flushing queued assignments. */
     private readonly jobAssigner: JobAssigner;
 
-    /** Pending pile redirects from building destruction (set at DEFAULT, consumed at LOGISTICS priority). */
-    private readonly pendingPileRedirects = new Map<number, Map<EMaterialType, number>>();
-
     constructor(config: LogisticsDispatcherConfig) {
         this.eventBus = config.eventBus;
         this.demandQueue = config.demandQueue;
@@ -104,6 +100,7 @@ export class LogisticsDispatcher implements TickSystem {
             demandQueue: config.demandQueue,
             eventBus: config.eventBus,
             inventoryManager: config.inventoryManager,
+            gameState: config.gameState,
         };
 
         this.preAssignmentQueue = new PreAssignmentQueue(this.transportJobDeps);
@@ -119,6 +116,7 @@ export class LogisticsDispatcher implements TickSystem {
         const transportJobBuilder = new TransportJobBuilder({
             gameState: config.gameState,
             positionResolver: config.positionResolver,
+            inventoryManager: config.inventoryManager,
         });
 
         this.carrierAssigner = new CarrierAssigner({
@@ -196,12 +194,6 @@ export class LogisticsDispatcher implements TickSystem {
         // can no longer deposit construction materials there.
         this.subscriptions.subscribe(eventBus, 'building:completed', ({ buildingId }) =>
             this.handleConstructionCompleted(buildingId)
-        );
-
-        // Store pile redirect info when building piles are converted to free piles.
-        // This fires at DEFAULT priority (before LOGISTICS), so data is ready for handleBuildingDestroyed.
-        this.subscriptions.subscribe(eventBus, 'pile:buildingPilesConverted', ({ buildingId, piles }) =>
-            this.pendingPileRedirects.set(buildingId, piles)
         );
 
         // Clean up logistics state when buildings are destroyed.
@@ -398,37 +390,18 @@ export class LogisticsDispatcher implements TickSystem {
             jobsCancelled: 0,
         };
 
-        // Check if building piles were converted to free piles (set by pile:buildingPilesConverted at DEFAULT priority)
-        const pileRedirects = this.pendingPileRedirects.get(buildingId);
-        this.pendingPileRedirects.delete(buildingId);
-
         // Handle active TransportJobs referencing this building (via byBuilding index)
         const affectedCarriers = this.jobStore.byBuilding.get(buildingId);
         for (const carrierId of [...affectedCarriers]) {
             const job = this.jobStore.jobs.get(carrierId)!;
-            if (job.destBuilding === buildingId) {
-                // Destination destroyed — must cancel, carrier has nowhere to deliver
+            if (job.destBuilding === buildingId || job.sourceBuilding === buildingId) {
+                // Already picked up from source — let carrier deliver
+                if (job.sourceBuilding === buildingId && job.phase === TransportPhase.PickedUp) {
+                    continue;
+                }
                 TransportJobService.cancel(job, 'building_destroyed', this.transportJobDeps);
                 this.jobStore.jobs.delete(carrierId);
                 result.jobsCancelled++;
-            } else if (job.sourceBuilding === buildingId) {
-                // Already picked up — source doesn't matter, let carrier deliver
-                if (job.phase === TransportPhase.PickedUp) {
-                    continue;
-                }
-                // Source destroyed — redirect to free pile if it exists
-                const pileEntityId = pileRedirects?.get(job.material);
-                if (
-                    pileEntityId !== undefined &&
-                    TransportJobService.redirectSource(job, pileEntityId, this.transportJobDeps)
-                ) {
-                    // sourceBuilding mutated by redirectSource — reindex to update byBuilding
-                    this.jobStore.jobs.reindex(carrierId);
-                } else {
-                    TransportJobService.cancel(job, 'building_destroyed', this.transportJobDeps);
-                    this.jobStore.jobs.delete(carrierId);
-                    result.jobsCancelled++;
-                }
             }
         }
 

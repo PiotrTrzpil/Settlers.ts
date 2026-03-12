@@ -3,7 +3,6 @@
 export enum SlotKind {
     Output = 'output',
     Input = 'input',
-    Construction = 'construction',
     Storage = 'storage',
     Free = 'free',
 }
@@ -11,7 +10,6 @@ export enum SlotKind {
 export type PileKind =
     | { kind: SlotKind.Output; buildingId: number }
     | { kind: SlotKind.Input; buildingId: number }
-    | { kind: SlotKind.Construction; buildingId: number }
     | { kind: SlotKind.Storage; buildingId: number }
     | { kind: SlotKind.Free };
 

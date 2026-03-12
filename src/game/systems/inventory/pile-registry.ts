@@ -218,8 +218,8 @@ export class PileRegistry {
     rebuildFromEntities(entities: readonly Entity[], resources: PileKindProvider): void {
         this.clear();
 
-        // Track pile indices for construction piles (multiple piles per material per building)
-        const constructionIndices = new Map<string, number>();
+        // Track pile indices per (building, material, kind) for disambiguation
+        const pileIndices = new Map<string, number>();
 
         for (const entity of entities) {
             if (entity.type !== EntityType.StackedPile) continue;
@@ -227,13 +227,10 @@ export class PileRegistry {
             const kind = resources.getKind(entity.id);
             if (!isLinkedPile(kind)) continue;
 
-            let pileIndex: number | undefined;
-            if (kind.kind === 'construction') {
-                const counterKey = `${kind.buildingId}:${entity.subType}`;
-                const idx = constructionIndices.get(counterKey) ?? 0;
-                pileIndex = idx;
-                constructionIndices.set(counterKey, idx + 1);
-            }
+            const counterKey = `${kind.buildingId}:${entity.subType}:${kind.kind}`;
+            const idx = pileIndices.get(counterKey) ?? 0;
+            const pileIndex = idx > 0 ? idx : undefined;
+            pileIndices.set(counterKey, idx + 1);
 
             const key: PileSlotKey = {
                 buildingId: kind.buildingId,

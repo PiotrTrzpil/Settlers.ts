@@ -16,7 +16,7 @@ import { installRealGameData } from '../../helpers/test-game-data';
 import { EntityType, UnitType } from '@/game/entity';
 import { TERRAIN } from '../../helpers/test-map';
 
-const hasRealData = installRealGameData();
+installRealGameData();
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
@@ -44,7 +44,7 @@ function moveUnit(sim: Simulation, entityId: number, x: number, y: number) {
 
 // ─── tests ───────────────────────────────────────────────────────────────────
 
-describe.skipIf(!hasRealData)('Geologist prospecting (integration)', { timeout: 60_000 }, () => {
+describe('Geologist prospecting (integration)', { timeout: 60_000 }, () => {
     let sim: Simulation;
 
     afterEach(() => {

@@ -46,7 +46,7 @@ export const SettlerTaskFeature: FeatureDefinition = {
     ],
 
     create(ctx: FeatureContext) {
-        const { inventoryManager, pileRegistry: pileSlotRegistry } = ctx.getFeature<InventoryExports>('inventory');
+        const { inventoryManager } = ctx.getFeature<InventoryExports>('inventory');
         const { buildingOverlayManager } = ctx.getFeature<BuildingOverlayFeatureExports>('building-overlays');
         const { constructionSiteManager } = ctx.getFeature<BuildingConstructionExports>('building-construction');
         const { workAreaStore } = ctx.getFeature<WorkAreaExports>('work-areas');
@@ -74,7 +74,6 @@ export const SettlerTaskFeature: FeatureDefinition = {
             visualService: ctx.visualService,
             inventoryManager,
             eventBus: ctx.eventBus,
-            getPileSlotRegistry: () => pileSlotRegistry,
             getPileRegistry: () => pileRegistry,
             workAreaStore,
             buildingOverlayManager,

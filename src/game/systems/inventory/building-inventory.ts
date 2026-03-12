@@ -1,715 +1,627 @@
-/**
- * Building inventory management.
- * Tracks input/output slots for each building's material storage.
- */
+/** Building inventory management — PileSlot-based model. */
 
-import { BuildingType } from '../../entity';
+import { BuildingType, type Entity } from '../../entity';
 import { EMaterialType } from '../../economy/material-type';
 import { Race } from '../../core/race';
-import { BUILDING_PRODUCTIONS, type Recipe } from '../../economy/building-production';
-import type { InventorySlot } from './inventory-slot';
-import { createSlot, deposit, withdraw, canAccept, canProvide, getAvailableSpace } from './inventory-slot';
-import { getInventoryConfig, type SlotConfig, type InventoryConfig } from './inventory-configs';
-import { type ComponentStore, mapStore } from '../../ecs';
-import { createLogger } from '@/utilities/logger';
+import { SlotKind } from '../../core/pile-kind';
+import type { TileCoord } from '../../core/coordinates';
+import type { Recipe } from '../../economy/building-production';
+import {
+    getInventoryConfig,
+    getConstructionInventoryConfig,
+    type SlotConfig,
+    type InventoryConfig,
+} from './inventory-configs';
+import type { PileSlot } from './pile-slot';
+import type { ComponentStore } from '../../ecs';
+import type { GameState } from '../../game-state';
+import type { Command, CommandResult } from '../../commands';
+import type { EventBus } from '../../event-bus';
 import type { Persistable } from '@/game/persistence';
+import { createLogger } from '@/utilities/logger';
+import {
+    type SerializedBuildingInventory,
+    type SerializedPileSlot,
+    spawnPileEntity,
+    updatePileEntity,
+    removePileEntity,
+    getProductionInputs,
+    getProductionOutput,
+} from './building-inventory-helpers';
 
 const log = createLogger('BuildingInventory');
 
-/**
- * Complete inventory state for a building.
- */
-export interface BuildingInventory {
-    /** Entity ID of the building this inventory belongs to */
+/** Lightweight view of all PileSlots for one building. */
+export interface BuildingInventoryView {
     buildingId: number;
-    /** Building type for reference */
-    buildingType: BuildingType;
-    /** Input slots for materials consumed by production */
-    inputSlots: InventorySlot[];
-    /** Output slots for materials produced */
-    outputSlots: InventorySlot[];
+    slotIds: ReadonlySet<number>;
 }
-
-// ── Serialization types ──
-
-export interface SerializedInventorySlot {
-    materialType: EMaterialType;
-    current: number;
-    max: number;
-}
-
-export interface SerializedBuildingInventory {
-    entityId: number;
-    buildingType: number;
-    inputSlots: SerializedInventorySlot[];
-    outputSlots: SerializedInventorySlot[];
+export interface BuildingInventoryDeps {
+    executeCommand: (cmd: Command) => CommandResult;
+    gameState: GameState;
+    eventBus: EventBus;
 }
 
 /**
- * Callback for inventory change events.
+ * Callback that resolves pile positions for a set of slot configs.
+ * Returns a position for each config entry, or null if no position is available
+ * (slot will be skipped). Called by createSlotsFromConfig.
  */
-export type InventoryChangeCallback = (
+export type SlotPositionResolver = (
     buildingId: number,
-    materialType: EMaterialType,
-    slotType: 'input' | 'output',
-    previousAmount: number,
-    newAmount: number
-) => void;
-
-let _instanceCounter = 0;
-
-/**
- * Manages building inventories across the game.
- * Provides methods to create, query, and modify building inventories.
- */
-export class BuildingInventoryManager implements Persistable<SerializedBuildingInventory[]> {
+    building: Entity,
+    configs: ReadonlyArray<{ materialType: EMaterialType; kind: SlotKind }>
+) => Array<TileCoord | null>;
+export class BuildingInventoryManager implements Persistable<SerializedBuildingInventory> {
     readonly persistKey = 'buildingInventories' as const;
-    private inventories: Map<number, BuildingInventory> = new Map();
 
-    /** Uniform read-only view for cross-cutting queries */
-    readonly store: ComponentStore<BuildingInventory> = mapStore(this.inventories);
-
-    private changeListeners: Set<InventoryChangeCallback> = new Set();
-    private allowedMaterials = new Map<number, Set<EMaterialType>>();
-    private _debugId = ++_instanceCounter;
+    /** All slots, indexed by stable slotId. */
+    private slots = new Map<number, PileSlot>();
+    /** buildingId → set of slotIds. */
+    private inventorySlots = new Map<number, Set<number>>();
+    /** Monotonically increasing slot ID counter. */
+    private nextSlotId = 1;
 
     /**
-     * Register a callback for inventory changes.
-     * @param callback Function to call when inventory changes
+     * ComponentStore for ECS queries — wraps inventorySlots map with a BuildingInventoryView.
+     * Provides stable per-building view of slot IDs for cross-system joins.
      */
-    onChange(callback: InventoryChangeCallback): void {
-        this.changeListeners.add(callback);
+    private _storeCache: ComponentStore<BuildingInventoryView> | null = null;
+
+    /** ComponentStore view for ECS queries over buildings that have inventory slots. */
+    get store(): ComponentStore<BuildingInventoryView> {
+        if (!this._storeCache) this._storeCache = this.buildComponentStore();
+        return this._storeCache;
     }
 
-    /**
-     * Unregister a change callback.
-     * @param callback The callback to remove
-     */
-    offChange(callback: InventoryChangeCallback): void {
-        this.changeListeners.delete(callback);
+    private buildComponentStore(): ComponentStore<BuildingInventoryView> {
+        const bs = this.inventorySlots;
+        const entriesFn = () => this.buildingStoreEntries();
+        const store: ComponentStore<BuildingInventoryView> = {
+            get(id: number) {
+                const slotIds = bs.get(id);
+                return slotIds ? { buildingId: id, slotIds } : undefined;
+            },
+            has(id: number) {
+                return bs.has(id);
+            },
+            get size() {
+                return bs.size;
+            },
+            entries: entriesFn,
+        };
+        return store;
     }
 
-    /**
-     * Emit an inventory change event to all listeners.
-     */
-    private emitChange(
-        buildingId: number,
-        materialType: EMaterialType,
-        slotType: 'input' | 'output',
-        previousAmount: number,
-        newAmount: number
-    ): void {
-        if (previousAmount === newAmount) return; // No actual change
-        log.debug(
-            `#${this._debugId} emitChange: building=${buildingId}, ${slotType}, ${previousAmount}->${newAmount}, listeners=${this.changeListeners.size}`
-        );
-        for (const listener of this.changeListeners) {
-            listener(buildingId, materialType, slotType, previousAmount, newAmount);
-        }
-    }
+    /** Injected dependencies (late-bound to break circular refs). */
+    private deps: BuildingInventoryDeps | null = null;
 
     /**
-     * Create an inventory for a building using an explicit configuration.
-     * Used for construction inventories where the config differs from the production config.
-     * @param buildingId Entity ID of the building
-     * @param buildingType Type of building (for reference in inventory object)
-     * @param config Explicit inventory configuration to use
-     * @returns The created inventory
+     * Configure dependencies. Must be called before any deposit/withdraw/createSlots call
+     * that needs pile entity management.
      */
-    createInventoryFromConfig(
+    configure(deps: BuildingInventoryDeps): void {
+        this.deps = deps;
+    }
+
+    private getDeps(): BuildingInventoryDeps {
+        if (!this.deps) throw new Error('BuildingInventoryManager: configure() must be called before use');
+        return this.deps;
+    }
+    /**
+     * Create all slots for a building using the operational inventory config.
+     * Does NOT create pile entities (amount starts at 0).
+     */
+    createSlots(
         buildingId: number,
         buildingType: BuildingType,
-        config: InventoryConfig
-    ): BuildingInventory {
-        const inventory: BuildingInventory = {
-            buildingId,
-            buildingType,
-            inputSlots: config.inputSlots.map((slotConfig: SlotConfig) =>
-                createSlot(slotConfig.materialType, slotConfig.maxCapacity)
-            ),
-            outputSlots: config.outputSlots.map((slotConfig: SlotConfig) =>
-                createSlot(slotConfig.materialType, slotConfig.maxCapacity)
-            ),
-        };
-
-        this.inventories.set(buildingId, inventory);
-        return inventory;
+        race: Race,
+        positionResolver: SlotPositionResolver
+    ): void {
+        this.createSlotsFromConfig(buildingId, buildingType, getInventoryConfig(buildingType, race), positionResolver);
     }
 
     /**
-     * Create an inventory for a building based on its type.
-     * @param buildingId Entity ID of the building
-     * @param buildingType Type of building
-     * @returns The created inventory
+     * Create slots from explicit config. Positions are resolved by the caller-supplied
+     * SlotPositionResolver — the manager never knows about XML pile data or construction sites.
      */
-    createInventory(buildingId: number, buildingType: BuildingType, race: Race): BuildingInventory {
-        const config = getInventoryConfig(buildingType, race);
+    createSlotsFromConfig(
+        buildingId: number,
+        buildingType: BuildingType,
+        config: InventoryConfig,
+        positionResolver: SlotPositionResolver
+    ): void {
+        const { gameState } = this.getDeps();
+        const building = gameState.getEntityOrThrow(buildingId, 'createSlotsFromConfig');
 
-        const inventory: BuildingInventory = {
-            buildingId,
-            buildingType,
-            inputSlots: config.inputSlots.map((slotConfig: SlotConfig) =>
-                createSlot(slotConfig.materialType, slotConfig.maxCapacity)
-            ),
-            outputSlots: config.outputSlots.map((slotConfig: SlotConfig) =>
-                createSlot(slotConfig.materialType, slotConfig.maxCapacity)
-            ),
-        };
-
-        this.inventories.set(buildingId, inventory);
-        return inventory;
-    }
-
-    /**
-     * Get the inventory for a building.
-     * @param buildingId Entity ID of the building
-     * @returns The building's inventory, or undefined if not found
-     */
-    getInventory(buildingId: number): BuildingInventory | undefined {
-        return this.inventories.get(buildingId);
-    }
-
-    /**
-     * Destroy a building's inventory, releasing all slots.
-     * Called by the cleanup registry LATE handler when a building entity is removed.
-     * @param buildingId Entity ID of the building
-     * @returns True if inventory was found and removed, false if not found
-     */
-    destroyBuildingInventory(buildingId: number): boolean {
-        this.allowedMaterials.delete(buildingId);
-        return this.inventories.delete(buildingId);
-    }
-
-    /**
-     * @deprecated Use destroyBuildingInventory instead.
-     */
-    removeInventory(buildingId: number): boolean {
-        return this.destroyBuildingInventory(buildingId);
-    }
-
-    /**
-     * Atomically swap from construction inventory to production inventory.
-     * Destroys the existing (construction) inventory and creates a fresh production inventory.
-     * Emits NO change events — InventoryPileSync handles pile clearing before this is called,
-     * and the new inventory starts empty.
-     * @param buildingId Entity ID of the building
-     * @param buildingType Type of the completed building
-     */
-    swapInventoryPhase(buildingId: number, buildingType: BuildingType, race: Race): void {
-        this.destroyBuildingInventory(buildingId);
-        this.createInventory(buildingId, buildingType, race);
-    }
-
-    /**
-     * Get an input slot for a specific material type.
-     * @param buildingId Entity ID of the building
-     * @param materialType Material type to find
-     * @returns The input slot, or undefined if not found
-     */
-    getInputSlot(buildingId: number, materialType: EMaterialType): InventorySlot | undefined {
-        const inventory = this.inventories.get(buildingId);
-        if (!inventory) return undefined;
-        return inventory.inputSlots.find(slot => slot.materialType === materialType);
-    }
-
-    /**
-     * Get an output slot for a specific material type.
-     * @param buildingId Entity ID of the building
-     * @param materialType Material type to find
-     * @returns The output slot, or undefined if not found
-     */
-    getOutputSlot(buildingId: number, materialType: EMaterialType): InventorySlot | undefined {
-        const inventory = this.inventories.get(buildingId);
-        if (!inventory) return undefined;
-        return inventory.outputSlots.find(s => s.materialType === materialType);
-    }
-
-    private getInputSlotOrThrow(buildingId: number, materialType: EMaterialType): InventorySlot {
-        return this.getSlotOrThrow(buildingId, materialType, 'input');
-    }
-
-    private getOutputSlotOrThrow(buildingId: number, materialType: EMaterialType): InventorySlot {
-        return this.getSlotOrThrow(buildingId, materialType, 'output');
-    }
-
-    private getSlotOrThrow(buildingId: number, materialType: EMaterialType, kind: 'input' | 'output'): InventorySlot {
-        const inventory = this.inventories.get(buildingId);
-        if (!inventory) {
-            throw new Error(
-                `Building ${buildingId} has no inventory. Known: [${[...this.inventories.keys()].join(', ')}]`
-            );
+        // Build flat list of configs with their kind for the resolver
+        const allConfigs: Array<{ materialType: EMaterialType; kind: SlotKind }> = [];
+        for (const cfg of config.inputSlots) {
+            allConfigs.push({ materialType: cfg.materialType, kind: SlotKind.Input });
         }
-        const slots = kind === 'input' ? inventory.inputSlots : inventory.outputSlots;
-        const slot = slots.find(s => s.materialType === materialType);
-        if (!slot) {
-            throw new Error(
-                `Building ${buildingId} (${BuildingType[inventory.buildingType]}) has no ${kind} slot for ` +
-                    `${EMaterialType[materialType]}. Has: [${slots.map(s => EMaterialType[s.materialType]).join(', ')}]`
-            );
+        for (const cfg of config.outputSlots) {
+            const kind = buildingType === BuildingType.StorageArea ? SlotKind.Storage : SlotKind.Output;
+            allConfigs.push({ materialType: cfg.materialType, kind });
         }
+
+        const positions = positionResolver(buildingId, building, allConfigs);
+
+        // Zip configs with resolved positions (null = no position available, skip slot)
+        let cfgIdx = 0;
+        for (const cfg of config.inputSlots) {
+            const position = positions[cfgIdx++];
+            if (position) {
+                this.addSlot(buildingId, cfg, allConfigs[cfgIdx - 1]!.kind, position);
+            }
+        }
+        for (const cfg of config.outputSlots) {
+            const position = positions[cfgIdx++];
+            if (position) {
+                this.addSlot(buildingId, cfg, allConfigs[cfgIdx - 1]!.kind, position);
+            }
+        }
+    }
+
+    /**
+     * Create construction slots for a building under construction.
+     */
+    createConstructionSlots(
+        buildingId: number,
+        buildingType: BuildingType,
+        race: Race,
+        positionResolver: SlotPositionResolver
+    ): void {
+        const config = getConstructionInventoryConfig(buildingType, race);
+        this.createSlotsFromConfig(buildingId, buildingType, config, positionResolver);
+    }
+
+    /**
+     * Destroy all slots for a building. Non-empty pile entities are converted to
+     * free piles (they survive the building removal). Empty slots are just cleaned up.
+     */
+    destroySlots(buildingId: number): void {
+        const slotIds = this.inventorySlots.get(buildingId);
+        if (!slotIds) return;
+        const { executeCommand, gameState } = this.getDeps();
+
+        for (const slotId of slotIds) {
+            const slot = this.slots.get(slotId)!;
+            if (slot.entityId !== null && slot.currentAmount > 0 && slot.kind !== SlotKind.Free) {
+                // Building destroyed with materials remaining — convert pile to free pile
+                const pileEntity = gameState.getEntity(slot.entityId);
+                if (pileEntity) {
+                    gameState.piles.setKind(slot.entityId, { kind: SlotKind.Free });
+                    this.registerFreePile(slot.entityId, slot.materialType, slot.currentAmount, slot.position);
+                }
+            } else if (slot.entityId !== null) {
+                // Empty slot or free pile cleanup — remove the pile entity
+                const pileEntity = gameState.getEntity(slot.entityId);
+                if (pileEntity) {
+                    removePileEntity(slot, executeCommand);
+                }
+            }
+            this.slots.delete(slotId);
+        }
+        this.inventorySlots.delete(buildingId);
+    }
+
+    /**
+     * Deposit amount into a slot by slotId.
+     * Spawns or updates the pile entity inline.
+     * Returns actual amount deposited (may be less than requested if slot is full).
+     */
+    deposit(slotId: number, amount: number): number {
+        const slot = this.getSlotOrThrow(slotId, 'deposit');
+        const { executeCommand, gameState } = this.getDeps();
+        const available = slot.maxCapacity - slot.currentAmount;
+        const toDeposit = Math.min(amount, available);
+        if (toDeposit <= 0) return 0;
+
+        const prev = slot.currentAmount;
+        slot.currentAmount += toDeposit;
+
+        if (slot.entityId === null) {
+            const building = gameState.getEntityOrThrow(slot.buildingId!, 'deposit:spawn');
+            spawnPileEntity(slot, building.player, executeCommand);
+        } else {
+            updatePileEntity(slot, executeCommand);
+        }
+
+        this.emitChanged(slot, prev);
+        return toDeposit;
+    }
+
+    /**
+     * Withdraw amount from a slot by slotId.
+     * Removes the pile entity when amount reaches 0.
+     * Returns actual amount withdrawn.
+     */
+    withdraw(slotId: number, amount: number): number {
+        const slot = this.getSlotOrThrow(slotId, 'withdraw');
+        const { executeCommand } = this.getDeps();
+        const toWithdraw = Math.min(amount, slot.currentAmount);
+        if (toWithdraw <= 0) return 0;
+
+        const prev = slot.currentAmount;
+        slot.currentAmount -= toWithdraw;
+
+        if (slot.currentAmount === 0 && slot.entityId !== null) {
+            removePileEntity(slot, executeCommand);
+        } else if (slot.entityId !== null) {
+            updatePileEntity(slot, executeCommand);
+        }
+
+        this.emitChanged(slot, prev);
+        return toWithdraw;
+    }
+    getSlot(slotId: number): PileSlot | undefined {
+        return this.slots.get(slotId);
+    }
+
+    getSlotOrThrow(slotId: number, context: string): PileSlot {
+        const slot = this.slots.get(slotId);
+        if (!slot) throw new Error(`BuildingInventoryManager: slot ${slotId} not found [${context}]`);
         return slot;
     }
 
-    /**
-     * Deposit material into a building's input slot.
-     * @param buildingId Entity ID of the building
-     * @param materialType Material type to deposit
-     * @param amount Amount to deposit
-     * @returns Amount deposited (may be less than requested if slot is full)
-     */
-    depositInput(buildingId: number, materialType: EMaterialType, amount: number): number {
-        const slot = this.getInputSlotOrThrow(buildingId, materialType);
+    /** All PileSlots for a building. */
+    getSlots(buildingId: number): readonly PileSlot[] {
+        const ids = this.inventorySlots.get(buildingId);
+        if (!ids) return [];
+        return Array.from(ids, id => this.slots.get(id)!);
+    }
 
-        const previousAmount = slot.currentAmount;
-        const overflow = deposit(slot, amount);
-        const deposited = amount - overflow;
-
-        if (deposited > 0) {
-            this.emitChange(buildingId, materialType, 'input', previousAmount, slot.currentAmount);
-        }
-
-        return deposited;
+    /** All slot IDs for a building. */
+    getSlotIds(buildingId: number): ReadonlySet<number> {
+        return this.inventorySlots.get(buildingId) ?? new Set();
     }
 
     /**
-     * Withdraw material from a building's output slot.
-     * For StorageArea buildings, frees the dynamic slot back to NO_MATERIAL when it drains to zero.
-     * @param buildingId Entity ID of the building
-     * @param materialType Material type to withdraw
-     * @param amount Amount to withdraw
-     * @returns Actual amount withdrawn (may be less than requested)
+     * Find first slot with space for the given material and kind.
+     * Kind can be a SlotKind or 'input'/'output' convenience aliases.
      */
-    withdrawOutput(buildingId: number, materialType: EMaterialType, amount: number): number {
-        if (this.isStorageArea(buildingId)) {
-            const inventory = this.inventories.get(buildingId);
-            if (!inventory)
-                throw new Error(`No inventory for building ${buildingId} in BuildingInventoryManager.withdrawOutput`);
-            const slot = inventory.outputSlots.find(s => s.materialType === materialType);
-            if (!slot || slot.currentAmount < amount) return 0;
-            const prev = slot.currentAmount;
-            const withdrawn = Math.min(amount, slot.currentAmount);
-            slot.currentAmount -= withdrawn;
-            if (slot.currentAmount === 0) {
-                slot.materialType = EMaterialType.NO_MATERIAL; // Free this slot for the next material
+    findSlot(buildingId: number, material: EMaterialType, kind: SlotKind | 'input' | 'output'): PileSlot | undefined {
+        const ids = this.inventorySlots.get(buildingId);
+        if (!ids) return undefined;
+        let resolvedKind: SlotKind;
+        if (kind === 'input') resolvedKind = SlotKind.Input;
+        else if (kind === 'output') resolvedKind = SlotKind.Output;
+        else resolvedKind = kind;
+        for (const id of ids) {
+            const slot = this.slots.get(id)!;
+            if (slot.materialType === material && slot.kind === resolvedKind && slot.currentAmount < slot.maxCapacity) {
+                return slot;
             }
-            this.emitChange(buildingId, materialType, 'output', prev, slot.currentAmount);
-            return withdrawn;
         }
-
-        const slot = this.getOutputSlotOrThrow(buildingId, materialType);
-
-        const previousAmount = slot.currentAmount;
-        const withdrawn = withdraw(slot, amount);
-
-        if (withdrawn > 0) {
-            this.emitChange(buildingId, materialType, 'output', previousAmount, slot.currentAmount);
-        }
-
-        return withdrawn;
+        return undefined;
     }
 
     /**
-     * Check if a building can accept material into its input.
-     * Throws if called on a StorageArea — use depositOutput instead.
-     * @param buildingId Entity ID of the building
-     * @param materialType Material type to check
-     * @param amount Amount to check
-     * @returns True if the building can accept the material
+     * Find first slot with space for given material and kind.
+     * Returns slot + its ID. For logistics resolveDestinationSlot.
      */
-    canAcceptInput(buildingId: number, materialType: EMaterialType, amount: number): boolean {
-        if (this.isStorageArea(buildingId)) {
-            throw new Error(`canAcceptInput called on StorageArea building ${buildingId} — use depositOutput instead`);
+    findSlotWithSpace(
+        buildingId: number,
+        material: EMaterialType,
+        kind: SlotKind | 'input' | 'output'
+    ): { slot: PileSlot; slotId: number } | undefined {
+        const s = this.findSlot(buildingId, material, kind);
+        return s ? { slot: s, slotId: s.id } : undefined;
+    }
+
+    /**
+     * All output slots for a building matching a material (for set_storage_filter command).
+     */
+    getOutputSlots(buildingId: number, material: EMaterialType): ReadonlyArray<{ slot: PileSlot; slotId: number }> {
+        const ids = this.inventorySlots.get(buildingId);
+        if (!ids) return [];
+        const result: { slot: PileSlot; slotId: number }[] = [];
+        for (const id of ids) {
+            const slot = this.slots.get(id)!;
+            if (slot.materialType === material && (slot.kind === SlotKind.Output || slot.kind === SlotKind.Storage)) {
+                result.push({ slot, slotId: id });
+            }
         }
-        const slot = this.getInputSlot(buildingId, materialType);
-        if (!slot) return false;
-        return canAccept(slot, materialType, amount);
+        return result;
     }
 
     /**
-     * Check if a building can provide material from its output.
-     * @param buildingId Entity ID of the building
-     * @param materialType Material type to check
-     * @param amount Amount to check
-     * @returns True if the building has enough material
+     * Set a slot's materialType. Used by logistics to claim/release StorageArea slots.
+     * Throws if the slot has amount > 0 and material would change.
      */
-    canProvideOutput(buildingId: number, materialType: EMaterialType, amount: number): boolean {
-        const slot = this.getOutputSlot(buildingId, materialType);
-        if (!slot) return false;
-        return canProvide(slot, materialType, amount);
-    }
-
-    /**
-     * Get available space in a building's input slot.
-     * Throws if called on a StorageArea — StorageArea has no input slots.
-     * @param buildingId Entity ID of the building
-     * @param materialType Material type to check
-     * @returns Available space, or 0 if slot not found
-     */
-    getInputSpace(buildingId: number, materialType: EMaterialType): number {
-        if (this.isStorageArea(buildingId)) {
+    setSlotMaterial(slotId: number, material: EMaterialType): void {
+        const slot = this.getSlotOrThrow(slotId, `setSlotMaterial`);
+        if (slot.currentAmount > 0 && slot.materialType !== material) {
             throw new Error(
-                `getInputSpace called on StorageArea building ${buildingId} — StorageArea has no input slots`
+                `Cannot reassign non-empty slot ${slotId}: has ${slot.currentAmount} of ` +
+                    `${EMaterialType[slot.materialType]}, attempted ${EMaterialType[material]}`
             );
         }
-        const slot = this.getInputSlot(buildingId, materialType);
-        if (!slot) return 0;
-        return getAvailableSpace(slot);
+        slot.materialType = material;
+        log.debug(`setSlotMaterial: slotId=${slotId} → ${EMaterialType[material]}`);
+    }
+    depositInput(buildingId: number, material: EMaterialType, amount: number): number {
+        const slot = this.requireInputSlot(buildingId, material, 'depositInput');
+        return this.deposit(slot.id, amount);
     }
 
-    /**
-     * Get amount in a building's input slot.
-     * @param buildingId Entity ID of the building
-     * @param materialType Material type to check
-     * @returns Amount in slot, or 0 if slot not found
-     */
-    getInputAmount(buildingId: number, materialType: EMaterialType): number {
-        const slot = this.getInputSlot(buildingId, materialType);
-        return slot?.currentAmount ?? 0;
+    depositOutput(buildingId: number, material: EMaterialType, amount: number): number {
+        const slot = this.requireOutputSlot(buildingId, material, 'depositOutput');
+        return this.deposit(slot.id, amount);
     }
 
-    /**
-     * Get amount available in a building's output slot.
-     * @param buildingId Entity ID of the building
-     * @param materialType Material type to check
-     * @returns Amount available, or 0 if slot not found
-     */
-    getOutputAmount(buildingId: number, materialType: EMaterialType): number {
-        const slot = this.getOutputSlot(buildingId, materialType);
-        return slot?.currentAmount ?? 0;
+    withdrawInput(buildingId: number, material: EMaterialType, amount: number): number {
+        const slot = this.requireInputSlot(buildingId, material, 'withdrawInput');
+        return this.withdraw(slot.id, amount);
     }
 
-    /**
-     * Check whether a building is a StorageArea.
-     * Used to gate dynamic-slot logic in depositOutput / withdrawOutput.
-     */
-    isStorageArea(buildingId: number): boolean {
-        return this.inventories.get(buildingId)?.buildingType === BuildingType.StorageArea;
+    withdrawOutput(buildingId: number, material: EMaterialType, amount: number): number {
+        const slot = this.requireOutputSlot(buildingId, material, 'withdrawOutput');
+        return this.withdraw(slot.id, amount);
+    }
+    getInputAmount(buildingId: number, material: EMaterialType): number {
+        return this.findInputSlot(buildingId, material)?.currentAmount ?? 0;
     }
 
-    /**
-     * Get remaining capacity for a material in a StorageArea.
-     * Accounts for existing assigned slots and free (NO_MATERIAL) slots.
-     * Returns 0 for non-StorageArea buildings.
-     */
-    getStorageOutputSpace(buildingId: number, materialType: EMaterialType): number {
-        const inventory = this.inventories.get(buildingId);
-        if (!inventory || inventory.buildingType !== BuildingType.StorageArea) return 0;
-        let space = 0;
-        for (const slot of inventory.outputSlots) {
-            if (slot.materialType === materialType) {
-                space += slot.maxCapacity - slot.currentAmount;
-            } else if (slot.materialType === EMaterialType.NO_MATERIAL && slot.currentAmount === 0) {
-                space += slot.maxCapacity;
+    getOutputAmount(buildingId: number, material: EMaterialType): number {
+        return this.findOutputSlot(buildingId, material)?.currentAmount ?? 0;
+    }
+
+    /** Total available input space across all matching slots. */
+    getInputSpace(buildingId: number, material: EMaterialType): number {
+        const ids = this.inventorySlots.get(buildingId);
+        if (!ids) return 0;
+        let total = 0;
+        for (const id of ids) {
+            const slot = this.slots.get(id)!;
+            if (slot.materialType === material && slot.kind === SlotKind.Input) {
+                total += slot.maxCapacity - slot.currentAmount;
             }
         }
-        return space;
+        return total;
     }
 
-    /**
-     * Free any empty StorageArea output slots assigned to the given material.
-     * Called when a material direction is disabled so the slot can be reused.
-     * Slots with material still in them are left untouched.
-     */
-    freeEmptyStorageSlots(buildingId: number, materialType: EMaterialType): void {
-        const inventory = this.inventories.get(buildingId);
-        if (!inventory || inventory.buildingType !== BuildingType.StorageArea) return;
-        for (const slot of inventory.outputSlots) {
-            if (slot.materialType === materialType && slot.currentAmount === 0) {
-                slot.materialType = EMaterialType.NO_MATERIAL;
-            }
-        }
-    }
-
-    /**
-     * Get the set of allowed materials for a StorageArea building.
-     * The actual routing filter lives in StorageFilterManager — this is a read-only view.
-     * @param buildingId Entity ID of the building
-     * @returns ReadonlySet of allowed material types (empty set = nothing configured)
-     */
-    getAllowedMaterials(buildingId: number): ReadonlySet<EMaterialType> {
-        return this.allowedMaterials.get(buildingId) ?? new Set();
-    }
-
-    /**
-     * Configure whether a specific material is allowed into this building's storage.
-     * Note: The isAllowed check lives ONLY in logistics routing — depositOutput does NOT enforce it.
-     * @param buildingId Entity ID of the building
-     * @param material Material type to configure
-     * @param allowed True to allow, false to disallow
-     */
-    setAllowedMaterial(buildingId: number, material: EMaterialType, allowed: boolean): void {
-        let set = this.allowedMaterials.get(buildingId);
-        if (!set) {
-            set = new Set();
-            this.allowedMaterials.set(buildingId, set);
-        }
-        if (allowed) set.add(material);
-        else set.delete(material);
-    }
-
-    /**
-     * Deposit material into a building's output slot (used by production).
-     * For StorageArea buildings, uses dynamic slot assignment:
-     *   1. Find an existing slot with the matching material type.
-     *   2. If none, claim the first free slot (NO_MATERIAL with amount 0) and assign it.
-     *   3. If all slots are occupied, return 0.
-     * @param buildingId Entity ID of the building
-     * @param materialType Material type to deposit
-     * @param amount Amount to deposit
-     * @returns Amount deposited (may be less than requested if slot is full)
-     */
-    depositOutput(buildingId: number, materialType: EMaterialType, amount: number): number {
-        log.debug(`#${this._debugId} depositOutput: building=${buildingId}, listeners=${this.changeListeners.size}`);
-
-        if (this.isStorageArea(buildingId)) {
-            const inventory = this.inventories.get(buildingId);
-            if (!inventory)
-                throw new Error(`No inventory for building ${buildingId} in BuildingInventoryManager.depositOutput`);
-            // 1. Find an existing slot already assigned to this material
-            let slot = inventory.outputSlots.find(s => s.materialType === materialType);
-            if (!slot) {
-                // 2. Find a free slot (NO_MATERIAL sentinel with no contents) and assign it
-                slot = inventory.outputSlots.find(
-                    s => s.materialType === EMaterialType.NO_MATERIAL && s.currentAmount === 0
-                );
-                if (!slot) return 0; // All dynamic slots are occupied
-                slot.materialType = materialType;
-            }
-            const deposited = Math.min(amount, slot.maxCapacity - slot.currentAmount);
-            if (deposited <= 0) return 0;
-            const prev = slot.currentAmount;
-            slot.currentAmount += deposited;
-            this.emitChange(buildingId, materialType, 'output', prev, slot.currentAmount);
-            return deposited;
-        }
-
-        const slot = this.getOutputSlotOrThrow(buildingId, materialType);
-
-        const previousAmount = slot.currentAmount;
-        const overflow = deposit(slot, amount);
-        const deposited = amount - overflow;
-
-        log.debug(
-            `#${this._debugId} depositOutput: prev=${previousAmount}, deposited=${deposited}, overflow=${overflow}`
-        );
-
-        if (deposited > 0) {
-            this.emitChange(buildingId, materialType, 'output', previousAmount, slot.currentAmount);
-        }
-
-        return deposited;
-    }
-
-    /**
-     * Withdraw material from a building's input slot (used by production).
-     * @param buildingId Entity ID of the building
-     * @param materialType Material type to withdraw
-     * @param amount Amount to withdraw
-     * @returns Actual amount withdrawn (may be less than requested)
-     */
-    withdrawInput(buildingId: number, materialType: EMaterialType, amount: number): number {
-        const slot = this.getInputSlotOrThrow(buildingId, materialType);
-
-        const previousAmount = slot.currentAmount;
-        const withdrawn = withdraw(slot, amount);
-
-        if (withdrawn > 0) {
-            this.emitChange(buildingId, materialType, 'input', previousAmount, slot.currentAmount);
-        }
-
-        return withdrawn;
-    }
-
-    /**
-     * Check if a building has all required inputs to start production.
-     * Uses BUILDING_PRODUCTIONS to determine what inputs are needed, or the provided recipe if given.
-     * @param buildingId Entity ID of the building
-     * @param recipe Optional specific recipe to check against (overrides BUILDING_PRODUCTIONS lookup)
-     * @returns True if all required inputs are available (at least 1 of each)
-     */
-    canStartProduction(buildingId: number, recipe?: Recipe): boolean {
-        const inventory = this.inventories.get(buildingId);
-        if (!inventory) return false;
-
-        const inputs = recipe ? recipe.inputs : BUILDING_PRODUCTIONS.get(inventory.buildingType)?.inputs;
-        if (!inputs) return false;
-
-        // Check that we have at least 1 of each required input
-        for (const inputMaterial of inputs) {
-            const slot = inventory.inputSlots.find(s => s.materialType === inputMaterial);
-            if (!slot || slot.currentAmount < 1) {
-                return false;
-            }
-        }
-
-        return true;
-    }
-
-    /**
-     * Consume inputs for one production cycle.
-     * Withdraws 1 of each required input material.
-     * @param buildingId Entity ID of the building
-     * @param recipe Optional specific recipe to consume inputs for (overrides BUILDING_PRODUCTIONS lookup)
-     * @returns True if inputs were consumed successfully
-     */
-    consumeProductionInputs(buildingId: number, recipe?: Recipe): boolean {
-        const inventory = this.inventories.get(buildingId);
-        if (!inventory) return false;
-
-        const inputs = recipe ? recipe.inputs : BUILDING_PRODUCTIONS.get(inventory.buildingType)?.inputs;
-        if (!inputs) return false;
-
-        // Consume 1 of each required input
-        for (const inputMaterial of inputs) {
-            this.withdrawInput(buildingId, inputMaterial, 1);
-        }
-
-        return true;
-    }
-
-    /**
-     * Produce output for one production cycle.
-     * Deposits 1 of the output material.
-     * @param buildingId Entity ID of the building
-     * @param recipe Optional specific recipe whose output to produce (overrides BUILDING_PRODUCTIONS lookup)
-     * @returns True if output was produced successfully
-     */
-    produceOutput(buildingId: number, recipe?: Recipe): boolean {
-        const inventory = this.inventories.get(buildingId);
-        if (!inventory) return false;
-
-        const output = recipe ? recipe.output : BUILDING_PRODUCTIONS.get(inventory.buildingType)?.output;
-        if (output === undefined || output === EMaterialType.NO_MATERIAL) return false;
-
-        const deposited = this.depositOutput(buildingId, output, 1);
-        return deposited > 0;
-    }
-
-    /**
-     * Check if a building's output has space for production result.
-     * @param buildingId Entity ID of the building
-     * @param recipe Optional specific recipe whose output slot to check (overrides BUILDING_PRODUCTIONS lookup)
-     * @returns True if output slot has space (or building has no output)
-     */
-    canStoreOutput(buildingId: number, recipe?: Recipe): boolean {
-        const inventory = this.inventories.get(buildingId);
-        if (!inventory) return false;
-
-        const output = recipe ? recipe.output : BUILDING_PRODUCTIONS.get(inventory.buildingType)?.output;
-        if (output === undefined) return true; // No production = always ok
-        if (output === EMaterialType.NO_MATERIAL) return true; // No output material
-
-        const slot = inventory.outputSlots.find(s => s.materialType === output);
+    canAcceptInput(buildingId: number, material: EMaterialType, amount: number): boolean {
+        const slot = this.findInputSlot(buildingId, material);
         if (!slot) return false;
+        return slot.currentAmount + amount <= slot.maxCapacity;
+    }
 
+    canProvideOutput(buildingId: number, material: EMaterialType, amount: number): boolean {
+        const slot = this.findOutputSlot(buildingId, material);
+        if (!slot) return false;
+        return slot.currentAmount >= amount;
+    }
+    canStartProduction(buildingId: number, recipe?: Recipe): boolean {
+        const inputs = getProductionInputs(buildingId, this.getDeps().gameState, recipe);
+        if (!inputs) return false;
+        for (const material of inputs) {
+            if (this.getInputAmount(buildingId, material) < 1) return false;
+        }
+        return true;
+    }
+
+    consumeProductionInputs(buildingId: number, recipe?: Recipe): boolean {
+        const inputs = getProductionInputs(buildingId, this.getDeps().gameState, recipe);
+        if (!inputs) return false;
+        for (const material of inputs) this.withdrawInput(buildingId, material, 1);
+        return true;
+    }
+
+    produceOutput(buildingId: number, recipe?: Recipe): boolean {
+        const output = getProductionOutput(buildingId, this.getDeps().gameState, recipe);
+        if (output === undefined || output === EMaterialType.NO_MATERIAL) return false;
+        return this.depositOutput(buildingId, output, 1) > 0;
+    }
+
+    canStoreOutput(buildingId: number, recipe?: Recipe): boolean {
+        const output = getProductionOutput(buildingId, this.getDeps().gameState, recipe);
+        if (output === undefined || output === EMaterialType.NO_MATERIAL) return true;
+        const slot = this.findOutputSlot(buildingId, output);
+        if (!slot) return false;
         return slot.currentAmount < slot.maxCapacity;
     }
-
-    /**
-     * Get all building IDs that have inventories.
-     */
-    getAllBuildingIds(): number[] {
-        return Array.from(this.inventories.keys());
+    getAllInventoryIds(): number[] {
+        return Array.from(this.inventorySlots.keys());
     }
 
-    /**
-     * Get all buildings that have a specific material available in output.
-     * @param materialType Material type to find
-     * @param minAmount Minimum amount required (default: 1)
-     * @returns Array of building IDs with the material available
-     */
-    getBuildingsWithOutput(materialType: EMaterialType, minAmount: number = 1): number[] {
+    /** Returns an iterable of building IDs that have slots (replaces old getAllInventories()). */
+    getAllInventories(): IterableIterator<number> {
+        return this.inventorySlots.keys();
+    }
+
+    getSourcesWithOutput(material: EMaterialType, minAmount = 1): number[] {
         const result: number[] = [];
-        for (const [buildingId, inventory] of this.inventories) {
-            const slot = inventory.outputSlots.find(s => s.materialType === materialType);
-            if (slot && slot.currentAmount >= minAmount) {
-                result.push(buildingId);
+        for (const [buildingId, slotIds] of this.inventorySlots) {
+            for (const id of slotIds) {
+                const slot = this.slots.get(id)!;
+                if (
+                    (slot.kind === SlotKind.Output || slot.kind === SlotKind.Storage || slot.kind === SlotKind.Free) &&
+                    slot.materialType === material &&
+                    slot.currentAmount >= minAmount
+                ) {
+                    result.push(buildingId);
+                    break;
+                }
             }
         }
         return result;
     }
 
-    /**
-     * Get all buildings that need a specific material (have space in input).
-     * @param materialType Material type to find
-     * @param minSpace Minimum space required (default: 1)
-     * @returns Array of building IDs that need the material
-     */
-    getBuildingsNeedingInput(materialType: EMaterialType, minSpace: number = 1): number[] {
+    getSinksNeedingInput(material: EMaterialType, minSpace = 1): number[] {
         const result: number[] = [];
-        for (const [buildingId, inventory] of this.inventories) {
-            const slot = inventory.inputSlots.find(s => s.materialType === materialType);
-            if (slot && getAvailableSpace(slot) >= minSpace) {
-                result.push(buildingId);
+        for (const [buildingId, slotIds] of this.inventorySlots) {
+            for (const id of slotIds) {
+                const slot = this.slots.get(id)!;
+                if (
+                    slot.kind === SlotKind.Input &&
+                    slot.materialType === material &&
+                    slot.maxCapacity - slot.currentAmount >= minSpace
+                ) {
+                    result.push(buildingId);
+                    break;
+                }
             }
         }
         return result;
     }
 
+    hasSlots(buildingId: number): boolean {
+        return this.inventorySlots.has(buildingId);
+    }
+
     /**
-     * Clear all inventories.
+     * Register an existing free pile entity as a PileSlot.
+     * Used by FreePileHandler when a pile entity already exists (building destroyed,
+     * place_pile command). Creates a slot with kind=Free, pre-linked entityId.
      */
+    registerFreePile(
+        entityId: number,
+        material: EMaterialType,
+        quantity: number,
+        position: { x: number; y: number }
+    ): void {
+        const slotId = this.nextSlotId++;
+        const slot: PileSlot = {
+            id: slotId,
+            materialType: material,
+            currentAmount: quantity,
+            maxCapacity: quantity,
+            position,
+            entityId,
+            kind: SlotKind.Free,
+            buildingId: entityId, // use pile entity ID as "building" for output queries
+        };
+        this.slots.set(slotId, slot);
+        this.getInventorySlotSet(entityId).add(slotId);
+    }
+
     clear(): void {
-        this.inventories.clear();
+        this.slots.clear();
+        this.inventorySlots.clear();
     }
-
-    /**
-     * Get all inventories.
-     */
-    getAllInventories(): IterableIterator<BuildingInventory> {
-        return this.inventories.values();
-    }
-
-    // ── Persistable implementation ──
-
-    serialize(): SerializedBuildingInventory[] {
-        const result: SerializedBuildingInventory[] = [];
-        for (const inv of this.getAllInventories()) {
-            result.push({
-                entityId: inv.buildingId,
-                buildingType: inv.buildingType,
-                inputSlots: this.serializeSlots(inv.inputSlots),
-                outputSlots: this.serializeSlots(inv.outputSlots),
+    serialize(): SerializedBuildingInventory {
+        const serializedSlots: SerializedPileSlot[] = [];
+        for (const slot of this.slots.values()) {
+            serializedSlots.push({
+                id: slot.id,
+                materialType: slot.materialType,
+                currentAmount: slot.currentAmount,
+                maxCapacity: slot.maxCapacity,
+                x: slot.position.x,
+                y: slot.position.y,
+                entityId: slot.entityId,
+                kind: slot.kind,
+                buildingId: slot.buildingId,
             });
         }
-        return result;
+        return { nextSlotId: this.nextSlotId, slots: serializedSlots };
     }
 
-    deserialize(data: SerializedBuildingInventory[]): void {
-        // Reservations are derived from the TransportJobStore on demand — not persisted in slots
-        for (const inv of data) {
-            this.restoreInventory(inv);
+    deserialize(data: SerializedBuildingInventory): void {
+        this.slots.clear();
+        this.inventorySlots.clear();
+        this.nextSlotId = data.nextSlotId;
+
+        for (const s of data.slots) {
+            const slot: PileSlot = {
+                id: s.id,
+                materialType: s.materialType,
+                currentAmount: s.currentAmount,
+                maxCapacity: s.maxCapacity,
+                position: { x: s.x, y: s.y },
+                entityId: s.entityId,
+                kind: s.kind,
+                buildingId: s.buildingId,
+            };
+            this.slots.set(s.id, slot);
+            if (s.buildingId !== null) {
+                this.getInventorySlotSet(s.buildingId).add(s.id);
+            }
+        }
+    }
+    private *buildingStoreEntries(): IterableIterator<[number, BuildingInventoryView]> {
+        for (const [buildingId, slotIds] of this.inventorySlots) {
+            yield [buildingId, { buildingId, slotIds }];
         }
     }
 
-    private serializeSlots(slots: InventorySlot[]): SerializedInventorySlot[] {
-        return slots.map(s => ({
-            materialType: s.materialType,
-            current: s.currentAmount,
-            max: s.maxCapacity,
-        }));
+    private addSlot(buildingId: number, cfg: SlotConfig, kind: SlotKind, position: TileCoord): void {
+        const slotId = this.nextSlotId++;
+        const slot: PileSlot = {
+            id: slotId,
+            materialType: cfg.materialType,
+            currentAmount: 0,
+            maxCapacity: cfg.maxCapacity,
+            position,
+            entityId: null,
+            kind,
+            buildingId,
+        };
+        this.slots.set(slotId, slot);
+        this.getInventorySlotSet(buildingId).add(slotId);
+        log.debug(
+            `createSlot: building=${buildingId}, slotId=${slotId}, kind=${kind}, material=${EMaterialType[cfg.materialType]}`
+        );
     }
 
-    /**
-     * Restore an inventory from serialized state (used by persistence).
-     */
-    restoreInventory(data: {
-        entityId: number;
-        buildingType: BuildingType;
-        inputSlots: Array<{ materialType: EMaterialType; current: number; max: number }>;
-        outputSlots: Array<{ materialType: EMaterialType; current: number; max: number }>;
-    }): void {
-        const toSlot = (s: { materialType: EMaterialType; current: number; max: number }): InventorySlot => ({
-            materialType: s.materialType,
-            currentAmount: s.current,
-            maxCapacity: s.max,
-        });
+    private getInventorySlotSet(buildingId: number): Set<number> {
+        let set = this.inventorySlots.get(buildingId);
+        if (!set) {
+            set = new Set();
+            this.inventorySlots.set(buildingId, set);
+        }
+        return set;
+    }
 
-        this.inventories.set(data.entityId, {
-            buildingId: data.entityId,
-            buildingType: data.buildingType,
-            inputSlots: data.inputSlots.map(toSlot),
-            outputSlots: data.outputSlots.map(toSlot),
+    private findInputSlot(buildingId: number, material: EMaterialType): PileSlot | undefined {
+        const ids = this.inventorySlots.get(buildingId);
+        if (!ids) return undefined;
+        for (const id of ids) {
+            const slot = this.slots.get(id)!;
+            if (slot.materialType === material && slot.kind === SlotKind.Input) {
+                return slot;
+            }
+        }
+        return undefined;
+    }
+
+    private findOutputSlot(buildingId: number, material: EMaterialType): PileSlot | undefined {
+        const ids = this.inventorySlots.get(buildingId);
+        if (!ids) return undefined;
+        for (const id of ids) {
+            const slot = this.slots.get(id)!;
+            if (
+                slot.materialType === material &&
+                (slot.kind === SlotKind.Output || slot.kind === SlotKind.Storage || slot.kind === SlotKind.Free)
+            ) {
+                return slot;
+            }
+        }
+        return undefined;
+    }
+
+    private requireInputSlot(buildingId: number, material: EMaterialType, ctx: string): PileSlot {
+        const slot = this.findInputSlot(buildingId, material);
+        if (!slot) throw new Error(`Building ${buildingId} has no input slot for ${EMaterialType[material]} [${ctx}]`);
+        return slot;
+    }
+
+    private requireOutputSlot(buildingId: number, material: EMaterialType, ctx: string): PileSlot {
+        const slot = this.findOutputSlot(buildingId, material);
+        if (!slot) throw new Error(`Building ${buildingId} has no output slot for ${EMaterialType[material]} [${ctx}]`);
+        return slot;
+    }
+
+    private emitChanged(slot: PileSlot, previousAmount: number): void {
+        if (!this.deps || slot.currentAmount === previousAmount) return;
+        const slotType = slot.kind === SlotKind.Input ? 'input' : 'output';
+        this.deps.eventBus.emit('inventory:changed', {
+            buildingId: slot.buildingId!,
+            materialType: slot.materialType,
+            slotType,
+            previousAmount,
+            newAmount: slot.currentAmount,
         });
     }
 }

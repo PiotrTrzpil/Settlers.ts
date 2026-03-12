@@ -17,12 +17,13 @@ import { installRealGameData } from '../../helpers/test-game-data';
 import { BuildingType } from '@/game/buildings/building-type';
 import { EntityType } from '@/game/entity';
 import { EMaterialType } from '@/game/economy/material-type';
+import { SlotKind } from '@/game/core/pile-kind';
 import { BuildingConstructionPhase } from '@/game/features/building-construction/types';
 import { TreeStage } from '@/game/features/trees/tree-system';
 import { createSnapshot, restoreFromSnapshot, type GameStateSnapshot } from '@/game/state/game-state-persistence';
 import type { Game } from '@/game/game';
 
-const hasRealData = installRealGameData();
+installRealGameData();
 
 // ─── Helpers ─────────────────────────────────────────────────────
 
@@ -84,19 +85,21 @@ function assertEntitiesMatch(original: Simulation, restored: Simulation): void {
 function assertInventoriesMatch(original: Simulation, restored: Simulation): void {
     for (const entity of original.state.entities) {
         if (entity.type !== EntityType.Building) continue;
-        const origInv = original.services.inventoryManager.getInventory(entity.id);
-        if (!origInv) continue;
+        const origSlots = original.services.inventoryManager.getSlots(entity.id);
+        if (origSlots.length === 0) continue;
 
-        const restInv = restored.services.inventoryManager.getInventory(entity.id);
-        expect(restInv, `inventory missing for building #${entity.id}`).toBeDefined();
+        const restSlots = restored.services.inventoryManager.getSlots(entity.id);
+        expect(restSlots.length, `inventory missing for building #${entity.id}`).toBeGreaterThan(0);
 
-        for (const slot of origInv.inputSlots) {
-            const rSlot = restInv!.inputSlots.find(s => s.materialType === slot.materialType);
+        for (const slot of origSlots.filter(s => s.kind === SlotKind.Input)) {
+            const rSlot = restSlots.find(s => s.kind === SlotKind.Input && s.materialType === slot.materialType);
             expect(rSlot, `input slot ${EMaterialType[slot.materialType]} missing`).toBeDefined();
             expect(rSlot!.currentAmount).toBe(slot.currentAmount);
         }
-        for (const slot of origInv.outputSlots) {
-            const rSlot = restInv!.outputSlots.find(s => s.materialType === slot.materialType);
+        for (const slot of origSlots.filter(s => s.kind === SlotKind.Output || s.kind === SlotKind.Storage)) {
+            const rSlot = restSlots.find(
+                s => (s.kind === SlotKind.Output || s.kind === SlotKind.Storage) && s.materialType === slot.materialType
+            );
             expect(rSlot, `output slot ${EMaterialType[slot.materialType]} missing`).toBeDefined();
             expect(rSlot!.currentAmount).toBe(slot.currentAmount);
         }
@@ -114,11 +117,8 @@ function countTotalMaterials(sim: Simulation): Map<EMaterialType, number> {
     const add = (mat: EMaterialType, amount: number) => totals.set(mat, (totals.get(mat) ?? 0) + amount);
 
     // Inventory slots (inputs + outputs for all buildings)
-    for (const inv of sim.services.inventoryManager.getAllInventories()) {
-        for (const slot of inv.inputSlots) {
-            if (slot.currentAmount > 0) add(slot.materialType, slot.currentAmount);
-        }
-        for (const slot of inv.outputSlots) {
+    for (const buildingId of sim.services.inventoryManager.getAllInventories()) {
+        for (const slot of sim.services.inventoryManager.getSlots(buildingId)) {
             if (slot.currentAmount > 0) add(slot.materialType, slot.currentAmount);
         }
     }
@@ -133,7 +133,7 @@ function countTotalMaterials(sim: Simulation): Map<EMaterialType, number> {
 
 // ─── Test suite ──────────────────────────────────────────────────
 
-describe.skipIf(!hasRealData)('Persistence: save/load round-trip', { timeout: 30_000 }, () => {
+describe('Persistence: save/load round-trip', { timeout: 30_000 }, () => {
     let sim: Simulation;
     let restored: Simulation | undefined;
 

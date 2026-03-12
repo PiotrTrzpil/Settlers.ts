@@ -12,14 +12,14 @@ import { BuildingType, getBuildingFootprint } from '@/game/buildings';
 import { Race } from '@/game/core/race';
 import { EMaterialType } from '@/game/economy/material-type';
 import { CONSTRUCTION_SITE_GROUND_TYPE } from '@/game/features/building-construction';
-import { TERRAIN, setHeightAt } from '../helpers/test-map';
-import { Simulation } from '../helpers/test-simulation';
+import { TERRAIN, setHeightAt } from '../../helpers/test-map';
+import { Simulation } from '../../helpers/test-simulation';
 
 describe('Resource Placement Commands', () => {
     let sim: Simulation;
 
     beforeEach(() => {
-        sim = new Simulation({ useStubData: true, mapWidth: 64, mapHeight: 64 });
+        sim = new Simulation({ mapWidth: 64, mapHeight: 64 });
     });
 
     it('place_pile creates entity with correct attributes and stores quantity', () => {
@@ -98,7 +98,7 @@ describe('Building Placement Terrain Modification', () => {
     let sim: Simulation;
 
     beforeEach(() => {
-        sim = new Simulation({ useStubData: true, mapWidth: 64, mapHeight: 64 });
+        sim = new Simulation({ mapWidth: 64, mapHeight: 64 });
     });
 
     it('should change ground to raw immediately on placement (normal mode)', () => {
@@ -163,6 +163,7 @@ describe('Building Placement Terrain Modification', () => {
             player: 0,
             race: 10,
             completed: true,
+            trusted: true, // bypass slope check — footprint extends beyond the 4 tiles with set heights
         });
         expect(result.success).toBe(true);
 

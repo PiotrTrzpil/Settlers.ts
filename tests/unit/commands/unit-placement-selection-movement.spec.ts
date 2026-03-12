@@ -59,13 +59,12 @@ describe('Unit Placement, Selection & Movement', () => {
             state.piles.removeState(entityId);
         });
 
-        const constructionSiteManager = new ConstructionSiteManager(eventBus, state.rng);
+        const constructionSiteManager = new ConstructionSiteManager(eventBus, state.rng, {} as any);
         movement.setTerrainData(groundType, groundHeight, mapSize.width, mapSize.height);
 
         terrain = new TerrainData(groundType, groundHeight, mapSize);
         const settingsManager = new GameSettingsManager();
         settingsManager.resetToDefaults();
-        /* eslint-disable @typescript-eslint/no-explicit-any */
         registry = new CommandHandlerRegistry();
         registerAllHandlers(registry, {
             state,
@@ -84,7 +83,6 @@ describe('Unit Placement, Selection & Movement', () => {
             unitTransformer: { dismissSpecialist: () => false } as any,
             getPlacementFilter: () => null,
         });
-        /* eslint-enable @typescript-eslint/no-explicit-any */
     });
 
     // ── Unit Placement ────────────────────────────────────────────────

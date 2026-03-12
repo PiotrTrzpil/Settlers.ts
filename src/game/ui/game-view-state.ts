@@ -86,7 +86,6 @@ export class GameViewState {
      * Update view state from game state.
      * Called from GameLoop.tick() so Vue components see up-to-date data.
      */
-    // eslint-disable-next-line complexity -- switch-exhaustiveness-check forces explicit cases for EntityType.Decoration
     public updateFromGameState(gameState: GameState): void {
         this.state.tick++;
 
@@ -115,41 +114,41 @@ export class GameViewState {
 
         for (const e of gameState.entities) {
             switch (e.type) {
-            case EntityType.Building:
-                buildings++;
-                break;
-            case EntityType.Unit:
-                units++;
-                break;
-            case EntityType.StackedPile:
-                resources++;
-                break;
-            case EntityType.MapObject: {
-                const objType = e.subType as MapObjectType;
-                if (isResourceDeposit(objType)) {
+                case EntityType.Building:
+                    buildings++;
+                    break;
+                case EntityType.Unit:
+                    units++;
+                    break;
+                case EntityType.StackedPile:
                     resources++;
-                } else {
-                    environment++;
-                    switch (getEnvironmentSubLayer(objType)) {
-                    case EnvironmentSubLayer.Trees:
-                        trees++;
-                        break;
-                    case EnvironmentSubLayer.Stones:
-                        stones++;
-                        break;
-                    case EnvironmentSubLayer.Plants:
-                        plants++;
-                        break;
-                    case EnvironmentSubLayer.Other:
-                        other++;
-                        break;
+                    break;
+                case EntityType.MapObject: {
+                    const objType = e.subType as MapObjectType;
+                    if (isResourceDeposit(objType)) {
+                        resources++;
+                    } else {
+                        environment++;
+                        switch (getEnvironmentSubLayer(objType)) {
+                            case EnvironmentSubLayer.Trees:
+                                trees++;
+                                break;
+                            case EnvironmentSubLayer.Stones:
+                                stones++;
+                                break;
+                            case EnvironmentSubLayer.Plants:
+                                plants++;
+                                break;
+                            case EnvironmentSubLayer.Other:
+                                other++;
+                                break;
+                        }
                     }
+                    break;
                 }
-                break;
-            }
-            case EntityType.Decoration:
-            case EntityType.None:
-                break;
+                case EntityType.Decoration:
+                case EntityType.None:
+                    break;
             }
         }
         this.state.buildingCount = buildings;

@@ -1,27 +1,26 @@
 /**
  * ConstructionRequestSystem — tick system that creates material delivery demands for buildings under construction.
  *
- * Periodically scans all active construction sites and, for each material still needed,
- * creates demands up to the remaining cost (capped at MAX_ACTIVE_PER_MATERIAL) so that
- * multiple carriers deliver in parallel — matching the original game's behaviour.
+ * Periodically scans all active construction sites and creates slot-agnostic demands
+ * for each material that still has capacity. Multiple carriers can deliver in parallel —
+ * matching the original game's behaviour. Slot assignment happens at job creation time.
  *
  * Demands are created as soon as a site is registered — carriers may deliver materials
  * during terrain leveling, parallel to the diggers, exactly as in Settlers 4.
  */
 
 import type { TickSystem } from '../../core/tick-system';
-import type { EMaterialType } from '../../economy/material-type';
 import type { ConstructionSiteManager } from './construction-site-manager';
 import { DemandPriority, type DemandQueue } from '../logistics/demand-queue';
 import type { TransportJobStore } from '../logistics/transport-job-store';
-
-/** Maximum number of active (pending + in-progress) demands per material per construction site. */
-const MAX_ACTIVE_PER_MATERIAL = 8;
+import type { BuildingInventoryManager } from '../../systems/inventory';
+import { SlotKind } from '../../core/pile-kind';
 
 export class ConstructionRequestSystem implements TickSystem {
     private readonly constructionSiteManager: ConstructionSiteManager;
     private readonly demandQueue: DemandQueue;
     private readonly jobStore: TransportJobStore;
+    private readonly inventoryManager: BuildingInventoryManager;
 
     private accumulator = 0;
     private static readonly TICK_INTERVAL = 0.5; // seconds
@@ -29,11 +28,13 @@ export class ConstructionRequestSystem implements TickSystem {
     constructor(
         constructionSiteManager: ConstructionSiteManager,
         demandQueue: DemandQueue,
-        jobStore: TransportJobStore
+        jobStore: TransportJobStore,
+        inventoryManager: BuildingInventoryManager
     ) {
         this.constructionSiteManager = constructionSiteManager;
         this.demandQueue = demandQueue;
         this.jobStore = jobStore;
+        this.inventoryManager = inventoryManager;
     }
 
     tick(dt: number): void {
@@ -45,20 +46,32 @@ export class ConstructionRequestSystem implements TickSystem {
 
     private processSites(): void {
         for (const site of this.constructionSiteManager.getAllActiveSites()) {
-            const remainingCosts = this.constructionSiteManager.getRemainingCosts(site.buildingId);
-            for (const cost of remainingCosts) {
-                this.ensureRequestsForMaterial(site.buildingId, cost.material, cost.count);
-            }
+            this.processSite(site.buildingId);
         }
     }
 
-    private ensureRequestsForMaterial(buildingId: number, material: EMaterialType, remaining: number): void {
-        const activeDemands = this.demandQueue.countDemands(buildingId, material);
-        const activeJobs = this.jobStore.getActiveJobCountForDest(buildingId, material);
-        const cap = Math.min(remaining - activeJobs, MAX_ACTIVE_PER_MATERIAL);
-        const needed = cap - activeDemands;
-        for (let i = 0; i < needed; i++) {
-            this.demandQueue.addDemand(buildingId, material, 1, DemandPriority.Normal);
+    /**
+     * Estimate total capacity per material across all input slots and create
+     * slot-agnostic demands for the remaining space (minus active demands/jobs).
+     */
+    private processSite(buildingId: number): void {
+        const remainingCosts = this.constructionSiteManager.getRemainingCosts(buildingId);
+        for (const cost of remainingCosts) {
+            const slots = this.inventoryManager
+                .getSlots(buildingId)
+                .filter(s => s.kind === SlotKind.Input && s.materialType === cost.material);
+            let totalSpace = 0;
+            for (const slot of slots) {
+                totalSpace += slot.maxCapacity - slot.currentAmount;
+            }
+            if (totalSpace <= 0) continue;
+
+            const activeDemands = this.demandQueue.countDemands(buildingId, cost.material);
+            const activeJobs = this.jobStore.getActiveJobCountForDest(buildingId, cost.material);
+            const needed = totalSpace - activeDemands - activeJobs;
+            for (let i = 0; i < needed; i++) {
+                this.demandQueue.addDemand(buildingId, cost.material, 1, DemandPriority.Normal);
+            }
         }
     }
 }

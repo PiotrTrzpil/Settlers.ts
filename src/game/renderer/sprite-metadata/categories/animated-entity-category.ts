@@ -52,7 +52,7 @@ export class AnimatedEntityCategory {
      *        All frames are registered under walkKey. Frame 0 is the standing pose (shown when
      *        stopped=true/idle); frames 1+ form the walk cycle.
      */
-    // eslint-disable-next-line sonarjs/cognitive-complexity, complexity -- multi-path animation setup
+    // eslint-disable-next-line sonarjs/cognitive-complexity -- multi-path animation setup
     register(
         entityType: EntityType,
         subType: number,

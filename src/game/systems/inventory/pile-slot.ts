@@ -1,0 +1,36 @@
+/**
+ * PileSlot — unified inventory + pile data model.
+ *
+ * Merges the old InventorySlot (data) with PileRegistry (entity mapping)
+ * and PilePositionResolver (position) into one flat record.
+ *
+ * A building's inventory = Map<slotId, PileSlot>.
+ * Free piles are standalone PileSlots with kind='free' and buildingId=null.
+ */
+
+import type { TileCoord } from '../../core/coordinates';
+import type { EMaterialType } from '../../economy/material-type';
+import type { SlotKind } from '../../core/pile-kind';
+
+/**
+ * A single inventory-pile slot. Holds material data, pile entity reference,
+ * and world position. Slot IDs are stable across the lifetime of a game session.
+ */
+export interface PileSlot {
+    /** Stable slot identifier — unique across all slots in the game. */
+    readonly id: number;
+    /** The material this slot holds (or NO_MATERIAL for unclaimed storage slots). */
+    materialType: EMaterialType;
+    /** Current amount of material (0..maxCapacity). */
+    currentAmount: number;
+    /** Maximum capacity (typically SLOT_CAPACITY = 8). */
+    maxCapacity: number;
+    /** World tile position where the pile entity is placed. */
+    position: TileCoord;
+    /** Pile entity ID (created when amount > 0, removed when amount reaches 0). null = no entity. */
+    entityId: number | null;
+    /** Slot purpose: output/input/construction/storage/free. */
+    kind: SlotKind;
+    /** Owning building entity ID. null for free piles. */
+    buildingId: number | null;
+}

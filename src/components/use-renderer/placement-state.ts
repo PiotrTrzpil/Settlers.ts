@@ -3,7 +3,6 @@
  */
 
 import type { EntityRenderer } from '@/game/renderer/entity-renderer';
-// eslint-disable-next-line sonarjs/deprecation -- legacy preview types kept for backward compat branch
 import type { BuildingPreview, ResourcePreview, ModeRenderState } from '@/game/input/render-state';
 
 /** Handle placement mode rendering state using consolidated preview */
@@ -26,7 +25,7 @@ export function updatePlacementModeState(er: EntityRenderer, renderState: ModeRe
         };
     } else if (preview?.type === 'building') {
         // Handle legacy BuildingPreview for backward compatibility
-        // eslint-disable-next-line sonarjs/deprecation, @typescript-eslint/no-deprecated -- legacy union type
+        // eslint-disable-next-line @typescript-eslint/no-deprecated -- legacy union type
         const buildingPreview: BuildingPreview = preview;
         er.placementPreview = {
             tile: { x: buildingPreview.x, y: buildingPreview.y },
@@ -36,7 +35,7 @@ export function updatePlacementModeState(er: EntityRenderer, renderState: ModeRe
         };
     } else if (preview?.type === 'pile') {
         // Handle legacy ResourcePreview for backward compatibility
-        // eslint-disable-next-line sonarjs/deprecation, @typescript-eslint/no-deprecated -- legacy union type
+        // eslint-disable-next-line @typescript-eslint/no-deprecated -- legacy union type
         const resourcePreview: ResourcePreview = preview;
         const amount = resourcePreview.amount ?? 1;
         er.placementPreview = {

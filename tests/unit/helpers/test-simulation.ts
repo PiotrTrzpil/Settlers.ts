@@ -28,7 +28,7 @@
  */
 
 import { onTestFinished } from 'vitest';
-import { installTestGameData, installRealGameData, resetTestGameData } from './test-game-data';
+import { installRealGameData, resetTestGameData } from './test-game-data';
 import { createTestMap, TERRAIN, type TestMap } from './test-map';
 import { TimelineRecorder } from './timeline-recorder';
 import { wireSimulationTimeline, formatSlots } from './simulation-timeline';
@@ -43,6 +43,7 @@ import { StorageDirection } from '@/game/systems/inventory/storage-filter-manage
 import { MapObjectType } from '@/game/types/map-object-types';
 import { GameSettingsManager } from '@/game/game-settings';
 import { Race } from '@/game/core/race';
+import { SlotKind } from '@/game/core/pile-kind';
 import { spiralSearch } from '@/game/utils/spiral-search';
 import { OreType } from '@/game/features/ore-veins/ore-type';
 import { isMineBuilding, getBuildingFootprint } from '@/game/buildings/types';
@@ -177,8 +178,6 @@ class SmartBuildingPlacer {
 export interface SimulationOptions {
     mapWidth?: number;
     mapHeight?: number;
-    /** When true, uses minimal stub data instead of real XML. Defaults to false (real data). */
-    useStubData?: boolean;
     /** Race for player 0 (defaults to Roman). */
     race?: Race;
 }
@@ -209,19 +208,17 @@ export class Simulation {
     private tickCount = 0;
 
     constructor(opts: SimulationOptions = {}) {
-        const { mapWidth = 128, mapHeight = 128, useStubData = false, race = Race.Roman } = opts;
+        const { mapWidth = 128, mapHeight = 128, race = Race.Roman } = opts;
         this.mapWidth = mapWidth;
         this.mapHeight = mapHeight;
         this.testId = `sim_${++simulationCounter}_${Date.now()}`;
         this.timeline = new TimelineRecorder(this.testId);
 
-        if (useStubData) {
-            installTestGameData();
-        } else {
-            const loaded = installRealGameData();
-            if (!loaded) {
-                installTestGameData();
-            }
+        const loaded = installRealGameData();
+        if (!loaded) {
+            throw new Error(
+                'Integration tests require real game data (public/Siedler4/GameData/). Run installRealGameData() first.'
+            );
         }
 
         this.map = createTestMap(mapWidth, mapHeight);
@@ -361,12 +358,16 @@ export class Simulation {
 
     private snapshotBuildings(): BuildingSnapshot[] {
         const buildings: BuildingSnapshot[] = [];
-        for (const inv of this.services.inventoryManager.getAllInventories()) {
-            const inputs = formatSlots(inv.inputSlots);
-            const outputs = formatSlots(inv.outputSlots);
+        const im = this.services.inventoryManager;
+        for (const buildingId of im.getAllInventories()) {
+            const slots = im.getSlots(buildingId);
+            const inputs = formatSlots(slots.filter(s => s.kind === SlotKind.Input));
+            const outputs = formatSlots(slots.filter(s => s.kind === SlotKind.Output || s.kind === SlotKind.Storage));
+            const entity = this.state.getEntity(buildingId);
+            const buildingType = entity?.subType ?? -1;
             buildings.push({
-                id: inv.buildingId,
-                type: BuildingType[inv.buildingType] ?? `Unknown(${inv.buildingType})`,
+                id: buildingId,
+                type: BuildingType[buildingType as BuildingType] ?? `Unknown(${buildingType})`,
                 inputs: inputs ? `in[${inputs}]` : '',
                 outputs: outputs ? `out[${outputs}]` : '',
             });
@@ -407,11 +408,14 @@ export class Simulation {
     }
 
     private checkInventoryIntegrity() {
-        for (const inv of this.services.inventoryManager.getAllInventories()) {
-            for (const slot of [...inv.inputSlots, ...inv.outputSlots]) {
+        const im = this.services.inventoryManager;
+        for (const buildingId of im.getAllInventories()) {
+            const entity = this.state.getEntity(buildingId);
+            const buildingType = entity?.subType ?? -1;
+            for (const slot of im.getSlots(buildingId)) {
                 if (slot.currentAmount < 0) {
                     this.recordInvariantViolation(
-                        `Building #${inv.buildingId} (${BuildingType[inv.buildingType]}) ` +
+                        `Building #${buildingId} (${BuildingType[buildingType as BuildingType]}) ` +
                             `has negative ${EMaterialType[slot.materialType]}: ${slot.currentAmount}`
                     );
                 }
@@ -715,14 +719,27 @@ export class Simulation {
     }
 
     injectOutput(buildingId: number, material: EMaterialType, amount: number) {
-        this.services.inventoryManager.depositOutput(buildingId, material, amount);
-        // Auto-configure StorageArea direction so tests work without explicit setup
-        if (this.services.inventoryManager.isStorageArea(buildingId)) {
+        const entity = this.state.getEntityOrThrow(buildingId, 'injectOutput');
+        const im = this.services.inventoryManager;
+
+        // StorageArea slots start as NO_MATERIAL with kind=Storage — claim one before depositing
+        if ((entity.subType as BuildingType) === BuildingType.StorageArea) {
+            const existing = im.findSlotWithSpace(buildingId, material, SlotKind.Storage);
+            if (!existing) {
+                const free = im.findSlotWithSpace(buildingId, EMaterialType.NO_MATERIAL, SlotKind.Storage);
+                if (!free)
+                    throw new Error(
+                        `injectOutput: no free slot on StorageArea ${buildingId} for ${EMaterialType[material]}`
+                    );
+                im.setSlotMaterial(free.slotId, material);
+            }
             const sfm = this.services.storageFilterManager;
             if (!sfm.getDirection(buildingId, material)) {
                 sfm.setDirection(buildingId, material, StorageDirection.Both);
             }
         }
+
+        im.depositOutput(buildingId, material, amount);
     }
 
     getOutput(buildingId: number, material: EMaterialType): number {

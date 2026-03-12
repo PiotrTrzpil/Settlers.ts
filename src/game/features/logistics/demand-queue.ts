@@ -5,6 +5,9 @@
  * Demands are added by scanners, consumed by the dispatcher, and automatically
  * re-created if the underlying need persists.
  *
+ * Demands are slot-agnostic — they express "building X needs material Y", not which
+ * specific slot. Slot assignment happens at job creation time (reservation layer).
+ *
  * NOT persisted — on game load, demand scanners run on first tick and recompute
  * all demands from inventory state + job store.
  */
@@ -78,6 +81,7 @@ export class DemandQueue {
 
     /**
      * Add a demand. Returns the created entry.
+     * Slot-agnostic — slot assignment happens at job creation time.
      */
     addDemand(buildingId: number, material: EMaterialType, amount: number, priority: DemandPriority): DemandEntry {
         const entry: DemandEntry = {

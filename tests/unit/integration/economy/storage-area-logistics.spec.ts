@@ -12,13 +12,14 @@
 import { describe, it, expect, afterEach } from 'vitest';
 import { BuildingType } from '@/game/entity';
 import { EMaterialType } from '@/game/economy';
+import { SlotKind } from '@/game/core/pile-kind';
 import { StorageDirection } from '@/game/systems/inventory/storage-filter-manager';
 import { createSimulation, createScenario, cleanupSimulation, type Simulation } from '../../helpers/test-simulation';
 import { installRealGameData } from '../../helpers/test-game-data';
 
-const hasRealData = installRealGameData();
+installRealGameData();
 
-describe.skipIf(!hasRealData)('StorageArea logistics (real game data)', { timeout: 30_000 }, () => {
+describe('StorageArea logistics (real game data)', { timeout: 30_000 }, () => {
     let sim: Simulation;
 
     afterEach(() => {
@@ -36,13 +37,23 @@ describe.skipIf(!hasRealData)('StorageArea logistics (real game data)', { timeou
         sim.runUntil(
             () => {
                 const site = sim.services.constructionSiteManager.getSite(s.siteId);
-                return !!site && site.materials.deliveredAmount > 0;
+                return (
+                    !!site &&
+                    sim.services.inventoryManager
+                        .getSlots(s.siteId)
+                        .filter(slot => slot.kind === SlotKind.Input)
+                        .some(slot => slot.currentAmount > 0)
+                );
             },
             { maxTicks: 50_000, label: 'material delivered from StorageArea' }
         );
 
-        const site = sim.services.constructionSiteManager.getSite(s.siteId)!;
-        expect(site.materials.deliveredAmount).toBeGreaterThan(0);
+        expect(
+            sim.services.inventoryManager
+                .getSlots(s.siteId)
+                .filter(slot => slot.kind === SlotKind.Input)
+                .some(slot => slot.currentAmount > 0)
+        ).toBe(true);
         expect(sim.errors).toHaveLength(0);
     });
 
@@ -58,8 +69,12 @@ describe.skipIf(!hasRealData)('StorageArea logistics (real game data)', { timeou
         // Run for a while — nothing should be delivered
         sim.tick(5000);
 
-        const site = sim.services.constructionSiteManager.getSite(s.siteId)!;
-        expect(site.materials.deliveredAmount).toBe(0);
+        expect(
+            sim.services.inventoryManager
+                .getSlots(s.siteId)
+                .filter(slot => slot.kind === SlotKind.Input)
+                .every(slot => slot.currentAmount === 0)
+        ).toBe(true);
     });
 
     it('disabled StorageArea does NOT supply construction site', () => {
@@ -73,8 +88,12 @@ describe.skipIf(!hasRealData)('StorageArea logistics (real game data)', { timeou
 
         sim.tick(5000);
 
-        const site = sim.services.constructionSiteManager.getSite(s.siteId)!;
-        expect(site.materials.deliveredAmount).toBe(0);
+        expect(
+            sim.services.inventoryManager
+                .getSlots(s.siteId)
+                .filter(slot => slot.kind === SlotKind.Input)
+                .every(slot => slot.currentAmount === 0)
+        ).toBe(true);
     });
 
     // ── Import ─────────────────────────────────────────────────────
@@ -103,8 +122,10 @@ describe.skipIf(!hasRealData)('StorageArea logistics (real game data)', { timeou
         const storageId = sim.placeBuilding(BuildingType.StorageArea);
 
         // Get total capacity — should exceed the cap
-        const inv = sim.services.inventoryManager.getInventory(storageId)!;
-        const totalCapacity = inv.outputSlots.reduce((sum, s) => sum + s.maxCapacity, 0);
+        const totalCapacity = sim.services.inventoryManager
+            .getSlots(storageId)
+            .filter(s => s.kind === SlotKind.Storage || s.kind === SlotKind.Output)
+            .reduce((sum, s) => sum + s.maxCapacity, 0);
         expect(totalCapacity).toBeGreaterThan(20);
 
         // Enable import for LOG
@@ -224,7 +245,11 @@ describe.skipIf(!hasRealData)('StorageArea logistics (real game data)', { timeou
         sim.services.storageFilterManager.setDirection(storageId, EMaterialType.BOARD, StorageDirection.Import);
 
         // Check capacity: should have space for BOARD
-        const space = sim.services.inventoryManager.getStorageOutputSpace(storageId, EMaterialType.BOARD);
+        const space = sim.services.inventoryManager
+            .getSlots(storageId)
+            .filter(s => s.kind === SlotKind.Storage || s.kind === SlotKind.Output)
+            .filter(s => s.materialType === EMaterialType.BOARD || s.materialType === EMaterialType.NO_MATERIAL)
+            .reduce((sum, s) => sum + s.maxCapacity - s.currentAmount, 0);
         expect(space).toBeGreaterThan(0);
     });
 
@@ -250,7 +275,11 @@ describe.skipIf(!hasRealData)('StorageArea logistics (real game data)', { timeou
 
         // Enable BOARD — should have remaining slots available
         sim.services.storageFilterManager.setDirection(storageId, EMaterialType.BOARD, StorageDirection.Import);
-        const space = sim.services.inventoryManager.getStorageOutputSpace(storageId, EMaterialType.BOARD);
+        const space = sim.services.inventoryManager
+            .getSlots(storageId)
+            .filter(s => s.kind === SlotKind.Storage || s.kind === SlotKind.Output)
+            .filter(s => s.materialType === EMaterialType.BOARD || s.materialType === EMaterialType.NO_MATERIAL)
+            .reduce((sum, s) => sum + s.maxCapacity - s.currentAmount, 0);
         expect(space).toBeGreaterThan(0);
     });
 
@@ -259,26 +288,30 @@ describe.skipIf(!hasRealData)('StorageArea logistics (real game data)', { timeou
         sim.placeBuilding(BuildingType.ResidenceSmall);
         const storageId = sim.placeBuilding(BuildingType.StorageArea);
 
-        // Deposit then fully withdraw LOG — slot is claimed but empty
-        sim.injectOutput(storageId, EMaterialType.LOG, 1);
-        sim.services.inventoryManager.withdrawOutput(storageId, EMaterialType.LOG, 1);
-
-        // Re-inject to claim a slot at amount=0 (by depositing and withdrawing again)
-        // Actually, withdrawOutput already freed it. Let's use depositOutput to claim a slot
-        // then drain it WITHOUT withdrawOutput to simulate the edge case.
-        // We need a slot with materialType=LOG, currentAmount=0.
-        // The simplest way: deposit 1, then manually set amount to 0.
+        // Claim a slot for LOG and deposit into it
         sim.injectOutput(storageId, EMaterialType.LOG, 1);
 
         // Get the inventory and find the LOG slot
-        const inv = sim.services.inventoryManager.getInventory(storageId)!;
-        const logSlot = inv.outputSlots.find(s => s.materialType === EMaterialType.LOG)!;
+        const logSlot = sim.services.inventoryManager
+            .getSlots(storageId)
+            .find(
+                s => (s.kind === SlotKind.Storage || s.kind === SlotKind.Output) && s.materialType === EMaterialType.LOG
+            )!;
         expect(logSlot).toBeDefined();
         expect(logSlot.currentAmount).toBe(1);
 
-        // Drain to 0 via withdraw (this frees the slot in normal flow)
+        // Drain to 0 via withdraw — slot stays claimed (materialType=LOG, amount=0)
         sim.services.inventoryManager.withdrawOutput(storageId, EMaterialType.LOG, 1);
-        // withdrawOutput already resets to NO_MATERIAL when drained to 0
+        expect(logSlot.currentAmount).toBe(0);
+        expect(logSlot.materialType).toBe(EMaterialType.LOG);
+
+        // Disallow LOG via command — system-handler frees empty-but-claimed slots
+        sim.execute({
+            type: 'set_storage_filter',
+            buildingId: storageId,
+            material: EMaterialType.LOG,
+            direction: null,
+        });
         expect(logSlot.materialType).toBe(EMaterialType.NO_MATERIAL);
     });
 
@@ -290,8 +323,9 @@ describe.skipIf(!hasRealData)('StorageArea logistics (real game data)', { timeou
         const storageId = sim.placeBuilding(BuildingType.StorageArea);
 
         // Fill ALL output slots with LOG (StorageArea has limited dynamic slots)
-        const inv = sim.services.inventoryManager.getInventory(storageId)!;
-        for (const slot of inv.outputSlots) {
+        for (const slot of sim.services.inventoryManager
+            .getSlots(storageId)
+            .filter(s => s.kind === SlotKind.Storage || s.kind === SlotKind.Output)) {
             slot.materialType = EMaterialType.LOG;
             slot.currentAmount = slot.maxCapacity;
         }

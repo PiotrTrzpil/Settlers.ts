@@ -18,7 +18,7 @@ import { isBuildingAvailableForRace } from '@/game/data/race-availability';
 import { getAllNeighbors } from '@/game/systems/hex-directions';
 import { setPathDebugHook } from '@/game/systems/pathfinding/astar';
 
-const hasRealData = installRealGameData();
+installRealGameData();
 
 const FUNCTIONAL_BUILDINGS: BuildingType[] = Object.values(BuildingType)
     .filter((v): v is BuildingType => typeof v === 'number')
@@ -38,7 +38,8 @@ function hasBuildingBlockData(race: Race, buildingType: BuildingType): boolean {
 
 /** Check one building's door is at the edge of the block area. Returns failure message or null. */
 function checkDoorAtEdge(race: Race, bt: BuildingType): string | null {
-    const bx = 60, by = 60;
+    const bx = 60,
+        by = 60;
     const label = `${BuildingType[bt]}/${Race[race]}`;
     const blockArea = getBuildingBlockArea(bx, by, bt, race);
     const blockKeys = new Set(blockArea.map(t => tileKey(t.x, t.y)));
@@ -132,7 +133,8 @@ function checkDoorPathfinding(sim: Simulation, race: Race, bt: BuildingType): st
 
     if (failure && VERBOSE) {
         const pathStr = path.map((t: TileCoord) => `(${t.x},${t.y})`).join('→');
-        failure += `\n  unit_start=(${unit.x},${unit.y}) door=(${door.x},${door.y})` +
+        failure +=
+            `\n  unit_start=(${unit.x},${unit.y}) door=(${door.x},${door.y})` +
             `\n  raw_path:      ${capturedRaw}` +
             `\n  smoothed_path: ${capturedSmoothed}` +
             `\n  path:          ${pathStr}`;
@@ -142,7 +144,7 @@ function checkDoorPathfinding(sim: Simulation, race: Race, bt: BuildingType): st
     return failure;
 }
 
-describe.skipIf(!hasRealData)('Door pathfinding — every building, every race', { timeout: 15000 }, () => {
+describe('Door pathfinding — every building, every race', { timeout: 15000 }, () => {
     // ─── Static: door is at edge of block area (has a non-blocked neighbor) ──
 
     it('every door is at the edge of the block area', () => {

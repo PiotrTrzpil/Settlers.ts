@@ -9,7 +9,7 @@ import { getBuildingDoorPos } from '@/game/data/game-data-access';
 import { Simulation, createScenario, cleanupSimulation } from '../../helpers/test-simulation';
 import { installRealGameData } from '../../helpers/test-game-data';
 
-const hasRealData = installRealGameData();
+installRealGameData();
 
 /** Check every visible unit — return violations where 2+ units share a tile. */
 function findTileViolations(sim: Simulation, tick: number): string[] {
@@ -34,7 +34,7 @@ function findTileViolations(sim: Simulation, tick: number): string[] {
     return violations;
 }
 
-describe.skipIf(!hasRealData)('Worker entering building with door occupant', { timeout: 30_000 }, () => {
+describe('Worker entering building with door occupant', { timeout: 30_000 }, () => {
     let sim: Simulation;
 
     afterEach(() => {
@@ -99,7 +99,7 @@ describe.skipIf(!hasRealData)('Worker entering building with door occupant', { t
     });
 });
 
-describe.skipIf(!hasRealData)('Tile sharing violations', { timeout: 60_000 }, () => {
+describe('Tile sharing violations', { timeout: 60_000 }, () => {
     let sim: Simulation;
 
     afterEach(() => {

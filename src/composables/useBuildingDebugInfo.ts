@@ -9,6 +9,7 @@ import type { Entity } from '@/game/entity';
 import { EntityType } from '@/game/entity';
 import { EMaterialType } from '@/game/economy';
 import { BuildingConstructionPhase } from '@/game/features/building-construction';
+import { SlotKind } from '@/game/core/pile-kind';
 import type { Game } from '@/game/game';
 
 export interface InventorySlotInfo {
@@ -69,7 +70,8 @@ export function useBuildingDebugInfo(
 
         const svc = game.value.services;
         const site = svc.constructionSiteManager.getSite(entity.id);
-        const inventory = svc.inventoryManager.getInventory(entity.id);
+        const slots = svc.inventoryManager.getSlots(entity.id);
+        const hasSlots = svc.inventoryManager.hasSlots(entity.id);
         const activeJobs = svc.logisticsDispatcher.jobStore.getJobsForBuilding(entity.id);
         const demands = [...svc.demandQueue.getAllDemands()].filter(d => d.buildingId === entity.id);
 
@@ -91,32 +93,33 @@ export function useBuildingDebugInfo(
         }
 
         // Material demand info — derive from demand queue and active jobs
-        const hasProduction = demands.length > 0 || activeJobs.length > 0 || inventory !== undefined;
+        const hasProduction = demands.length > 0 || activeJobs.length > 0 || hasSlots;
         const pendingInputs = demands.map(d => EMaterialType[d.materialType]);
 
         // Inventory info
-        const hasInventory = inventory !== undefined;
+        const hasInventory = hasSlots;
         const inventorySlots: InventorySlotInfo[] = [];
 
-        if (inventory) {
+        if (hasSlots) {
             const jobStore = svc.logisticsDispatcher.jobStore;
-            for (const slot of inventory.inputSlots) {
-                const reserved = jobStore.getReservedAmount(entity.id, slot.materialType);
-                inventorySlots.push({
-                    type: 'In',
-                    material: EMaterialType[slot.materialType],
-                    amount: slot.currentAmount,
-                    reserved,
-                });
-            }
-            for (const slot of inventory.outputSlots) {
-                const reserved = jobStore.getReservedAmount(entity.id, slot.materialType);
-                inventorySlots.push({
-                    type: 'Out',
-                    material: EMaterialType[slot.materialType],
-                    amount: slot.currentAmount,
-                    reserved,
-                });
+            for (const slot of slots) {
+                if (slot.kind === SlotKind.Input) {
+                    const reserved = jobStore.getReservedAmount(entity.id, slot.materialType);
+                    inventorySlots.push({
+                        type: 'In',
+                        material: EMaterialType[slot.materialType],
+                        amount: slot.currentAmount,
+                        reserved,
+                    });
+                } else if (slot.kind === SlotKind.Output || slot.kind === SlotKind.Storage) {
+                    const reserved = jobStore.getReservedAmount(entity.id, slot.materialType);
+                    inventorySlots.push({
+                        type: 'Out',
+                        material: EMaterialType[slot.materialType],
+                        amount: slot.currentAmount,
+                        reserved,
+                    });
+                }
             }
         }
 

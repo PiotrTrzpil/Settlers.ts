@@ -14,9 +14,9 @@ import { Simulation, createScenario, cleanupSimulation } from '../../helpers/tes
 import { installRealGameData } from '../../helpers/test-game-data';
 import { SlotKind } from '@/game/core/pile-kind';
 
-const hasRealData = installRealGameData();
+installRealGameData();
 
-describe.skipIf(!hasRealData)('Construction pile tracking (real game data)', { timeout: 60_000 }, () => {
+describe('Construction pile tracking (real game data)', { timeout: 60_000 }, () => {
     let sim: Simulation;
 
     afterEach(() => {
@@ -24,12 +24,12 @@ describe.skipIf(!hasRealData)('Construction pile tracking (real game data)', { t
         cleanupSimulation();
     });
 
-    /** Count construction-phase StackedPile entities of a given material type for a building. */
+    /** Count StackedPile entities of a given material type linked to a building. */
     function countConstructionPiles(buildingId: number, material: EMaterialType): number {
         return sim.state.entities.filter(e => {
             if (e.type !== EntityType.StackedPile || e.subType !== material) return false;
             const kind = sim.state.piles.getKind(e.id);
-            return kind?.kind === SlotKind.Construction && 'buildingId' in kind && kind.buildingId === buildingId;
+            return kind?.kind === SlotKind.Input && 'buildingId' in kind && kind.buildingId === buildingId;
         }).length;
     }
 

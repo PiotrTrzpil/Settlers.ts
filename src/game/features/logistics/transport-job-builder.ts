@@ -18,35 +18,39 @@ import { choreo } from '../../systems/choreo/choreo-builder';
 import type { JobState } from '../settler-tasks/types';
 import type { TransportJobRecord } from './transport-job-record';
 import type { GameState } from '../../game-state';
+import type { BuildingInventoryManager } from '../../systems/inventory/building-inventory';
 
 /**
- * Resolves pile positions for carrier transport (subset of BuildingPositionResolver).
+ * Resolves source pile positions for carrier transport (output pile at source building).
  * Injected at construction so the builder has no direct dependency on settler-tasks internals.
  */
 export interface TransportPositionResolver {
     getSourcePilePosition(buildingId: number, material: string): { x: number; y: number } | null;
-    getDestinationPilePosition(buildingId: number, material: string): { x: number; y: number } | null;
 }
 
 export interface TransportJobBuilderConfig {
     gameState: GameState;
     positionResolver: TransportPositionResolver;
+    inventoryManager: BuildingInventoryManager;
 }
 
 /**
  * Builds ChoreoJobState for carrier transport deliveries.
  *
- * Resolves pile positions (output pile at source, input pile at dest) via the
- * position resolver, falling back to building door. Builds the transport
- * choreography dynamically via ChoreoBuilder.
+ * Source pile position (pickup): resolved via positionResolver (output pile at source building).
+ * Destination pile position (delivery): read directly from inventoryManager.getSlot(slotId).position.
+ *
+ * Builds the transport choreography dynamically via ChoreoBuilder.
  */
 export class TransportJobBuilder {
     private readonly gameState: GameState;
     private readonly positionResolver: TransportPositionResolver;
+    private readonly inventoryManager: BuildingInventoryManager;
 
     constructor(config: TransportJobBuilderConfig) {
         this.gameState = config.gameState;
         this.positionResolver = config.positionResolver;
+        this.inventoryManager = config.inventoryManager;
     }
 
     /**
@@ -57,12 +61,18 @@ export class TransportJobBuilder {
         const materialName = EMaterialType[record.material];
         // Source building's output pile = where the carrier picks up
         const sourcePos = this.resolvePilePos(
-            record.sourceBuilding, this.positionResolver.getDestinationPilePosition(record.sourceBuilding, materialName)
+            record.sourceBuilding,
+            this.positionResolver.getSourcePilePosition(record.sourceBuilding, materialName)
         );
-        // Dest building's input pile = where the carrier delivers
-        const destPos = this.resolvePilePos(
-            record.destBuilding, this.positionResolver.getSourcePilePosition(record.destBuilding, materialName)
-        );
+        // Destination slot's position comes directly from the PileSlot — no resolver indirection
+        const destSlot = this.inventoryManager.getSlot(record.slotId);
+        if (!destSlot) {
+            throw new Error(
+                `TransportJobBuilder.build: slot ${record.slotId} not found for job ${record.id} ` +
+                    `(dest building ${record.destBuilding}, material ${materialName})`
+            );
+        }
+        const destPos = destSlot.position;
 
         const job = choreo('JOB_CARRIER_TRANSPORT_GOOD')
             .addNode(ChoreoTaskType.TRANSPORT_GO_TO_SOURCE, { jobPart: 'C_WALK' })
@@ -81,16 +91,14 @@ export class TransportJobBuilder {
             amount: record.amount,
             sourcePos,
             destPos,
+            slotId: record.slotId,
         };
 
         return job;
     }
 
-    /** Resolve a pile position, falling back to building door or entity position. */
-    private resolvePilePos(
-        buildingId: number,
-        pile: { x: number; y: number } | null
-    ): { x: number; y: number } {
+    /** Resolve a source pile position, falling back to building door or entity position. */
+    private resolvePilePos(buildingId: number, pile: { x: number; y: number } | null): { x: number; y: number } {
         if (pile) return pile;
         const entity = this.gameState.getEntityOrThrow(buildingId, 'transport building/pile');
         // Free piles: use entity position directly (not a building, no door offset)

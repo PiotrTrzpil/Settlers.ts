@@ -65,10 +65,6 @@ import { BarracksFeature, type BarracksExports } from './features/barracks/barra
 import { TowerGarrisonFeature, type TowerGarrisonExports } from './features/tower-garrison';
 import { SettlerLocationFeature } from './features/settler-location';
 import type { SettlerLocationExports } from './features/settler-location/types';
-import {
-    InventoryPileSyncFeature,
-    type InventoryPileSyncExports,
-} from './features/inventory/inventory-pile-sync-feature';
 import { FreePilesFeature } from './features/inventory/free-piles-feature';
 import { TerritoryFeature, type TerritoryExports } from './features/territory/territory-feature';
 import { VictoryConditionsFeature, type VictoryConditionsExports } from './features/victory-conditions';
@@ -77,13 +73,8 @@ import { AiPlayerFeature, type AiPlayerExports } from './features/ai-player';
 
 // Re-export types that external code imports transitively via GameServices
 import type { CarrierRegistry } from './features/carriers';
-import {
-    BuildingInventoryManager,
-    PileRegistry,
-    StorageFilterManager,
-    type InventoryChangeCallback,
-} from './systems/inventory';
-import type { InventoryPileSync } from './features/inventory';
+import { BuildingInventoryManager, StorageFilterManager } from './systems/inventory';
+import type { BuildingPileRegistry } from './systems/inventory/building-pile-registry';
 import type { DemandQueue, TransportJobStore, LogisticsDispatcher } from './features/logistics';
 import type { BuildingOverlayManager, OverlayRegistry } from './features/building-overlays';
 import type {
@@ -137,7 +128,7 @@ export class GameServices {
     public readonly victorySystem: VictoryConditionsSystem;
     public readonly unitTransformer: UnitTransformer;
     public readonly recruitSystem: RecruitSystem;
-    public readonly inventoryPileSync: InventoryPileSync | null;
+    public readonly pileRegistry: BuildingPileRegistry | null;
     public readonly aiSystem: AiPlayerSystem;
     public readonly persistenceRegistry: PersistenceRegistry;
 
@@ -183,26 +174,9 @@ export class GameServices {
 
         // 2. Inventory system — instantiated directly (not a feature).
         this.inventoryManager = new BuildingInventoryManager();
-        const pileSlotRegistry = new PileRegistry();
         this.storageFilterManager = new StorageFilterManager();
 
-        // Bridge inventory changes to EventBus for consumers (debug panel, UI)
-        const onInventoryChanged: InventoryChangeCallback = (
-            buildingId,
-            materialType,
-            slotType,
-            previousAmount,
-            newAmount
-        ) => {
-            eventBus.emit('inventory:changed', {
-                buildingId,
-                materialType,
-                slotType,
-                previousAmount,
-                newAmount,
-            });
-        };
-        this.inventoryManager.onChange(onInventoryChanged);
+        // inventory:changed events are now emitted directly by BuildingInventoryManager via EventBus.
 
         // 3. Feature registry — loads all game features in dependency order.
         this.featureRegistry = new FeatureRegistry({
@@ -220,7 +194,6 @@ export class GameServices {
             'inventory',
             {
                 inventoryManager: this.inventoryManager,
-                pileRegistry: pileSlotRegistry,
                 storageFilterManager: this.storageFilterManager,
             },
             [{ persistable: this.inventoryManager, after: ['constructionSites'] }, this.storageFilterManager]
@@ -292,7 +265,6 @@ export class GameServices {
             VictoryConditionsFeature,
             // AI — depends on combat, territory, victory-conditions, inventory
             AiPlayerFeature,
-            InventoryPileSyncFeature,
             FreePilesFeature,
         ]);
 
@@ -325,8 +297,7 @@ export class GameServices {
         this.unitTransformer = arExports.unitTransformer;
         this.aiSystem = this.feat<AiPlayerExports>('ai-player').aiSystem;
         this.recruitSystem = arExports.recruitSystem;
-        const pileSyncExports = this.feat<InventoryPileSyncExports>('inventory-pile-sync');
-        this.inventoryPileSync = pileSyncExports.inventoryPileSync;
+        this.pileRegistry = constrExports.pileRegistry;
 
         // 5. Persistence registry — register feature-declared persistables first, then manual ones.
         this.persistenceRegistry = new PersistenceRegistry();
@@ -337,8 +308,8 @@ export class GameServices {
         this.persistenceRegistry.register(gameState.piles);
 
         // 6. Wire pile registry to settler-tasks (cross-feature, conditional).
-        if (pileSyncExports.pileRegistry) {
-            this.feat<SettlerTaskExports>('settler-tasks').setPileRegistry(pileSyncExports.pileRegistry);
+        if (constrExports.pileRegistry) {
+            this.feat<SettlerTaskExports>('settler-tasks').setPileRegistry(constrExports.pileRegistry);
         }
 
         // 7. Core entity lifecycle — too small to be a feature.
@@ -355,7 +326,7 @@ export class GameServices {
 
         // 8. Late inventory removal — MUST happen after logistics cleanup.
         this.cleanupRegistry.onEntityRemoved(
-            this.inventoryManager.destroyBuildingInventory.bind(this.inventoryManager),
+            this.inventoryManager.destroySlots.bind(this.inventoryManager),
             CLEANUP_PRIORITY.LATE
         );
 

@@ -36,7 +36,7 @@ function createMockInputContext() {
             pointer: { value: { x: 0, y: 0, tileX: 10, tileY: 10 } },
             keys: { value: new Set() },
             drag: { value: null },
-        } as any, // eslint-disable-line @typescript-eslint/no-explicit-any -- minimal InputState stub
+        } as any,
         currentTile: { x: 10, y: 10 },
         getModeData: <T>() => modeData as T,
         setModeData: <T>(data: T) => {

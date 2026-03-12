@@ -16,6 +16,7 @@ import type { MaterialTransfer } from '../material-transfer';
 import type { Command, CommandResult } from '../../commands';
 import type { TransportJobRecord } from '../logistics/transport-job-record';
 import type { TaskResult, ChoreoJobState, ChoreoNode } from '../../systems/choreo';
+import type { ConstructionSiteManager } from '../building-construction/construction-site-manager';
 
 // Re-export everything from systems/choreo so existing importers don't need to change paths.
 export {
@@ -125,6 +126,8 @@ export interface InventoryExecutorContext extends InventoryContext {
     materialTransfer: MaterialTransfer;
     eventBus: EventBus;
     transportJobOps: TransportJobOps;
+    /** Used by TRANSPORT_DELIVER to emit construction:materialDelivered on construction sites. */
+    constructionSiteManager: ConstructionSiteManager;
 }
 
 /**

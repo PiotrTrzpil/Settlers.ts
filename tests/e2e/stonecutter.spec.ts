@@ -65,7 +65,9 @@ test.describe('Stonecutter Production', { tag: '@slow' }, () => {
                     const stones = game.state.entities.filter((e: any) => e.type === 3 && e.subType === 103); // ResourceStone
                     const buildings = game.state.entities.filter((e: any) => e.type === 2); // Building
                     const stoneStats = game.services?.stoneSystem?.getStats?.() ?? null;
-                    const inv = game.services?.inventoryManager?.getInventory?.(scId) ?? null;
+                    const invSlots: any[] = game.services?.inventoryManager?.hasSlots?.(scId)
+                        ? (game.services.inventoryManager.getSlots(scId) as any[])
+                        : [];
                     const taskRuntimes = game.services?.settlerTaskSystem?.getDebugInfo?.() ?? null;
                     // Check game data: try an operation that requires it
                     let gameDataStatus: string;
@@ -101,9 +103,12 @@ test.describe('Stonecutter Production', { tag: '@slow' }, () => {
                         })),
                         stoneCount: stones.length,
                         stoneStats,
-                        invOutput: inv
-                            ? inv.outputSlots.map((s: any) => ({ mat: s.materialType, amt: s.currentAmount }))
-                            : null,
+                        invOutput:
+                            invSlots.length > 0
+                                ? invSlots
+                                      .filter((s: any) => s.kind === 'output' || s.kind === 'storage')
+                                      .map((s: any) => ({ mat: s.materialType, amt: s.currentAmount }))
+                                : null,
                         taskRuntimes,
                         gameDataStatus,
                     };

@@ -128,7 +128,7 @@ describe('PileRegistry', () => {
         const kindMap = new Map<number, PileKind>([
             [1, { kind: SlotKind.Input, buildingId: 10 }],
             [2, { kind: SlotKind.Output, buildingId: 10 }],
-            [3, { kind: SlotKind.Construction, buildingId: 20 }],
+            [3, { kind: SlotKind.Input, buildingId: 20 }],
             [5, { kind: SlotKind.Free }],
         ]);
         const resources = makeMockResources(kindMap);
@@ -141,7 +141,7 @@ describe('PileRegistry', () => {
         // New entries present
         expect(registry.getEntityId(makeKey(10, EMaterialType.LOG, SlotKind.Input))).toBe(1);
         expect(registry.getEntityId(makeKey(10, EMaterialType.STONE, SlotKind.Output))).toBe(2);
-        expect(registry.getEntityId(makeKey(20, EMaterialType.BOARD, SlotKind.Construction))).toBe(3);
+        expect(registry.getEntityId(makeKey(20, EMaterialType.BOARD, SlotKind.Input))).toBe(3);
 
         expect(registry.getLinkedEntities(10).size).toBe(2);
         expect(registry.getLinkedEntities(20).size).toBe(1);

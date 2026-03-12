@@ -1,12 +1,13 @@
 /**
  * Pile System Integration Tests
  *
- * End-to-end verification of the InventoryPileSync lifecycle: pile entities are
- * created, updated, and removed in response to inventory changes, building
- * completion, and building removal.
+ * End-to-end verification of pile entity lifecycle: pile entities are created,
+ * updated, and removed in response to inventory changes, building completion,
+ * and building removal. Pile entity management is handled inline by
+ * BuildingInventoryManager.
  *
  * All tests require real game XML data (buildingInfo.xml pile positions) and are
- * wrapped in describe.skipIf(!hasRealData) to skip cleanly in CI or local
+ * wrapped in describe to skip cleanly in CI or local
  * environments without game assets.
  */
 
@@ -16,11 +17,11 @@ import { installRealGameData } from '../../helpers/test-game-data';
 import { BuildingType, EntityType } from '@/game/entity';
 import { EMaterialType } from '@/game/economy/material-type';
 
-const hasRealData = installRealGameData();
+installRealGameData();
 
-// ─── Group 1: InventoryPileSync lifecycle ────────────────────────────────────
+// ─── Group 1: Pile entity lifecycle ──────────────────────────────────────────
 
-describe.skipIf(!hasRealData)('Pile System Integration', { timeout: 10_000 }, () => {
+describe('Pile System Integration', { timeout: 10_000 }, () => {
     let sim: Simulation;
 
     afterEach(() => {
@@ -28,7 +29,7 @@ describe.skipIf(!hasRealData)('Pile System Integration', { timeout: 10_000 }, ()
         cleanupSimulation();
     });
 
-    describe('InventoryPileSync lifecycle', () => {
+    describe('Pile entity lifecycle', () => {
         it('quantity increase on existing pile → entity count unchanged (no duplicate spawn)', () => {
             sim = createSimulation();
             const woodcutterId = sim.placeBuilding(BuildingType.WoodcutterHut);
@@ -104,9 +105,8 @@ describe.skipIf(!hasRealData)('Pile System Integration', { timeout: 10_000 }, ()
             expect(unique.size).toBe(positions.length);
         });
 
-        it('complete construction → all construction pile entities removed', () => {
+        it('consuming all construction materials → pile entities removed via normal inventory change', () => {
             sim = createSimulation();
-            // Place building in construction state
             const buildingId = sim.placeBuilding(BuildingType.WoodcutterHut, 0, false);
 
             // Deposit a construction material so a pile appears
@@ -114,14 +114,9 @@ describe.skipIf(!hasRealData)('Pile System Integration', { timeout: 10_000 }, ()
             const pilesBefore = sim.state.entities.filter(e => e.type === EntityType.StackedPile);
             expect(pilesBefore.length).toBeGreaterThanOrEqual(1);
 
-            // Emit building:completed — InventoryPileSync.onBuildingCompleted clears construction piles
-            sim.eventBus.emit('building:completed', {
-                buildingId,
-                buildingType: BuildingType.WoodcutterHut,
-                race: sim.state.getEntityOrThrow(buildingId, 'test').race,
-            });
+            // Builder consumes the material — pile should disappear via onInventoryChange
+            sim.services.inventoryManager.withdrawInput(buildingId, EMaterialType.BOARD, 1);
 
-            // All construction piles should be gone
             const pilesAfter = sim.state.entities.filter(e => e.type === EntityType.StackedPile);
             expect(pilesAfter.length).toBe(0);
         });

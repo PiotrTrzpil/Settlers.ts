@@ -50,7 +50,7 @@ export function getAvailableSupplies(
     const supplies: ResourceSupply[] = [];
 
     // Get all buildings that have this material in their output
-    const buildingIds = inventoryManager.getBuildingsWithOutput(materialType, minAmount);
+    const buildingIds = inventoryManager.getSourcesWithOutput(materialType, minAmount);
 
     for (const buildingId of buildingIds) {
         // Filter by player if specified
@@ -87,7 +87,7 @@ export function hasAnySupply(
     materialType: EMaterialType,
     minAmount: number = 1
 ): boolean {
-    const buildingIds = inventoryManager.getBuildingsWithOutput(materialType, minAmount);
+    const buildingIds = inventoryManager.getSourcesWithOutput(materialType, minAmount);
     return buildingIds.length > 0;
 }
 
@@ -99,7 +99,7 @@ export function hasAnySupply(
  * @returns Total amount available
  */
 export function getTotalSupply(inventoryManager: BuildingInventoryManager, materialType: EMaterialType): number {
-    const buildingIds = inventoryManager.getBuildingsWithOutput(materialType, 1);
+    const buildingIds = inventoryManager.getSourcesWithOutput(materialType, 1);
     let total = 0;
 
     for (const buildingId of buildingIds) {

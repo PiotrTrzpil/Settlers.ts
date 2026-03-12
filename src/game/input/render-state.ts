@@ -130,7 +130,7 @@ export interface PathPreview {
 /**
  * Union type for all preview types.
  */
-// eslint-disable-next-line @typescript-eslint/no-deprecated, sonarjs/deprecation -- union includes deprecated types for backward compat
+// eslint-disable-next-line @typescript-eslint/no-deprecated -- union includes deprecated types for backward compat
 export type ModePreview = PlacementPreview | BuildingPreview | SelectionBox | PathPreview | ResourcePreview;
 
 /**

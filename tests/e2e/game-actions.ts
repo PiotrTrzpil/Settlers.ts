@@ -477,18 +477,18 @@ export async function getBuildingInventory(page: Page, buildingId: number): Prom
     return page.evaluate(id => {
         const game = window.__settlers__?.game;
         if (!game?.services?.inventoryManager) return null;
-        const inv = game.services.inventoryManager.getInventory(id);
-        if (!inv) return null;
+        if (!game.services.inventoryManager.hasSlots(id)) return null;
+        const slots: any[] = game.services.inventoryManager.getSlots(id) as any[];
         const mapSlot = (s: any) => ({
             materialType: s.materialType,
             currentAmount: s.currentAmount,
             maxCapacity: s.maxCapacity,
-            reservedAmount: s.reservedAmount,
+            reservedAmount: s.reservedAmount ?? 0,
         });
         return {
             buildingId: id,
-            inputSlots: inv.inputSlots.map(mapSlot),
-            outputSlots: inv.outputSlots.map(mapSlot),
+            inputSlots: slots.filter((s: any) => s.kind === 'input').map(mapSlot),
+            outputSlots: slots.filter((s: any) => s.kind === 'output' || s.kind === 'storage').map(mapSlot),
         };
     }, buildingId);
 }

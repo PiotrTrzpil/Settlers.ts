@@ -372,11 +372,11 @@ export function gatherProductionBuildings(
     const result: ProductionBuildingSummary[] = [];
 
     for (const entity of gameState.entityIndex.ofTypeAndPlayer(EntityType.Building, player)) {
-        const inv = inventoryManager.getInventory(entity.id);
-        if (!inv) continue;
+        if (!inventoryManager.hasSlots(entity.id)) continue;
+        const allSlots = inventoryManager.getSlots(entity.id);
 
-        const inputs = collectSlots(inv.inputSlots);
-        const outputs = collectSlots(inv.outputSlots);
+        const inputs = collectSlots(allSlots.filter(s => s.kind === SlotKind.Input));
+        const outputs = collectSlots(allSlots.filter(s => s.kind === SlotKind.Output || s.kind === SlotKind.Storage));
         if (inputs.length === 0 && outputs.length === 0) continue;
 
         result.push({
@@ -529,9 +529,14 @@ function scanBuildings(gameState: GameState, inventoryManager: BuildingInventory
     const fullOutputBuildings: number[] = [];
 
     for (const entity of gameState.entityIndex.ofTypeAndPlayer(EntityType.Building, player)) {
-        const inv = inventoryManager.getInventory(entity.id);
-        if (!inv) continue;
-        const outputs = inv.outputSlots.filter(s => s.materialType !== EMaterialType.NO_MATERIAL);
+        if (!inventoryManager.hasSlots(entity.id)) continue;
+        const outputs = inventoryManager
+            .getSlots(entity.id)
+            .filter(
+                s =>
+                    (s.kind === SlotKind.Output || s.kind === SlotKind.Storage) &&
+                    s.materialType !== EMaterialType.NO_MATERIAL
+            );
         if (outputs.length > 0 && outputs.every(s => s.currentAmount >= s.maxCapacity)) {
             fullOutputBuildings.push(entity.id);
         }

@@ -10,7 +10,7 @@
  * the TransportJob lifecycle, material transfer, and carrier events.
  */
 
-import { type Entity } from '../../../entity';
+import { type Entity, clearCarrying } from '../../../entity';
 import { EMaterialType } from '../../../economy';
 import { createLogger } from '@/utilities/logger';
 import { TaskResult, framesToSeconds, tickDuration } from '../../../systems/choreo/types';
@@ -141,9 +141,41 @@ export function executeTransportPickup(
 }
 
 /**
+ * Deposit material from the carrier into the targeted slot and handle overflow.
+ *
+ * Calls `inventoryManager.deposit(slotId, amount)` using the stable slot ID from transportData.
+ * If the slot cannot fit all material (overflow), the remainder is dropped as
+ * a free pile via `materialTransfer.drop` after adjusting entity.carrying.
+ *
+ * Returns the amount successfully deposited.
+ */
+function depositIntoSlot(settler: Entity, slotId: number, ctx: InventoryExecutorContext): number {
+    if (!settler.carrying) {
+        throw new Error(`TransportExecutors.depositIntoSlot: settler ${settler.id} is not carrying anything`);
+    }
+
+    const { material, amount } = settler.carrying;
+    const deposited = ctx.inventoryManager.deposit(slotId, amount);
+
+    const overflow = amount - deposited;
+    if (overflow > 0) {
+        // Adjust carrying amount to the overflow so materialTransfer.drop creates
+        // a free pile with the correct quantity. clearCarrying is called inside drop.
+        settler.carrying = { material, amount: overflow };
+        ctx.materialTransfer.drop(settler.id);
+    } else {
+        clearCarrying(settler);
+    }
+
+    return deposited;
+}
+
+/**
  * TRANSPORT_DELIVER — deposit material at destination building.
  *
- * First tick: validates job, deposits via materialTransfer, fulfills request.
+ * First tick: validates job, deposits via inventoryManager.deposit(slotId) into the
+ * targeted slot from transportData, fulfills the transport job. Emits
+ * construction:materialDelivered when delivering to a construction site.
  * Subsequent ticks: plays dropoff animation.
  */
 export function executeTransportDeliver(
@@ -157,7 +189,7 @@ export function executeTransportDeliver(
         job.workStarted = true;
 
         const td = requireTransportData(job, 'TRANSPORT_DELIVER');
-        const { jobId, destBuildingId, material } = td;
+        const { jobId, destBuildingId, material, slotId } = td;
 
         if (!ctx.transportJobOps.getJob(jobId)) {
             log.debug(`Carrier ${settler.id}: transport job ${jobId} no longer exists, dropping material`);
@@ -173,9 +205,7 @@ export function executeTransportDeliver(
         }
 
         const amount = settler.carrying.amount;
-        // StorageArea has no input slots — deliver to output (dynamic slot assignment)
-        const slotType = ctx.inventoryManager.isStorageArea(destBuildingId) ? 'output' : 'input';
-        const deposited = ctx.materialTransfer.deliver(settler.id, destBuildingId, slotType);
+        const deposited = depositIntoSlot(settler, slotId, ctx);
         ctx.transportJobOps.deliver(jobId);
 
         const overflow = amount - deposited;
@@ -204,6 +234,15 @@ export function executeTransportDeliver(
             toBuilding: destBuildingId,
             overflow,
         });
+
+        // Emit construction delivery event so the demand system knows to re-check
+        // remaining materials. BuildingLifecycleHandler no longer bridges inventory:changed.
+        if (deposited > 0 && ctx.constructionSiteManager.getSite(destBuildingId)) {
+            ctx.eventBus.emit('construction:materialDelivered', {
+                buildingId: destBuildingId,
+                material,
+            });
+        }
     }
 
     return tickDuration(job, dt, resolveInventoryDuration(node));

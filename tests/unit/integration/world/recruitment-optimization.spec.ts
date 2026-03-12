@@ -21,7 +21,7 @@ import { EMaterialType } from '@/game/economy/material-type';
 import { BuildingType } from '@/game/buildings/building-type';
 import { Race } from '@/game/core/race';
 
-const hasRealData = installRealGameData();
+installRealGameData();
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
@@ -49,7 +49,7 @@ function diagnose(sim: Simulation, unitType: UnitType): string {
 
 // ─── tests ───────────────────────────────────────────────────────────────────
 
-describe.skipIf(!hasRealData)('Recruitment optimization (integration)', { timeout: 30_000 }, () => {
+describe('Recruitment optimization (integration)', { timeout: 30_000 }, () => {
     let sim: Simulation;
 
     afterEach(() => {

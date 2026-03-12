@@ -16,6 +16,7 @@ export interface SerializedTransportData {
     amount: number;
     sourcePos: { x: number; y: number };
     destPos: { x: number; y: number };
+    slotId: number;
 }
 
 export interface SerializedChoreoJob {
@@ -53,9 +54,9 @@ export function serializeRuntime(entityId: number, runtime: UnitRuntime): Serial
         lastDirection: runtime.lastDirection,
         homeAssignment: runtime.homeAssignment
             ? {
-                buildingId: runtime.homeAssignment.buildingId,
-                hasVisited: runtime.homeAssignment.hasVisited,
-            }
+                  buildingId: runtime.homeAssignment.buildingId,
+                  hasVisited: runtime.homeAssignment.hasVisited,
+              }
             : null,
         job: serializedJob,
     };
@@ -83,6 +84,7 @@ export function serializeJob(job: ChoreoJobState): SerializedChoreoJob {
             amount: job.transportData.amount,
             sourcePos: { x: job.transportData.sourcePos.x, y: job.transportData.sourcePos.y },
             destPos: { x: job.transportData.destPos.x, y: job.transportData.destPos.y },
+            slotId: job.transportData.slotId,
         };
     }
     return result;
@@ -97,6 +99,7 @@ function deserializeTransportData(data: SerializedTransportData): TransportData 
         amount: data.amount,
         sourcePos: { x: data.sourcePos.x, y: data.sourcePos.y },
         destPos: { x: data.destPos.x, y: data.destPos.y },
+        slotId: data.slotId,
     };
 }
 

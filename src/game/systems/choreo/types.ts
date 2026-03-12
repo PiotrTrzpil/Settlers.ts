@@ -163,6 +163,8 @@ export interface TransportData {
     sourcePos: { x: number; y: number };
     /** Pre-resolved destination position (input pile / door for delivery). */
     destPos: { x: number; y: number };
+    /** Target PileSlot ID at the destination (stable across inventory lifecycle). */
+    slotId: number;
 }
 
 // ─────────────────────────────────────────────────────────────

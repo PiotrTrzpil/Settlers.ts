@@ -13,6 +13,8 @@ import { EMaterialType } from '@/game/economy';
 import type { BuildingInventoryManager } from '@/game/features/inventory';
 import { EventBus } from '@/game/event-bus';
 import type { TransportJobDeps } from '@/game/features/logistics/transport-job-service';
+import { EntityType } from '@/game/entity';
+import type { GameState } from '@/game/game-state';
 
 // ─── Minimal BuildingInventoryManager stub ──────────────────────────
 
@@ -39,9 +41,22 @@ function createInventoryStub(outputAmount = 5) {
             const slot = getOrCreate(buildingId, material);
             slot.current -= amount;
         },
-        getBuildingsWithOutput: () => [],
-        getInventory: () => undefined,
+        getSourcesWithOutput: () => [],
+        findSlot: (_buildingId: number, _material: EMaterialType) => ({ id: 1 }),
+        findSlotWithSpace: (_buildingId: number, _material: EMaterialType) => ({
+            slot: { id: 1, currentAmount: 0, maxCapacity: 8 },
+            slotId: 1,
+        }),
+        setSlotMaterial: () => {},
         _slots: slots,
+    };
+}
+
+/** Minimal GameState stub — destination buildings are regular (non-storage) buildings. */
+function createGameStateStub() {
+    return {
+        getEntity: (id: number) => ({ id, type: EntityType.Building, subType: 0 }),
+        getEntityOrThrow: (id: number) => ({ id, type: EntityType.Building, subType: 0 }),
     };
 }
 
@@ -70,6 +85,7 @@ describe('TransportJobService', () => {
             demandQueue,
             eventBus,
             inventoryManager: inventoryManager as unknown as BuildingInventoryManager,
+            gameState: createGameStateStub() as unknown as GameState,
         };
     });
 
@@ -111,6 +127,7 @@ describe('TransportJobService', () => {
                 demandQueue,
                 eventBus,
                 inventoryManager: inventoryManager as unknown as BuildingInventoryManager,
+                gameState: createGameStateStub() as unknown as GameState,
             };
 
             const demand = addDemand();
@@ -131,6 +148,7 @@ describe('TransportJobService', () => {
                 material: MATERIAL,
                 amount: 5,
                 carrierId: 99,
+                slotId: 0,
                 phase: TransportPhase.Reserved,
                 createdAt: 0,
             };

@@ -108,6 +108,7 @@ export class CarrierAssigner {
             demandQueue: config.demandQueue,
             eventBus: config.eventBus,
             inventoryManager: config.inventoryManager,
+            gameState: config.gameState,
         };
         this.carrierFilter = config.carrierFilter ?? null;
     }

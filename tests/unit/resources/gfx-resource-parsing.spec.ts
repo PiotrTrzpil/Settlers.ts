@@ -17,7 +17,6 @@ import { rgb565ToRgba, TEAM_COLOR_PALETTES, FILE_TEAM_COUNT } from '@/resources/
 // Polyfill ImageData for Node.js test environment
 beforeAll(() => {
     if (typeof globalThis.ImageData === 'undefined') {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         (globalThis as any).ImageData = class ImageData {
             readonly width: number;
             readonly height: number;

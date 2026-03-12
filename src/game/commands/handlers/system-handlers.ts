@@ -3,10 +3,12 @@ import type { GameState } from '../../game-state';
 import type { TerrainData } from '../../terrain';
 import type { EventBus } from '../../event-bus';
 import { BuildingType } from '../../buildings/types';
+import { EMaterialType } from '../../economy';
 import type { TreeSystem } from '../../features/trees';
 import type { CropSystem } from '../../features/crops';
 import type { StorageFilterManager } from '../../systems/inventory/storage-filter-manager';
 import type { BuildingInventoryManager } from '../../systems/inventory/building-inventory';
+import { SlotKind } from '../../core/pile-kind';
 import type {
     PlacePileCommand,
     SpawnPileCommand,
@@ -135,8 +137,13 @@ export function executeSetStorageFilter(deps: SetStorageFilterDeps, cmd: SetStor
         deps.storageFilterManager.setDirection(cmd.buildingId, cmd.material, cmd.direction);
     } else {
         deps.storageFilterManager.disallow(cmd.buildingId, cmd.material);
-        // Free empty output slots so they can be reused by other materials
-        deps.inventoryManager.freeEmptyStorageSlots(cmd.buildingId, cmd.material);
+        // Release empty storage slots so they can be reused by other materials
+        const slots = deps.inventoryManager.getSlots(cmd.buildingId);
+        for (const slot of slots) {
+            if (slot.kind === SlotKind.Storage && slot.materialType === cmd.material && slot.currentAmount === 0) {
+                deps.inventoryManager.setSlotMaterial(slot.id, EMaterialType.NO_MATERIAL);
+            }
+        }
     }
     deps.eventBus.emit('storage:directionChanged', { buildingId: cmd.buildingId, materialType: cmd.material });
     return COMMAND_OK;

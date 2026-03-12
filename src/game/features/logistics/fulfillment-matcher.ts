@@ -7,7 +7,7 @@
 
 import { hexDistance } from '../../systems/hex-directions';
 import type { GameState } from '../../game-state';
-import { EntityType } from '../../entity';
+import { BuildingType, EntityType } from '../../entity';
 import type { EMaterialType } from '../../economy/material-type';
 import { getAvailableSupplies } from './resource-supply';
 import type { TransportJobStore } from './transport-job-store';
@@ -107,7 +107,8 @@ function* iterateMatchCandidates(
     }
 
     const destIsStorageBuilding =
-        destBuilding.type === EntityType.Building && inventoryManager.isStorageArea(request.buildingId);
+        destBuilding.type === EntityType.Building &&
+        (destBuilding.subType as BuildingType) === BuildingType.StorageArea;
 
     const supplies = getAvailableSupplies(gameState, inventoryManager, request.materialType, {
         playerId,
@@ -126,7 +127,8 @@ function* iterateMatchCandidates(
 
         // Only apply storage direction filtering to actual StorageArea buildings (not free piles)
         const sourceIsStorage =
-            sourceBuilding.type === EntityType.Building && inventoryManager.isStorageArea(supply.buildingId);
+            sourceBuilding.type === EntityType.Building &&
+            (sourceBuilding.subType as BuildingType) === BuildingType.StorageArea;
         const sourceAllowed =
             !sourceIsStorage ||
             isStorageSourceAllowed(
@@ -259,7 +261,7 @@ export function canPotentiallyFulfill(
     }
 
     // Check there's any supply
-    const buildingIds = inventoryManager.getBuildingsWithOutput(request.materialType, 1);
+    const buildingIds = inventoryManager.getSourcesWithOutput(request.materialType, 1);
 
     // Need at least one supply that isn't the destination
     return buildingIds.some((id: number) => id !== request.buildingId);

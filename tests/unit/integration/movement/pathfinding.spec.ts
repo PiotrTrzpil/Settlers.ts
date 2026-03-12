@@ -57,7 +57,7 @@ import { hexDistance, GRID_DELTAS } from '@/game/systems/hex-directions';
 import { Race } from '@/game/core/race';
 import { getBuildingDoorPos } from '@/game/data/game-data-access';
 
-const hasRealData = installRealGameData();
+installRealGameData();
 
 // ─── Assertion helpers ──────────────────────────────────────────────
 
@@ -79,7 +79,7 @@ function assertAllPassable(visited: TileCoord[], groundType: Uint8Array, mapWidt
 
 // ─── Tests ──────────────────────────────────────────────────────────
 
-describe.skipIf(!hasRealData)('Movement & Pathfinding simulation (real game data)', { timeout: 5000 }, () => {
+describe('Movement & Pathfinding simulation (real game data)', { timeout: 5000 }, () => {
     let sim: Simulation;
 
     afterEach(() => {

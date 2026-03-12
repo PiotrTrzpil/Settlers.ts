@@ -79,7 +79,7 @@ export class MatchDiagnostics {
         const destBuilding = this.gameState.getEntity(request.buildingId);
         if (!destBuilding) return;
 
-        const supplies = this.inventoryManager.getBuildingsWithOutput(request.materialType, 1);
+        const supplies = this.inventoryManager.getSourcesWithOutput(request.materialType, 1);
         const otherSupplies = supplies.filter((id: number) => id !== request.buildingId);
         if (otherSupplies.length > 0) {
             log.debug(

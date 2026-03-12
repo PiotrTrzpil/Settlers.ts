@@ -20,7 +20,7 @@ import { EntityType, UnitType } from '@/game/entity';
 import { EMaterialType } from '@/game/economy/material-type';
 import { BuildingType } from '@/game/buildings/building-type';
 
-const hasRealData = installRealGameData();
+installRealGameData();
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
@@ -43,7 +43,7 @@ function diagnoseWorker(sim: Simulation, unitType: UnitType): string {
 
 // ─── tests ───────────────────────────────────────────────────────────────────
 
-describe.skipIf(!hasRealData)('Building worker auto-recruitment (integration)', { timeout: 30_000 }, () => {
+describe('Building worker auto-recruitment (integration)', { timeout: 30_000 }, () => {
     let sim: Simulation;
 
     afterEach(() => {
