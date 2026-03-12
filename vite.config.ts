@@ -22,7 +22,13 @@ if (isTest) {
 
 // Load node polyfills plugin only when needed (full build + non-test)
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-const plugins: any[] = [vue(), glsl(), wasm(), devWriteFilePlugin(resolve(__dirname)), cliWsPlugin()];
+const plugins: any[] = [
+    vue({ features: { optionsAPI: false } }),
+    glsl(),
+    wasm(),
+    devWriteFilePlugin(resolve(__dirname)),
+    cliWsPlugin(),
+];
 if (!isTest && !isFastBuild) {
     const { nodePolyfills } = await import('vite-plugin-node-polyfills');
     plugins.push(
@@ -43,6 +49,10 @@ export default defineConfig({
         __BUILD_TIME__: JSON.stringify(Date.now().toString()),
         // Source hash for stale server detection in e2e tests
         __SOURCE_HASH__: JSON.stringify(computeSourceHash()),
+        // Vue feature flags — tree-shake unused features in production
+        __VUE_OPTIONS_API__: false,
+        __VUE_PROD_DEVTOOLS__: false,
+        __VUE_PROD_HYDRATION_MISMATCH_DETAILS__: false,
     },
     resolve: {
         alias: {
@@ -70,6 +80,7 @@ export default defineConfig({
     test: {
         environment: 'node',
         include: ['tests/unit/**/*.spec.ts'],
+        globalSetup: ['tests/unit/helpers/global-setup.ts'],
         reporters: process.env['CI'] ? ['verbose', 'github-actions'] : ['dot'],
         setupFiles: ['tests/unit/helpers/silence-console.ts'],
         disableConsoleIntercept: true,

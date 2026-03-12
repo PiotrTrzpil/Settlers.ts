@@ -1,0 +1,38 @@
+{
+    "$schema": "https://raw.githubusercontent.com/nicolo-ribaudo/oxc-project/refs/heads/nicolo/json-schema/npm/oxlint/configuration_schema.json",
+    "rules": {
+        "semi": ["error", "always"],
+        "no-unused-expressions": "error",
+        "no-self-compare": "error",
+        "no-template-curly-in-string": "warn",
+        "eqeqeq": ["warn", "smart"],
+        "no-throw-literal": "error",
+        "no-shadow": "warn",
+        "max-depth": ["error", { "max": 4 }],
+        "complexity": ["error", { "max": 15 }],
+        "max-lines": ["error", { "max": 600 }],
+        "max-lines-per-function": ["error", { "max": 250 }],
+        "@typescript-eslint/no-non-null-assertion": "off",
+        "no-unused-vars": ["warn", { "argsIgnorePattern": "^_" }],
+
+        "@typescript-eslint/no-floating-promises": "error",
+        "@typescript-eslint/await-thenable": "error",
+        "@typescript-eslint/no-array-delete": "error"
+    },
+    "overrides": [
+        {
+            "files": ["**/renderer/**/*.ts"],
+            "rules": {
+                "max-lines": ["error", { "max": 1000 }]
+            }
+        },
+        {
+            "files": ["tests/e2e/**/*.ts"],
+            "rules": {
+                "max-lines-per-function": "off",
+                "max-depth": ["error", { "max": 5 }]
+            }
+        }
+    ],
+    "ignorePatterns": ["dist", "node_modules", "*.cjs", "*.js", "scripts/**/*.js"]
+}

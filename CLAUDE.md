@@ -77,7 +77,7 @@ NEVER GIT STASH.
 | Operation | Tool |
 |-----------|------|
 | Move/Rename file | `move_file` |
-| Rename symbol | `rename_symbol` |
+| Rename symbol | `rename_symbol_strict` |
 
 
 If you are doing some editing patterns that are similar in many files:
@@ -88,8 +88,6 @@ If you are doing some editing patterns that are similar in many files:
 ALWAYS prefer mass approaches, e.g. `sd` and others. (but carefully, first think deeper if your pattern to find will not miss some similar cases (maybe do some fuzzy search first), and do a dry run of replace somehow first or a limited run before running on all needed files.)
 
 
-
-
 ## Notes
 
 NEVER GIT STASH.
@@ -97,8 +95,6 @@ NEVER GIT STASH.
 - **Line length**: max 140 chars (TS), 150 chars (Vue). URLs, strings, and template literals are exempt.
 - **Complexity**: max cyclomatic complexity 15 per function. Extract helpers to stay under the limit.
 - **Formatting**: Prettier (`.prettierrc`). Runs automatically via lint-staged on commit.
-- Playwright `outputDir` writes to `tests/e2e/.results/` (gitignored).
-- Screenshot baselines live in `tests/e2e/__screenshots__/` and are committed.
 
 ## CRITICAL — Size Limits (MANDATORY)
 
@@ -112,6 +108,17 @@ ESLint enforces these hard limits (skip blank lines & comments):
 **When creating a new file:** outline the structure first (functions, responsibilities, rough line counts). If the outline exceeds limits, split into multiple files BEFORE writing any code. Do NOT write a huge file and refactor after.
 
 **When editing an existing file that's near/over the limit:** do NOT shave off small bits (removing comments, inlining trivial helpers) to squeeze under the limit. Instead, extract a coherent chunk — a logical group of related functions or a self-contained responsibility — into its own module.
+
+## CRITICAL — Fix Root Causes, Not Symptoms (MANDATORY)
+
+**Always fix the underlying bug. Never add workarounds, safety nets, or "just in case" cleanup handlers.**
+
+If system A has a bug that causes incorrect state, fix system A. Do NOT add a handler in system B that papers over A's broken logic. Workarounds:
+- Hide the real bug, making it harder to find later
+- Add complexity that nobody understands after the original bug is forgotten
+- Create coupling between systems that should be independent
+
+When you see two options — a clean fix at the root cause vs. a workaround downstream — **always choose the root cause fix without asking**. This is not a judgment call. Workarounds are bugs.
 
 ## CRITICAL — Optimistic Programming (MANDATORY)
 
@@ -154,63 +161,8 @@ grep "FAIL\|error" /tmp/test.txt           # then filter from the file
 ```
 Re-running tests just to see different output is forbidden. Read `/tmp/test.txt` instead.
 
-If some tests fail, ALWAYS RUN JUST ONE FAILING TEST to investigate, then after fixing it, run another failing tests. only run all if you have fixed the failing test.
+More testing rules (integration tests, TDD, timeline DB, e2e) are in `.claude/rules/testing.md` — loaded automatically when working with test files.
 
-## Testing Approach — MANDATORY
-
-### 1. Prefer Integration Tests
-
-**Always write integration tests over unit tests.** Integration tests exercise real game systems together (construction, logistics, movement, combat) and catch bugs that unit tests miss. Place them in `tests/unit/integration/`. Only write isolated unit tests when testing pure logic with no system dependencies.
-
-### 2. TDD for Bug Fixes
-
-**Always use TDD when fixing bugs.** Before writing any fix:
-1. Write a failing test that reproduces the bug
-2. Confirm the test fails for the right reason
-3. Implement the fix
-4. Confirm the test passes
-
-Never fix a bug without a reproducing test first. The test is proof the bug existed and proof it's fixed.
-
-### 3. Use Timeline DB to Investigate
-
-**Always query the timeline SQLite DB to understand what happened in a test.** Do not guess or add `console.log` — the timeline already captures all events, entity state changes, and console output. All timelines are saved to `tests/unit/.timeline/*.db` (SQLite), one DB per run.
-
-**IMPORTANT:** Multiple sessions may run tests concurrently. Always use `--db <path>` with the specific DB from your run, not the default (which picks the latest and may belong to another session). The DB path is printed at the start of each test run.
-
-```sh
-pnpm timeline -- --db <path>                              # show failed tests
-pnpm timeline -- --db <path> --entity 42                  # entity history
-pnpm timeline -- --db <path> --cat logistics --test <id>  # filter by category
-pnpm timeline -- --db <path> --console --test <id>        # console output
-pnpm timeline -- --db <path> --console --list             # list tests with console output
-pnpm timeline -- --db <path> --console --level error      # only console.error
-pnpm timeline -- --db <path> --sql "SELECT * FROM timeline WHERE category='movement' AND test_id=<id> ORDER BY tick"
-```
-
-Use `--sql` for custom queries when the built-in filters aren't enough. The DB schema has `timeline`, `test_runs`, and `console_log` tables.
-
-### 4. Live Timeline Recording
-
-**Timeline events are recorded automatically** whenever the dev server runs (`pnpm dev`). No extra setup needed. DBs are saved to `data/.timeline/`.
-
-```sh
-# Query live recordings (while dev server is running or after)
-pnpm timeline:live                                          # list live sessions
-pnpm timeline:live -- --sql "SELECT category, COUNT(*) AS n FROM timeline GROUP BY category ORDER BY n DESC"
-pnpm timeline -- --db data/.timeline/<file>.db --entity 42  # query specific DB
-
-# Standalone receiver (for remote servers or custom setups)
-pnpm timeline:record                                        # connects to ws://localhost:5173
-CLI_URL=ws://localhost:5174/__cli__ pnpm timeline:record     # custom port
-```
-
-## E2E testing
-
-**Read `docs/testing/guide.md` before writing or updating tests.**
-
-- Always lint first before running tests.
-- **Never use `--reporter=line`** — it suppresses stdout. Use `--reporter=list` instead.
 
 
 NEVER GIT STASH.

@@ -102,6 +102,20 @@ Run `pnpm cli "js"` (no expression) to list all available scope variables.
 10. `carriers` / `reqs` / `workers` / `jobs` — logistics deep-dive
 11. `js <expr>` — deep inspection
 
+
+## Live Timeline Recording
+
+**Timeline events are recorded automatically** whenever the dev server runs (`pnpm dev`). No extra setup needed. DBs are saved to `data/.timeline/`.
+
+```sh
+pnpm timeline:live                                          # list live sessions
+pnpm timeline:live -- --sql "SELECT category, COUNT(*) AS n FROM timeline GROUP BY category ORDER BY n DESC"
+pnpm timeline -- --db data/.timeline/<file>.db --entity 42  # query specific DB
+pnpm timeline:record                                        # connects to ws://localhost:5173
+CLI_URL=ws://localhost:5174/__cli__ pnpm timeline:record     # custom port
+```
+
+
 ### Timeline
 Events are auto-recorded to `data/.timeline/` during dev. Query with:
 ```sh
