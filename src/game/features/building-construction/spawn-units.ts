@@ -23,4 +23,3 @@ export const BUILDING_SPAWN_ON_COMPLETE: Record<number, BuildingSpawnConfig | un
     [BuildingType.ResidenceMedium]: { unitType: UnitType.Carrier, count: 4, spawnInterval: RESIDENCE_SPAWN_INTERVAL },
     [BuildingType.ResidenceBig]: { unitType: UnitType.Carrier, count: 6, spawnInterval: RESIDENCE_SPAWN_INTERVAL },
 };
-

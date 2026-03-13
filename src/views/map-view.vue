@@ -209,8 +209,8 @@
                     <div class="stale-save-dialog">
                         <h2 class="stale-save-title">Incompatible Save Data</h2>
                         <p class="stale-save-message">
-                            A saved game was found, but it was created with an older version
-                            and can no longer be loaded. The game is paused until you decide.
+                            A saved game was found, but it was created with an older version and can no longer be
+                            loaded. The game is paused until you decide.
                         </p>
                         <div class="stale-save-actions">
                             <button class="stale-save-btn stale-save-btn--discard" @click="dismissStaleSnapshot">

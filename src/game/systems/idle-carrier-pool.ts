@@ -56,12 +56,7 @@ export class IdleCarrierPool {
      * "Available" = not transport-busy, not reserved, passes optional filter.
      * Returns entity ID or null.
      */
-    findNearest(
-        nearX: number,
-        nearY: number,
-        player: number,
-        filter?: CarrierEligibilityFilter,
-    ): number | null {
+    findNearest(nearX: number, nearY: number, player: number, filter?: CarrierEligibilityFilter): number | null {
         const result = this.findNearestWithCost(nearX, nearY, player, filter);
         return result ? result.carrierId : null;
     }
@@ -76,7 +71,7 @@ export class IdleCarrierPool {
         nearX: number,
         nearY: number,
         player: number,
-        filter?: CarrierEligibilityFilter,
+        filter?: CarrierEligibilityFilter
     ): { carrierId: number; distSq: number } | null {
         let bestId: number | null = null;
         let bestDistSq = Infinity;
@@ -97,12 +92,12 @@ export class IdleCarrierPool {
         return bestId !== null ? { carrierId: bestId, distSq: bestDistSq } : null;
     }
 
-    private isAvailable(
-        id: number, entityPlayer: number, player: number, filter?: CarrierEligibilityFilter,
-    ): boolean {
-        return entityPlayer === player
-            && !this.isTransportBusy(id)
-            && !this.unitReservation.isReserved(id)
-            && (!filter || filter(id));
+    private isAvailable(id: number, entityPlayer: number, player: number, filter?: CarrierEligibilityFilter): boolean {
+        return (
+            entityPlayer === player &&
+            !this.isTransportBusy(id) &&
+            !this.unitReservation.isReserved(id) &&
+            (!filter || filter(id))
+        );
     }
 }

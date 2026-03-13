@@ -121,7 +121,7 @@ export class RecruitSystem implements TickSystem {
         opts?: {
             target?: { x: number; y: number };
             hint?: { x: number; y: number };
-        },
+        }
     ): RecruitmentCandidate | null {
         const toolMaterial = SPECIALIST_TOOL_MAP[unitType] ?? null;
 
@@ -152,11 +152,7 @@ export class RecruitSystem implements TickSystem {
      * This is the primary API for demand systems — they never need to touch
      * UnitTransformer, tool piles, or choreo building directly.
      */
-    dispatchRecruitment(
-        unitType: UnitType,
-        player: number,
-        opts?: DispatchRecruitmentOpts,
-    ): number | null {
+    dispatchRecruitment(unitType: UnitType, player: number, opts?: DispatchRecruitmentOpts): number | null {
         const candidate = this.findRecruitmentCandidate(unitType, player, opts);
         if (!candidate) return null;
 
@@ -187,13 +183,14 @@ export class RecruitSystem implements TickSystem {
             if (near) existing.near = near;
         } else {
             this.queue.set(unitType, {
-                toolMaterial, player, race, count, near,
+                toolMaterial,
+                player,
+                race,
+                count,
+                near,
             });
         }
-        log.debug(
-            `Enqueued ${count}× ${UnitType[unitType]}`
-            + ` (total: ${this.queue.get(unitType)!.count})`
-        );
+        log.debug(`Enqueued ${count}× ${UnitType[unitType]}` + ` (total: ${this.queue.get(unitType)!.count})`);
     }
 
     dequeue(unitType: UnitType, count: number): void {
@@ -241,8 +238,9 @@ export class RecruitSystem implements TickSystem {
 
         for (const [unitType, entry] of this.queue) {
             const carrierId = this.dispatchRecruitment(
-                unitType, entry.player,
-                entry.near ? { hint: entry.near } : undefined,
+                unitType,
+                entry.player,
+                entry.near ? { hint: entry.near } : undefined
             );
 
             if (carrierId !== null) {
@@ -253,12 +251,8 @@ export class RecruitSystem implements TickSystem {
         }
 
         if (justDispatched.length > 0) {
-            const current = [
-                ...this.gameState.selection.selectedEntityIds,
-            ];
-            this.gameState.selection.selectMultiple([
-                ...current, ...justDispatched,
-            ]);
+            const current = [...this.gameState.selection.selectedEntityIds];
+            this.gameState.selection.selectMultiple([...current, ...justDispatched]);
         }
     }
 
@@ -270,7 +264,7 @@ export class RecruitSystem implements TickSystem {
         candidate: RecruitmentCandidate,
         unitType: UnitType,
         toolMaterial: EMaterialType,
-        opts?: DispatchRecruitmentOpts,
+        opts?: DispatchRecruitmentOpts
     ): number | null {
         const toolPile = candidate.toolPile!;
 
@@ -280,14 +274,16 @@ export class RecruitSystem implements TickSystem {
             : createRecruitmentJob(toolPile.pileEntityId, toolPile.x, toolPile.y, unitType);
 
         const assigned = this.unitTransformer.assignAndRegisterTransform(
-            candidate.carrierId, job, unitType, toolMaterial, toolPile,
+            candidate.carrierId,
+            job,
+            unitType,
+            toolMaterial,
+            toolPile
         );
         return assigned ? candidate.carrierId : null;
     }
 
-    private executeDirectRecruitment(
-        carrierId: number, unitType: UnitType, player: number,
-    ): number | null {
+    private executeDirectRecruitment(carrierId: number, unitType: UnitType, player: number): number | null {
         const ok = this.unitTransformer.requestDirectTransform(carrierId, unitType, player);
         return ok ? carrierId : null;
     }
@@ -308,7 +304,7 @@ export class RecruitSystem implements TickSystem {
     private findToolBasedCandidate(
         toolMaterial: EMaterialType,
         player: number,
-        opts?: { target?: { x: number; y: number }; hint?: { x: number; y: number } },
+        opts?: { target?: { x: number; y: number }; hint?: { x: number; y: number } }
     ): RecruitmentCandidate | null {
         // Hint mode: find tool nearest to hint, then carrier nearest to tool
         if (opts?.hint) {
@@ -322,11 +318,9 @@ export class RecruitSystem implements TickSystem {
     private resolveToolWithHint(
         toolMaterial: EMaterialType,
         hint: { x: number; y: number },
-        player: number,
+        player: number
     ): RecruitmentCandidate | null {
-        const toolPile = this.toolSourceResolver.findNearestToolPile(
-            toolMaterial, hint.x, hint.y, player,
-        );
+        const toolPile = this.toolSourceResolver.findNearestToolPile(toolMaterial, hint.x, hint.y, player);
         if (!toolPile) return null;
         const carrierId = this.idleCarrierPool.findNearest(toolPile.x, toolPile.y, player);
         if (carrierId === null) return null;
@@ -340,7 +334,7 @@ export class RecruitSystem implements TickSystem {
     private resolveToolByScan(
         toolMaterial: EMaterialType,
         player: number,
-        target?: { x: number; y: number },
+        target?: { x: number; y: number }
     ): RecruitmentCandidate | null {
         let best: RecruitmentCandidate | null = null;
         let bestCost = Infinity;
@@ -351,9 +345,7 @@ export class RecruitSystem implements TickSystem {
             if (entity.player !== player) continue;
             if (!this.idleCarrierPool.isIdle(id)) continue;
 
-            const toolPile = this.toolSourceResolver.findNearestToolPile(
-                toolMaterial, entity.x, entity.y, player,
-            );
+            const toolPile = this.toolSourceResolver.findNearestToolPile(toolMaterial, entity.x, entity.y, player);
             if (!toolPile) continue;
 
             const cost = tripCost(entity.x, entity.y, toolPile.x, toolPile.y, target);
@@ -369,9 +361,11 @@ export class RecruitSystem implements TickSystem {
 
 /** Squared distance for carrier→tool leg, plus optional tool→target leg. */
 function tripCost(
-    carrierX: number, carrierY: number,
-    toolX: number, toolY: number,
-    target?: { x: number; y: number },
+    carrierX: number,
+    carrierY: number,
+    toolX: number,
+    toolY: number,
+    target?: { x: number; y: number }
 ): number {
     const cdx = carrierX - toolX;
     const cdy = carrierY - toolY;

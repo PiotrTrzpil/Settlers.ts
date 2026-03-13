@@ -46,9 +46,16 @@ export function createGeologistHandler(
                 }
             }
 
-            const result = spiralSearch(cx, cy, terrain.width, terrain.height, (tx, ty) => {
-                return terrain.isRock(tx, ty) && !oreVeinData.isProspected(tx, ty);
-            }, GEOLOGIST_SEARCH_RADIUS);
+            const result = spiralSearch(
+                cx,
+                cy,
+                terrain.width,
+                terrain.height,
+                (tx, ty) => {
+                    return terrain.isRock(tx, ty) && !oreVeinData.isProspected(tx, ty);
+                },
+                GEOLOGIST_SEARCH_RADIUS
+            );
 
             // No more tiles — mark exhausted so we don't re-search every cooldown
             if (!result && settlerId !== undefined) {

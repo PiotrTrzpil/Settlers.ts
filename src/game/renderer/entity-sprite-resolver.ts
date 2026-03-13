@@ -227,7 +227,11 @@ export class EntitySpriteResolver {
             const entry = this.sprites.getAnimatedEntity(entity.type, entity.subType, entity.race);
             if (entry) {
                 const frame = resolveAnimationFrame(
-                    vs.animation, entry.animationData, entity.type, entity.subType, spriteDir
+                    vs.animation,
+                    entry.animationData,
+                    entity.type,
+                    entity.subType,
+                    spriteDir
                 );
                 if (frame) {
                     return { skip: false, transitioning: false, sprite: frame, progress: 1, transitionData: null };
@@ -295,16 +299,16 @@ export class EntitySpriteResolver {
         if (!this.sprites) return null;
 
         switch (entityType) {
-        case 'building':
-            return this.sprites.getBuilding(subType as BuildingType, race);
-        case 'pile':
-            return this.sprites.getGoodSprite(subType as EMaterialType, variation ?? 0);
-        case 'unit':
-            return this.getUnitPreviewSprite(subType as UnitType, race, level ?? 1);
-        default: {
-            const _exhaustive: never = entityType;
-            return _exhaustive;
-        }
+            case 'building':
+                return this.sprites.getBuilding(subType as BuildingType, race);
+            case 'pile':
+                return this.sprites.getGoodSprite(subType as EMaterialType, variation ?? 0);
+            case 'unit':
+                return this.getUnitPreviewSprite(subType as UnitType, race, level ?? 1);
+            default: {
+                const _exhaustive: never = entityType;
+                return _exhaustive;
+            }
         }
     }
 

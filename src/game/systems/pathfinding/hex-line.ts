@@ -30,7 +30,7 @@ function evenInterleave(a: Dir, countA: number, b: Dir, countB: number): Dir[] {
     let emittedA = 0;
     for (let i = 0; i < total; i++) {
         // At step i, the ideal number of A steps emitted is countA*(i+1)/total
-        const targetA = Math.round(countA * (i + 1) / total);
+        const targetA = Math.round((countA * (i + 1)) / total);
         if (emittedA < targetA) {
             result.push({ dx: a.dx, dy: a.dy });
             emittedA++;
@@ -63,7 +63,7 @@ export function getHexLine(x1: number, y1: number, x2: number, y2: number): Tile
 
     if (sameSign) {
         // Diagonal (+1,+1) or (-1,-1) covers both axes simultaneously
-        const sign = (dx + dy) >= 0 ? 1 : -1;
+        const sign = dx + dy >= 0 ? 1 : -1;
         const absDx = Math.abs(dx);
         const absDy = Math.abs(dy);
         const diag = Math.min(absDx, absDy);

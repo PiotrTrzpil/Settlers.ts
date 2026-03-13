@@ -54,7 +54,11 @@ export class TowerBowmanRenderPass implements PluggableRenderPass {
         ctx.spriteManager.paletteManager.bind(gl);
         const rowsPerPlayer = ctx.spriteManager.paletteManager.textureRowsPerPlayer;
         ctx.spriteBatchRenderer.beginSpriteBatch(
-            gl, projection, PALETTE_TEXTURE_WIDTH, rowsPerPlayer, ctx.renderSettings.antialias
+            gl,
+            projection,
+            PALETTE_TEXTURE_WIDTH,
+            rowsPerPlayer,
+            ctx.renderSettings.antialias
         );
 
         // Iterate all buildings in the game state that have garrisons with bowmen
@@ -69,9 +73,12 @@ export class TowerBowmanRenderPass implements PluggableRenderPass {
 
             // Compute tower screen position (same as entity-sprite-pass for buildings)
             const worldPos = TilePicker.tileToWorld(
-                entity.x, entity.y,
-                ctx.groundHeight, ctx.mapSize,
-                viewPoint.x, viewPoint.y
+                entity.x,
+                entity.y,
+                ctx.groundHeight,
+                ctx.mapSize,
+                viewPoint.x,
+                viewPoint.y
             );
             const towerX = worldPos.worldX - TILE_CENTER_X;
             const towerY = worldPos.worldY - TILE_CENTER_Y * 0.5;
@@ -122,9 +129,15 @@ export class TowerBowmanRenderPass implements PluggableRenderPass {
             const y = towerY + slot.offsetY;
 
             ctx.spriteBatchRenderer.addSprite(
-                gl, x, y, sprite,
+                gl,
+                x,
+                y,
+                sprite,
                 ctx.renderSettings.disablePlayerTinting ? 0 : bowman.player + 1,
-                TINT_NEUTRAL[0]!, TINT_NEUTRAL[1]!, TINT_NEUTRAL[2]!, TINT_NEUTRAL[3]!
+                TINT_NEUTRAL[0]!,
+                TINT_NEUTRAL[1]!,
+                TINT_NEUTRAL[2]!,
+                TINT_NEUTRAL[3]!
             );
             this.lastSpriteCount++;
         }

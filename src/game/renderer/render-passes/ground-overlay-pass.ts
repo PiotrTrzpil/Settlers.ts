@@ -59,7 +59,12 @@ export class GroundOverlayPass implements IRenderPass {
         );
     }
 
-    private selCtx: { mapSize: GroundOverlayContext['mapSize']; groundHeight: Uint8Array; viewPoint: IViewPoint; unitStates: GroundOverlayContext['unitStates'] } | null = null;
+    private selCtx: {
+        mapSize: GroundOverlayContext['mapSize'];
+        groundHeight: Uint8Array;
+        viewPoint: IViewPoint;
+        unitStates: GroundOverlayContext['unitStates'];
+    } | null = null;
 
     private setupAttributes(gl: WebGL2RenderingContext, viewPoint: IViewPoint): void {
         const { ctx } = this;

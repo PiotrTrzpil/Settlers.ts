@@ -101,16 +101,11 @@ export class ChoreoBuilder {
     goToDoor(buildingId: number): this {
         if (!_context) {
             throw new Error(
-                'ChoreoBuilder: context not set — call '
-                + 'ChoreoBuilder.withContext() before using goToDoor'
+                'ChoreoBuilder: context not set — call ' + 'ChoreoBuilder.withContext() before using goToDoor'
             );
         }
-        const building = _context.gameState.getEntityOrThrow(
-            buildingId, 'ChoreoBuilder.goToDoor'
-        );
-        const tile = findBuildingApproachTile(
-            building, _context.terrain, _context.gameState
-        );
+        const building = _context.gameState.getEntityOrThrow(buildingId, 'ChoreoBuilder.goToDoor');
+        const tile = findBuildingApproachTile(building, _context.terrain, _context.gameState);
         return this.goTo(tile.x, tile.y, buildingId);
     }
 
@@ -119,9 +114,7 @@ export class ChoreoBuilder {
      * Stashes buildingId in metadata as `enterBuildingId`.
      */
     goToDoorAndEnter(buildingId: number): this {
-        return this.goToDoor(buildingId)
-            .meta({ enterBuildingId: buildingId })
-            .enterBuilding();
+        return this.goToDoor(buildingId).meta({ enterBuildingId: buildingId }).enterBuilding();
     }
 
     /** Add an ENTER_BUILDING node. */

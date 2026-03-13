@@ -177,7 +177,6 @@ export function xmlIdToBuildingTypes(xmlId: string): BuildingType[] {
     return types;
 }
 
-
 // ============ Typed game data lookups ============
 
 /**

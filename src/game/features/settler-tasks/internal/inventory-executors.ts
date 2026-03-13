@@ -133,17 +133,15 @@ export const executeGetGood: InventoryExecutorFn = (
         const withdrawn = ctx.materialTransfer.pickUp(settler.id, buildingId, material, 1, false);
         if (withdrawn === 0) {
             log.warn(
-                `GET_GOOD: settler ${settler.id} — building ${buildingId} has no `
-                    + `${EMaterialType[material]} in input inventory`
+                `GET_GOOD: settler ${settler.id} — building ${buildingId} has no ` +
+                    `${EMaterialType[material]} in input inventory`
             );
             return TaskResult.FAILED;
         }
 
         job.carryingGood = material;
 
-        log.debug(
-            `GET_GOOD: settler ${settler.id} withdrew ${EMaterialType[material]} from building ${buildingId}`
-        );
+        log.debug(`GET_GOOD: settler ${settler.id} withdrew ${EMaterialType[material]} from building ${buildingId}`);
     }
 
     return tickDuration(job, dt, resolveInventoryDuration(node));

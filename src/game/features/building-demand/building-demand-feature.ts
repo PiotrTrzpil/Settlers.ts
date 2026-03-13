@@ -18,16 +18,10 @@ export interface BuildingDemandExports {
 
 export const BuildingDemandFeature: FeatureDefinition = {
     id: 'building-demand',
-    dependencies: [
-        'settler-tasks',
-        'recruit',
-        'settler-location',
-    ],
+    dependencies: ['settler-tasks', 'recruit', 'settler-location'],
 
     create(ctx: FeatureContext) {
-        const {
-            settlerTaskSystem, choreoSystem,
-        } = ctx.getFeature<SettlerTaskExports>('settler-tasks');
+        const { settlerTaskSystem, choreoSystem } = ctx.getFeature<SettlerTaskExports>('settler-tasks');
         const { locationManager } = ctx.getFeature<SettlerLocationExports>('settler-location');
         const { recruitSystem } = ctx.getFeature<RecruitExports>('recruit');
 
@@ -35,17 +29,11 @@ export const BuildingDemandFeature: FeatureDefinition = {
             gameState: ctx.gameState,
             eventBus: ctx.eventBus,
             findIdleSpecialist: (unitType, player, nearX, nearY) =>
-                settlerTaskSystem.findIdleSpecialist(
-                    unitType, player, nearX, nearY,
-                ),
-            assignJob: (unitId, job, moveTo) =>
-                settlerTaskSystem.assignJob(unitId, job, moveTo),
+                settlerTaskSystem.findIdleSpecialist(unitType, player, nearX, nearY),
+            assignJob: (unitId, job, moveTo) => settlerTaskSystem.assignJob(unitId, job, moveTo),
             assignWorkerToBuilding: (settlerId, buildingId) =>
-                settlerTaskSystem.assignWorkerToBuilding(
-                    settlerId, buildingId,
-                ),
-            dispatchRecruitment: (unitType, player, opts) =>
-                recruitSystem.dispatchRecruitment(unitType, player, opts),
+                settlerTaskSystem.assignWorkerToBuilding(settlerId, buildingId),
+            dispatchRecruitment: (unitType, player, opts) => recruitSystem.dispatchRecruitment(unitType, player, opts),
         });
 
         // Register ENTER_BUILDING executor on shared ChoreoSystem
