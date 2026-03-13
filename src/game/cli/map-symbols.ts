@@ -146,8 +146,8 @@ const BUILDING_SYMBOL_MAP: ReadonlyMap<BuildingType, string> = new Map([
     [BuildingType.DarkTemple, '&'],
 ]);
 
-function buildingSymbol(subType: number): string {
-    return BUILDING_SYMBOL_MAP.get(subType as BuildingType) ?? 'B';
+function buildingSymbol(subType: BuildingType): string {
+    return BUILDING_SYMBOL_MAP.get(subType) ?? 'B';
 }
 
 /** [minSubType, maxSubType, symbol] — checked in order, first match wins. */
@@ -216,7 +216,7 @@ export function renderTileSymbol(
     // Ground entity layers (buildings, piles, map objects)
     if (groundEntity) {
         if (groundEntity.type === EntityType.Building && layers.buildings) {
-            return buildingSymbol(groundEntity.subType as number);
+            return buildingSymbol(groundEntity.subType as BuildingType);
         }
         if (groundEntity.type === EntityType.StackedPile && layers.piles) {
             return 'P';

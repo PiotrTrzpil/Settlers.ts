@@ -309,7 +309,7 @@ export class Simulation {
             spawnWorker: spawnWorker ?? completed,
         });
         if (!result.success) {
-            throw new Error(`Failed to place ${BuildingType[buildingType]} at (${x}, ${y}): ${result.error}`);
+            throw new Error(`Failed to place ${buildingType} at (${x}, ${y}): ${result.error}`);
         }
         return this.resultEntityId(result);
     }
@@ -433,7 +433,7 @@ export class Simulation {
      */
     placeMineBuilding(buildingType: BuildingType, oreType: OreType, oreLevel = 3): number {
         if (!isMineBuilding(buildingType)) {
-            throw new Error(`${BuildingType[buildingType]} is not a mine building`);
+            throw new Error(`${buildingType} is not a mine building`);
         }
         const pos = this.placer.findMinePosition();
         fillRockSquare(this.map, pos.x, pos.y, 6, this.mapWidth, this.mapHeight);
@@ -449,9 +449,7 @@ export class Simulation {
             spawnWorker: true,
         });
         if (!result.success) {
-            throw new Error(
-                `Failed to place mine ${BuildingType[buildingType]} at (${pos.x}, ${pos.y}): ${result.error}`
-            );
+            throw new Error(`Failed to place mine ${buildingType} at (${pos.x}, ${pos.y}): ${result.error}`);
         }
         const entityId = this.resultEntityId(result);
 

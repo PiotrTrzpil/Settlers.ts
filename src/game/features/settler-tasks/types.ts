@@ -3,6 +3,7 @@
  */
 
 import type { ChoreoJobState } from './choreo-types';
+import type { BuildingType } from '../../buildings/building-type';
 
 /** Search types - what a settler looks for */
 export enum SearchType {
@@ -52,7 +53,7 @@ export interface SettlerConfig {
      * When set, selectJob filters `jobs` to only those matching the assigned building.
      * Key is BuildingType enum value.
      */
-    buildingJobs?: Map<number, string[]>;
+    buildingJobs?: Map<BuildingType, string[]>;
 }
 
 /**

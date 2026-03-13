@@ -58,7 +58,7 @@ export interface GameEventBase {
     /** Optional unit type for timeline enrichment. */
     unitType?: UnitType;
     /** Optional building type for timeline enrichment. */
-    buildingType?: number;
+    buildingType?: BuildingType;
 }
 
 /** Core event map — building, unit, terrain, movement, carrier, logistics, inventory, production events. */

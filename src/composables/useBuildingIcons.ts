@@ -184,7 +184,7 @@ export function useBuildingIcons(fileManager: Ref<FileManager | null>, currentRa
 
         const raceIcons = BUILDING_ICON_INDICES[race];
         for (const [typeStr] of Object.entries(raceIcons)) {
-            const buildingType = Number(typeStr) as BuildingType;
+            const buildingType = typeStr as BuildingType;
             const url = getCachedIconUrl(race, buildingType, gfxReader, false);
             const selectedUrl = getCachedIconUrl(race, buildingType, gfxReader, true);
             if (url) {

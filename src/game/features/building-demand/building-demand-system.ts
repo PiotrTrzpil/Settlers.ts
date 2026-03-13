@@ -17,6 +17,7 @@ import type { GameState } from '../../game-state';
 import type { EventBus } from '../../event-bus';
 import { EventSubscriptionManager } from '../../event-bus';
 import type { BuildingDemand } from './types';
+import type { BuildingType } from '../../buildings/building-type';
 import type { UnitType } from '../../core/unit-types';
 import type { Race } from '../../core/race';
 import type { ChoreoJobState } from '../../systems/choreo';
@@ -141,15 +142,12 @@ export class BuildingDemandSystem implements TickSystem {
     // Internal — demand creation
     // ================================================================
 
-    addDemandFromBuilding(buildingId: number, buildingType: number, race: Race): void {
+    addDemandFromBuilding(buildingId: number, buildingType: BuildingType, race: Race): void {
         if (this.demands.has(buildingId)) {
             return;
         } // already pending
 
-        const entity = this.gameState.getEntity(buildingId);
-        if (!entity) {
-            return;
-        }
+        const entity = this.gameState.getEntityOrThrow(buildingId, 'building requesting worker demand');
 
         const workerInfo = getBuildingWorkerInfo(race, buildingType);
         if (!workerInfo) {

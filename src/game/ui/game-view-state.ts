@@ -9,7 +9,7 @@
  */
 
 import { reactive } from 'vue';
-import { EntityType, UnitType, type Entity } from '../entity';
+import { BuildingType, EntityType, UnitType, type Entity } from '../entity';
 import { MapObjectType } from '@/game/types/map-object-types';
 import { isResourceDeposit, getEnvironmentSubLayer, EnvironmentSubLayer } from '../renderer/layer-visibility';
 import type { GameState } from '../game-state';
@@ -88,7 +88,7 @@ export interface GameViewStateData {
 
     // Input mode (written by InputManager onModeChange callback)
     mode: string;
-    placeBuildingType: number;
+    placeBuildingType: BuildingType | null;
     placePileType: number | string;
     placeUnitType: UnitType | string;
 
@@ -122,7 +122,7 @@ export class GameViewState {
             tick: 0,
             ticksPaused: true,
             mode: 'select',
-            placeBuildingType: 0,
+            placeBuildingType: null,
             placePileType: 0,
             placeUnitType: '',
             selectedEntityId: null,

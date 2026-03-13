@@ -29,9 +29,7 @@ export class CarrierRegistry {
     }
 
     register(entityId: number): void {
-        if (!this.entityProvider.getEntity(entityId)) {
-            throw new Error(`Cannot register carrier: entity ${entityId} not found`);
-        }
+        this.entityProvider.getEntityOrThrow(entityId, 'carrier being registered');
         if (this.ids.has(entityId)) {
             throw new Error(`Carrier ${entityId} already registered`);
         }

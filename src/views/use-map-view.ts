@@ -3,7 +3,7 @@ import { useRoute } from 'vue-router';
 import { MapLoader } from '@/resources/map/map-loader';
 import { Game } from '@/game/game';
 import { createTestMapLoader, createEmptyMapLoader } from '@/game/test-map-factory';
-import { TileCoord, UnitType } from '@/game/entity';
+import { BuildingType, TileCoord, UnitType } from '@/game/entity';
 import { Race } from '@/game/core/race';
 import type { EMaterialType } from '@/game/economy';
 import { BinaryReader } from '@/resources/file/binary-reader';
@@ -395,7 +395,7 @@ export function useMapView(
     );
     const gameActions = createGameActions(() => game.value, game);
 
-    const setPlaceMode = (buildingType: number, race: number) => modeToggler.setPlaceMode(buildingType, race);
+    const setPlaceMode = (buildingType: BuildingType, race: number) => modeToggler.setPlaceMode(buildingType, race);
     const setPlaceResourceMode = (rt: EMaterialType) => modeToggler.setPlacePileMode(rt, resourceAmount.value);
     const setPlaceUnitMode = (ut: UnitType) => modeToggler.setPlaceUnitMode(ut, currentPlayerRace.value);
     const setSelectMode = () => modeToggler.setSelectMode();

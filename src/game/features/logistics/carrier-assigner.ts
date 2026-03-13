@@ -164,10 +164,10 @@ export class CarrierAssigner {
 
         const filter = this.buildFilter();
         for (const candidate of candidates) {
-            const source = this.gameState.getEntity(candidate.sourceBuilding);
-            if (!source) {
-                continue;
-            }
+            const source = this.gameState.getEntityOrThrow(
+                candidate.sourceBuilding,
+                'supply source building in carrier ranking'
+            );
 
             const dx2 = source.x - destX;
             const dy2 = source.y - destY;
@@ -287,16 +287,16 @@ export class CarrierAssigner {
                 continue;
             }
 
-            const carrier = this.gameState.getEntity(carrierId);
-            if (!carrier || carrier.player !== playerId) {
+            const carrier = this.gameState.getEntityOrThrow(carrierId, 'busy carrier in PickedUp phase');
+            if (carrier.player !== playerId) {
                 continue;
             }
 
             const record = this.activeJobs.get(carrierId)!;
-            const dest = this.gameState.getEntity(record.destBuilding);
-            if (!dest) {
-                continue;
-            }
+            const dest = this.gameState.getEntityOrThrow(
+                record.destBuilding,
+                'destination building of busy carrier job'
+            );
 
             // Cost: carrier→dest + dest→newSource
             const cdx = carrier.x - dest.x;

@@ -78,10 +78,10 @@ export const S4_BUILDING_TYPES = {
 } as const;
 
 /**
- * Map S4 building types to internal BuildingType values
- * Returns the internal type, or the S4 value if not yet implemented
+ * Map S4 building types to internal BuildingType values.
+ * Throws if the S4 type has no mapping (all known types should be covered).
  */
-function mapS4ToInternalType(s4Type: number): number {
+function mapS4ToInternalType(s4Type: number): BuildingType {
     const mapping: Record<number, BuildingType> = {
         [S4_BUILDING_TYPES.WOODCUTTERHUT]: BuildingType.WoodcutterHut,
         [S4_BUILDING_TYPES.FORESTERHUT]: BuildingType.ForesterHut,
@@ -121,7 +121,11 @@ function mapS4ToInternalType(s4Type: number): number {
         [S4_BUILDING_TYPES.CASTLE]: BuildingType.Castle,
     };
 
-    return mapping[s4Type] ?? s4Type;
+    const mapped = mapping[s4Type];
+    if (mapped === undefined) {
+        throw new Error(`Unknown S4 building type: ${s4Type}`);
+    }
+    return mapped;
 }
 
 export interface BuildingsAPIContext {
@@ -319,6 +323,7 @@ export function registerBuildingsAPI(runtime: LuaRuntime, context: BuildingsAPIC
     });
 
     // Buildings.GetType(entityId) - Get building type
+    // eslint-disable-next-line sonarjs/function-return-type -- scripting API returns string (BuildingType) or -1 for not-found
     runtime.registerFunction('Buildings', 'GetType', (entityId: number) => {
         const entity = context.gameState.getEntity(entityId);
         if (entity && entity.type === EntityType.Building) {

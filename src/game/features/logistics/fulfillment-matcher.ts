@@ -105,10 +105,10 @@ function* iterateMatchCandidates(
 ): Generator<MatchCandidate> {
     const { playerId, jobStore, storageFilterManager } = options;
 
-    const destBuilding = gameState.getEntity(request.buildingId);
-    if (!destBuilding) {
-        return;
-    }
+    const destBuilding = gameState.getEntityOrThrow(
+        request.buildingId,
+        'demand destination building in fulfillment matching'
+    );
 
     const destIsStorageBuilding =
         destBuilding.type === EntityType.Building &&
@@ -124,10 +124,10 @@ function* iterateMatchCandidates(
             continue;
         }
 
-        const sourceBuilding = gameState.getEntity(supply.buildingId);
-        if (!sourceBuilding) {
-            continue;
-        }
+        const sourceBuilding = gameState.getEntityOrThrow(
+            supply.buildingId,
+            'supply source building in fulfillment matching'
+        );
 
         // Only apply storage direction filtering to actual StorageArea buildings (not free piles)
         const sourceIsStorage =

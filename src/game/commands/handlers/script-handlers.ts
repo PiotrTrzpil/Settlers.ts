@@ -1,7 +1,6 @@
 import { EntityType, UnitType } from '../../entity';
 import type { GameState } from '../../game-state';
 import type { EventBus } from '../../event-bus';
-import { BuildingType } from '../../buildings/types';
 import { EMaterialType } from '../../economy';
 import type {
     ScriptAddGoodsCommand,
@@ -40,7 +39,7 @@ export function executeScriptAddBuilding(deps: ScriptDeps, cmd: ScriptAddBuildin
         {
             type: 'building_placed',
             entityId: entity.id,
-            buildingType: cmd.buildingType as BuildingType,
+            buildingType: cmd.buildingType,
             x: cmd.x,
             y: cmd.y,
         },

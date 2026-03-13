@@ -21,7 +21,7 @@ describe('GameState – edge cases', () => {
     it('should assign incrementing IDs', () => {
         const { entity: e1 } = addUnit(state, 0, 0);
         const e2 = addBuilding(state, 1, 1, BuildingType.WoodcutterHut, 0);
-        const { entity: e3 } = addUnit(state, 2, 2, { subType: UnitType.Builder });
+        const { entity: e3 } = addUnit(state, 2, 2, { subType: UnitType.Builder as UnitType });
 
         expect(e1.id).toBe(1);
         expect(e2.id).toBe(2);

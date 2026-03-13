@@ -1,5 +1,6 @@
 import { test, expect } from './matchers';
 import { test as fixtureTest, expect as fixtureExpect } from './fixtures';
+import { BuildingType } from '@/game/buildings/building-type';
 import { GamePage } from './game-page';
 
 /**
@@ -245,7 +246,7 @@ fixtureTest.describe('Entity Selection', { tag: '@smoke' }, () => {
             return;
         }
 
-        const building = await gp.actions.placeBuilding(1, buildableTile.x, buildableTile.y);
+        const building = await gp.actions.placeBuilding(BuildingType.WoodcutterHut, buildableTile.x, buildableTile.y);
         fixtureExpect(building).not.toBeNull();
 
         // Select the building and read selection state atomically

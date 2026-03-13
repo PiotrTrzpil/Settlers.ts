@@ -249,17 +249,13 @@ export class BuildingInventoryManager {
             const slot = this.slotStore.get(slotId)!;
             if (slot.entityId !== null && slot.currentAmount > 0 && slot.kind !== SlotKind.Free) {
                 // Building destroyed with materials remaining — convert pile to free pile
-                const pileEntity = gameState.getEntity(slot.entityId);
-                if (pileEntity) {
-                    this.registerFreePile(slot.entityId, slot.materialType, slot.currentAmount, slot.position);
-                }
+                gameState.getEntityOrThrow(slot.entityId, 'pile entity during building slot destruction');
+                this.registerFreePile(slot.entityId, slot.materialType, slot.currentAmount, slot.position);
             } else if (slot.entityId !== null) {
                 // Empty slot or free pile cleanup — remove the pile entity
-                const pileEntity = gameState.getEntity(slot.entityId);
-                if (pileEntity) {
-                    this._entityIndex.delete(slot.entityId);
-                    removePileEntity(slot, executeCommand);
-                }
+                gameState.getEntityOrThrow(slot.entityId, 'pile entity during empty slot cleanup');
+                this._entityIndex.delete(slot.entityId);
+                removePileEntity(slot, executeCommand);
             }
             this.slotStore.delete(slotId);
         }

@@ -75,7 +75,7 @@ export class PlaceBuildingMode extends BasePlacementMode<BuildingType> {
     }
 
     protected getSubTypeName(subType: BuildingType): string {
-        return BuildingType[subType];
+        return subType;
     }
 
     /**

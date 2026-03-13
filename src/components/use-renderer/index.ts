@@ -137,7 +137,12 @@ function canPlaceBuilding(getGame: () => Game | null, x: number, y: number, buil
 }
 
 /** Create a ValidPositionGrid for the given building type when entering placement mode. */
-function createPlacementGrid(game: Game, buildingType: number, viewX: number, viewY: number): ValidPositionGrid | null {
+function createPlacementGrid(
+    game: Game,
+    buildingType: BuildingType,
+    viewX: number,
+    viewY: number
+): ValidPositionGrid | null {
     const race = game.playerRaces.get(game.currentPlayer);
     if (race === undefined) {
         return null;
@@ -203,7 +208,8 @@ function buildInputManager(deps: InputManagerDeps): InputManager {
             if (newMode === 'place_building') {
                 const game = getGame();
                 const buildingType =
-                    (data?.['buildingType'] as number | undefined) ?? (data?.['subType'] as number | undefined);
+                    (data?.['buildingType'] as BuildingType | undefined) ??
+                    (data?.['subType'] as BuildingType | undefined);
                 if (game && buildingType !== undefined) {
                     const grid = createPlacementGrid(
                         game,

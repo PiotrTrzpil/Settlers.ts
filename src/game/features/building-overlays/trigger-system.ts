@@ -30,7 +30,7 @@ export interface TriggerSystemConfig {
     /** Callback to set working/idle overlay state on a building. */
     setWorkingOverlay: (buildingId: number, working: boolean) => void;
     /** Entity store for building race and type lookups. */
-    gameState: Pick<GameState, 'getEntity'>;
+    gameState: Pick<GameState, 'getEntity' | 'getEntityOrThrow'>;
     /** Game data loader for BuildingTrigger XML definitions. */
     dataLoader: Pick<GameDataLoader, 'getBuildingTrigger'>;
 }
@@ -65,7 +65,7 @@ type ActiveTriggerSet = Set<string>;
  */
 export class TriggerSystemImpl implements TriggerSystem {
     private readonly setWorkingOverlay: (buildingId: number, working: boolean) => void;
-    private readonly gameState: Pick<GameState, 'getEntity'>;
+    private readonly gameState: Pick<GameState, 'getEntity' | 'getEntityOrThrow'>;
     private readonly dataLoader: Pick<GameDataLoader, 'getBuildingTrigger'>;
 
     /** Active triggers per building: buildingId → Set of active trigger IDs */
@@ -88,7 +88,6 @@ export class TriggerSystemImpl implements TriggerSystem {
      * activates Working overlays, and records the trigger as active.
      *
      * Logs a warning and is a no-op when:
-     * - The building entity is not found (entity may have been removed mid-task)
      * - The trigger ID is unknown for the building's race (unknown triggers in XML)
      * - The trigger is already active for this building (idempotent guard)
      */
@@ -99,7 +98,6 @@ export class TriggerSystemImpl implements TriggerSystem {
 
         const building = this.gameState.getEntity(buildingId);
         if (!building) {
-            log.warn(`fireTrigger: building entity ${buildingId} not found for trigger '${triggerId}'`);
             return;
         }
 
@@ -148,7 +146,7 @@ export class TriggerSystemImpl implements TriggerSystem {
      * Removes the trigger from the active set. When no triggers remain active,
      * deactivates Working overlays (switches to Idle).
      *
-     * Safe to call when the trigger is not active or the building is gone.
+     * Safe to call when the trigger is not active (no-op). Building must still exist.
      */
     stopTrigger(buildingId: number, triggerId: string): void {
         if (!triggerId) {
@@ -169,8 +167,8 @@ export class TriggerSystemImpl implements TriggerSystem {
             this.setWorkingOverlay(buildingId, false);
 
             // Apply stop effects (if any)
-            const building = this.gameState.getEntity(buildingId);
-            if (building && building.type === EntityType.Building) {
+            const building = this.gameState.getEntityOrThrow(buildingId, 'building for trigger deactivation');
+            if (building.type === EntityType.Building) {
                 const raceId = raceToRaceId(building.race);
                 const triggerDef = this.dataLoader.getBuildingTrigger(raceId, triggerId);
                 if (triggerDef) {

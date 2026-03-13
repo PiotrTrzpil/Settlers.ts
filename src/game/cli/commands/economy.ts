@@ -316,13 +316,13 @@ function formatBuildingCounts(
     ctx: CliContext,
     lines: string[]
 ): void {
-    const counts = new Map<number, number>();
+    const counts = new Map<BuildingType, number>();
     for (const e of state.entityIndex.ofTypeAndPlayer(EntityType.Building, player)) {
-        counts.set(e.subType as number, (counts.get(e.subType as number) ?? 0) + 1);
+        counts.set(e.subType as BuildingType, (counts.get(e.subType as BuildingType) ?? 0) + 1);
     }
     if (counts.size > 0) {
         lines.push('=== Buildings ===');
-        const rows = [...counts.entries()].map(([bt, n]) => [BuildingType[bt as BuildingType] || `#${bt}`, String(n)]);
+        const rows = [...counts.entries()].map(([bt, n]) => [String(bt) || `#${bt}`, String(n)]);
         lines.push(ctx.fmt.table(rows, ['type', 'count']));
     } else {
         lines.push('no buildings');

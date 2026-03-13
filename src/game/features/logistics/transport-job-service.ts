@@ -74,9 +74,9 @@ function resolveStorageAreaSlot(
  * Returns the slot ID, or -1 if no slot is available.
  */
 function resolveDestinationSlot(destBuilding: number, material: EMaterialType, deps: TransportJobDeps): number {
-    const entity = deps.gameState.getEntity(destBuilding);
-    // Free piles and non-building entities use their first (and only) pile slot.
-    if (!entity || entity.type !== EntityType.Building) {
+    const entity = deps.gameState.getEntityOrThrow(destBuilding, 'transport job destination building');
+    // Non-building entities (free piles) use their first (and only) pile slot.
+    if (entity.type !== EntityType.Building) {
         const slots = deps.inventoryManager.getSlots(destBuilding);
         const first = slots.values().next().value;
         return first !== undefined ? first.id : 0;

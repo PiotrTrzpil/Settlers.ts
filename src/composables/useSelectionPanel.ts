@@ -79,7 +79,7 @@ export function useSelectionPanel(game: Ref<Game | null>): {
         }
 
         if (entity.type === EntityType.Building) {
-            const typeName = BuildingType[entity.subType as BuildingType];
+            const typeName = String(entity.subType);
             // Convert PascalCase to readable format (e.g., WoodcutterHut -> Woodcutter Hut)
             return typeName.replace(/([A-Z])/g, ' $1').trim();
         }

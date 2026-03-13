@@ -10,7 +10,6 @@ import type { SettlerTaskSystem } from '../settler-tasks/settler-task-system';
 import type { SnapshotConfig } from './logistics-snapshot';
 import { EntityType } from '../../entity';
 import { UnitType, UNIT_TYPE_CONFIG, isUnitTypeMilitary } from '../../core/unit-types';
-import { BuildingType } from '../../buildings/building-type';
 import { SlotKind } from '../../core/pile-kind';
 import { EMaterialType } from '../../economy/material-type';
 import { SettlerState } from '../settler-tasks/types';
@@ -23,7 +22,7 @@ export interface BottleneckDiag {
 }
 
 function buildingTypeNameSafe(subType: number | string): string {
-    return BuildingType[subType as BuildingType] || `#${subType}`;
+    return String(subType) || `#${subType}`;
 }
 
 function unitTypeNameSafe(subType: number | string): string {
@@ -32,8 +31,8 @@ function unitTypeNameSafe(subType: number | string): string {
 }
 
 function entityLabel(gameState: GameState, id: number, nameOf: (sub: number | string) => string): string {
-    const e = gameState.getEntity(id);
-    return e ? `${nameOf(e.subType)}#${id}` : `#${id}`;
+    const e = gameState.getEntityOrThrow(id, 'entity for bottleneck label');
+    return `${nameOf(e.subType)}#${id}`;
 }
 
 function isNonCarrierWorker(subType: UnitType): boolean {
@@ -93,8 +92,11 @@ function countDemandsForPlayer(config: SnapshotConfig, player: number): number {
     const { demandQueue, gameState } = config;
     let count = 0;
     for (const demand of demandQueue.getAllDemands()) {
-        const building = gameState.getEntity(demand.buildingId);
-        if (building && building.player === player) {
+        const building = gameState.getEntityOrThrow(
+            demand.buildingId,
+            'demand destination building in bottleneck detection'
+        );
+        if (building.player === player) {
             count++;
         }
     }

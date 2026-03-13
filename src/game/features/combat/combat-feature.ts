@@ -55,11 +55,7 @@ export const CombatFeature: FeatureDefinition = {
         });
 
         ctx.on('combat:unitDefeated', ({ unitId }) => {
-            const entity = ctx.gameState.getEntity(unitId);
-            if (!entity) {
-                log.debug(`combat:unitDefeated for entity ${unitId} but entity already gone`);
-                return;
-            }
+            const entity = ctx.gameState.getEntityOrThrow(unitId, 'defeated unit for death angel spawn');
 
             const angel = ctx.gameState.addUnit(UnitType.Angel, entity.x, entity.y, entity.player, {
                 race: entity.race,

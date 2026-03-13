@@ -1,5 +1,6 @@
 import { FileManager } from '@/utilities/file-manager';
 import { IMapLoader } from '@/resources/map/imap-loader';
+import { BuildingType } from './entity';
 import { GameCore } from './game-core';
 import { GameLoop } from './game-loop';
 import { SoundManager } from './audio';
@@ -55,7 +56,7 @@ export class Game extends GameCore {
     public mode: string = 'select';
 
     /** Building type to place (when mode === 'place_building') */
-    public placeBuildingType = 0;
+    public placeBuildingType: BuildingType | null = null;
 
     /** When true, renderers use procedural textures instead of loading game assets */
     public useProceduralTextures = false;

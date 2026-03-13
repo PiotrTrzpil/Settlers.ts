@@ -15,7 +15,7 @@ import { ValidPositionGrid } from '@/game/systems/placement/valid-position-grid'
  */
 export function createCliPlacementGrid(
     game: GameCore,
-    buildingType: number,
+    buildingType: BuildingType,
     centerX: number,
     centerY: number,
     player: number,
@@ -27,7 +27,7 @@ export function createCliPlacementGrid(
     }
 
     const request: GridComputeRequest = {
-        buildingType: buildingType as BuildingType,
+        buildingType,
         race,
         player,
         centerX: Math.round(centerX),

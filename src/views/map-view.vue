@@ -273,6 +273,7 @@ import type { Game } from '@/game/game';
 import { SoundManager } from '@/game/audio/sound-manager';
 import { saveCameraState, clearCameraState } from '@/game/renderer/camera-persistence';
 import { getCurrentMapId } from '@/game/state/game-state-persistence';
+import { BuildingType } from '@/game/buildings/building-type';
 
 import FileBrowser from '@/components/file-browser.vue';
 import RendererViewer from '@/components/renderer-viewer.vue';
@@ -412,7 +413,7 @@ const placeBuildingsWithWorker = computed({
     },
 });
 
-function setPlaceMode(buildingType: number) {
+function setPlaceMode(buildingType: BuildingType) {
     setPlaceModeBase(buildingType, currentRace.value);
 }
 

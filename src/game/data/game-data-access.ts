@@ -157,7 +157,7 @@ function ensureXmlIdMap(): Map<string, BuildingType[]> {
     if (!xmlIdToBuildingTypeMap) {
         xmlIdToBuildingTypeMap = new Map();
         for (const [btStr, xmlId] of Object.entries(BUILDING_TYPE_TO_XML_ID)) {
-            const bt = Number(btStr) as BuildingType;
+            const bt = btStr as BuildingType;
             const arr = xmlIdToBuildingTypeMap.get(xmlId);
             if (arr) {
                 arr.push(bt);
@@ -200,7 +200,7 @@ export function getBuildingInfo(race: Race, buildingType: BuildingType): Buildin
     }
     const xmlId = BUILDING_TYPE_TO_XML_ID[buildingType];
     if (!xmlId) {
-        throw new Error(`No XML mapping for BuildingType ${BuildingType[buildingType]}`);
+        throw new Error(`No XML mapping for BuildingType ${buildingType}`);
     }
     return loader.getBuilding(RACE_TO_RACE_ID[race], xmlId) ?? undefined;
 }
@@ -214,7 +214,7 @@ export function getBuildingInfo(race: Race, buildingType: BuildingType): Buildin
 export function getBuildingDoorOffset(race: Race, buildingType: BuildingType): { dx: number; dy: number } | null {
     const info = getBuildingInfo(race, buildingType);
     if (!info) {
-        throw new Error(`No BuildingInfo found for ${BuildingType[buildingType]} / race ${Race[race]}`);
+        throw new Error(`No BuildingInfo found for ${buildingType} / race ${Race[race]}`);
     }
     const { xOffset, yOffset } = info.door;
     if (xOffset === 0 && yOffset === 0) {
@@ -437,7 +437,7 @@ export function getWorkerBuildingTypes(race: Race, unitType: UnitType): Readonly
     if (!raceMap) {
         raceMap = new Map<UnitType, Set<BuildingType>>();
         for (const btStr of Object.keys(BUILDING_TYPE_TO_XML_ID)) {
-            const bt = Number(btStr) as BuildingType;
+            const bt = btStr as BuildingType;
             if (!isBuildingAvailableForRace(bt, race)) {
                 continue;
             }

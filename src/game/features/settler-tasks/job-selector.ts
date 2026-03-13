@@ -7,6 +7,7 @@
  */
 
 import type { Entity } from '../../entity';
+import type { BuildingType } from '../../buildings/building-type';
 import { raceToRaceId } from '../../data/game-data-access';
 import { ChoreoTaskType, type ChoreoJob, type ChoreoNode } from './choreo-types';
 import type { JobChoreographyStore } from './job-choreography-store';
@@ -101,7 +102,7 @@ export class JobSelector {
         const raceId = raceToRaceId(settler.race);
 
         // For settlers with building-sourced jobs (e.g. miners), filter to the assigned building's jobs
-        const jobs = (homeBuilding && config.buildingJobs?.get(homeBuilding.subType as number)) ?? config.jobs;
+        const jobs = (homeBuilding && config.buildingJobs?.get(homeBuilding.subType as BuildingType)) ?? config.jobs;
 
         for (const jobId of jobs) {
             const job = this.choreographyStore.getJob(raceId, jobId);

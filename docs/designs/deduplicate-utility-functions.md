@@ -44,6 +44,8 @@ Three pairs of identical/near-identical functions exist across the codebase. Ext
 
 ```typescript
 // src/game/features/logistics/logistics-helpers.ts (NEW)
+// Param type matches Entity.subType (number | string) — these are debug formatters
+// that must handle arbitrary subType values, not just valid enum members
 export function buildingTypeNameSafe(subType: number | string): string;
 export function unitTypeNameSafe(subType: number | string): string;
 

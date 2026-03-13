@@ -149,7 +149,7 @@ function buildingInfoToCosts(info: BuildingInfo): readonly ConstructionCost[] {
 export function getConstructionCosts(buildingType: BuildingType, race: Race): readonly ConstructionCost[] {
     const info = getBuildingInfo(race, buildingType);
     if (!info) {
-        throw new Error(`No BuildingInfo for ${BuildingType[buildingType]} / ${Race[race]}`);
+        throw new Error(`No BuildingInfo for ${buildingType} / ${Race[race]}`);
     }
     return buildingInfoToCosts(info);
 }
@@ -157,11 +157,7 @@ export function getConstructionCosts(buildingType: BuildingType, race: Race): re
 /** All building types that have construction costs defined in XML game data (for any race). */
 export function getBuildingTypesWithCosts(): BuildingType[] {
     const result: BuildingType[] = [];
-    for (const val of Object.values(BuildingType)) {
-        if (typeof val !== 'number') {
-            continue;
-        }
-        const bt = val as BuildingType;
+    for (const bt of Object.values(BuildingType)) {
         if (!hasBuildingXmlMapping(bt)) {
             continue;
         }

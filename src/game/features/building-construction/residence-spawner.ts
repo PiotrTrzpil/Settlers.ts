@@ -67,11 +67,7 @@ export class ResidenceSpawnerSystem implements TickSystem {
             // Reset timer for next spawn
             entry.timer += entry.config.spawnInterval!;
 
-            if (!this.spawnOne(entry.buildingEntityId, entry.config)) {
-                this.pending.splice(i, 1);
-                continue;
-            }
-
+            this.spawnOne(entry.buildingEntityId, entry.config);
             entry.remaining--;
             if (entry.remaining <= 0) {
                 this.pending.splice(i, 1);
@@ -80,11 +76,8 @@ export class ResidenceSpawnerSystem implements TickSystem {
     }
 
     /** Spawn a single carrier at the building's door tile, pushing any occupant aside. */
-    private spawnOne(buildingEntityId: number, config: BuildingSpawnConfig): boolean {
-        const building = this.gameState.getEntity(buildingEntityId);
-        if (!building) {
-            return false;
-        }
+    private spawnOne(buildingEntityId: number, config: BuildingSpawnConfig): void {
+        const building = this.gameState.getEntityOrThrow(buildingEntityId, 'residence building for carrier spawn');
 
         const door = getBuildingDoorPos(building.x, building.y, building.race, building.subType as BuildingType);
 
@@ -106,8 +99,6 @@ export class ResidenceSpawnerSystem implements TickSystem {
             y: door.y,
             player: building.player,
         });
-
-        return true;
     }
 
     onEntityRemoved(entityId: number): void {

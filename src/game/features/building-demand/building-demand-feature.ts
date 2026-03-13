@@ -12,7 +12,7 @@ import { BuildingDemandSystem } from './building-demand-system';
 import type { SettlerLocationExports } from '../settler-location/types';
 import { ChoreoTaskType } from '@/game/systems/choreo';
 import { createEnterBuildingExecutor } from '../settler-tasks/internal/dispatch-executors';
-import { EntityType } from '../../entity';
+import { EntityType, BuildingType } from '../../entity';
 import { BUILDING_SPAWN_ON_COMPLETE } from '../building-construction/spawn-units';
 
 export interface BuildingDemandExports {
@@ -61,10 +61,10 @@ export const BuildingDemandFeature: FeatureDefinition = {
                     }
                     // Buildings that auto-spawn units on completion (residences)
                     // already have their workers — skip them.
-                    if (BUILDING_SPAWN_ON_COMPLETE[e.subType as number]) {
+                    if (BUILDING_SPAWN_ON_COMPLETE[e.subType as BuildingType]) {
                         continue;
                     }
-                    buildingDemandSystem.addDemandFromBuilding(e.id, e.subType as number, e.race);
+                    buildingDemandSystem.addDemandFromBuilding(e.id, e.subType as BuildingType, e.race);
                 }
             },
             destroy: () => {

@@ -43,9 +43,7 @@ async function loadOneBuildingSprites(
 
     const dirCount = ctx.spriteLoader.getDirectionCount(fileSet, constructionJobIndex);
     if (dirCount === 0) {
-        log.warn(
-            `No sprite directions for ${BuildingType[buildingType]} (job ${constructionJobIndex}) in ${Race[race]} file`
-        );
+        log.warn(`No sprite directions for ${buildingType} (job ${constructionJobIndex}) in ${Race[race]} file`);
         return null;
     }
 
@@ -123,7 +121,7 @@ async function loadBuildingSpritesForFile(
             if (!info || info.file !== fileNum) {
                 continue;
             }
-            const buildingType = Number(typeStr) as BuildingType;
+            const buildingType = typeStr as BuildingType;
             if (!isBuildingAvailableForRace(buildingType, race)) {
                 continue;
             }

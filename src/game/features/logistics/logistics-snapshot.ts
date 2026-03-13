@@ -17,7 +17,6 @@ import { DemandPriority } from './demand-queue';
 import { EMaterialType } from '../../economy/material-type';
 import { EntityType } from '../../entity';
 import { UnitType, UNIT_TYPE_CONFIG, isUnitTypeMilitary } from '../../core/unit-types';
-import { BuildingType } from '../../buildings/building-type';
 import { SlotKind } from '../../core/pile-kind';
 import { query } from '../../ecs';
 import {
@@ -153,8 +152,8 @@ export function formatMaterial(materialType: EMaterialType): string {
     return materialType;
 }
 
-function buildingTypeNameSafe(subType: number): string {
-    return BuildingType[subType as BuildingType] || `#${subType}`;
+function buildingTypeNameSafe(subType: number | string): string {
+    return String(subType) || `#${subType}`;
 }
 
 function unitTypeNameSafe(subType: UnitType): string {
@@ -223,14 +222,17 @@ export function gatherDemands(
     const rawDemands: DemandEntry[] = [];
 
     for (const demand of demandQueue.getAllDemands()) {
-        const building = gameState.getEntity(demand.buildingId);
-        if (!building || building.player !== player) {
+        const building = gameState.getEntityOrThrow(
+            demand.buildingId,
+            'demand destination building in logistics snapshot'
+        );
+        if (building.player !== player) {
             continue;
         }
         summaries.push({
             id: demand.id,
             buildingId: demand.buildingId,
-            buildingType: buildingTypeNameSafe(building.subType as number),
+            buildingType: buildingTypeNameSafe(building.subType),
             material: formatMaterial(demand.materialType),
             materialType: demand.materialType,
             priority: PRIORITY_NAMES[demand.priority],
@@ -341,8 +343,8 @@ export function gatherLogisticsSnapshot(
 
     // Count active jobs and stalled jobs from job store
     for (const [carrierId, job] of config.logisticsDispatcher.jobStore.jobs.raw) {
-        const carrier = config.gameState.getEntity(carrierId);
-        if (!carrier || carrier.player !== player) {
+        const carrier = config.gameState.getEntityOrThrow(carrierId, 'carrier in active job store');
+        if (carrier.player !== player) {
             continue;
         }
         stats.activeJobCount++;
@@ -381,7 +383,7 @@ export function gatherProductionBuildings(
 
         result.push({
             entityId: entity.id,
-            type: buildingTypeNameSafe(entity.subType as number),
+            type: buildingTypeNameSafe(entity.subType),
             inputs,
             outputs,
             outputFull: outputs.length > 0 && outputs.every(s => s.current >= s.max),
@@ -500,10 +502,8 @@ function buildWorkerSummary(
     const assignedBuilding = settlerTaskSystem.getAssignedBuilding(entityId);
     let assignedBuildingType: string | null = null;
     if (assignedBuilding !== null) {
-        const bldg = gameState.getEntity(assignedBuilding);
-        if (bldg) {
-            assignedBuildingType = buildingTypeNameSafe(bldg.subType as number);
-        }
+        const bldg = gameState.getEntityOrThrow(assignedBuilding, 'worker assigned building in logistics snapshot');
+        assignedBuildingType = buildingTypeNameSafe(bldg.subType);
     }
 
     return {
@@ -530,8 +530,8 @@ export function gatherTransportJobs(
     const result: TransportJobSummary[] = [];
 
     for (const [carrierId, job] of logisticsDispatcher.jobStore.jobs.raw) {
-        const carrier = gameState.getEntity(carrierId);
-        if (!carrier || carrier.player !== player) {
+        const carrier = gameState.getEntityOrThrow(carrierId, 'carrier in transport job store');
+        if (carrier.player !== player) {
             continue;
         }
         result.push({

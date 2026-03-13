@@ -148,9 +148,7 @@ export class GameState {
         // Resolve race: explicit opt > player lookup > fallback for non-unit/building types
         const race = explicitRace ?? this.playerRaces.get(player);
         if (type === EntityType.Building && race === undefined) {
-            throw new Error(
-                `addEntity: race is required for buildings (BuildingType ${BuildingType[subType as BuildingType]})`
-            );
+            throw new Error(`addEntity: race is required for buildings (BuildingType ${String(subType)})`);
         }
         if (type === EntityType.Unit && race === undefined) {
             throw new Error(`addEntity: race is required for units (UnitType ${subType})`);
@@ -318,7 +316,7 @@ export class GameState {
                 const occupant = this.entityMap.get(occupantId);
                 const desc =
                     occupant?.type === EntityType.Building
-                        ? `building #${occupantId} (${BuildingType[occupant.subType as BuildingType]})`
+                        ? `building #${occupantId} (${String(occupant.subType)})`
                         : `${EntityType[occupant?.type ?? 0]} #${occupantId}`;
                 throw new Error(
                     `addEntity: cannot place MapObject (subType=${subType}) at (${x},${y}) — tile occupied by ${desc}`

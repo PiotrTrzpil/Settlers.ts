@@ -8,7 +8,6 @@
 import type { Entity } from '@/game/entity';
 import { EntityType } from '@/game/entity';
 import { UnitType } from '@/game/core/unit-types';
-import { BuildingType } from '@/game/buildings/building-type';
 import type { IViewPoint } from '../i-view-point';
 import type { IRenderPass, ColorEntityContext } from './types';
 import { TilePicker } from '@/game/input/tile-picker';
@@ -150,7 +149,7 @@ export class ColorEntityPass implements IRenderPass {
             return String(entity.subType as UnitType);
         }
         if (entity.type === EntityType.Building) {
-            return BuildingType[entity.subType as number] ?? `Bld#${entity.subType}`;
+            return String(entity.subType);
         }
         if (entity.type === EntityType.StackedPile) {
             return String(entity.subType);

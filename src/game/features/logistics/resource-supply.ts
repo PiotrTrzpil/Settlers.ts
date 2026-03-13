@@ -55,8 +55,8 @@ export function getAvailableSupplies(
     for (const buildingId of buildingIds) {
         // Filter by player if specified
         if (playerId !== undefined) {
-            const building = gameState.getEntity(buildingId);
-            if (!building || building.player !== playerId) {
+            const building = gameState.getEntityOrThrow(buildingId, 'supply building in resource supply lookup');
+            if (building.player !== playerId) {
                 continue;
             }
         }

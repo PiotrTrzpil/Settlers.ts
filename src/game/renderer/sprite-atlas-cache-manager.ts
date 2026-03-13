@@ -27,7 +27,7 @@ import {
 } from './sprite-cache';
 import { consumeEarlyPrefetch, type EarlyPrefetchHandle } from './sprite-cache/early-prefetch';
 import type { Entity } from '@/game/entity';
-import { UnitType } from '@/game/entity';
+import { BuildingType, UnitType } from '@/game/entity';
 
 const log = new LogHandler('SpriteAtlasCacheManager');
 
@@ -102,7 +102,7 @@ export function computeLayerPriority(
 ): { layerOrder: number[]; essentialCount: number } {
     // Count entity subtypes by entity type
     const mapObjectTypes = new Set<number>();
-    const buildingTypes = new Set<number>();
+    const buildingTypes = new Set<BuildingType>();
     const unitTypes = new Set<UnitType>();
     const layerScore = new Map<number, number>();
 
@@ -111,7 +111,7 @@ export function computeLayerPriority(
         if (entityType === 3 /* MapObject */) {
             mapObjectTypes.add(entity.subType as number);
         } else if (entityType === 2 /* Building */) {
-            buildingTypes.add(entity.subType as number);
+            buildingTypes.add(entity.subType as BuildingType);
         } else if (entityType === 1 /* Unit */) {
             unitTypes.add(entity.subType as UnitType);
         }

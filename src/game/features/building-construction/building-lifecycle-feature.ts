@@ -94,10 +94,7 @@ export class BuildingLifecycleHandler {
     }
 
     private onBuildingPlaced({ buildingId, buildingType, x, y, player }: GameEvents['building:placed']): void {
-        const entity = this.gameState.getEntity(buildingId);
-        if (!entity) {
-            return;
-        }
+        const entity = this.gameState.getEntityOrThrow(buildingId, 'building placed event target');
         this.constructionSiteManager.registerSite(buildingId, buildingType, entity.race, player, x, y);
         const constructionConfig = getConstructionInventoryConfig(buildingType, entity.race);
         if (constructionConfig.inputSlots.length > 0) {

@@ -67,10 +67,7 @@ export class TowerGarrisonManager {
                 return;
             }
 
-            const unit = this.gameState.getEntity(settlerId);
-            if (!unit) {
-                return;
-            }
+            const unit = this.gameState.getEntityOrThrow(settlerId, 'unit entering garrison building');
             const role = getGarrisonRole(unit.subType as UnitType);
             if (!role) {
                 return;
@@ -115,9 +112,7 @@ export class TowerGarrisonManager {
     initTower(buildingId: number, buildingType: BuildingType): void {
         const capacity = getGarrisonCapacity(buildingType);
         if (!capacity) {
-            throw new Error(
-                `TowerGarrisonManager.initTower: building type ${BuildingType[buildingType]} has no garrison capacity`
-            );
+            throw new Error(`TowerGarrisonManager.initTower: building type ${buildingType} has no garrison capacity`);
         }
 
         this.garrisons.set(buildingId, {
@@ -126,7 +121,7 @@ export class TowerGarrisonManager {
             bowmanSlots: { max: capacity.bowmanSlots, unitIds: [] },
         });
 
-        log.debug(`Tower ${buildingId} (${BuildingType[buildingType]}) registered`);
+        log.debug(`Tower ${buildingId} (${buildingType}) registered`);
     }
 
     /**

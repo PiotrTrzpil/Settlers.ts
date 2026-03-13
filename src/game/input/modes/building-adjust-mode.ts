@@ -73,8 +73,8 @@ export class BuildingAdjustMode extends BaseInputMode {
             return;
         }
 
-        const building = deps.gameState.getEntity(buildingId);
-        if (!building || building.type !== EntityType.Building) {
+        const building = deps.gameState.getEntityOrThrow(buildingId, 'building selected for adjustment');
+        if (building.type !== EntityType.Building) {
             return;
         }
 

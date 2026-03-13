@@ -22,8 +22,8 @@ export function executeSelect(deps: SelectionDeps, cmd: SelectCommand): CommandR
     const debugAll = debugStats.state.selectAllUnits;
 
     if (cmd.entityId !== null) {
-        const ent = state.getEntity(cmd.entityId);
-        if (ent && !sel.canSelect(ent, debugAll)) {
+        const ent = state.getEntityOrThrow(cmd.entityId, 'entity to select');
+        if (!sel.canSelect(ent, debugAll)) {
             sel.clear();
             return commandSuccess([{ type: 'selection_changed', selectedIds: [] }]);
         }
@@ -55,7 +55,7 @@ export function executeSelectAtTile(deps: SelectionDeps, cmd: SelectAtTileComman
 export function executeToggleSelection(deps: SelectionDeps, cmd: ToggleSelectionCommand): CommandResult {
     const { state } = deps;
     const sel = state.selection;
-    const entity = state.getEntity(cmd.entityId);
+    const entity = state.getEntityOrThrow(cmd.entityId, 'entity to toggle selection');
     if (!sel.canSelect(entity, debugStats.state.selectAllUnits)) {
         return commandFailed(`Entity ${cmd.entityId} is not selectable`);
     }
@@ -75,8 +75,8 @@ export function executeSelectMultiple(deps: SelectionDeps, cmd: SelectMultipleCo
     const { state } = deps;
     const debugAll = debugStats.state.selectAllUnits;
     const entities = cmd.entityIds
-        .map(id => state.getEntity(id))
-        .filter((e): e is Entity => e !== undefined && state.selection.canSelect(e, debugAll));
+        .map(id => state.getEntityOrThrow(id, 'entity in multiple selection'))
+        .filter((e): e is Entity => state.selection.canSelect(e, debugAll));
     const selectedIds = state.selection.selectArea(entities, debugAll);
     return commandSuccess([{ type: 'selection_changed', selectedIds }]);
 }
@@ -85,20 +85,17 @@ export function executeSelectSameUnitType(deps: SelectionDeps, cmd: SelectSameUn
     const { state } = deps;
     const debugAll = debugStats.state.selectAllUnits;
 
-    const seed = state.getEntity(cmd.seedEntityId);
-    if (!seed || seed.type !== EntityType.Unit) {
+    const seed = state.getEntityOrThrow(cmd.seedEntityId, 'seed entity for same-type selection');
+    if (seed.type !== EntityType.Unit) {
         return commandFailed(`Seed entity ${cmd.seedEntityId} is not a unit`);
     }
 
     const subType = seed.subType;
     const entities = cmd.candidateIds
-        .map(id => state.getEntity(id))
+        .map(id => state.getEntityOrThrow(id, 'candidate entity for same-type selection'))
         .filter(
             (e): e is Entity =>
-                e !== undefined &&
-                e.type === EntityType.Unit &&
-                e.subType === subType &&
-                state.selection.canSelect(e, debugAll)
+                e.type === EntityType.Unit && e.subType === subType && state.selection.canSelect(e, debugAll)
         );
 
     const selectedIds = state.selection.selectArea(entities, debugAll);

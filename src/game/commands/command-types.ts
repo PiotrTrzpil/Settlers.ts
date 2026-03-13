@@ -198,7 +198,7 @@ export interface ScriptAddGoodsCommand {
 
 export interface ScriptAddBuildingCommand {
     type: 'script_add_building';
-    buildingType: number;
+    buildingType: BuildingType;
     x: number;
     y: number;
     player: number;

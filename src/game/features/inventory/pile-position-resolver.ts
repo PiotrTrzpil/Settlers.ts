@@ -76,7 +76,7 @@ export class PilePositionResolver {
                 if (!pos) {
                     this.log.warn(
                         `No XML ${slotKind} pile position for material ${material} ` +
-                            `on building ${building.id} (${BuildingType[bt]}); slot skipped`
+                            `on building ${building.id} (${bt}); slot skipped`
                     );
                 }
                 return pos ?? null;
@@ -102,7 +102,7 @@ export class PilePositionResolver {
                 }
                 throw new Error(
                     `PilePositionResolver: no free storage pile position for building ${building.id} ` +
-                        `(${BuildingType[bt]}); inventory constraint violated`
+                        `(${bt}); inventory constraint violated`
                 );
             }
         }

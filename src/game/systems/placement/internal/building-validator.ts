@@ -73,9 +73,7 @@ export function validateBuildingPlacement(
     ctx: PlacementContext
 ): PlacementResult {
     if (ctx.race === undefined) {
-        throw new Error(
-            `validateBuildingPlacement: ctx.race is required for building placement (${BuildingType[buildingType]})`
-        );
+        throw new Error(`validateBuildingPlacement: ctx.race is required for building placement (${buildingType})`);
     }
     const footprint = getBuildingFootprint(x, y, buildingType, ctx.race);
     const isMine = isMineBuilding(buildingType);

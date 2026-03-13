@@ -338,10 +338,7 @@ export function getProductionInputs(
     if (recipe) {
         return recipe.inputs;
     }
-    const entity = gameState.getEntity(buildingId);
-    if (!entity) {
-        return undefined;
-    }
+    const entity = gameState.getEntityOrThrow(buildingId, 'building in production inputs lookup');
     return BUILDING_PRODUCTIONS.get(entity.subType as BuildingType)?.inputs;
 }
 
@@ -357,10 +354,7 @@ export function getProductionOutput(
     if (recipe) {
         return recipe.output;
     }
-    const entity = gameState.getEntity(buildingId);
-    if (!entity) {
-        return undefined;
-    }
+    const entity = gameState.getEntityOrThrow(buildingId, 'building in production output lookup');
     return BUILDING_PRODUCTIONS.get(entity.subType as BuildingType)?.output;
 }
 

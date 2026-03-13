@@ -18,7 +18,7 @@ import type { BuildingSpawnConfig } from './types';
 /** Seconds between each carrier spawn from a residence */
 const RESIDENCE_SPAWN_INTERVAL = 3;
 
-export const BUILDING_SPAWN_ON_COMPLETE: Record<number, BuildingSpawnConfig | undefined> = {
+export const BUILDING_SPAWN_ON_COMPLETE: Partial<Record<BuildingType, BuildingSpawnConfig>> = {
     [BuildingType.ResidenceSmall]: { unitType: UnitType.Carrier, count: 2, spawnInterval: RESIDENCE_SPAWN_INTERVAL },
     [BuildingType.ResidenceMedium]: { unitType: UnitType.Carrier, count: 4, spawnInterval: RESIDENCE_SPAWN_INTERVAL },
     [BuildingType.ResidenceBig]: { unitType: UnitType.Carrier, count: 6, spawnInterval: RESIDENCE_SPAWN_INTERVAL },

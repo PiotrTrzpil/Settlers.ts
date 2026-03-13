@@ -1,4 +1,5 @@
 import { test, expect } from './fixtures';
+import { BuildingType } from '@/game/buildings/building-type';
 import { Timeout } from './wait-config';
 
 /**
@@ -14,19 +15,19 @@ test.describe('Game State Reset', { tag: '@smoke' }, () => {
         const { check: checkErrors } = gp.collectErrors();
 
         // Place a storage area + woodcutter (triggers inventory + logistics registration)
-        const storageTile = await gp.actions.findBuildableTile(2);
+        const storageTile = await gp.actions.findBuildableTile(BuildingType.StorageArea);
         if (!storageTile) {
             test.skip();
             return;
         }
-        await gp.actions.placeBuilding(2, storageTile.x, storageTile.y);
+        await gp.actions.placeBuilding(BuildingType.StorageArea, storageTile.x, storageTile.y);
 
-        const woodcutterTile = await gp.actions.findBuildableTile(1);
+        const woodcutterTile = await gp.actions.findBuildableTile(BuildingType.WoodcutterHut);
         if (!woodcutterTile) {
             test.skip();
             return;
         }
-        await gp.actions.placeBuilding(1, woodcutterTile.x, woodcutterTile.y);
+        await gp.actions.placeBuilding(BuildingType.WoodcutterHut, woodcutterTile.x, woodcutterTile.y);
 
         // Spawn a carrier so logistics can create reservations
         await gp.actions.spawnUnit('Carrier');
@@ -49,9 +50,9 @@ test.describe('Game State Reset', { tag: '@smoke' }, () => {
         const { check: checkErrors } = gp.collectErrors();
 
         await gp.actions.placeBuilding(
-            2,
-            (await gp.actions.findBuildableTile(2))!.x,
-            (await gp.actions.findBuildableTile(2))!.y
+            BuildingType.StorageArea,
+            (await gp.actions.findBuildableTile(BuildingType.StorageArea))!.x,
+            (await gp.actions.findBuildableTile(BuildingType.StorageArea))!.y
         );
         await gp.wait.waitForFrames(5);
 
@@ -64,23 +65,23 @@ test.describe('Game State Reset', { tag: '@smoke' }, () => {
 
     test('entities can be placed after reset', async ({ gp }) => {
         // Place, reset, place again — verifies systems are in clean state
-        const tile1 = await gp.actions.findBuildableTile(1);
+        const tile1 = await gp.actions.findBuildableTile(BuildingType.WoodcutterHut);
         if (!tile1) {
             test.skip();
             return;
         }
-        await gp.actions.placeBuilding(1, tile1.x, tile1.y);
+        await gp.actions.placeBuilding(BuildingType.WoodcutterHut, tile1.x, tile1.y);
         await expect(gp).toHaveBuildingCount(1);
 
         await gp.resetGameState();
         await expect(gp).toHaveBuildingCount(0);
 
-        const tile2 = await gp.actions.findBuildableTile(1);
+        const tile2 = await gp.actions.findBuildableTile(BuildingType.WoodcutterHut);
         if (!tile2) {
             test.skip();
             return;
         }
-        await gp.actions.placeBuilding(1, tile2.x, tile2.y);
+        await gp.actions.placeBuilding(BuildingType.WoodcutterHut, tile2.x, tile2.y);
         await expect(gp).toHaveBuildingCount(1);
 
         await gp.actions.spawnUnit('Carrier');

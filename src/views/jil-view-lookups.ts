@@ -24,8 +24,8 @@ export const BUILDING_FILE_IDS = new Set([10, 11, 12, 14]);
 // Build reverse lookup from job index to building name
 export const jobToBuildingName = new Map<number, string>();
 for (const [typeStr, jobIndex] of Object.entries(BUILDING_JOB_INDICES)) {
-    const buildingType = Number(typeStr) as BuildingType;
-    jobToBuildingName.set(jobIndex, BuildingType[buildingType]);
+    const buildingType = typeStr as BuildingType;
+    jobToBuildingName.set(jobIndex, buildingType);
 }
 
 // Build reverse lookup from job index to resource/material name

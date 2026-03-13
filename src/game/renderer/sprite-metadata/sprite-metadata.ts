@@ -217,7 +217,7 @@ export function getBuildingSpriteMap(race: Race): Partial<Record<BuildingType, B
     const result: Partial<Record<BuildingType, BuildingSpriteInfo>> = {};
 
     for (const [typeStr, jobIndex] of Object.entries(BUILDING_JOB_INDICES)) {
-        const buildingType = Number(typeStr) as BuildingType;
+        const buildingType = typeStr as BuildingType;
         if (!isBuildingAvailableForRace(buildingType, race)) {
             continue;
         }
@@ -628,7 +628,7 @@ export class SpriteMetadataRegistry {
     /**
      * Get atlas layers for buildings — only completed sprite (no construction).
      */
-    public getLayersForBuildings(types: Set<number>, race: number): Set<number> {
+    public getLayersForBuildings(types: Set<BuildingType>, race: number): Set<number> {
         const layers = new Set<number>();
         const raceMap = this.buildings.getRaceMap().get(race);
         if (!raceMap) {

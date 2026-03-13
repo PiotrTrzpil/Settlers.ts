@@ -91,10 +91,7 @@ export class BuildingSiegeSystem implements TickSystem {
      */
     onMovementStopped(entityId: number): void {
         try {
-            const unit = this.gameState.getEntity(entityId);
-            if (!unit) {
-                return;
-            }
+            const unit = this.gameState.getEntityOrThrow(entityId, 'unit that stopped moving');
             if (unit.type !== EntityType.Unit) {
                 return;
             }
@@ -430,7 +427,7 @@ export class BuildingSiegeSystem implements TickSystem {
         // garrison buildings), but catching it here prevents destroying the
         // old garrison with no replacement.
         if (!isGarrisonBuildingType(buildingType)) {
-            log.error(`captureBuilding: ${BuildingType[buildingType]} has no garrison capacity, aborting`);
+            log.error(`captureBuilding: ${buildingType} has no garrison capacity, aborting`);
             return;
         }
 

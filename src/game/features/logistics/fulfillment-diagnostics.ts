@@ -75,10 +75,10 @@ export interface DiagnosticConfig {
 export function diagnoseUnfulfilledRequest(request: DiagnosticRequest, config: DiagnosticConfig): UnfulfilledReason {
     const { gameState, inventoryManager, jobStore } = config;
 
-    const destBuilding = gameState.getEntity(request.buildingId);
-    if (!destBuilding) {
-        return UnfulfilledReason.NoSupply;
-    }
+    const destBuilding = gameState.getEntityOrThrow(
+        request.buildingId,
+        'demand destination building in fulfillment diagnostics'
+    );
 
     const playerId = destBuilding.player;
 

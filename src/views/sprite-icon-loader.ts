@@ -161,7 +161,7 @@ export async function loadBuildingIcons(
     fileManager: FileManager,
     race: Race,
     buildings: { type: BuildingType }[]
-): Promise<Record<number, IconEntry>> {
+): Promise<Partial<Record<BuildingType, IconEntry>>> {
     const loader = new SpriteLoader(fileManager);
     const fileSet = await loader.loadFileSet(String(race as number));
     if (!fileSet?.jilReader || !fileSet.dilReader) {
@@ -196,7 +196,7 @@ export async function loadBuildingIcons(
 
     // Map sprite dimensions linearly to ICON_MIN..ICON_MAX
     const dimRange = maxDim - minDim || 1;
-    const icons: Record<number, IconEntry> = {};
+    const icons: Partial<Record<BuildingType, IconEntry>> = {};
     for (const { type, data, dim } of sprites) {
         const t = (dim - minDim) / dimRange;
         const displaySize = Math.round(ICON_MIN_PX + t * (ICON_MAX_PX - ICON_MIN_PX));

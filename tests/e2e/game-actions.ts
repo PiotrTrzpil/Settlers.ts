@@ -7,6 +7,7 @@
 import type { Page } from '@playwright/test';
 import type { BuildingResult, ResourceResult, UnitResult, BatchPlacementResult } from './game-action-types';
 import type { UnitType } from '@/game/core/unit-types';
+import { BuildingType } from '@/game/buildings/building-type';
 
 // Re-export all types and query functions so existing imports keep working
 export type {
@@ -53,7 +54,7 @@ export async function setGameSpeed(page: Page, speed: number): Promise<void> {
  */
 export async function placeBuilding(
     page: Page,
-    buildingType: number,
+    buildingType: BuildingType,
     x: number,
     y: number,
     player = 0
@@ -196,7 +197,10 @@ export async function moveUnit(page: Page, entityId: number, targetX: number, ta
  * Temporarily places and removes a building to validate terrain + slope.
  * @param buildingType BuildingType to test (default 1 = Lumberjack).
  */
-export async function findBuildableTile(page: Page, buildingType = 1): Promise<{ x: number; y: number } | null> {
+export async function findBuildableTile(
+    page: Page,
+    buildingType: BuildingType = BuildingType.WoodcutterHut
+): Promise<{ x: number; y: number } | null> {
     return page.evaluate(bt => {
         const game = window.__settlers__?.game;
         if (!game) return null;
@@ -250,7 +254,7 @@ export async function findPassableTile(page: Page): Promise<{ x: number; y: numb
 // ── Batch placement ─────────────────────────────────────────────
 
 export type PlacementSpec =
-    | { kind: 'building'; buildingTypes?: number[]; players?: number[] }
+    | { kind: 'building'; buildingTypes?: BuildingType[]; players?: number[] }
     | { kind: 'pile'; materialTypes?: number[] };
 
 /**
@@ -270,7 +274,9 @@ export async function placeMultiple(page: Page, count: number, spec: PlacementSp
 
             const executePlacement = (tx: number, ty: number, idx: number) => {
                 if (s.kind === 'building') {
-                    const bt = s.buildingTypes ? s.buildingTypes[idx % s.buildingTypes.length]! : 1;
+                    const bt = s.buildingTypes
+                        ? s.buildingTypes[idx % s.buildingTypes.length]!
+                        : ('WoodcutterHut' as BuildingType);
                     const p = s.players ? s.players[idx % s.players.length]! : 0;
                     return game.execute({
                         type: 'place_building',
@@ -418,7 +424,7 @@ export async function spawnMatureTreesNear(
  */
 export async function findBuildableTileNear(
     page: Page,
-    buildingType: number,
+    buildingType: BuildingType,
     centerX: number,
     centerY: number
 ): Promise<{ x: number; y: number } | null> {

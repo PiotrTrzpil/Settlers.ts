@@ -10,7 +10,6 @@ import type { AnimationPlayback } from '../animation/entity-visual-service';
 import type { AnimationData } from '../animation/animation';
 import type { SpriteEntry } from './sprite-metadata';
 import { EntityType } from '../entity';
-import { BuildingType } from '../buildings/building-type';
 import { createLogger } from '@/utilities/logger';
 
 const log = createLogger('AnimationHelpers');
@@ -31,7 +30,7 @@ function entityLabel(entityType: EntityType, subType: number | string): string {
         case EntityType.Unit:
             return `Unit/${String(subType)}`;
         case EntityType.Building:
-            return `Building/${typeof subType === 'number' ? (BuildingType[subType] ?? subType) : subType}`;
+            return `Building/${String(subType)}`;
         case EntityType.None:
         case EntityType.MapObject:
         case EntityType.StackedPile:

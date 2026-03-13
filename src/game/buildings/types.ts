@@ -56,7 +56,7 @@ export function isMineBuilding(buildingType: BuildingType): boolean {
 export function getBuildingHotspot(buildingType: BuildingType, race: Race): { x: number; y: number } {
     const info = getBuildingInfo(race, buildingType);
     if (!info) {
-        throw new Error(`No BuildingInfo for ${BuildingType[buildingType]} / race ${Race[race]}`);
+        throw new Error(`No BuildingInfo for ${buildingType} / race ${Race[race]}`);
     }
     return { x: info.hotSpotX, y: info.hotSpotY };
 }
@@ -74,11 +74,11 @@ export function getBuildingHotspot(buildingType: BuildingType, race: Race): { x:
 export function getBuildingFootprint(x: number, y: number, buildingType: BuildingType, race: Race): TileCoord[] {
     const info = getBuildingInfo(race, buildingType);
     if (!info) {
-        throw new Error(`No BuildingInfo for ${BuildingType[buildingType]} / race ${Race[race]}`);
+        throw new Error(`No BuildingInfo for ${buildingType} / race ${Race[race]}`);
     }
     if (info.buildingPosLines.length === 0) {
         throw new Error(
-            `No footprint bitmask data for ${BuildingType[buildingType]} / race ${Race[race]}. ` +
+            `No footprint bitmask data for ${buildingType} / race ${Race[race]}. ` +
                 `All buildings must have buildingPosLines in their XML definition.`
         );
     }
@@ -95,7 +95,7 @@ export function getBuildingFootprint(x: number, y: number, buildingType: Buildin
 export function getBuildingBlockArea(x: number, y: number, buildingType: BuildingType, race: Race): TileCoord[] {
     const info = getBuildingInfo(race, buildingType);
     if (!info) {
-        throw new Error(`No BuildingInfo for ${BuildingType[buildingType]} / race ${Race[race]}`);
+        throw new Error(`No BuildingInfo for ${buildingType} / race ${Race[race]}`);
     }
     if (info.blockPosLines.length === 0) {
         return [];

@@ -4,12 +4,13 @@
  * Extracted from game-actions.ts to keep that file under the 600-line limit.
  */
 import type { Page } from '@playwright/test';
+import type { BuildingType } from '@/game/buildings/building-type';
 
 // ── Return types ────────────────────────────────────────────────
 
 export interface GameState {
     mode: string;
-    placeBuildingType: number;
+    placeBuildingType: BuildingType | null;
     entityCount: number;
     entities: EntityInfo[];
     mapWidth: number;
@@ -92,7 +93,7 @@ export interface BuildingInventoryInfo {
 
 /** Read structured game state including entities and map size. */
 export async function getGameState(page: Page): Promise<GameState | null> {
-    return page.evaluate(() => {
+    return page.evaluate<GameState | null>(() => {
         const game = window.__settlers__?.game;
         if (!game) return null;
         return {

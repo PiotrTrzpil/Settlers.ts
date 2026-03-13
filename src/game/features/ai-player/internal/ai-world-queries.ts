@@ -119,10 +119,7 @@ export function findNearestEnemyBase(
     const allBuildingIds = state.entityIndex.idsOfType(EntityType.Building);
     const sorted = [...allBuildingIds].sort((a, b) => a - b);
     for (const id of sorted) {
-        const entity = state.getEntity(id);
-        if (!entity) {
-            continue;
-        }
+        const entity = state.getEntityOrThrow(id, 'building in findNearestEnemyBase');
         if (entity.player === player) {
             continue;
         }

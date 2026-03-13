@@ -1,5 +1,5 @@
 import { ref, computed, watch, reactive, type Ref, type ShallowRef } from 'vue';
-import { Entity, TileCoord } from '@/game/entity';
+import { BuildingType, Entity, TileCoord } from '@/game/entity';
 import { isUnitAvailableForRace, isBuildingAvailableForRace } from '@/game/data/race-availability';
 import { Race } from '@/game/core/race';
 import type { Game } from '@/game/game';
@@ -44,7 +44,7 @@ export function setupUIState() {
     const resourceAmount = ref(1);
     const hoveredTile = ref<TileCoord | null>(null);
     const resourceIcons = ref<Record<string, string>>({});
-    const buildingIcons = ref<Record<number, IconEntry>>({});
+    const buildingIcons = ref<Partial<Record<BuildingType, IconEntry>>>({});
     const unitIcons = ref<Record<string, IconEntry>>({});
     const specialistIcons = ref<Record<string, IconEntry>>({});
 
@@ -99,7 +99,7 @@ export function setupComputedState(game: ShallowRef<Game | null>, selectedRace?:
 
     // Mode state - sourced from the game's view state
     const currentMode = computed(() => game.value?.viewState.state.mode ?? 'select');
-    const placeBuildingType = computed(() => game.value?.viewState.state.placeBuildingType ?? 0);
+    const placeBuildingType = computed(() => game.value?.viewState.state.placeBuildingType ?? null);
     const placeResourceType = computed(() => game.value?.viewState.state.placePileType ?? '');
     const placeUnitType = computed(() => game.value?.viewState.state.placeUnitType ?? '');
 

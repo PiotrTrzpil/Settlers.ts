@@ -1,6 +1,6 @@
 import { triggerRef, watch, onMounted, onBeforeUnmount, type Ref, type ShallowRef } from 'vue';
 import type { Game } from '@/game/game';
-import { UnitType } from '@/game/entity';
+import { BuildingType, UnitType } from '@/game/entity';
 import { Race } from '@/game/core/race';
 import type { EMaterialType } from '@/game/economy';
 import type { FileManager } from '@/utilities/file-manager';
@@ -19,7 +19,7 @@ const availableResources = ALL_RESOURCES;
 /** Create mode toggle handler */
 export function createModeToggler(getGame: () => Game | null, getInputManager: () => InputManager | null) {
     return {
-        setPlaceMode(buildingType: number, race: number): void {
+        setPlaceMode(buildingType: BuildingType, race: number): void {
             const game = getGame();
             const inputManager = getInputManager();
             if (!game || !inputManager) {

@@ -191,12 +191,10 @@ export class SettlerTaskSystem implements TickSystem {
             this.runtimes.reindex(settlerId);
 
             if (runtime.job) {
-                const entity = this.gameState.getEntity(settlerId);
-                if (entity) {
-                    const unitConfig = this.settlerConfigs.get(entity.subType as UnitType);
-                    if (unitConfig) {
-                        this.interruptJobForCleanup(entity, unitConfig, runtime);
-                    }
+                const entity = this.gameState.getEntityOrThrow(settlerId, 'settler whose approach was interrupted');
+                const unitConfig = this.settlerConfigs.get(entity.subType as UnitType);
+                if (unitConfig) {
+                    this.interruptJobForCleanup(entity, unitConfig, runtime);
                 }
                 runtime.job = null;
             }
@@ -221,8 +219,8 @@ export class SettlerTaskSystem implements TickSystem {
                 return;
             }
 
-            const entity = this.gameState.getEntity(unitId);
-            if (entity && runtime.job) {
+            const entity = this.gameState.getEntityOrThrow(unitId, 'unit being transformed to Carrier');
+            if (runtime.job) {
                 const unitConfig = this.settlerConfigs.get(toType);
                 if (unitConfig) {
                     this.interruptJobForCleanup(entity, unitConfig, runtime);

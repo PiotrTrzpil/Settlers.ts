@@ -26,7 +26,7 @@ describe('Command System – edge cases', () => {
             setTerrainAt(sim.map, 10, 10, TERRAIN.WATER);
             const result = sim.execute({
                 type: 'place_building',
-                buildingType: 1,
+                buildingType: BuildingType.WoodcutterHut,
                 x: 10,
                 y: 10,
                 player: 0,

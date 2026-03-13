@@ -9,7 +9,6 @@
  */
 
 import { EntityType } from '@/game/entity';
-import { BuildingType } from '@/game/buildings/building-type';
 import { EventFmt } from '@/game/debug/event-formatting';
 import type { SerializedTimelineEntry } from '@/game/cli/types';
 import type { InventorySlot } from '@/game/systems/inventory/inventory-slot';
@@ -138,12 +137,11 @@ export function recordTimelineEvent(
     const y = extractNum(payload, 'y');
     const level = typeof payload['level'] === 'string' ? payload['level'] : undefined;
     const rawEntityType = extractNum(payload, 'entityType');
-    const rawBuildingType = extractNum(payload, 'buildingType');
     if (!entityType && rawEntityType !== undefined) {
         entityType = EntityType[rawEntityType];
     }
     const unitType = typeof payload['unitType'] === 'string' ? payload['unitType'] : undefined;
-    const buildingType = rawBuildingType !== undefined ? BuildingType[rawBuildingType] : undefined;
+    const buildingType = typeof payload['buildingType'] === 'string' ? payload['buildingType'] : undefined;
 
     // Use inventory slotType as label (preserves input/output distinction)
     const finalLabel = event === 'inventory:changed' ? (payload['slotType'] as string) : label;

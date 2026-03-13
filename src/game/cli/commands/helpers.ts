@@ -19,8 +19,8 @@ export function fail(output: string): CliResult {
 
 // ─── Entity display ──────────────────────────────────────────────────────────
 
-export function buildingTypeName(subType: number): string {
-    return BuildingType[subType as BuildingType];
+export function buildingTypeName(subType: BuildingType): string {
+    return String(subType);
 }
 
 export function unitTypeName(subType: UnitType): string {
@@ -29,7 +29,7 @@ export function unitTypeName(subType: UnitType): string {
 
 export function entityTypeName(entity: Entity): string {
     if (entity.type === EntityType.Building) {
-        return buildingTypeName(entity.subType as number);
+        return buildingTypeName(entity.subType as BuildingType);
     }
     if (entity.type === EntityType.Unit) {
         return unitTypeName(entity.subType as UnitType);

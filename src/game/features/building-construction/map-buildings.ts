@@ -169,7 +169,7 @@ export function populateMapBuildings(
         result.push({ buildingId: entity.id, buildingType, race: entity.race });
 
         const entries = perPlayer.get(buildingData.player) ?? [];
-        entries.push(`${BuildingType[buildingType]}@(${buildingData.x},${buildingData.y})`);
+        entries.push(`${buildingType}@(${buildingData.x},${buildingData.y})`);
         perPlayer.set(buildingData.player, entries);
     }
 

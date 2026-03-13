@@ -1,4 +1,5 @@
 import { test, expect } from './fixtures';
+import { BuildingType } from '@/game/buildings/building-type';
 import { EMaterialType } from '@/game/economy/material-type';
 
 /**
@@ -17,9 +18,9 @@ import { EMaterialType } from '@/game/economy/material-type';
  */
 
 // BuildingType enum values
-const WOODCUTTER_HUT = 1;
-const SAWMILL = 3;
-const RESIDENCE_SMALL = 29;
+const WOODCUTTER_HUT = BuildingType.WoodcutterHut;
+const SAWMILL = BuildingType.Sawmill;
+const RESIDENCE_SMALL = BuildingType.ResidenceSmall;
 
 // EMaterialType enum values
 const LOG = EMaterialType.LOG;

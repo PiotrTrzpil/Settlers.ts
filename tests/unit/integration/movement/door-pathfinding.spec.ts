@@ -20,13 +20,24 @@ import { setPathDebugHook } from '@/game/systems/pathfinding/astar';
 
 installRealGameData();
 
-const FUNCTIONAL_BUILDINGS: BuildingType[] = Object.values(BuildingType)
-    .filter((v): v is BuildingType => typeof v === 'number')
-    .filter(bt => {
-        if (bt >= BuildingType.Eyecatcher01 && bt <= BuildingType.Eyecatcher12) return false;
-        if (!hasBuildingXmlMapping(bt)) return false;
-        return true;
-    });
+const EYECATCHERS = new Set<BuildingType>([
+    BuildingType.Eyecatcher01,
+    BuildingType.Eyecatcher02,
+    BuildingType.Eyecatcher03,
+    BuildingType.Eyecatcher04,
+    BuildingType.Eyecatcher05,
+    BuildingType.Eyecatcher06,
+    BuildingType.Eyecatcher07,
+    BuildingType.Eyecatcher08,
+    BuildingType.Eyecatcher09,
+    BuildingType.Eyecatcher10,
+    BuildingType.Eyecatcher11,
+    BuildingType.Eyecatcher12,
+]);
+
+const FUNCTIONAL_BUILDINGS: BuildingType[] = Object.values(BuildingType).filter(
+    bt => !EYECATCHERS.has(bt) && hasBuildingXmlMapping(bt)
+);
 
 function hasBuildingBlockData(race: Race, buildingType: BuildingType): boolean {
     try {
@@ -40,7 +51,7 @@ function hasBuildingBlockData(race: Race, buildingType: BuildingType): boolean {
 function checkDoorAtEdge(race: Race, bt: BuildingType): string | null {
     const bx = 60,
         by = 60;
-    const label = `${BuildingType[bt]}/${Race[race]}`;
+    const label = `${bt}/${Race[race]}`;
     const blockArea = getBuildingBlockArea(bx, by, bt, race);
     const blockKeys = new Set(blockArea.map(t => tileKey(t.x, t.y)));
     const passable = getBuildingPassableTiles(bx, by, bt, race, blockArea);
@@ -87,7 +98,7 @@ function checkVisitedForBlocked(visited: TileCoord[], occupancy: Set<string>, la
 
 /** Check one building's door is reachable via pathfinding in a simulation. */
 function checkDoorPathfinding(sim: Simulation, race: Race, bt: BuildingType): string | null {
-    const label = `${BuildingType[bt]}/${Race[race]}`;
+    const label = `${bt}/${Race[race]}`;
     const buildingId = sim.placeBuilding(bt, 0, true, race, false);
     const building = sim.state.getEntityOrThrow(buildingId, 'test');
     const door = getBuildingDoorPos(building.x, building.y, race, bt);

@@ -37,10 +37,7 @@ export function hasAttackerAtDoor(
     const door = getBuildingDoorPos(building.x, building.y, building.race, building.subType as BuildingType);
 
     for (const attackerId of siege.attackerIds) {
-        const attacker = gameState.getEntity(attackerId);
-        if (!attacker) {
-            continue;
-        }
+        const attacker = gameState.getEntityOrThrow(attackerId, 'siege attacker at door check');
         const dist = Math.max(Math.abs(attacker.x - door.x), Math.abs(attacker.y - door.y));
         if (dist <= DOOR_ARRIVAL_DISTANCE) {
             return true;

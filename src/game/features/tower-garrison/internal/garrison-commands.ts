@@ -101,7 +101,7 @@ export function executeGarrisonUnitsCommand(cmd: GarrisonUnitsCommand, ctx: Garr
 
     const buildingType = building.subType as BuildingType;
     if (!getGarrisonCapacity(buildingType)) {
-        log.warn(`garrison_units: building ${cmd.buildingId} (${BuildingType[buildingType]}) has no garrison capacity`);
+        log.warn(`garrison_units: building ${cmd.buildingId} (${buildingType}) has no garrison capacity`);
         return false;
     }
 

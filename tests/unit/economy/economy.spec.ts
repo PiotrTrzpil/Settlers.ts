@@ -40,9 +40,9 @@ describe('Material Types', () => {
 describe('Production Chains', () => {
     it('all production chains have valid materials and include key buildings', () => {
         for (const [buildingType, chain] of BUILDING_PRODUCTIONS) {
-            expect(MATERIAL_CONFIGS.has(chain.output), `${BuildingType[buildingType]} output`).toBe(true);
+            expect(MATERIAL_CONFIGS.has(chain.output), `${buildingType} output`).toBe(true);
             for (const input of chain.inputs) {
-                expect(MATERIAL_CONFIGS.has(input), `${BuildingType[buildingType]} input`).toBe(true);
+                expect(MATERIAL_CONFIGS.has(input), `${buildingType} input`).toBe(true);
             }
             expect(chain.inputs).not.toContain(EMaterialType.NO_MATERIAL);
         }
@@ -90,13 +90,13 @@ describe('Construction Costs (XML)', () => {
 
         for (const bt of covered) {
             const raceMap = getConstructionCostRaceMap(bt)!;
-            expect(raceMap.size, `${BuildingType[bt]} has no race data`).toBeGreaterThan(0);
+            expect(raceMap.size, `${bt} has no race data`).toBeGreaterThan(0);
             for (const [race, costs] of raceMap) {
-                expect(costs.length, `${BuildingType[bt]} (${Race[race]})`).toBeGreaterThan(0);
+                expect(costs.length, `${bt} (${Race[race]})`).toBeGreaterThan(0);
                 const materials = costs.map(c => c.material);
                 const usesBuildingMaterials =
                     materials.includes(EMaterialType.BOARD) || materials.includes(EMaterialType.STONE);
-                expect(usesBuildingMaterials, `${BuildingType[bt]} (${Race[race]}) needs BOARD or STONE`).toBe(true);
+                expect(usesBuildingMaterials, `${bt} (${Race[race]}) needs BOARD or STONE`).toBe(true);
                 for (const cost of costs) {
                     expect(MATERIAL_CONFIGS.has(cost.material)).toBe(true);
                     expect(cost.count).toBeGreaterThan(0);

@@ -115,10 +115,7 @@ export class MaterialRequestSystem implements TickSystem {
         }
 
         for (const buildingId of this.dirtyBuildings) {
-            const entity = this.gameState.getEntity(buildingId);
-            if (!entity || entity.type !== EntityType.Building) {
-                continue;
-            }
+            const entity = this.gameState.getEntityOrThrow(buildingId, 'dirty building in material request system');
 
             const buildingType = entity.subType as BuildingType;
             const config = getInventoryConfig(buildingType, entity.race);
@@ -134,10 +131,7 @@ export class MaterialRequestSystem implements TickSystem {
         }
 
         for (const buildingId of this.dirtyStorageAreas) {
-            const entity = this.gameState.getEntity(buildingId);
-            if (!entity || entity.type !== EntityType.Building) {
-                continue;
-            }
+            const entity = this.gameState.getEntityOrThrow(buildingId, 'dirty storage area in material request system');
             if ((entity.subType as BuildingType) !== BuildingType.StorageArea) {
                 continue;
             }

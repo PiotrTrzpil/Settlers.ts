@@ -34,7 +34,7 @@ export { canPlaceBuildingFootprint, canPlaceBuilding, canPlaceResource, canPlace
  */
 export function validatePlacement(
     entityType: PlacementEntityType,
-    subType: number,
+    subType: number | string,
     x: number,
     y: number,
     ctx: PlacementContext | UnitPlacementContext

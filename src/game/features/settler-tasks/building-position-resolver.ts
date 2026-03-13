@@ -184,7 +184,7 @@ export class BuildingPositionResolverImpl implements BuildingPositionResolver {
         if (!registry) {
             throw new Error(
                 `BuildingPileRegistry not available when resolving ${slotType} pile ` +
-                    `for ${material} at building ${buildingId} (${BuildingType[building.subType as number]})`
+                    `for ${material} at building ${buildingId} (${String(building.subType)})`
             );
         }
 

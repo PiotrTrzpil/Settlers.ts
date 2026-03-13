@@ -1,5 +1,7 @@
 import type { Page } from '@playwright/test';
 import { test, expect } from './fixtures';
+import { BuildingType } from '@/game/buildings/building-type';
+import { EMaterialType } from '@/game/economy/material-type';
 
 /**
  * E2E tests for the stonecutter production chain.
@@ -14,10 +16,10 @@ import { test, expect } from './fixtures';
  */
 
 // BuildingType enum values
-const STONECUTTER_HUT = 4;
+const STONECUTTER_HUT = BuildingType.StonecutterHut;
 
 // EMaterialType enum values
-const STONE = 1;
+const STONE = EMaterialType.STONE;
 
 /** Gather diagnostic state from the game for debugging stonecutter behavior. */
 async function gatherDiagnosticState(page: Page, scId: number) {

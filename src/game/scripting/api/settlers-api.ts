@@ -250,7 +250,8 @@ export function registerSettlersAPI(runtime: LuaRuntime, context: SettlersAPICon
     });
 
     // Settlers.GetType(entityId) - Get settler's type (returns string name or -1 if not a unit)
-    // eslint-disable-next-line sonarjs/function-return-type -- S4 Lua API convention: -1 sentinel for not-found
+    // S4 Lua API convention: -1 sentinel for not-found; mixed return type is intentional.
+    /* eslint-disable sonarjs/function-return-type -- S4 Lua API convention: -1 sentinel for not-found; mixed return type is intentional */
     runtime.registerFunction('Settlers', 'GetType', (entityId: number): string | number => {
         const entity = context.gameState.getEntity(entityId);
         if (entity && entity.type === EntityType.Unit) {
@@ -258,6 +259,7 @@ export function registerSettlersAPI(runtime: LuaRuntime, context: SettlersAPICon
         }
         return -1;
     });
+    /* eslint-enable sonarjs/function-return-type -- end S4 Lua API exception */
 
     // Settlers.GetPlayer(entityId) - Get settler's owner player
     runtime.registerFunction('Settlers', 'GetPlayer', (entityId: number) => {

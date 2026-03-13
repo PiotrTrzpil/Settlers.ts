@@ -16,12 +16,7 @@ import { isUnitAvailableForRace, isBuildingAvailableForRace } from '@/game/data/
  * Uses gpEmptyMap fixture (empty flat map with real sprite assets, skips in CI if unavailable).
  */
 
-/** Extract all numeric values from a numeric enum (BuildingType remains numeric). */
-function enumValues<T extends Record<string, string | number>>(enumObj: T): number[] {
-    return Object.values(enumObj).filter((v): v is number => typeof v === 'number');
-}
-
-const ALL_BUILDING_TYPES = enumValues(BuildingType);
+const ALL_BUILDING_TYPES = Object.values(BuildingType) as BuildingType[];
 const ALL_UNIT_TYPES = Object.values(UnitType) as UnitType[];
 const ALL_MATERIAL_TYPES = (Object.values(EMaterialType) as EMaterialType[]).filter(
     v => v !== EMaterialType.NO_MATERIAL
@@ -166,9 +161,7 @@ test.describe('Entity Rendering Catalog', { tag: ['@requires-assets', '@screensh
             const missing = await gpEmptyMap.sprites.getEntitiesWithoutSprites();
             const missingBuildings = missing.filter(m => m.entityType === EntityType.Building);
             if (missingBuildings.length > 0) {
-                const names = missingBuildings.map(
-                    m => `Building ${BuildingType[m.subType as number] ?? m.subType} (race=${m.race})`
-                );
+                const names = missingBuildings.map(m => `Building ${String(m.subType)} (race=${m.race})`);
                 console.log(`[${raceName}] ${missingBuildings.length} buildings without sprites: ${names.join(', ')}`);
             }
 

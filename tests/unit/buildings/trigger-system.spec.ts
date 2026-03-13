@@ -37,7 +37,14 @@ describe('TriggerSystemImpl', () => {
 
         const config: TriggerSystemConfig = {
             setWorkingOverlay: setWorkingOverlay as (buildingId: number, working: boolean) => void,
-            gameState: { getEntity: (id: number) => entities.get(id) },
+            gameState: {
+                getEntity: (id: number) => entities.get(id),
+                getEntityOrThrow: (id: number, context?: string) => {
+                    const e = entities.get(id);
+                    if (!e) throw new Error(`Entity ${id} not found (${context})`);
+                    return e;
+                },
+            },
             dataLoader: { getBuildingTrigger: (_raceId: string, triggerId: string) => triggers.get(triggerId) },
         };
         system = new TriggerSystemImpl(config);

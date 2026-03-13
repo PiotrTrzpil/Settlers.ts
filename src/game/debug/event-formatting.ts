@@ -11,7 +11,6 @@
  *   - Flags:              workStarted, wasCarrying
  */
 
-import { BuildingType } from '../buildings/building-type';
 import { UnitType } from '../core/unit-types';
 import { EntityType } from '../entity';
 import { MapObjectType } from '../types/map-object-types';
@@ -27,12 +26,11 @@ function parts(...items: (string | false | null | undefined)[]): string {
  * Each method takes the typed event payload and returns a compact one-line summary.
  */
 export const EventFmt = {
-    'building:placed': (e: GameEvents['building:placed']) =>
-        `${BuildingType[e.buildingType]} at (${e.x},${e.y}) player=${e.player}`,
+    'building:placed': (e: GameEvents['building:placed']) => `${e.buildingType} at (${e.x},${e.y}) player=${e.player}`,
 
-    'building:completed': (e: GameEvents['building:completed']) => BuildingType[e.buildingType],
+    'building:completed': (e: GameEvents['building:completed']) => e.buildingType,
 
-    'building:removed': (e: GameEvents['building:removed']) => BuildingType[e.buildingType],
+    'building:removed': (e: GameEvents['building:removed']) => e.buildingType,
 
     'terrain:modified': (e: GameEvents['terrain:modified']) =>
         e.x !== undefined ? `${e.reason} at (${e.x},${e.y})` : e.reason,
@@ -80,7 +78,7 @@ export const EventFmt = {
     'entity:created': (e: GameEvents['entity:created']) => {
         let typeName = `sub=${e.subType}`;
         if (e.entityType === EntityType.Building) {
-            typeName = BuildingType[e.subType as number]!;
+            typeName = String(e.subType);
         } else if (e.entityType === EntityType.Unit) {
             typeName = e.subType as UnitType;
         } else if (e.entityType === EntityType.StackedPile) {
@@ -242,7 +240,7 @@ export const EventFmt = {
     'siege:buildingCaptured': (e: GameEvents['siege:buildingCaptured']) =>
         `building=#${e.buildingId} player${e.oldPlayer}→player${e.newPlayer}`,
     'building:ownerChanged': (e: GameEvents['building:ownerChanged']) =>
-        `#${e.buildingId} ${BuildingType[e.buildingType]} player${e.oldPlayer}→player${e.newPlayer}`,
+        `#${e.buildingId} ${e.buildingType} player${e.oldPlayer}→player${e.newPlayer}`,
 
     'building:workerSpawned': (e: GameEvents['building:workerSpawned']) =>
         `building=${e.buildingId} settler=${e.unitId}`,

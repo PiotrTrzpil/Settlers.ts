@@ -7,6 +7,7 @@
 import { getGameDataLoader, type RaceId, type SettlerValueInfo } from '@/resources/game-data';
 import { Race } from '../core/race';
 import { UnitType, UNIT_TYPE_CONFIG, isUnitTypeMilitary } from '../core/unit-types';
+import { BuildingType } from '../buildings/building-type';
 import { SearchType, DISPATCH_ONLY_CONFIG, type SettlerConfig } from '../features/settler-tasks/types';
 import { raceToRaceId, xmlIdToBuildingTypes } from './game-data-access';
 
@@ -119,7 +120,7 @@ function deriveSettlerConfig(info: SettlerValueInfo, settlerXmlId: string): Sett
     }
 
     let workJobs = filterWorkJobs(info.animLists);
-    let buildingJobsMap: Map<number, string[]> | undefined;
+    let buildingJobsMap: Map<BuildingType, string[]> | undefined;
 
     // Settlers with no own work jobs: pull from building XML (e.g. miners)
     if (workJobs.length === 0) {
@@ -174,7 +175,7 @@ function collectBuildingJobsForRace(
     raceId: RaceId,
     settlerXmlId: string,
     allJobs: string[],
-    buildingJobs: Map<number, string[]>
+    buildingJobs: Map<BuildingType, string[]>
 ): boolean {
     const buildings = getGameDataLoader().getBuildingsForRace(raceId);
     if (!buildings) {
@@ -196,9 +197,12 @@ function collectBuildingJobsForRace(
     return allJobs.length > 0;
 }
 
-function collectBuildingAnimLists(settlerXmlId: string): { allJobs: string[]; buildingJobs: Map<number, string[]> } {
+function collectBuildingAnimLists(settlerXmlId: string): {
+    allJobs: string[];
+    buildingJobs: Map<BuildingType, string[]>;
+} {
     const allJobs: string[] = [];
-    const buildingJobs = new Map<number, string[]>();
+    const buildingJobs = new Map<BuildingType, string[]>();
     for (const raceId of ALL_RACE_IDS) {
         if (collectBuildingJobsForRace(raceId, settlerXmlId, allJobs, buildingJobs)) {
             break;

@@ -123,7 +123,7 @@ export class SmartBuildingPlacer {
             const fp = getBuildingFootprint(x, y, buildingType, race);
             return fp.every(t => !this.state.unitOccupancy.has(tileKey(t.x, t.y)));
         });
-        if (!result) throw new Error(`SmartBuildingPlacer: no valid position for ${BuildingType[buildingType]}`);
+        if (!result) throw new Error(`SmartBuildingPlacer: no valid position for ${buildingType}`);
         return result;
     }
 
@@ -171,7 +171,7 @@ export function snapshotBuildings(state: GameState, services: GameServices): Bui
         const buildingType = entity?.subType ?? -1;
         buildings.push({
             id: buildingId,
-            type: BuildingType[buildingType as BuildingType] ?? `Unknown(${buildingType})`,
+            type: String(buildingType),
             inputs: inputs ? `in[${inputs}]` : '',
             outputs: outputs ? `out[${outputs}]` : '',
         });
@@ -202,7 +202,7 @@ export function checkEntityBounds(
         if (e.x < 0 || e.y < 0 || e.x >= mapWidth || e.y >= mapHeight) {
             let typeName: string = EntityType[e.type] ?? 'Unknown';
             if (e.type === EntityType.Unit) typeName = e.subType as UnitType;
-            else if (e.type === EntityType.Building) typeName = BuildingType[e.subType as number] ?? 'Unknown';
+            else if (e.type === EntityType.Building) typeName = String(e.subType);
             errors.push({
                 tick: tickCount,
                 system: 'invariant',
@@ -228,7 +228,7 @@ export function checkInventoryIntegrity(
                     tick: tickCount,
                     system: 'invariant',
                     error: new Error(
-                        `Building #${buildingId} (${BuildingType[buildingType as BuildingType]}) ` +
+                        `Building #${buildingId} (${String(buildingType)}) ` +
                             `has negative ${slot.materialType}: ${slot.currentAmount}`
                     ),
                 });

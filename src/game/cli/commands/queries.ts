@@ -105,10 +105,7 @@ function invCommand(): CliCommand {
                 return fail('usage: inv <buildingId>');
             }
 
-            const entity = ctx.game.state.getEntity(id);
-            if (!entity) {
-                return fail(`entity ${id} not found`);
-            }
+            const entity = ctx.game.state.getEntityOrThrow(id, 'building id in inv command');
             if (entity.type !== EntityType.Building) {
                 return fail(`entity ${id} is not a building`);
             }
@@ -150,10 +147,7 @@ function entityCommand(): CliCommand {
                 return fail('usage: e <entityId>');
             }
 
-            const entity = ctx.game.state.getEntity(id);
-            if (!entity) {
-                return fail(`entity ${id} not found`);
-            }
+            const entity = ctx.game.state.getEntityOrThrow(id, 'entity id in entity command');
 
             const entries: [string, string | number][] = [
                 ['id', entity.id],
