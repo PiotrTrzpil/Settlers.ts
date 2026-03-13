@@ -20,7 +20,6 @@ export type {
     RemoveEntityCommand,
     SpawnPileCommand,
     SpawnMapObjectCommand,
-    UpdatePileQuantityCommand,
     SetStorageFilterCommand,
     SpawnBuildingUnitsCommand,
     PlantTreeCommand,

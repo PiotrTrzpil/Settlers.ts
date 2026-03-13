@@ -76,7 +76,7 @@ describe('Pile System Integration', { timeout: 10_000 }, () => {
             expect(stillAlive).toBeDefined();
 
             // Kind should now be 'free' (no longer tied to the removed building)
-            const kind = sim.state.piles.getKind(pileId);
+            const kind = sim.services.inventoryManager.getPileKind(pileId);
             expect(kind.kind).toBe('free');
         });
     });

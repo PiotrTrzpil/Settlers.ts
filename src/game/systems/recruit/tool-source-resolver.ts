@@ -2,6 +2,7 @@ import type { GameState } from '../../game-state';
 import { EntityType } from '../../entity';
 import type { EMaterialType } from '../../economy/material-type';
 import { SlotKind } from '../../core/pile-kind';
+import type { BuildingInventoryManager } from '../../systems/inventory/building-inventory';
 
 export interface ToolSource {
     pileEntityId: number;
@@ -11,10 +12,12 @@ export interface ToolSource {
 
 export class ToolSourceResolver {
     private readonly gameState: GameState;
+    private readonly inventoryManager: BuildingInventoryManager;
     private readonly reservedPiles = new Set<number>();
 
-    constructor(gameState: GameState) {
+    constructor(gameState: GameState, inventoryManager: BuildingInventoryManager) {
         this.gameState = gameState;
+        this.inventoryManager = inventoryManager;
     }
 
     findNearestToolPile(material: EMaterialType, nearX: number, nearY: number, player: number): ToolSource | null {
@@ -35,7 +38,7 @@ export class ToolSourceResolver {
                 continue;
             }
 
-            const kind = this.gameState.piles.getKind(entity.id);
+            const kind = this.inventoryManager.getPileKind(entity.id);
             if (kind.kind !== SlotKind.Free) {
                 continue;
             }

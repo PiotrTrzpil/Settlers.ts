@@ -14,7 +14,6 @@ import type { BuildingInventoryManager } from '../inventory';
 import type { OreVeinData } from '../ore-veins';
 import { MINE_ORE_TYPE, MINE_SEARCH_RADIUS } from '../ore-veins/ore-type';
 import { isMineBuilding } from '../../buildings/types';
-import { createLogger } from '@/utilities/logger';
 import { WorkHandlerType, type EntityWorkHandler, type PositionWorkHandler } from './types';
 import { ProductionMode } from '../production-control';
 import { spiralSearch } from '../../utils/spiral-search';
@@ -184,22 +183,17 @@ const WATER_SEARCH_RADIUS = 20;
 /** River ground types (S4GroundType.RIVER1–RIVER4) */
 const RIVER_TYPE_MIN = 96;
 const RIVER_TYPE_MAX = 99;
-const waterLog = createLogger('WaterHandler');
-
 function isRiverTile(groundType: number): boolean {
     return groundType >= RIVER_TYPE_MIN && groundType <= RIVER_TYPE_MAX;
 }
 
 /**
  * Create a position handler for WATER search type (waterworkers).
- * Worker walks to a nearby river tile within the work area, draws water,
- * and deposits WATER output at their assigned building.
+ * Worker walks to a nearby river tile within the work area to draw water.
+ * Output deposit is handled by the choreography PUT_GOOD node (entity=GOOD_WATER),
+ * not by this handler — keeping a single deposit code path through the inventory executors.
  */
-export function createWaterHandler(
-    terrain: TerrainData,
-    inventoryManager: BuildingInventoryManager,
-    getAssignedBuilding: (settlerId: number) => number | null
-): PositionWorkHandler {
+export function createWaterHandler(terrain: TerrainData): PositionWorkHandler {
     return {
         type: WorkHandlerType.POSITION,
 
@@ -212,16 +206,8 @@ export function createWaterHandler(
             });
         },
 
-        onWorkAtPositionComplete: (_x: number, _y: number, settlerId: number) => {
-            const buildingId = getAssignedBuilding(settlerId);
-            if (buildingId === null) {
-                waterLog.debug(`Waterworker ${settlerId} has no assigned building, skipping output`);
-                return;
-            }
-            if (inventoryManager.canStoreOutput(buildingId)) {
-                inventoryManager.produceOutput(buildingId);
-                waterLog.debug(`Waterworker ${settlerId} deposited WATER at building ${buildingId}`);
-            }
+        onWorkAtPositionComplete: () => {
+            // No-op: deposit handled by PUT_GOOD choreography node
         },
     };
 }

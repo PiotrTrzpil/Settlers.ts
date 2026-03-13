@@ -69,18 +69,15 @@ export function createGameState(): GameState {
  * Mirrors the production wiring done by GameServices — creates movement controllers
  * for units and resource state for stacked resources.
  */
-function wireEntityLifecycleEvents(eventBus: EventBus, movement: MovementSystem, state: GameState): void {
+function wireEntityLifecycleEvents(eventBus: EventBus, movement: MovementSystem, _state: GameState): void {
     eventBus.on('entity:created', ({ entityId, entityType: type, subType, x, y }) => {
         if (type === EntityType.Unit) {
             const speed = getUnitTypeSpeed(subType as UnitType);
             movement.createController(entityId, x, y, speed);
-        } else if (type === EntityType.StackedPile) {
-            state.piles.createState(entityId);
         }
     });
     eventBus.on('entity:removed', ({ entityId }) => {
         movement.removeController(entityId);
-        state.piles.removeState(entityId);
     });
 }
 

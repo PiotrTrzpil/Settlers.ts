@@ -164,9 +164,9 @@ export class GameCore {
         return mapBuildings;
     }
 
-    /** RECONCILE — assign workers to buildings before lifecycle events fire. */
+    /** RECONCILE — move units off building footprints before lifecycle events block them. */
     private reconcile(): void {
-        this.services.settlerTaskSystem.assignInitialBuildingWorkers();
+        this.services.settlerTaskSystem.relocateUnitsFromFootprints();
     }
 
     /** ACTIVATE — emit building:completed for each map building. Listeners see correct occupancy. */

@@ -115,12 +115,6 @@ export interface SpawnMapObjectCommand {
     variation?: number;
 }
 
-export interface UpdatePileQuantityCommand {
-    type: 'update_pile_quantity';
-    entityId: number;
-    quantity: number;
-}
-
 export interface SetStorageFilterCommand {
     type: 'set_storage_filter';
     buildingId: number;
@@ -326,7 +320,6 @@ export type Command =
     | RemoveEntityCommand
     | SpawnPileCommand
     | SpawnMapObjectCommand
-    | UpdatePileQuantityCommand
     | SetStorageFilterCommand
     | SpawnBuildingUnitsCommand
     | PlantTreeCommand

@@ -27,7 +27,7 @@ export const RecruitFeature: FeatureDefinition = {
         const { settlerTaskSystem, choreoSystem } = ctx.getFeature<SettlerTaskExports>('settler-tasks');
         const { inventoryManager } = ctx.getFeature<InventoryExports>('inventory');
 
-        const toolSourceResolver = new ToolSourceResolver(ctx.gameState);
+        const toolSourceResolver = new ToolSourceResolver(ctx.gameState, inventoryManager);
 
         const unitTransformer = new UnitTransformer({
             gameState: ctx.gameState,

@@ -44,13 +44,10 @@ function createTestHarness() {
         if (type === EntityType.Unit) {
             const speed = getUnitTypeSpeed(subType as UnitType);
             movement.createController(entityId, x, y, speed);
-        } else if (type === EntityType.StackedPile) {
-            state.piles.createState(entityId);
         }
     });
     eventBus.on('entity:removed', ({ entityId }) => {
         movement.removeController(entityId);
-        state.piles.removeState(entityId);
     });
 
     const constructionSiteManager = new ConstructionSiteManager(eventBus, state.rng, {} as any);

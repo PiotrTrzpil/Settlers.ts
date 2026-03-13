@@ -32,7 +32,6 @@ import {
     executePlacePile,
     executeSpawnMapObject,
     executeSpawnPile,
-    executeUpdatePileQuantity,
     executeSetStorageFilter,
 } from './handlers/system-handlers';
 import { executeScriptAddGoods, executeScriptAddBuilding, executeScriptAddSettlers } from './handlers/script-handlers';
@@ -116,7 +115,6 @@ export function registerAllHandlers(registry: CommandHandlerRegistry, deps: Comm
     registry.register('place_pile', cmd => executePlacePile({ state, terrain, eventBus }, cmd));
     registry.register('spawn_pile', cmd => executeSpawnPile({ state, terrain, eventBus }, cmd));
     registry.register('spawn_map_object', cmd => executeSpawnMapObject({ state }, cmd));
-    registry.register('update_pile_quantity', cmd => executeUpdatePileQuantity({ state }, cmd));
     registry.register('set_storage_filter', cmd =>
         executeSetStorageFilter({ state, eventBus, storageFilterManager, inventoryManager }, cmd)
     );

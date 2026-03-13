@@ -32,11 +32,11 @@ export interface PileSlotKey {
 }
 
 /**
- * Minimal interface of StackedPileManager methods that PileRegistry needs
- * during HMR / save-load rebuild.
+ * Minimal interface for pile kind queries during HMR / save-load rebuild.
+ * Satisfied by BuildingInventoryManager.
  */
 export interface PileKindProvider {
-    getKind(entityId: number): PileKind;
+    getPileKind(entityId: number): PileKind;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -230,7 +230,7 @@ export class PileRegistry {
                 continue;
             }
 
-            const kind = resources.getKind(entity.id);
+            const kind = resources.getPileKind(entity.id);
             if (!isLinkedPile(kind)) {
                 continue;
             }

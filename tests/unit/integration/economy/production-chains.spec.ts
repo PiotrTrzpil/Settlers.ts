@@ -12,6 +12,7 @@ import { installRealGameData } from '../../helpers/test-game-data';
 import { BuildingType } from '@/game/buildings/building-type';
 import { EntityType, UnitType } from '@/game/entity';
 import { EMaterialType } from '@/game/economy/material-type';
+import { Race } from '@/game/core/race';
 import { OreType } from '@/game/features/ore-veins/ore-type';
 import { TrainingRecipeIndex } from '@/game/features/barracks';
 import { ProductionMode } from '@/game/features/production-control';
@@ -70,6 +71,18 @@ describe('Economy – gatherer & production chains', { timeout: 5000 }, () => {
         sim.runUntil(() => sim.getOutput(woodcutterId, EMaterialType.LOG) >= 5, { maxTicks: 500 * 30 });
         sim.runTicks(60 * 30);
         expect(sim.getOutput(woodcutterId, EMaterialType.LOG)).toBe(5);
+    });
+
+    it('viking woodcutter cuts trees without teleporting into building', () => {
+        sim = createSimulation({ race: Race.Viking });
+
+        sim.placeBuilding(BuildingType.ResidenceSmall);
+        const woodcutterId = sim.placeBuilding(BuildingType.WoodcutterHut);
+
+        sim.plantTreesNear(woodcutterId, 3);
+
+        sim.runUntil(() => sim.getOutput(woodcutterId, EMaterialType.LOG) >= 3, { maxTicks: 300 * 30 });
+        expect(sim.getOutput(woodcutterId, EMaterialType.LOG)).toBe(3);
     });
 
     it('full chain: farm → grain → mill → flour + waterwork → water → bakery → bread', () => {

@@ -410,7 +410,7 @@ export function restoreFromSnapshot(game: GameCore, snapshot: GameStateSnapshot)
     // deserializeAll() overwrites default state created by entity:created events.
     game.services.persistenceRegistry.deserializeAll(snapshot as unknown as Record<string, unknown>);
 
-    // 5a. Rebuild inventory reverse index (buildingId → slotIds) from restored slot data.
+    // 5a. Rebuild inventory reverse index (buildingId → slotIds, entityId → slotId).
     game.services.inventoryManager.rebuildInventoryIndex();
 
     // 6. Rebuild derived state that is not owned by features.

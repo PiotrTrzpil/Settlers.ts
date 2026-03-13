@@ -28,7 +28,7 @@ describe('Construction pile tracking (real game data)', { timeout: 60_000 }, () 
     function countConstructionPiles(buildingId: number, material: EMaterialType): number {
         return sim.state.entities.filter(e => {
             if (e.type !== EntityType.StackedPile || e.subType !== material) return false;
-            const kind = sim.state.piles.getKind(e.id);
+            const kind = sim.services.inventoryManager.getPileKind(e.id);
             return kind?.kind === SlotKind.Input && 'buildingId' in kind && kind.buildingId === buildingId;
         }).length;
     }

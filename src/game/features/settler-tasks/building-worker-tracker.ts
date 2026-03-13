@@ -13,7 +13,7 @@ import { UnitType } from '../../entity';
 import { createLogger } from '@/utilities/logger';
 import { SettlerState } from './types';
 import type { UnitRuntime } from './unit-state-machine';
-import { assignInitialBuildingWorkers } from './initial-worker-assignment';
+import { relocateUnitsFromFootprints } from './initial-worker-assignment';
 import type { ISettlerBuildingLocationManager } from '../settler-location/types';
 import type { IndexedMap, Index } from '@/game/utils/indexed-map';
 
@@ -109,15 +109,9 @@ export class BuildingWorkerTracker {
         });
     }
 
-    /** Assign workers positioned inside matching building footprints. Called once after map load. */
-    assignInitial(): void {
-        assignInitialBuildingWorkers(
-            this.gameState,
-            this.occupants,
-            this.locationManager,
-            id => this.getOrCreateRuntime(id),
-            (settlerId, runtime, buildingId) => this.claim(settlerId, runtime, buildingId, true)
-        );
+    /** Move units off building footprints so they aren't trapped. Called once after map load. */
+    relocateFromFootprints(): void {
+        relocateUnitsFromFootprints(this.gameState);
     }
 
     // ─────────────────────────────────────────────────────────────

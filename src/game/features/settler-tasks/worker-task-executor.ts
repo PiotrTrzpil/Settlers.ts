@@ -450,7 +450,7 @@ export class WorkerTaskExecutor {
             return false;
         }
 
-        const slot = this.inventoryManager.findSlot(homeBuilding.id, material, 'output');
+        const slot = this.inventoryManager.findOutputSlot(homeBuilding.id, material);
         return slot !== undefined && slot.currentAmount >= slot.maxCapacity;
     }
 

@@ -118,7 +118,7 @@ describe('Free pile logistics (real game data)', { timeout: 30_000 }, () => {
         expect(sim.state.getEntity(pileId)).toBeDefined();
 
         // Pile kind is now free
-        expect(sim.state.piles.getKind(pileId).kind).toBe('free');
+        expect(sim.services.inventoryManager.getPileKind(pileId).kind).toBe('free');
 
         // Pile has its own output inventory (discoverable by logistics)
         expect(sim.services.inventoryManager.hasSlots(pileId)).toBe(true);
@@ -158,7 +158,7 @@ describe('Free pile logistics (real game data)', { timeout: 30_000 }, () => {
 
         // Pile should still exist as a free pile
         expect(sim.state.getEntity(pileId)).toBeDefined();
-        expect(sim.state.piles.getKind(pileId).kind).toBe('free');
+        expect(sim.services.inventoryManager.getPileKind(pileId).kind).toBe('free');
 
         // Logistics should create a new job from the free pile to the construction site
         sim.runUntil(() => sim.services.inventoryManager.getSlots(siteId).some(s => s.currentAmount > 0), {

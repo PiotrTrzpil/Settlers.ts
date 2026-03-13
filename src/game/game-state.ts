@@ -13,7 +13,6 @@ import type { MovementSystem } from './systems/movement/index';
 import { SeededRng, createGameRng } from './core/rng';
 import { EventBus } from './event-bus';
 import { SelectionManager } from './ui/selection-manager';
-import { StackedPileManager } from './state/stacked-pile-manager';
 import { type ComponentStore, mapStore } from './ecs';
 import { EntityIndex } from './entity-index';
 import type { SpatialGrid } from './spatial-grid';
@@ -55,7 +54,6 @@ export interface AddBuildingOptions {
  *
  * Extracted concerns (owned here but encapsulated in dedicated classes):
  * - Selection state → SelectionManager
- * - Stacked resource state → StackedPileManager
  * - Movement → MovementSystem (created externally, set via initMovement)
  */
 export class GameState {
@@ -84,9 +82,6 @@ export class GameState {
     /** Player entity selection state */
     public readonly selection: SelectionManager;
 
-    /** Stacked resource state (quantities, building ownership) */
-    public readonly piles: StackedPileManager;
-
     public nextId = 1;
 
     /** Ground-layer occupancy: buildings (footprints), map objects, stacked piles */
@@ -111,7 +106,6 @@ export class GameState {
         this.eventBus = eventBus;
         this.rng = createGameRng(seed);
         this.selection = new SelectionManager(this);
-        this.piles = new StackedPileManager(this);
     }
 
     /**
@@ -129,7 +123,6 @@ export class GameState {
      */
     public initSpatialIndex(spatialIndex: SpatialGrid): void {
         this.spatialIndex = spatialIndex;
-        this.piles.initSpatialIndex(spatialIndex);
     }
 
     /**

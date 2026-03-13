@@ -42,9 +42,9 @@ describe('Resource Placement Commands', () => {
         expect(resource.x).toBe(32);
         expect(resource.y).toBe(32);
 
-        const resourceState = sim.state.piles.states.get(resource.id);
-        expect(resourceState).toBeDefined();
-        expect(resourceState!.quantity).toBe(amount);
+        const slot = sim.services.inventoryManager.getSlotByEntityId(resource.id);
+        expect(slot).toBeDefined();
+        expect(slot!.currentAmount).toBe(amount);
     });
 
     it('place_pile fails on water terrain', () => {

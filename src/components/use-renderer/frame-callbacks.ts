@@ -42,10 +42,13 @@ export interface CallbackContext {
 
 /** Wire core entity data into the render context */
 function applyEntityData(b: RenderContextBuilder, g: Game): void {
-    b.entities(g.state.entities).unitStates(g.state.unitStates).pileStates(g.state.piles.states).selection({
-        primaryId: g.state.selection.selectedEntityId,
-        ids: g.state.selection.selectedEntityIds,
-    });
+    b.entities(g.state.entities)
+        .unitStates(g.state.unitStates)
+        .pileStates(g.services.inventoryManager.pileStates)
+        .selection({
+            primaryId: g.state.selection.selectedEntityId,
+            ids: g.state.selection.selectedEntityIds,
+        });
 }
 
 /** Wire building construction visuals and overlays */

@@ -115,7 +115,7 @@ export async function placeResource(
             if (entityId == null) return null;
             const entity = game.state.getEntity(entityId);
             if (!entity) return null;
-            const resourceState = game.state.piles?.states?.get(entityId);
+            const slot = game.services?.inventoryManager?.getSlotByEntityId(entityId);
             window.__settlers__?.viewState?.forceCountUpdate();
             return {
                 id: entity.id,
@@ -123,7 +123,7 @@ export async function placeResource(
                 subType: entity.subType,
                 x: entity.x,
                 y: entity.y,
-                amount: resourceState?.quantity ?? amt,
+                amount: slot?.currentAmount ?? amt,
             };
         },
         { mt: materialType, posX: x, posY: y, amt: amount }

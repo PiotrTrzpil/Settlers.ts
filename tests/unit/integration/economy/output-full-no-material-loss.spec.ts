@@ -72,6 +72,32 @@ describe('Output full — no material loss', { timeout: 5000 }, () => {
         expect(logsRemaining).toBe(2);
     });
 
+    /**
+     * Regression: isOutputFull used findSlot() which only returns slots with
+     * space (currentAmount < maxCapacity). A full slot returned undefined,
+     * so isOutputFull always returned false for free workers like woodcutters.
+     * Fix: use findOutputSlot() which matches by material+kind without capacity filter.
+     */
+    it('woodcutter does not cut trees when LOG output is full', () => {
+        sim = createSimulation();
+
+        sim.placeBuilding(BuildingType.ResidenceSmall);
+        const woodcutterId = sim.placeBuilding(BuildingType.WoodcutterHut);
+
+        // Fill output to capacity
+        sim.injectOutput(woodcutterId, EMaterialType.LOG, 8);
+        expect(sim.getOutput(woodcutterId, EMaterialType.LOG)).toBe(8);
+
+        // Plant trees — woodcutter should NOT cut them while output is full
+        const treeCount = sim.plantTreesNear(woodcutterId, 5);
+
+        sim.runTicks(120 * 30);
+
+        // Output unchanged, trees untouched
+        expect(sim.getOutput(woodcutterId, EMaterialType.LOG)).toBe(8);
+        expect(sim.countNearbyTrees(woodcutterId)).toBe(treeCount);
+    });
+
     it('sawmill resumes production after output is cleared', () => {
         sim = createSimulation();
 

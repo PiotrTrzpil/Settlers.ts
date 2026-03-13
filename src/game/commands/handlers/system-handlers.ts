@@ -13,7 +13,6 @@ import type {
     PlacePileCommand,
     SpawnPileCommand,
     SpawnMapObjectCommand,
-    UpdatePileQuantityCommand,
     SetStorageFilterCommand,
     PlantTreeCommand,
     PlantCropCommand,
@@ -35,10 +34,6 @@ export interface SpawnPileDeps {
 }
 
 export interface SpawnMapObjectDeps {
-    state: GameState;
-}
-
-export interface UpdatePileQuantityDeps {
     state: GameState;
 }
 
@@ -82,11 +77,6 @@ export function executePlacePile(deps: PlacePileDeps, cmd: PlacePileCommand): Co
 
     const entity = state.addEntity(EntityType.StackedPile, cmd.materialType, cmd.x, cmd.y, 0);
 
-    const resourceState = state.piles.states.get(entity.id);
-    if (resourceState) {
-        resourceState.quantity = cmd.amount;
-    }
-
     deps.eventBus.emit('pile:freePilePlaced', {
         entityId: entity.id,
         materialType: cmd.materialType,
@@ -109,8 +99,6 @@ export function executeSpawnPile(deps: SpawnPileDeps, cmd: SpawnPileCommand): Co
         throw new Error(`spawn_pile: position (${cmd.x}, ${cmd.y}) out of bounds`);
     }
     const entity = state.addEntity(EntityType.StackedPile, cmd.materialType, cmd.x, cmd.y, cmd.player);
-    state.piles.setKind(entity.id, cmd.kind);
-    state.piles.setQuantity(entity.id, cmd.quantity);
 
     if (cmd.kind.kind === 'free') {
         deps.eventBus.emit('pile:freePilePlaced', {
@@ -121,11 +109,6 @@ export function executeSpawnPile(deps: SpawnPileDeps, cmd: SpawnPileCommand): Co
     }
 
     return commandSuccess([{ type: 'entity_created', entityId: entity.id, entityType: 'StackedPile' }]);
-}
-
-export function executeUpdatePileQuantity(deps: UpdatePileQuantityDeps, cmd: UpdatePileQuantityCommand): CommandResult {
-    deps.state.piles.setQuantity(cmd.entityId, cmd.quantity);
-    return COMMAND_OK;
 }
 
 export function executeSetStorageFilter(deps: SetStorageFilterDeps, cmd: SetStorageFilterCommand): CommandResult {

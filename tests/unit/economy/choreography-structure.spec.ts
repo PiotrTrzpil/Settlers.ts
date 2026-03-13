@@ -138,4 +138,17 @@ describeWithData('Choreography structure verification (real XML data)', () => {
         expect(job.nodes.find(n => n.task === 'PLANT')).toBeDefined();
         expect(job.nodes[job.nodes.length - 1]!.task).toBe('CHECKIN');
     });
+
+    it('viking woodcutter has useWork=true on tree-relative nodes (XML data fix)', () => {
+        const job = getRealJob('RACE_VIKING', 'JOB_WOODCUTTER_WORK');
+        const goVirtualNodes = job.nodes.filter(n => n.task === 'GO_VIRTUAL');
+        expect(goVirtualNodes.length).toBeGreaterThan(0);
+        for (const node of goVirtualNodes) {
+            expect(node.useWork).toBe(true);
+        }
+        const workNodes = job.nodes.filter(n => n.task === 'WORK_ON_ENTITY' || n.task === 'WORK_ON_ENTITY_VIRTUAL');
+        for (const node of workNodes) {
+            expect(node.useWork).toBe(true);
+        }
+    });
 });

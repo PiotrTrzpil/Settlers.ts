@@ -419,17 +419,18 @@ export function gatherPiles(
     player: number,
     options?: { limit?: number; kindFilter?: string }
 ): PileSummary[] {
-    const { gameState } = config;
+    const { gameState, inventoryManager } = config;
     const kindFilter = options?.kindFilter;
     const result: PileSummary[] = [];
 
     for (const entity of gameState.entityIndex.ofTypeAndPlayer(EntityType.StackedPile, player)) {
-        const pileState = gameState.piles.states.get(entity.id);
-        if (!pileState) {
+        const slot = inventoryManager.getSlotByEntityId(entity.id);
+        if (!slot || slot.currentAmount === 0) {
             continue;
         }
 
-        const kind = pileState.kind.kind;
+        const pileKind = inventoryManager.getPileKind(entity.id);
+        const kind = pileKind.kind;
         if (kindFilter && kind !== kindFilter) {
             continue;
         }
@@ -437,9 +438,9 @@ export function gatherPiles(
         result.push({
             entityId: entity.id,
             material: formatMaterial(entity.subType),
-            quantity: pileState.quantity,
+            quantity: slot.currentAmount,
             kind,
-            buildingId: pileState.kind.kind !== SlotKind.Free ? pileState.kind.buildingId : null,
+            buildingId: pileKind.kind !== SlotKind.Free ? pileKind.buildingId : null,
             x: entity.x,
             y: entity.y,
         });

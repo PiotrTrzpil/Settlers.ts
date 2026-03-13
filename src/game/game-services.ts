@@ -309,7 +309,7 @@ export class GameServices {
         for (const { persistable, after } of this.featureRegistry.getPersistables()) {
             this.persistenceRegistry.register(persistable, after);
         }
-        // stacked-pile-manager: persistence removed — state rebuilds during replay
+        // Pile state derived from inventory slots — no separate persistence needed.
 
         // 6. Wire pile registry to settler-tasks (cross-feature, conditional).
         if (constrExports.pileRegistry) {
@@ -317,15 +317,9 @@ export class GameServices {
         }
 
         // 7. Core entity lifecycle — too small to be a feature.
-        this.subscriptions.subscribe(eventBus, 'entity:created', ({ entityId, entityType: type }) => {
-            if (type === EntityType.StackedPile) {
-                gameState.piles.createState(entityId);
-            }
-        });
-
         this.cleanupRegistry.onEntityRemoved(entityId => {
             this.visualService.remove(entityId);
-            gameState.piles.removeState(entityId);
+            this.inventoryManager.onPileEntityRemoved(entityId);
         });
 
         // 8. Late inventory removal — MUST happen after logistics cleanup.

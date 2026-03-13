@@ -459,7 +459,8 @@ export class MovementSystem implements TickSystem {
     private detectTeleport(controller: MovementController, prevState: MovementState): void {
         const teleportDist = controller.detectTeleport();
         const steps = Math.max(1, controller.stepsTakenThisTick);
-        const threshold = 1.5 * steps + 0.01;
+        // Diagonal steps cover sqrt(2) ≈ 1.414 tile-coords, so use that as the per-step base
+        const threshold = 1.5 * Math.SQRT2 * steps + 0.01;
         if (teleportDist > threshold) {
             console.warn(
                 `[MovementSystem] TELEPORT DETECTED! Entity ${controller.entityId} jumped ${teleportDist.toFixed(2)} tiles` +

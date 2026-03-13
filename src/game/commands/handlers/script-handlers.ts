@@ -16,13 +16,16 @@ export interface ScriptDeps {
 }
 
 export function executeScriptAddGoods(deps: ScriptDeps, cmd: ScriptAddGoodsCommand): CommandResult {
-    const { state } = deps;
+    const { state, eventBus } = deps;
 
     const entity = state.addEntity(EntityType.StackedPile, cmd.materialType, cmd.x, cmd.y, 0);
 
-    if (cmd.amount > 1) {
-        state.piles.setQuantity(entity.id, cmd.amount);
-    }
+    // Register free pile — FreePileHandler creates the inventory slot
+    eventBus.emit('pile:freePilePlaced', {
+        entityId: entity.id,
+        materialType: cmd.materialType,
+        quantity: cmd.amount,
+    });
 
     return commandSuccess([{ type: 'entity_created', entityId: entity.id, entityType: 'StackedPile' }]);
 }

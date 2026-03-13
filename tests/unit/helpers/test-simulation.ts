@@ -53,6 +53,7 @@ import type { MapBuildingData, MapSettlerData } from '@/resources/map/map-entity
 import { BuildingConstructionPhase } from '@/game/features/building-construction/types';
 import type { OreType } from '@/game/features/ore-veins/ore-type';
 import type { TestMap } from './test-map';
+import { simulateMovement } from './simulation-movement';
 
 // Re-export types so existing imports keep working
 export type {
@@ -376,7 +377,7 @@ export class Simulation {
         });
         const settlerCount = populateMapSettlers(this.state, settlers, this.eventBus);
 
-        this.services.settlerTaskSystem.assignInitialBuildingWorkers();
+        this.services.settlerTaskSystem.relocateUnitsFromFootprints();
 
         for (const { buildingId, buildingType, race } of mapBuildings) {
             this.eventBus.emit('building:completed', { buildingId, buildingType, race });
@@ -391,12 +392,23 @@ export class Simulation {
         return tilesNearBuilding(this.state, buildingId, count, far, this.mapWidth, this.mapHeight);
     }
 
-    plantTreesNear(buildingId: number, count: number) {
-        placeTreeEntities(this.state, this.services, this.tilesNear(buildingId, count));
+    plantTreesNear(buildingId: number, count: number): number {
+        const tiles = this.tilesNear(buildingId, count);
+        placeTreeEntities(this.state, this.services, tiles);
+        return tiles.length;
     }
 
-    plantTreesFar(buildingId: number, count: number) {
-        placeTreeEntities(this.state, this.services, this.tilesNear(buildingId, count, true));
+    plantTreesFar(buildingId: number, count: number): number {
+        const tiles = this.tilesNear(buildingId, count, true);
+        placeTreeEntities(this.state, this.services, tiles);
+        return tiles.length;
+    }
+
+    countNearbyTrees(buildingId: number): number {
+        const b = this.state.getEntityOrThrow(buildingId, 'countNearbyTrees');
+        return this.state.entities.filter(
+            e => e.type === EntityType.MapObject && Math.abs(e.x - b.x) <= 20 && Math.abs(e.y - b.y) <= 20
+        ).length;
     }
 
     placeRiverNear(buildingId: number, count: number) {
@@ -473,27 +485,7 @@ export class Simulation {
     }
 
     simulateMovement(entityId: number, opts: { maxTicks?: number; target?: TileCoord } = {}): TileCoord[] {
-        const { maxTicks = 600, target } = opts;
-        const entity = this.state.getEntityOrThrow(entityId, 'simulateMovement');
-        const unitState = this.state.unitStates.get(entityId)!;
-        const visited: TileCoord[] = [{ x: entity.x, y: entity.y }];
-        const dt = 1 / 30;
-
-        for (let i = 0; i < maxTicks; i++) {
-            this.tick(dt);
-            const last = visited[visited.length - 1]!;
-            if (entity.x !== last.x || entity.y !== last.y) {
-                visited.push({ x: entity.x, y: entity.y });
-            }
-            if (target) {
-                if (entity.x === target.x && entity.y === target.y) break;
-            } else {
-                if (unitState.path.length === 0 && unitState.moveProgress === 0 && visited.length > 1) {
-                    break;
-                }
-            }
-        }
-        return visited;
+        return simulateMovement(this, entityId, opts);
     }
 
     // ─── Inventory queries ────────────────────────────────────────

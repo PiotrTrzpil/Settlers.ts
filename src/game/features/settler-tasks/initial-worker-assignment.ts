@@ -1,86 +1,85 @@
 /**
- * Post-map-load worker assignment.
+ * Post-map-load unit relocation.
  *
- * Scans all units and assigns workers that are positioned inside their matching
- * building's footprint. Called once after map entities are populated so that
- * map-placed workers (e.g. a woodcutter inside a woodcutter hut) are recognized.
+ * Map data places units at building anchors, which are deep inside the blocked
+ * footprint. This module moves them to free tiles near the door so they can
+ * pathfind normally. Worker-to-building assignment happens separately via the
+ * normal tick systems.
  */
 
-import { BuildingType, EntityType, UnitType } from '../../entity';
+import { BuildingType, EntityType } from '../../entity';
 import type { GameState } from '../../game-state';
-import { getWorkerBuildingTypes, getBuildingDoorPos } from '../../data/game-data-access';
-import { getBuildingMaxOccupants } from '../../buildings/types';
+import { getBuildingDoorPos } from '../../data/game-data-access';
+import { GRID_DELTAS, NUMBER_OF_DIRECTIONS } from '../../systems/hex-directions';
 import { createLogger } from '@/utilities/logger';
-import type { ISettlerBuildingLocationManager } from '../settler-location/types';
-import type { UnitRuntime } from './unit-state-machine';
 
 const log = createLogger('InitialWorkerAssignment');
 
 /**
- * For each worker unit on a building footprint tile, check if the building's worker type
- * matches the unit type. If so, claim the building and mark the unit as inside.
+ * Relocate any unit sitting on a building footprint to a free tile near the
+ * building's door. Each unit gets a unique tile to avoid stacking.
  */
-export function assignInitialBuildingWorkers(
-    gameState: GameState,
-    buildingOccupants: Map<number, number>,
-    locationManager: ISettlerBuildingLocationManager,
-    getRuntime: (entityId: number) => UnitRuntime,
-    claimBuilding: (settlerId: number, runtime: UnitRuntime, buildingId: number) => void
-): void {
-    let assigned = 0;
+export function relocateUnitsFromFootprints(gameState: GameState): void {
+    const taken = new Set<string>();
+    let relocated = 0;
+
     for (const entity of gameState.entities) {
         if (entity.type !== EntityType.Unit) {
             continue;
         }
-
-        const unitType = entity.subType as UnitType;
-        const workplaceTypes = getWorkerBuildingTypes(entity.race, unitType);
-        if (!workplaceTypes) {
-            continue;
-        }
-
-        // Check if this unit is on a building footprint tile (ground layer has buildings)
         const buildingAtTile = gameState.getGroundEntityAt(entity.x, entity.y);
         if (!buildingAtTile || buildingAtTile.type !== EntityType.Building) {
             continue;
         }
-        if (buildingAtTile.player !== entity.player) {
-            continue;
-        }
-
-        // Check if building type matches the unit's workplace types
-        if (!workplaceTypes.has(buildingAtTile.subType as BuildingType)) {
-            continue;
-        }
-
-        // Check occupancy limit
-        const currentOccupants = buildingOccupants.get(buildingAtTile.id) ?? 0;
-        if (currentOccupants >= getBuildingMaxOccupants(buildingAtTile.subType as BuildingType)) {
-            continue;
-        }
-
-        // Move worker to the building's door position before entering.
-        // Map data places workers at the building anchor, which is deep inside the
-        // blocked footprint. The door is at the footprint edge — matching what
-        // spawnWorkerInsideBuilding does for construction-spawned workers.
         const door = getBuildingDoorPos(
             buildingAtTile.x,
             buildingAtTile.y,
             buildingAtTile.race,
             buildingAtTile.subType as BuildingType
         );
-        entity.x = door.x;
-        entity.y = door.y;
 
-        // Assign: claim building, mark as inside, skip the approaching phase
-        const runtime = getRuntime(entity.id);
-        claimBuilding(entity.id, runtime, buildingAtTile.id);
-        runtime.homeAssignment!.hasVisited = true;
-        locationManager.enterBuilding(entity.id, buildingAtTile.id);
+        const target = findFreeTileNear(door.x, door.y, taken, gameState);
+        entity.x = target.x;
+        entity.y = target.y;
+        taken.add(`${target.x},${target.y}`);
+        relocated++;
+    }
+    if (relocated > 0) {
+        log.debug(`Relocated ${relocated} units from building footprints`);
+    }
+}
 
-        assigned++;
+/** Find the nearest non-building, non-taken tile using BFS outward from the door. */
+function findFreeTileNear(
+    doorX: number,
+    doorY: number,
+    taken: Set<string>,
+    gameState: GameState
+): { x: number; y: number } {
+    const visited = new Set<string>();
+    const queue: { x: number; y: number }[] = [{ x: doorX, y: doorY }];
+    visited.add(`${doorX},${doorY}`);
+
+    while (queue.length > 0) {
+        const { x, y } = queue.shift()!;
+        for (let d = 0; d < NUMBER_OF_DIRECTIONS; d++) {
+            const [dx, dy] = GRID_DELTAS[d]!;
+            const nx = x + dx;
+            const ny = y + dy;
+            const key = `${nx},${ny}`;
+            if (visited.has(key)) {
+                continue;
+            }
+            visited.add(key);
+            if (!taken.has(key) && !gameState.getGroundEntityAt(nx, ny)) {
+                return { x: nx, y: ny };
+            }
+            // Keep expanding through building tiles to find the edge
+            if (visited.size < 100) {
+                queue.push({ x: nx, y: ny });
+            }
+        }
     }
-    if (assigned > 0) {
-        log.debug(`Assigned ${assigned} initial building workers from map positions`);
-    }
+
+    return { x: doorX, y: doorY };
 }

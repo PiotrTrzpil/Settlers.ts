@@ -33,6 +33,7 @@ import type { EventBus } from '../../event-bus';
 import { EventSubscriptionManager } from '../../event-bus';
 import type { ChoreoJobState } from '../choreo';
 import { EntityType, EXTENDED_OFFSETS } from '../../entity';
+
 import { UnitType } from '../../core/unit-types';
 import { EMaterialType } from '../../economy/material-type';
 import type { CarrierRegistry } from '../carrier-registry';
@@ -248,10 +249,6 @@ export class UnitTransformer {
                 continue;
             }
             const pile = this.gameState.addEntity(EntityType.StackedPile, toolMaterial as number, tx, ty, 0);
-            const pileState = this.gameState.piles.states.get(pile.id);
-            if (pileState) {
-                pileState.quantity = 1;
-            }
             this.eventBus.emit('pile:freePilePlaced', { entityId: pile.id, materialType: toolMaterial, quantity: 1 });
             log.debug(`Dropped ${EMaterialType[toolMaterial]} at (${tx}, ${ty})`);
             return;

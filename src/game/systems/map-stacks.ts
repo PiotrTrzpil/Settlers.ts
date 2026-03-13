@@ -47,10 +47,8 @@ export function populateMapStacks(state: GameState, stacks: MapStackData[], even
         }
 
         const entity = state.addEntity(EntityType.StackedPile, materialType, stackData.x, stackData.y, 0);
-        // entity:created handler in game-services.ts calls createState(entity.id) with kind: 'free' as default.
-        state.piles.setQuantity(entity.id, stackData.amount);
 
-        // Register free pile as output source for the logistics system
+        // Register free pile — FreePileHandler creates the inventory slot
         eventBus?.emit('pile:freePilePlaced', {
             entityId: entity.id,
             materialType,

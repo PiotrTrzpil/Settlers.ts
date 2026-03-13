@@ -320,8 +320,8 @@ export class SettlerTaskSystem implements TickSystem {
         this.oreVeinData = data;
     }
 
-    assignInitialBuildingWorkers(): void {
-        this.workerTracker.assignInitial();
+    relocateUnitsFromFootprints(): void {
+        this.workerTracker.relocateFromFootprints();
     }
 
     findIdleSpecialist(unitType: UnitType, player: number, nearX: number, nearY: number): number | null {

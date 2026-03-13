@@ -93,17 +93,6 @@ export function spawnPileEntity(
 }
 
 /**
- * Update quantity on an existing pile entity.
- */
-export function updatePileEntity(slot: PileSlot, executeCommand: (cmd: Command) => CommandResult): void {
-    executeCommand({
-        type: 'update_pile_quantity',
-        entityId: slot.entityId!,
-        quantity: slot.currentAmount,
-    });
-}
-
-/**
  * Remove a pile entity and clear the entityId on the slot.
  */
 export function removePileEntity(slot: PileSlot, executeCommand: (cmd: Command) => CommandResult): void {
@@ -370,4 +359,25 @@ export function getProductionOutput(
         return undefined;
     }
     return BUILDING_PRODUCTIONS.get(entity.subType as BuildingType)?.output;
+}
+
+// ── Throughput helpers ───────────────────────────────────────────────────────
+
+/** Get or create a throughput entry for a (building, material) pair. */
+export function getOrCreateThroughput(
+    throughput: ThroughputMap,
+    buildingId: number,
+    materialType: EMaterialType
+): MaterialThroughput {
+    let byMaterial = throughput.get(buildingId);
+    if (!byMaterial) {
+        byMaterial = new Map();
+        throughput.set(buildingId, byMaterial);
+    }
+    let entry = byMaterial.get(materialType);
+    if (!entry) {
+        entry = { totalIn: 0, totalOut: 0 };
+        byMaterial.set(materialType, entry);
+    }
+    return entry;
 }

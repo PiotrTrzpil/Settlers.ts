@@ -37,7 +37,7 @@ function makeStackedResourceEntity(id: number, x: number, y: number, material: E
 
 function makeMockResources(kindMap: Map<number, PileKind>): PileKindProvider {
     return {
-        getKind(entityId: number): PileKind {
+        getPileKind(entityId: number): PileKind {
             const kind = kindMap.get(entityId);
             if (!kind) throw new Error(`MockResources: unknown entity ${entityId}`);
             return kind;
