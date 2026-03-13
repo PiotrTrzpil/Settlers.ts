@@ -3,9 +3,8 @@
 import './game/renderer/sprite-cache/early-prefetch';
 
 import { createApp } from 'vue';
-import Toast from 'vue-toastification';
-import type { ToastOptionsAndRequiredContent } from 'vue-toastification/dist/types/types';
-import 'vue-toastification/dist/index.css';
+import Vue3Toastify, { type ToastContainerOptions } from 'vue3-toastify';
+import 'vue3-toastify/dist/index.css';
 import App from './app.vue';
 import router from './router';
 import { LogHandler } from './utilities/log-handler';
@@ -65,26 +64,15 @@ app.config.errorHandler = (err, _vm, info) => {
     const msg = err instanceof Error ? err.message : String(err);
     toastError(info, msg);
 };
-app.use(Toast, {
-    position: 'bottom-right' as const,
-    timeout: 8000,
-    maxToasts: 5,
+app.use(Vue3Toastify, {
+    position: 'bottom-right',
+    autoClose: 8000,
+    limit: 5,
     newestOnTop: true,
     pauseOnHover: true,
     pauseOnFocusLoss: false,
     hideProgressBar: false,
     closeOnClick: true,
     draggable: false,
-    // eslint-disable-next-line sonarjs/function-return-type -- API requires false|toast union
-    filterBeforeCreate(
-        toast: ToastOptionsAndRequiredContent,
-        toasts: ToastOptionsAndRequiredContent[]
-    ): ToastOptionsAndRequiredContent | false {
-        // Deduplicate: suppress if identical toast already visible
-        if (toasts.filter(t => t.content === toast.content).length > 0) {
-            return false;
-        }
-        return toast;
-    },
-});
+} as ToastContainerOptions);
 app.use(router).mount('#app');

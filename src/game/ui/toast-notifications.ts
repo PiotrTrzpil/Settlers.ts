@@ -1,16 +1,13 @@
 /**
- * Bridge between the game engine and vue-toastification.
+ * Bridge between the game engine and vue3-toastify.
  *
  * Game systems (GameLoop, Renderer) call these functions to surface
  * errors/warnings to the player via toasts.  The bridge applies its
  * own throttling so the same source+message pair cannot reappear for
  * THROTTLE_MS, preventing flood from hot-path callers.
- *
- * vue-toastification's `useToast()` works from anywhere once the
- * plugin is installed on the Vue app.
  */
 
-import { useToast } from 'vue-toastification';
+import { toast } from 'vue3-toastify';
 
 /** Minimum interval between identical toast messages (ms) */
 const THROTTLE_MS = 10_000;
@@ -20,16 +17,6 @@ const throttle = new Map<string, number>();
 
 /** Handle returned by `setInterval`, lazily created */
 let pruneTimer: ReturnType<typeof setInterval> | null = null;
-
-/** Cached toast interface — created on first use */
-let toast: ReturnType<typeof useToast> | null = null;
-
-function getToast(): ReturnType<typeof useToast> {
-    if (!toast) {
-        toast = useToast();
-    }
-    return toast;
-}
 
 function isThrottled(key: string): boolean {
     const now = performance.now();
@@ -70,7 +57,7 @@ export function toastError(source: string, message: string): void {
     if (isThrottled(key)) {
         return;
     }
-    getToast().error(`[${source}] ${message}`, { timeout: 8000 });
+    toast.error(`[${source}] ${message}`, { autoClose: 8000, toastId: key });
 }
 
 /**
@@ -81,7 +68,7 @@ export function toastWarn(source: string, message: string): void {
     if (isThrottled(key)) {
         return;
     }
-    getToast().warning(`[${source}] ${message}`, { timeout: 6000 });
+    toast.warn(`[${source}] ${message}`, { autoClose: 6000, toastId: key });
 }
 
 /** Clear all throttle state (e.g., on game reset). */
