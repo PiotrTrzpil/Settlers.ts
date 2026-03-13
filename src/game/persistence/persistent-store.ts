@@ -28,21 +28,21 @@ export interface StoreSerializer<T> {
 // Shared persistence helpers
 // ---------------------------------------------------------------------------
 
-function serializeEntries<T>(entries: Iterable<[number, T]>, serializer?: StoreSerializer<T>): Record<number, unknown> {
-    const result: Record<number, unknown> = {};
+function serializeMap<T>(entries: Iterable<[number, T]>, serializer?: StoreSerializer<T>): Map<number, unknown> {
+    const result = new Map<number, unknown>();
     for (const [id, v] of entries) {
-        result[id] = serializer ? serializer.serialize(v) : v;
+        result.set(id, serializer ? serializer.serialize(v) : v);
     }
     return result;
 }
 
-function deserializeEntries<T>(
-    data: Record<number, unknown>,
+function deserializeMap<T>(
+    data: Map<number, unknown>,
     setter: (id: number, value: T) => void,
     serializer?: StoreSerializer<T>
 ): void {
-    for (const [id, raw] of Object.entries(data)) {
-        setter(Number(id), serializer ? serializer.deserialize(raw) : (raw as T));
+    for (const [id, raw] of data) {
+        setter(id, serializer ? serializer.deserialize(raw) : (raw as T));
     }
 }
 
@@ -59,7 +59,7 @@ function deserializeEntries<T>(
  *
  * Also satisfies the read-only `ComponentStore<T>` interface for ECS queries.
  */
-export class PersistentMap<T> implements Persistable<Record<number, unknown>>, ComponentStore<T> {
+export class PersistentMap<T> implements Persistable<Map<number, unknown>>, ComponentStore<T> {
     readonly persistKey: string;
     private readonly data = new Map<number, T>();
     private readonly serializer?: StoreSerializer<T>;
@@ -110,13 +110,13 @@ export class PersistentMap<T> implements Persistable<Record<number, unknown>>, C
     }
 
     // --- Persistable ---
-    serialize(): Record<number, unknown> {
-        return serializeEntries(this.data, this.serializer);
+    serialize(): Map<number, unknown> {
+        return serializeMap(this.data, this.serializer);
     }
 
-    deserialize(data: Record<number, unknown>): void {
+    deserialize(data: Map<number, unknown>): void {
         this.data.clear();
-        deserializeEntries(data, (id, v) => this.data.set(id, v), this.serializer);
+        deserializeMap(data, (id, v) => this.data.set(id, v), this.serializer);
     }
 }
 
@@ -169,7 +169,7 @@ export class PersistentValue<T> implements Persistable<unknown> {
  * Thin wrapper: holds an IndexedMap<number, T> internally instead of a plain Map.
  * Delegates all operations.
  */
-export class PersistentIndexedMap<T> implements Persistable<Record<number, unknown>>, ComponentStore<T> {
+export class PersistentIndexedMap<T> implements Persistable<Map<number, unknown>>, ComponentStore<T> {
     readonly persistKey: string;
     private readonly data: IndexedMap<number, T>;
     private readonly serializer?: StoreSerializer<T>;
@@ -229,13 +229,13 @@ export class PersistentIndexedMap<T> implements Persistable<Record<number, unkno
     }
 
     // --- Persistable ---
-    serialize(): Record<number, unknown> {
-        return serializeEntries(this.data, this.serializer);
+    serialize(): Map<number, unknown> {
+        return serializeMap(this.data, this.serializer);
     }
 
-    deserialize(data: Record<number, unknown>): void {
+    deserialize(data: Map<number, unknown>): void {
         this.data.clear();
-        deserializeEntries(data, (id, v) => this.data.set(id, v), this.serializer);
+        deserializeMap(data, (id, v) => this.data.set(id, v), this.serializer);
     }
 }
 

@@ -6,6 +6,7 @@
  * no typed fields for individual features.
  */
 
+import superjson from 'superjson';
 import type { GameCore } from '../game-core';
 import { EntityType } from '../entity';
 import type { CarryingState } from '../entity';
@@ -18,8 +19,8 @@ const STORAGE_KEY = 'settlers_game_state';
 const INITIAL_STATE_KEY = 'settlers_initial_state';
 const LAST_MAP_KEY = 'settlers_last_map';
 const AUTO_SAVE_INTERVAL_MS = 5000; // Save every 5 seconds
-// Bumped: snapshot simplification — removed typed feature fields, event-free entity restore
-const SNAPSHOT_VERSION = 12;
+// Bumped: migrated serialization to superjson (native Map/Set support)
+const SNAPSHOT_VERSION = 13;
 
 /**
  * Snapshot format: metadata + entity table + terrain + dynamic feature data.
@@ -321,7 +322,7 @@ export function createSnapshot(game: GameCore): GameStateSnapshot {
 export function saveGameState(game: GameCore): boolean {
     try {
         const snapshot = createSnapshot(game);
-        const json = JSON.stringify(snapshot);
+        const json = superjson.stringify(snapshot);
         try {
             localStorage.setItem(STORAGE_KEY, json);
         } catch {
@@ -353,7 +354,7 @@ export function checkSavedSnapshot(): SnapshotCheckResult {
         const stored = localStorage.getItem(STORAGE_KEY);
         if (!stored) return { status: 'none' };
 
-        const snapshot = JSON.parse(stored) as GameStateSnapshot;
+        const snapshot = superjson.parse<GameStateSnapshot>(stored);
         if (snapshot.version !== SNAPSHOT_VERSION) {
             return { status: 'stale', savedVersion: snapshot.version, expectedVersion: SNAPSHOT_VERSION };
         }
@@ -399,13 +400,13 @@ export function clearSavedTreeState(): void {
         const stored = localStorage.getItem(STORAGE_KEY);
         if (!stored) return;
 
-        const snapshot = JSON.parse(stored) as GameStateSnapshot;
+        const snapshot = superjson.parse<GameStateSnapshot>(stored);
         snapshot.entities = snapshot.entities.filter(e => e.type !== EntityType.MapObject);
         // Clear feature-specific tree/stone data stored under dynamic keys
         delete snapshot['trees'];
         delete snapshot['stones'];
         delete snapshot['resourceQuantities'];
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(snapshot));
+        localStorage.setItem(STORAGE_KEY, superjson.stringify(snapshot));
     } catch {
         // If anything fails, just clear the whole thing
         localStorage.removeItem(STORAGE_KEY);
@@ -523,7 +524,7 @@ export function saveInitialState(game: GameCore): boolean {
         // Always keep in-memory copy so reset works even if localStorage is full
         _cachedInitialSnapshot = snapshot;
         try {
-            localStorage.setItem(INITIAL_STATE_KEY, JSON.stringify(snapshot));
+            localStorage.setItem(INITIAL_STATE_KEY, superjson.stringify(snapshot));
         } catch {
             console.warn('GameState: localStorage full — initial state cached in memory only');
         }
@@ -554,7 +555,7 @@ export function loadInitialState(): GameStateSnapshot | null {
         const stored = localStorage.getItem(INITIAL_STATE_KEY);
         if (!stored) return null;
 
-        const snapshot = JSON.parse(stored) as GameStateSnapshot;
+        const snapshot = superjson.parse<GameStateSnapshot>(stored);
         if (snapshot.mapId !== currentMapId) {
             console.log(`Initial state is for different map (${snapshot.mapId}), not available`);
             return null;
