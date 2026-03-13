@@ -9,11 +9,75 @@
  */
 
 import { reactive } from 'vue';
-import { EntityType } from '../entity';
+import { EntityType, type Entity } from '../entity';
 import { MapObjectType } from '@/game/types/map-object-types';
 import { isResourceDeposit, getEnvironmentSubLayer, EnvironmentSubLayer } from '../renderer/layer-visibility';
 import type { GameState } from '../game-state';
 import { getBridge } from '../debug/debug-bridge';
+
+interface EntityCounts {
+    buildings: number;
+    units: number;
+    resources: number;
+    environment: number;
+    trees: number;
+    stones: number;
+    plants: number;
+    other: number;
+}
+
+function countEntities(entities: readonly Entity[]): EntityCounts {
+    let buildings = 0;
+    let units = 0;
+    let resources = 0;
+    let environment = 0;
+    let trees = 0;
+    let stones = 0;
+    let plants = 0;
+    let other = 0;
+
+    for (const e of entities) {
+        switch (e.type) {
+            case EntityType.Building:
+                buildings++;
+                break;
+            case EntityType.Unit:
+                units++;
+                break;
+            case EntityType.StackedPile:
+                resources++;
+                break;
+            case EntityType.MapObject: {
+                const objType = e.subType as MapObjectType;
+                if (isResourceDeposit(objType)) {
+                    resources++;
+                } else {
+                    environment++;
+                    switch (getEnvironmentSubLayer(objType)) {
+                        case EnvironmentSubLayer.Trees:
+                            trees++;
+                            break;
+                        case EnvironmentSubLayer.Stones:
+                            stones++;
+                            break;
+                        case EnvironmentSubLayer.Plants:
+                            plants++;
+                            break;
+                        case EnvironmentSubLayer.Other:
+                            other++;
+                            break;
+                    }
+                }
+                break;
+            }
+            case EntityType.Decoration:
+            case EntityType.None:
+                break;
+        }
+    }
+
+    return { buildings, units, resources, environment, trees, stones, plants, other };
+}
 
 export interface GameViewStateData {
     /** Increments every update — use as a reactive dirty flag in Vue computeds */
@@ -103,62 +167,15 @@ export class GameViewState {
         }
         this.lastEntityCountUpdate = now;
 
-        let buildings = 0;
-        let units = 0;
-        let resources = 0;
-        let environment = 0;
-        let trees = 0;
-        let stones = 0;
-        let plants = 0;
-        let other = 0;
-
-        for (const e of gameState.entities) {
-            switch (e.type) {
-                case EntityType.Building:
-                    buildings++;
-                    break;
-                case EntityType.Unit:
-                    units++;
-                    break;
-                case EntityType.StackedPile:
-                    resources++;
-                    break;
-                case EntityType.MapObject: {
-                    const objType = e.subType as MapObjectType;
-                    if (isResourceDeposit(objType)) {
-                        resources++;
-                    } else {
-                        environment++;
-                        switch (getEnvironmentSubLayer(objType)) {
-                            case EnvironmentSubLayer.Trees:
-                                trees++;
-                                break;
-                            case EnvironmentSubLayer.Stones:
-                                stones++;
-                                break;
-                            case EnvironmentSubLayer.Plants:
-                                plants++;
-                                break;
-                            case EnvironmentSubLayer.Other:
-                                other++;
-                                break;
-                        }
-                    }
-                    break;
-                }
-                case EntityType.Decoration:
-                case EntityType.None:
-                    break;
-            }
-        }
-        this.state.buildingCount = buildings;
-        this.state.unitCount = units;
-        this.state.pileCount = resources;
-        this.state.environmentCount = environment;
-        this.state.treeCount = trees;
-        this.state.stoneCount = stones;
-        this.state.plantCount = plants;
-        this.state.otherCount = other;
+        const counts = countEntities(gameState.entities);
+        this.state.buildingCount = counts.buildings;
+        this.state.unitCount = counts.units;
+        this.state.pileCount = counts.resources;
+        this.state.environmentCount = counts.environment;
+        this.state.treeCount = counts.trees;
+        this.state.stoneCount = counts.stones;
+        this.state.plantCount = counts.plants;
+        this.state.otherCount = counts.other;
 
         let moving = 0;
         let pathSteps = 0;

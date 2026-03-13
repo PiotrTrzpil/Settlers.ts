@@ -7,21 +7,14 @@ import type { CliArgs, CliCommand, CliContext, CliResult } from '../types';
 import type { Command } from '@/game/commands/command-types';
 import { ProductionMode } from '@/game/features/production-control';
 import { StorageDirection } from '@/game/systems/inventory/storage-filter-manager';
+import { ok, fail } from './helpers';
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
-
-function ok(): CliResult {
-    return { ok: true, output: 'ok' };
-}
-
-function fail(msg: string): CliResult {
-    return { ok: false, output: msg };
-}
 
 /** Execute a command and return ok/fail CliResult. */
 function exec(ctx: CliContext, cmd: Command): CliResult {
     const result = ctx.game.execute(cmd);
-    return result.success ? ok() : fail(result.error!);
+    return result.success ? ok('ok') : fail(result.error!);
 }
 
 /** Parse a positional as a required integer, throw with context on failure. */

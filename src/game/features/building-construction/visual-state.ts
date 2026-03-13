@@ -86,7 +86,7 @@ export function getBuildingVisualState(site: ConstructionSite | undefined): Buil
 
         default: {
             const _: never = phase;
-            throw new Error(`getBuildingVisualState: unhandled BuildingConstructionPhase ${_}`);
+            throw new Error(`getBuildingVisualState: unhandled BuildingConstructionPhase ${String(_)}`);
         }
     }
 }

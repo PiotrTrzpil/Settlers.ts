@@ -71,17 +71,15 @@ function waitForGarrisoned(sim: Simulation, buildingId: number, count: number, l
     });
 }
 
-// ─── tests ───────────────────────────────────────────────────────────────────
+// ─── Basic garrison (garrison_units) ──────────────────────────────────────
 
-describe('Tower garrison (integration)', { timeout: 30_000 }, () => {
+describe('Tower garrison – basic garrison_units', { timeout: 30_000 }, () => {
     let sim: Simulation;
 
     afterEach(() => {
         sim?.destroy();
         cleanupSimulation();
     });
-
-    // ─── Basic garrison (garrison_units) ──────────────────────────────────────
 
     it('swordsman walks to tower and becomes hidden in swordsman slot', () => {
         sim = createSimulation();
@@ -118,7 +116,6 @@ describe('Tower garrison (integration)', { timeout: 30_000 }, () => {
 
     it('multiple units fill their respective role slots', () => {
         sim = createSimulation();
-        // GuardTowerSmall: 1 swordsman slot, 2 bowman slots
         const towerId = sim.placeBuilding(BuildingType.GuardTowerSmall);
         const swordsmanId = sim.spawnUnitNear(towerId, UnitType.Swordsman1)[0]!;
         const [bowman1Id, bowman2Id] = sim.spawnUnitNear(towerId, UnitType.Bowman1, 2);
@@ -141,7 +138,6 @@ describe('Tower garrison (integration)', { timeout: 30_000 }, () => {
         const bowmanId = sim.spawnUnitNear(towerId, UnitType.Bowman1)[0]!;
         const swordsmanId = sim.spawnUnitNear(towerId, UnitType.Swordsman1)[0]!;
 
-        // Bowman listed first, swordsman second — slots should still be correct
         const result = garrisonUnits(sim, towerId, [bowmanId, swordsmanId]);
         expect(result.success).toBe(true);
 
@@ -155,16 +151,14 @@ describe('Tower garrison (integration)', { timeout: 30_000 }, () => {
 
     it('excess swordsmen beyond slot capacity are rejected', () => {
         sim = createSimulation();
-        // GuardTowerSmall has only 1 swordsman slot
         const towerId = sim.placeBuilding(BuildingType.GuardTowerSmall);
         const [sw1, sw2, sw3] = sim.spawnUnitNear(towerId, UnitType.Swordsman1, 3);
 
         const result = garrisonUnits(sim, towerId, [sw1!, sw2!, sw3!]);
-        expect(result.success).toBe(true); // 1 accepted, 2 silently rejected
+        expect(result.success).toBe(true);
 
         waitForGarrisoned(sim, towerId, 1, 'one swordsman garrisoned');
 
-        // Only 1 can garrison; others remain visible
         expect(garrisonedCount(sim, towerId)).toBe(1);
         expect(sim.errors).toHaveLength(0);
     });
@@ -187,7 +181,6 @@ describe('Tower garrison (integration)', { timeout: 30_000 }, () => {
         garrisonUnits(sim, towerId, [swordsmanId]);
         expect(sim.services.garrisonManager.isEnRoute(swordsmanId)).toBe(true);
 
-        // Same unit to same tower — should be filtered out as already en-route
         const result = garrisonUnits(sim, towerId, [swordsmanId]);
         expect(result.success).toBe(false);
     });
@@ -203,7 +196,7 @@ describe('Tower garrison (integration)', { timeout: 30_000 }, () => {
 
     it('full tower rejects additional garrison command', () => {
         sim = createSimulation();
-        const towerId = sim.placeBuilding(BuildingType.GuardTowerSmall); // 1 sw, 2 bw
+        const towerId = sim.placeBuilding(BuildingType.GuardTowerSmall);
         const swordsmanId = sim.spawnUnitNear(towerId, UnitType.Swordsman1)[0]!;
         const [bw1, bw2] = sim.spawnUnitNear(towerId, UnitType.Bowman1, 2);
 
@@ -216,10 +209,19 @@ describe('Tower garrison (integration)', { timeout: 30_000 }, () => {
         expect(garrisonedCount(sim, towerId)).toBe(3);
         expect(sim.errors).toHaveLength(0);
     });
+});
 
-    // ─── garrison_selected_units ───────────────────────────────────────────────
+// ─── garrison_selected_units ───────────────────────────────────────────────
 
-    it('garrison_selected_units: garrisons selected military unit into tower at clicked tile', () => {
+describe('Tower garrison – garrison_selected_units', { timeout: 30_000 }, () => {
+    let sim: Simulation;
+
+    afterEach(() => {
+        sim?.destroy();
+        cleanupSimulation();
+    });
+
+    it('garrisons selected military unit into tower at clicked tile', () => {
         sim = createSimulation();
         const towerId = sim.placeBuilding(BuildingType.GuardTowerSmall);
         const swordsmanId = sim.spawnUnitNear(towerId, UnitType.Swordsman1)[0]!;
@@ -233,7 +235,7 @@ describe('Tower garrison (integration)', { timeout: 30_000 }, () => {
         expect(sim.errors).toHaveLength(0);
     });
 
-    it('garrison_selected_units: clears selection on success', () => {
+    it('clears selection on success', () => {
         sim = createSimulation();
         const towerId = sim.placeBuilding(BuildingType.GuardTowerSmall);
         const swordsmanId = sim.spawnUnitNear(towerId, UnitType.Swordsman1)[0]!;
@@ -248,7 +250,7 @@ describe('Tower garrison (integration)', { timeout: 30_000 }, () => {
         expect(sim.errors).toHaveLength(0);
     });
 
-    it('garrison_selected_units: fails silently for non-garrison building tile', () => {
+    it('fails silently for non-garrison building tile', () => {
         sim = createSimulation();
         const hut = sim.placeBuilding(BuildingType.WoodcutterHut);
         const swordsmanId = sim.spawnUnitNear(hut, UnitType.Swordsman1)[0]!;
@@ -256,10 +258,10 @@ describe('Tower garrison (integration)', { timeout: 30_000 }, () => {
         sim.execute({ type: 'select', entityId: swordsmanId });
         const result = garrisonSelected(sim, hut);
         expect(result.success).toBe(false);
-        expect(sim.state.selection.selectedEntityId).toBe(swordsmanId); // selection unchanged
+        expect(sim.state.selection.selectedEntityId).toBe(swordsmanId);
     });
 
-    it('garrison_selected_units: fails silently on empty tile', () => {
+    it('fails silently on empty tile', () => {
         sim = createSimulation();
         const swordsmanId = sim.spawnUnit(64, 64, UnitType.Swordsman1);
 
@@ -268,7 +270,7 @@ describe('Tower garrison (integration)', { timeout: 30_000 }, () => {
         expect(result.success).toBe(false);
     });
 
-    it('garrison_selected_units: fails when only non-military units are selected', () => {
+    it('fails when only non-military units are selected', () => {
         sim = createSimulation();
         const towerId = sim.placeBuilding(BuildingType.GuardTowerSmall);
         const carrierId = sim.spawnUnitNear(towerId, UnitType.Carrier)[0]!;
@@ -279,7 +281,7 @@ describe('Tower garrison (integration)', { timeout: 30_000 }, () => {
         expect(garrisonedCount(sim, towerId)).toBe(0);
     });
 
-    it('garrison_selected_units: garrisons multiple selected military units at once', () => {
+    it('garrisons multiple selected military units at once', () => {
         sim = createSimulation();
         const towerId = sim.placeBuilding(BuildingType.GuardTowerSmall);
         const swordsmanId = sim.spawnUnitNear(towerId, UnitType.Swordsman1)[0]!;
@@ -293,8 +295,17 @@ describe('Tower garrison (integration)', { timeout: 30_000 }, () => {
         expect(garrisonedCount(sim, towerId)).toBe(2);
         expect(sim.errors).toHaveLength(0);
     });
+});
 
-    // ─── Ungarrison ───────────────────────────────────────────────────────────
+// ─── Ungarrison & building lifecycle ───────────────────────────────────────
+
+describe('Tower garrison – ungarrison & lifecycle', { timeout: 30_000 }, () => {
+    let sim: Simulation;
+
+    afterEach(() => {
+        sim?.destroy();
+        cleanupSimulation();
+    });
 
     it('ejected unit becomes visible near the tower', () => {
         sim = createSimulation();
@@ -325,7 +336,7 @@ describe('Tower garrison (integration)', { timeout: 30_000 }, () => {
 
         const result = ungarrison(sim, towerId, swordsmanId);
         expect(result.success).toBe(false);
-        expect(isHidden(sim, swordsmanId)).toBe(true); // still garrisoned
+        expect(isHidden(sim, swordsmanId)).toBe(true);
         expect(garrisonedCount(sim, towerId)).toBe(1);
         expect(sim.errors).toHaveLength(0);
     });
@@ -364,23 +375,18 @@ describe('Tower garrison (integration)', { timeout: 30_000 }, () => {
         expect(sim.errors).toHaveLength(0);
     });
 
-    // ─── Building lifecycle ───────────────────────────────────────────────────
-
     it('re-garrisoning a unit standing at the door finalizes immediately', () => {
         sim = createSimulation();
         const towerId = sim.placeBuilding(BuildingType.GuardTowerSmall);
         const swordsmanId = sim.spawnUnitNear(towerId, UnitType.Swordsman1)[0]!;
         const bowmanId = sim.spawnUnitNear(towerId, UnitType.Bowman1)[0]!;
 
-        // Fully garrison the tower (need 2 units so we can eject one)
         garrisonUnits(sim, towerId, [swordsmanId, bowmanId]);
         waitForGarrisoned(sim, towerId, 2, 'both garrisoned');
 
-        // Eject the swordsman — it now stands at the approach tile (door)
         ungarrison(sim, towerId, swordsmanId);
         expect(isHidden(sim, swordsmanId)).toBe(false);
 
-        // Re-garrison the unit while it's already at the door
         const result = garrisonUnits(sim, towerId, [swordsmanId]);
         expect(result.success).toBe(true);
 
@@ -408,13 +414,10 @@ describe('Tower garrison (integration)', { timeout: 30_000 }, () => {
         expect(sim.errors).toHaveLength(0);
     });
 
-    // ─── Bug reproduction: unit far from tower ───────────────────────────────
-
     it('unit spawned far from tower still garrisons', () => {
         sim = createSimulation();
         const towerId = sim.placeBuilding(BuildingType.GuardTowerSmall);
 
-        // Spawn unit 20 tiles away from tower (not adjacent like spawnUnitNear)
         const tower = sim.state.getEntityOrThrow(towerId, 'test');
         const unitId = sim.spawnUnit(tower.x + 20, tower.y, UnitType.Swordsman1);
 
@@ -427,31 +430,35 @@ describe('Tower garrison (integration)', { timeout: 30_000 }, () => {
         expect(isHidden(sim, unitId)).toBe(true);
         expect(sim.errors).toHaveLength(0);
     });
+});
+
+// ─── Garrison edge cases ─────────────────────────────────────────────────────
+
+describe('Tower garrison – garrison edge cases', { timeout: 30_000 }, () => {
+    let sim: Simulation;
+
+    afterEach(() => {
+        sim?.destroy();
+        cleanupSimulation();
+    });
 
     it('garrison command where pathfinding fails does not leave unit stuck en-route', () => {
         sim = createSimulation();
         const towerId = sim.placeBuilding(BuildingType.GuardTowerSmall);
         const tower = sim.state.getEntityOrThrow(towerId, 'test');
 
-        // Create a full-width water wall between tower and unit spawn area.
-        // The wall is 3 tiles thick to prevent any diagonal bypass.
         const wallY = tower.y + 8;
         for (let dy = 0; dy < 3; dy++) {
             for (let x = 0; x < sim.mapWidth; x++) {
-                sim.fillTerrain(x, wallY + dy, 0, 0); // 0 = WATER
+                sim.fillTerrain(x, wallY + dy, 0, 0);
             }
         }
 
-        // Spawn unit on the far side of the wall (on grass)
         const unitId = sim.spawnUnit(tower.x, wallY + 10, UnitType.Swordsman1);
 
         garrisonUnits(sim, towerId, [unitId]);
-        // Command may succeed (unit accepted) but pathfinding fails internally
-
-        // Run a few ticks to let things settle
         sim.runTicks(100);
 
-        // The unit must NOT be stuck in en-route limbo — it should be free to command
         const isEnRoute = sim.services.garrisonManager.isEnRoute(unitId);
         expect(isEnRoute).toBe(false);
         expect(isHidden(sim, unitId)).toBe(false);
@@ -464,7 +471,6 @@ describe('Tower garrison (integration)', { timeout: 30_000 }, () => {
         const towerId = sim.placeBuilding(BuildingType.GuardTowerSmall);
         const tower = sim.state.getEntityOrThrow(towerId, 'test');
 
-        // Water wall blocks all paths
         const wallY = tower.y + 8;
         for (let dy = 0; dy < 3; dy++) {
             for (let x = 0; x < sim.mapWidth; x++) {
@@ -474,7 +480,6 @@ describe('Tower garrison (integration)', { timeout: 30_000 }, () => {
 
         const unitId = sim.spawnUnit(tower.x, wallY + 10, UnitType.Swordsman1);
 
-        // Count pathfinding failures for this unit
         let pathFailCount = 0;
         sim.eventBus.on('movement:pathFailed', ({ unitId: id }) => {
             if (id === unitId) pathFailCount++;
@@ -483,8 +488,6 @@ describe('Tower garrison (integration)', { timeout: 30_000 }, () => {
         garrisonUnits(sim, towerId, [unitId]);
         sim.runTicks(100);
 
-        // Should only attempt pathfinding once — auto-garrison must not retry
-        // the same unreachable unit→tower pair repeatedly
         expect(pathFailCount).toBe(1);
     });
 
@@ -496,16 +499,13 @@ describe('Tower garrison (integration)', { timeout: 30_000 }, () => {
         const tower = sim.state.getEntityOrThrow(towerId, 'test');
         const door = getBuildingDoorPos(tower.x, tower.y, tower.race, tower.subType as BuildingType);
 
-        // First soldier: spawn near and garrison (simulates auto-garrison)
         const firstId = sim.spawnUnitNear(towerId, UnitType.Swordsman1)[0]!;
         garrisonUnits(sim, towerId, [firstId]);
         waitForGarrisoned(sim, towerId, 1, 'first soldier garrisoned');
         expect(isHidden(sim, firstId)).toBe(true);
 
-        // Second soldier: spawn to the RIGHT and garrison manually
         const secondId = sim.spawnUnit(tower.x + 15, tower.y, UnitType.Swordsman1);
 
-        // Capture stop position for diagnostics
         let stoppedPos: { x: number; y: number } | null = null;
         sim.eventBus.on('unit:movementStopped', ({ unitId }) => {
             if (unitId === secondId) {
@@ -529,7 +529,6 @@ describe('Tower garrison (integration)', { timeout: 30_000 }, () => {
             console.log(`[DIAG] door in buildingOccupancy=${sim.state.buildingOccupancy.has(tileKey(door.x, door.y))}`);
             console.log(`[DIAG] isEnRoute=${sim.services.garrisonManager.isEnRoute(secondId)}`);
             console.log(`[DIAG] hidden=${u.hidden}`);
-            // Check what's on the door tile
             const doorOccupant = sim.state.unitOccupancy.get(tileKey(door.x, door.y));
             console.log(`[DIAG] door unitOccupancy=${doorOccupant} (tower=${towerId}, first=${firstId})`);
         }
@@ -545,19 +544,15 @@ describe('Tower garrison (integration)', { timeout: 30_000 }, () => {
         const tower = sim.state.getEntityOrThrow(towerId, 'test');
         const door = getBuildingDoorPos(tower.x, tower.y, tower.race, tower.subType as BuildingType);
 
-        // First soldier garrisons
         const firstId = sim.spawnUnitNear(towerId, UnitType.Swordsman1)[0]!;
         garrisonUnits(sim, towerId, [firstId]);
         waitForGarrisoned(sim, towerId, 1, 'first soldier garrisoned');
 
-        // After garrisoning: movement controller must be removed
         expect(sim.state.movement.hasController(firstId)).toBe(false);
 
-        // After garrisoning: unitOccupancy at door must NOT show the garrisoned unit
         const doorOccupant = sim.state.unitOccupancy.get(tileKey(door.x, door.y));
         expect(doorOccupant).not.toBe(firstId);
 
-        // Second soldier must still be able to garrison
         const bowmanId = sim.spawnUnitNear(towerId, UnitType.Bowman1)[0]!;
         garrisonUnits(sim, towerId, [bowmanId]);
         waitForGarrisoned(sim, towerId, 2, 'second unit garrisoned after first');
@@ -574,7 +569,6 @@ describe('Tower garrison (integration)', { timeout: 30_000 }, () => {
 
         const door = getBuildingDoorPos(tower.x, tower.y, tower.race, tower.subType as BuildingType);
 
-        // Door tile must NOT be in buildingOccupancy — units need to walk onto it
         const doorBlocked = sim.state.buildingOccupancy.has(tileKey(door.x, door.y));
         expect(doorBlocked).toBe(false);
     });

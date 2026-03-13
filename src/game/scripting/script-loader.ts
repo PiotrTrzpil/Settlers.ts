@@ -35,8 +35,10 @@ export function loadScriptFromMapData(scriptData: ArrayBuffer | Uint8Array): Scr
         let code = decoder.decode(data);
 
         // Clean up: remove null terminators and normalize line endings
-        // eslint-disable-next-line sonarjs/slow-regex -- simple patterns, not user-controlled input
-        code = code.replace(/\0+$/, '').replace(/\r\n/g, '\n').trim();
+        while (code.endsWith('\0')) {
+            code = code.slice(0, -1);
+        }
+        code = code.replace(/\r\n/g, '\n').trim();
 
         if (!code) {
             log.warn('Empty script data');

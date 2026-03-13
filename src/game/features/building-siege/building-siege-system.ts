@@ -14,79 +14,43 @@
  */
 
 import type { TickSystem } from '../../core/tick-system';
-import type { CoreDeps } from '../feature';
 import type { GameState } from '../../game-state';
 import type { EventBus } from '../../event-bus';
-import type { TowerGarrisonManager } from '../tower-garrison/tower-garrison-manager';
-import type { CombatSystem } from '../combat/combat-system';
-import type { EntityVisualService } from '../../animation/entity-visual-service';
-import type { UnitReservationRegistry } from '../../systems/unit-reservation';
-import type { SettlerTaskSystem } from '../settler-tasks';
-import type { Command, CommandResult } from '../../commands';
 import { EntityType, UnitType, BuildingType, type Entity } from '../../entity';
-import type { Race } from '../../core/race';
-import { getBaseUnitType } from '../../core/unit-types';
 import { CombatStatus } from '../combat/combat-state';
 import { isGarrisonBuildingType } from '../tower-garrison/internal/garrison-capacity';
 import { choreo } from '@/game/systems/choreo/choreo-builder';
 import { getBuildingDoorPos } from '../../data/game-data-access';
 import { sortedEntries } from '@/utilities/collections';
 import { createLogger } from '@/utilities/logger';
+import type { TowerGarrisonManager } from '../tower-garrison/tower-garrison-manager';
+import type { CombatSystem } from '../combat/combat-system';
+import type { EntityVisualService } from '../../animation/entity-visual-service';
+import type { UnitReservationRegistry } from '../../systems/unit-reservation';
+import type { SettlerTaskSystem } from '../settler-tasks';
+import type { Command, CommandResult } from '../../commands';
+import {
+    type BuildingSiegeSystemConfig,
+    type SiegeState,
+    SiegePhase,
+    TICK_CHECK_INTERVAL,
+    MAX_ACTIVE_ATTACKERS,
+    MAX_SIEGE_ATTACKERS,
+    DOOR_ARRIVAL_DISTANCE,
+    BUILDING_SEARCH_RADIUS,
+    IDLE_SCAN_RADIUS,
+} from './siege-types';
+import {
+    isSwordsman,
+    isInAnySiege,
+    hasAttackerAtDoor,
+    findNearbyEnemyGarrison,
+    isIdleEnemySwordsman,
+} from './siege-helpers';
+
+export { SiegePhase, type SiegeState, type BuildingSiegeSystemConfig } from './siege-types';
 
 const log = createLogger('BuildingSiegeSystem');
-
-// ── Constants ──────────────────────────
-
-/** How often (in ticks) the system scans for new siege opportunities and checks arrivals. */
-const TICK_CHECK_INTERVAL = 10;
-
-/** Max attackers that simultaneously fight a single defender. */
-const MAX_ACTIVE_ATTACKERS = 2;
-
-/** Max total attackers committed to a single siege (fighting + waiting at door). */
-const MAX_SIEGE_ATTACKERS = 4;
-
-/** Chebyshev distance threshold for "unit is at the building door". */
-const DOOR_ARRIVAL_DISTANCE = 2;
-
-/** Radius (Euclidean) to search for enemy garrison buildings around a swordsman. */
-const BUILDING_SEARCH_RADIUS = 18;
-
-/** Radius (Euclidean) for idle swordsman scan around enemy garrison buildings. */
-const IDLE_SCAN_RADIUS = 18;
-
-// ── Types ──────────────────────────
-
-export enum SiegePhase {
-    /** Attackers approaching door, no defender ejected yet */
-    Approaching = 0,
-    /** Defender ejected, combat in progress */
-    Fighting = 1,
-    /** All defenders dead, attacker entering building */
-    Capturing = 2,
-}
-
-export interface SiegeState {
-    buildingId: number;
-    /** Player who is attacking this building */
-    attackerPlayer: number;
-    phase: SiegePhase;
-    /** Swordsman IDs committed to this siege (at door or approaching) */
-    attackerIds: number[];
-    /** Currently ejected defender entity ID (null if none yet or between defenders) */
-    activeDefenderId: number | null;
-}
-
-// ── Config ──────────────────────────
-
-export interface BuildingSiegeSystemConfig extends CoreDeps {
-    garrisonManager: TowerGarrisonManager;
-    combatSystem: CombatSystem;
-    visualService: EntityVisualService;
-    unitReservation: UnitReservationRegistry;
-    settlerTaskSystem: SettlerTaskSystem;
-    executeCommand: (cmd: Command) => CommandResult;
-}
 
 // ── System ──────────────────────────
 
@@ -134,12 +98,12 @@ export class BuildingSiegeSystem implements TickSystem {
             if (unit.type !== EntityType.Unit) {
                 return;
             }
-            if (!this.isSwordsman(unit.subType as UnitType)) {
+            if (!isSwordsman(unit.subType as UnitType)) {
                 return;
             }
             // Skip units already committed to another task (e.g., en-route to friendly garrison)
             // but allow units in a siege (they're reserved by us)
-            if (this.unitReservation.isReserved(entityId) && !this.isInAnySiege(entityId)) {
+            if (this.unitReservation.isReserved(entityId) && !isInAnySiege(entityId, this.sieges)) {
                 return;
             }
 
@@ -248,7 +212,7 @@ export class BuildingSiegeSystem implements TickSystem {
         switch (siege.phase) {
             case SiegePhase.Approaching:
                 // Check if any attacker has arrived at the door
-                if (this.hasAttackerAtDoor(siege, building)) {
+                if (hasAttackerAtDoor(siege, building, this.gameState)) {
                     this.advanceSiege(buildingId, siege);
                 }
                 break;
@@ -271,7 +235,7 @@ export class BuildingSiegeSystem implements TickSystem {
     // ── Siege initiation ──────────────────────────
 
     private tryBeginOrJoinSiege(unitId: number, unit: { x: number; y: number; player: number }): void {
-        const target = this.findNearbyEnemyGarrison(unit, BUILDING_SEARCH_RADIUS);
+        const target = findNearbyEnemyGarrison(unit, BUILDING_SEARCH_RADIUS, this.gameState);
         if (!target) {
             return;
         }
@@ -295,44 +259,6 @@ export class BuildingSiegeSystem implements TickSystem {
 
         // At door — advance the siege (eject defender or capture)
         this.advanceSiege(target.id, siege);
-    }
-
-    /** Find the closest enemy garrison building (by door distance) within the given radius. */
-    private findNearbyEnemyGarrison(
-        unit: { x: number; y: number; player: number },
-        radius: number
-    ): Entity | undefined {
-        const nearby = this.gameState.getEntitiesInRadius(unit.x, unit.y, radius);
-        let best: Entity | undefined;
-        let bestDist = Infinity;
-
-        for (const candidate of nearby) {
-            if (candidate.type !== EntityType.Building) {
-                continue;
-            }
-            if (candidate.player === unit.player) {
-                continue;
-            }
-            if (!isGarrisonBuildingType(candidate.subType as BuildingType)) {
-                continue;
-            }
-
-            // Measure distance to the door, not the building center
-            const door = getBuildingDoorPos(
-                candidate.x,
-                candidate.y,
-                candidate.race,
-                candidate.subType as BuildingType
-            );
-            const dx = door.x - unit.x;
-            const dy = door.y - unit.y;
-            const dist = dx * dx + dy * dy;
-            if (dist < bestDist) {
-                bestDist = dist;
-                best = candidate;
-            }
-        }
-        return best;
     }
 
     /** Assign a move task directly (bypasses command handler reservation check). */
@@ -588,26 +514,6 @@ export class BuildingSiegeSystem implements TickSystem {
 
     // ── Helpers ──────────────────────────
 
-    /** Check if any attacker is within door arrival distance of the building. */
-    private hasAttackerAtDoor(
-        siege: SiegeState,
-        building: { x: number; y: number; race: Race; subType: number }
-    ): boolean {
-        const door = getBuildingDoorPos(building.x, building.y, building.race, building.subType as BuildingType);
-
-        for (const attackerId of siege.attackerIds) {
-            const attacker = this.gameState.getEntity(attackerId);
-            if (!attacker) {
-                continue;
-            }
-            const dist = Math.max(Math.abs(attacker.x - door.x), Math.abs(attacker.y - door.y));
-            if (dist <= DOOR_ARRIVAL_DISTANCE) {
-                return true;
-            }
-        }
-        return false;
-    }
-
     /** Remove an attacker from any siege they're part of. Cancels siege if no attackers remain. */
     private removeAttacker(entityId: number): void {
         for (const [buildingId, siege] of this.sieges) {
@@ -633,28 +539,8 @@ export class BuildingSiegeSystem implements TickSystem {
         }
     }
 
-    /** Returns true if the given UnitType is a swordsman (any level). */
-    private isSwordsman(unitType: UnitType): boolean {
-        return getBaseUnitType(unitType) === UnitType.Swordsman1;
-    }
-
-    /** Returns true if the unit is already part of any active siege. */
-    private isInAnySiege(unitId: number): boolean {
-        for (const siege of this.sieges.values()) {
-            if (siege.attackerIds.includes(unitId)) {
-                return true;
-            }
-        }
-        return false;
-    }
-
     // ── Idle swordsman scan ──────────────────────────
 
-    /**
-     * Scan enemy garrison buildings for nearby idle swordsmen that should
-     * auto-attack. Covers cases where swordsmen become idle without
-     * triggering unit:movementStopped (e.g., after winning a combat).
-     */
     private scanIdleSwordsmen(): void {
         const buildings = this.gameState.entityIndex.idsOfType(EntityType.Building);
 
@@ -673,7 +559,15 @@ export class BuildingSiegeSystem implements TickSystem {
     private scanNearbyIdleSwordsmen(building: Entity): void {
         const nearby = this.gameState.getEntitiesInRadius(building.x, building.y, IDLE_SCAN_RADIUS);
         for (const unit of nearby) {
-            if (!this.isIdleEnemySwordsman(unit, building.player)) {
+            if (
+                !isIdleEnemySwordsman(
+                    unit,
+                    building.player,
+                    id => this.combatSystem.isInCombat(id),
+                    this.sieges,
+                    id => this.unitReservation.isReserved(id)
+                )
+            ) {
                 continue;
             }
 
@@ -684,16 +578,5 @@ export class BuildingSiegeSystem implements TickSystem {
                 log.error(`Error in idle scan for swordsman ${unit.id}`, err);
             }
         }
-    }
-
-    private isIdleEnemySwordsman(unit: Entity, buildingPlayer: number): boolean {
-        return (
-            unit.type === EntityType.Unit &&
-            unit.player !== buildingPlayer &&
-            this.isSwordsman(unit.subType as UnitType) &&
-            !this.combatSystem.isInCombat(unit.id) &&
-            !this.isInAnySiege(unit.id) &&
-            !this.unitReservation.isReserved(unit.id)
-        );
     }
 }

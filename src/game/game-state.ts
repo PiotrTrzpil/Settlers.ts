@@ -5,12 +5,11 @@ import {
     tileKey,
     BuildingType,
     getBuildingFootprint,
-    isUnitTypeSelectable,
     type CarryingState,
 } from './entity';
 import { Race } from './core/race';
 import { getBuildingBlockArea, getBuildingPassableTiles } from './buildings/types';
-import type { MovementSystem, MovementController } from './systems/movement/index';
+import type { MovementSystem } from './systems/movement/index';
 import { SeededRng, createGameRng } from './core/rng';
 import { EventBus } from './event-bus';
 import { SelectionManager } from './ui/selection-manager';
@@ -18,115 +17,9 @@ import { StackedPileManager } from './state/stacked-pile-manager';
 import { type ComponentStore, mapStore } from './ecs';
 import { EntityIndex } from './entity-index';
 import type { SpatialGrid } from './spatial-grid';
+import { UnitStateMap, resolveEntitySelectable } from './unit-state-adapter';
 
-/**
- * Legacy UnitState interface for backward compatibility.
- * This is a read-only view into a MovementController.
- * Note: Animation-related state (idleTime, etc.) is now managed by the animation system.
- */
-export interface UnitStateView {
-    readonly entityId: number;
-    readonly path: ReadonlyArray<{ x: number; y: number }>;
-    readonly pathIndex: number;
-    readonly moveProgress: number;
-    readonly speed: number;
-    readonly prevX: number;
-    readonly prevY: number;
-}
-
-/**
- * Interface for looking up unit states by entity ID.
- * Used by renderers and other systems that need to access unit movement state.
- */
-export interface UnitStateLookup {
-    get(entityId: number): UnitStateView | undefined;
-}
-
-/**
- * Adapter that wraps a MovementController as a UnitStateView.
- * Provides backward-compatible read access to movement state.
- */
-class UnitStateAdapter implements UnitStateView {
-    constructor(private controller: MovementController) {}
-
-    get entityId(): number {
-        return this.controller.entityId;
-    }
-    get path(): ReadonlyArray<{ x: number; y: number }> {
-        return this.controller.path;
-    }
-    get pathIndex(): number {
-        return this.controller.pathIndex;
-    }
-    get moveProgress(): number {
-        return this.controller.progress;
-    }
-    get speed(): number {
-        return this.controller.speed;
-    }
-    get prevX(): number {
-        return this.controller.prevTileX;
-    }
-    get prevY(): number {
-        return this.controller.prevTileY;
-    }
-}
-
-/**
- * Adapter Map that provides legacy unitStates interface.
- * Wraps MovementSystem for backward compatibility with existing code.
- */
-class UnitStateMap implements UnitStateLookup {
-    constructor(private movementSystem: MovementSystem) {}
-
-    get(entityId: number): UnitStateView | undefined {
-        const controller = this.movementSystem.getController(entityId);
-        return controller ? new UnitStateAdapter(controller) : undefined;
-    }
-
-    has(entityId: number): boolean {
-        return this.movementSystem.hasController(entityId);
-    }
-
-    delete(entityId: number): boolean {
-        if (this.movementSystem.hasController(entityId)) {
-            this.movementSystem.removeController(entityId);
-            return true;
-        }
-        return false;
-    }
-
-    values(): IterableIterator<UnitStateView> {
-        // eslint-disable-next-line @typescript-eslint/no-this-alias -- needed for generator context
-        const self = this;
-        return (function* () {
-            for (const controller of self.movementSystem.getAllControllers()) {
-                yield new UnitStateAdapter(controller);
-            }
-        })();
-    }
-
-    *[Symbol.iterator](): IterableIterator<[number, UnitStateView]> {
-        for (const controller of this.movementSystem.getAllControllers()) {
-            yield [controller.entityId, new UnitStateAdapter(controller)];
-        }
-    }
-}
-
-/** Determine entity selectability from type + subtype (no explicit override). */
-function resolveEntitySelectable(type: EntityType, subType: number): boolean | undefined {
-    switch (type) {
-        case EntityType.Unit:
-            return isUnitTypeSelectable(subType as UnitType);
-        case EntityType.Building:
-            return true;
-        case EntityType.MapObject:
-        case EntityType.StackedPile:
-        case EntityType.Decoration:
-        case EntityType.None:
-            return false;
-    }
-}
+export type { UnitStateView, UnitStateLookup } from './unit-state-adapter';
 
 /** Options for addEntity — all optional, with sensible defaults. */
 export interface AddEntityOptions {

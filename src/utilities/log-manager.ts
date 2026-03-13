@@ -8,7 +8,7 @@ export enum LogType {
 export interface ILogMessage {
     type: LogType;
     source: string;
-    msg: string | any;
+    msg: any;
     exception?: Error;
     index?: number;
 }

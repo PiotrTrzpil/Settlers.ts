@@ -60,7 +60,7 @@ export class OptimizedDepthSorter {
     private floatDepthKeys: Float64Array;
     private sortedIndices: Uint32Array;
     private tempEntities: Entity[];
-    private indexArray: number[] = new Array(INITIAL_CAPACITY);
+    private indexArray: number[] = Array.from({ length: INITIAL_CAPACITY });
 
     // Last sort state for incremental optimization
     private lastEntityCount = 0;
@@ -69,7 +69,7 @@ export class OptimizedDepthSorter {
     constructor() {
         this.floatDepthKeys = new Float64Array(INITIAL_CAPACITY);
         this.sortedIndices = new Uint32Array(INITIAL_CAPACITY);
-        this.tempEntities = new Array(INITIAL_CAPACITY);
+        this.tempEntities = Array.from({ length: INITIAL_CAPACITY });
     }
 
     /**
@@ -191,7 +191,7 @@ export class OptimizedDepthSorter {
         const newCapacity = Math.max(count, this.floatDepthKeys.length * 2);
         this.floatDepthKeys = new Float64Array(newCapacity);
         this.sortedIndices = new Uint32Array(newCapacity);
-        this.tempEntities = new Array(newCapacity);
+        this.tempEntities = Array.from({ length: newCapacity });
     }
 
     /**

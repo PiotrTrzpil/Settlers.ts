@@ -198,6 +198,8 @@ export interface ChoreoJobState {
     transportData?: TransportData;
     /** Ticks to wait before retrying a failed pathfinding attempt (0 = try now). */
     pathRetryCountdown: number;
+    /** Number of consecutive pathfinding failures (for exponential backoff). */
+    pathRetryCount: number;
     /** Per-node waypoints for multi-destination jobs. Each GO_TO_TARGET consumes the next entry. */
     waypoints?: Array<{ x: number; y: number; entityId?: number }>;
     /** Typed metadata bag — replaces carryingGood hacks for stashing domain data. */
@@ -219,6 +221,7 @@ export function createChoreoJobState(jobId: string, nodes: ChoreoNode[] = []): C
         carryingGood: null,
         workStarted: false,
         pathRetryCountdown: 0,
+        pathRetryCount: 0,
     };
 }
 

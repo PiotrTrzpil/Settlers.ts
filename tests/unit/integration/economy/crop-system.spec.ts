@@ -58,15 +58,15 @@ installRealGameData();
 
 const SIM_256 = { mapWidth: 256, mapHeight: 256 } as const;
 
-describe('Crop system (real game data)', { timeout: 10_000 }, () => {
+// ── All crop types ──────────────────────────────────────────────
+
+describe('Crop system – all crop types', { timeout: 10_000 }, () => {
     let sim: Simulation;
 
     afterEach(() => {
         sim?.destroy();
         cleanupSimulation();
     });
-
-    // ── Grain (Roman) ────────────────────────────────────────────
 
     it('grain farm: farmer plants grain, crops grow and are harvested → GRAIN output', () => {
         sim = createSimulation(SIM_256);
@@ -101,8 +101,6 @@ describe('Crop system (real game data)', { timeout: 10_000 }, () => {
         expect(sim.getOutput(farmId, EMaterialType.GRAIN)).toBeGreaterThanOrEqual(3);
     });
 
-    // ── Grain (Viking) — regression: 2 consecutive GO_TO_TARGET nodes ──
-
     it('grain farm (Viking): farmer plants grain despite multi-step walk choreography', () => {
         sim = createSimulation({ ...SIM_256, race: Race.Viking });
 
@@ -119,8 +117,6 @@ describe('Crop system (real game data)', { timeout: 10_000 }, () => {
         sim.runUntil(() => planted >= 1, { maxTicks: 3000 * 30 });
         expect(planted).toBeGreaterThanOrEqual(1);
 
-        // The Viking choreography has 2 GO_TO_TARGET nodes — the farmer should NOT
-        // get stuck in a fail/restart loop at the second GO_TO_TARGET.
         expect(
             failCount,
             `Farmer stuck in fail loop: ${failCount} task failures on JOB_FARMERGRAIN_PLANT. ` +
@@ -129,8 +125,6 @@ describe('Crop system (real game data)', { timeout: 10_000 }, () => {
 
         expect(sim.getOutput(farmId, EMaterialType.GRAIN)).toBeGreaterThanOrEqual(0);
     });
-
-    // ── Sunflower (Trojan) ───────────────────────────────────────
 
     it('sunflower farm: farmer plants sunflowers → SUNFLOWER output', () => {
         sim = createSimulation({ ...SIM_256, race: Race.Trojan });
@@ -150,8 +144,6 @@ describe('Crop system (real game data)', { timeout: 10_000 }, () => {
         expect(harvested).toBeGreaterThanOrEqual(1);
     });
 
-    // ── Agave (Mayan) ────────────────────────────────────────────
-
     it('agave farm: farmer plants agave → AGAVE output', () => {
         sim = createSimulation({ ...SIM_256, race: Race.Mayan });
 
@@ -169,8 +161,6 @@ describe('Crop system (real game data)', { timeout: 10_000 }, () => {
         expect(planted).toBeGreaterThanOrEqual(1);
         expect(harvested).toBeGreaterThanOrEqual(1);
     });
-
-    // ── Beehive (Viking) ─────────────────────────────────────────
 
     it('beekeeper: plants beehives → HONEY output', () => {
         sim = createSimulation({ ...SIM_256, race: Race.Viking });
@@ -190,8 +180,6 @@ describe('Crop system (real game data)', { timeout: 10_000 }, () => {
         expect(harvested).toBeGreaterThanOrEqual(1);
     });
 
-    // ── Grape/Vine (Roman) ───────────────────────────────────────
-
     it('vineyard: winemaker plants vines, crops grow and are harvested → WINE output', () => {
         sim = createSimulation(SIM_256);
 
@@ -209,8 +197,17 @@ describe('Crop system (real game data)', { timeout: 10_000 }, () => {
         expect(planted).toBeGreaterThanOrEqual(1);
         expect(harvested).toBeGreaterThanOrEqual(1);
     });
+});
 
-    // ── Planting from work area center ──────────────────────────
+// ── Planting from work area center & invariants ─────────────────
+
+describe('Crop system – work area & lifecycle invariants', { timeout: 10_000 }, () => {
+    let sim: Simulation;
+
+    afterEach(() => {
+        sim?.destroy();
+        cleanupSimulation();
+    });
 
     it('grain farm: crops are planted outward from the work area center', () => {
         sim = createSimulation(SIM_256);
@@ -279,8 +276,6 @@ describe('Crop system (real game data)', { timeout: 10_000 }, () => {
 
         const center = getWorkAreaCenter(sim, farmId);
 
-        // Each successive crop should be at equal or greater distance from center
-        // (the search always picks closest valid tile)
         const distances = planted.map(p => {
             const dx = p.x - center.x;
             const dy = p.y - center.y;
@@ -307,23 +302,18 @@ describe('Crop system (real game data)', { timeout: 10_000 }, () => {
         const race = sim.state.playerRaces.get(farm.player)!;
         const radius = sim.services.workAreaStore.getRadius(farm.subType as BuildingType, race);
 
-        // Spawn a crop well outside the work area — entity:created handler
-        // registers it as Mature (harvestable) since it wasn't planted by a farmer
         const farX = center.x + radius * 2;
         const farY = center.y;
         sim.execute({ type: 'spawn_map_object', objectType: MapObjectType.Grain, x: farX, y: farY });
 
-        // Track which crops get harvested and their positions
         const harvestedPositions: { x: number; y: number }[] = [];
         sim.eventBus.on('crop:harvested', e => {
             const entity = sim.state.getEntity(e.entityId);
             if (entity) harvestedPositions.push({ x: entity.x, y: entity.y });
         });
 
-        // Let the farmer plant some crops and start harvesting
         sim.runUntil(() => harvestedPositions.length >= 1, { maxTicks: 5000 * 30 });
 
-        // The far-away crop should NOT have been harvested
         for (const pos of harvestedPositions) {
             const dx = pos.x - center.x;
             const dy = pos.y - center.y;
@@ -335,9 +325,7 @@ describe('Crop system (real game data)', { timeout: 10_000 }, () => {
         }
     });
 
-    // ── Crop lifecycle invariants ────────────────────────────────
-
-    it('crop lifecycle invariant: planted ≥ matured ≥ harvested', () => {
+    it('crop lifecycle invariant: planted >= matured >= harvested', () => {
         sim = createSimulation(SIM_256);
 
         const counts = new Map<string, { planted: number; matured: number; harvested: number }>();
@@ -362,8 +350,6 @@ describe('Crop system (real game data)', { timeout: 10_000 }, () => {
         }
     });
 
-    // ── Full production chains through crops ─────────────────────
-
     it('full chain: grain farm → grain → mill → flour', () => {
         sim = createSimulation(SIM_256);
 
@@ -374,8 +360,4 @@ describe('Crop system (real game data)', { timeout: 10_000 }, () => {
         sim.runUntil(() => sim.getOutput(millId, EMaterialType.FLOUR) >= 1, { maxTicks: 3000 * 30 });
         expect(sim.getOutput(millId, EMaterialType.FLOUR)).toBeGreaterThanOrEqual(1);
     });
-
-    // NOTE: Mead (HONEY+WATER), Tequila (AGAVE→TEQUILA), and SunflowerOil (SUNFLOWER→OIL)
-    // chains are not tested here — they involve transformer buildings with additional input
-    // requirements (e.g. MeadMakerHut needs WATER) that belong in production-chains.spec.ts.
 });

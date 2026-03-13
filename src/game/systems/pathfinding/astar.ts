@@ -97,6 +97,14 @@ export function consumeLastPathfindingFailure(): PathfindingFailureInfo | null {
     return f;
 }
 
+/** Optional entity context for diagnostic logging — set before calling findPathAStar. */
+let _entityContext: number | undefined;
+
+/** Set the entity ID that will be included in pathfinding failure warnings. */
+export function setPathfindingEntityContext(entityId: number | undefined): void {
+    _entityContext = entityId;
+}
+
 /** Cost multiplier for integer arithmetic (10 = 0.1 precision) */
 const COST_SCALE = 10;
 
@@ -339,8 +347,9 @@ function logPathfindingFailure(
         neighborInfo,
     };
 
+    const entityTag = _entityContext !== undefined ? ` entity=${_entityContext}` : '';
     console.warn(
-        `[A*] No path (${startX},${startY})->(${goalX},${goalY}): ` +
+        `[A*] No path (${startX},${startY})->(${goalX},${goalY}):${entityTag} ` +
             `searched=${nodesSearched}/${MAX_SEARCH_NODES} ${exhausted ? 'EXHAUSTED' : 'EMPTY_QUEUE'} ` +
             `start[passable=${startPassable}, inBuilding=${startInBuilding}] ` +
             `goal[passable=${goalPassable}, inBuilding=${goalInBuilding}]${neighborInfo}`

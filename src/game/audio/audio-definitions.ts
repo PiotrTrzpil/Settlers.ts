@@ -7,8 +7,8 @@ export enum SoundType {
 import { Howl } from 'howler';
 
 export interface IAudioManager {
-    loadSound(config: SoundConfig): Howl | null;
-    getMusicVolumeMultiplier(): number;
+    loadSound: (config: SoundConfig) => Howl | null;
+    getMusicVolumeMultiplier: () => number;
 }
 
 export interface SoundConfig {

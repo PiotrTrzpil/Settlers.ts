@@ -135,7 +135,7 @@ export class GameDataLoader {
             const content = await remoteFile.loadString(url);
             return content;
         } catch (e) {
-            log.warn(`Failed to load ${filename}: ${e}`);
+            log.warn(`Failed to load ${filename}: ${String(e)}`);
             return null;
         }
     }

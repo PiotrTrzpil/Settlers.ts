@@ -76,7 +76,7 @@ export async function processBatched<T, R>(
     processor: (item: T) => Promise<R>,
     batchSize = DEFAULT_BATCH_SIZE
 ): Promise<R[]> {
-    const results: R[] = new Array(items.length);
+    const results: R[] = Array.from({ length: items.length });
     let resultIdx = 0;
 
     for (let i = 0; i < items.length; i += batchSize) {
@@ -84,7 +84,7 @@ export async function processBatched<T, R>(
         const batchCount = batchEnd - i;
 
         // Create promises for this batch without slicing
-        const promises: Promise<R>[] = new Array(batchCount);
+        const promises: Promise<R>[] = Array.from({ length: batchCount });
         for (let j = 0; j < batchCount; j++) {
             promises[j] = processor(items[i + j]!);
         }

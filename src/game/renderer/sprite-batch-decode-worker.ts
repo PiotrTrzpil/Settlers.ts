@@ -158,7 +158,7 @@ self.onmessage = (e: MessageEvent<BatchDecodeRequest>) => {
 
         // Allocate one big output buffer for all sprites
         const allIndices = new Uint16Array(totalOutputLength);
-        const results: BatchSpriteResult[] = new Array(manifest.length);
+        const results: BatchSpriteResult[] = Array.from({ length: manifest.length });
 
         // Second pass: decode all sprites into the output buffer
         let offset = 0;

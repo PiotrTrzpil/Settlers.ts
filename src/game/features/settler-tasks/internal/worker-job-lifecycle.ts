@@ -346,6 +346,7 @@ export class WorkerJobLifecycle {
         job.progress = -1;
         job.workStarted = false;
         job.pathRetryCountdown = 0;
+        job.pathRetryCount = 0;
         const completedTask = nodes[job.nodeIndex - 1]!.task;
         // Preserve targetPos when the next node is also GO_TO_TARGET — some choreographies
         // (e.g. Viking JOB_FARMERGRAIN_PLANT) split the walk into multiple legs that all

@@ -62,9 +62,13 @@ export function createBuildStepExecutor(
             cycleCounters.set(siteId, count);
         }
 
-        // Advance progress based on consumed materials — always in sync.
+        // Advance progress based on consumed materials (totalOut sum across all cost materials).
+        const consumedAmount = site.materials.costs.reduce(
+            (sum, cost) => sum + inventoryManager.getThroughput(siteId, cost.material).totalOut,
+            0
+        );
         const targetProgress =
-            site.materials.consumedAmount * progressPerMaterial + (cycleCounters.get(siteId) ?? 0) * progressPerCycle;
+            consumedAmount * progressPerMaterial + (cycleCounters.get(siteId) ?? 0) * progressPerCycle;
         constructionSiteManager.setConstructionProgress(siteId, targetProgress);
 
         return TaskResult.DONE;

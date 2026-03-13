@@ -249,12 +249,12 @@ export class GfxImageExporter {
                     result.files.push(outputPath);
                 } catch (err) {
                     result.failedCount++;
-                    result.errors.push(`Image ${index}: ${err}`);
+                    result.errors.push(`Image ${String(index)}: ${String(err)}`);
                 }
             }
         } catch (err) {
             result.success = false;
-            result.errors.push(`Failed to load GFX file: ${err}`);
+            result.errors.push(`Failed to load GFX file: ${String(err)}`);
         }
 
         return result;
@@ -286,14 +286,14 @@ export class GfxImageExporter {
                 const index = indices[i]!;
 
                 if (options.onProgress) {
-                    options.onProgress(i + 1, indices.length, `${baseName}/${index}`);
+                    options.onProgress(i + 1, indices.length, `${baseName}/${String(index)}`);
                 }
 
                 try {
                     const image = reader.getImage(index);
                     if (!image) {
                         result.failedCount++;
-                        result.errors.push(`Image ${index} is null`);
+                        result.errors.push(`Image ${String(index)} is null`);
                         continue;
                     }
 
@@ -309,12 +309,12 @@ export class GfxImageExporter {
                     result.files.push(outputPath);
                 } catch (err) {
                     result.failedCount++;
-                    result.errors.push(`Image ${index}: ${err}`);
+                    result.errors.push(`Image ${String(index)}: ${String(err)}`);
                 }
             }
         } catch (err) {
             result.success = false;
-            result.errors.push(`Failed to load GH file: ${err}`);
+            result.errors.push(`Failed to load GH file: ${String(err)}`);
         }
 
         return result;

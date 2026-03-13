@@ -199,6 +199,7 @@ export class GameServices {
             [
                 { persistable: this.inventoryManager.slotStore, after: ['constructionSites'] },
                 this.inventoryManager.nextSlotIdStore,
+                this.inventoryManager.throughputStore,
                 this.storageFilterManager.persistentStore,
             ]
         );

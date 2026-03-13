@@ -455,7 +455,7 @@ export class BuildingConstructionSystem implements TickSystem {
         }
 
         // Remove units that have cleared the footprint or died
-        for (const unitId of [...tracked]) {
+        for (const unitId of Array.from(tracked)) {
             const unit = this.state.getEntity(unitId);
             if (!unit || !blockKeys.has(tileKey(unit.x, unit.y))) {
                 tracked.delete(unitId);

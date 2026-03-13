@@ -347,7 +347,7 @@ export const RAW_OBJECT_REGISTRY: readonly RawObjectEntry[] = [
 // ============================================================
 
 const LOOKUP_BY_RAW: ReadonlyArray<RawObjectEntry | null> = (() => {
-    const table: (RawObjectEntry | null)[] = new Array(256).fill(null);
+    const table: (RawObjectEntry | null)[] = Array.from<RawObjectEntry | null>({ length: 256 }).fill(null);
     for (const entry of RAW_OBJECT_REGISTRY) {
         table[entry.raw] = entry;
     }

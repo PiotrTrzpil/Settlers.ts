@@ -5,7 +5,6 @@
  */
 
 import type { GameState } from '../../game-state';
-import type { CoreDeps } from '../feature';
 import type { TickSystem } from '../../core/tick-system';
 import { EntityType, UnitType, type Entity } from '../../entity';
 import type { EventBus } from '../../event-bus';
@@ -16,9 +15,8 @@ import { sortedEntries } from '@/utilities/collections';
 import { SearchType, SettlerState, type JobState, type WorkHandler, type SettlerConfig } from './types';
 import type { TransportJobOps } from './choreo-types';
 import { buildAllSettlerConfigs } from '../../data/settler-data-access';
-import type { BuildingInventoryManager, BuildingPileRegistry } from '../inventory';
+import type { BuildingInventoryManager } from '../inventory';
 import { createWorkplaceHandler, createCarrierHandler } from './work-handlers';
-import type { EntityVisualService } from '../../animation/entity-visual-service';
 import { WorkHandlerRegistry } from './work-handler-registry';
 import { IdleAnimationController } from './idle-animation-controller';
 import { WorkerTaskExecutor } from './worker-task-executor';
@@ -28,42 +26,19 @@ import { BuildingPositionResolverImpl } from './building-position-resolver';
 import { JobPartResolverImpl } from './job-part-resolver';
 import { TriggerSystemImpl } from '../building-overlays/trigger-system';
 import { getGameDataLoader } from '@/resources/game-data';
-import type { WorkAreaStore } from '../work-areas/work-area-store';
-import type { BuildingOverlayManager } from '../building-overlays/building-overlay-manager';
 import type { OreVeinData } from '../ore-veins/ore-vein-data';
-import type { ProductionControlManager } from '../production-control';
-import type { BarracksTrainingManager } from '../barracks';
-import type { ConstructionSiteManager } from '../building-construction/construction-site-manager';
-import type { Command, CommandResult } from '../../commands';
-import type { MaterialTransfer } from '../material-transfer';
-import type { ChoreoSystem } from '../../systems/choreo';
 import type { ISettlerBuildingLocationManager } from '../settler-location/types';
 import { BuildingWorkerTracker } from './building-worker-tracker';
 import { IndexedMap } from '@/game/utils/indexed-map';
 import type { TickScheduler, ScheduleHandle } from '../../systems/tick-scheduler';
 import { NO_HANDLE } from '../../systems/tick-scheduler';
+import { type SettlerTaskSystemConfig, type SettlerDebugEntry, buildDebugEntry } from './settler-task-config';
+export type { SettlerTaskSystemConfig } from './settler-task-config';
 
 const log = createLogger('SettlerTaskSystem');
 const ORPHAN_CHECK_INTERVAL = 60;
 const IDLE_SEARCH_COOLDOWN = 10;
 type SettlerConfigs = Map<UnitType, SettlerConfig>;
-
-export interface SettlerTaskSystemConfig extends CoreDeps {
-    tickScheduler: TickScheduler;
-    choreoSystem: ChoreoSystem;
-    visualService: EntityVisualService;
-    inventoryManager: BuildingInventoryManager;
-    getPileRegistry: () => BuildingPileRegistry | null;
-    workAreaStore: WorkAreaStore;
-    buildingOverlayManager: BuildingOverlayManager;
-    getProductionControlManager?: () => ProductionControlManager;
-    getBarracksTrainingManager?: () => BarracksTrainingManager;
-    constructionSiteManager: ConstructionSiteManager;
-    executeCommand: (cmd: Command) => CommandResult;
-    materialTransfer: MaterialTransfer;
-    isInCombat?: (entityId: number) => boolean;
-    locationManager: ISettlerBuildingLocationManager;
-}
 
 export class SettlerTaskSystem implements TickSystem {
     private readonly gameState: GameState;
@@ -313,17 +288,7 @@ export class SettlerTaskSystem implements TickSystem {
         return this.runtimes.get(entityId)?.state ?? null;
     }
 
-    getDebugInfo(): Array<{
-        entityId: number;
-        state: string;
-        jobId: string | null;
-        jobType: string | null;
-        taskIndex: number | null;
-        progress: number | null;
-        targetId: number | null;
-        carryingGood: number | null;
-        assignedBuilding: number | null;
-    }> {
+    getDebugInfo(): SettlerDebugEntry[] {
         const result = [];
         for (const [entityId, runtime] of this.runtimes) {
             result.push(buildDebugEntry(entityId, runtime));
@@ -632,19 +597,4 @@ export class SettlerTaskSystem implements TickSystem {
             this.workerExecutor.interruptJob(entity, config, runtime);
         }
     }
-}
-
-function buildDebugEntry(entityId: number, runtime: UnitRuntime) {
-    const job = runtime.job;
-    return {
-        entityId,
-        state: runtime.state,
-        jobId: job?.jobId ?? null,
-        jobType: job?.type ?? null,
-        taskIndex: job?.nodeIndex ?? null,
-        progress: job?.progress ?? null,
-        targetId: job?.targetId ?? null,
-        carryingGood: job?.carryingGood ?? null,
-        assignedBuilding: runtime.homeAssignment?.buildingId ?? null,
-    };
 }

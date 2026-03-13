@@ -196,21 +196,21 @@ export interface IRenderContext {
 
     // === Building Visual State ===
     /** Get the pre-computed render state for a building entity */
-    getBuildingRenderState(entityId: number): BuildingRenderState;
+    readonly getBuildingRenderState: (entityId: number) => BuildingRenderState;
 
     // === Building Overlays ===
     /** Get pre-computed overlay render data for a building (empty array if none) */
-    getBuildingOverlays(entityId: number): readonly BuildingOverlayRenderData[];
+    readonly getBuildingOverlays: (entityId: number) => readonly BuildingOverlayRenderData[];
 
     // === Animation ===
     /** Get the visual state for an entity (null if not tracked) */
-    getVisualState(entityId: number): EntityVisualState | null;
+    readonly getVisualState: (entityId: number) => EntityVisualState | null;
     /** Get direction transition for a unit (null if not transitioning) */
-    getDirectionTransition(entityId: number): DirectionTransition | null;
+    readonly getDirectionTransition: (entityId: number) => DirectionTransition | null;
 
     // === Combat ===
     /** Get health ratio (0-1) for a unit. Returns null if no health tracking (civilian units). */
-    getHealthRatio(entityId: number): number | null;
+    readonly getHealthRatio: (entityId: number) => number | null;
 
     // === Selection ===
     /** Current selection state */

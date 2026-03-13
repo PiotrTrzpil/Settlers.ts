@@ -92,7 +92,7 @@ export class EntityGrid {
 
         // Initialize cells
         const cellCount = this.gridWidth * this.gridHeight;
-        this.cells = new Array(cellCount);
+        this.cells = Array.from({ length: cellCount });
         for (let i = 0; i < cellCount; i++) {
             this.cells[i] = { entities: [], dirty: false };
         }

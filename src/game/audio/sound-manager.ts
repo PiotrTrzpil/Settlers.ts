@@ -328,10 +328,10 @@ export class SoundManager implements IAudioManager {
             volume: 1.0,
             autoplay: false,
             onloaderror: (_id, err) => {
-                SoundManager.log.error(`Failed to load sound ${config.id}: ${err}`);
+                SoundManager.log.error(`Failed to load sound ${config.id}: ${String(err)}`);
             },
             onplayerror: (_id, err) => {
-                SoundManager.log.error(`Failed to play sound ${config.id}: ${err}`);
+                SoundManager.log.error(`Failed to play sound ${config.id}: ${String(err)}`);
                 // Unlock audio context if needed
                 // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- Howler.ctx is null in headless/test environments
                 if (Howler.ctx?.state === 'suspended') {

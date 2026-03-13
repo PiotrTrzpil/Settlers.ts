@@ -6,6 +6,7 @@
 
 import { LogHandler } from '@/utilities/log-handler';
 import { FileManager } from '@/utilities/file-manager';
+import { BinaryReader } from '@/resources/file/binary-reader';
 import { GfxFileReader } from '@/resources/gfx/gfx-file-reader';
 import { GilFileReader } from '@/resources/gfx/gil-file-reader';
 import { JilFileReader } from '@/resources/gfx/jil-file-reader';
@@ -97,12 +98,26 @@ export class SpriteLoader {
             return globalFileSetCache.get(fileId)!; // OK: has() check above guarantees entry exists
         }
 
+        const files = await this.loadRawFiles(fileId);
+        if (!files) {
+            return null;
+        }
+
+        const fileSet = await this.parseFileSet(fileId, files);
+        globalFileSetCache.set(fileId, fileSet);
+        return fileSet;
+    }
+
+    /**
+     * Load raw GFX file buffers from disk.
+     * Returns null if minimum required files are missing.
+     */
+    private async loadRawFiles(fileId: string): Promise<Record<string, BinaryReader> | null> {
         // Check for .pil or .pi4 palette index format
         const pilFileExists = this.fileManager.findFile(fileId + '.pil', false);
         const paletteIndexExt = pilFileExists ? '.pil' : '.pi4';
         const paletteExt = pilFileExists ? '.pa6' : '.p46';
 
-        // Load all required files
         const files = await this.fileManager.readFiles(
             {
                 gfx: `${fileId}.gfx`,
@@ -115,7 +130,6 @@ export class SpriteLoader {
             true
         );
 
-        // Check minimum required files
         if (
             !files['gfx']?.length ||
             !files['gil']?.length ||
@@ -126,24 +140,30 @@ export class SpriteLoader {
             return null;
         }
 
-        // Parse index files off main thread via worker
+        return files;
+    }
+
+    /**
+     * Parse raw file buffers into reader objects via worker.
+     */
+    private async parseFileSet(fileId: string, files: Record<string, BinaryReader>): Promise<LoadedGfxFileSet> {
         const parseStart = performance.now();
 
         const parsed = await parseIndexFilesInWorker({
-            gil: files['gil'],
-            pil: files['paletteIndex'],
+            gil: files['gil']!,
+            pil: files['paletteIndex']!,
             jil: files['jil']?.length ? files['jil'] : null,
             dil: files['dil']?.length ? files['dil'] : null,
         });
 
         const gilReader = new GilFileReader(parsed.gil);
         const pilReader = new PilFileReader(parsed.pil);
-        const paletteCollection = new PaletteCollection(files['palette'], pilReader);
+        const paletteCollection = new PaletteCollection(files['palette']!, pilReader);
 
         const jilReader = parsed.jil ? new JilFileReader(parsed.jil) : null;
         const dilReader = parsed.dil ? new DilFileReader(parsed.dil) : null;
 
-        const gfxReader = new GfxFileReader(files['gfx'], gilReader, jilReader, dilReader, paletteCollection);
+        const gfxReader = new GfxFileReader(files['gfx']!, gilReader, jilReader, dilReader, paletteCollection);
 
         const parseTime = performance.now() - parseStart;
         if (parseTime > 50) {
@@ -152,17 +172,7 @@ export class SpriteLoader {
             );
         }
 
-        const fileSet: LoadedGfxFileSet = {
-            fileId,
-            gfxReader,
-            gilReader,
-            jilReader,
-            dilReader,
-            paletteCollection,
-        };
-
-        globalFileSetCache.set(fileId, fileSet);
-        return fileSet;
+        return { fileId, gfxReader, gilReader, jilReader, dilReader, paletteCollection };
     }
 
     /**
@@ -419,7 +429,7 @@ export class SpriteLoader {
 
             return { image: gfxImage, region, entry };
         } catch (e) {
-            SpriteLoader.log.debug(`Worker decode failed, falling back to sync: ${e}`);
+            SpriteLoader.log.debug(`Worker decode failed, falling back to sync: ${String(e)}`);
             return this.packSpriteIntoAtlasFallback(gfxImage, atlas, paletteBaseOffset, trimOverride);
         }
     }

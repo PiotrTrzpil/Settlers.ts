@@ -289,6 +289,112 @@ interface UseRendererOptions {
     getInitialCamera?: () => { x: number; y: number; zoom: number } | null;
 }
 
+/** Mutable state shared between useRenderer and its extracted helpers. */
+interface RendererMutableState {
+    renderer: Renderer | null;
+    tilePicker: TilePicker | null;
+    entityRenderer: EntityRenderer | null;
+    indicatorRenderer: BuildingIndicatorRenderer | null;
+    landscapeRenderer: LandscapeRenderer | null;
+    inputManager: InputManager | null;
+    rendererInitStart: number;
+    placementGrid: ValidPositionGrid | null;
+}
+
+/**
+ * Create and configure renderers for the current game.
+ * Populates landscapeRenderer, indicatorRenderer, and entityRenderer on the state object.
+ */
+function setupRenderers(state: RendererMutableState, game: Game, getDebugGrid: () => boolean): void {
+    if (!state.renderer) {
+        return;
+    }
+
+    state.landscapeRenderer = new LandscapeRenderer(
+        game.fileManager,
+        game.terrain.mapSize,
+        game.terrain.groundType,
+        game.terrain.groundHeight,
+        getDebugGrid(),
+        game.useProceduralTextures,
+        game.mapLoader.landscape.getTerrainAttributes?.() ?? null,
+        game.mapLoader.landscape.getGameplayAttributes?.() ?? null
+    );
+    state.renderer.add(state.landscapeRenderer);
+
+    state.indicatorRenderer = new BuildingIndicatorRenderer(game.terrain.mapSize, game.terrain.groundHeight);
+    state.renderer.add(state.indicatorRenderer);
+
+    state.entityRenderer = new EntityRenderer(game.terrain.mapSize, game.terrain.groundHeight, game.fileManager);
+    state.entityRenderer.skipSpriteLoading = game.useProceduralTextures;
+    state.entityRenderer.onSpritesLoaded = () => {
+        debugStats.state.mapLoadTimings.rendererInit = Math.round(performance.now() - state.rendererInitStart);
+        debugStats.markRendererReady();
+        game.enableTicks();
+        void loadOverlaySpritesAndUpdateFrameCounts(state.entityRenderer!, game);
+    };
+    state.renderer.add(state.entityRenderer);
+}
+
+interface InitGLDeps {
+    getGame: () => Game | null;
+    getDebugGrid: () => boolean;
+    getLayerVisibility: () => LayerVisibility;
+    selectionBox: Ref<SelectionBox | null>;
+}
+
+/**
+ * Initialize GL resources and bind event handlers.
+ * Wires up terrain-modified listener, update/render callbacks, and e2e debug bridge.
+ */
+function initGLAndBindEvents(state: RendererMutableState, game: Game, deps: InitGLDeps): void {
+    if (!state.renderer || !state.landscapeRenderer || !state.indicatorRenderer || !state.entityRenderer) {
+        return;
+    }
+
+    const { renderer, landscapeRenderer, indicatorRenderer, entityRenderer, inputManager } = state;
+
+    const gl = renderer.gl;
+    if (gl) {
+        state.rendererInitStart = performance.now();
+        const localPlayerRace = game.playerRaces.get(game.currentPlayer) ?? null;
+        // Persist race for eager prefetch on next page load
+        if (localPlayerRace !== null) {
+            saveSavedRace(localPlayerRace);
+        }
+        void initRenderersAsync(gl, landscapeRenderer, indicatorRenderer, entityRenderer, localPlayerRace, game);
+    } else {
+        debugStats.state.gameLoaded = true;
+        if (game.useProceduralTextures) {
+            game.enableTicks();
+        }
+    }
+
+    exposeForE2E(renderer.viewPoint, landscapeRenderer, entityRenderer, inputManager);
+
+    game.eventBus.on('terrain:modified', () => {
+        state.landscapeRenderer?.markTerrainDirty();
+    });
+
+    const contextGetter = () => ({
+        game: deps.getGame(),
+        entityRenderer: state.entityRenderer,
+        indicatorRenderer: state.indicatorRenderer,
+        landscapeRenderer: state.landscapeRenderer,
+        inputManager: state.inputManager,
+        debugGrid: deps.getDebugGrid(),
+        darkLandDilation: deps.getGame()?.settings.state.darkLandDilation ?? true,
+        layerVisibility: deps.getLayerVisibility(),
+        placementGrid: state.placementGrid,
+    });
+
+    // Register update callback (input, sound, debug stats — runs before render)
+    game.setUpdateCallback(createUpdateCallback(contextGetter, renderer, deps.selectionBox));
+
+    // Register render callback (visual sync + GPU draw only)
+    game.setRenderCallback(createRenderCallback(contextGetter, renderer));
+}
+
 export function useRenderer({
     canvas,
     getGame,
@@ -297,14 +403,16 @@ export function useRenderer({
     onTileClick,
     getInitialCamera,
 }: UseRendererOptions) {
-    let renderer: Renderer | null = null;
-    let tilePicker: TilePicker | null = null;
-    let entityRenderer: EntityRenderer | null = null;
-    let indicatorRenderer: BuildingIndicatorRenderer | null = null;
-    let landscapeRenderer: LandscapeRenderer | null = null;
-    let inputManager: InputManager | null = null;
-    let rendererInitStart = 0;
-    let placementGrid: ValidPositionGrid | null = null;
+    const state: RendererMutableState = {
+        renderer: null,
+        tilePicker: null,
+        entityRenderer: null,
+        indicatorRenderer: null,
+        landscapeRenderer: null,
+        inputManager: null,
+        rendererInitStart: 0,
+        placementGrid: null,
+    };
 
     const selectionBox = ref<SelectionBox | null>(null); // drag selection overlay
     const { hintMessage, hintProvider } = createHintState(); // transient cursor hint
@@ -314,13 +422,13 @@ export function useRenderer({
      */
     function resolveTile(screenX: number, screenY: number): TileCoord | null {
         const game = getGame();
-        if (!game || !tilePicker || !renderer) {
+        if (!game || !state.tilePicker || !state.renderer) {
             return null;
         }
-        return tilePicker.screenToTile(
+        return state.tilePicker.screenToTile(
             screenX,
             screenY,
-            renderer.viewPoint,
+            state.renderer.viewPoint,
             game.terrain.mapSize,
             game.terrain.groundHeight
         );
@@ -330,17 +438,17 @@ export function useRenderer({
         executeGameCommand(command, getGame, onTileClick);
 
     const entityPicker = createEntityPicker(
-        () => entityRenderer?.entities ?? [],
-        () => entityRenderer?.spriteResolver ?? null,
+        () => state.entityRenderer?.entities ?? [],
+        () => state.entityRenderer?.spriteResolver ?? null,
         () => getGame()!.state.selection,
-        () => buildPickerContext(getGame, renderer, entityRenderer, canvas)
+        () => buildPickerContext(getGame, state.renderer, state.entityRenderer, canvas)
     );
 
     const entityRectPicker = createEntityRectPicker(
-        () => entityRenderer?.entities ?? [],
-        () => entityRenderer?.spriteResolver ?? null,
+        () => state.entityRenderer?.entities ?? [],
+        () => state.entityRenderer?.spriteResolver ?? null,
         () => getGame()!.state.selection,
-        () => buildPickerContext(getGame, renderer, entityRenderer, canvas)
+        () => buildPickerContext(getGame, state.renderer, state.entityRenderer, canvas)
     );
 
     /** Create and configure the InputManager with all modes registered. */
@@ -348,7 +456,7 @@ export function useRenderer({
         if (!canvas.value) {
             return;
         }
-        inputManager = buildInputManager({
+        state.inputManager = buildInputManager({
             canvas: canvas as Ref<HTMLElement | null>,
             getGame,
             resolveTile,
@@ -357,94 +465,11 @@ export function useRenderer({
             entityRectPicker,
             hintProvider,
             onTileClick,
-            getRenderer: () => renderer,
+            getRenderer: () => state.renderer,
             onPlacementGridChange: grid => {
-                placementGrid = grid;
+                state.placementGrid = grid;
             },
         });
-    }
-
-    /**
-     * Create and configure renderers for the current game.
-     */
-    function setupRenderers(game: Game): void {
-        if (!renderer) {
-            return;
-        }
-
-        landscapeRenderer = new LandscapeRenderer(
-            game.fileManager,
-            game.terrain.mapSize,
-            game.terrain.groundType,
-            game.terrain.groundHeight,
-            getDebugGrid(),
-            game.useProceduralTextures,
-            game.mapLoader.landscape.getTerrainAttributes?.() ?? null,
-            game.mapLoader.landscape.getGameplayAttributes?.() ?? null
-        );
-        renderer.add(landscapeRenderer);
-
-        indicatorRenderer = new BuildingIndicatorRenderer(game.terrain.mapSize, game.terrain.groundHeight);
-        renderer.add(indicatorRenderer);
-
-        entityRenderer = new EntityRenderer(game.terrain.mapSize, game.terrain.groundHeight, game.fileManager);
-        entityRenderer.skipSpriteLoading = game.useProceduralTextures;
-        entityRenderer.onSpritesLoaded = () => {
-            debugStats.state.mapLoadTimings.rendererInit = Math.round(performance.now() - rendererInitStart);
-            debugStats.markRendererReady();
-            game.enableTicks();
-            void loadOverlaySpritesAndUpdateFrameCounts(entityRenderer!, game);
-        };
-        renderer.add(entityRenderer);
-    }
-
-    /**
-     * Initialize GL resources and bind event handlers.
-     */
-    function initGLAndBindEvents(game: Game): void {
-        if (!renderer || !landscapeRenderer || !indicatorRenderer || !entityRenderer) {
-            return;
-        }
-
-        const gl = renderer.gl;
-        if (gl) {
-            rendererInitStart = performance.now();
-            const localPlayerRace = game.playerRaces.get(game.currentPlayer) ?? null;
-            // Persist race for eager prefetch on next page load
-            if (localPlayerRace !== null) {
-                saveSavedRace(localPlayerRace);
-            }
-            void initRenderersAsync(gl, landscapeRenderer, indicatorRenderer, entityRenderer, localPlayerRace, game);
-        } else {
-            debugStats.state.gameLoaded = true;
-            if (game.useProceduralTextures) {
-                game.enableTicks();
-            }
-        }
-
-        exposeForE2E(renderer.viewPoint, landscapeRenderer, entityRenderer, inputManager);
-
-        game.eventBus.on('terrain:modified', () => {
-            landscapeRenderer?.markTerrainDirty();
-        });
-
-        const contextGetter = () => ({
-            game: getGame(),
-            entityRenderer,
-            indicatorRenderer,
-            landscapeRenderer,
-            inputManager,
-            debugGrid: getDebugGrid(),
-            darkLandDilation: getGame()?.settings.state.darkLandDilation ?? true,
-            layerVisibility: getLayerVisibility(),
-            placementGrid,
-        });
-
-        // Register update callback (input, sound, debug stats — runs before render)
-        game.setUpdateCallback(createUpdateCallback(contextGetter, renderer, selectionBox));
-
-        // Register render callback (visual sync + GPU draw only)
-        game.setRenderCallback(createRenderCallback(contextGetter, renderer));
     }
 
     /**
@@ -453,29 +478,29 @@ export function useRenderer({
      */
     function initRenderer(): void {
         const game = getGame();
-        if (game == null || renderer == null) {
+        if (game == null || state.renderer == null) {
             return;
         }
 
         debugStats.reset();
         game.viewState.reset();
-        renderer.clear();
+        state.renderer.clear();
 
         // Inject game settings into ViewPoint and InputManager
-        renderer.viewPoint.setSettings(game.settings.state);
-        if (inputManager) {
-            inputManager.setSettings(game.settings.state);
+        state.renderer.viewPoint.setSettings(game.settings.state);
+        if (state.inputManager) {
+            state.inputManager.setSettings(game.settings.state);
         }
 
-        setupRenderers(game);
-        initGLAndBindEvents(game);
+        setupRenderers(state, game, getDebugGrid);
+        initGLAndBindEvents(state, game, { getGame, getDebugGrid, getLayerVisibility, selectionBox });
 
         // Restore camera: prefer explicit prop (settings recreation), then per-map localStorage (HMR),
         // then center on player start (fresh map load / reset)
         const camera = getInitialCamera?.() ?? loadCameraState(getCurrentMapId());
         if (camera) {
-            renderer.viewPoint.setRawPosition(camera.x, camera.y);
-            renderer.viewPoint.zoomValue = camera.zoom;
+            state.renderer.viewPoint.setRawPosition(camera.x, camera.y);
+            state.renderer.viewPoint.zoomValue = camera.zoom;
         } else {
             centerOnPlayerStart();
         }
@@ -487,8 +512,8 @@ export function useRenderer({
         console.log(`[${performance.now().toFixed(0)}ms] [perf] Canvas mounted`);
         const cavEl = canvas.value!;
         const game = getGame();
-        renderer = new Renderer(cavEl, { externalInput: true, antialias: game?.settings.state.antialias });
-        tilePicker = new TilePicker(cavEl);
+        state.renderer = new Renderer(cavEl, { externalInput: true, antialias: game?.settings.state.antialias });
+        state.tilePicker = new TilePicker(cavEl);
 
         createInputManager();
         initRenderer();
@@ -504,44 +529,44 @@ export function useRenderer({
             game.destroy();
         }
 
-        inputManager?.destroy();
-        inputManager = null;
+        state.inputManager?.destroy();
+        state.inputManager = null;
 
-        if (renderer) {
-            renderer.destroy();
+        if (state.renderer) {
+            state.renderer.destroy();
         }
     });
 
     async function setRace(race: Race): Promise<boolean> {
-        if (!entityRenderer) {
+        if (!state.entityRenderer) {
             return false;
         }
-        return entityRenderer.setRace(race);
+        return state.entityRenderer.setRace(race);
     }
 
     function getRace(): Race {
-        if (!entityRenderer) {
+        if (!state.entityRenderer) {
             throw new Error('getRace called before entityRenderer is initialized');
         }
-        return entityRenderer.getRace();
+        return state.entityRenderer.getRace();
     }
 
-    const getInputManager = (): InputManager | null => inputManager;
+    const getInputManager = (): InputManager | null => state.inputManager;
 
     function getCamera(): { x: number; y: number; zoom: number } | null {
-        if (!renderer) {
+        if (!state.renderer) {
             return null;
         }
         return {
-            x: renderer.viewPoint.x,
-            y: renderer.viewPoint.y,
-            zoom: renderer.viewPoint.zoomValue,
+            x: state.renderer.viewPoint.x,
+            y: state.renderer.viewPoint.y,
+            zoom: state.renderer.viewPoint.zoomValue,
         };
     }
 
     /** Center camera on the current player's start position (Castle), or first land tile, with standard zoom. */
     function centerOnPlayerStart(): void {
-        if (!renderer) {
+        if (!state.renderer) {
             return;
         }
         const game = getGame();
@@ -550,15 +575,15 @@ export function useRenderer({
         }
         const pos = game.findPlayerStartPosition();
         if (pos) {
-            renderer.viewPoint.setPosition(pos.x, pos.y);
-            renderer.viewPoint.zoomValue = 2;
+            state.renderer.viewPoint.setPosition(pos.x, pos.y);
+            state.renderer.viewPoint.zoomValue = 2;
         }
     }
 
-    const getDecoLabels = (): DebugEntityLabel[] => entityRenderer?.debugDecoLabels ?? [];
+    const getDecoLabels = (): DebugEntityLabel[] => state.entityRenderer?.debugDecoLabels ?? [];
 
     return {
-        getRenderer: () => renderer,
+        getRenderer: () => state.renderer,
         setRace,
         getRace,
         getInputManager,

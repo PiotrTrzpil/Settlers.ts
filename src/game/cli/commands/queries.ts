@@ -10,24 +10,17 @@ import type { CliArgs, CliCommand, CliContext, CliResult } from '../types';
 import type { LogEntry } from '../cli';
 import { Race } from '@/game/core/race';
 import { EntityType, type Entity } from '@/game/entity';
-import { BuildingType } from '@/game/buildings/building-type';
-import { UnitType, UNIT_TYPE_CONFIG, isUnitTypeMilitary } from '@/game/core/unit-types';
+import { UnitType, isUnitTypeMilitary } from '@/game/core/unit-types';
 import { EMaterialType } from '@/game/economy/material-type';
 import { BuildingConstructionPhase } from '@/game/features/building-construction';
 import { SlotKind } from '@/game/core/pile-kind';
 import type { GameState } from '@/game/game-state';
 import { resolveViewport, parseLayers, type MapSizePreset } from '../map-symbols';
 import { renderMapText } from '../map-renderer';
+import { findCommand, atCommand } from './spatial-queries';
+import { ok, fail, entityTypeName, posText, tableWithLimit } from './helpers';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
-
-function ok(output: string): CliResult {
-    return { ok: true, output };
-}
-
-function fail(output: string): CliResult {
-    return { ok: false, output };
-}
 
 function buildingStatusText(buildingId: number, ctx: CliContext): string {
     const site = ctx.game.services.constructionSiteManager.getSite(buildingId);
@@ -37,24 +30,6 @@ function buildingStatusText(buildingId: number, ctx: CliContext): string {
     return BuildingConstructionPhase[site.phase];
 }
 
-function buildingTypeName(subType: number): string {
-    return BuildingType[subType as BuildingType];
-}
-
-function unitTypeName(subType: number): string {
-    return UNIT_TYPE_CONFIG[subType as UnitType].name;
-}
-
-function entityTypeName(entity: Entity): string {
-    if (entity.type === EntityType.Building) {
-        return buildingTypeName(entity.subType);
-    }
-    if (entity.type === EntityType.Unit) {
-        return unitTypeName(entity.subType);
-    }
-    return EntityType[entity.type];
-}
-
 function carryingText(entity: Entity): string {
     if (!entity.carrying) {
         return '-';
@@ -62,27 +37,7 @@ function carryingText(entity: Entity): string {
     return `${EMaterialType[entity.carrying.material]}x${entity.carrying.amount}`;
 }
 
-function posText(entity: Entity): string {
-    return `${entity.x},${entity.y}`;
-}
-
 // ─── ls sub-handlers ──────────────────────────────────────────────────────────
-
-function limitRows(rows: string[][], limit: number): { rows: string[][]; truncated: number } {
-    if (limit <= 0 || rows.length <= limit) {
-        return { rows, truncated: 0 };
-    }
-    return { rows: rows.slice(0, limit), truncated: rows.length - limit };
-}
-
-function tableWithLimit(rows: string[][], headers: string[], limit: number, ctx: CliContext): string {
-    const { rows: limited, truncated } = limitRows(rows, limit);
-    let out = ctx.fmt.table(limited, headers);
-    if (truncated > 0) {
-        out += `\n... ${truncated} more (use --n to show more)`;
-    }
-    return out;
-}
 
 function lsBuildings(state: GameState, player: number, limit: number, ctx: CliContext): CliResult {
     const rows: string[][] = [];
@@ -259,54 +214,6 @@ function mapCommand(): CliCommand {
     };
 }
 
-function findCommand(): CliCommand {
-    return {
-        name: 'find',
-        aliases: [],
-        usage: 'find <BuildingType|UnitType> [--p N] [--n N]',
-        desc: 'Find entities of a given type (--n limits rows, default 30)',
-        execute(args: CliArgs, ctx: CliContext): CliResult {
-            const name = String(args._[0] ?? '');
-            if (!name) {
-                return fail('usage: find <BuildingType|UnitType> [--p N] [--n N]');
-            }
-            const limit = typeof args['n'] === 'number' ? args['n'] : 30;
-
-            const resolved = resolveEntitySubType(name, ctx);
-            if (!resolved) {
-                return fail(`'${name}' is not a valid BuildingType or UnitType`);
-            }
-
-            const rows: string[][] = [];
-            for (const e of ctx.game.state.entityIndex.ofTypeAndPlayer(resolved.entityType, ctx.player)) {
-                if (e.subType !== resolved.subType) {
-                    continue;
-                }
-                rows.push([String(e.id), posText(e)]);
-            }
-
-            if (rows.length === 0) {
-                return ok(`no ${name} found`);
-            }
-            return ok(tableWithLimit(rows, ['id', 'pos'], limit, ctx));
-        },
-    };
-}
-
-/** Try resolving as BuildingType, then UnitType. Returns null on failure. */
-function resolveEntitySubType(name: string, ctx: CliContext): { entityType: EntityType; subType: number } | null {
-    try {
-        return { entityType: EntityType.Building, subType: ctx.resolveBuilding(name) };
-    } catch {
-        // not a building — try unit
-    }
-    try {
-        return { entityType: EntityType.Unit, subType: ctx.resolveUnit(name) };
-    } catch {
-        return null;
-    }
-}
-
 function tickCommand(): CliCommand {
     return {
         name: 'tick',
@@ -478,6 +385,7 @@ function jsCommand(): CliCommand {
                 if (scopeNames.length === 0) {
                     scopeNames.push(...Object.keys(scope));
                 }
+                // oxlint-disable-next-line typescript-eslint(no-implied-eval) -- intentional CLI eval
                 const fn = new Function(...scopeNames, `return (${expr})`);
                 const result = fn(...scopeNames.map(k => scope[k]));
                 if (result === undefined) {
@@ -561,6 +469,7 @@ export function createQueryCommands(
         entityCommand(),
         mapCommand(),
         findCommand(),
+        atCommand(),
         tickCommand(),
         logCommand(logs),
         jsCommand(),

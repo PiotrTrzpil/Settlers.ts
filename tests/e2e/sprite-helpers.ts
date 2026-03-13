@@ -156,28 +156,18 @@ export async function getEntitiesWithoutSprites(page: Page): Promise<MissingSpri
             race: number;
         }> = [];
 
+        const spriteCheckers: Record<number, (e: any) => boolean> = {
+            [ET_UNIT]: (e: any) => sm.getUnit(e.subType, 0, e.race) !== null,
+            [ET_BUILDING]: (e: any) => sm.getBuilding(e.subType, e.race) !== null,
+            [ET_MAP_OBJECT]: (e: any) => sm.getMapObject(e.subType) !== null,
+            [ET_STACKED_PILE]: (e: any) => sm.getGoodSprite(e.subType) !== null,
+        };
+
         for (const entity of game.state.entities) {
-            // Skip types that never have sprites
-            if (
-                entity.type !== ET_UNIT &&
-                entity.type !== ET_BUILDING &&
-                entity.type !== ET_MAP_OBJECT &&
-                entity.type !== ET_STACKED_PILE
-            )
-                continue;
+            const checker = spriteCheckers[entity.type];
+            if (!checker) continue;
 
-            let hasSprite = false;
-            if (entity.type === ET_UNIT) {
-                hasSprite = sm.getUnit(entity.subType, 0, entity.race) !== null;
-            } else if (entity.type === ET_BUILDING) {
-                hasSprite = sm.getBuilding(entity.subType, entity.race) !== null;
-            } else if (entity.type === ET_MAP_OBJECT) {
-                hasSprite = sm.getMapObject(entity.subType) !== null;
-            } else if (entity.type === ET_STACKED_PILE) {
-                hasSprite = sm.getGoodSprite(entity.subType) !== null;
-            }
-
-            if (!hasSprite) {
+            if (!checker(entity)) {
                 missing.push({
                     entityId: entity.id,
                     entityType: entity.type,

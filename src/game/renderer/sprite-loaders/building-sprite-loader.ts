@@ -156,7 +156,7 @@ async function loadBuildingSpritesForFile(
 
         return batch.count > 0;
     } catch (e) {
-        log.error(`Failed to load GFX file ${fileNum}: ${e}`);
+        log.error(`Failed to load GFX file ${String(fileNum)}: ${String(e)}`);
         return false;
     }
 }

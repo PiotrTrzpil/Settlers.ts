@@ -48,7 +48,7 @@ export function connectGameCli(url: string = DEFAULT_URL): Promise<GameCliClient
         const pending = new Map<number, PendingEntry>();
 
         ws.on('message', (data: WebSocket.Data) => {
-            const msg = JSON.parse(data.toString()) as WsResultMessage;
+            const msg = JSON.parse((data as Buffer).toString('utf-8')) as WsResultMessage;
             const entry = pending.get(msg.id);
             if (!entry) {
                 return;

@@ -152,21 +152,15 @@ import { LogHandler } from '@/utilities/log-handler';
 import { FileManager, IFileSource } from '@/utilities/file-manager';
 import { IndexFileItem } from '@/resources/gfx/index-file-item';
 import { pad, loadGfxFileSet, parseGfxReaders, renderImageToCanvas } from '@/utilities/view-helpers';
-import {
-    BUILDING_JOB_INDICES,
-    RESOURCE_JOB_INDICES,
-    GFX_FILE_NUMBERS,
-    CARRIER_MATERIAL_JOB_INDICES,
-    SETTLER_JOB_INDICES,
-    SETTLER_KEY_TO_UNIT_TYPE,
-    SETTLER_FILE_NUMBERS,
-} from '@/game/renderer/sprite-metadata';
-import { BuildingType, UnitType } from '@/game/entity';
-import { EMaterialType } from '@/game/economy';
-
-// Settler files (20-24.jil) contain carrier sprites with materials
-const SETTLER_FILE_IDS = new Set(Object.values(SETTLER_FILE_NUMBERS));
 import { useCompositeGridView } from '@/composables/useGridView';
+import {
+    isSettlerFile as isSettlerFileCheck,
+    getCarrierMaterialLabel as getCarrierMaterialLabelLookup,
+    getWorkerLabel as getWorkerLabelLookup,
+    getNameForJob as getNameForJobLookup,
+    isJobMapped as isJobMappedLookup,
+    getJobLabel as getJobLabelLookup,
+} from './jil-view-lookups';
 
 import FileBrowser from '@/components/file-browser.vue';
 import Checkbox from '@/components/Checkbox.vue';
@@ -311,96 +305,6 @@ function getDirectionCount(jobIndex: number): number {
     return directionCounts.value.get(jobIndex) ?? 1;
 }
 
-// Build reverse lookup from job index to building name
-const jobToBuildingName = new Map<number, string>();
-for (const [typeStr, jobIndex] of Object.entries(BUILDING_JOB_INDICES)) {
-    const buildingType = Number(typeStr) as BuildingType;
-    jobToBuildingName.set(jobIndex, BuildingType[buildingType]);
-}
-
-// Build reverse lookup from job index to resource/material name
-const jobToResourceName = new Map<number, string>();
-for (const [typeStr, jobIndex] of Object.entries(RESOURCE_JOB_INDICES)) {
-    const materialType = Number(typeStr) as EMaterialType;
-    jobToResourceName.set(jobIndex, EMaterialType[materialType]);
-}
-
-// Build reverse lookup from job index to carrier material name (mapped materials)
-const jobToCarrierMaterial = new Map<number, string>();
-for (const [typeStr, jobIndex] of Object.entries(CARRIER_MATERIAL_JOB_INDICES)) {
-    const materialType = Number(typeStr) as EMaterialType;
-    jobToCarrierMaterial.set(jobIndex, EMaterialType[materialType]);
-}
-
-// Build reverse lookup from job index to worker state descriptions (settler files)
-const jobToWorkerLabels = new Map<number, string[]>();
-
-function formatWorkerName(key: string): string {
-    const unitType = SETTLER_KEY_TO_UNIT_TYPE[key];
-    if (unitType !== undefined) {
-        const levelMatch = /^.+_(\d+)$/.exec(key);
-        const name = UnitType[unitType];
-        return levelMatch ? `${name} L${levelMatch[1]}` : name;
-    }
-    return key.charAt(0).toUpperCase() + key.slice(1);
-}
-
-function addWorkerLabel(jobIndex: number, workerName: string, state: string): void {
-    if (jobIndex < 0) {
-        return;
-    }
-    const label = `${workerName}: ${state}`;
-    const existing = jobToWorkerLabels.get(jobIndex);
-    if (existing) {
-        existing.push(label);
-    } else {
-        jobToWorkerLabels.set(jobIndex, [label]);
-    }
-}
-
-for (const [workerKey, workerData] of Object.entries(SETTLER_JOB_INDICES)) {
-    const name = formatWorkerName(workerKey);
-    for (const [field, value] of Object.entries(workerData as Record<string, number>)) {
-        addWorkerLabel(value, name, field);
-    }
-}
-
-// Building files are race-specific: 10=Roman, 11=Viking, 12=Mayan, 14=Trojan
-// Dark Tribe (13) uses different mappings
-const BUILDING_FILE_IDS = new Set([10, 11, 12, 14]);
-
-function isSettlerFile(): boolean {
-    const fileId = getCurrentFileId();
-    return fileId !== null && SETTLER_FILE_IDS.has(fileId);
-}
-
-/** Get carrier material label for a job (e.g., "Carrier: AGAVE"). Only for settler files. */
-function getCarrierMaterialLabel(jobIndex: number): string | null {
-    if (!isSettlerFile()) {
-        return null;
-    }
-    const material = jobToCarrierMaterial.get(jobIndex);
-    return material ? `Carrier: ${material}` : null;
-}
-
-/** Get worker state labels for a job (e.g., "Woodcutter: work.0"). Only for settler files. */
-function getWorkerLabel(jobIndex: number): string | null {
-    if (!isSettlerFile()) {
-        return null;
-    }
-    const labels = jobToWorkerLabels.get(jobIndex);
-    return labels ? labels.join(', ') : null;
-}
-
-/** Check if a job index has any known mapping (building, resource, worker, or carrier). */
-function isJobMapped(jobIndex: number): boolean {
-    return (
-        getBuildingForJob(jobIndex) !== null ||
-        getWorkerLabel(jobIndex) !== null ||
-        getCarrierMaterialLabel(jobIndex) !== null
-    );
-}
-
 function getCurrentFileId(): number | null {
     if (!fileName.value) {
         return null;
@@ -410,54 +314,27 @@ function getCurrentFileId(): number | null {
     return match ? parseInt(match[1]!, 10) : null;
 }
 
-function getNameForJob(jobIndex: number): string | null {
-    const fileId = getCurrentFileId();
-    if (fileId === null) {
-        return null;
-    }
-
-    // Check if it's a building file
-    if (BUILDING_FILE_IDS.has(fileId)) {
-        return jobToBuildingName.get(jobIndex) ?? null;
-    }
-
-    // Check if it's the resource file (3.jil)
-    if (fileId === GFX_FILE_NUMBERS.RESOURCES) {
-        return jobToResourceName.get(jobIndex) ?? null;
-    }
-
-    return null;
+// Wrapper functions that pass the current file ID to the extracted lookup helpers
+function isSettlerFile(): boolean {
+    return isSettlerFileCheck(getCurrentFileId());
 }
-
-// Keep for backwards compatibility
+function getCarrierMaterialLabel(jobIndex: number): string | null {
+    return getCarrierMaterialLabelLookup(getCurrentFileId(), jobIndex);
+}
+function getWorkerLabel(jobIndex: number): string | null {
+    return getWorkerLabelLookup(getCurrentFileId(), jobIndex);
+}
+function getNameForJob(jobIndex: number): string | null {
+    return getNameForJobLookup(getCurrentFileId(), jobIndex);
+}
 function getBuildingForJob(jobIndex: number): string | null {
     return getNameForJob(jobIndex);
 }
-
-// Get a combined label for dropdown display
+function isJobMapped(jobIndex: number): boolean {
+    return isJobMappedLookup(getCurrentFileId(), jobIndex);
+}
 function getJobLabel(jobIndex: number): string {
-    const buildingName = getBuildingForJob(jobIndex);
-    if (buildingName) {
-        return buildingName;
-    }
-
-    const workerLabel = getWorkerLabel(jobIndex);
-    const carrierLabel = getCarrierMaterialLabel(jobIndex);
-
-    if (workerLabel && carrierLabel) {
-        return `${workerLabel} | ${carrierLabel}`;
-    }
-    if (workerLabel) {
-        return workerLabel;
-    }
-    if (carrierLabel) {
-        return carrierLabel;
-    }
-
-    if (isSettlerFile()) {
-        return '[?]';
-    }
-    return '';
+    return getJobLabelLookup(getCurrentFileId(), jobIndex);
 }
 
 function onFileSelect(file: IFileSource) {

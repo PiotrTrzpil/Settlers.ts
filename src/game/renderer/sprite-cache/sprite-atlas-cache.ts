@@ -429,7 +429,7 @@ export async function clearIndexedDBCache(race: Race): Promise<void> {
         await Promise.all(deletes);
         log.debug(`Cache API: cleared ${Race[race]}`);
     } catch (e) {
-        log.debug(`Cache API clear failed: ${e}`);
+        log.debug(`Cache API clear failed: ${String(e)}`);
     }
 }
 
@@ -442,7 +442,7 @@ export async function clearAllIndexedDBCache(): Promise<void> {
         await caches.delete('settlers-atlas-v5');
         log.debug('Cache API: cleared all');
     } catch (e) {
-        log.debug(`Cache API clear-all failed: ${e}`);
+        log.debug(`Cache API clear-all failed: ${String(e)}`);
     }
 }
 

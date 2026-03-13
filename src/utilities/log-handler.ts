@@ -38,7 +38,7 @@ export class LogHandler {
     }
 
     /** write a debug message. If [msg] is not a String it is displayed: as {prop:value} */
-    public debug(msg: string | any): void {
+    public debug(msg: any): void {
         LogHandler.manager.push({
             type: LogType.Debug,
             source: this._moduleName,

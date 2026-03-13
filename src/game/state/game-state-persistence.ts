@@ -11,8 +11,6 @@ import type { GameCore } from '../game-core';
 import { EntityType } from '../entity';
 import type { CarryingState } from '../entity';
 import type { Race } from '../core/race';
-import type { TreeStage } from '../features/trees/tree-system';
-import type { StoneStage } from '../features/stones/stone-system';
 
 const STORAGE_KEY = 'settlers_game_state';
 const INITIAL_STATE_KEY = 'settlers_initial_state';
@@ -61,45 +59,7 @@ export interface GameStateSnapshot {
     [key: string]: unknown;
 }
 
-// ─── Feature serialization types ─────────────────────────────────────────────
-// These types are used by individual feature Persistable implementations.
-// They are NOT fields on GameStateSnapshot — feature data lives under dynamic
-// persist keys via the PersistenceRegistry.
-//
-// With superjson at the boundary, Maps/Sets are preserved natively.
-// Entity/building IDs are Map keys rather than embedded fields.
-// ─────────────────────────────────────────────────────────────────────────────
-
-export interface SerializedTree {
-    stage: TreeStage;
-    progress: number;
-    stumpTimer: number;
-    currentOffset: number;
-    variant?: number;
-}
-
-export interface SerializedStone {
-    stage: StoneStage;
-    variant: number;
-    level: number;
-}
-
-export interface SerializedCrop {
-    stage: number;
-    cropType: number;
-    progress: number;
-    decayTimer: number;
-    currentOffset: number;
-}
-
-export interface SerializedProductionControl {
-    mode: string;
-    recipeCount: number;
-    roundRobinIndex: number;
-    proportions: Map<number, number>;
-    queue: number[];
-    productionCounts: Map<number, number>;
-}
+export type { SerializedTree, SerializedStone, SerializedCrop, SerializedProductionControl } from './persistence-types';
 
 /** Current map identifier for save/load matching */
 let currentMapId: string = '';

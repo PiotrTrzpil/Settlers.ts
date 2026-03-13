@@ -37,6 +37,7 @@ export const enum MapObjectCategory {
     DarkGroundRare = 'dark_ground_rare',
 }
 
+/* eslint-disable @typescript-eslint/no-duplicate-enum-values -- TreePalm/TreeCypress are intentional aliases */
 export enum MapObjectType {
     // ---- Trees (S4ModApi S4_TREE_ENUM, raw bytes 1-18) ----
     TreeOak = 0, // 1
@@ -59,9 +60,7 @@ export enum MapObjectType {
     TreeOliveSmall = 17, // 18
 
     // Tree aliases for code compatibility or specific tribe variations
-    // eslint-disable-next-line @typescript-eslint/no-duplicate-enum-values -- alias: TreePalm maps same sprite as generic palm
     TreePalm = 10, // Alias for Coconut/Date generic
-    // eslint-disable-next-line @typescript-eslint/no-duplicate-enum-values -- alias: TreeCypress maps same sprite as generic fir/spruce
     TreeCypress = 8, // Alias for Fir/Spruce generic
     TreeDead = 18, // Placeholder for now
 
@@ -314,3 +313,4 @@ export enum MapObjectType {
     ColumnRuinsW3 = 631,
     ColumnRuinsW4 = 632,
 }
+/* eslint-enable @typescript-eslint/no-duplicate-enum-values -- end of enum with intentional alias values */

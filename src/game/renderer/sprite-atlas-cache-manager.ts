@@ -446,7 +446,7 @@ export class SpriteAtlasCacheManager {
         let paletteReady = false;
         let layersReceived = 0;
         let essentialFired = false;
-        const layerBuffersForModuleCache: ArrayBuffer[] = new Array(meta.layerCount);
+        const layerBuffersForModuleCache: ArrayBuffer[] = Array.from({ length: meta.layerCount });
 
         const tryFireEssential = () => {
             if (essentialFired) {

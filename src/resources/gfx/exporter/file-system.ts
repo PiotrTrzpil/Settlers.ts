@@ -283,11 +283,10 @@ export class BrowserFileSystem implements IFileReader, IFileWriter {
     async mkdir(path: string): Promise<void> {
         if (this.directoryHandle) {
             const parts = path.split('/').filter(Boolean);
-            let dirHandle = this.directoryHandle;
-
-            for (const part of parts) {
-                dirHandle = await dirHandle.getDirectoryHandle(part, { create: true });
-            }
+            await parts.reduce(async (parentPromise, part) => {
+                const parent = await parentPromise;
+                return parent.getDirectoryHandle(part, { create: true });
+            }, Promise.resolve(this.directoryHandle));
         }
         // For download fallback, mkdir is a no-op
     }

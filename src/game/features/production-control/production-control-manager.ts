@@ -102,7 +102,9 @@ export class ProductionControlManager {
                 return state.queue.length > 0 ? state.queue[0]! : null;
             default: {
                 const exhaustive: never = state.mode;
-                throw new Error(`ProductionControlManager: unknown mode '${exhaustive}' for building ${buildingId}.`);
+                throw new Error(
+                    `ProductionControlManager: unknown mode '${String(exhaustive)}' for building ${buildingId}.`
+                );
             }
         }
     }
@@ -138,7 +140,9 @@ export class ProductionControlManager {
                 return this.selectManual(state);
             default: {
                 const exhaustive: never = state.mode;
-                throw new Error(`ProductionControlManager: unknown mode '${exhaustive}' for building ${buildingId}.`);
+                throw new Error(
+                    `ProductionControlManager: unknown mode '${String(exhaustive)}' for building ${buildingId}.`
+                );
             }
         }
 

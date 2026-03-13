@@ -63,7 +63,7 @@ function createViewFieldMatcher<T>(config: {
     assert?: ApplyAssertion<T>;
     formatExpected?: (expected: T) => unknown;
 }) {
-    const describeActual = config.describeActual ?? ((a: T | undefined) => `${a}`);
+    const describeActual = config.describeActual ?? ((a: T | undefined) => `${String(a)}`);
 
     return async (gp: GamePage, expected: T, options?: MatcherOptions) => {
         const timeout = options?.timeout ?? DEFAULT_TIMEOUT;

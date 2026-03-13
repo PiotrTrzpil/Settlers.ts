@@ -1,13 +1,12 @@
-import { EntityType, TileCoord, tileKey } from '../../entity';
+import { EntityType, tileKey } from '../../entity';
 import { MovementController, MovementState } from './movement-controller';
 import { PathfindingService } from './pathfinding-service';
 import type { TickSystem } from '../../core/tick-system';
-import type { EventBus, GameEvents } from '../../event-bus';
+import type { EventBus } from '../../event-bus';
 import { type ComponentStore, mapStore } from '../../ecs';
 import { LogHandler } from '@/utilities/log-handler';
-import { getAllNeighbors } from '../hex-directions';
-import { isPassable } from '../../terrain';
-import { consumeLastPathfindingFailure } from '../pathfinding';
+import { consumeLastPathfindingFailure, setPathfindingEntityContext } from '../pathfinding';
+import { BumpResolver } from './bump-resolver';
 
 const log = new LogHandler('MovementSystem');
 
@@ -16,19 +15,6 @@ const REPATH_WAIT_TIMEOUT = 0.5; // seconds
 
 /** After this long, clear path and let the task system reassign */
 const GIVEUP_WAIT_TIMEOUT = 2.0; // seconds
-
-/**
- * Score a candidate bump destination. Higher is better.
- * Prefers tiles perpendicular to the bumper's travel direction (side-step),
- * penalizes tiles ahead of the bumper (which cause repeated bumps).
- */
-function scoreBumpTile(tile: TileCoord, occupant: MovementController, travelDx: number, travelDy: number): number {
-    const dx = tile.x - occupant.tileX;
-    const dy = tile.y - occupant.tileY;
-    // Dot product: how much this tile aligns with the bumper's travel direction
-    // Negative dot = perpendicular/behind = good; positive = ahead = bad
-    return -(dx * travelDx + dy * travelDy);
-}
 
 /**
  * Callback for updating entity position in the game state.
@@ -60,7 +46,7 @@ export interface MovementSystemConfig {
  * Responsibilities:
  *   - Controller lifecycle (create / get / remove)
  *   - Per-tick update loop (advance, move, finalize)
- *   - Inline bump-or-wait collision resolution
+ *   - Delegating collision resolution to BumpResolver
  *   - Delegating pathfinding to PathfindingService
  *   - Emitting movement-stopped events
  */
@@ -87,19 +73,31 @@ export class MovementSystem implements TickSystem {
 
     set verbose(value: boolean) {
         this._verbose = value;
+        this.bumpResolverDeps.verbose = value;
     }
 
     // Pathfinding service
     private readonly pathfinder: PathfindingService;
 
+    // Bump resolution
+    private readonly bumpResolverDeps: {
+        controllers: Map<number, MovementController>;
+        unitOccupancy: Map<string, number>;
+        buildingOccupancy: Set<string>;
+        eventBus: EventBus;
+        pathfinder: PathfindingService;
+        updatePositionFn: UpdatePositionFn;
+        terrainGroundType: Uint8Array | undefined;
+        terrainMapWidth: number;
+        terrainMapHeight: number;
+        verbose: boolean;
+    };
+
+    private readonly bumpResolver: BumpResolver;
+
     // Cached callbacks
     private readonly updatePositionFn: UpdatePositionFn;
     private readonly getEntityFn: GetEntityFn;
-
-    // Terrain data for bump validation
-    private terrainGroundType: Uint8Array | undefined;
-    private terrainMapWidth = 0;
-    private terrainMapHeight = 0;
 
     // Previous movement state per controller for change detection
     private prevStates: Map<number, MovementState> = new Map();
@@ -113,6 +111,20 @@ export class MovementSystem implements TickSystem {
         this.buildingFootprint = config.buildingFootprint;
         this.pathfinder = new PathfindingService();
         this.pathfinder.setBuildingOccupancy(config.buildingOccupancy);
+
+        this.bumpResolverDeps = {
+            controllers: this.controllers,
+            unitOccupancy: config.unitOccupancy,
+            buildingOccupancy: config.buildingOccupancy,
+            eventBus: config.eventBus,
+            pathfinder: this.pathfinder,
+            updatePositionFn: config.updatePosition,
+            terrainGroundType: undefined,
+            terrainMapWidth: 0,
+            terrainMapHeight: 0,
+            verbose: this._verbose,
+        };
+        this.bumpResolver = new BumpResolver(this.bumpResolverDeps);
     }
 
     // -------------------------------------------------------------------------
@@ -124,18 +136,15 @@ export class MovementSystem implements TickSystem {
      */
     setTerrainData(groundType: Uint8Array, groundHeight: Uint8Array, mapWidth: number, mapHeight: number): void {
         this.pathfinder.setTerrainData(groundType, groundHeight, mapWidth, mapHeight);
-        this.terrainGroundType = groundType;
-        this.terrainMapWidth = mapWidth;
-        this.terrainMapHeight = mapHeight;
+        this.bumpResolverDeps.terrainGroundType = groundType;
+        this.bumpResolverDeps.terrainMapWidth = mapWidth;
+        this.bumpResolverDeps.terrainMapHeight = mapHeight;
     }
 
     // -------------------------------------------------------------------------
     // Controller lifecycle
     // -------------------------------------------------------------------------
 
-    /**
-     * Create a new movement controller for a unit.
-     */
     createController(entityId: number, x: number, y: number, speed: number): MovementController {
         const controller = new MovementController(entityId, x, y, speed);
         this.controllers.set(entityId, controller);
@@ -143,16 +152,10 @@ export class MovementSystem implements TickSystem {
         return controller;
     }
 
-    /**
-     * Get an existing movement controller.
-     */
     getController(entityId: number): MovementController | undefined {
         return this.controllers.get(entityId);
     }
 
-    /**
-     * Remove a movement controller.
-     */
     removeController(entityId: number): void {
         const ctrl = this.controllers.get(entityId);
         if (ctrl) {
@@ -165,16 +168,10 @@ export class MovementSystem implements TickSystem {
         this.prevStates.delete(entityId);
     }
 
-    /**
-     * Check if a controller exists.
-     */
     hasController(entityId: number): boolean {
         return this.controllers.has(entityId);
     }
 
-    /**
-     * Get all controllers.
-     */
     getAllControllers(): IterableIterator<MovementController> {
         return this.controllers.values();
     }
@@ -183,7 +180,6 @@ export class MovementSystem implements TickSystem {
      * Repath all moving units whose remaining path passes through any of the given tiles.
      * Used when building footprint is blocked mid-game (e.g. construction site evacuation)
      * so in-flight units route around the newly blocked area.
-     * @param excludeIds Units to skip (e.g. evacuating units that have valid escape paths)
      */
     repathUnitsThrough(blockedKeys: Set<string>, excludeIds?: Set<number>): void {
         for (const ctrl of this.controllers.values()) {
@@ -203,7 +199,9 @@ export class MovementSystem implements TickSystem {
             if (!goal) {
                 continue;
             }
+            setPathfindingEntityContext(ctrl.entityId);
             const newPath = this.pathfinder.findPath(ctrl.tileX, ctrl.tileY, goal.x, goal.y);
+            setPathfindingEntityContext(undefined);
             if (newPath && newPath.length > 0) {
                 ctrl.replacePath(newPath);
             } else {
@@ -230,7 +228,9 @@ export class MovementSystem implements TickSystem {
         const fromX = controller.tileX;
         const fromY = controller.tileY;
 
+        setPathfindingEntityContext(entityId);
         const path = this.pathfinder.findPath(fromX, fromY, targetX, targetY);
+        setPathfindingEntityContext(undefined);
 
         if (!path || path.length === 0) {
             this.emitPathFailed(entityId, fromX, fromY, targetX, targetY);
@@ -286,38 +286,7 @@ export class MovementSystem implements TickSystem {
      * Returns true if the tile is now free (was empty or push succeeded).
      */
     pushUnitAt(x: number, y: number): boolean {
-        const key = tileKey(x, y);
-        const occupantId = this.unitOccupancy.get(key);
-        if (occupantId === undefined) {
-            return true;
-        } // no unit here
-
-        const occupant = this.controllers.get(occupantId);
-        if (!occupant) {
-            return true;
-        }
-
-        const neighbors = getAllNeighbors({ x, y });
-        for (const n of neighbors) {
-            if (!this.isTilePassableForBump(n.x, n.y)) {
-                continue;
-            }
-            if (this.getUnitAt(tileKey(n.x, n.y), occupantId) !== undefined) {
-                continue;
-            }
-
-            // Push the occupant to the free neighbor
-            const oldKey = tileKey(occupant.tileX, occupant.tileY);
-            if (this.unitOccupancy.get(oldKey) === occupantId) {
-                this.unitOccupancy.delete(oldKey);
-            }
-            occupant.handlePush(n.x, n.y);
-            this.unitOccupancy.set(tileKey(n.x, n.y), occupantId);
-            this.updatePositionFn(occupantId, n.x, n.y);
-            this.repathBumpedOccupant(occupant, n);
-            return true;
-        }
-        return false; // no free neighbor
+        return this.bumpResolver.pushUnitAt(x, y);
     }
 
     // -------------------------------------------------------------------------
@@ -349,9 +318,6 @@ export class MovementSystem implements TickSystem {
         }
     }
 
-    /**
-     * Update a single movement controller.
-     */
     private updateController(controller: MovementController, deltaSec: number): void {
         const prevState = this.prevStates.get(controller.entityId) ?? controller.state;
 
@@ -365,8 +331,6 @@ export class MovementSystem implements TickSystem {
 
             // If next waypoint is building-blocked and the unit is NOT on a blocked tile
             // itself (i.e. it's trying to enter, not escape), repath around it.
-            // Units on blocked tiles (e.g. during evacuation) must be allowed to step
-            // through to escape.
             const wpKey = tileKey(wp.x, wp.y);
             if (this.buildingOccupancy.has(wpKey)) {
                 const currentKey = tileKey(controller.tileX, controller.tileY);
@@ -374,7 +338,6 @@ export class MovementSystem implements TickSystem {
                     this.repathFromCurrent(controller);
                     break;
                 }
-                // else: unit is escaping from inside blocked area — allow step
             }
 
             const occupantId = this.getUnitAt(tileKey(wp.x, wp.y), controller.entityId);
@@ -387,32 +350,7 @@ export class MovementSystem implements TickSystem {
         }
 
         controller.finalizeTick();
-
-        // Detect visual position discontinuity (teleport guard).
-        // Multi-step ticks (2+ steps in one tick at high game speed) naturally produce
-        // larger visual jumps — scale the threshold by steps taken.
-        const teleportDist = controller.detectTeleport();
-        const steps = Math.max(1, controller.stepsTakenThisTick);
-        const threshold = 1.5 * steps + 0.01;
-        if (teleportDist > threshold) {
-            console.warn(
-                `[MovementSystem] TELEPORT DETECTED! Entity ${controller.entityId} jumped ${teleportDist.toFixed(2)} tiles` +
-                    ` | state=${controller.state} prevState=${prevState}` +
-                    ` | tile=(${controller.tileX},${controller.tileY}) prev=(${controller.prevTileX},${controller.prevTileY})` +
-                    ` | progress=${controller.progress.toFixed(2)} inTransit=${controller.isInTransit}` +
-                    ` | pathLen=${controller.path.length} pathIdx=${controller.pathIndex}` +
-                    ` | steps=${steps}`
-            );
-            this.eventBus.emit('movement:teleport', {
-                unitId: controller.entityId,
-                distance: teleportDist,
-                state: controller.state,
-                prevState,
-                x: controller.tileX,
-                y: controller.tileY,
-                level: 'warn',
-            });
-        }
+        this.detectTeleport(controller, prevState);
 
         controller.updateLastVisualPosition();
         this.emitMovementStopped(controller, prevState);
@@ -423,10 +361,6 @@ export class MovementSystem implements TickSystem {
     // Tile occupancy queries
     // -------------------------------------------------------------------------
 
-    /**
-     * Find the unit occupying a tile via the shared unitOccupancy map.
-     * Returns undefined if no other unit occupies the tile.
-     */
     private getUnitAt(key: string, selfId: number): number | undefined {
         const occupant = this.unitOccupancy.get(key);
         if (occupant !== undefined && occupant !== selfId) {
@@ -439,7 +373,6 @@ export class MovementSystem implements TickSystem {
     // Step & collision helpers
     // -------------------------------------------------------------------------
 
-    /** Execute a single step forward onto a free tile. */
     private stepForward(controller: MovementController): void {
         const oldKey = tileKey(controller.tileX, controller.tileY);
         const newPos = controller.executeMove();
@@ -462,21 +395,14 @@ export class MovementSystem implements TickSystem {
         controller.resetWaitTime();
     }
 
-    /**
-     * Handle collision with an occupied tile. Returns true if the loop should continue
-     * (bump succeeded), false if the loop should break (waiting/repath/giveup).
-     */
     private resolveCollision(controller: MovementController, occupantId: number, deltaSec: number): boolean {
         controller.addWaitTime(deltaSec);
 
-        // Always try bump first — even after repath timeout
-        if (this.tryBump(controller, occupantId)) {
+        if (this.bumpResolver.tryBump(controller, occupantId)) {
             this.stepForward(controller);
             return true;
         }
 
-        // Bump failed — escalate based on how long we've been waiting.
-        // Use cumulativeWaitTime for giveup (survives repath resets).
         if (controller.cumulativeWaitTime > GIVEUP_WAIT_TIMEOUT) {
             if (this._verbose) {
                 this.eventBus.emit('movement:escalation', {
@@ -499,7 +425,6 @@ export class MovementSystem implements TickSystem {
             return false;
         }
 
-        // Can't bump — wait this tick, halt progress to prevent accumulation
         if (this._verbose) {
             const wp = controller.nextWaypoint!;
             this.eventBus.emit('movement:blocked', {
@@ -514,11 +439,12 @@ export class MovementSystem implements TickSystem {
         return false;
     }
 
-    /** Repath the controller from its current position to its goal. */
     private repathFromCurrent(controller: MovementController): void {
         const goal = controller.goal;
         if (goal) {
+            setPathfindingEntityContext(controller.entityId);
             const newPath = this.pathfinder.findPath(controller.tileX, controller.tileY, goal.x, goal.y);
+            setPathfindingEntityContext(undefined);
             if (newPath && newPath.length > 0) {
                 controller.replacePath(newPath);
             }
@@ -527,302 +453,33 @@ export class MovementSystem implements TickSystem {
     }
 
     // -------------------------------------------------------------------------
-    // Bump resolution
+    // Diagnostics
     // -------------------------------------------------------------------------
 
-    /** Maximum depth for recursive bump chains to prevent infinite loops. */
-    private static readonly MAX_BUMP_DEPTH = 4;
-
-    /** Check if bumper is allowed to push occupant (priority + state rules). */
-    private canBumpOccupant(bumper: MovementController, occupant: MovementController): boolean {
-        // Never bump a unit performing a pick/put animation — wait for it to finish
-        if (occupant.busy) {
-            return false;
-        }
-        // Only bump idle or waiting units — actively moving units will leave soon
-        if (occupant.state === 'moving' && occupant.waitTime === 0) {
-            return false;
-        }
-        // Moving bumper can always push idle occupants (it has a destination, they don't).
-        // When both are moving/waiting, lower ID has priority to prevent oscillation.
-        if (occupant.state !== 'idle' && bumper.entityId >= occupant.entityId) {
-            return false;
-        }
-        return true;
-    }
-
-    /**
-     * Attempt to bump an occupant out of the way, recursively if needed.
-     * Returns true if bump succeeded (occupant moved, tile is now free).
-     */
-    private tryBump(bumper: MovementController, occupantId: number, depth = 0): boolean {
-        if (this._verbose && depth === 0) {
-            this.emitBumpAttempt(bumper.entityId, occupantId);
-        }
-        if (depth > MovementSystem.MAX_BUMP_DEPTH) {
-            this.emitBumpFailed(bumper.entityId, occupantId, 'max_depth');
-            return false;
-        }
-
-        const occupant = this.controllers.get(occupantId);
-        if (!occupant || !this.canBumpOccupant(bumper, occupant)) {
-            this.emitBumpFailed(bumper.entityId, occupantId, this.bumpFailReason(occupant), {
-                occupantState: occupant?.state,
-                occupantBusy: occupant?.busy,
-            });
-            return false;
-        }
-
-        return this.tryBumpOrSwap(bumper, occupant, occupantId, depth);
-    }
-
-    /** Core bump logic: find destination, clear it, execute bump — or fall back to swap. */
-    private tryBumpOrSwap(
-        bumper: MovementController,
-        occupant: MovementController,
-        occupantId: number,
-        depth: number
-    ): boolean {
-        const dest = this.findBumpDestination(occupant, bumper, depth);
-        if (!dest) {
-            return this.swapOrFail(bumper, occupant, occupantId, depth, 'no_destination');
-        }
-
-        // If the destination is occupied, recursively bump its occupant first
-        if (!this.clearTileForBump(occupant, dest, depth)) {
-            return this.swapOrFail(bumper, occupant, occupantId, depth, 'dest_occupied');
-        }
-
-        // Execute the bump — update unitOccupancy before entity position
-        this.executeBump(bumper.entityId, occupant, occupantId, dest);
-        return true;
-    }
-
-    /** Try swap at depth=0 as last resort, or emit failure. */
-    private swapOrFail(
-        bumper: MovementController,
-        occupant: MovementController,
-        occupantId: number,
-        depth: number,
-        reason: string
-    ): boolean {
-        if (depth === 0 && this.trySwap(bumper, occupant, occupantId)) {
-            return true;
-        }
-        this.emitBumpFailed(bumper.entityId, occupantId, reason, {
-            occupantPos: `${occupant.tileX},${occupant.tileY}`,
-        });
-        return false;
-    }
-
-    /** Perform the physical bump: update occupancy maps, move the occupant, repath if needed. */
-    private executeBump(bumperId: number, occupant: MovementController, occupantId: number, dest: TileCoord): void {
-        if (this._verbose) {
-            this.eventBus.emit('movement:bump', {
-                unitId: bumperId,
-                occupantId,
-                fromX: occupant.tileX,
-                fromY: occupant.tileY,
-                toX: dest.x,
-                toY: dest.y,
+    private detectTeleport(controller: MovementController, prevState: MovementState): void {
+        const teleportDist = controller.detectTeleport();
+        const steps = Math.max(1, controller.stepsTakenThisTick);
+        const threshold = 1.5 * steps + 0.01;
+        if (teleportDist > threshold) {
+            console.warn(
+                `[MovementSystem] TELEPORT DETECTED! Entity ${controller.entityId} jumped ${teleportDist.toFixed(2)} tiles` +
+                    ` | state=${controller.state} prevState=${prevState}` +
+                    ` | tile=(${controller.tileX},${controller.tileY}) prev=(${controller.prevTileX},${controller.prevTileY})` +
+                    ` | progress=${controller.progress.toFixed(2)} inTransit=${controller.isInTransit}` +
+                    ` | pathLen=${controller.path.length} pathIdx=${controller.pathIndex}` +
+                    ` | steps=${steps}`
+            );
+            this.eventBus.emit('movement:teleport', {
+                unitId: controller.entityId,
+                distance: teleportDist,
+                state: controller.state,
+                prevState,
+                x: controller.tileX,
+                y: controller.tileY,
+                level: 'warn',
             });
         }
-        const oldKey = tileKey(occupant.tileX, occupant.tileY);
-        if (this.unitOccupancy.get(oldKey) === occupantId) {
-            this.unitOccupancy.delete(oldKey);
-        }
-        occupant.handlePush(dest.x, dest.y);
-        this.unitOccupancy.set(tileKey(dest.x, dest.y), occupantId);
-        this.updatePositionFn(occupantId, dest.x, dest.y);
-        this.repathBumpedOccupant(occupant, dest);
     }
-
-    /**
-     * Last-resort swap: move the occupant to the bumper's tile.
-     * Only valid when the bumper's tile is passable for the occupant.
-     */
-    private trySwap(bumper: MovementController, occupant: MovementController, occupantId: number): boolean {
-        const bumperTile: TileCoord = { x: bumper.tileX, y: bumper.tileY };
-        if (!this.isTilePassableForBump(bumperTile.x, bumperTile.y)) {
-            return false;
-        }
-
-        this.executeBump(bumper.entityId, occupant, occupantId, bumperTile);
-        return true;
-    }
-
-    /** If the bumped unit has a goal, repath it from its new position. */
-    private repathBumpedOccupant(occupant: MovementController, dest: TileCoord): void {
-        const goal = occupant.goal;
-        if (!goal) {
-            return;
-        }
-        const newPath = this.pathfinder.findPath(dest.x, dest.y, goal.x, goal.y);
-        if (newPath && newPath.length > 0) {
-            occupant.replacePath(newPath);
-        }
-    }
-
-    /** Return the reason string for a failed bump check (before canBumpOccupant). */
-    private bumpFailReason(occupant: MovementController | undefined): string {
-        if (!occupant) {
-            return 'no_controller';
-        }
-        if (occupant.busy) {
-            return 'busy';
-        }
-        if (occupant.state === 'moving' && occupant.waitTime === 0) {
-            return 'actively_moving';
-        }
-        return 'priority';
-    }
-
-    /** Emit movement:bumpAttempt if verbose logging is enabled. */
-    private emitBumpAttempt(bumperId: number, occupantId: number): void {
-        if (!this._verbose) {
-            return;
-        }
-        const occ = this.controllers.get(occupantId);
-        this.eventBus.emit('movement:bumpAttempt', {
-            unitId: bumperId,
-            occupantId,
-            hasController: !!occ,
-            occupantState: occ?.state,
-            occupantBusy: occ?.busy,
-        });
-    }
-
-    /** Emit movement:bumpFailed if verbose logging is enabled. */
-    private emitBumpFailed(
-        bumperId: number,
-        occupantId: number,
-        reason: string,
-        extra?: Omit<GameEvents['movement:bumpFailed'], 'unitId' | 'occupantId' | 'reason'>
-    ): void {
-        if (!this._verbose) {
-            return;
-        }
-        this.eventBus.emit('movement:bumpFailed', { unitId: bumperId, occupantId, reason, ...extra });
-    }
-
-    /** Ensure the target tile is free by recursively bumping its occupant if needed. */
-    private clearTileForBump(bumper: MovementController, dest: TileCoord, depth: number): boolean {
-        const destOccupantId = this.getUnitAt(tileKey(dest.x, dest.y), bumper.entityId);
-        if (destOccupantId === undefined) {
-            return true;
-        }
-        return this.tryBump(bumper, destOccupantId, depth + 1);
-    }
-
-    /**
-     * Find the best neighbor tile to bump an occupant to.
-     * Prefers free tiles. If none, considers tiles occupied by bumpable units (recursive bump).
-     * Avoids pushing the occupant into the bumper's path.
-     */
-    private findBumpDestination(
-        occupant: MovementController,
-        bumper: MovementController,
-        depth: number
-    ): TileCoord | null {
-        const neighbors = getAllNeighbors({ x: occupant.tileX, y: occupant.tileY });
-        const travelDx = occupant.tileX - bumper.tileX;
-        const travelDy = occupant.tileY - bumper.tileY;
-
-        // Separate into free tiles and tiles with bumpable occupants
-        const free: TileCoord[] = [];
-        const bumpable: TileCoord[] = [];
-
-        for (const n of neighbors) {
-            // Never push the occupant back onto the bumper's tile
-            if (n.x === bumper.tileX && n.y === bumper.tileY) {
-                continue;
-            }
-            if (!this.isTilePassableForBump(n.x, n.y)) {
-                continue;
-            }
-            const nOccupant = this.getUnitAt(tileKey(n.x, n.y), occupant.entityId);
-            if (nOccupant === undefined) {
-                free.push(n);
-            } else if (depth < MovementSystem.MAX_BUMP_DEPTH && this.isBumpableOccupant(nOccupant)) {
-                bumpable.push(n);
-            }
-        }
-
-        // Prefer free tiles; fall back to bumpable tiles for chain-push
-        const candidates = free.length > 0 ? free : bumpable;
-        if (candidates.length === 0) {
-            return null;
-        }
-        if (candidates.length === 1) {
-            return candidates[0]!;
-        }
-
-        return this.pickBestBumpTile(candidates, occupant, travelDx, travelDy);
-    }
-
-    /** Check if an occupant can be bumped (idle or waiting, not busy). */
-    private isBumpableOccupant(occupantId: number): boolean {
-        const ctrl = this.controllers.get(occupantId);
-        if (!ctrl) {
-            return false;
-        }
-        if (ctrl.busy) {
-            return false;
-        }
-        if (ctrl.state === 'idle') {
-            return true;
-        }
-        // Moving but waiting (stuck) — bumpable
-        return ctrl.waitTime > 0;
-    }
-
-    /** Pick the best tile from candidates using bump scoring (perpendicular to travel direction). */
-    private pickBestBumpTile(
-        candidates: TileCoord[],
-        occupant: MovementController,
-        travelDx: number,
-        travelDy: number
-    ): TileCoord {
-        let best = candidates[0]!;
-        let bestScore = scoreBumpTile(best, occupant, travelDx, travelDy);
-        for (let i = 1; i < candidates.length; i++) {
-            const n = candidates[i]!;
-            const score = scoreBumpTile(n, occupant, travelDx, travelDy);
-            if (score > bestScore) {
-                bestScore = score;
-                best = n;
-            }
-        }
-        return best;
-    }
-
-    /**
-     * Check if a tile is passable for bump destination:
-     * in bounds, passable terrain, not blocked by a completed building.
-     * Uses buildingOccupancy (movement-blocking tiles) rather than buildingFootprint
-     * so that construction sites in digging phase allow bumps onto their tiles.
-     * Does NOT check unit occupancy — caller handles that.
-     */
-    private isTilePassableForBump(x: number, y: number): boolean {
-        if (x < 0 || x >= this.terrainMapWidth || y < 0 || y >= this.terrainMapHeight) {
-            return false;
-        }
-        if (this.terrainGroundType) {
-            const idx = x + y * this.terrainMapWidth;
-            if (!isPassable(this.terrainGroundType[idx]!)) {
-                return false;
-            }
-        }
-        const key = tileKey(x, y);
-        if (this.buildingOccupancy.has(key)) {
-            return false;
-        }
-        return true;
-    }
-
-    // -------------------------------------------------------------------------
-    // Events
-    // -------------------------------------------------------------------------
 
     private emitMovementStopped(controller: MovementController, prevState: MovementState): void {
         if (controller.state !== prevState && controller.state === 'idle' && prevState !== 'idle') {

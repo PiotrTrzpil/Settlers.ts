@@ -382,7 +382,7 @@ export class LogisticsDispatcher implements TickSystem {
     private handleConstructionCompleted(buildingId: number): void {
         let jobsCancelled = 0;
         const affectedCarriers = this.jobStore.byBuilding.get(buildingId);
-        for (const carrierId of [...affectedCarriers]) {
+        for (const carrierId of Array.from(affectedCarriers)) {
             const job = this.jobStore.jobs.get(carrierId)!;
             if (job.destBuilding === buildingId) {
                 TransportJobService.cancel(job, 'construction_completed', this.transportJobDeps);
@@ -419,7 +419,7 @@ export class LogisticsDispatcher implements TickSystem {
 
         // Handle active TransportJobs referencing this building (via byBuilding index)
         const affectedCarriers = this.jobStore.byBuilding.get(buildingId);
-        for (const carrierId of [...affectedCarriers]) {
+        for (const carrierId of Array.from(affectedCarriers)) {
             const job = this.jobStore.jobs.get(carrierId)!;
             if (job.destBuilding === buildingId || job.sourceBuilding === buildingId) {
                 // Already picked up from source — let carrier deliver

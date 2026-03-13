@@ -50,7 +50,7 @@ test.describe('Entity Rendering Catalog', { tag: ['@requires-assets', '@screensh
             await gpEmptyMap.wait.waitForFrames(5, 5000);
 
             const spawnedCount = await page.evaluate(
-                ({ unitTypes, race }) => {
+                ({ unitTypes: types, race: r }) => {
                     const game = window.__settlers__!.game!;
                     const w = game.terrain.mapSize.width;
                     const h = game.terrain.mapSize.height;
@@ -60,7 +60,7 @@ test.describe('Entity Rendering Catalog', { tag: ['@requires-assets', '@screensh
                     const SPACING = 3;
                     let count = 0;
 
-                    for (let i = 0; i < unitTypes.length; i++) {
+                    for (let i = 0; i < types.length; i++) {
                         const col = i % COLS;
                         const row = Math.floor(i / COLS);
                         const x = cx - Math.floor(COLS / 2) * SPACING + col * SPACING;
@@ -68,11 +68,11 @@ test.describe('Entity Rendering Catalog', { tag: ['@requires-assets', '@screensh
 
                         const result = game.execute({
                             type: 'spawn_unit',
-                            unitType: unitTypes[i]!,
+                            unitType: types[i]!,
                             x,
                             y,
                             player: 0,
-                            race,
+                            race: r,
                         });
                         if (result?.success) count++;
                     }
@@ -118,7 +118,7 @@ test.describe('Entity Rendering Catalog', { tag: ['@requires-assets', '@screensh
             await gpEmptyMap.wait.waitForFrames(5, 5000);
 
             const placedCount = await page.evaluate(
-                ({ buildingTypes, race }) => {
+                ({ buildingTypes: types, race: r }) => {
                     const game = window.__settlers__!.game!;
                     const search = window.__settlers__!.utils!.spiralSearch!;
                     const w = game.terrain.mapSize.width;
@@ -127,7 +127,7 @@ test.describe('Entity Rendering Catalog', { tag: ['@requires-assets', '@screensh
                     const cy = Math.floor(h / 2);
                     let count = 0;
 
-                    for (const bt of buildingTypes) {
+                    for (const bt of types) {
                         try {
                             search(cx, cy, w, h, (tx, ty) => {
                                 const result = game.execute({
@@ -136,7 +136,7 @@ test.describe('Entity Rendering Catalog', { tag: ['@requires-assets', '@screensh
                                     x: tx,
                                     y: ty,
                                     player: 0,
-                                    race,
+                                    race: r,
                                     completed: true,
                                 });
                                 if (result?.success) {

@@ -96,18 +96,14 @@ export interface TerrainPhase {
 
 /**
  * Material delivery tracking.
- * Tracks construction costs and consumed quantities.
- * Delivered amounts are queried directly from inventory (no shadow copy).
+ * Tracks construction costs only — consumed/delivered amounts are derived from
+ * BuildingInventoryManager throughput counters (totalIn/totalOut).
  */
 export interface MaterialsData {
     /** From getConstructionCosts(buildingType, race) */
     costs: readonly ConstructionCost[];
     /** Sum of all cost quantities */
     totalCost: number;
-    /** Materials consumed by builder work ticks */
-    consumedAmount: number;
-    /** Per-material consumed tracking — how many of each material builders have used up. */
-    consumed: Map<EMaterialType, number>;
 }
 
 /**

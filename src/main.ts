@@ -22,7 +22,7 @@ const log = new LogHandler('Global');
 // Force full page reload when HMR fails (prevents stale code issues)
 if (import.meta.hot) {
     import.meta.hot.on('vite:error', (payload: unknown) => {
-        log.warn(`HMR error detected (auto-reload disabled): ${payload}`);
+        log.warn(`HMR error detected (auto-reload disabled): ${String(payload)}`);
     });
 
     // Force reload for renderer/engine files — these hold GPU resources and

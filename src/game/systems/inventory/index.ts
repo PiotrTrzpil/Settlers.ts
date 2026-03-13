@@ -32,7 +32,7 @@ export {
 
 // Building inventory manager
 export type { BuildingInventoryView, BuildingInventoryDeps } from './building-inventory';
-export type { SerializedBuildingInventory, SerializedPileSlot } from './building-inventory-helpers';
+export type { MaterialThroughput, SerializedBuildingInventory, SerializedPileSlot } from './building-inventory-helpers';
 export { BuildingInventoryManager } from './building-inventory';
 
 // PileSlot type (unified inventory+pile slot)

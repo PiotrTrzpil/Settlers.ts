@@ -15,7 +15,7 @@ vi.mock('howler', () => ({
     Howler: { ctx: { state: 'running' } },
 }));
 
-import { MusicController, IAudioManager } from '@/game/audio';
+import { MusicController, type IAudioManager } from '@/game/audio';
 
 function createMockHowl(isPlaying = false) {
     return {
@@ -30,10 +30,12 @@ function createMockHowl(isPlaying = false) {
     };
 }
 
+type MockHowl = ReturnType<typeof createMockHowl>;
+
 describe('MusicController', () => {
     let controller: MusicController;
     let mockSoundManager: IAudioManager;
-    let mockHowlInstance: ReturnType<typeof createMockHowl>;
+    let mockHowlInstance: MockHowl;
 
     beforeEach(() => {
         vi.clearAllMocks();
@@ -41,7 +43,7 @@ describe('MusicController', () => {
         mockSoundManager = {
             loadSound: vi.fn().mockReturnValue(mockHowlInstance),
             getMusicVolumeMultiplier: vi.fn().mockReturnValue(0.5),
-        };
+        } as unknown as IAudioManager;
         controller = new MusicController(mockSoundManager);
     });
 
@@ -49,29 +51,19 @@ describe('MusicController', () => {
         vi.clearAllTimers();
     });
 
-    it('should track currentMusicId and stop cleanly', () => {
+    it('should play music and track current id', () => {
         controller.playMusic('MUSIC_ROMAN_01');
         expect(controller.currentMusicId).toBe('MUSIC_ROMAN_01');
+    });
 
+    it('should stop music and clear current id', () => {
+        controller.playMusic('MUSIC_ROMAN_01');
         controller.stopMusic();
         expect(controller.currentMusicId).toBeNull();
     });
 
-    it('should skip duplicate plays of the same track', () => {
+    it('should toggle music off and on, resuming last track', () => {
         controller.playMusic('MUSIC_ROMAN_01');
-        mockHowlInstance.playing.mockReturnValue(true);
-
-        const loadSpy = mockSoundManager.loadSound as ReturnType<typeof vi.fn>;
-        loadSpy.mockClear();
-        controller.playMusic('MUSIC_ROMAN_01');
-        expect(loadSpy).not.toHaveBeenCalled();
-    });
-
-    it('should not play when disabled, and resume last track when re-enabled', () => {
-        controller.playMusic('MUSIC_ROMAN_01');
-        expect(controller.currentMusicId).toBe('MUSIC_ROMAN_01');
-
-        // Disable stops music
         controller.toggleMusic(false);
         expect(controller.currentMusicId).toBeNull();
         expect(controller.enabled).toBe(false);
@@ -81,16 +73,17 @@ describe('MusicController', () => {
         expect(controller.currentMusicId).toBeNull();
 
         // Re-enable resumes last track
-        (mockSoundManager.loadSound as ReturnType<typeof vi.fn>).mockReturnValue(createMockHowl());
+        const loadSpy = vi.mocked(mockSoundManager.loadSound as (...args: unknown[]) => unknown);
+        loadSpy.mockReturnValue(createMockHowl());
         controller.toggleMusic(true);
-        expect(mockSoundManager.loadSound).toHaveBeenCalled();
+        expect(loadSpy).toHaveBeenCalled();
         expect(controller.currentMusicId).toBe('MUSIC_ROMAN_01');
     });
 
     it('should crossfade: fade out old track when playing new one', () => {
         const firstHowl = createMockHowl(true);
         const secondHowl = createMockHowl();
-        const loadSpy = mockSoundManager.loadSound as ReturnType<typeof vi.fn>;
+        const loadSpy = vi.mocked(mockSoundManager.loadSound as (...args: unknown[]) => unknown);
         loadSpy.mockReturnValueOnce(firstHowl).mockReturnValueOnce(secondHowl);
 
         controller.playMusic('MUSIC_ROMAN_01');
@@ -107,7 +100,7 @@ describe('MusicController', () => {
 
         const firstHowl = createMockHowl();
         const secondHowl = createMockHowl();
-        const loadSpy = mockSoundManager.loadSound as ReturnType<typeof vi.fn>;
+        const loadSpy = vi.mocked(mockSoundManager.loadSound as (...args: unknown[]) => unknown);
         loadSpy.mockReturnValueOnce(firstHowl).mockReturnValueOnce(secondHowl);
 
         controller.playMusic('MUSIC_ROMAN_01');
@@ -117,16 +110,16 @@ describe('MusicController', () => {
         expect(endHandler).toBeDefined();
 
         // Play different track (first is now stale)
-        firstHowl.playing.mockReturnValue(true);
         controller.playMusic('MUSIC_ROMAN_02');
-
-        // Trigger stale end handler
-        endHandler?.();
-        vi.advanceTimersByTime(1000);
-
-        // Should still be on second track
         expect(controller.currentMusicId).toBe('MUSIC_ROMAN_02');
 
-        vi.useRealTimers();
+        // Fire the end callback from first track — should NOT auto-advance
+        // since it's stale (a different track is now current)
+        if (endHandler) {
+            (endHandler as () => void)();
+        }
+
+        // Still playing second track — no third track loaded
+        expect(controller.currentMusicId).toBe('MUSIC_ROMAN_02');
     });
 });

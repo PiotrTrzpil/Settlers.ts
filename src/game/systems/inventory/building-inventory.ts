@@ -19,12 +19,24 @@ import type { Command, CommandResult } from '../../commands';
 import type { EventBus } from '../../event-bus';
 import { PersistentMap, PersistentValue } from '@/game/persistence/persistent-store';
 import { createLogger } from '@/utilities/logger';
+import type { MaterialThroughput } from './building-inventory-helpers';
 import {
+    type ThroughputMap,
+    throughputSerializer,
     spawnPileEntity,
     updatePileEntity,
     removePileEntity,
     getProductionInputs,
     getProductionOutput,
+    findInputSlot,
+    findOutputSlot,
+    requireInputSlot,
+    requireOutputSlot,
+    getSourcesWithOutput as getSourcesWithOutputFn,
+    getSinksNeedingInput as getSinksNeedingInputFn,
+    findSlotByKind,
+    getOutputSlotsForMaterial,
+    getInputSpace as getInputSpaceFn,
 } from './building-inventory-helpers';
 
 const log = createLogger('BuildingInventory');
@@ -55,6 +67,12 @@ export class BuildingInventoryManager {
     readonly slotStore = new PersistentMap<PileSlot>('buildingInventories');
     /** Slot ID counter — auto-persisted. */
     readonly nextSlotIdStore = new PersistentValue<number>('buildingInventoryNextSlotId', 1);
+    /** Cumulative throughput per (buildingId, materialType) — auto-persisted. */
+    readonly throughputStore = new PersistentValue<ThroughputMap>(
+        'buildingInventoryThroughput',
+        new Map(),
+        throughputSerializer
+    );
     /** buildingId → set of slotIds (derived index, rebuilt after restore). */
     private inventorySlots = new Map<number, Set<number>>();
 
@@ -231,6 +249,10 @@ export class BuildingInventoryManager {
             updatePileEntity(slot, executeCommand);
         }
 
+        if (slot.buildingId !== null) {
+            this.recordThroughputIn(slot.buildingId, slot.materialType, toDeposit);
+        }
+
         this.emitChanged(slot, prev);
         return toDeposit;
     }
@@ -255,6 +277,10 @@ export class BuildingInventoryManager {
             removePileEntity(slot, executeCommand);
         } else if (slot.entityId !== null) {
             updatePileEntity(slot, executeCommand);
+        }
+
+        if (slot.buildingId !== null) {
+            this.recordThroughputOut(slot.buildingId, slot.materialType, toWithdraw);
         }
 
         this.emitChanged(slot, prev);
@@ -287,29 +313,27 @@ export class BuildingInventoryManager {
     }
 
     /**
+     * Get cumulative throughput for a specific (building, material) pair.
+     * Returns { totalIn: 0, totalOut: 0 } if no throughput has been recorded yet.
+     */
+    getThroughput(buildingId: number, materialType: EMaterialType): MaterialThroughput {
+        return this.throughputStore.get().get(buildingId)?.get(materialType) ?? { totalIn: 0, totalOut: 0 };
+    }
+
+    /**
+     * Get all throughput entries for a building.
+     * Returns an empty map if no throughput has been recorded for this building.
+     */
+    getBuildingThroughput(buildingId: number): ReadonlyMap<EMaterialType, MaterialThroughput> {
+        return this.throughputStore.get().get(buildingId) ?? new Map();
+    }
+
+    /**
      * Find first slot with space for the given material and kind.
      * Kind can be a SlotKind or 'input'/'output' convenience aliases.
      */
     findSlot(buildingId: number, material: EMaterialType, kind: SlotKind | 'input' | 'output'): PileSlot | undefined {
-        const ids = this.inventorySlots.get(buildingId);
-        if (!ids) {
-            return undefined;
-        }
-        let resolvedKind: SlotKind;
-        if (kind === 'input') {
-            resolvedKind = SlotKind.Input;
-        } else if (kind === 'output') {
-            resolvedKind = SlotKind.Output;
-        } else {
-            resolvedKind = kind;
-        }
-        for (const id of ids) {
-            const slot = this.slotStore.get(id)!;
-            if (slot.materialType === material && slot.kind === resolvedKind && slot.currentAmount < slot.maxCapacity) {
-                return slot;
-            }
-        }
-        return undefined;
+        return findSlotByKind(this.inventorySlots, this.slotStore, buildingId, material, kind);
     }
 
     /**
@@ -329,18 +353,7 @@ export class BuildingInventoryManager {
      * All output slots for a building matching a material (for set_storage_filter command).
      */
     getOutputSlots(buildingId: number, material: EMaterialType): ReadonlyArray<{ slot: PileSlot; slotId: number }> {
-        const ids = this.inventorySlots.get(buildingId);
-        if (!ids) {
-            return [];
-        }
-        const result: { slot: PileSlot; slotId: number }[] = [];
-        for (const id of ids) {
-            const slot = this.slotStore.get(id)!;
-            if (slot.materialType === material && (slot.kind === SlotKind.Output || slot.kind === SlotKind.Storage)) {
-                result.push({ slot, slotId: id });
-            }
-        }
-        return result;
+        return getOutputSlotsForMaterial(this.inventorySlots, this.slotStore, buildingId, material);
     }
 
     /**
@@ -359,24 +372,21 @@ export class BuildingInventoryManager {
         log.debug(`setSlotMaterial: slotId=${slotId} → ${EMaterialType[material]}`);
     }
     depositInput(buildingId: number, material: EMaterialType, amount: number): number {
-        const slot = this.requireInputSlot(buildingId, material, 'depositInput');
-        return this.deposit(slot.id, amount);
+        return this.deposit(this.requireInputSlot(buildingId, material, 'depositInput').id, amount);
     }
 
     depositOutput(buildingId: number, material: EMaterialType, amount: number): number {
-        const slot = this.requireOutputSlot(buildingId, material, 'depositOutput');
-        return this.deposit(slot.id, amount);
+        return this.deposit(this.requireOutputSlot(buildingId, material, 'depositOutput').id, amount);
     }
 
     withdrawInput(buildingId: number, material: EMaterialType, amount: number): number {
-        const slot = this.requireInputSlot(buildingId, material, 'withdrawInput');
-        return this.withdraw(slot.id, amount);
+        return this.withdraw(this.requireInputSlot(buildingId, material, 'withdrawInput').id, amount);
     }
 
     withdrawOutput(buildingId: number, material: EMaterialType, amount: number): number {
-        const slot = this.requireOutputSlot(buildingId, material, 'withdrawOutput');
-        return this.withdraw(slot.id, amount);
+        return this.withdraw(this.requireOutputSlot(buildingId, material, 'withdrawOutput').id, amount);
     }
+
     getInputAmount(buildingId: number, material: EMaterialType): number {
         return this.findInputSlot(buildingId, material)?.currentAmount ?? 0;
     }
@@ -387,46 +397,22 @@ export class BuildingInventoryManager {
 
     /** Total available input space across all matching slots. */
     getInputSpace(buildingId: number, material: EMaterialType): number {
-        const ids = this.inventorySlots.get(buildingId);
-        if (!ids) {
-            return 0;
-        }
-        let total = 0;
-        for (const id of ids) {
-            const slot = this.slotStore.get(id)!;
-            if (slot.materialType === material && slot.kind === SlotKind.Input) {
-                total += slot.maxCapacity - slot.currentAmount;
-            }
-        }
-        return total;
+        return getInputSpaceFn(this.inventorySlots, this.slotStore, buildingId, material);
     }
 
     canAcceptInput(buildingId: number, material: EMaterialType, amount: number): boolean {
         const slot = this.findInputSlot(buildingId, material);
-        if (!slot) {
-            return false;
-        }
-        return slot.currentAmount + amount <= slot.maxCapacity;
+        return !!slot && slot.currentAmount + amount <= slot.maxCapacity;
     }
 
     canProvideOutput(buildingId: number, material: EMaterialType, amount: number): boolean {
         const slot = this.findOutputSlot(buildingId, material);
-        if (!slot) {
-            return false;
-        }
-        return slot.currentAmount >= amount;
+        return !!slot && slot.currentAmount >= amount;
     }
+
     canStartProduction(buildingId: number, recipe?: Recipe): boolean {
         const inputs = getProductionInputs(buildingId, this.getDeps().gameState, recipe);
-        if (!inputs) {
-            return false;
-        }
-        for (const material of inputs) {
-            if (this.getInputAmount(buildingId, material) < 1) {
-                return false;
-            }
-        }
-        return true;
+        return !!inputs && inputs.every(m => this.getInputAmount(buildingId, m) >= 1);
     }
 
     consumeProductionInputs(buildingId: number, recipe?: Recipe): boolean {
@@ -454,10 +440,7 @@ export class BuildingInventoryManager {
             return true;
         }
         const slot = this.findOutputSlot(buildingId, output);
-        if (!slot) {
-            return false;
-        }
-        return slot.currentAmount < slot.maxCapacity;
+        return !!slot && slot.currentAmount < slot.maxCapacity;
     }
     getAllInventoryIds(): number[] {
         return Array.from(this.inventorySlots.keys());
@@ -469,39 +452,11 @@ export class BuildingInventoryManager {
     }
 
     getSourcesWithOutput(material: EMaterialType, minAmount = 1): number[] {
-        const result: number[] = [];
-        for (const [buildingId, slotIds] of this.inventorySlots) {
-            for (const id of slotIds) {
-                const slot = this.slotStore.get(id)!;
-                if (
-                    (slot.kind === SlotKind.Output || slot.kind === SlotKind.Storage || slot.kind === SlotKind.Free) &&
-                    slot.materialType === material &&
-                    slot.currentAmount >= minAmount
-                ) {
-                    result.push(buildingId);
-                    break;
-                }
-            }
-        }
-        return result;
+        return getSourcesWithOutputFn(this.inventorySlots, this.slotStore, material, minAmount);
     }
 
     getSinksNeedingInput(material: EMaterialType, minSpace = 1): number[] {
-        const result: number[] = [];
-        for (const [buildingId, slotIds] of this.inventorySlots) {
-            for (const id of slotIds) {
-                const slot = this.slotStore.get(id)!;
-                if (
-                    slot.kind === SlotKind.Input &&
-                    slot.materialType === material &&
-                    slot.maxCapacity - slot.currentAmount >= minSpace
-                ) {
-                    result.push(buildingId);
-                    break;
-                }
-            }
-        }
-        return result;
+        return getSinksNeedingInputFn(this.inventorySlots, this.slotStore, material, minSpace);
     }
 
     hasSlots(buildingId: number): boolean {
@@ -538,6 +493,7 @@ export class BuildingInventoryManager {
     clear(): void {
         this.slotStore.clear();
         this.nextSlotIdStore.set(1);
+        this.throughputStore.get().clear();
         this.inventorySlots.clear();
     }
 
@@ -589,50 +545,42 @@ export class BuildingInventoryManager {
     }
 
     private findInputSlot(buildingId: number, material: EMaterialType): PileSlot | undefined {
-        const ids = this.inventorySlots.get(buildingId);
-        if (!ids) {
-            return undefined;
-        }
-        for (const id of ids) {
-            const slot = this.slotStore.get(id)!;
-            if (slot.materialType === material && slot.kind === SlotKind.Input) {
-                return slot;
-            }
-        }
-        return undefined;
+        return findInputSlot(this.inventorySlots, this.slotStore, buildingId, material);
     }
 
     private findOutputSlot(buildingId: number, material: EMaterialType): PileSlot | undefined {
-        const ids = this.inventorySlots.get(buildingId);
-        if (!ids) {
-            return undefined;
-        }
-        for (const id of ids) {
-            const slot = this.slotStore.get(id)!;
-            if (
-                slot.materialType === material &&
-                (slot.kind === SlotKind.Output || slot.kind === SlotKind.Storage || slot.kind === SlotKind.Free)
-            ) {
-                return slot;
-            }
-        }
-        return undefined;
+        return findOutputSlot(this.inventorySlots, this.slotStore, buildingId, material);
     }
 
     private requireInputSlot(buildingId: number, material: EMaterialType, ctx: string): PileSlot {
-        const slot = this.findInputSlot(buildingId, material);
-        if (!slot) {
-            throw new Error(`Building ${buildingId} has no input slot for ${EMaterialType[material]} [${ctx}]`);
-        }
-        return slot;
+        return requireInputSlot(this.inventorySlots, this.slotStore, buildingId, material, ctx);
     }
 
     private requireOutputSlot(buildingId: number, material: EMaterialType, ctx: string): PileSlot {
-        const slot = this.findOutputSlot(buildingId, material);
-        if (!slot) {
-            throw new Error(`Building ${buildingId} has no output slot for ${EMaterialType[material]} [${ctx}]`);
+        return requireOutputSlot(this.inventorySlots, this.slotStore, buildingId, material, ctx);
+    }
+
+    private getOrCreateThroughput(buildingId: number, materialType: EMaterialType): MaterialThroughput {
+        const throughput = this.throughputStore.get();
+        let byMaterial = throughput.get(buildingId);
+        if (!byMaterial) {
+            byMaterial = new Map();
+            throughput.set(buildingId, byMaterial);
         }
-        return slot;
+        let entry = byMaterial.get(materialType);
+        if (!entry) {
+            entry = { totalIn: 0, totalOut: 0 };
+            byMaterial.set(materialType, entry);
+        }
+        return entry;
+    }
+
+    private recordThroughputIn(buildingId: number, materialType: EMaterialType, amount: number): void {
+        this.getOrCreateThroughput(buildingId, materialType).totalIn += amount;
+    }
+
+    private recordThroughputOut(buildingId: number, materialType: EMaterialType, amount: number): void {
+        this.getOrCreateThroughput(buildingId, materialType).totalOut += amount;
     }
 
     private emitChanged(slot: PileSlot, previousAmount: number): void {

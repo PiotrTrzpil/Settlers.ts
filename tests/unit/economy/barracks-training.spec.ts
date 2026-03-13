@@ -39,7 +39,7 @@ describe('Training Recipes', () => {
                 specialistBlock.every(r => r.unitType === specialistType),
                 `${Race[race]} specialist block`
             ).toBe(true);
-            expect(specialistBlock.map(r => r.soldierLevel).sort()).toEqual([1, 2, 3]);
+            expect(specialistBlock.map(r => r.soldierLevel).sort((a, b) => a - b)).toEqual([1, 2, 3]);
         }
     });
 

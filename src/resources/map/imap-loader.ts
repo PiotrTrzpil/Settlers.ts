@@ -15,4 +15,7 @@ export interface IMapLoader {
 
     /** Optional entity data parsed from map chunks (players, buildings, settlers, stacks) */
     entityData?: MapEntityData;
+
+    /** Human-readable summary of the loaded map */
+    toString(): string;
 }

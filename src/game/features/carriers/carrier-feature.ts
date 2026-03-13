@@ -15,7 +15,7 @@ export interface CarrierFeatureExports {
     carrierRegistry: CarrierRegistry;
     idleCarrierPool: IdleCarrierPool;
     /** Late-bind the transport busy check from logistics-dispatcher. */
-    setIsTransportBusy(fn: (carrierId: number) => boolean): void;
+    setIsTransportBusy: (fn: (carrierId: number) => boolean) => void;
 }
 
 export const CarrierFeature: FeatureDefinition = {

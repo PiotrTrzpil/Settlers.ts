@@ -22,12 +22,9 @@ import { EntityType } from '@/game/entity';
 import { BuildingType } from '@/game/buildings/building-type';
 import { EMaterialType } from '@/game/economy/material-type';
 import { SlotKind } from '@/game/core/pile-kind';
+import { ok } from './helpers';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
-
-function ok(output: string): CliResult {
-    return { ok: true, output };
-}
 
 function buildSnapshotConfig(ctx: CliContext): SnapshotConfig {
     const svc = ctx.game.services;

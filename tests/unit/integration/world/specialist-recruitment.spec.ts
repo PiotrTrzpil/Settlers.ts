@@ -30,9 +30,9 @@ function countPilesOf(sim: Simulation, material: EMaterialType): number {
         .length;
 }
 
-// ─── tests ───────────────────────────────────────────────────────────────────
+// ─── Thief & Geologist recruitment ────────────────────────────────────────
 
-describe('Specialist recruitment (integration)', { timeout: 30_000 }, () => {
+describe('Specialist recruitment – basic transforms', { timeout: 30_000 }, () => {
     let sim: Simulation;
 
     afterEach(() => {
@@ -40,12 +40,9 @@ describe('Specialist recruitment (integration)', { timeout: 30_000 }, () => {
         cleanupSimulation();
     });
 
-    // ─── Thief: direct in-place transform ────────────────────────────────────
-
     it('Thief: carrier transforms in place without a tool pile', () => {
         sim = createSimulation();
 
-        // Spawn one idle carrier (no tool pile needed for Thief)
         sim.spawnUnit(64, 64, UnitType.Carrier);
         expect(sim.countEntities(EntityType.Unit, UnitType.Carrier)).toBe(1);
 
@@ -53,7 +50,6 @@ describe('Specialist recruitment (integration)', { timeout: 30_000 }, () => {
         expect(result.success).toBe(true);
         expect(sim.services.recruitSystem.getQueuedCount(UnitType.Thief)).toBe(1);
 
-        // Run until the queue drains (≤0.5s drain interval) and the transform completes
         sim.runUntil(() => sim.countEntities(EntityType.Unit, UnitType.Thief) === 1, {
             maxTicks: 3_000,
             label: 'Thief appears',
@@ -69,8 +65,6 @@ describe('Specialist recruitment (integration)', { timeout: 30_000 }, () => {
         expect(sim.services.recruitSystem.getQueuedCount(UnitType.Thief)).toBe(0);
         expect(sim.errors).toHaveLength(0);
     });
-
-    // ─── Tool-based specialist ────────────────────────────────────────────────
 
     it('Geologist: carrier walks to pickaxe pile and transforms', () => {
         sim = createSimulation();
@@ -96,8 +90,17 @@ describe('Specialist recruitment (integration)', { timeout: 30_000 }, () => {
         expect(sim.countEntities(EntityType.Unit, UnitType.Carrier)).toBe(0);
         expect(sim.errors).toHaveLength(0);
     });
+});
 
-    // ─── Queue decrement before drain ─────────────────────────────────────────
+// ─── Queue decrement & dismissal ──────────────────────────────────────────
+
+describe('Specialist recruitment – queue decrement & dismissal', { timeout: 30_000 }, () => {
+    let sim: Simulation;
+
+    afterEach(() => {
+        sim?.destroy();
+        cleanupSimulation();
+    });
 
     it('decrement before drain cancels queued request — no specialist created', () => {
         sim = createSimulation();
@@ -110,13 +113,11 @@ describe('Specialist recruitment (integration)', { timeout: 30_000 }, () => {
         recruitSpecialist(sim, UnitType.Thief, -1);
         expect(sim.services.recruitSystem.getQueuedCount(UnitType.Thief)).toBe(1);
 
-        // Only one carrier, so at most one Thief ever appears
         sim.runUntil(() => sim.countEntities(EntityType.Unit, UnitType.Thief) === 1, {
             maxTicks: 3_000,
             label: 'one Thief appears',
         });
 
-        // Queue fully drained — no second Thief possible (only 1 carrier)
         expect(sim.countEntities(EntityType.Unit, UnitType.Thief)).toBe(1);
         expect(sim.countEntities(EntityType.Unit, UnitType.Carrier)).toBe(0);
         expect(sim.services.recruitSystem.getQueuedCount(UnitType.Thief)).toBe(0);
@@ -134,7 +135,6 @@ describe('Specialist recruitment (integration)', { timeout: 30_000 }, () => {
 
         expect(sim.services.recruitSystem.getQueuedCount(UnitType.Geologist)).toBe(0);
 
-        // Even with drain ticks nothing should happen
         sim.runTicks(200);
 
         expect(sim.countEntities(EntityType.Unit, UnitType.Geologist)).toBe(0);
@@ -142,28 +142,23 @@ describe('Specialist recruitment (integration)', { timeout: 30_000 }, () => {
         expect(sim.errors).toHaveLength(0);
     });
 
-    // ─── Dismiss: queue drains first, then live specialist ───────────────────
-
     it('decrement drains queue before dismissing live specialist', () => {
         sim = createSimulation();
 
-        // Two carriers: one will become Thief, one stays idle for the second request
         sim.spawnUnit(64, 64, UnitType.Carrier);
         sim.spawnUnit(65, 64, UnitType.Carrier);
 
-        // Queue 2 Thieves then immediately drain 1 before any tick runs
         recruitSpecialist(sim, UnitType.Thief, 2);
         recruitSpecialist(sim, UnitType.Thief, -1);
 
         expect(sim.services.recruitSystem.getQueuedCount(UnitType.Thief)).toBe(1);
-        expect(sim.countEntities(EntityType.Unit, UnitType.Thief)).toBe(0); // none yet
+        expect(sim.countEntities(EntityType.Unit, UnitType.Thief)).toBe(0);
 
         sim.runUntil(() => sim.countEntities(EntityType.Unit, UnitType.Thief) === 1, {
             maxTicks: 3_000,
             label: 'one Thief appears',
         });
 
-        // Exactly 1 Thief (queue was 1 after decrement, 1 carrier remains idle)
         expect(sim.countEntities(EntityType.Unit, UnitType.Thief)).toBe(1);
         expect(sim.errors).toHaveLength(0);
     });
@@ -171,7 +166,6 @@ describe('Specialist recruitment (integration)', { timeout: 30_000 }, () => {
     it('dismiss live specialist returns them to carrier pool', () => {
         sim = createSimulation();
 
-        // Spawn a carrier and turn them into a Thief
         sim.spawnUnit(64, 64, UnitType.Carrier);
         recruitSpecialist(sim, UnitType.Thief, 1);
 
@@ -182,7 +176,6 @@ describe('Specialist recruitment (integration)', { timeout: 30_000 }, () => {
         expect(sim.countEntities(EntityType.Unit, UnitType.Thief)).toBe(1);
         expect(sim.countEntities(EntityType.Unit, UnitType.Carrier)).toBe(0);
 
-        // Dismiss the Thief
         const dismissResult = recruitSpecialist(sim, UnitType.Thief, -1);
         expect(dismissResult.success).toBe(true);
 
@@ -203,10 +196,8 @@ describe('Specialist recruitment (integration)', { timeout: 30_000 }, () => {
             label: 'Geologist appears',
         });
 
-        // Pickaxe pile was consumed during transform
         expect(countPilesOf(sim, EMaterialType.PICKAXE)).toBe(0);
 
-        // Dismiss → pickaxe dropped on ground
         recruitSpecialist(sim, UnitType.Geologist, -1);
 
         expect(sim.countEntities(EntityType.Unit, UnitType.Geologist)).toBe(0);
@@ -214,10 +205,17 @@ describe('Specialist recruitment (integration)', { timeout: 30_000 }, () => {
         expect(countPilesOf(sim, EMaterialType.PICKAXE)).toBe(1);
         expect(sim.errors).toHaveLength(0);
     });
+});
 
-    // ─── Multiple queued ──────────────────────────────────────────────────────
+// ─── Partial recruitment (busy / reserved carriers) ──────────────────────
 
-    // ─── Partial recruitment (busy / reserved carriers) ──────────────────────
+describe('Specialist recruitment – reserved carriers & batch', { timeout: 30_000 }, () => {
+    let sim: Simulation;
+
+    afterEach(() => {
+        sim?.destroy();
+        cleanupSimulation();
+    });
 
     it('reserved carrier is skipped — queue stays full until carrier is free', () => {
         sim = createSimulation();
@@ -228,14 +226,12 @@ describe('Specialist recruitment (integration)', { timeout: 30_000 }, () => {
         recruitSpecialist(sim, UnitType.Thief, 1);
         expect(sim.services.recruitSystem.getQueuedCount(UnitType.Thief)).toBe(1);
 
-        // Run several drain intervals — reserved carrier must not be picked up
         sim.runTicks(200);
 
         expect(sim.countEntities(EntityType.Unit, UnitType.Thief)).toBe(0);
         expect(sim.countEntities(EntityType.Unit, UnitType.Carrier)).toBe(1);
         expect(sim.services.recruitSystem.getQueuedCount(UnitType.Thief)).toBe(1);
 
-        // Release the reservation — next drain should dispatch
         sim.services.unitReservation.release(carrierId);
 
         sim.runUntil(() => sim.countEntities(EntityType.Unit, UnitType.Thief) === 1, {
@@ -256,7 +252,6 @@ describe('Specialist recruitment (integration)', { timeout: 30_000 }, () => {
         sim.spawnUnit(64, 64, UnitType.Carrier);
         sim.services.unitReservation.reserve(reservedId, { purpose: 'test' });
 
-        // Queue 3 Thieves — only 2 idle carriers are available
         recruitSpecialist(sim, UnitType.Thief, 3);
 
         sim.runUntil(() => sim.countEntities(EntityType.Unit, UnitType.Thief) === 2, {
@@ -267,7 +262,6 @@ describe('Specialist recruitment (integration)', { timeout: 30_000 }, () => {
                 `thieves=${sim.countEntities(EntityType.Unit, UnitType.Thief)}`,
         });
 
-        // Queue still holds 1 pending request (reserved carrier never got dispatched)
         expect(sim.countEntities(EntityType.Unit, UnitType.Thief)).toBe(2);
         expect(sim.services.recruitSystem.getQueuedCount(UnitType.Thief)).toBe(1);
         expect(sim.errors).toHaveLength(0);
@@ -283,7 +277,6 @@ describe('Specialist recruitment (integration)', { timeout: 30_000 }, () => {
 
         recruitSpecialist(sim, UnitType.Thief, 2);
 
-        // Multiple drain intervals pass — nothing should happen
         sim.runTicks(400);
 
         expect(sim.countEntities(EntityType.Unit, UnitType.Thief)).toBe(0);

@@ -46,7 +46,7 @@ export class LibFileHeader {
     public getFileInfo(): LibFileItem[] {
         const count = this.fileNameCount;
 
-        const result = new Array<LibFileItem>(count);
+        const result = Array.from<LibFileItem>({ length: count });
 
         const fileNames = this.readFileNames(this.reader, this.fileNameListOffset, this.fileNameCount);
 
@@ -89,12 +89,12 @@ export class LibFileHeader {
 
     private readFileNames(data: BinaryReader, offset: number, count: number): string[] {
         if (count <= 0) {
-            return new Array<string>(0);
+            return Array.from<string>({ length: 0 });
         }
 
         data.setOffset(offset);
 
-        const list = new Array<string>(count);
+        const list = Array.from<string>({ length: count });
 
         for (let i = 0; i < count; i++) {
             list[i] = data.readNullString();

@@ -326,7 +326,7 @@ export class EntityRenderer extends RendererBase implements IRenderer {
                     }
                 })
                 .catch((err: unknown) => {
-                    EntityRenderer.log.warn(`Sprite loading failed: ${err}`);
+                    EntityRenderer.log.warn(`Sprite loading failed: ${String(err)}`);
                     // Still notify - procedural rendering can continue without sprites
                     this._onSpritesLoaded?.();
                 });

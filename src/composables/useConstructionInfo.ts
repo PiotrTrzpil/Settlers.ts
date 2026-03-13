@@ -11,7 +11,6 @@ import type { Entity } from '@/game/entity';
 import { EntityType } from '@/game/entity';
 import { EMaterialType } from '@/game/economy';
 import { BuildingConstructionPhase } from '@/game/features/building-construction';
-import { SlotKind } from '@/game/core/pile-kind';
 import type { Game } from '@/game/game';
 
 export interface ConstructionMaterialInfo {
@@ -94,15 +93,11 @@ export function useConstructionInfo(
 
         const overallProgress = computeOverallProgress(site.phase, site.terrain.progress, site.building.progress);
 
-        const slots = game.value.services.inventoryManager.getSlots(entity.id);
         const materials: ConstructionMaterialInfo[] = site.materials.costs.map(cost => {
-            const inSlots = slots
-                .filter(s => s.kind === SlotKind.Input && s.materialType === cost.material)
-                .reduce((sum, s) => sum + s.currentAmount, 0);
-            const consumed = site.materials.consumed.get(cost.material) ?? 0;
+            const throughput = game.value!.services.inventoryManager.getThroughput(entity.id, cost.material);
             return {
                 name: EMaterialType[cost.material],
-                delivered: inSlots + consumed,
+                delivered: throughput.totalIn,
                 required: cost.count,
             };
         });

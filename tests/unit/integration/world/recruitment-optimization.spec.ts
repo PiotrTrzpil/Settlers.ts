@@ -29,15 +29,6 @@ function recruitSpecialist(sim: Simulation, unitType: UnitType, count: number, p
     return sim.execute({ type: 'recruit_specialist', unitType, count, player, race: Race.Roman });
 }
 
-function _findUnit(sim: Simulation, unitType: UnitType, player = 0): number | null {
-    for (const e of sim.state.entities) {
-        if (e.type === EntityType.Unit && e.subType === unitType && e.player === player) {
-            return e.id;
-        }
-    }
-    return null;
-}
-
 function diagnose(sim: Simulation, unitType: UnitType): string {
     return (
         `workers=${sim.countEntities(EntityType.Unit, unitType)} ` +

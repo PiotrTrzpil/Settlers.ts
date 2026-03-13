@@ -18,6 +18,7 @@ export {
     type PathfindingTerrain,
     type PathfindingFailureInfo,
     consumeLastPathfindingFailure,
+    setPathfindingEntityContext,
 } from './astar';
 
 // Data structures

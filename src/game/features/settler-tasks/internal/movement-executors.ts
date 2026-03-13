@@ -30,8 +30,14 @@ const ARRIVAL_DIST = 1;
 /** Arrival threshold for "roughly" movement tasks — settler doesn't need to be adjacent. */
 const ARRIVAL_DIST_ROUGH = 2;
 
-/** Ticks to wait before retrying pathfinding after a failed attempt. */
+/** Base ticks to wait before retrying pathfinding after a failed attempt. */
 const PATH_RETRY_COOLDOWN = 10;
+
+/** Maximum number of consecutive pathfinding retries before giving up. */
+const PATH_MAX_RETRIES = 6;
+
+/** Maximum cooldown ticks (caps exponential backoff). */
+const PATH_MAX_COOLDOWN = 300;
 
 // ─────────────────────────────────────────────────────────────
 // Shared movement helper
@@ -48,30 +54,44 @@ const PATH_RETRY_COOLDOWN = 10;
  *
  * When node.dir !== -1, the controller's direction is set on arrival.
  */
-/** Try to issue pathfinding with retry cooldown. Returns true if movement was started. */
+/**
+ * Try to issue pathfinding with exponential backoff.
+ * Returns 'moved' if path was found, 'waiting' during cooldown, 'failed' if max retries exceeded.
+ */
 function tryIssuePath(
     settler: Entity,
     targetX: number,
     targetY: number,
     ctx: MovementContext,
     job?: ChoreoJobState
-): boolean {
+): 'moved' | 'waiting' | 'failed' {
     if (job && job.pathRetryCountdown > 0) {
         job.pathRetryCountdown--;
-        return false;
+        return 'waiting';
     }
     const moved = ctx.gameState.movement.moveUnit(settler.id, targetX, targetY);
     if (!moved) {
         if (job) {
-            job.pathRetryCountdown = PATH_RETRY_COOLDOWN;
+            job.pathRetryCount++;
+            if (job.pathRetryCount > PATH_MAX_RETRIES) {
+                log.warn(
+                    `moveToPosition: settler ${settler.id} gave up pathfinding to (${targetX},${targetY}) after ${PATH_MAX_RETRIES} retries`
+                );
+                return 'failed';
+            }
+            const cooldown = Math.min(PATH_RETRY_COOLDOWN * 2 ** (job.pathRetryCount - 1), PATH_MAX_COOLDOWN);
+            job.pathRetryCountdown = cooldown;
+            log.debug(
+                `moveToPosition: path failed for settler ${settler.id}, retry ${job.pathRetryCount}/${PATH_MAX_RETRIES} in ${cooldown} ticks`
+            );
         }
-        log.debug(`moveToPosition: path failed for settler ${settler.id}, retrying in ${PATH_RETRY_COOLDOWN} ticks`);
-        return false;
+        return 'waiting';
     }
     if (job) {
         job.pathRetryCountdown = 0;
+        job.pathRetryCount = 0;
     }
-    return true;
+    return 'moved';
 }
 
 export function moveToPosition(
@@ -97,7 +117,10 @@ export function moveToPosition(
     }
 
     if (controller.state === 'idle') {
-        tryIssuePath(settler, targetX, targetY, ctx, job);
+        const result = tryIssuePath(settler, targetX, targetY, ctx, job);
+        if (result === 'failed') {
+            return TaskResult.FAILED;
+        }
     }
 
     return TaskResult.CONTINUE;

@@ -17,158 +17,23 @@ import { getBuildingFootprint, type BuildingType } from '../../buildings/types';
 import type { Race } from '../../core/race';
 import type { EMaterialType } from '../../economy/material-type';
 import type { ConstructionCost } from '../../economy/building-production';
-import { getConstructionCosts } from '../../economy/building-production';
 import type { EventBus } from '../../event-bus';
-import { getBuildingInfo } from '../../data/game-data-access';
-import { getBuildingFootprintFromInfo } from '@/resources/game-data';
 import type { SeededRng } from '../../core/rng';
 import { type ComponentStore, mapStore } from '../../ecs';
 import { BuildingConstructionPhase, type CapturedTerrainTile, type ConstructionSite } from './types';
-import { PersistentMap, type StoreSerializer } from '@/game/persistence/persistent-store';
+import { PersistentMap } from '@/game/persistence/persistent-store';
 import type { TileCoord } from '../../core/coordinates';
 import { assignConstructionPilePositions } from '../../systems/inventory/construction-pile-positions';
 import type { BuildingInventoryManager } from '../../systems/inventory/building-inventory';
 import { SlotKind } from '../../core/pile-kind';
+import {
+    type SerializedConstructionSite,
+    makeConstructionSiteSerializer,
+    getWorkerCount,
+    getConstructionCostsAndTotal,
+} from './construction-site-serializer';
 
-// ── Serialization types ──
-
-/**
- * Serialized form of a ConstructionSite for game state persistence.
- * Worker assignments (terrain.slots.assigned, building.slots.assigned) are NOT serialized —
- * workers are re-assigned by the settler task system on load.
- */
-export interface SerializedConstructionSite {
-    buildingType: BuildingType;
-    race: Race;
-    player: number;
-    tileX: number;
-    tileY: number;
-    phase: BuildingConstructionPhase;
-    levelingProgress: number;
-    levelingComplete: boolean;
-    constructionProgress: number;
-    /** Per-material consumed counts. */
-    consumedMaterials: Map<EMaterialType, number>;
-    consumedAmount: number;
-    terrainModified: boolean;
-}
-
-// ── Construction site store serializer ──
-
-/** Serialized form with buildingId included so the StoreSerializer can restore it. */
-type PersistedConstructionSite = SerializedConstructionSite & { buildingId: number };
-
-/**
- * StoreSerializer for ConstructionSite.
- * Converts between the full in-memory ConstructionSite and the lean PersistedConstructionSite.
- * Derived fields (constructionCosts, workerCount, pilePositions) are recomputed on deserialize.
- */
-function makeConstructionSiteSerializer(): StoreSerializer<ConstructionSite> {
-    return {
-        serialize(site: ConstructionSite): PersistedConstructionSite {
-            return {
-                buildingId: site.buildingId,
-                buildingType: site.buildingType,
-                race: site.race,
-                player: site.player,
-                tileX: site.tileX,
-                tileY: site.tileY,
-                phase: site.phase,
-                levelingProgress: site.terrain.progress,
-                levelingComplete: site.terrain.complete,
-                constructionProgress: site.building.progress,
-                consumedMaterials: new Map(site.materials.consumed),
-                consumedAmount: site.materials.consumedAmount,
-                terrainModified: site.terrain.modified,
-            };
-        },
-        deserialize(raw: unknown): ConstructionSite {
-            const data = raw as PersistedConstructionSite;
-            const constructionCosts = getConstructionCosts(data.buildingType, data.race);
-            const totalCost = constructionCosts.reduce((sum, c) => sum + c.count, 0);
-            const workerCount = getWorkerCount(data.buildingType, data.race);
-            const pilePositions = assignConstructionPilePositions(data.buildingType, data.race, data.tileX, data.tileY);
-            return {
-                buildingId: data.buildingId,
-                buildingType: data.buildingType,
-                race: data.race,
-                player: data.player,
-                tileX: data.tileX,
-                tileY: data.tileY,
-                phase:
-                    data.phase === BuildingConstructionPhase.Evacuating
-                        ? BuildingConstructionPhase.WaitingForBuilders
-                        : data.phase,
-                terrain: {
-                    slots: {
-                        required: workerCount,
-                        assigned: new Set(),
-                        started: data.levelingProgress > 0,
-                    },
-                    progress: data.levelingProgress,
-                    complete: data.levelingComplete,
-                    originalTerrain: null,
-                    modified: data.terrainModified,
-                    unleveledTiles: null,
-                    reservedTiles: new Set(),
-                    totalLevelingTiles: 0,
-                },
-                materials: {
-                    costs: constructionCosts,
-                    totalCost,
-                    consumedAmount: data.consumedAmount,
-                    consumed: new Map<EMaterialType, number>(data.consumedMaterials),
-                },
-                building: {
-                    slots: {
-                        required: workerCount,
-                        assigned: new Set(),
-                        started: data.constructionProgress > 0,
-                    },
-                    progress: data.constructionProgress,
-                },
-                pilePositions,
-            };
-        },
-    };
-}
-
-// ── Worker count helpers ──
-
-/** Default worker count when XML data is unavailable (e.g. eyecatchers without BuildingInfo). */
-const DEFAULT_WORKER_COUNT = 2;
-
-/**
- * Derive worker slot count from building footprint tile count.
- * Thresholds match the design doc (docs/designs/building-construction-process.md).
- */
-function getWorkerCountFromFootprint(footprintTileCount: number): number {
-    if (footprintTileCount <= 30) {
-        return 2;
-    }
-    if (footprintTileCount <= 60) {
-        return 3;
-    }
-    if (footprintTileCount <= 100) {
-        return 4;
-    }
-    if (footprintTileCount <= 150) {
-        return 5;
-    }
-    return 6;
-}
-
-/**
- * Get worker slot count from building footprint size.
- * Falls back to DEFAULT_WORKER_COUNT if no BuildingInfo exists for this building/race.
- */
-function getWorkerCount(buildingType: BuildingType, race: Race): number {
-    const info = getBuildingInfo(race, buildingType);
-    if (!info) {
-        return DEFAULT_WORKER_COUNT;
-    }
-    return getWorkerCountFromFootprint(getBuildingFootprintFromInfo(info).length);
-}
+export type { SerializedConstructionSite };
 
 // ── ConstructionSiteManager ──
 
@@ -231,8 +96,7 @@ export class ConstructionSiteManager {
             throw new Error(`ConstructionSiteManager: site already registered for buildingId ${buildingId}`);
         }
 
-        const constructionCosts = getConstructionCosts(buildingType, race);
-        const totalCost = constructionCosts.reduce((sum, c) => sum + c.count, 0);
+        const { costs: constructionCosts, totalCost } = getConstructionCostsAndTotal(buildingType, race);
         const workerCount = getWorkerCount(buildingType, race);
         const pilePositions = assignConstructionPilePositions(buildingType, race, tileX, tileY);
 
@@ -257,8 +121,6 @@ export class ConstructionSiteManager {
             materials: {
                 costs: constructionCosts,
                 totalCost,
-                consumedAmount: 0,
-                consumed: new Map(),
             },
             building: {
                 slots: { required: workerCount, assigned: new Set(), started: false },
@@ -555,9 +417,10 @@ export class ConstructionSiteManager {
     }
 
     /**
-     * Pick the next material to consume and update per-material consumed tracking.
-     * Iterates costs in order, finding the first material that has inventory available
-     * beyond what's already been consumed. Returns the material type, or null if none.
+     * Pick the next material to consume.
+     * Iterates costs in order, finding the first material where throughput.totalOut is
+     * below the required cost and an input slot has inventory available.
+     * Returns the material type, or null if none available.
      */
     consumeNextMaterial(buildingId: number): EMaterialType | null {
         const site = this.persistentStore.get(buildingId);
@@ -567,13 +430,14 @@ export class ConstructionSiteManager {
         const slots = this.inventoryManager.getSlots(buildingId);
 
         for (const cost of site.materials.costs) {
+            const throughput = this.inventoryManager.getThroughput(buildingId, cost.material);
+            if (throughput.totalOut >= cost.count) {
+                continue;
+            }
             const inSlots = slots
                 .filter(s => s.kind === SlotKind.Input && s.materialType === cost.material)
                 .reduce((sum, s) => sum + s.currentAmount, 0);
             if (inSlots > 0) {
-                const consumed = site.materials.consumed.get(cost.material) ?? 0;
-                site.materials.consumed.set(cost.material, consumed + 1);
-                site.materials.consumedAmount += 1;
                 return cost.material;
             }
         }
@@ -582,21 +446,17 @@ export class ConstructionSiteManager {
 
     /**
      * Returns costs where remaining delivery is still short of the required amount.
-     * Remaining = cost - (currentInSlots + consumed). Each entry reflects what still needs delivery.
+     * Remaining = cost.count - throughput.totalIn per material.
+     * totalIn = cumulative units deposited (delivered), so remaining = what still needs delivery.
      */
     getRemainingCosts(buildingId: number): ConstructionCost[] {
         const site = this.getSiteOrThrow(buildingId, 'getRemainingCosts');
-        const slots = this.inventoryManager.getSlots(site.buildingId);
         const remaining: ConstructionCost[] = [];
 
         for (const cost of site.materials.costs) {
-            const inSlots = slots
-                .filter(s => s.kind === SlotKind.Input && s.materialType === cost.material)
-                .reduce((sum, s) => sum + s.currentAmount, 0);
-            const consumed = site.materials.consumed.get(cost.material) ?? 0;
-            const total = inSlots + consumed;
-            if (total < cost.count) {
-                remaining.push({ material: cost.material, count: cost.count - total });
+            const throughput = this.inventoryManager.getThroughput(buildingId, cost.material);
+            if (throughput.totalIn < cost.count) {
+                remaining.push({ material: cost.material, count: cost.count - throughput.totalIn });
             }
         }
         return remaining;

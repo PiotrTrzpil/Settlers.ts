@@ -17,7 +17,7 @@ function table(rows: string[][], headers?: string[]): string {
 
     const allRows = headers ? [headers, ...rows] : rows;
     const colCount = allRows.reduce((max, row) => Math.max(max, row.length), 0);
-    const widths = new Array<number>(colCount).fill(0);
+    const widths = Array.from<number>({ length: colCount }).fill(0);
 
     for (const row of allRows) {
         for (let c = 0; c < row.length; c++) {

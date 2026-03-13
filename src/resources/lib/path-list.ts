@@ -25,7 +25,7 @@ export class PathList {
     }
 
     constructor(paths: string[]) {
-        this.pathNames = new Array<string>(paths.length);
+        this.pathNames = Array.from<string>({ length: paths.length });
 
         for (let i = 0; i < paths.length; i++) {
             this.pathNames[i] = Path.fixPath(paths[i]!);
