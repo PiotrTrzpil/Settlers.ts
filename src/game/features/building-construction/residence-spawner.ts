@@ -63,7 +63,9 @@ export class ResidenceSpawnerSystem implements TickSystem, Persistable<Serialize
         for (let i = this.pending.length - 1; i >= 0; i--) {
             const entry = this.pending[i]!;
             entry.timer -= dt;
-            if (entry.timer > 0) continue;
+            if (entry.timer > 0) {
+                continue;
+            }
 
             // Reset timer for next spawn
             entry.timer += entry.config.spawnInterval!;
@@ -83,7 +85,9 @@ export class ResidenceSpawnerSystem implements TickSystem, Persistable<Serialize
     /** Spawn a single carrier at the building's door tile, pushing any occupant aside. */
     private spawnOne(buildingEntityId: number, config: BuildingSpawnConfig): boolean {
         const building = this.gameState.getEntity(buildingEntityId);
-        if (!building) return false;
+        if (!building) {
+            return false;
+        }
 
         const door = getBuildingDoorPos(building.x, building.y, building.race, building.subType as BuildingType);
 
@@ -111,7 +115,9 @@ export class ResidenceSpawnerSystem implements TickSystem, Persistable<Serialize
 
     onEntityRemoved(entityId: number): void {
         const idx = this.pending.findIndex(p => p.buildingEntityId === entityId);
-        if (idx !== -1) this.pending.splice(idx, 1);
+        if (idx !== -1) {
+            this.pending.splice(idx, 1);
+        }
     }
 
     /** Number of pending spawn entries (for testing) */

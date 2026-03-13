@@ -49,15 +49,21 @@ export function createWorkplaceHandler(
     function canStoreAnyOutput(targetId: number): boolean {
         const pcm = getProductionControlManager?.();
         const state = pcm?.getProductionState(targetId);
-        if (!state) return inventoryManager.canStoreOutput(targetId);
+        if (!state) {
+            return inventoryManager.canStoreOutput(targetId);
+        }
 
         // Manual mode with empty queue — building idles
-        if (state.mode === ProductionMode.Manual && state.queue.length === 0) return false;
+        if (state.mode === ProductionMode.Manual && state.queue.length === 0) {
+            return false;
+        }
 
         // Check that at least one recipe's output slot has space
         const building = gameState.getEntityOrThrow(targetId, 'workplace canWork');
         const recipeSet = getRecipeSet(building.subType as BuildingType);
-        if (!recipeSet) return inventoryManager.canStoreOutput(targetId);
+        if (!recipeSet) {
+            return inventoryManager.canStoreOutput(targetId);
+        }
         return recipeSet.recipes.some(r => inventoryManager.canStoreOutput(targetId, r));
     }
 
@@ -66,18 +72,26 @@ export function createWorkplaceHandler(
         shouldWaitForWork: true,
 
         findTarget: (_x: number, _y: number, settlerId?: number) => {
-            if (settlerId === undefined) return null;
+            if (settlerId === undefined) {
+                return null;
+            }
 
             // Use pre-assigned building (set by occupancy tracking in SettlerTaskSystem)
             const workplace = getAssignedBuilding(settlerId);
-            if (!workplace) return null;
+            if (!workplace) {
+                return null;
+            }
 
             return { entityId: workplace.id, x: workplace.x, y: workplace.y };
         },
 
         canWork: (targetId: number) => {
-            if (!inventoryManager.canStartProduction(targetId)) return false;
-            if (!canStoreAnyOutput(targetId)) return false;
+            if (!inventoryManager.canStartProduction(targetId)) {
+                return false;
+            }
+            if (!canStoreAnyOutput(targetId)) {
+                return false;
+            }
 
             // Mine buildings require ore in the surrounding mountain tiles
             const oreDataForCanWork = getOreVeinData?.();
@@ -86,7 +100,9 @@ export function createWorkplaceHandler(
                 const bt = building.subType as BuildingType;
                 if (isMineBuilding(bt)) {
                     const oreType = MINE_ORE_TYPE.get(bt);
-                    if (!oreType) return false;
+                    if (!oreType) {
+                        return false;
+                    }
                     return oreDataForCanWork.hasOreInRadius(building.x, building.y, MINE_SEARCH_RADIUS, oreType);
                 }
             }
@@ -189,7 +205,9 @@ export function createWaterHandler(
 
         findPosition: (x: number, y: number) => {
             return spiralSearch(x, y, terrain.width, terrain.height, (tx, ty) => {
-                if (Math.abs(tx - x) > WATER_SEARCH_RADIUS || Math.abs(ty - y) > WATER_SEARCH_RADIUS) return false;
+                if (Math.abs(tx - x) > WATER_SEARCH_RADIUS || Math.abs(ty - y) > WATER_SEARCH_RADIUS) {
+                    return false;
+                }
                 return isRiverTile(terrain.groundType[terrain.toIndex(tx, ty)]!);
             });
         },

@@ -106,18 +106,18 @@ function countCropStages(system: CropSystem) {
     for (const [, state] of system.getAllCropStates()) {
         total++;
         switch (state.stage) {
-        case CropStage.Growing:
-            growing++;
-            break;
-        case CropStage.Mature:
-            mature++;
-            break;
-        case CropStage.Harvesting:
-            harvesting++;
-            break;
-        case CropStage.Harvested:
-            harvested++;
-            break;
+            case CropStage.Growing:
+                growing++;
+                break;
+            case CropStage.Mature:
+                mature++;
+                break;
+            case CropStage.Harvesting:
+                harvesting++;
+                break;
+            case CropStage.Harvested:
+                harvested++;
+                break;
         }
     }
     return { total, growing, mature, harvesting, harvested };

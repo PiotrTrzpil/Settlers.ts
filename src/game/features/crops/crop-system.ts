@@ -68,7 +68,9 @@ const CROP_TYPE_CONFIGS: ReadonlyMap<MapObjectType, CropTypeConfig> = new Map([
 
 function getCropConfig(cropType: MapObjectType): CropTypeConfig {
     const config = CROP_TYPE_CONFIGS.get(cropType);
-    if (!config) throw new Error(`No config for crop type ${MapObjectType[cropType]} in CropSystem`);
+    if (!config) {
+        throw new Error(`No config for crop type ${MapObjectType[cropType]} in CropSystem`);
+    }
     return config;
 }
 
@@ -136,15 +138,15 @@ export class CropSystem extends GrowableSystem<CropState> implements Persistable
         const config = getCropConfig(state.cropType);
 
         switch (state.stage) {
-        case CropStage.Growing: {
-            const idx = Math.min(Math.floor(state.progress * config.growingCount), config.growingCount - 1);
-            return idx;
-        }
-        case CropStage.Mature:
-        case CropStage.Harvesting:
-            return config.growingCount;
-        case CropStage.Harvested:
-            return config.growingCount + 1;
+            case CropStage.Growing: {
+                const idx = Math.min(Math.floor(state.progress * config.growingCount), config.growingCount - 1);
+                return idx;
+            }
+            case CropStage.Mature:
+            case CropStage.Harvesting:
+                return config.growingCount;
+            case CropStage.Harvested:
+                return config.growingCount + 1;
         }
     }
 
@@ -174,7 +176,9 @@ export class CropSystem extends GrowableSystem<CropState> implements Persistable
 
         if (state.stage === CropStage.Harvested) {
             state.decayTimer -= dt;
-            if (state.decayTimer <= 0) return 'remove';
+            if (state.decayTimer <= 0) {
+                return 'remove';
+            }
         }
 
         return 'keep';
@@ -206,7 +210,9 @@ export class CropSystem extends GrowableSystem<CropState> implements Persistable
 
     startHarvesting(entityId: number): boolean {
         const state = this.states.get(entityId);
-        if (!state || state.stage !== CropStage.Mature) return false;
+        if (!state || state.stage !== CropStage.Mature) {
+            return false;
+        }
 
         state.stage = CropStage.Harvesting;
         state.progress = 0;
@@ -220,7 +226,9 @@ export class CropSystem extends GrowableSystem<CropState> implements Persistable
      */
     updateHarvesting(entityId: number, progress: number): boolean {
         const state = this.states.get(entityId);
-        if (!state || state.stage !== CropStage.Harvesting) return false;
+        if (!state || state.stage !== CropStage.Harvesting) {
+            return false;
+        }
 
         state.progress = Math.min(1, progress);
 

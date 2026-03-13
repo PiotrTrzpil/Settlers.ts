@@ -218,7 +218,9 @@ export function getBuildingSpriteMap(race: Race): Partial<Record<BuildingType, B
 
     for (const [typeStr, jobIndex] of Object.entries(BUILDING_JOB_INDICES)) {
         const buildingType = Number(typeStr) as BuildingType;
-        if (!isBuildingAvailableForRace(buildingType, race)) continue;
+        if (!isBuildingAvailableForRace(buildingType, race)) {
+            continue;
+        }
         result[buildingType] = {
             file: fileNum,
             index: jobIndex,
@@ -625,7 +627,9 @@ export class SpriteMetadataRegistry {
     public getLayersForBuildings(types: Set<number>, race: number): Set<number> {
         const layers = new Set<number>();
         const raceMap = this.buildings.getRaceMap().get(race);
-        if (!raceMap) return layers;
+        if (!raceMap) {
+            return layers;
+        }
         for (const [type, sprites] of raceMap) {
             if (types.has(type) && sprites.completed) {
                 layers.add(sprites.completed.atlasRegion.layer);
@@ -640,11 +644,15 @@ export class SpriteMetadataRegistry {
     public getLayersForUnits(types: Set<number>, race: number): Set<number> {
         const layers = new Set<number>();
         const raceMap = this.units.getRaceMap().get(race);
-        if (!raceMap) return layers;
+        if (!raceMap) {
+            return layers;
+        }
         for (const [type, dirMap] of raceMap) {
             if (types.has(type)) {
                 const dir0 = dirMap.get(0);
-                if (dir0) layers.add(dir0.atlasRegion.layer);
+                if (dir0) {
+                    layers.add(dir0.atlasRegion.layer);
+                }
             }
         }
         return layers;
@@ -699,7 +707,9 @@ export class SpriteMetadataRegistry {
                 registry.animated.setByRaceEntry(race, entityType, subTypeMap);
             }
         }
-        for (const race of result.loadedRaces) registry._loadedRaces.add(race);
+        for (const race of result.loadedRaces) {
+            registry._loadedRaces.add(race);
+        }
 
         return registry;
     }

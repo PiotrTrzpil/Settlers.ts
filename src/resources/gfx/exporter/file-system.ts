@@ -136,7 +136,9 @@ export class NodeFileSystem implements IFileReader, IFileWriter {
 
     dirname(path: string): string {
         const lastSlash = path.lastIndexOf('/');
-        if (lastSlash <= 0) return '.';
+        if (lastSlash <= 0) {
+            return '.';
+        }
         return path.substring(0, lastSlash);
     }
 
@@ -303,7 +305,9 @@ export class BrowserFileSystem implements IFileReader, IFileWriter {
     // eslint-disable-next-line sonarjs/no-identical-functions -- same path utility shared by multiple filesystem backend classes
     dirname(path: string): string {
         const lastSlash = path.lastIndexOf('/');
-        if (lastSlash <= 0) return '.';
+        if (lastSlash <= 0) {
+            return '.';
+        }
         return path.substring(0, lastSlash);
     }
 
@@ -398,7 +402,9 @@ export class MemoryFileSystem implements IFileReader, IFileWriter {
     // eslint-disable-next-line sonarjs/no-identical-functions -- same path utility shared by multiple filesystem backend classes
     dirname(path: string): string {
         const lastSlash = path.lastIndexOf('/');
-        if (lastSlash <= 0) return '.';
+        if (lastSlash <= 0) {
+            return '.';
+        }
         return path.substring(0, lastSlash);
     }
 

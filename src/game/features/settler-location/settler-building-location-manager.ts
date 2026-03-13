@@ -30,7 +30,7 @@ import {
 const log = createLogger('SettlerBuildingLocationManager');
 
 export class SettlerBuildingLocationManager
-implements ISettlerBuildingLocationManager, Persistable<SerializedSettlerLocations>
+    implements ISettlerBuildingLocationManager, Persistable<SerializedSettlerLocations>
 {
     readonly persistKey = 'settler-building-locations' as const;
 
@@ -74,7 +74,9 @@ implements ISettlerBuildingLocationManager, Persistable<SerializedSettlerLocatio
      */
     cancelApproach(settlerId: number): void {
         const location = this.locationMap.get(settlerId);
-        if (!location) return; // no-op — idempotent
+        if (!location) {
+            return;
+        } // no-op — idempotent
         if (location.status === SettlerBuildingStatus.Inside) {
             throw new Error(
                 `SettlerBuildingLocationManager.cancelApproach: settler ${settlerId} is Inside building ` +
@@ -168,7 +170,9 @@ implements ISettlerBuildingLocationManager, Persistable<SerializedSettlerLocatio
     /** Returns true if settler is confirmed inside a building (hidden). If buildingId is given, also checks it matches. */
     isInside(settlerId: number, buildingId?: number): boolean {
         const location = this.locationMap.get(settlerId);
-        if (location?.status !== SettlerBuildingStatus.Inside) return false;
+        if (location?.status !== SettlerBuildingStatus.Inside) {
+            return false;
+        }
         return buildingId === undefined || location.buildingId === buildingId;
     }
 
@@ -245,7 +249,9 @@ implements ISettlerBuildingLocationManager, Persistable<SerializedSettlerLocatio
             }
             // Approaching: entity stays visible; feature will re-issue movement on its own onTerrainReady
         }
-        if (skipped > 0) log.debug(`Skipped ${skipped} stale settler location entries`);
+        if (skipped > 0) {
+            log.debug(`Skipped ${skipped} stale settler location entries`);
+        }
         log.debug(`Deserialized: ${this.locationMap.size} settler location entries`);
     }
 
@@ -258,7 +264,9 @@ implements ISettlerBuildingLocationManager, Persistable<SerializedSettlerLocatio
         const approachingSettlers: number[] = [];
 
         for (const [settlerId, location] of this.locationMap) {
-            if (location.buildingId !== buildingId) continue;
+            if (location.buildingId !== buildingId) {
+                continue;
+            }
             if (location.status === SettlerBuildingStatus.Inside) {
                 insideSettlers.push(settlerId);
             } else {

@@ -95,7 +95,9 @@ const props = defineProps<{
 
 // Player tabs — derive available players from game.playerRaces
 const playerIds = computed(() => {
-    if (!props.game) return [0];
+    if (!props.game) {
+        return [0];
+    }
     return [...props.game.playerRaces.keys()].sort((a, b) => a - b);
 });
 
@@ -133,7 +135,9 @@ const displayedDemands = computed(() => {
     return [...state.value.demands]
         .sort((a, b) => {
             const pDiff = (priorityOrder[a.priority] ?? 1) - (priorityOrder[b.priority] ?? 1);
-            if (pDiff !== 0) return pDiff;
+            if (pDiff !== 0) {
+                return pDiff;
+            }
             return b.age - a.age;
         })
         .slice(0, 15);

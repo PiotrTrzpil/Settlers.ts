@@ -41,19 +41,29 @@ export class TickScheduler implements TickSystem {
 
     /** Cancel a pending callback. No-op if already fired or invalid handle. */
     cancel(handle: ScheduleHandle): void {
-        if (handle === NO_HANDLE) return;
+        if (handle === NO_HANDLE) {
+            return;
+        }
         this.cancelled.add(handle);
     }
 
     /** Returns true if the handle refers to a still-pending callback. */
     isPending(handle: ScheduleHandle): boolean {
-        if (handle === NO_HANDLE) return false;
-        if (this.cancelled.has(handle)) return false;
+        if (handle === NO_HANDLE) {
+            return false;
+        }
+        if (this.cancelled.has(handle)) {
+            return false;
+        }
         // Search for the handle in future buckets
         for (const [tick, bucket] of this.queue) {
-            if (tick <= this._currentTick) continue;
+            if (tick <= this._currentTick) {
+                continue;
+            }
             for (const entry of bucket) {
-                if (entry.handle === handle) return true;
+                if (entry.handle === handle) {
+                    return true;
+                }
             }
         }
         return false;
@@ -68,7 +78,9 @@ export class TickScheduler implements TickSystem {
     tick(_dt: number): void {
         this._currentTick++;
         const bucket = this.queue.get(this._currentTick);
-        if (!bucket) return;
+        if (!bucket) {
+            return;
+        }
         this.queue.delete(this._currentTick);
 
         for (const entry of bucket) {

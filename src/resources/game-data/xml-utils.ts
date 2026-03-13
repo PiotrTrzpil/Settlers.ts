@@ -12,7 +12,9 @@ export function getChildText(parent: Element, tagName: string): string {
 /** Get text content as number, with default value */
 export function getChildNumber(parent: Element, tagName: string, defaultValue = 0): number {
     const text = getChildText(parent, tagName);
-    if (!text) return defaultValue;
+    if (!text) {
+        return defaultValue;
+    }
     const num = parseInt(text, 10);
     return isNaN(num) ? defaultValue : num;
 }
@@ -20,14 +22,18 @@ export function getChildNumber(parent: Element, tagName: string, defaultValue = 
 /** Get text content as boolean */
 export function getChildBool(parent: Element, tagName: string, defaultValue = false): boolean {
     const text = getChildText(parent, tagName).toLowerCase();
-    if (!text) return defaultValue;
+    if (!text) {
+        return defaultValue;
+    }
     return text === 'true' || text === '1';
 }
 
 /** Get all values from a container element with <value> children */
 export function getValueArray(parent: Element, containerTag: string): number[] {
     const container = parent.getElementsByTagName(containerTag)[0];
-    if (!container) return [];
+    if (!container) {
+        return [];
+    }
 
     const values: number[] = [];
     const valueElements = container.getElementsByTagName('value');
@@ -46,7 +52,9 @@ export function getTextArray(parent: Element, tagName: string): string[] {
     for (let i = 0; i < elements.length; i++) {
         // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- textContent may be null at runtime
         const text = elements[i]!.textContent?.trim();
-        if (text) result.push(text);
+        if (text) {
+            result.push(text);
+        }
     }
     return result;
 }

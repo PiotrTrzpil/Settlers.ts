@@ -125,7 +125,9 @@ export class PileRegistry {
      */
     deregister(entityId: number): void {
         const s = this.reverse.get(entityId);
-        if (!s) return;
+        if (!s) {
+            return;
+        }
 
         this.reverse.delete(entityId);
         this.forward.delete(s);
@@ -164,7 +166,9 @@ export class PileRegistry {
     /** Reverse lookup: entity id → slot key */
     getKey(entityId: number): PileSlotKey | undefined {
         const s = this.reverse.get(entityId);
-        if (!s) return undefined;
+        if (!s) {
+            return undefined;
+        }
         return deserializeKey(s);
     }
 
@@ -222,10 +226,14 @@ export class PileRegistry {
         const pileIndices = new Map<string, number>();
 
         for (const entity of entities) {
-            if (entity.type !== EntityType.StackedPile) continue;
+            if (entity.type !== EntityType.StackedPile) {
+                continue;
+            }
 
             const kind = resources.getKind(entity.id);
-            if (!isLinkedPile(kind)) continue;
+            if (!isLinkedPile(kind)) {
+                continue;
+            }
 
             const counterKey = `${kind.buildingId}:${entity.subType}:${kind.kind}`;
             const idx = pileIndices.get(counterKey) ?? 0;

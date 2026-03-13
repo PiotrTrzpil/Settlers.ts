@@ -69,7 +69,9 @@ export class EconomyPlanner {
     /** Whether there is a next build step and a valid position can be found for it. */
     canPlaceNext(): boolean {
         const step = this.currentStep();
-        if (!step) return false;
+        if (!step) {
+            return false;
+        }
 
         // Use cached position if it matches the current step
         if (this.cachedPosition && this.cachedPosition.buildingType === step.buildingType) {
@@ -101,7 +103,9 @@ export class EconomyPlanner {
 
         // Use cached position — canPlaceNext() must have been called first
         const pos = this.cachedPosition;
-        if (!pos || pos.buildingType !== step.buildingType) return;
+        if (!pos || pos.buildingType !== step.buildingType) {
+            return;
+        }
 
         this.cachedPosition = null;
 
@@ -114,7 +118,9 @@ export class EconomyPlanner {
             race: this.race,
         });
 
-        if (!result.success) return;
+        if (!result.success) {
+            return;
+        }
 
         this.placedForCurrentStep++;
         if (this.placedForCurrentStep >= step.count) {

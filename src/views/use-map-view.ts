@@ -259,7 +259,9 @@ async function loadMap(
 
         if (isLuaEnabled()) {
             void result.game.loadScript(file.name).then(scriptResult => {
-                if (scriptResult.success) log.info(`Script loaded: ${scriptResult.scriptPath}`);
+                if (scriptResult.success) {
+                    log.info(`Script loaded: ${scriptResult.scriptPath}`);
+                }
             });
         }
 
@@ -275,7 +277,9 @@ function createModeToggler(getGame: () => Game | null, getInputManager: () => In
         setPlaceMode(buildingType: number, race: number): void {
             const game = getGame();
             const inputManager = getInputManager();
-            if (!game || !inputManager) return;
+            if (!game || !inputManager) {
+                return;
+            }
 
             if (
                 game.viewState.state.mode === 'place_building' &&
@@ -294,7 +298,9 @@ function createModeToggler(getGame: () => Game | null, getInputManager: () => In
         setPlacePileMode(resourceType: EMaterialType, amount: number): void {
             const game = getGame();
             const inputManager = getInputManager();
-            if (!game || !inputManager) return;
+            if (!game || !inputManager) {
+                return;
+            }
 
             if (game.viewState.state.mode === 'place_pile' && game.viewState.state.placePileType === resourceType) {
                 inputManager.switchMode('select');
@@ -306,7 +312,9 @@ function createModeToggler(getGame: () => Game | null, getInputManager: () => In
         setPlaceUnitMode(unitType: UnitType, race: Race): void {
             const game = getGame();
             const inputManager = getInputManager();
-            if (!game || !inputManager) return;
+            if (!game || !inputManager) {
+                return;
+            }
 
             const vs = game.viewState.state;
             if (vs.mode === 'place_unit' && vs.placeUnitType === unitType) {
@@ -327,21 +335,30 @@ function createGameActions(getGame: () => Game | null, game: ShallowRef<Game | n
     return {
         removeSelected(): void {
             const g = getGame();
-            if (!g || g.state.selection.selectedEntityId === null) return;
+            if (!g || g.state.selection.selectedEntityId === null) {
+                return;
+            }
             g.execute({ type: 'remove_entity', entityId: g.state.selection.selectedEntityId });
             triggerRef(game);
         },
 
         togglePause(): void {
             const g = getGame();
-            if (!g) return;
-            if (g.isRunning) g.stop();
-            else g.start();
+            if (!g) {
+                return;
+            }
+            if (g.isRunning) {
+                g.stop();
+            } else {
+                g.start();
+            }
         },
 
         resetGameState(): void {
             const g = getGame();
-            if (!g) return;
+            if (!g) {
+                return;
+            }
 
             try {
                 clearSavedGameState();
@@ -405,7 +422,9 @@ function setupIconLoading(
 function setupLifecycle(game: ShallowRef<Game | null>, initializeMap: () => void): void {
     onMounted(() => initializeMap());
     onBeforeUnmount(() => {
-        if (!game.value) return;
+        if (!game.value) {
+            return;
+        }
         gameStatePersistence.stop();
         game.value.destroy();
         game.value = null;
@@ -457,18 +476,24 @@ export function useMapView(
     };
 
     function initializeMap(): void {
-        if (mapLoadState.initialized) return;
+        if (mapLoadState.initialized) {
+            return;
+        }
         mapLoadState.initialized = true;
-        if (isTestMap.value) void loadMap(mapLoadCtx, null, { isTestMap: true });
-        else if (isEmptyMap.value) void loadMap(mapLoadCtx, null, { isEmptyMap: true });
-        else if (mapFileParam.value) {
+        if (isTestMap.value) {
+            void loadMap(mapLoadCtx, null, { isTestMap: true });
+        } else if (isEmptyMap.value) {
+            void loadMap(mapLoadCtx, null, { isEmptyMap: true });
+        } else if (mapFileParam.value) {
             const mapPath = mapFileParam.value;
             const file: IFileSource = {
                 name: mapPath,
                 path: mapPath,
-                readBinary: async() => {
+                readBinary: async () => {
                     const resp = await fetch(`/Siedler4/Map/${mapPath}`);
-                    if (!resp.ok) throw new Error(`Failed to fetch map: ${resp.status} ${resp.statusText}`);
+                    if (!resp.ok) {
+                        throw new Error(`Failed to fetch map: ${resp.status} ${resp.statusText}`);
+                    }
                     const buf = await resp.arrayBuffer();
                     return new BinaryReader(buf, 0, null, mapPath);
                 },
@@ -478,7 +503,9 @@ export function useMapView(
     }
 
     function onFileSelect(file: IFileSource): void {
-        if (isTestMap.value || isEmptyMap.value) return;
+        if (isTestMap.value || isEmptyMap.value) {
+            return;
+        }
         void loadMap(mapLoadCtx, file);
     }
 
@@ -489,7 +516,9 @@ export function useMapView(
     const showDebug = computed({
         get: () => game.value?.settings.state.showDebugGrid ?? false,
         set: (value: boolean) => {
-            if (game.value) game.value.settings.state.showDebugGrid = value;
+            if (game.value) {
+                game.value.settings.state.showDebugGrid = value;
+            }
         },
     });
 
@@ -553,7 +582,9 @@ export function useMapView(
 
     const layerCounts = computed<LayerCounts>(() => {
         const vs = game.value?.viewState.state;
-        if (!vs) return EMPTY_COUNTS;
+        if (!vs) {
+            return EMPTY_COUNTS;
+        }
         return {
             buildings: vs.buildingCount,
             units: vs.unitCount,

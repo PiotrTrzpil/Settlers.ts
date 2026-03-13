@@ -105,11 +105,15 @@ export class RequestMatcher {
 
         const results: RequestMatchResult[] = [];
         for (const match of allMatches) {
-            if (results.length >= maxCandidates) break;
+            if (results.length >= maxCandidates) {
+                break;
+            }
 
             if (this.matchFilter) {
                 const sourceEntity = this.gameState.getEntityOrThrow(match.sourceBuilding, 'match filter source');
-                if (!this.matchFilter(sourceEntity, destBuilding, playerId)) continue;
+                if (!this.matchFilter(sourceEntity, destBuilding, playerId)) {
+                    continue;
+                }
             }
 
             results.push({ ...match, playerId });

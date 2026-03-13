@@ -77,6 +77,9 @@ export default tseslint.config(
             'vue/multi-word-component-names': 'off',
             'no-void': 'off',
 
+            // Require braces on all control flow (no single-line if/else/for/while)
+            curly: ['error', 'all'],
+
             // Rules moved to oxlint (much faster) — keep disabled here to avoid double-reporting
             semi: 'off',
             'space-before-function-paren': 'off',

@@ -29,23 +29,35 @@ export function assignInitialBuildingWorkers(
 ): void {
     let assigned = 0;
     for (const entity of gameState.entities) {
-        if (entity.type !== EntityType.Unit) continue;
+        if (entity.type !== EntityType.Unit) {
+            continue;
+        }
 
         const unitType = entity.subType as UnitType;
         const workplaceTypes = getWorkerBuildingTypes(entity.race, unitType);
-        if (!workplaceTypes) continue;
+        if (!workplaceTypes) {
+            continue;
+        }
 
         // Check if this unit is on a building footprint tile (ground layer has buildings)
         const buildingAtTile = gameState.getGroundEntityAt(entity.x, entity.y);
-        if (!buildingAtTile || buildingAtTile.type !== EntityType.Building) continue;
-        if (buildingAtTile.player !== entity.player) continue;
+        if (!buildingAtTile || buildingAtTile.type !== EntityType.Building) {
+            continue;
+        }
+        if (buildingAtTile.player !== entity.player) {
+            continue;
+        }
 
         // Check if building type matches the unit's workplace types
-        if (!workplaceTypes.has(buildingAtTile.subType as BuildingType)) continue;
+        if (!workplaceTypes.has(buildingAtTile.subType as BuildingType)) {
+            continue;
+        }
 
         // Check occupancy limit
         const currentOccupants = buildingOccupants.get(buildingAtTile.id) ?? 0;
-        if (currentOccupants >= getBuildingMaxOccupants(buildingAtTile.subType as BuildingType)) continue;
+        if (currentOccupants >= getBuildingMaxOccupants(buildingAtTile.subType as BuildingType)) {
+            continue;
+        }
 
         // Move worker to the building's door position before entering.
         // Map data places workers at the building anchor, which is deep inside the

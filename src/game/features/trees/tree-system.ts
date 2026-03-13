@@ -119,29 +119,37 @@ export class TreeSystem extends GrowableSystem<TreeState> implements Persistable
     protected getSpriteOffset(state: TreeState): number {
         const base = state.variant * TREE_JOBS_PER_TYPE;
         switch (state.stage) {
-        case TreeStage.Growing:
-            if (state.progress < 0.33) return base + TREE_OFFSET.SAPLING;
-            if (state.progress < 0.66) return base + TREE_OFFSET.SMALL;
-            return base + TREE_OFFSET.MEDIUM;
+            case TreeStage.Growing:
+                if (state.progress < 0.33) {
+                    return base + TREE_OFFSET.SAPLING;
+                }
+                if (state.progress < 0.66) {
+                    return base + TREE_OFFSET.SMALL;
+                }
+                return base + TREE_OFFSET.MEDIUM;
 
-        case TreeStage.Normal:
-            return base + TREE_OFFSET.NORMAL;
+            case TreeStage.Normal:
+                return base + TREE_OFFSET.NORMAL;
 
-        case TreeStage.Cutting:
-            // Phase 1: Tree still standing while being chopped
-            if (state.progress < 0.3) return base + TREE_OFFSET.NORMAL;
-            // Phase 2: Tree falls
-            if (state.progress < 0.4) return base + TREE_OFFSET.FALLING;
-            // Phase 3: Cutting the fallen log (5 phases across 0.4-0.9)
-            if (state.progress < 0.9) {
-                const phase = Math.floor(((state.progress - 0.4) / 0.5) * 5);
-                return base + TREE_OFFSET.CUTTING_1 + Math.min(4, phase);
-            }
-            // Phase 4: Log picked up - canopy disappearing
-            return base + TREE_OFFSET.CANOPY_DISAPPEARING;
+            case TreeStage.Cutting:
+                // Phase 1: Tree still standing while being chopped
+                if (state.progress < 0.3) {
+                    return base + TREE_OFFSET.NORMAL;
+                }
+                // Phase 2: Tree falls
+                if (state.progress < 0.4) {
+                    return base + TREE_OFFSET.FALLING;
+                }
+                // Phase 3: Cutting the fallen log (5 phases across 0.4-0.9)
+                if (state.progress < 0.9) {
+                    const phase = Math.floor(((state.progress - 0.4) / 0.5) * 5);
+                    return base + TREE_OFFSET.CUTTING_1 + Math.min(4, phase);
+                }
+                // Phase 4: Log picked up - canopy disappearing
+                return base + TREE_OFFSET.CANOPY_DISAPPEARING;
 
-        case TreeStage.Cut:
-            return base + TREE_OFFSET.CANOPY_DISAPPEARING;
+            case TreeStage.Cut:
+                return base + TREE_OFFSET.CANOPY_DISAPPEARING;
         }
     }
 
@@ -176,7 +184,9 @@ export class TreeSystem extends GrowableSystem<TreeState> implements Persistable
         // Decaying stumps
         if (state.stage === TreeStage.Cut) {
             state.stumpTimer -= dt;
-            if (state.stumpTimer <= 0) return 'remove';
+            if (state.stumpTimer <= 0) {
+                return 'remove';
+            }
         }
 
         return 'keep';
@@ -223,7 +233,9 @@ export class TreeSystem extends GrowableSystem<TreeState> implements Persistable
      */
     startCutting(entityId: number): boolean {
         const state = this.states.get(entityId);
-        if (!state || state.stage !== TreeStage.Normal) return false;
+        if (!state || state.stage !== TreeStage.Normal) {
+            return false;
+        }
 
         state.stage = TreeStage.Cutting;
         state.progress = 0;
@@ -240,7 +252,9 @@ export class TreeSystem extends GrowableSystem<TreeState> implements Persistable
      */
     updateCutting(entityId: number, progress: number): boolean {
         const state = this.states.get(entityId);
-        if (!state || state.stage !== TreeStage.Cutting) return false;
+        if (!state || state.stage !== TreeStage.Cutting) {
+            return false;
+        }
 
         state.progress = Math.min(1, progress);
 

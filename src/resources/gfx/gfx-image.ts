@@ -56,7 +56,9 @@ export class GfxImage implements IGfxImage {
 
             if (value <= 1) {
                 // Bounds check before reading count byte
-                if (pos >= bufferLength) break;
+                if (pos >= bufferLength) {
+                    break;
+                }
                 const count = buffer[pos]!;
                 pos++;
 
@@ -167,7 +169,9 @@ export class GfxImage implements IGfxImage {
             while (j < length && pos < bufferLength) {
                 const value = buffer[pos++]!;
                 if (value <= 1) {
-                    if (pos >= bufferLength) break;
+                    if (pos >= bufferLength) {
+                        break;
+                    }
                     const count = buffer[pos++]!;
                     for (let i = 0; i < count && j < length; i++) {
                         indices[j++] = value; // 0 = transparent, 1 = shadow

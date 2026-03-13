@@ -17,8 +17,8 @@
     "test:e2e:report": "playwright show-report",
     "lint": "oxlint --type-aware src tests & vue-tsc --noEmit & eslint --cache --cache-location node_modules/.cache/eslint/ src tests; wait",
     "lint:fix": "eslint src tests --fix",
-    "format": "prettier --write \"src/**/*.{ts,vue}\"",
-    "format:check": "prettier --check \"src/**/*.{ts,vue}\"",
+    "format": "oxfmt --write \"src/**/*.{ts,vue}\"",
+    "format:check": "oxfmt --check \"src/**/*.{ts,vue}\"",
     "cli": "tsx scripts/cli.ts",
     "timeline": "node scripts/timeline.mjs",
     "timeline:record": "tsx scripts/timeline-receiver.ts",
@@ -47,7 +47,7 @@
   },
   "lint-staged": {
     "*.{ts,vue}": [
-      "prettier --write",
+      "oxfmt --write",
       "eslint --fix"
     ]
   },
@@ -80,9 +80,9 @@
     "knip": "^5.84.1",
     "lint-staged": "^16.2.7",
     "madge": "^8.0.0",
+    "oxfmt": "^0.40.0",
     "oxlint": "^1.54.0",
     "oxlint-tsgolint": "^0.16.0",
-    "prettier": "^3.8.1",
     "tsx": "^4.21.0",
     "type-coverage": "^2.29.7",
     "typescript": "~5.9.3",

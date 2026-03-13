@@ -81,8 +81,12 @@ export class OptimizedDepthSorter {
      */
     public sortByDepth(entities: Entity[], ctx: OptimizedSortContext): void {
         const count = entities.length;
-        if (count === 0) return;
-        if (count === 1) return; // Already sorted
+        if (count === 0) {
+            return;
+        }
+        if (count === 1) {
+            return;
+        } // Already sorted
 
         // Ensure buffers are large enough
         this.ensureCapacity(count);
@@ -92,7 +96,9 @@ export class OptimizedDepthSorter {
             const entity = entities[i]!;
             // Visible entities MUST have cached world positions
             const worldPos = ctx.getWorldPos(entity);
-            if (!worldPos) throw new Error(`OptimizedDepthSorter: no cached world pos for visible entity ${entity.id}`);
+            if (!worldPos) {
+                throw new Error(`OptimizedDepthSorter: no cached world pos for visible entity ${entity.id}`);
+            }
             const spriteEntry = this.getSpriteEntry(entity, ctx.spriteManager);
             this.floatDepthKeys[i] = this.computeFloatDepthKey(entity, worldPos, spriteEntry, ctx);
             this.sortedIndices[i] = i;
@@ -177,7 +183,9 @@ export class OptimizedDepthSorter {
      * Ensure all buffers can hold the given count.
      */
     private ensureCapacity(count: number): void {
-        if (this.floatDepthKeys.length >= count) return;
+        if (this.floatDepthKeys.length >= count) {
+            return;
+        }
 
         // Grow by 2x to amortize allocation cost
         const newCapacity = Math.max(count, this.floatDepthKeys.length * 2);
@@ -191,18 +199,18 @@ export class OptimizedDepthSorter {
      */
     private getDepthFactor(entityType: EntityType): number {
         switch (entityType) {
-        case EntityType.Building:
-            return DEPTH_FACTOR_BUILDING;
-        case EntityType.MapObject:
-            return DEPTH_FACTOR_MAP_OBJECT;
-        case EntityType.Unit:
-            return DEPTH_FACTOR_UNIT;
-        case EntityType.StackedPile:
-            return DEPTH_FACTOR_PILE;
-        case EntityType.Decoration:
-            return DEPTH_FACTOR_BUILDING;
-        case EntityType.None:
-            return 1.0;
+            case EntityType.Building:
+                return DEPTH_FACTOR_BUILDING;
+            case EntityType.MapObject:
+                return DEPTH_FACTOR_MAP_OBJECT;
+            case EntityType.Unit:
+                return DEPTH_FACTOR_UNIT;
+            case EntityType.StackedPile:
+                return DEPTH_FACTOR_PILE;
+            case EntityType.Decoration:
+                return DEPTH_FACTOR_BUILDING;
+            case EntityType.None:
+                return 1.0;
         }
     }
 
@@ -210,20 +218,22 @@ export class OptimizedDepthSorter {
      * Get sprite entry for an entity.
      */
     private getSpriteEntry(entity: Entity, spriteManager: SpriteRenderManager | null): SpriteEntry | null {
-        if (!spriteManager) return null;
+        if (!spriteManager) {
+            return null;
+        }
 
         switch (entity.type) {
-        case EntityType.Building:
-            return spriteManager.getBuilding(entity.subType as BuildingType, entity.race);
-        case EntityType.MapObject:
-            return spriteManager.getMapObject(entity.subType as MapObjectType);
-        case EntityType.Unit:
-            return spriteManager.getUnit(entity.subType as UnitType, 0, entity.race);
-        case EntityType.StackedPile:
-            return spriteManager.getGoodSprite(entity.subType as EMaterialType);
-        case EntityType.Decoration:
-        case EntityType.None:
-            return null;
+            case EntityType.Building:
+                return spriteManager.getBuilding(entity.subType as BuildingType, entity.race);
+            case EntityType.MapObject:
+                return spriteManager.getMapObject(entity.subType as MapObjectType);
+            case EntityType.Unit:
+                return spriteManager.getUnit(entity.subType as UnitType, 0, entity.race);
+            case EntityType.StackedPile:
+                return spriteManager.getGoodSprite(entity.subType as EMaterialType);
+            case EntityType.Decoration:
+            case EntityType.None:
+                return null;
         }
     }
 }

@@ -154,7 +154,9 @@ export class RecruitSystem implements TickSystem {
      */
     dispatchRecruitment(unitType: UnitType, player: number, opts?: DispatchRecruitmentOpts): number | null {
         const candidate = this.findRecruitmentCandidate(unitType, player, opts);
-        if (!candidate) return null;
+        if (!candidate) {
+            return null;
+        }
 
         const toolMaterial = SPECIALIST_TOOL_MAP[unitType] ?? null;
 
@@ -180,7 +182,9 @@ export class RecruitSystem implements TickSystem {
         const existing = this.queue.get(unitType);
         if (existing) {
             existing.count += count;
-            if (near) existing.near = near;
+            if (near) {
+                existing.near = near;
+            }
         } else {
             this.queue.set(unitType, {
                 toolMaterial,
@@ -195,9 +199,13 @@ export class RecruitSystem implements TickSystem {
 
     dequeue(unitType: UnitType, count: number): void {
         const existing = this.queue.get(unitType);
-        if (!existing) return;
+        if (!existing) {
+            return;
+        }
         existing.count = Math.max(0, existing.count - count);
-        if (existing.count === 0) this.queue.delete(unitType);
+        if (existing.count === 0) {
+            this.queue.delete(unitType);
+        }
         log.debug(`Dequeued ${count}× ${UnitType[unitType]}`);
     }
 
@@ -245,7 +253,9 @@ export class RecruitSystem implements TickSystem {
 
             if (carrierId !== null) {
                 entry.count--;
-                if (entry.count === 0) this.queue.delete(unitType);
+                if (entry.count === 0) {
+                    this.queue.delete(unitType);
+                }
                 justDispatched.push(carrierId);
             }
         }
@@ -321,9 +331,13 @@ export class RecruitSystem implements TickSystem {
         player: number
     ): RecruitmentCandidate | null {
         const toolPile = this.toolSourceResolver.findNearestToolPile(toolMaterial, hint.x, hint.y, player);
-        if (!toolPile) return null;
+        if (!toolPile) {
+            return null;
+        }
         const carrierId = this.idleCarrierPool.findNearest(toolPile.x, toolPile.y, player);
-        if (carrierId === null) return null;
+        if (carrierId === null) {
+            return null;
+        }
         return { carrierId, toolPile };
     }
 
@@ -342,11 +356,17 @@ export class RecruitSystem implements TickSystem {
         const store = this.idleCarrierPool.carrierStore;
 
         for (const [id, , entity] of query(store, this.gameState.store)) {
-            if (entity.player !== player) continue;
-            if (!this.idleCarrierPool.isIdle(id)) continue;
+            if (entity.player !== player) {
+                continue;
+            }
+            if (!this.idleCarrierPool.isIdle(id)) {
+                continue;
+            }
 
             const toolPile = this.toolSourceResolver.findNearestToolPile(toolMaterial, entity.x, entity.y, player);
-            if (!toolPile) continue;
+            if (!toolPile) {
+                continue;
+            }
 
             const cost = tripCost(entity.x, entity.y, toolPile.x, toolPile.y, target);
             if (cost < bestCost) {

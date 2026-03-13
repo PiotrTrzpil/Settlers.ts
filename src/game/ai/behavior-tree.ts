@@ -24,7 +24,9 @@ export class Sequence<T> extends Node<T> {
     tick(entity: T, deltaMs: number): NodeStatus {
         for (const child of this.children) {
             const status = child.tick(entity, deltaMs);
-            if (status !== NodeStatus.SUCCESS) return status;
+            if (status !== NodeStatus.SUCCESS) {
+                return status;
+            }
         }
         return NodeStatus.SUCCESS;
     }
@@ -40,7 +42,9 @@ export class Selector<T> extends Node<T> {
     tick(entity: T, deltaMs: number): NodeStatus {
         for (const child of this.children) {
             const status = child.tick(entity, deltaMs);
-            if (status !== NodeStatus.FAILURE) return status;
+            if (status !== NodeStatus.FAILURE) {
+                return status;
+            }
         }
         return NodeStatus.FAILURE;
     }
@@ -67,25 +71,33 @@ export class Parallel<T> extends Node<T> {
         for (const child of this.children) {
             const status = child.tick(entity, deltaMs);
             switch (status) {
-            case NodeStatus.SUCCESS:
-                successCount++;
-                break;
-            case NodeStatus.FAILURE:
-                failureCount++;
-                break;
-            case NodeStatus.RUNNING:
-                hasRunning = true;
-                break;
+                case NodeStatus.SUCCESS:
+                    successCount++;
+                    break;
+                case NodeStatus.FAILURE:
+                    failureCount++;
+                    break;
+                case NodeStatus.RUNNING:
+                    hasRunning = true;
+                    break;
             }
         }
 
         if (this.requireAll) {
-            if (failureCount > 0) return NodeStatus.FAILURE;
-            if (hasRunning) return NodeStatus.RUNNING;
+            if (failureCount > 0) {
+                return NodeStatus.FAILURE;
+            }
+            if (hasRunning) {
+                return NodeStatus.RUNNING;
+            }
             return NodeStatus.SUCCESS;
         } else {
-            if (successCount > 0) return NodeStatus.SUCCESS;
-            if (hasRunning) return NodeStatus.RUNNING;
+            if (successCount > 0) {
+                return NodeStatus.SUCCESS;
+            }
+            if (hasRunning) {
+                return NodeStatus.RUNNING;
+            }
             return NodeStatus.FAILURE;
         }
     }
@@ -140,7 +152,9 @@ export class Guard<T> extends Node<T> {
     }
 
     tick(entity: T, deltaMs: number): NodeStatus {
-        if (!this.conditionFn(entity)) return NodeStatus.FAILURE;
+        if (!this.conditionFn(entity)) {
+            return NodeStatus.FAILURE;
+        }
         return this.child.tick(entity, deltaMs);
     }
 }
@@ -157,9 +171,13 @@ export class Repeat<T> extends Node<T> {
     }
 
     tick(entity: T, deltaMs: number): NodeStatus {
-        if (!this.conditionFn(entity)) return NodeStatus.SUCCESS;
+        if (!this.conditionFn(entity)) {
+            return NodeStatus.SUCCESS;
+        }
         const status = this.child.tick(entity, deltaMs);
-        if (status === NodeStatus.FAILURE) return NodeStatus.FAILURE;
+        if (status === NodeStatus.FAILURE) {
+            return NodeStatus.FAILURE;
+        }
         return NodeStatus.RUNNING;
     }
 }

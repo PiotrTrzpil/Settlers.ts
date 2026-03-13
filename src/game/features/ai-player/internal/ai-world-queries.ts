@@ -83,10 +83,15 @@ export function getPlayerBasePosition(state: GameState, player: number): { x: nu
     let bestPriority = -1;
     for (const b of buildings) {
         const bt = b.subType as BuildingType;
-        if (!TERRITORY_BUILDINGS.has(bt)) continue;
+        if (!TERRITORY_BUILDINGS.has(bt)) {
+            continue;
+        }
         let priority = 0;
-        if (bt === BuildingType.Castle) priority = 2;
-        else if (bt === BuildingType.GuardTowerBig) priority = 1;
+        if (bt === BuildingType.Castle) {
+            priority = 2;
+        } else if (bt === BuildingType.GuardTowerBig) {
+            priority = 1;
+        }
         if (priority > bestPriority) {
             bestPriority = priority;
             best = b;
@@ -115,9 +120,15 @@ export function findNearestEnemyBase(
     const sorted = [...allBuildingIds].sort((a, b) => a - b);
     for (const id of sorted) {
         const entity = state.getEntity(id);
-        if (!entity) continue;
-        if (entity.player === player) continue;
-        if (!TERRITORY_BUILDINGS.has(entity.subType as BuildingType)) continue;
+        if (!entity) {
+            continue;
+        }
+        if (entity.player === player) {
+            continue;
+        }
+        if (!TERRITORY_BUILDINGS.has(entity.subType as BuildingType)) {
+            continue;
+        }
 
         const dx = entity.x - fromX;
         const dy = entity.y - fromY;

@@ -73,7 +73,9 @@ export class RenderPassRegistry {
         }));
 
         this.slots.sort((a, b) => {
-            if (a.layer !== b.layer) return a.layer - b.layer;
+            if (a.layer !== b.layer) {
+                return a.layer - b.layer;
+            }
             return a.priority - b.priority;
         });
 

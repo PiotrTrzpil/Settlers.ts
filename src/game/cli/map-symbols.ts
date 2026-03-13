@@ -97,12 +97,22 @@ const SYMBOL_LEGEND: Record<string, string> = {
 
 function unitSymbol(subType: number): string {
     const ut = subType as UnitType;
-    if (ut === UnitType.Carrier) return 'c';
-    if (ut === UnitType.Builder) return 'b';
-    if (ut === UnitType.Donkey) return 'd';
-    if (ut === UnitType.SquadLeader) return '@';
+    if (ut === UnitType.Carrier) {
+        return 'c';
+    }
+    if (ut === UnitType.Builder) {
+        return 'b';
+    }
+    if (ut === UnitType.Donkey) {
+        return 'd';
+    }
+    if (ut === UnitType.SquadLeader) {
+        return '@';
+    }
     const base = getBaseUnitType(ut);
-    if (RANGED_BASE_TYPES.has(base)) return '>';
+    if (RANGED_BASE_TYPES.has(base)) {
+        return '>';
+    }
     // Swordsman, AxeWarrior, Medic, and other military → melee symbol
     if (
         base === UnitType.Swordsman1 ||
@@ -150,20 +160,38 @@ const MAP_OBJECT_RANGES: readonly [number, number, string][] = [
 
 function mapObjectSymbol(subType: number): string {
     for (const [lo, hi, sym] of MAP_OBJECT_RANGES) {
-        if (subType >= lo && subType <= hi) return sym;
+        if (subType >= lo && subType <= hi) {
+            return sym;
+        }
     }
     return '.';
 }
 
 function terrainSymbol(groundType: number): string {
-    if (groundType <= 8) return '~';
-    if (groundType === 32) return '^';
-    if (groundType === 48) return ',';
-    if (groundType >= 64 && groundType <= 65) return '_';
-    if (groundType >= 80 && groundType <= 81) return '%';
-    if (groundType >= 96 && groundType <= 99) return '~';
-    if (groundType >= 128 && groundType <= 129) return '*';
-    if (groundType >= 144 && groundType <= 145) return '#';
+    if (groundType <= 8) {
+        return '~';
+    }
+    if (groundType === 32) {
+        return '^';
+    }
+    if (groundType === 48) {
+        return ',';
+    }
+    if (groundType >= 64 && groundType <= 65) {
+        return '_';
+    }
+    if (groundType >= 80 && groundType <= 81) {
+        return '%';
+    }
+    if (groundType >= 96 && groundType <= 99) {
+        return '~';
+    }
+    if (groundType >= 128 && groundType <= 129) {
+        return '*';
+    }
+    if (groundType >= 144 && groundType <= 145) {
+        return '#';
+    }
     return '.';
 }
 
@@ -225,14 +253,18 @@ export function resolveViewport(
 export function buildLegend(usedSymbols: Set<string>): string {
     const parts: string[] = [];
     for (const [sym, desc] of Object.entries(SYMBOL_LEGEND)) {
-        if (usedSymbols.has(sym)) parts.push(`${sym}=${desc}`);
+        if (usedSymbols.has(sym)) {
+            parts.push(`${sym}=${desc}`);
+        }
     }
     return parts.join(' ');
 }
 
 /** Parse `--layer terrain,buildings,...` flag into a MapLayerFilter. Returns ALL_LAYERS if undefined. */
 export function parseLayers(layerArg: string | undefined): MapLayerFilter {
-    if (!layerArg) return { ...ALL_LAYERS };
+    if (!layerArg) {
+        return { ...ALL_LAYERS };
+    }
     const filter: MapLayerFilter = {
         terrain: false,
         buildings: false,

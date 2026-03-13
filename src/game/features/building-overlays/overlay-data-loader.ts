@@ -38,7 +38,9 @@ const FLAG_SPRITE_REF: OverlaySpriteRef = { gfxFile: 0, jobIndex: 0 };
  */
 function resolveOverlaySpriteRef(jobName: string, gfxFile: number, parentJobIndex?: number): OverlaySpriteRef | null {
     const resolved = resolveOverlayJilEntry(BUILDING_OVERLAY_JIL_INDICES[jobName] ?? null, parentJobIndex);
-    if (!resolved) return null;
+    if (!resolved) {
+        return null;
+    }
     return { gfxFile, jobIndex: resolved.jobIndex, directionIndex: resolved.directionIndex || undefined };
 }
 
@@ -56,12 +58,12 @@ function deriveOverlayKey(job: string, buildingXmlId: string): string {
 
 function patchTypeToCondition(type: string): OverlayCondition {
     switch (type) {
-    case 'EVENT':
-        return OverlayCondition.Working;
-    case 'PERMANENT':
-    case 'TIMED':
-    default:
-        return OverlayCondition.Always;
+        case 'EVENT':
+            return OverlayCondition.Working;
+        case 'PERMANENT':
+        case 'TIMED':
+        default:
+            return OverlayCondition.Always;
     }
 }
 
@@ -94,7 +96,9 @@ function patchToDef(
     parentJobIndex?: number
 ): BuildingOverlayDef | null {
     const spriteRef = resolveOverlaySpriteRef(patch.job, gfxFile, parentJobIndex);
-    if (!spriteRef) return null;
+    if (!spriteRef) {
+        return null;
+    }
 
     const key = deriveOverlayKey(patch.job, buildingXmlId);
     const isEvent = patch.type === 'EVENT';
@@ -127,9 +131,13 @@ function convertPatches(
     const usedKeys = new Set<string>();
 
     for (const patch of patches) {
-        if (!patch.job) continue;
+        if (!patch.job) {
+            continue;
+        }
         let def = patchToDef(patch, buildingXmlId, 0, gfxFile, parentJobIndex);
-        if (!def) continue; // JIL index not yet mapped — skip until filled in
+        if (!def) {
+            continue;
+        } // JIL index not yet mapped — skip until filled in
         // Ensure unique key within this building
         if (usedKeys.has(def.key)) {
             def = { ...def, key: `${def.key}_s${patch.slot}` };
@@ -157,7 +165,9 @@ function registerRaceOverlays(
 
     for (const [buildingXmlId, buildingInfo] of raceBuildingData.buildings) {
         const buildingTypes = getBuildingTypesByXmlId(buildingXmlId);
-        if (!buildingTypes) continue;
+        if (!buildingTypes) {
+            continue;
+        }
 
         for (const bt of buildingTypes) {
             const defs: BuildingOverlayDef[] = [];

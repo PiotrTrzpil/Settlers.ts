@@ -36,12 +36,12 @@ export class ShaderProgram implements ShaderObject {
         }
 
         switch (shaderType) {
-        case ShaderType.VERTEX_SHADER:
-            return this.gl.VERTEX_SHADER;
-        case ShaderType.FRAGMENT_SHADER:
-            return this.gl.FRAGMENT_SHADER;
-        default:
-            return 0;
+            case ShaderType.VERTEX_SHADER:
+                return this.gl.VERTEX_SHADER;
+            case ShaderType.FRAGMENT_SHADER:
+                return this.gl.FRAGMENT_SHADER;
+            default:
+                return 0;
         }
     }
 
@@ -191,12 +191,16 @@ export class ShaderProgram implements ShaderObject {
     }
 
     public getAttribLocation(name: string): number {
-        if (!this.gl || !this.shaderProgram) return -1;
+        if (!this.gl || !this.shaderProgram) {
+            return -1;
+        }
         return this.gl.getAttribLocation(this.shaderProgram, name);
     }
 
     public getUniformLocation(name: string): WebGLUniformLocation | null {
-        if (!this.gl || !this.shaderProgram) return null;
+        if (!this.gl || !this.shaderProgram) {
+            return null;
+        }
         return this.gl.getUniformLocation(this.shaderProgram, name);
     }
 

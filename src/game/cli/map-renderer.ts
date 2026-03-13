@@ -22,7 +22,9 @@ export function renderMapText(game: GameCore, viewport: MapViewport, layers: Map
 
     // X-axis header
     const xNums: string[] = [];
-    for (let x = minX; x <= maxX; x++) xNums.push(x === cx ? '*' : String(x % 10));
+    for (let x = minX; x <= maxX; x++) {
+        xNums.push(x === cx ? '*' : String(x % 10));
+    }
     lines.push(' '.repeat(yLabelWidth + 1) + xNums.join(''));
 
     // Grid rows
@@ -45,7 +47,9 @@ export function renderMapText(game: GameCore, viewport: MapViewport, layers: Map
 
     // Legend
     const legend = buildLegend(usedSymbols);
-    if (legend) lines.push('', legend);
+    if (legend) {
+        lines.push('', legend);
+    }
 
     return lines.join('\n');
 }

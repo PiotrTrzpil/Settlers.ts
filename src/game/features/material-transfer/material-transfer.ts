@@ -67,7 +67,9 @@ export class MaterialTransfer {
             ? this.inventoryManager.withdrawOutput(fromBuilding, material, amount)
             : this.inventoryManager.withdrawInput(fromBuilding, material, amount);
 
-        if (withdrawn === 0) return 0;
+        if (withdrawn === 0) {
+            return 0;
+        }
 
         setCarrying(entity, material, withdrawn);
         return withdrawn;
@@ -124,7 +126,9 @@ export class MaterialTransfer {
      */
     drop(carrierId: number): void {
         const entity = this.gameState.getEntityOrThrow(carrierId, 'MaterialTransfer.drop');
-        if (!entity.carrying) return;
+        if (!entity.carrying) {
+            return;
+        }
 
         const { material, amount } = entity.carrying;
         clearCarrying(entity);
@@ -145,7 +149,9 @@ export class MaterialTransfer {
      */
     onEntityRemoved(entityId: number): void {
         const entity = this.gameState.getEntity(entityId);
-        if (!entity?.carrying) return;
+        if (!entity?.carrying) {
+            return;
+        }
 
         const { material, amount } = entity.carrying;
         clearCarrying(entity);

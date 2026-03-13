@@ -36,9 +36,13 @@ export const SLOT_CAPACITY = 8;
  * Buildings with no XML entry or no piles get empty configs.
  */
 export function getInventoryConfig(buildingType: BuildingType, race: Race): InventoryConfig {
-    if (!hasBuildingXmlMapping(buildingType)) return { inputSlots: [], outputSlots: [] };
+    if (!hasBuildingXmlMapping(buildingType)) {
+        return { inputSlots: [], outputSlots: [] };
+    }
     const info = getBuildingInfo(race, buildingType);
-    if (!info) return { inputSlots: [], outputSlots: [] };
+    if (!info) {
+        return { inputSlots: [], outputSlots: [] };
+    }
 
     const inputSlots: SlotConfig[] = [];
     const outputSlots: SlotConfig[] = [];
@@ -46,10 +50,14 @@ export function getInventoryConfig(buildingType: BuildingType, race: Race): Inve
     for (const pile of info.piles) {
         if (pile.type === PileSlotType.Input) {
             const materialType = xmlGoodToMaterialType(pile.good);
-            if (materialType !== undefined) inputSlots.push({ materialType, maxCapacity: SLOT_CAPACITY });
+            if (materialType !== undefined) {
+                inputSlots.push({ materialType, maxCapacity: SLOT_CAPACITY });
+            }
         } else if (pile.type === PileSlotType.Output) {
             const materialType = xmlGoodToMaterialType(pile.good);
-            if (materialType !== undefined) outputSlots.push({ materialType, maxCapacity: SLOT_CAPACITY });
+            if (materialType !== undefined) {
+                outputSlots.push({ materialType, maxCapacity: SLOT_CAPACITY });
+            }
         } else {
             // Storage pile (type=4) — NO_MATERIAL slot, material assigned on first deposit
             outputSlots.push({ materialType: EMaterialType.NO_MATERIAL, maxCapacity: SLOT_CAPACITY });

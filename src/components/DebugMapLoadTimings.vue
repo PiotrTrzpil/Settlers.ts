@@ -75,16 +75,28 @@ const mlt = debugStats.state.mapLoadTimings;
 const slt = debugStats.state.loadTimings;
 
 const cacheLabel = computed(() => {
-    if (!slt.cacheHit) return 'MISS';
-    if (slt.cacheSource === 'module') return 'HIT (HMR)';
-    if (slt.cacheSource === 'indexeddb') return 'HIT (IDB)';
+    if (!slt.cacheHit) {
+        return 'MISS';
+    }
+    if (slt.cacheSource === 'module') {
+        return 'HIT (HMR)';
+    }
+    if (slt.cacheSource === 'indexeddb') {
+        return 'HIT (IDB)';
+    }
     return 'HIT';
 });
 
 const cacheClass = computed(() => {
-    if (!slt.cacheHit) return 'cache-miss';
-    if (slt.cacheSource === 'module') return 'cache-hit-hmr';
-    if (slt.cacheSource === 'indexeddb') return 'cache-hit-idb';
+    if (!slt.cacheHit) {
+        return 'cache-miss';
+    }
+    if (slt.cacheSource === 'module') {
+        return 'cache-hit-hmr';
+    }
+    if (slt.cacheSource === 'indexeddb') {
+        return 'cache-hit-idb';
+    }
     return 'cache-hit-hmr';
 });
 
@@ -97,7 +109,9 @@ const totalMs = computed(
 
 const spriteLoadLabel = computed(() => {
     const ms = `${slt.totalSprites} ms`;
-    if (!slt.cacheHit) return ms;
+    if (!slt.cacheHit) {
+        return ms;
+    }
     const src = slt.cacheSource === 'module' ? 'HMR' : 'IDB';
     return `${ms} (cached: ${src})`;
 });

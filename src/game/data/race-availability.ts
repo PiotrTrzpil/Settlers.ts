@@ -105,7 +105,9 @@ export const MATERIAL_RACE_AVAILABILITY: Partial<Record<EMaterialType, readonly 
 
 /** Check if a material has carrier sprites for the given race. */
 export function isMaterialAvailableForRace(materialType: EMaterialType, race: Race): boolean {
-    if (race === Race.DarkTribe) return false; // Dark Tribe has no standard carrier economy
+    if (race === Race.DarkTribe) {
+        return false;
+    } // Dark Tribe has no standard carrier economy
     const allowedRaces = MATERIAL_RACE_AVAILABILITY[materialType];
     return !allowedRaces || allowedRaces.includes(race);
 }
@@ -117,21 +119,31 @@ export function isUnitAvailableForRace(unitType: UnitType, race: Race): boolean 
     const base = getBaseUnitType(unitType);
     if (race === Race.DarkTribe) {
         // Dark Tribe has their exclusive units, Angels, plus basic L1 military (swordsman, bowman)
-        if (DARK_TRIBE_EXCLUSIVE_BASE.has(base)) return true;
-        if (base === UnitType.Angel) return true;
+        if (DARK_TRIBE_EXCLUSIVE_BASE.has(base)) {
+            return true;
+        }
+        if (base === UnitType.Angel) {
+            return true;
+        }
         if (base === UnitType.Swordsman1 || base === UnitType.Bowman1) {
             return !DARK_TRIBE_EXCLUDED_EXACT.has(unitType);
         }
         return false;
     }
     // Dark Tribe exclusive units not available to other races.
-    if (DARK_TRIBE_EXCLUSIVE_BASE.has(base)) return false;
+    if (DARK_TRIBE_EXCLUSIVE_BASE.has(base)) {
+        return false;
+    }
     // Race-specific specialists: only available for their designated race.
     const specialistRace = SPECIALIST_UNIT_RACE.get(base);
-    if (specialistRace !== undefined) return specialistRace === race;
+    if (specialistRace !== undefined) {
+        return specialistRace === race;
+    }
     // Race-specific economy workers: only available for their designated races.
     const workerRaces = WORKER_UNIT_RACE[unitType];
-    if (workerRaces) return workerRaces.includes(race);
+    if (workerRaces) {
+        return workerRaces.includes(race);
+    }
     return true;
 }
 

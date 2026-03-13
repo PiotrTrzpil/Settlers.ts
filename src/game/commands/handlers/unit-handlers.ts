@@ -53,9 +53,13 @@ export function executeSpawnUnit(deps: SpawnUnitDeps, cmd: SpawnUnitCommand): Co
     const { state, terrain } = deps;
 
     const isTileValid = (x: number, y: number) => {
-        if (!terrain.isInBounds(x, y) || !terrain.isPassable(x, y)) return false;
+        if (!terrain.isInBounds(x, y) || !terrain.isPassable(x, y)) {
+            return false;
+        }
         // Units can't overlap other units
-        if (state.getUnitAt(x, y)) return false;
+        if (state.getUnitAt(x, y)) {
+            return false;
+        }
         // Ground entities block spawning, except construction sites (not yet blocked for movement)
         const ground = state.getGroundEntityAt(x, y);
         if (ground && (ground.type !== EntityType.Building || state.buildingOccupancy.has(tileKey(x, y)))) {
@@ -136,7 +140,9 @@ export function executeMoveSelectedUnits(deps: MoveSelectedUnitsDeps, cmd: MoveS
     }[] = [];
     for (let i = 0; i < selectedUnits.length; i++) {
         const unit = selectedUnits[i]!;
-        if (deps.unitReservation.isReserved(unit.id)) continue;
+        if (deps.unitReservation.isReserved(unit.id)) {
+            continue;
+        }
 
         const offset = FORMATION_OFFSETS[Math.min(i, FORMATION_OFFSETS.length - 1)]!;
         const targetX = cmd.targetX + offset[0];
@@ -175,7 +181,9 @@ export interface RecruitSpecialistDeps {
 
 export function executeRecruitSpecialist(deps: RecruitSpecialistDeps, cmd: RecruitSpecialistCommand): CommandResult {
     const toolMaterial = SPECIALIST_TOOL_MAP[cmd.unitType];
-    if (toolMaterial === undefined) return commandFailed(`Unknown specialist type: ${UnitType[cmd.unitType]}`);
+    if (toolMaterial === undefined) {
+        return commandFailed(`Unknown specialist type: ${UnitType[cmd.unitType]}`);
+    }
 
     if (cmd.count > 0) {
         const near = cmd.nearX !== undefined && cmd.nearY !== undefined ? { x: cmd.nearX, y: cmd.nearY } : null;
@@ -191,7 +199,9 @@ export function executeRecruitSpecialist(deps: RecruitSpecialistDeps, cmd: Recru
         }
         // Dismiss live specialists for the remainder
         for (let i = 0; i < remaining; i++) {
-            if (!deps.unitTransformer.dismissSpecialist(cmd.unitType, toolMaterial, cmd.player)) break;
+            if (!deps.unitTransformer.dismissSpecialist(cmd.unitType, toolMaterial, cmd.player)) {
+                break;
+            }
         }
     }
 

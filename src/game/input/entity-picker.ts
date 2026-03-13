@@ -67,7 +67,9 @@ export function createEntityPicker(
     return (screenX: number, screenY: number) => {
         const ctx = getContext();
         const resolver = getSpriteResolver();
-        if (!ctx || !resolver) return null;
+        if (!ctx || !resolver) {
+            return null;
+        }
 
         const sel = getSelection();
         const debugAll = debugStats.state.selectAllUnits;
@@ -75,10 +77,14 @@ export function createEntityPicker(
         let bestArea = Infinity;
 
         for (const entity of getEntities()) {
-            if (!sel.canSelect(entity, debugAll)) continue;
+            if (!sel.canSelect(entity, debugAll)) {
+                continue;
+            }
 
             const resolved = resolver.resolve(entity);
-            if (resolved.skip || !resolved.sprite) continue;
+            if (resolved.skip || !resolved.sprite) {
+                continue;
+            }
 
             const bounds = spriteToScreenBounds(entity, resolved.sprite, ctx);
             if (screenX >= bounds.sx0 && screenX <= bounds.sx1 && screenY >= bounds.sy0 && screenY <= bounds.sy1) {
@@ -108,7 +114,9 @@ export function createEntityRectPicker(
     return (sx1: number, sy1: number, sx2: number, sy2: number) => {
         const ctx = getContext();
         const resolver = getSpriteResolver();
-        if (!ctx || !resolver) return [];
+        if (!ctx || !resolver) {
+            return [];
+        }
 
         const sel = getSelection();
         const debugAll = debugStats.state.selectAllUnits;
@@ -120,10 +128,14 @@ export function createEntityRectPicker(
 
         const ids: number[] = [];
         for (const entity of getEntities()) {
-            if (!sel.canSelect(entity, debugAll)) continue;
+            if (!sel.canSelect(entity, debugAll)) {
+                continue;
+            }
 
             const resolved = resolver.resolve(entity);
-            if (resolved.skip || !resolved.sprite) continue;
+            if (resolved.skip || !resolved.sprite) {
+                continue;
+            }
 
             const bounds = spriteToScreenBounds(entity, resolved.sprite, ctx);
             // AABB intersection test

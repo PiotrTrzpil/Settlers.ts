@@ -253,7 +253,9 @@ export function framesToSeconds(frames: number): number {
  * Returns DONE when progress >= 1 or duration is non-positive/infinite, CONTINUE otherwise.
  */
 export function tickDuration(job: ChoreoJobState, dt: number, durationSeconds: number): TaskResult {
-    if (durationSeconds <= 0 || durationSeconds === Infinity) return TaskResult.DONE;
+    if (durationSeconds <= 0 || durationSeconds === Infinity) {
+        return TaskResult.DONE;
+    }
     job.progress += dt / durationSeconds;
     return job.progress >= 1 ? TaskResult.DONE : TaskResult.CONTINUE;
 }

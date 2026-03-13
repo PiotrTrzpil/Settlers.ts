@@ -73,7 +73,9 @@ export function diagnoseUnfulfilledRequest(request: DiagnosticRequest, config: D
     const { gameState, inventoryManager, carrierRegistry, jobStore, getActiveJobId, isReserved } = config;
 
     const destBuilding = gameState.getEntity(request.buildingId);
-    if (!destBuilding) return UnfulfilledReason.NoSupply;
+    if (!destBuilding) {
+        return UnfulfilledReason.NoSupply;
+    }
 
     const playerId = destBuilding.player;
 
@@ -107,7 +109,9 @@ export function diagnoseUnfulfilledRequest(request: DiagnosticRequest, config: D
     let hasIdleButReserved = false;
 
     for (const [id, , entity] of query(carrierRegistry.store, gameState.store)) {
-        if (entity.player !== playerId) continue;
+        if (entity.player !== playerId) {
+            continue;
+        }
 
         hasCarrier = true;
 

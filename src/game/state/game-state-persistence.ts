@@ -247,7 +247,9 @@ function encodeTerrainDiff(current: Uint8Array, initial: Uint8Array): string | n
             pairs.push(i, current[i]!);
         }
     }
-    if (pairs.length === 0) return null;
+    if (pairs.length === 0) {
+        return null;
+    }
     return uint8ArrayToBase64(new Uint8Array(new Uint32Array(pairs).buffer));
 }
 
@@ -257,7 +259,9 @@ function applyTerrainDiff(terrain: Uint8Array, diffBase64: string): void {
     const pairs = new Uint32Array(raw.buffer, 0, raw.byteLength / 4);
     for (let i = 0; i < pairs.length; i += 2) {
         const idx = pairs[i]!;
-        if (idx < terrain.length) terrain[idx] = pairs[i + 1]!;
+        if (idx < terrain.length) {
+            terrain[idx] = pairs[i + 1]!;
+        }
     }
 }
 
@@ -352,7 +356,9 @@ export type SnapshotCheckResult =
 export function checkSavedSnapshot(): SnapshotCheckResult {
     try {
         const stored = localStorage.getItem(STORAGE_KEY);
-        if (!stored) return { status: 'none' };
+        if (!stored) {
+            return { status: 'none' };
+        }
 
         const snapshot = superjson.parse<GameStateSnapshot>(stored);
         if (snapshot.version !== SNAPSHOT_VERSION) {
@@ -373,7 +379,9 @@ export function checkSavedSnapshot(): SnapshotCheckResult {
  */
 export function loadSnapshot(): GameStateSnapshot | null {
     const result = checkSavedSnapshot();
-    if (result.status === 'valid') return result.snapshot;
+    if (result.status === 'valid') {
+        return result.snapshot;
+    }
 
     if (result.status === 'stale') {
         console.warn(`Snapshot version mismatch: ${result.savedVersion} !== ${result.expectedVersion}`);
@@ -398,7 +406,9 @@ export function clearSavedGameState(): void {
 export function clearSavedTreeState(): void {
     try {
         const stored = localStorage.getItem(STORAGE_KEY);
-        if (!stored) return;
+        if (!stored) {
+            return;
+        }
 
         const snapshot = superjson.parse<GameStateSnapshot>(stored);
         snapshot.entities = snapshot.entities.filter(e => e.type !== EntityType.MapObject);
@@ -430,7 +440,9 @@ function restoreEntities(game: GameCore, snapshot: GameStateSnapshot): void {
     const constructionSiteIds = new Set<number>();
     const sites = snapshot['constructionSites'] as Array<{ buildingId: number }> | undefined;
     if (sites) {
-        for (const site of sites) constructionSiteIds.add(site.buildingId);
+        for (const site of sites) {
+            constructionSiteIds.add(site.buildingId);
+        }
     }
 
     // Recreate entities via addEntity — emits entity:created events so systems
@@ -440,23 +452,37 @@ function restoreEntities(game: GameCore, snapshot: GameStateSnapshot): void {
         state.nextId = e.id; // ensure addEntity produces the correct ID
         const completed = e.type === EntityType.Building && !constructionSiteIds.has(e.id);
         const entity = state.addEntity(e.type, e.subType, e.x, e.y, e.player, { race: e.race, completed });
-        if (e.carrying) entity.carrying = e.carrying;
-        if (e.hidden) entity.hidden = e.hidden;
+        if (e.carrying) {
+            entity.carrying = e.carrying;
+        }
+        if (e.hidden) {
+            entity.hidden = e.hidden;
+        }
     }
 }
 
 /** Apply terrain arrays/diffs from a snapshot to the live terrain. Auto-saves use diffs; initial state uses full arrays. */
 function restoreTerrain(game: GameCore, snapshot: GameStateSnapshot): void {
-    if (snapshot.terrainGroundType) game.terrain.groundType.set(base64ToUint8Array(snapshot.terrainGroundType));
-    if (snapshot.terrainGroundHeight) game.terrain.groundHeight.set(base64ToUint8Array(snapshot.terrainGroundHeight));
-    if (snapshot.terrainGroundTypeDiff) applyTerrainDiff(game.terrain.groundType, snapshot.terrainGroundTypeDiff);
-    if (snapshot.terrainGroundHeightDiff) applyTerrainDiff(game.terrain.groundHeight, snapshot.terrainGroundHeightDiff);
+    if (snapshot.terrainGroundType) {
+        game.terrain.groundType.set(base64ToUint8Array(snapshot.terrainGroundType));
+    }
+    if (snapshot.terrainGroundHeight) {
+        game.terrain.groundHeight.set(base64ToUint8Array(snapshot.terrainGroundHeight));
+    }
+    if (snapshot.terrainGroundTypeDiff) {
+        applyTerrainDiff(game.terrain.groundType, snapshot.terrainGroundTypeDiff);
+    }
+    if (snapshot.terrainGroundHeightDiff) {
+        applyTerrainDiff(game.terrain.groundHeight, snapshot.terrainGroundHeightDiff);
+    }
     const modified =
         snapshot.terrainGroundType ||
         snapshot.terrainGroundHeight ||
         snapshot.terrainGroundTypeDiff ||
         snapshot.terrainGroundHeightDiff;
-    if (modified) game.eventBus.emit('terrain:modified', { reason: 'snapshot' });
+    if (modified) {
+        game.eventBus.emit('terrain:modified', { reason: 'snapshot' });
+    }
 }
 
 /**
@@ -553,7 +579,9 @@ export function loadInitialState(): GameStateSnapshot | null {
 
     try {
         const stored = localStorage.getItem(INITIAL_STATE_KEY);
-        if (!stored) return null;
+        if (!stored) {
+            return null;
+        }
 
         const snapshot = superjson.parse<GameStateSnapshot>(stored);
         if (snapshot.mapId !== currentMapId) {

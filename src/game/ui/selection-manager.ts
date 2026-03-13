@@ -25,9 +25,15 @@ export class SelectionManager {
      * @param debugSelectAll When true, all units are selectable (debug mode)
      */
     canSelect(entity: Entity | undefined, debugSelectAll = false): boolean {
-        if (!entity) return false;
-        if (entity.hidden) return false;
-        if (entity.selectable !== false) return true;
+        if (!entity) {
+            return false;
+        }
+        if (entity.hidden) {
+            return false;
+        }
+        if (entity.selectable !== false) {
+            return true;
+        }
         return debugSelectAll && entity.type === EntityType.Unit;
     }
 

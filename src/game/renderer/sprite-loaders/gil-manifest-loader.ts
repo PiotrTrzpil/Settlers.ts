@@ -26,7 +26,9 @@ export async function loadGilManifest(manifest: GilSpriteManifest, ctx: SpriteLo
     const gfxFileId = String(manifest.gfxFile);
 
     const fileSet = await ctx.spriteLoader.loadFileSet(gfxFileId);
-    if (!fileSet) return 0;
+    if (!fileSet) {
+        return 0;
+    }
 
     let paletteBase = ctx.paletteManager.getBaseOffset(gfxFileId);
     if (paletteBase < 0) {
@@ -72,7 +74,9 @@ export async function loadGilSpriteBatch(
         result.set(gilIndex, sprite.entry);
     }
 
-    if (result.size > 0) atlas.update(gl);
+    if (result.size > 0) {
+        atlas.update(gl);
+    }
 
     return result;
 }

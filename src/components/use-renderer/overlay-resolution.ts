@@ -43,14 +43,22 @@ function resolveConstructionOverlay(
 ): void {
     const site = g.services.constructionSiteManager.getSite(entityId);
     const vs = getBuildingVisualState(site);
-    if (vs.phase !== BuildingConstructionPhase.ConstructionRising || !er.spriteManager) return;
-    if (!site || site.building.progress < 0.5) return;
+    if (vs.phase !== BuildingConstructionPhase.ConstructionRising || !er.spriteManager) {
+        return;
+    }
+    if (!site || site.building.progress < 0.5) {
+        return;
+    }
 
     const entity = g.state.getEntity(entityId);
-    if (!entity) return;
+    if (!entity) {
+        return;
+    }
 
     const constructionSprite = er.spriteManager.getBuildingConstruction(entity.subType as BuildingType, entity.race);
-    if (!constructionSprite) return;
+    if (!constructionSprite) {
+        return;
+    }
 
     out.push({
         sprite: scaleSprite(constructionSprite, ENTITY_SCALE),
@@ -65,10 +73,14 @@ function resolveConstructionOverlay(
 /** Resolve custom overlays (smoke, wheels, flags) from the BuildingOverlayManager. */
 function resolveCustomOverlays(entityId: number, g: Game, er: EntityRenderer, out: BuildingOverlayRenderData[]): void {
     const instances = g.services.buildingOverlayManager.getOverlays(entityId);
-    if (!instances) return;
+    if (!instances) {
+        return;
+    }
 
     for (const inst of instances) {
-        if (!inst.active) continue;
+        if (!inst.active) {
+            continue;
+        }
 
         if (inst.def.isFlag) {
             resolveFlagInstance(
@@ -89,7 +101,9 @@ function resolveCustomOverlays(entityId: number, g: Game, er: EntityRenderer, ou
             spriteRef.jobIndex,
             spriteRef.directionIndex ?? 0
         );
-        if (!frames || frames.length === 0) continue;
+        if (!frames || frames.length === 0) {
+            continue;
+        }
 
         const frameIndex = getOverlayFrame(inst);
         const sprite = frames[Math.min(frameIndex, frames.length - 1)]!;
@@ -119,15 +133,23 @@ function resolveFlagInstance(
     er: EntityRenderer,
     out: BuildingOverlayRenderData[]
 ): void {
-    if (!er.spriteManager) return;
+    if (!er.spriteManager) {
+        return;
+    }
     const entity = g.state.getEntity(entityId);
-    if (!entity) return;
+    if (!entity) {
+        return;
+    }
 
     const flagFrameCount = er.spriteManager.getFlagFrameCount(entity.player);
-    if (flagFrameCount === 0) return;
+    if (flagFrameCount === 0) {
+        return;
+    }
 
     const rawSprite = er.spriteManager.getFlag(entity.player, frameIndex % flagFrameCount);
-    if (!rawSprite) return;
+    if (!rawSprite) {
+        return;
+    }
 
     const offsetX = defOffsetX * PIXELS_TO_WORLD * FLAG_SCALE;
     const offsetY = defOffsetY * PIXELS_TO_WORLD * FLAG_SCALE;

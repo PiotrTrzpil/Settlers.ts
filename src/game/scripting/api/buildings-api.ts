@@ -181,7 +181,9 @@ export function registerBuildingsAPI(runtime: LuaRuntime, context: BuildingsAPIC
                 race,
             });
 
-            if (!result.success || !result.effects?.length) return -1;
+            if (!result.success || !result.effects?.length) {
+                return -1;
+            }
             return (result.effects[0] as { entityId: number }).entityId;
         }
     );
@@ -204,15 +206,25 @@ export function registerBuildingsAPI(runtime: LuaRuntime, context: BuildingsAPIC
         let count = 0;
 
         for (const entity of context.gameState.entities) {
-            if (entity.type !== EntityType.Building) continue;
-            if (entity.subType !== internalType) continue;
-            if (entity.player !== player) continue;
+            if (entity.type !== EntityType.Building) {
+                continue;
+            }
+            if (entity.subType !== internalType) {
+                continue;
+            }
+            if (entity.player !== player) {
+                continue;
+            }
 
             // Filter by state if specified
             if (state !== undefined) {
                 const isComplete = isBuildingCompleted(context.constructionSiteManager, entity.id);
-                if (state === BUILDING_STATE_CONSTANTS.STANDARD && !isComplete) continue;
-                if (state === BUILDING_STATE_CONSTANTS.BUILD && isComplete) continue;
+                if (state === BUILDING_STATE_CONSTANTS.STANDARD && !isComplete) {
+                    continue;
+                }
+                if (state === BUILDING_STATE_CONSTANTS.BUILD && isComplete) {
+                    continue;
+                }
             }
 
             count++;
@@ -229,9 +241,15 @@ export function registerBuildingsAPI(runtime: LuaRuntime, context: BuildingsAPIC
             const rangeSq = range * range;
 
             for (const entity of context.gameState.entities) {
-                if (entity.type !== EntityType.Building) continue;
-                if (entity.subType !== internalType) continue;
-                if (entity.player !== player) continue;
+                if (entity.type !== EntityType.Building) {
+                    continue;
+                }
+                if (entity.subType !== internalType) {
+                    continue;
+                }
+                if (entity.player !== player) {
+                    continue;
+                }
 
                 const dx = entity.x - x;
                 const dy = entity.y - y;
@@ -267,7 +285,9 @@ export function registerBuildingsAPI(runtime: LuaRuntime, context: BuildingsAPIC
                 race,
             });
 
-            if (!result.success || !result.effects?.length) return -1;
+            if (!result.success || !result.effects?.length) {
+                return -1;
+            }
             return (result.effects[0] as { entityId: number }).entityId;
         }
     );

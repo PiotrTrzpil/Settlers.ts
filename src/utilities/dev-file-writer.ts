@@ -23,8 +23,11 @@ export function writeDevFile(filePath: string, content: string): void {
         body: JSON.stringify({ path: filePath, content }),
     }).then(
         res => {
-            if (res.ok) console.log(`Saved ${filePath}`);
-            else console.warn(`Failed to save ${filePath}:`, res.statusText);
+            if (res.ok) {
+                console.log(`Saved ${filePath}`);
+            } else {
+                console.warn(`Failed to save ${filePath}:`, res.statusText);
+            }
         },
         () => {
             console.warn(`Dev server unavailable. Content for ${filePath}:\n${content}`);

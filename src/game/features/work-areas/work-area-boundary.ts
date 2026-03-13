@@ -52,10 +52,14 @@ function computeEvenRingDots(
         const x = Math.round(dx) + cx;
         const y = Math.round(dy) + cy;
 
-        if (x < 0 || y < 0 || x >= mapWidth || y >= mapHeight) continue;
+        if (x < 0 || y < 0 || x >= mapWidth || y >= mapHeight) {
+            continue;
+        }
 
         const key = y * mapWidth + x;
-        if (seen.has(key)) continue;
+        if (seen.has(key)) {
+            continue;
+        }
         seen.add(key);
 
         dots.push({ x, y, player });
@@ -84,7 +88,9 @@ export function computeWorkAreaColoredRings(
         const r = ringRadii[i]!;
         const playerIdx = RING_PLAYER_INDICES[i]!;
         const dots = computeEvenRingDots(cx, cy, r, playerIdx, mapWidth, mapHeight);
-        for (const dot of dots) result.push(dot);
+        for (const dot of dots) {
+            result.push(dot);
+        }
     }
     return result;
 }

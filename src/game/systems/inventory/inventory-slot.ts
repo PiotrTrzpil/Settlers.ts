@@ -75,7 +75,9 @@ export function canAccept(slot: InventorySlot, materialType: EMaterialType, amou
         return false;
     }
     const sanitized = sanitizeAmount(amount);
-    if (sanitized === 0) return true; // Can always accept 0
+    if (sanitized === 0) {
+        return true;
+    } // Can always accept 0
     return slot.currentAmount + sanitized <= slot.maxCapacity;
 }
 

@@ -41,7 +41,9 @@ export function createBuildingAdjustMode(getGame: () => Game | null): BuildingAd
 
     return new BuildingAdjustMode(() => {
         const game = getGame();
-        if (!game) return null;
+        if (!game) {
+            return null;
+        }
 
         if (!handlers) {
             handlers = [new WorkAreaAdjustHandler(game.services.workAreaStore)];
@@ -60,7 +62,9 @@ export function handleModeChange(
 ): (oldMode: string, newMode: string, data?: Record<string, unknown>) => void {
     return (_oldMode, newMode, data) => {
         const game = getGame();
-        if (!game) return;
+        if (!game) {
+            return;
+        }
 
         const vs = game.viewState.state;
         vs.mode = newMode;
@@ -102,7 +106,9 @@ export function createHintState(): HintState {
     const hintMessage = ref<HintMessage | null>(null);
     let timer: ReturnType<typeof setTimeout> | null = null;
     function hintProvider(msg: string, sx: number, sy: number): void {
-        if (timer !== null) clearTimeout(timer);
+        if (timer !== null) {
+            clearTimeout(timer);
+        }
         hintMessage.value = { text: msg, x: sx, y: sy };
         timer = setTimeout(() => {
             hintMessage.value = null;

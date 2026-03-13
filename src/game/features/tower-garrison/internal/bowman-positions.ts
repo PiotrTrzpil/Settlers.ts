@@ -22,10 +22,14 @@ export function getBowmanSlotPositions(
     buildingType: BuildingType,
     race: Race
 ): readonly BowmanSlotPosition[] | undefined {
-    if (!isGarrisonBuildingType(buildingType)) return undefined;
+    if (!isGarrisonBuildingType(buildingType)) {
+        return undefined;
+    }
 
     const info = getBuildingInfo(race, buildingType);
-    if (!info || info.settlers.length === 0) return undefined;
+    if (!info || info.settlers.length === 0) {
+        return undefined;
+    }
 
     const topSlots: BowmanSlotPosition[] = [];
     for (const s of info.settlers) {

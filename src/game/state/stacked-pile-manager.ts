@@ -46,7 +46,9 @@ export class StackedPileManager implements Persistable<SerializedResourceQuantit
     /** Set the pile kind for a stacked resource. */
     setKind(entityId: number, kind: PileKind): void {
         const state = this.states.get(entityId);
-        if (state) state.kind = kind;
+        if (state) {
+            state.kind = kind;
+        }
     }
 
     /**
@@ -55,7 +57,9 @@ export class StackedPileManager implements Persistable<SerializedResourceQuantit
      */
     getKind(entityId: number): PileKind {
         const state = this.states.get(entityId);
-        if (!state) throw new Error(`StackedPileManager.getKind: unknown entity ${entityId}`);
+        if (!state) {
+            throw new Error(`StackedPileManager.getKind: unknown entity ${entityId}`);
+        }
         return state.kind;
     }
 
@@ -71,7 +75,9 @@ export class StackedPileManager implements Persistable<SerializedResourceQuantit
      */
     getOwnerBuildingId(entityId: number): number | undefined {
         const state = this.states.get(entityId);
-        if (!state) return undefined;
+        if (!state) {
+            return undefined;
+        }
         return getOwnerBuildingId(state.kind);
     }
 
@@ -112,10 +118,16 @@ export class StackedPileManager implements Persistable<SerializedResourceQuantit
                 : this.entityProvider.entities;
 
         for (const entity of candidates) {
-            if (entity.type !== EntityType.StackedPile) continue;
-            if (entity.subType !== material) continue;
+            if (entity.type !== EntityType.StackedPile) {
+                continue;
+            }
+            if (entity.subType !== material) {
+                continue;
+            }
             const state = this.states.get(entity.id);
-            if (!state || state.kind.kind !== SlotKind.Free) continue;
+            if (!state || state.kind.kind !== SlotKind.Free) {
+                continue;
+            }
 
             const dx = entity.x - x;
             const dy = entity.y - y;

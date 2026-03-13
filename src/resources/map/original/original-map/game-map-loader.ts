@@ -63,28 +63,44 @@ export class OriginalMapLoader extends OriginalMapFile implements IMapLoader {
         const data = createEmptyEntityData();
 
         const playerReader = this.getChunkReader(MapChunkType.MapPlayerInformation);
-        if (playerReader) data.players = parsePlayerInformation(playerReader);
+        if (playerReader) {
+            data.players = parsePlayerInformation(playerReader);
+        }
 
         const buildingReader = this.getChunkReader(MapChunkType.MapBuildings);
-        if (buildingReader) data.buildings = parseBuildings(buildingReader);
+        if (buildingReader) {
+            data.buildings = parseBuildings(buildingReader);
+        }
 
         const settlerReader = this.getChunkReader(MapChunkType.MapSettlers);
-        if (settlerReader) data.settlers = parseSettlers(settlerReader);
+        if (settlerReader) {
+            data.settlers = parseSettlers(settlerReader);
+        }
 
         const stackReader = this.getChunkReader(MapChunkType.MapStacks);
-        if (stackReader) data.stacks = parseStacks(stackReader);
+        if (stackReader) {
+            data.stacks = parseStacks(stackReader);
+        }
 
         const objectReader = this.getChunkReader(MapChunkType.MapObjects);
-        if (objectReader) data.objects = parseMapObjects(objectReader, this.mapSize.width, this.mapSize.height);
+        if (objectReader) {
+            data.objects = parseMapObjects(objectReader, this.mapSize.width, this.mapSize.height);
+        }
 
         const teamReader = this.getChunkReader(MapChunkType.MapTeamInformation);
-        if (teamReader) data.teams = parseTeamInformation(teamReader);
+        if (teamReader) {
+            data.teams = parseTeamInformation(teamReader);
+        }
 
         const questTextReader = this.getChunkReader(MapChunkType.MapQuestText);
-        if (questTextReader) data.quest.questText = parseQuestText(questTextReader);
+        if (questTextReader) {
+            data.quest.questText = parseQuestText(questTextReader);
+        }
 
         const questTipReader = this.getChunkReader(MapChunkType.MapQuestTip);
-        if (questTipReader) data.quest.questTip = parseQuestText(questTipReader);
+        if (questTipReader) {
+            data.quest.questTip = parseQuestText(questTipReader);
+        }
 
         this.logLoader.debug(
             `Parsed: ${data.players.length} players, ${data.buildings.length} buildings, ` +

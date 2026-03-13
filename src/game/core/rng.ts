@@ -93,7 +93,9 @@ export class SeededRng {
      * @returns The selected element, or undefined if array is empty
      */
     pick<T>(array: readonly T[]): T | undefined {
-        if (array.length === 0) return undefined;
+        if (array.length === 0) {
+            return undefined;
+        }
         return array[this.nextInt(array.length)];
     }
 

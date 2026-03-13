@@ -66,7 +66,9 @@ export class SpriteDecoderPool {
 
     /** Lazily create batch workers on first use. */
     private ensureBatchWorkers(): void {
-        if (this.batchWorkers.length > 0) return;
+        if (this.batchWorkers.length > 0) {
+            return;
+        }
         for (let i = 0; i < this.workerCount; i++) {
             const batchWorker = new BatchDecodeWorker();
             batchWorker.onmessage = this.handleBatchMessage.bind(this);
@@ -223,7 +225,9 @@ export class SpriteDecoderPool {
         return Promise.all(promises).then(chunkResults => {
             // Merge results from all chunks
             let totalLength = 0;
-            for (const cr of chunkResults) totalLength += cr.allIndices.length;
+            for (const cr of chunkResults) {
+                totalLength += cr.allIndices.length;
+            }
 
             const mergedIndices = new Uint16Array(totalLength);
             const mergedResults: BatchSpriteResult[] = [];

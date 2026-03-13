@@ -65,8 +65,12 @@ export function useBuildingDebugInfo(
         // eslint-disable-next-line sonarjs/void-use -- intentionally touch reactive tick to trigger re-evaluation
         void tick.value;
         const entity = selectedEntity.value;
-        if (!entity || entity.type !== EntityType.Building) return null;
-        if (!game.value) return null;
+        if (!entity || entity.type !== EntityType.Building) {
+            return null;
+        }
+        if (!game.value) {
+            return null;
+        }
 
         const svc = game.value.services;
         const site = svc.constructionSiteManager.getSite(entity.id);

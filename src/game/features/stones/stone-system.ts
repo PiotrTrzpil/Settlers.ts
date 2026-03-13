@@ -97,8 +97,12 @@ export class StoneSystem implements Persistable<SerializedStone[]> {
      * Uses initialLevel if provided (from map data), otherwise full level.
      */
     register(entityId: number, objectType: MapObjectType, initialLevel?: number): void {
-        if (OBJECT_TYPE_CATEGORY[objectType] !== MapObjectCategory.Goods || objectType !== MapObjectType.ResourceStone)
+        if (
+            OBJECT_TYPE_CATEGORY[objectType] !== MapObjectCategory.Goods ||
+            objectType !== MapObjectType.ResourceStone
+        ) {
             return;
+        }
 
         this.gameState.getEntityOrThrow(entityId, 'stone for registration');
 
@@ -120,7 +124,9 @@ export class StoneSystem implements Persistable<SerializedStone[]> {
      */
     restoreStoneState(entityId: number, data: { stage: StoneStage; variant: number; level: number }): void {
         // Skip stale entries — entity may have been removed between snapshot capture and restore
-        if (!this.visualService.getState(entityId)) return;
+        if (!this.visualService.getState(entityId)) {
+            return;
+        }
 
         const state: StoneState = {
             stage: data.stage,
@@ -150,7 +156,9 @@ export class StoneSystem implements Persistable<SerializedStone[]> {
     /** Start mining (called by stonecutter work handler). */
     startMining(entityId: number): void {
         const state = this.states.get(entityId);
-        if (!state || state.stage !== StoneStage.Normal) return;
+        if (!state || state.stage !== StoneStage.Normal) {
+            return;
+        }
 
         state.stage = StoneStage.Mining;
     }
@@ -163,7 +171,9 @@ export class StoneSystem implements Persistable<SerializedStone[]> {
      */
     completeMining(entityId: number): boolean {
         const state = this.states.get(entityId);
-        if (!state || state.stage !== StoneStage.Mining) return false;
+        if (!state || state.stage !== StoneStage.Mining) {
+            return false;
+        }
 
         state.level--;
 
@@ -206,7 +216,9 @@ export class StoneSystem implements Persistable<SerializedStone[]> {
                 minDistanceSq: 0,
                 proximityFilter: () => false,
             });
-            if (!spot) break;
+            if (!spot) {
+                break;
+            }
             this.executeCommand({
                 type: 'spawn_map_object',
                 objectType: MapObjectType.ResourceStone,
@@ -247,7 +259,9 @@ export class StoneSystem implements Persistable<SerializedStone[]> {
     getStats(): { total: number; mining: number } {
         let mining = 0;
         for (const state of this.states.values()) {
-            if (state.stage === StoneStage.Mining) mining++;
+            if (state.stage === StoneStage.Mining) {
+                mining++;
+            }
         }
         return { total: this.states.size, mining };
     }

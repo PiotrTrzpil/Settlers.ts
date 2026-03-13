@@ -81,7 +81,9 @@ export class DecorationSpriteCategory {
      */
     setFlagsMap(flags: Map<number, SpriteEntry[]>): void {
         this.flags.clear();
-        for (const [k, v] of flags) this.flags.set(k, v);
+        for (const [k, v] of flags) {
+            this.flags.set(k, v);
+        }
     }
 
     /**
@@ -96,6 +98,8 @@ export class DecorationSpriteCategory {
      */
     setTerritoryDotsMap(dots: Map<number, SpriteEntry>): void {
         this.territoryDots.clear();
-        for (const [k, v] of dots) this.territoryDots.set(k, v);
+        for (const [k, v] of dots) {
+            this.territoryDots.set(k, v);
+        }
     }
 }

@@ -110,8 +110,11 @@ async function deflateWithPlatform(data: Uint8Array<ArrayBuffer>): Promise<Uint8
             const zlib = await import('zlib');
             return new Promise((resolve, reject) => {
                 zlib.deflate(data, { level: 6 }, (err, result) => {
-                    if (err) reject(err);
-                    else resolve(new Uint8Array(result));
+                    if (err) {
+                        reject(err);
+                    } else {
+                        resolve(new Uint8Array(result));
+                    }
                 });
             });
         } catch {
@@ -132,9 +135,13 @@ async function deflateWithPlatform(data: Uint8Array<ArrayBuffer>): Promise<Uint8
 
             for (;;) {
                 const { done, value } = await reader.read();
-                if (done) break;
+                if (done) {
+                    break;
+                }
                 // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- undefined in some stream impls
-                if (value) chunks.push(value);
+                if (value) {
+                    chunks.push(value);
+                }
             }
 
             // Combine chunks

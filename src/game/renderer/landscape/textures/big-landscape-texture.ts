@@ -36,7 +36,9 @@ export class BigLandscapeTexture extends LandscapeTextureBase implements ILandsc
     }
 
     public copyToTextureMap(srcImg: GfxImage16Bit, destTextureMap: TextureMap16Bit): void {
-        if (this.layout.has(this.srcX, this.srcY)) return;
+        if (this.layout.has(this.srcX, this.srcY)) {
+            return;
+        }
 
         const repeatWidth = 32;
         const dest = destTextureMap.reserve(256 + repeatWidth, 256);

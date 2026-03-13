@@ -37,7 +37,9 @@ function dilateDarkFlags(flags: Uint8Array, w: number, h: number, passes: number
             const rowUp = row - w;
             const rowDown = row + w;
             for (let x = 1; x < w - 1; x++) {
-                if (prev[row + x]!) continue;
+                if (prev[row + x]!) {
+                    continue;
+                }
                 const count =
                     prev[rowUp + x - 1]! +
                     prev[rowUp + x]! +
@@ -47,7 +49,9 @@ function dilateDarkFlags(flags: Uint8Array, w: number, h: number, passes: number
                     prev[rowDown + x - 1]! +
                     prev[rowDown + x]! +
                     prev[rowDown + x + 1]!;
-                if (count >= 5) flags[row + x] = 1;
+                if (count >= 5) {
+                    flags[row + x] = 1;
+                }
             }
         }
     }
@@ -81,7 +85,9 @@ export function computeDarknessMap(
     gameplayAttrs: Uint8Array | null,
     dilate = true
 ): Uint8Array | null {
-    if (!terrainAttrs && !gameplayAttrs) return null;
+    if (!terrainAttrs && !gameplayAttrs) {
+        return null;
+    }
 
     const w = mapSize.width;
     const h = mapSize.height;
@@ -101,7 +107,9 @@ export function computeDarknessMap(
 
     // Write dark land into R channel
     for (let i = 0; i < len; i++) {
-        if (darkFlags[i]) result[i * 2] = 255;
+        if (darkFlags[i]) {
+            result[i * 2] = 255;
+        }
     }
 
     // Write fog of war into G channel

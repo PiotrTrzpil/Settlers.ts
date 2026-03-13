@@ -76,7 +76,9 @@ export function captureOriginalTerrain(
                 continue;
             }
             const nIdx = mapSize.toIndex(nx, ny);
-            if (captured.has(nIdx)) continue;
+            if (captured.has(nIdx)) {
+                continue;
+            }
             captured.add(nIdx);
 
             tiles.push({
@@ -207,7 +209,9 @@ export function setConstructionSiteGroundType(
 ): boolean {
     let modified = false;
     for (const tile of originalTerrain.tiles) {
-        if (!tile.isFootprint) continue;
+        if (!tile.isFootprint) {
+            continue;
+        }
         const idx = mapSize.toIndex(tile.x, tile.y);
         if (groundType[idx] !== CONSTRUCTION_SITE_GROUND_TYPE) {
             groundType[idx] = CONSTRUCTION_SITE_GROUND_TYPE;

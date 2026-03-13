@@ -234,7 +234,9 @@ export function gatherDemands(
 
     for (const demand of demandQueue.getAllDemands()) {
         const building = gameState.getEntity(demand.buildingId);
-        if (!building || building.player !== player) continue;
+        if (!building || building.player !== player) {
+            continue;
+        }
         summaries.push({
             id: demand.id,
             buildingId: demand.buildingId,
@@ -311,7 +313,9 @@ export function gatherCarriers(
     const carriers: CarrierSummary[] = [];
 
     for (const [id, , entity] of query(carrierRegistry.store, gameState.store)) {
-        if (entity.player !== player) continue;
+        if (entity.player !== player) {
+            continue;
+        }
         const summary = buildCarrierSummary(id, entity, settlerTaskSystem, logisticsDispatcher);
         carriers.push(summary);
         stats.carrierCount++;
@@ -348,7 +352,9 @@ export function gatherLogisticsSnapshot(
     // Count active jobs and stalled jobs from job store
     for (const [carrierId, job] of config.logisticsDispatcher.jobStore.jobs.raw) {
         const carrier = config.gameState.getEntity(carrierId);
-        if (!carrier || carrier.player !== player) continue;
+        if (!carrier || carrier.player !== player) {
+            continue;
+        }
         stats.activeJobCount++;
         if (config.demandQueue.getGameTime() - job.createdAt > STALL_THRESHOLD_SEC) {
             stats.stalledCount++;
@@ -372,12 +378,16 @@ export function gatherProductionBuildings(
     const result: ProductionBuildingSummary[] = [];
 
     for (const entity of gameState.entityIndex.ofTypeAndPlayer(EntityType.Building, player)) {
-        if (!inventoryManager.hasSlots(entity.id)) continue;
+        if (!inventoryManager.hasSlots(entity.id)) {
+            continue;
+        }
         const allSlots = inventoryManager.getSlots(entity.id);
 
         const inputs = collectSlots(allSlots.filter(s => s.kind === SlotKind.Input));
         const outputs = collectSlots(allSlots.filter(s => s.kind === SlotKind.Output || s.kind === SlotKind.Storage));
-        if (inputs.length === 0 && outputs.length === 0) continue;
+        if (inputs.length === 0 && outputs.length === 0) {
+            continue;
+        }
 
         result.push({
             entityId: entity.id,
@@ -399,7 +409,9 @@ function collectSlots(
 ): SlotSummary[] {
     const result: SlotSummary[] = [];
     for (const slot of slots) {
-        if (slot.materialType === EMaterialType.NO_MATERIAL) continue;
+        if (slot.materialType === EMaterialType.NO_MATERIAL) {
+            continue;
+        }
         result.push({
             material: formatMaterial(slot.materialType),
             current: slot.currentAmount,
@@ -423,10 +435,14 @@ export function gatherPiles(
 
     for (const entity of gameState.entityIndex.ofTypeAndPlayer(EntityType.StackedPile, player)) {
         const pileState = gameState.piles.states.get(entity.id);
-        if (!pileState) continue;
+        if (!pileState) {
+            continue;
+        }
 
         const kind = pileState.kind.kind;
-        if (kindFilter && kind !== kindFilter) continue;
+        if (kindFilter && kind !== kindFilter) {
+            continue;
+        }
 
         result.push({
             entityId: entity.id,
@@ -456,9 +472,13 @@ export function gatherWorkers(
     const result: WorkerSummary[] = [];
 
     for (const entity of gameState.entityIndex.ofTypeAndPlayer(EntityType.Unit, player)) {
-        if (!isNonCarrierWorker(entity.subType)) continue;
+        if (!isNonCarrierWorker(entity.subType)) {
+            continue;
+        }
         const workerSummary = buildWorkerSummary(entity.id, entity, settlerTaskSystem, gameState, stateFilter);
-        if (workerSummary) result.push(workerSummary);
+        if (workerSummary) {
+            result.push(workerSummary);
+        }
     }
 
     result.sort((a, b) => a.entityId - b.entityId);
@@ -473,14 +493,20 @@ function buildWorkerSummary(
     stateFilter: string | undefined
 ): WorkerSummary | null {
     const state = settlerTaskSystem.getSettlerState(entityId);
-    if (!state) return null;
-    if (stateFilter && state !== stateFilter) return null;
+    if (!state) {
+        return null;
+    }
+    if (stateFilter && state !== stateFilter) {
+        return null;
+    }
 
     const assignedBuilding = settlerTaskSystem.getAssignedBuilding(entityId);
     let assignedBuildingType: string | null = null;
     if (assignedBuilding !== null) {
         const bldg = gameState.getEntity(assignedBuilding);
-        if (bldg) assignedBuildingType = buildingTypeNameSafe(bldg.subType);
+        if (bldg) {
+            assignedBuildingType = buildingTypeNameSafe(bldg.subType);
+        }
     }
 
     return {
@@ -508,7 +534,9 @@ export function gatherTransportJobs(
 
     for (const [carrierId, job] of logisticsDispatcher.jobStore.jobs.raw) {
         const carrier = gameState.getEntity(carrierId);
-        if (!carrier || carrier.player !== player) continue;
+        if (!carrier || carrier.player !== player) {
+            continue;
+        }
         result.push({
             id: job.id,
             carrierId,
@@ -529,7 +557,9 @@ function scanBuildings(gameState: GameState, inventoryManager: BuildingInventory
     const fullOutputBuildings: number[] = [];
 
     for (const entity of gameState.entityIndex.ofTypeAndPlayer(EntityType.Building, player)) {
-        if (!inventoryManager.hasSlots(entity.id)) continue;
+        if (!inventoryManager.hasSlots(entity.id)) {
+            continue;
+        }
         const outputs = inventoryManager
             .getSlots(entity.id)
             .filter(
@@ -548,9 +578,13 @@ function countCarrierStatus(config: SnapshotConfig, player: number) {
     let total = 0;
     let idle = 0;
     for (const [id, , entity] of query(config.carrierRegistry.store, config.gameState.store)) {
-        if (entity.player !== player) continue;
+        if (entity.player !== player) {
+            continue;
+        }
         total++;
-        if (config.settlerTaskSystem.getActiveJobId(id) === null) idle++;
+        if (config.settlerTaskSystem.getActiveJobId(id) === null) {
+            idle++;
+        }
     }
     return { total, idle };
 }
@@ -558,7 +592,9 @@ function countCarrierStatus(config: SnapshotConfig, player: number) {
 function findIdleWorkers(gameState: GameState, settlerTaskSystem: SettlerTaskSystem, player: number): number[] {
     const idleWorkers: number[] = [];
     for (const entity of gameState.entityIndex.ofTypeAndPlayer(EntityType.Unit, player)) {
-        if (!isNonCarrierWorker(entity.subType)) continue;
+        if (!isNonCarrierWorker(entity.subType)) {
+            continue;
+        }
         if (settlerTaskSystem.getSettlerState(entity.id) === SettlerState.IDLE) {
             idleWorkers.push(entity.id);
         }

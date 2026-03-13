@@ -30,7 +30,9 @@ export class PlacementPreviewPass implements IRenderPass {
     public draw(gl: WebGL2RenderingContext, projection: Float32Array, viewPoint: IViewPoint): void {
         const { ctx } = this;
         const preview = ctx.placementPreview;
-        if (!preview) return;
+        if (!preview) {
+            return;
+        }
 
         const { tile, valid, entityType, subType, race, variation, level } = preview;
 

@@ -32,7 +32,9 @@ export class WorkAreaAdjustHandler implements BuildingAdjustHandler {
     constructor(private readonly store: WorkAreaStore) {}
 
     getItems(buildingType: BuildingType, race: Race): readonly AdjustableItem[] {
-        if (!hasWorkArea(buildingType, race)) return [];
+        if (!hasWorkArea(buildingType, race)) {
+            return [];
+        }
         return [WORK_AREA_INSTANCE_ITEM];
     }
 
@@ -79,7 +81,9 @@ export class WorkAreaAdjustHandler implements BuildingAdjustHandler {
         race: Race,
         activeItemKey: string | null
     ): TileHighlight[] {
-        if (!hasWorkArea(buildingType, race)) return [];
+        if (!hasWorkArea(buildingType, race)) {
+            return [];
+        }
 
         const offset = this.store.getOffset(buildingType, race, buildingId);
         const x = buildingX + offset.dx;

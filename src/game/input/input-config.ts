@@ -137,9 +137,15 @@ export function findBindingsForAction(config: InputConfig, action: InputAction):
 
 /** Check if required modifiers are pressed */
 function checkRequiredModifiers(binding: KeyBinding, shiftKey: boolean, ctrlKey: boolean, altKey: boolean): boolean {
-    if (binding.shift && !shiftKey) return false;
-    if (binding.ctrl && !ctrlKey) return false;
-    if (binding.alt && !altKey) return false;
+    if (binding.shift && !shiftKey) {
+        return false;
+    }
+    if (binding.ctrl && !ctrlKey) {
+        return false;
+    }
+    if (binding.alt && !altKey) {
+        return false;
+    }
     return true;
 }
 
@@ -159,13 +165,21 @@ export function matchesKeyBinding(
     ctrlKey: boolean,
     altKey: boolean
 ): boolean {
-    if (!binding.key && !binding.altKey) return false;
+    if (!binding.key && !binding.altKey) {
+        return false;
+    }
 
     const keyMatches = binding.key === code || binding.altKey === code;
-    if (!keyMatches) return false;
+    if (!keyMatches) {
+        return false;
+    }
 
-    if (!checkRequiredModifiers(binding, shiftKey, ctrlKey, altKey)) return false;
-    if (hasUnwantedModifiers(binding, ctrlKey, altKey)) return false;
+    if (!checkRequiredModifiers(binding, shiftKey, ctrlKey, altKey)) {
+        return false;
+    }
+    if (hasUnwantedModifiers(binding, ctrlKey, altKey)) {
+        return false;
+    }
 
     return true;
 }
@@ -181,14 +195,26 @@ export function matchesMouseBinding(
     altKey: boolean
 ): boolean {
     // Must have a mouse button to match
-    if (binding.mouseButton === undefined) return false;
-    if (binding.mouseButton !== button) return false;
+    if (binding.mouseButton === undefined) {
+        return false;
+    }
+    if (binding.mouseButton !== button) {
+        return false;
+    }
 
     // Check modifiers
-    if (binding.shift && !shiftKey) return false;
-    if (!binding.shift && shiftKey) return false;
-    if (binding.ctrl && !ctrlKey) return false;
-    if (binding.alt && !altKey) return false;
+    if (binding.shift && !shiftKey) {
+        return false;
+    }
+    if (!binding.shift && shiftKey) {
+        return false;
+    }
+    if (binding.ctrl && !ctrlKey) {
+        return false;
+    }
+    if (binding.alt && !altKey) {
+        return false;
+    }
 
     return true;
 }

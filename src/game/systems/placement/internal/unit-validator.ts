@@ -31,7 +31,9 @@ export interface UnitPlacementContext extends PlacementContext {
 export function validateUnitPlacement(x: number, y: number, ctx: UnitPlacementContext): PlacementResult {
     // Check ground-layer occupancy (bounds, terrain, ground entities)
     const groundResult = validateSingleTilePlacement(x, y, ctx);
-    if (!groundResult.canPlace) return groundResult;
+    if (!groundResult.canPlace) {
+        return groundResult;
+    }
 
     // Check unit-layer occupancy
     if (ctx.unitOccupancy.has(tileKey(x, y))) {

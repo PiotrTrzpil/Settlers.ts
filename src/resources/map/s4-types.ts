@@ -516,7 +516,9 @@ const resourceRanges: [number, number, ResourceCategory, string][] = [
 
 /** Get resource type category and amount from value */
 export function parseResourceValue(value: number): { type: ResourceCategory; amount: number; name: string } {
-    if (value === 0) return { type: 'none', amount: 0, name: 'None' };
+    if (value === 0) {
+        return { type: 'none', amount: 0, name: 'None' };
+    }
     for (const [min, max, type, displayName] of resourceRanges) {
         if (value >= min && value <= max) {
             const amount = value - min + 1;

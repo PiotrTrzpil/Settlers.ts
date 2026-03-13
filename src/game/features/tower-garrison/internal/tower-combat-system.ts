@@ -64,14 +64,18 @@ export class TowerCombatSystem implements TickSystem {
         try {
             this.scanTimer += dt;
             const shouldScan = this.scanTimer >= TOWER_SCAN_INTERVAL;
-            if (shouldScan) this.scanTimer = 0;
+            if (shouldScan) {
+                this.scanTimer = 0;
+            }
 
             // Advance all bowman attack timers
             for (const [id, t] of this.attackTimers) {
                 this.attackTimers.set(id, t + dt);
             }
 
-            if (!shouldScan) return;
+            if (!shouldScan) {
+                return;
+            }
 
             // Clear stale targets — rebuilt each scan
             towerBowmanTargets.clear();
@@ -91,11 +95,17 @@ export class TowerCombatSystem implements TickSystem {
     private processAllTowers(): void {
         // Iterate all buildings that have garrisons
         for (const entity of this.gameState.entities) {
-            if (entity.type !== EntityType.Building) continue;
+            if (entity.type !== EntityType.Building) {
+                continue;
+            }
 
             const garrison = this.garrisonManager.getGarrison(entity.id);
-            if (!garrison) continue;
-            if (garrison.bowmanSlots.unitIds.length === 0) continue;
+            if (!garrison) {
+                continue;
+            }
+            if (garrison.bowmanSlots.unitIds.length === 0) {
+                continue;
+            }
 
             this.processTower(entity, garrison.bowmanSlots.unitIds);
         }
@@ -107,16 +117,24 @@ export class TowerCombatSystem implements TickSystem {
         // Find valid enemy targets
         const enemies: Entity[] = [];
         for (const candidate of nearby) {
-            if (candidate.type !== EntityType.Unit) continue;
-            if (candidate.player === building.player) continue;
+            if (candidate.type !== EntityType.Unit) {
+                continue;
+            }
+            if (candidate.player === building.player) {
+                continue;
+            }
 
             const combatState = this.combatSystem.getState(candidate.id);
-            if (!combatState || combatState.health <= 0) continue;
+            if (!combatState || combatState.health <= 0) {
+                continue;
+            }
 
             enemies.push(candidate);
         }
 
-        if (enemies.length === 0) return;
+        if (enemies.length === 0) {
+            return;
+        }
 
         // Each bowman independently picks nearest target and fires
         for (const bowmanId of bowmanIds) {

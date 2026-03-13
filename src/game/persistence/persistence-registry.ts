@@ -63,18 +63,26 @@ function topologicalSort(registrations: PersistenceRegistration[]): PersistenceR
 
     function visit(reg: PersistenceRegistration): void {
         const key = reg.persistable.persistKey;
-        if (visited.has(key)) return;
-        if (visiting.has(key)) throw new Error(`PersistenceRegistry: cycle involving '${key}'`);
+        if (visited.has(key)) {
+            return;
+        }
+        if (visiting.has(key)) {
+            throw new Error(`PersistenceRegistry: cycle involving '${key}'`);
+        }
         visiting.add(key);
         for (const dep of reg.after) {
             const depReg = byKey.get(dep);
-            if (depReg) visit(depReg);
+            if (depReg) {
+                visit(depReg);
+            }
         }
         visiting.delete(key);
         visited.add(key);
         sorted.push(reg);
     }
 
-    for (const reg of registrations) visit(reg);
+    for (const reg of registrations) {
+        visit(reg);
+    }
     return sorted;
 }

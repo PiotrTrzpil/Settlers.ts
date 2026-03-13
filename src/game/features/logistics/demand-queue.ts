@@ -115,7 +115,9 @@ export class DemandQueue {
         if (this.sortedCacheDirty) {
             const sorted = [...this.demands.values()];
             sorted.sort((a, b) => {
-                if (a.priority !== b.priority) return a.priority - b.priority;
+                if (a.priority !== b.priority) {
+                    return a.priority - b.priority;
+                }
                 return a.timestamp - b.timestamp;
             });
             this.sortedCache = sorted;
@@ -129,7 +131,9 @@ export class DemandQueue {
      */
     consumeDemand(demandId: number): boolean {
         const entry = this.demands.get(demandId);
-        if (!entry) return false;
+        if (!entry) {
+            return false;
+        }
 
         this.demands.delete(demandId);
         this.removeFromBuildingIndex(entry.buildingId, demandId);
@@ -149,7 +153,9 @@ export class DemandQueue {
      */
     cancelDemandsForBuilding(buildingId: number): number {
         const demandIds = this.byBuilding.get(buildingId);
-        if (!demandIds || demandIds.size === 0) return 0;
+        if (!demandIds || demandIds.size === 0) {
+            return 0;
+        }
 
         const ids = [...demandIds].sort((a, b) => a - b); // deterministic order
         for (const id of ids) {
@@ -165,12 +171,16 @@ export class DemandQueue {
      */
     countDemands(buildingId: number, material: EMaterialType): number {
         const demandIds = this.byBuilding.get(buildingId);
-        if (!demandIds) return 0;
+        if (!demandIds) {
+            return 0;
+        }
 
         let count = 0;
         for (const id of demandIds) {
             const entry = this.demands.get(id)!;
-            if (entry.materialType === material) count++;
+            if (entry.materialType === material) {
+                count++;
+            }
         }
         return count;
     }
@@ -212,7 +222,9 @@ export class DemandQueue {
 
     private removeFromBuildingIndex(buildingId: number, demandId: number): void {
         const set = this.byBuilding.get(buildingId);
-        if (!set) return;
+        if (!set) {
+            return;
+        }
         set.delete(demandId);
         if (set.size === 0) {
             this.byBuilding.delete(buildingId);

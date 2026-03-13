@@ -91,10 +91,13 @@ const DEFAULT_SETTINGS: GameSettings = {
 /** Load settings from localStorage, merging with defaults */
 function loadSettings(): GameSettings {
     try {
-        if (typeof localStorage === 'undefined' || typeof localStorage.getItem !== 'function')
+        if (typeof localStorage === 'undefined' || typeof localStorage.getItem !== 'function') {
             return { ...DEFAULT_SETTINGS };
+        }
         const stored = localStorage.getItem(SETTINGS_STORAGE_KEY);
-        if (!stored) return { ...DEFAULT_SETTINGS };
+        if (!stored) {
+            return { ...DEFAULT_SETTINGS };
+        }
 
         const parsed = JSON.parse(stored) as Partial<GameSettings>;
 

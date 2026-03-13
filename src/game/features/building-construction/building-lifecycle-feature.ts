@@ -85,7 +85,9 @@ export class BuildingLifecycleHandler {
                     usedPositions,
                     pileIndex,
                 });
-                if (position) usedPositions.add(`${position.x},${position.y}`);
+                if (position) {
+                    usedPositions.add(`${position.x},${position.y}`);
+                }
                 return position;
             });
         };
@@ -93,7 +95,9 @@ export class BuildingLifecycleHandler {
 
     private onBuildingPlaced({ buildingId, buildingType, x, y, player }: GameEvents['building:placed']): void {
         const entity = this.gameState.getEntity(buildingId);
-        if (!entity) return;
+        if (!entity) {
+            return;
+        }
         this.constructionSiteManager.registerSite(buildingId, buildingType, entity.race, player, x, y);
         const constructionConfig = getConstructionInventoryConfig(buildingType, entity.race);
         if (constructionConfig.inputSlots.length > 0) {

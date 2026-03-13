@@ -42,8 +42,12 @@ export function computeSlopeDifficulty(
     groundHeight: Uint8Array,
     mapSize: MapSize
 ): PlacementStatus {
-    if (tiles.length === 0) return PlacementStatus.Easy;
-    if (tiles.length === 1) return PlacementStatus.Easy;
+    if (tiles.length === 0) {
+        return PlacementStatus.Easy;
+    }
+    if (tiles.length === 1) {
+        return PlacementStatus.Easy;
+    }
 
     // Build a set of footprint tile indices for quick lookup
     const footprintSet = new Set<number>();
@@ -86,8 +90,12 @@ export function computeSlopeDifficulty(
     }
 
     // Rate difficulty based on maximum gradient found
-    if (maxGradient <= 2) return PlacementStatus.Easy;
-    if (maxGradient <= 5) return PlacementStatus.Medium;
+    if (maxGradient <= 2) {
+        return PlacementStatus.Easy;
+    }
+    if (maxGradient <= 5) {
+        return PlacementStatus.Medium;
+    }
     return PlacementStatus.Difficult;
 }
 
@@ -106,7 +114,9 @@ export function isSlopeValid(tiles: TileCoord[], groundHeight: Uint8Array, mapSi
  * Used for continuous color gradients in the building indicator.
  */
 export function computeHeightRange(tiles: TileCoord[], groundHeight: Uint8Array, mapSize: MapSize): number {
-    if (tiles.length <= 1) return 0;
+    if (tiles.length <= 1) {
+        return 0;
+    }
 
     const footprintSet = new Set<number>();
     for (const tile of tiles) {
@@ -120,9 +130,13 @@ export function computeHeightRange(tiles: TileCoord[], groundHeight: Uint8Array,
         for (const [dx, dy] of CARDINAL_OFFSETS) {
             const nx = tile.x + dx;
             const ny = tile.y + dy;
-            if (nx < 0 || nx >= mapSize.width || ny < 0 || ny >= mapSize.height) continue;
+            if (nx < 0 || nx >= mapSize.width || ny < 0 || ny >= mapSize.height) {
+                continue;
+            }
             const nIdx = mapSize.toIndex(nx, ny);
-            if (!footprintSet.has(nIdx)) continue;
+            if (!footprintSet.has(nIdx)) {
+                continue;
+            }
             maxGradient = Math.max(maxGradient, Math.abs(h - groundHeight[nIdx]!));
         }
     }

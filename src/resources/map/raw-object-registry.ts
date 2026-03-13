@@ -356,7 +356,9 @@ const LOOKUP_BY_RAW: ReadonlyArray<RawObjectEntry | null> = (() => {
 
 /** Look up a raw byte value in the registry. Returns the entry or undefined if unknown. */
 export function lookupRawObject(raw: number): RawObjectEntry | undefined {
-    if (raw < 0 || raw > 255) return undefined;
+    if (raw < 0 || raw > 255) {
+        return undefined;
+    }
     return LOOKUP_BY_RAW[raw] ?? undefined;
 }
 
@@ -373,7 +375,9 @@ export function lookupRawObject(raw: number): RawObjectEntry | undefined {
 const TYPE_TO_RAW: ReadonlyMap<number, number> = (() => {
     const m = new Map<number, number>();
     for (const e of RAW_OBJECT_REGISTRY) {
-        if (e.type != null && !m.has(e.type)) m.set(e.type, e.raw);
+        if (e.type != null && !m.has(e.type)) {
+            m.set(e.type, e.raw);
+        }
     }
     return m;
 })();

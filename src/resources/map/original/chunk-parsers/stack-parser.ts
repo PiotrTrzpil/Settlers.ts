@@ -52,9 +52,15 @@ function skipRemainingBytes(reader: BinaryReader, startPos: number, entrySize: n
  * Validate stack entry data
  */
 function isValidStackEntry(x: number, y: number, materialType: number, amount: number): boolean {
-    if (x > MAX_COORDINATE || y > MAX_COORDINATE) return false;
-    if (materialType < 0 || materialType > MAX_GOOD_TYPE) return false;
-    if (amount === 0 || amount > 8) return false;
+    if (x > MAX_COORDINATE || y > MAX_COORDINATE) {
+        return false;
+    }
+    if (materialType < 0 || materialType > MAX_GOOD_TYPE) {
+        return false;
+    }
+    if (amount === 0 || amount > 8) {
+        return false;
+    }
     return true;
 }
 
@@ -89,7 +95,9 @@ export function parseStacks(reader: BinaryReader): MapStackData[] {
 
         skipRemainingBytes(reader, startPos, entrySize);
 
-        if (!isValidStackEntry(x, y, materialType, amount)) continue;
+        if (!isValidStackEntry(x, y, materialType, amount)) {
+            continue;
+        }
 
         stacks.push({
             x,

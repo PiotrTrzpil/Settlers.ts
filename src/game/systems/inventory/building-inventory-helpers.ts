@@ -112,9 +112,13 @@ export function getProductionInputs(
     gameState: GameState,
     recipe?: Recipe
 ): readonly EMaterialType[] | undefined {
-    if (recipe) return recipe.inputs;
+    if (recipe) {
+        return recipe.inputs;
+    }
     const entity = gameState.getEntity(buildingId);
-    if (!entity) return undefined;
+    if (!entity) {
+        return undefined;
+    }
     return BUILDING_PRODUCTIONS.get(entity.subType as BuildingType)?.inputs;
 }
 
@@ -127,8 +131,12 @@ export function getProductionOutput(
     gameState: GameState,
     recipe?: Recipe
 ): EMaterialType | undefined {
-    if (recipe) return recipe.output;
+    if (recipe) {
+        return recipe.output;
+    }
     const entity = gameState.getEntity(buildingId);
-    if (!entity) return undefined;
+    if (!entity) {
+        return undefined;
+    }
     return BUILDING_PRODUCTIONS.get(entity.subType as BuildingType)?.output;
 }

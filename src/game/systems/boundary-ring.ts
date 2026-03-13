@@ -50,7 +50,9 @@ const DEFAULT_MIN_SPACING = 1.2;
  * and keep only the best candidate per slice (closest to average boundary distance).
  */
 function angularBin<T>(items: ScreenDot<T>[], minSpacing: number): ScreenDot<T>[] {
-    if (items.length <= 1) return items;
+    if (items.length <= 1) {
+        return items;
+    }
 
     // Centroid
     let cx = 0;
@@ -103,11 +105,15 @@ function hasNearby<T>(sd: ScreenDot<T>, hash: Map<number, ScreenDot<T>[]>, minDi
     for (let dy = -1; dy <= 1; dy++) {
         for (let dx = -1; dx <= 1; dx++) {
             const bucket = hash.get(hashKey(hx + dx, hy + dy));
-            if (!bucket) continue;
+            if (!bucket) {
+                continue;
+            }
             for (const p of bucket) {
                 const dsx = sd.sx - p.sx;
                 const dsy = sd.sy - p.sy;
-                if (dsx * dsx + dsy * dsy < minDistSq) return true;
+                if (dsx * dsx + dsy * dsy < minDistSq) {
+                    return true;
+                }
             }
         }
     }
@@ -120,7 +126,9 @@ function distancePrune<T>(candidates: ScreenDot<T>[], minDistSq: number): T[] {
     const hash = new Map<number, ScreenDot<T>[]>();
 
     for (const sd of candidates) {
-        if (hasNearby(sd, hash, minDistSq)) continue;
+        if (hasNearby(sd, hash, minDistSq)) {
+            continue;
+        }
 
         accepted.push(sd.dot);
         const hKey = hashKey(Math.floor(sd.sx), Math.floor(sd.sy));
@@ -151,7 +159,9 @@ function distancePrune<T>(candidates: ScreenDot<T>[], minDistSq: number): T[] {
  * @param minSpacing - Desired screen-space distance between dots.
  */
 export function thinDotsInScreenSpace<T extends BoundaryDot>(raw: T[], minSpacing = DEFAULT_MIN_SPACING): T[] {
-    if (raw.length <= 1) return [...raw];
+    if (raw.length <= 1) {
+        return [...raw];
+    }
 
     // Project to screen space
     const projected: ScreenDot<T>[] = raw.map(dot => ({

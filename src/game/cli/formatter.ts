@@ -11,7 +11,9 @@ export function createFormatter(): OutputFormatter {
 const COL_SEP = '  ';
 
 function table(rows: string[][], headers?: string[]): string {
-    if (rows.length === 0 && !headers) return '';
+    if (rows.length === 0 && !headers) {
+        return '';
+    }
 
     const allRows = headers ? [headers, ...rows] : rows;
     const colCount = allRows.reduce((max, row) => Math.max(max, row.length), 0);
@@ -43,7 +45,9 @@ function formatRow(row: string[], widths: number[]): string {
 }
 
 function kv(entries: [string, string | number][]): string {
-    if (entries.length === 0) return '';
+    if (entries.length === 0) {
+        return '';
+    }
 
     const maxKeyLen = entries.reduce((max, [key]) => Math.max(max, key.length), 0);
 

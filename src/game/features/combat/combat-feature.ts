@@ -68,7 +68,9 @@ export const CombatFeature: FeatureDefinition = {
             });
 
             const prefix = UNIT_XML_PREFIX[UnitType.Angel];
-            if (!prefix) throw new Error('No XML prefix for UnitType.Angel');
+            if (!prefix) {
+                throw new Error('No XML prefix for UnitType.Angel');
+            }
             ctx.visualService.play(angel.id, xmlKey(prefix, 'WALK'), { loop: false, direction: 0 });
 
             deathAngelSystem.register(angel.id, UnitType.Angel);

@@ -69,10 +69,14 @@ export class BuildingAdjustMode extends BaseInputMode {
     /** Set the active adjustment from the UI. */
     setActiveItem(buildingId: number, item: AdjustableItem, handler: BuildingAdjustHandler): void {
         const deps = this.getDeps();
-        if (!deps) return;
+        if (!deps) {
+            return;
+        }
 
         const building = deps.gameState.getEntity(buildingId);
-        if (!building || building.type !== EntityType.Building) return;
+        if (!building || building.type !== EntityType.Building) {
+            return;
+        }
 
         this.active = {
             buildingId,
@@ -117,11 +121,17 @@ export class BuildingAdjustMode extends BaseInputMode {
     }
 
     override onPointerUp(data: PointerData, _context: InputContext): InputResult {
-        if (data.button !== MouseButton.Left) return UNHANDLED;
-        if (!this.active) return UNHANDLED;
+        if (data.button !== MouseButton.Left) {
+            return UNHANDLED;
+        }
+        if (!this.active) {
+            return UNHANDLED;
+        }
 
         const deps = this.getDeps();
-        if (!deps) return UNHANDLED;
+        if (!deps) {
+            return UNHANDLED;
+        }
 
         if (this.active.item.precision === 'tile') {
             return this.handleTilePlacement(data, deps);
@@ -131,8 +141,12 @@ export class BuildingAdjustMode extends BaseInputMode {
     }
 
     private handleTilePlacement(data: PointerData, _deps: BuildingAdjustDeps): InputResult {
-        if (!this.active) throw new Error('BuildingAdjustMode: handleTilePlacement called without active adjustment');
-        if (data.tileX === undefined || data.tileY === undefined) return UNHANDLED;
+        if (!this.active) {
+            throw new Error('BuildingAdjustMode: handleTilePlacement called without active adjustment');
+        }
+        if (data.tileX === undefined || data.tileY === undefined) {
+            return UNHANDLED;
+        }
 
         const { buildingX, buildingY, item, handler, buildingType, race, buildingId } = this.active;
         const offset: TileOffset = {
@@ -152,11 +166,15 @@ export class BuildingAdjustMode extends BaseInputMode {
         // For now, we use tile coordinates as a rough position and allow the
         // renderer glue layer to provide precise pixel conversion.
         // The actual pixel offset is computed by the caller via setPixelOffset().
-        if (data.tileX === undefined || data.tileY === undefined) return UNHANDLED;
+        if (data.tileX === undefined || data.tileY === undefined) {
+            return UNHANDLED;
+        }
 
         // Store screen coordinates in the mode data so the glue layer can
         // resolve them to pixel offsets using the coordinate system.
-        if (!this.active) throw new Error('BuildingAdjustMode: handlePixelPlacement called without active adjustment');
+        if (!this.active) {
+            throw new Error('BuildingAdjustMode: handlePixelPlacement called without active adjustment');
+        }
         const { item, handler, buildingType, race } = this.active;
 
         // For pixel items, we expect the glue layer to call resolvePixelPlacement()
@@ -199,7 +217,9 @@ export class BuildingAdjustMode extends BaseInputMode {
      */
     completePixelPlacement(buildingType: BuildingType, race: Race, itemKey: string, offset: PixelOffset): void {
         const handler = this.active?.handler;
-        if (!handler) return;
+        if (!handler) {
+            return;
+        }
         handler.setOffset(buildingType, race, itemKey, offset);
     }
 
@@ -219,10 +239,14 @@ export class BuildingAdjustMode extends BaseInputMode {
     }
 
     private buildHighlights(): TileHighlight[] {
-        if (!this.active) return [];
+        if (!this.active) {
+            return [];
+        }
 
         const deps = this.getDeps();
-        if (!deps) return [];
+        if (!deps) {
+            return [];
+        }
 
         const { buildingId, buildingX, buildingY, buildingType, race, item, handler } = this.active;
         const highlights: TileHighlight[] = [];

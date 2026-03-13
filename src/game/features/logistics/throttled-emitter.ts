@@ -25,7 +25,9 @@ export class ThrottledEmitter<E extends keyof GameEvents> {
     /** Emit the event if the key hasn't been emitted within the cooldown period. */
     tryEmit(key: string, payload: GameEvents[E]): void {
         const lastEmit = this.cooldowns.get(key) ?? -Infinity;
-        if (this.elapsedTime - lastEmit < this.cooldownSec) return;
+        if (this.elapsedTime - lastEmit < this.cooldownSec) {
+            return;
+        }
         this.cooldowns.set(key, this.elapsedTime);
         this.eventBus.emit(this.eventName, payload);
     }

@@ -43,16 +43,24 @@ export function useGarrison(
 
         const g = game.value;
         const id = buildingId.value;
-        if (!g || id === null) return null;
+        if (!g || id === null) {
+            return null;
+        }
 
         const entity = g.state.getEntity(id);
-        if (!entity || entity.type !== EntityType.Building) return null;
+        if (!entity || entity.type !== EntityType.Building) {
+            return null;
+        }
 
         const capacity = getGarrisonCapacity(entity.subType as BuildingType);
-        if (!capacity) return null;
+        if (!capacity) {
+            return null;
+        }
 
         const garrison = g.services.garrisonManager.getGarrison(id);
-        if (!garrison) return null;
+        if (!garrison) {
+            return null;
+        }
 
         const swordsmanUnits = garrison.swordsmanSlots.unitIds.map(unitId => {
             const unitType = g.state.getEntityOrThrow(unitId, 'useGarrison:swordsman').subType as UnitType;

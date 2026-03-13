@@ -28,10 +28,16 @@ export function useCarrierDebugInfo(
         // eslint-disable-next-line sonarjs/void-use -- intentionally touch reactive tick to trigger re-evaluation
         void tick.value;
         const entity = selectedEntity.value;
-        if (!entity || entity.type !== EntityType.Unit) return null;
-        if (!game.value) return null;
+        if (!entity || entity.type !== EntityType.Unit) {
+            return null;
+        }
+        if (!game.value) {
+            return null;
+        }
 
-        if (!game.value.services.carrierRegistry.has(entity.id)) return null;
+        if (!game.value.services.carrierRegistry.has(entity.id)) {
+            return null;
+        }
 
         const movement = game.value.state.movement.getController(entity.id);
         const pathLength = movement?.path.length ?? 0;

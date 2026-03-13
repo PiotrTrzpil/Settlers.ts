@@ -107,7 +107,9 @@ export class TransportJobStore {
      */
     promotePending(jobId: number): TransportJobRecord | null {
         const record = this.pendingReservations.get(jobId);
-        if (!record) return null;
+        if (!record) {
+            return null;
+        }
         this.pendingReservations.delete(jobId);
         this.jobs.set(record.carrierId, record);
         return record;
@@ -119,7 +121,9 @@ export class TransportJobStore {
      */
     removePending(jobId: number): TransportJobRecord | null {
         const record = this.pendingReservations.get(jobId);
-        if (!record) return null;
+        if (!record) {
+            return null;
+        }
         this.pendingReservations.delete(jobId);
         return record;
     }
@@ -223,10 +227,14 @@ export class TransportJobStore {
 
     /** Check if a demand ID already has a job (prevents double-assignment). */
     hasDemand(demandId: number): boolean {
-        if (this.byDemand.get(demandId).size > 0) return true;
+        if (this.byDemand.get(demandId).size > 0) {
+            return true;
+        }
         // Also check pending reservations
         for (const record of this.pendingReservations.values()) {
-            if (record.demandId === demandId) return true;
+            if (record.demandId === demandId) {
+                return true;
+            }
         }
         return false;
     }

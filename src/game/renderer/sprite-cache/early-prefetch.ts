@@ -42,7 +42,9 @@ function paletteUrl(race: Race): string {
 function isCacheDisabled(): boolean {
     try {
         const stored = localStorage.getItem('settlers_game_settings');
-        if (!stored) return false;
+        if (!stored) {
+            return false;
+        }
         const settings = JSON.parse(stored);
         return settings.cacheDisabled === true;
     } catch {
@@ -104,7 +106,9 @@ if (!isCacheDisabled()) {
     let gotDone = false;
 
     const maybeTerminate = () => {
-        if (gotPalette && gotDone) worker.terminate();
+        if (gotPalette && gotDone) {
+            worker.terminate();
+        }
     };
 
     let resolveMeta: (value: { metaJson: string; timings: Record<string, number> } | null) => void;
@@ -133,14 +137,20 @@ if (!isCacheDisabled()) {
             `[${performance.now().toFixed(0)}ms] [cache] palette: ${Math.round(msg.paletteBytes / 1024)}KB in ${msg.readMs}ms`
         );
         gotPalette = true;
-        if (paletteCb) paletteCb(pd);
-        else bufferedPalette = { data: pd };
+        if (paletteCb) {
+            paletteCb(pd);
+        } else {
+            bufferedPalette = { data: pd };
+        }
         maybeTerminate();
     };
 
     const handleLayer = (msg: Extract<WorkerOutboundMessage, { type: 'layer' }>) => {
-        if (layerCb) layerCb(msg.index, msg.buffer);
-        else bufferedLayers.push({ index: msg.index, buffer: msg.buffer });
+        if (layerCb) {
+            layerCb(msg.index, msg.buffer);
+        } else {
+            bufferedLayers.push({ index: msg.index, buffer: msg.buffer });
+        }
     };
 
     const handleDone = (msg: Extract<WorkerOutboundMessage, { type: 'done' }>) => {
@@ -150,17 +160,25 @@ if (!isCacheDisabled()) {
                 `${(msg.timings.layerBytes / 1024 / 1024).toFixed(1)}MB)`
         );
         gotDone = true;
-        if (doneCb) doneCb(msg.timings);
-        else bufferedDone = { timings: msg.timings };
+        if (doneCb) {
+            doneCb(msg.timings);
+        } else {
+            bufferedDone = { timings: msg.timings };
+        }
         maybeTerminate();
     };
 
     worker.onmessage = (e: MessageEvent<WorkerOutboundMessage>) => {
         const msg = e.data;
-        if (msg.type === 'meta') handleMeta(msg);
-        else if (msg.type === 'palette') handlePalette(msg);
-        else if (msg.type === 'layer') handleLayer(msg);
-        else handleDone(msg);
+        if (msg.type === 'meta') {
+            handleMeta(msg);
+        } else if (msg.type === 'palette') {
+            handlePalette(msg);
+        } else if (msg.type === 'layer') {
+            handleLayer(msg);
+        } else {
+            handleDone(msg);
+        }
     };
 
     worker.onerror = () => {

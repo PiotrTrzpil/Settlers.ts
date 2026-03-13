@@ -34,7 +34,9 @@ const TERRAIN_BANDS: ReadonlyArray<{ frac0: number; frac1: number; type: Landsca
 function getTerrainForRow(row: number): LandscapeType {
     const frac = row / MAP_SIZE;
     for (const band of TERRAIN_BANDS) {
-        if (frac >= band.frac0 && frac < band.frac1) return band.type;
+        if (frac >= band.frac0 && frac < band.frac1) {
+            return band.type;
+        }
     }
     return LandscapeType.Grass;
 }

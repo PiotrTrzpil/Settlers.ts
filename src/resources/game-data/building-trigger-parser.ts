@@ -14,9 +14,13 @@ import { parseXML, getChildText, getChildNumber } from './xml-utils';
 
 function parseTriggerSound(parent: Element): TriggerSound | null {
     const soundEl = parent.getElementsByTagName('sound')[0];
-    if (!soundEl) return null;
+    if (!soundEl) {
+        return null;
+    }
     const def = getChildText(soundEl, 'def');
-    if (!def) return null;
+    if (!def) {
+        return null;
+    }
     return { def };
 }
 
@@ -71,7 +75,9 @@ export function parseBuildingTriggers(xmlContent: string): Map<RaceId, RaceBuild
         const raceEl = raceElements[i]!;
         const raceId = raceEl.getAttribute('id')?.trim() as RaceId;
         // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- getAttribute may return null despite cast
-        if (!raceId) continue;
+        if (!raceId) {
+            continue;
+        }
 
         const triggers = new Map<string, BuildingTrigger>();
 

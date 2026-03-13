@@ -70,20 +70,26 @@ export class VictoryConditionsSystem implements TickSystem {
     // ── Event handlers (called by feature wiring) ───────────────────────
 
     onBuildingCompleted(buildingType: BuildingType, player: number): void {
-        if (buildingType !== BuildingType.Castle) return;
+        if (buildingType !== BuildingType.Castle) {
+            return;
+        }
         this.castleCounts.set(player, (this.castleCounts.get(player) ?? 0) + 1);
         this.dirty = true;
     }
 
     onBuildingRemoved(buildingType: BuildingType, player: number): void {
-        if (buildingType !== BuildingType.Castle) return;
+        if (buildingType !== BuildingType.Castle) {
+            return;
+        }
         const count = this.castleCounts.get(player) ?? 0;
         this.castleCounts.set(player, Math.max(0, count - 1));
         this.dirty = true;
     }
 
     onBuildingOwnerChanged(buildingType: BuildingType, oldPlayer: number, newPlayer: number): void {
-        if (buildingType !== BuildingType.Castle) return;
+        if (buildingType !== BuildingType.Castle) {
+            return;
+        }
         const oldCount = this.castleCounts.get(oldPlayer) ?? 0;
         this.castleCounts.set(oldPlayer, Math.max(0, oldCount - 1));
         this.castleCounts.set(newPlayer, (this.castleCounts.get(newPlayer) ?? 0) + 1);
@@ -103,7 +109,9 @@ export class VictoryConditionsSystem implements TickSystem {
     getActivePlayers(): number[] {
         const active: number[] = [];
         for (const [player, status] of this.playerStatus) {
-            if (status === PlayerStatus.Playing) active.push(player);
+            if (status === PlayerStatus.Playing) {
+                active.push(player);
+            }
         }
         return active;
     }
@@ -111,15 +119,21 @@ export class VictoryConditionsSystem implements TickSystem {
     // ── TickSystem ──────────────────────────────────────────────────────
 
     tick(_dt: number): void {
-        if (this.result.ended) return;
+        if (this.result.ended) {
+            return;
+        }
 
         if (!this.initialized) {
-            if (!this.tryInitPlayers()) return;
+            if (!this.tryInitPlayers()) {
+                return;
+            }
             // First init counts as dirty — need initial check
             this.dirty = true;
         }
 
-        if (!this.dirty) return;
+        if (!this.dirty) {
+            return;
+        }
         this.dirty = false;
         this.checkConditions();
     }
@@ -129,7 +143,9 @@ export class VictoryConditionsSystem implements TickSystem {
     /** Returns true if players were successfully initialized. */
     private tryInitPlayers(): boolean {
         const races = this.gameState.playerRaces;
-        if (races.size === 0) return false;
+        if (races.size === 0) {
+            return false;
+        }
 
         for (const playerIndex of races.keys()) {
             this.playerStatus.set(playerIndex, PlayerStatus.Playing);
@@ -141,7 +157,9 @@ export class VictoryConditionsSystem implements TickSystem {
             const buildingIds = this.gameState.entityIndex.idsOfTypeAndPlayer(EntityType.Building, playerIndex);
             for (const id of buildingIds) {
                 const entity = this.gameState.getEntity(id);
-                if (entity && entity.subType === BuildingType.Castle) count++;
+                if (entity && entity.subType === BuildingType.Castle) {
+                    count++;
+                }
             }
             this.castleCounts.set(playerIndex, count);
         }
@@ -161,11 +179,15 @@ export class VictoryConditionsSystem implements TickSystem {
                 break;
             }
         }
-        if (!anyCastles) return;
+        if (!anyCastles) {
+            return;
+        }
 
         // Check each active player for castle ownership
         for (const [player, status] of this.playerStatus) {
-            if (status !== PlayerStatus.Playing) continue;
+            if (status !== PlayerStatus.Playing) {
+                continue;
+            }
             if ((this.castleCounts.get(player) ?? 0) === 0) {
                 this.eliminatePlayer(player);
             }

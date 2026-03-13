@@ -55,7 +55,9 @@ export function isMineBuilding(buildingType: BuildingType): boolean {
  */
 export function getBuildingHotspot(buildingType: BuildingType, race: Race): { x: number; y: number } {
     const info = getBuildingInfo(race, buildingType);
-    if (!info) throw new Error(`No BuildingInfo for ${BuildingType[buildingType]} / race ${Race[race]}`);
+    if (!info) {
+        throw new Error(`No BuildingInfo for ${BuildingType[buildingType]} / race ${Race[race]}`);
+    }
     return { x: info.hotSpotX, y: info.hotSpotY };
 }
 
@@ -71,7 +73,9 @@ export function getBuildingHotspot(buildingType: BuildingType, race: Race): { x:
  */
 export function getBuildingFootprint(x: number, y: number, buildingType: BuildingType, race: Race): TileCoord[] {
     const info = getBuildingInfo(race, buildingType);
-    if (!info) throw new Error(`No BuildingInfo for ${BuildingType[buildingType]} / race ${Race[race]}`);
+    if (!info) {
+        throw new Error(`No BuildingInfo for ${BuildingType[buildingType]} / race ${Race[race]}`);
+    }
     if (info.buildingPosLines.length === 0) {
         throw new Error(
             `No footprint bitmask data for ${BuildingType[buildingType]} / race ${Race[race]}. ` +
@@ -90,8 +94,12 @@ export function getBuildingFootprint(x: number, y: number, buildingType: Buildin
  */
 export function getBuildingBlockArea(x: number, y: number, buildingType: BuildingType, race: Race): TileCoord[] {
     const info = getBuildingInfo(race, buildingType);
-    if (!info) throw new Error(`No BuildingInfo for ${BuildingType[buildingType]} / race ${Race[race]}`);
-    if (info.blockPosLines.length === 0) return [];
+    if (!info) {
+        throw new Error(`No BuildingInfo for ${BuildingType[buildingType]} / race ${Race[race]}`);
+    }
+    if (info.blockPosLines.length === 0) {
+        return [];
+    }
     return getBuildingBlockAreaAt(info, x, y);
 }
 
@@ -117,18 +125,24 @@ export function getBuildingPassableTiles(
     } catch {
         return passable; // game data not loaded
     }
-    if (!info) return passable;
+    if (!info) {
+        return passable;
+    }
 
     const blockKeys = new Set(blockArea.map(t => tileKey(t.x, t.y)));
 
     // Door: anchor-relative offset
     const doorKey = tileKey(x + info.door.xOffset, y + info.door.yOffset);
-    if (blockKeys.has(doorKey)) passable.add(doorKey);
+    if (blockKeys.has(doorKey)) {
+        passable.add(doorKey);
+    }
 
     // Piles: anchor-relative offsets — mark as passable if inside block area
     for (const pile of info.piles) {
         const pileKey = tileKey(x + pile.xOffset, y + pile.yOffset);
-        if (blockKeys.has(pileKey)) passable.add(pileKey);
+        if (blockKeys.has(pileKey)) {
+            passable.add(pileKey);
+        }
     }
 
     return passable;

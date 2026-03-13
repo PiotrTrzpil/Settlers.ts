@@ -109,7 +109,9 @@ function reqsCommand(): CliCommand {
 
             const lines: string[] = [];
             lines.push(`=== Demands (${stats.demandCount} pending, ${stats.activeJobCount} active jobs) ===`);
-            if (stats.stalledCount > 0) lines.push(`stalled: ${stats.stalledCount}`);
+            if (stats.stalledCount > 0) {
+                lines.push(`stalled: ${stats.stalledCount}`);
+            }
             lines.push('');
 
             if (demands.length > 0) {
@@ -146,7 +148,9 @@ function pilesCommand(): CliCommand {
             const kindFilter = typeof args['kind'] === 'string' ? args['kind'] : undefined;
             const piles = gatherPiles(config, ctx.player, { limit, kindFilter });
 
-            if (piles.length === 0) return ok('no piles');
+            if (piles.length === 0) {
+                return ok('no piles');
+            }
 
             const totals = new Map<string, number>();
             let totalQty = 0;
@@ -191,7 +195,9 @@ function workersCommand(): CliCommand {
             const stateFilter = typeof args['state'] === 'string' ? args['state'] : undefined;
             const workers = gatherWorkers(config, ctx.player, { limit, stateFilter });
 
-            if (workers.length === 0) return ok('no workers');
+            if (workers.length === 0) {
+                return ok('no workers');
+            }
 
             const byState = new Map<string, number>();
             for (const w of workers) {
@@ -227,7 +233,9 @@ function jobsCommand(): CliCommand {
             const limit = limitArg(args);
             const jobs = gatherTransportJobs(config, ctx.player, { limit });
 
-            if (jobs.length === 0) return ok('no active transport jobs');
+            if (jobs.length === 0) {
+                return ok('no active transport jobs');
+            }
 
             const lines: string[] = [];
             lines.push(`=== Transport Jobs (${jobs.length} active) ===`);
@@ -329,7 +337,9 @@ function isOutputSlotWithMaterial(slot: {
     materialType: EMaterialType;
     currentAmount: number;
 }): boolean {
-    if (slot.kind !== SlotKind.Output && slot.kind !== SlotKind.Storage) return false;
+    if (slot.kind !== SlotKind.Output && slot.kind !== SlotKind.Storage) {
+        return false;
+    }
     return slot.materialType !== EMaterialType.NO_MATERIAL && slot.currentAmount > 0;
 }
 
@@ -342,10 +352,16 @@ function formatStorageMaterials(
     const totals = new Map<EMaterialType, number>();
     const invManager = ctx.game.services.inventoryManager;
     for (const e of state.entityIndex.ofTypeAndPlayer(EntityType.Building, player)) {
-        if ((e.subType as BuildingType) !== BuildingType.StorageArea) continue;
-        if (!invManager.hasSlots(e.id)) continue;
+        if ((e.subType as BuildingType) !== BuildingType.StorageArea) {
+            continue;
+        }
+        if (!invManager.hasSlots(e.id)) {
+            continue;
+        }
         for (const slot of invManager.getSlots(e.id)) {
-            if (!isOutputSlotWithMaterial(slot)) continue;
+            if (!isOutputSlotWithMaterial(slot)) {
+                continue;
+            }
             totals.set(slot.materialType, (totals.get(slot.materialType) ?? 0) + slot.currentAmount);
         }
     }
@@ -360,7 +376,9 @@ function formatStorageMaterials(
 
 function formatProductionStatus(config: SnapshotConfig, player: number, ctx: CliContext, lines: string[]): void {
     const buildings = gatherProductionBuildings(config, player);
-    if (buildings.length === 0) return;
+    if (buildings.length === 0) {
+        return;
+    }
 
     lines.push('');
     lines.push('=== Production ===');
@@ -370,8 +388,11 @@ function formatProductionStatus(config: SnapshotConfig, player: number, ctx: Cli
         const outputStr =
             b.outputs.length > 0 ? b.outputs.map(s => `${s.material} ${s.current}/${s.max}`).join(', ') : '-';
         let status = 'ok';
-        if (b.isConstructing) status = 'building';
-        else if (b.outputFull) status = 'FULL';
+        if (b.isConstructing) {
+            status = 'building';
+        } else if (b.outputFull) {
+            status = 'FULL';
+        }
         return [`${b.type}#${b.entityId}`, inputStr, outputStr, status];
     });
     lines.push(ctx.fmt.table(rows, ['building', 'input', 'output', 'status']));
@@ -397,7 +418,9 @@ function formatCarrierAndPileSummary(config: SnapshotConfig, player: number, lin
 function formatBottleneckWarnings(config: SnapshotConfig, player: number, lines: string[]): void {
     const diags = detectBottlenecks(config, player);
     const warnings = diags.filter(d => d.severity !== 'info');
-    if (warnings.length === 0) return;
+    if (warnings.length === 0) {
+        return;
+    }
 
     lines.push('');
     for (const d of warnings) {

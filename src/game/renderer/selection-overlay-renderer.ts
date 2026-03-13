@@ -105,10 +105,16 @@ export class SelectionOverlayRenderer {
         gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
 
         for (const entity of sortedEntities) {
-            if (!selectedEntityIds.has(entity.id)) continue;
+            if (!selectedEntityIds.has(entity.id)) {
+                continue;
+            }
             // Skip units (use dots) and buildings (use sprite-based indicator in entity-sprite-pass)
-            if (entity.type === EntityType.Unit) continue;
-            if (entity.type === EntityType.Building) continue;
+            if (entity.type === EntityType.Unit) {
+                continue;
+            }
+            if (entity.type === EntityType.Building) {
+                continue;
+            }
 
             // Non-building entities use simple scale-based sizing
             const worldPos = getEntityWorldPos(entity, ctx);
@@ -223,13 +229,17 @@ export class SelectionOverlayRenderer {
         aColor: number,
         ctx: SelectionRenderContext
     ): void {
-        if (selectedEntityIds.size === 0) return;
+        if (selectedEntityIds.size === 0) {
+            return;
+        }
 
         gl.vertexAttrib4f(aColor, PATH_COLOR[0]!, PATH_COLOR[1]!, PATH_COLOR[2]!, PATH_COLOR[3]!);
 
         for (const entityId of selectedEntityIds) {
             const unitState = ctx.unitStates.get(entityId);
-            if (!unitState || unitState.pathIndex >= unitState.path.length) continue;
+            if (!unitState || unitState.pathIndex >= unitState.path.length) {
+                continue;
+            }
 
             const maxDots = Math.min(unitState.path.length, unitState.pathIndex + MAX_PATH_DOTS);
             for (let i = unitState.pathIndex; i < maxDots; i++) {
@@ -323,7 +333,9 @@ export class SelectionOverlayRenderer {
             const dx = p1.worldX - p0.worldX;
             const dy = p1.worldY - p0.worldY;
             const len = Math.sqrt(dx * dx + dy * dy);
-            if (len < 0.001) continue;
+            if (len < 0.001) {
+                continue;
+            }
 
             const nx = (-dy / len) * lineWidth * 0.5;
             const ny = (dx / len) * lineWidth * 0.5;
@@ -369,13 +381,19 @@ export class SelectionOverlayRenderer {
         aColor: number,
         ctx: SelectionRenderContext
     ): void {
-        if (selectedEntityIds.size === 0) return;
+        if (selectedEntityIds.size === 0) {
+            return;
+        }
 
         gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
 
         for (const entity of sortedEntities) {
-            if (!selectedEntityIds.has(entity.id)) continue;
-            if (entity.type !== EntityType.Unit) continue;
+            if (!selectedEntityIds.has(entity.id)) {
+                continue;
+            }
+            if (entity.type !== EntityType.Unit) {
+                continue;
+            }
 
             // Draw small dot at logical origin (current tile position)
             const originPos = TilePicker.tileToWorld(
@@ -414,7 +432,9 @@ export class SelectionOverlayRenderer {
         ctx: SelectionRenderContext
     ): void {
         const buildings = sortedEntities.filter(e => e.type === EntityType.Building);
-        if (buildings.length === 0) return;
+        if (buildings.length === 0) {
+            return;
+        }
 
         gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
 
@@ -431,7 +451,9 @@ export class SelectionOverlayRenderer {
             const blockKeys = new Set<string>();
             try {
                 const blockArea = getBuildingBlockArea(entity.x, entity.y, buildingType, entity.race);
-                for (const t of blockArea) blockKeys.add(tileKey(t.x, t.y));
+                for (const t of blockArea) {
+                    blockKeys.add(tileKey(t.x, t.y));
+                }
             } catch {
                 /* no block data — treat all as block area */
             }
@@ -473,8 +495,12 @@ export class SelectionOverlayRenderer {
         doorPos: { x: number; y: number },
         blockKeys: Set<string>
     ): readonly number[] {
-        if (tile.x === doorPos.x && tile.y === doorPos.y) return FOOTPRINT_DOOR_COLOR;
-        if (blockKeys.size === 0 || blockKeys.has(tileKey(tile.x, tile.y))) return FOOTPRINT_TILE_COLOR;
+        if (tile.x === doorPos.x && tile.y === doorPos.y) {
+            return FOOTPRINT_DOOR_COLOR;
+        }
+        if (blockKeys.size === 0 || blockKeys.has(tileKey(tile.x, tile.y))) {
+            return FOOTPRINT_TILE_COLOR;
+        }
         return FOOTPRINT_EDGE_COLOR;
     }
 
@@ -491,7 +517,9 @@ export class SelectionOverlayRenderer {
         ctx: SelectionRenderContext,
         color: readonly number[]
     ): void {
-        if (circles.length === 0) return;
+        if (circles.length === 0) {
+            return;
+        }
 
         const c = color;
         gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
@@ -548,7 +576,9 @@ export class SelectionOverlayRenderer {
                 const dx = p1.worldX - p0.worldX;
                 const dy = p1.worldY - p0.worldY;
                 const len = Math.sqrt(dx * dx + dy * dy);
-                if (len < 0.001) continue;
+                if (len < 0.001) {
+                    continue;
+                }
 
                 // Normal (perpendicular) for line width
                 const nx = (-dy / len) * lineWidth * 0.5;
@@ -589,8 +619,12 @@ export class SelectionOverlayRenderer {
      * Get the scale for an entity type.
      */
     private getEntityScale(entityType: EntityType): number {
-        if (entityType === EntityType.Building) return BUILDING_SCALE;
-        if (entityType === EntityType.StackedPile) return PILE_SCALE;
+        if (entityType === EntityType.Building) {
+            return BUILDING_SCALE;
+        }
+        if (entityType === EntityType.StackedPile) {
+            return PILE_SCALE;
+        }
         return UNIT_SCALE;
     }
 
@@ -683,7 +717,9 @@ export class SelectionOverlayRenderer {
         aColor: number,
         ctx: SelectionRenderContext
     ): void {
-        if (highlights.length === 0) return;
+        if (highlights.length === 0) {
+            return;
+        }
         gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
 
         const diamondVerts = new Float32Array(12);

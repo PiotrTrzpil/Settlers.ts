@@ -27,7 +27,9 @@ export interface CliWsHandle {
  * Returns a handle for timeline integration (sending timeline:end).
  */
 export function connectCliWs(cli: GameCli): CliWsHandle | undefined {
-    if (!import.meta.env.DEV) return undefined;
+    if (!import.meta.env.DEV) {
+        return undefined;
+    }
 
     let retries = 0;
     let ws: WebSocket | null = null;
@@ -45,7 +47,9 @@ export function connectCliWs(cli: GameCli): CliWsHandle | undefined {
             const capture = getBridge().timelineCapture;
             if (capture) {
                 capture.onFlush = entries => {
-                    if (!ws || ws.readyState !== WebSocket.OPEN) return;
+                    if (!ws || ws.readyState !== WebSocket.OPEN) {
+                        return;
+                    }
                     const batch: WsTimelineBatch = {
                         type: 'timeline:batch',
                         entries,
@@ -77,7 +81,9 @@ export function connectCliWs(cli: GameCli): CliWsHandle | undefined {
         ws.onclose = () => {
             // Detach timeline flush callback so capture doesn't send to a dead socket
             const capture = getBridge().timelineCapture;
-            if (capture) capture.onFlush = null;
+            if (capture) {
+                capture.onFlush = null;
+            }
 
             ws = null;
             if (retries < MAX_RETRIES) {
@@ -94,15 +100,21 @@ export function connectCliWs(cli: GameCli): CliWsHandle | undefined {
     function handleControlMessage(msg: WsControlMessage): void {
         const capture = getBridge().timelineCapture;
         if (msg.type === 'timeline:subscribe') {
-            if (capture) capture.addSubscriber();
+            if (capture) {
+                capture.addSubscriber();
+            }
         } else {
-            if (capture) capture.removeSubscriber();
+            if (capture) {
+                capture.removeSubscriber();
+            }
         }
     }
 
     /** Send a timeline:end push to notify all subscribers that recording stopped. */
     function sendTimelineEnd(): void {
-        if (!ws || ws.readyState !== WebSocket.OPEN) return;
+        if (!ws || ws.readyState !== WebSocket.OPEN) {
+            return;
+        }
         const end: WsTimelineEnd = { type: 'timeline:end' };
         ws.send(JSON.stringify(end));
     }

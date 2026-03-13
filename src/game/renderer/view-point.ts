@@ -166,7 +166,9 @@ export class ViewPoint implements IViewPoint {
         this.onMove = null;
 
         // Only remove listeners if we attached them
-        if (this.externalInput) return;
+        if (this.externalInput) {
+            return;
+        }
 
         window.removeEventListener('pointerup', this.handlePointerUp);
         window.removeEventListener('keydown', this.handleKeyDown);
@@ -273,14 +275,20 @@ export class ViewPoint implements IViewPoint {
         }
 
         // Legacy keyboard panning (non-external input mode)
-        if (this.keysDown.size === 0) return;
+        if (this.keysDown.size === 0) {
+            return;
+        }
 
         const speed = this.panSpeed * this.zoomValue * dt;
         let dx = 0;
         let dy = 0;
 
-        if (this.keysDown.has('d')) dx += speed;
-        if (this.keysDown.has('a')) dx -= speed;
+        if (this.keysDown.has('d')) {
+            dx += speed;
+        }
+        if (this.keysDown.has('a')) {
+            dx -= speed;
+        }
         if (this.keysDown.has('s')) {
             dy += speed * 2;
             dx += speed;
@@ -290,7 +298,9 @@ export class ViewPoint implements IViewPoint {
             dx -= speed;
         }
 
-        if (dx === 0 && dy === 0) return;
+        if (dx === 0 && dy === 0) {
+            return;
+        }
 
         this.posX += dx;
         this.posY += dy;
@@ -308,7 +318,9 @@ export class ViewPoint implements IViewPoint {
         e.preventDefault();
 
         const direction = Math.sign(e.deltaY);
-        if (direction === 0) return;
+        if (direction === 0) {
+            return;
+        }
 
         const canvas = this.canvas;
         const aspect = canvas.clientWidth / canvas.clientHeight;

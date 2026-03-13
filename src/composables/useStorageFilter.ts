@@ -45,9 +45,15 @@ export function useStorageFilter(
 } {
     const isStorageArea = computed<boolean>(() => {
         const e = entity.value;
-        if (!e) return false;
-        if (e.type !== EntityType.Building) return false;
-        if (e.subType !== BuildingType.StorageArea) return false;
+        if (!e) {
+            return false;
+        }
+        if (e.type !== EntityType.Building) {
+            return false;
+        }
+        if (e.subType !== BuildingType.StorageArea) {
+            return false;
+        }
         const isUnderConstruction = game.value?.services.constructionSiteManager.hasSite(e.id) ?? false;
         return !isUnderConstruction;
     });
@@ -58,7 +64,9 @@ export function useStorageFilter(
         void tick.value;
 
         const e = entity.value;
-        if (!e || !isStorageArea.value) return [];
+        if (!e || !isStorageArea.value) {
+            return [];
+        }
 
         const sfm = game.value?.services.storageFilterManager;
 
@@ -72,14 +80,18 @@ export function useStorageFilter(
     function setDirection(material: EMaterialType, direction: StorageDirection | null): void {
         const e = entity.value;
         const g = game.value;
-        if (!e || !g) return;
+        if (!e || !g) {
+            return;
+        }
         g.execute({ type: 'set_storage_filter', buildingId: e.id, material, direction });
     }
 
     function cycleDirection(material: EMaterialType): void {
         const e = entity.value;
         const g = game.value;
-        if (!e || !g) return;
+        if (!e || !g) {
+            return;
+        }
         const current = g.services.storageFilterManager.getDirection(e.id, material);
         const idx = DIRECTION_CYCLE.indexOf(current);
         const next = DIRECTION_CYCLE[(idx + 1) % DIRECTION_CYCLE.length]!;

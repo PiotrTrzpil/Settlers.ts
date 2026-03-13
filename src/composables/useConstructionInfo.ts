@@ -79,12 +79,18 @@ export function useConstructionInfo(
         void tick.value;
 
         const entity = selectedEntity.value;
-        if (!entity || entity.type !== EntityType.Building) return null;
-        if (!game.value) return null;
+        if (!entity || entity.type !== EntityType.Building) {
+            return null;
+        }
+        if (!game.value) {
+            return null;
+        }
 
         const csm = game.value.services.constructionSiteManager;
         const site = csm.getSite(entity.id);
-        if (!site) return null;
+        if (!site) {
+            return null;
+        }
 
         const overallProgress = computeOverallProgress(site.phase, site.terrain.progress, site.building.progress);
 

@@ -159,7 +159,9 @@ export class GameLoop {
 
     /** Enable game ticks (call after sprites are loaded) */
     public enableTicks(): void {
-        if (!this._ticksPaused) return;
+        if (!this._ticksPaused) {
+            return;
+        }
         this._ticksPaused = false;
         GameLoop.log.debug('Game ticks enabled');
     }
@@ -188,7 +190,9 @@ export class GameLoop {
     }
 
     public start(): void {
-        if (this.running) return;
+        if (this.running) {
+            return;
+        }
         this.running = true;
         this.lastTime = performance.now();
         this.animRequest = requestAnimationFrame(this.boundFrame);
@@ -248,7 +252,9 @@ export class GameLoop {
         for (const state of this.systemErrors.values()) {
             if (state.name === name) {
                 state.disabled = !enabled;
-                if (enabled) state.consecutiveFailures = 0;
+                if (enabled) {
+                    state.consecutiveFailures = 0;
+                }
                 return;
             }
         }
@@ -273,8 +279,9 @@ export class GameLoop {
      */
     private handleSystemError(system: TickSystem, error: unknown): void {
         const state = this.systemErrors.get(system);
-        if (!state)
+        if (!state) {
             throw new Error(`GameLoop: no error state for system (handleSystemError) — system may not be registered`);
+        }
         state.consecutiveFailures++;
         const err = error instanceof Error ? error : new Error(String(error));
 
@@ -337,7 +344,9 @@ export class GameLoop {
     }
 
     private frame(now: number): void {
-        if (!this.running) return;
+        if (!this.running) {
+            return;
+        }
 
         const frameStart = performance.now();
         const deltaSec = Math.min((now - this.lastTime) / 1000, 0.1); // cap at 100ms
@@ -440,10 +449,13 @@ export class GameLoop {
         // A failure in one system does not prevent others from running.
         for (const system of this.systems) {
             const errorState = this.systemErrors.get(system);
-            if (!errorState)
+            if (!errorState) {
                 throw new Error(`GameLoop: no error state for system in tick loop — system may not be registered`);
+            }
 
-            if (errorState.disabled) continue;
+            if (errorState.disabled) {
+                continue;
+            }
 
             const start = performance.now();
             try {

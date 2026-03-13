@@ -57,7 +57,9 @@ const selectedItemReader = shallowRef<BinaryReader | null>(null);
 
 const detailRows = computed(() => {
     const item = selectedItem.value;
-    if (!item) return [];
+    if (!item) {
+        return [];
+    }
     const valid = item.checkChecksum();
     return [
         { label: 'File Name', value: item.getFullName() },
@@ -82,13 +84,19 @@ function onSelectItem() {
 }
 
 function formatSize(bytes: number): string {
-    if (bytes < 1024) return `${bytes} B`;
-    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    if (bytes < 1024) {
+        return `${bytes} B`;
+    }
+    if (bytes < 1024 * 1024) {
+        return `${(bytes / 1024).toFixed(1)} KB`;
+    }
     return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
 }
 
 function getCompressionRatio(item: { length: number; decompressedLength: number }): string {
-    if (item.decompressedLength === 0) return '0';
+    if (item.decompressedLength === 0) {
+        return '0';
+    }
     const ratio = (1 - item.length / item.decompressedLength) * 100;
     return ratio.toFixed(1);
 }

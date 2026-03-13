@@ -15,7 +15,9 @@ import { getBuildingInfo, hasBuildingXmlMapping } from '../../data/game-data-acc
  * Derived from XML buildingInfo: a building has a work area when workingAreaRadius > 0.
  */
 export function hasWorkArea(buildingType: BuildingType, race: Race): boolean {
-    if (!hasBuildingXmlMapping(buildingType)) return false;
+    if (!hasBuildingXmlMapping(buildingType)) {
+        return false;
+    }
     const info = getBuildingInfo(race, buildingType);
     return info !== undefined && info.workingAreaRadius > 0;
 }

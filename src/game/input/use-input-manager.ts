@@ -93,7 +93,9 @@ export function useInputManager(options: UseInputManagerOptions): UseInputManage
 
     // Initialize manager when canvas is available
     function initManager(): void {
-        if (!options.canvas.value) return;
+        if (!options.canvas.value) {
+            return;
+        }
 
         // Clean up existing manager
         if (manager.value) {
@@ -188,7 +190,9 @@ export function useInputManager(options: UseInputManagerOptions): UseInputManage
 
     // Update function (call each frame)
     function update(deltaTime: number): void {
-        if (!manager.value) return;
+        if (!manager.value) {
+            return;
+        }
 
         manager.value.update(deltaTime);
 

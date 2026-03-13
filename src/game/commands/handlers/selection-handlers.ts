@@ -42,7 +42,9 @@ export function executeSelectAtTile(deps: SelectionDeps, cmd: SelectAtTileComman
     const entity = sel.canSelect(rawEntity, debugAll) ? rawEntity : undefined;
 
     if (cmd.addToSelection) {
-        if (entity) sel.toggle(entity.id);
+        if (entity) {
+            sel.toggle(entity.id);
+        }
         return commandSuccess([{ type: 'selection_changed', selectedIds: [...sel.selectedEntityIds] }]);
     }
 

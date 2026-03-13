@@ -202,7 +202,9 @@ export class SpriteMetadataSerializer {
     }
 
     private static deserializeMapObjects(data: any, mapObjects: MapObjectSpriteCategory): void {
-        if (data.mapObjects) mapObjects.setEntries(arrayToMap(data.mapObjects));
+        if (data.mapObjects) {
+            mapObjects.setEntries(arrayToMap(data.mapObjects));
+        }
     }
 
     private static deserializeGoods(data: any, goods: GoodSpriteCategory): void {
@@ -219,8 +221,12 @@ export class SpriteMetadataSerializer {
     }
 
     private static deserializeDecoration(data: any, decoration: DecorationSpriteCategory): void {
-        if (data.flags) decoration.setFlagsMap(arrayToMap(data.flags));
-        if (data.territoryDots) decoration.setTerritoryDotsMap(arrayToMap(data.territoryDots));
+        if (data.flags) {
+            decoration.setFlagsMap(arrayToMap(data.flags));
+        }
+        if (data.territoryDots) {
+            decoration.setTerritoryDotsMap(arrayToMap(data.territoryDots));
+        }
     }
 
     // eslint-disable-next-line sonarjs/cognitive-complexity -- legacy format compat requires branching
@@ -260,7 +266,9 @@ export class SpriteMetadataSerializer {
         entityType: EntityType,
         animated: AnimatedEntityCategory
     ): void {
-        if (!legacyData) return;
+        if (!legacyData) {
+            return;
+        }
         const subTypeMap = new Map<number, AnimatedSpriteEntry>();
         for (const [type, entryData] of legacyData) {
             subTypeMap.set(type, deserializeAnimEntry(entryData));
@@ -269,7 +277,9 @@ export class SpriteMetadataSerializer {
     }
 
     private static deserializeOverlays(data: any, overlays: OverlaySpriteCategory): void {
-        if (!data.overlayFrames) return;
+        if (!data.overlayFrames) {
+            return;
+        }
         for (const [key, frames] of data.overlayFrames as Array<[string, SpriteEntry[]]>) {
             const parts = key.split(':');
             overlays.register(Number(parts[0]), Number(parts[1]), Number(parts[2]), frames);
@@ -278,7 +288,9 @@ export class SpriteMetadataSerializer {
 
     private static deserializeLegacyLoadedRaces(data: any, loadedRaces: Set<number>): void {
         if (data.loadedRaces) {
-            for (const race of data.loadedRaces) loadedRaces.add(race);
+            for (const race of data.loadedRaces) {
+                loadedRaces.add(race);
+            }
         }
     }
 }

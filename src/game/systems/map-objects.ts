@@ -215,12 +215,18 @@ function addMapObject(
     groundType: Uint8Array,
     mapSize: MapSize
 ): 'tree' | 'deco' | null {
-    if (x < 0 || x >= mapSize.width || y < 0 || y >= mapSize.height) return null;
-    if (state.getGroundEntityAt(x, y)) return null;
+    if (x < 0 || x >= mapSize.width || y < 0 || y >= mapSize.height) {
+        return null;
+    }
+    if (state.getGroundEntityAt(x, y)) {
+        return null;
+    }
 
     const entry = lookupRawObject(rawType);
     if (entry?.type != null) {
-        if (entry.category === MapObjectCategory.Trees && !isBuildable(groundType[mapSize.toIndex(x, y)]!)) return null;
+        if (entry.category === MapObjectCategory.Trees && !isBuildable(groundType[mapSize.toIndex(x, y)]!)) {
+            return null;
+        }
         state.addEntity(EntityType.MapObject, entry.type, x, y, 0, { variation: entry.variation });
         return isTreeType(entry.type) ? 'tree' : 'deco';
     }
@@ -240,8 +246,11 @@ export function populateMapObjectsFromEntityData(
 
     for (const obj of objects) {
         const result = addMapObject(state, obj.x, obj.y, obj.objectType, groundType, mapSize);
-        if (result === 'tree') treeCount++;
-        else if (result === 'deco') decoCount++;
+        if (result === 'tree') {
+            treeCount++;
+        } else if (result === 'deco') {
+            decoCount++;
+        }
     }
 
     log.debug(`Populated ${treeCount} trees + ${decoCount} decorations from ${objects.length} tile entries`);
@@ -266,7 +275,9 @@ export function spawnTestObjects(
 ): number {
     const { groundType, mapSize } = terrain;
     const types = getTypesForCategory(category);
-    if (types.length === 0) return 0;
+    if (types.length === 0) {
+        return 0;
+    }
 
     const w = mapSize.width;
     const h = mapSize.height;
@@ -279,8 +290,12 @@ export function spawnTestObjects(
         const idx = mapSize.toIndex(x, y);
 
         // Skip unbuildable or occupied
-        if (!isBuildable(groundType[idx]!)) continue;
-        if (state.getGroundEntityAt(x, y)) continue;
+        if (!isBuildable(groundType[idx]!)) {
+            continue;
+        }
+        if (state.getGroundEntityAt(x, y)) {
+            continue;
+        }
 
         // Cycle through types in category
         const objectType = types[i % types.length]!;
@@ -311,8 +326,12 @@ export function clearMapObjects(state: GameState, category?: MapObjectCategory, 
 
     // Find matching entities
     const toRemove = state.entities.filter(e => {
-        if (e.type !== EntityType.MapObject) return false;
-        if (allowedTypes && !allowedTypes.has(e.subType as MapObjectType)) return false;
+        if (e.type !== EntityType.MapObject) {
+            return false;
+        }
+        if (allowedTypes && !allowedTypes.has(e.subType as MapObjectType)) {
+            return false;
+        }
         return true;
     });
 
@@ -339,7 +358,9 @@ export function countMapObjectsByCategory(state: GameState): Map<MapObjectCatego
     }
 
     for (const entity of state.entities) {
-        if (entity.type !== EntityType.MapObject) continue;
+        if (entity.type !== EntityType.MapObject) {
+            continue;
+        }
         const category = OBJECT_TYPE_CATEGORY[entity.subType as MapObjectType];
 
         if (category) {

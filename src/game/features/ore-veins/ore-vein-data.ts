@@ -69,7 +69,9 @@ export class OreVeinData {
         for (let y = y0; y <= y1; y++) {
             for (let x = x0; x <= x1; x++) {
                 const idx = this.toIndex(x, y);
-                if (this.oreType[idx] === requiredType && this.oreLevel[idx]! > 0) return true;
+                if (this.oreType[idx] === requiredType && this.oreLevel[idx]! > 0) {
+                    return true;
+                }
             }
         }
         return false;
@@ -103,7 +105,9 @@ export class OreVeinData {
             }
         }
 
-        if (candidates.length === 0) return false;
+        if (candidates.length === 0) {
+            return false;
+        }
 
         const idx = candidates[pickIndex(candidates.length)]!;
         this.oreLevel[idx] = this.oreLevel[idx]! - 1;
@@ -114,7 +118,9 @@ export class OreVeinData {
     getTotalOre(type: OreType): number {
         let total = 0;
         for (let i = 0; i < this.oreType.length; i++) {
-            if (this.oreType[i] === type) total += this.oreLevel[i]!;
+            if (this.oreType[i] === type) {
+                total += this.oreLevel[i]!;
+            }
         }
         return total;
     }

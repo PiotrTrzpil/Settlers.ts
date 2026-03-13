@@ -23,20 +23,29 @@ const PALM_TREES = new Set([MapObjectType.TreeCoconut, MapObjectType.TreeDate]);
 /** Check if terrain allows trees */
 function canHaveTrees(terrain: number): boolean {
     // No trees on water
-    if (terrain >= S4GroundType.WATER1 && terrain <= S4GroundType.WATER8) return false;
+    if (terrain >= S4GroundType.WATER1 && terrain <= S4GroundType.WATER8) {
+        return false;
+    }
 
     // No trees on rivers
-    if (terrain >= S4GroundType.RIVER1 && terrain <= S4GroundType.RIVER4) return false;
+    if (terrain >= S4GroundType.RIVER1 && terrain <= S4GroundType.RIVER4) {
+        return false;
+    }
 
     // No trees on snow/mountains
-    if (terrain === S4GroundType.SNOW || terrain === S4GroundType.SNOW_ROCK) return false;
+    if (terrain === S4GroundType.SNOW || terrain === S4GroundType.SNOW_ROCK) {
+        return false;
+    }
 
     // No trees on rock/mountains
-    if (terrain === S4GroundType.ROCK || terrain === S4GroundType.ROCK_GRASS || terrain === S4GroundType.ROCK_SNOW)
+    if (terrain === S4GroundType.ROCK || terrain === S4GroundType.ROCK_GRASS || terrain === S4GroundType.ROCK_SNOW) {
         return false;
+    }
 
     // No trees on roads
-    if (terrain === S4GroundType.SANDYROAD || terrain === S4GroundType.COBBLEDROAD) return false;
+    if (terrain === S4GroundType.SANDYROAD || terrain === S4GroundType.COBBLEDROAD) {
+        return false;
+    }
 
     return true;
 }
@@ -48,7 +57,9 @@ function isBeachTerrain(terrain: number): boolean {
 
 /** Filter tree type based on terrain */
 function isTreeAllowedOnTerrain(treeType: MapObjectType, terrain: number): boolean {
-    if (!canHaveTrees(terrain)) return false;
+    if (!canHaveTrees(terrain)) {
+        return false;
+    }
 
     // On beach/desert, only palms allowed
     if (isBeachTerrain(terrain)) {
@@ -81,8 +92,12 @@ export interface ExpandTreesOptions {
 function hasNearbyTree(x: number, y: number, occupied: Set<number>, mapSize: MapSize): boolean {
     for (let cy = -1; cy <= 1; cy++) {
         for (let cx = -1; cx <= 1; cx++) {
-            if (cx === 0 && cy === 0) continue;
-            if (occupied.has(mapSize.toIndex(x + cx, y + cy))) return true;
+            if (cx === 0 && cy === 0) {
+                continue;
+            }
+            if (occupied.has(mapSize.toIndex(x + cx, y + cy))) {
+                return true;
+            }
         }
     }
     return false;
@@ -103,7 +118,9 @@ function selectTreeTypeForExpansion(
 
     const allTreeTypes = getTypesForCategory(MapObjectCategory.Trees);
     const allowed = allTreeTypes.filter(t => isTreeAllowedOnTerrain(t, terrain));
-    if (allowed.length === 0) return seedType;
+    if (allowed.length === 0) {
+        return seedType;
+    }
 
     return allowed[Math.abs(hash(x, y, seed + 3000)) % allowed.length]!;
 }
@@ -124,7 +141,9 @@ function shouldPlaceTree(
     seed: number
 ): boolean {
     const dist = Math.sqrt(dx * dx + dy * dy);
-    if (dist > radius) return false;
+    if (dist > radius) {
+        return false;
+    }
 
     // Smooth fade: 1.0 at center, 0.0 at edge
     const distFactor = smoothstep(1 - dist / radius);
@@ -150,9 +169,13 @@ function collectSeedTrees(
         // so tree expansion never tries to place on an occupied tile.
         occupied.add(mapSize.toIndex(entity.x, entity.y));
 
-        if (entity.type !== EntityType.MapObject) continue;
+        if (entity.type !== EntityType.MapObject) {
+            continue;
+        }
         const cat = OBJECT_TYPE_CATEGORY[entity.subType as MapObjectType];
-        if (cat !== MapObjectCategory.Trees) continue;
+        if (cat !== MapObjectCategory.Trees) {
+            continue;
+        }
         seeds.push({ x: entity.x, y: entity.y, type: entity.subType as MapObjectType });
     }
     return { seeds, occupied };
@@ -175,15 +198,25 @@ function tryPlaceTreeAt(
     minSpacing: number
 ): boolean {
     const idx = mapSize.toIndex(nx, ny);
-    if (occupied.has(idx)) return false;
+    if (occupied.has(idx)) {
+        return false;
+    }
 
     const terrain = groundType[idx]!;
-    if (!isBuildable(terrain) || !canHaveTrees(terrain)) return false;
-    if (!shouldPlaceTree(dx, dy, nx, ny, radius, density, seed)) return false;
-    if (minSpacing > 0 && hasNearbyTree(nx, ny, occupied, mapSize)) return false;
+    if (!isBuildable(terrain) || !canHaveTrees(terrain)) {
+        return false;
+    }
+    if (!shouldPlaceTree(dx, dy, nx, ny, radius, density, seed)) {
+        return false;
+    }
+    if (minSpacing > 0 && hasNearbyTree(nx, ny, occupied, mapSize)) {
+        return false;
+    }
 
     const treeType = selectTreeTypeForExpansion(seedType, terrain, nx, ny, seed);
-    if (!isTreeAllowedOnTerrain(treeType, terrain)) return false;
+    if (!isTreeAllowedOnTerrain(treeType, terrain)) {
+        return false;
+    }
 
     state.addEntity(EntityType.MapObject, treeType, nx, ny, 0);
     occupied.add(idx);
@@ -210,10 +243,14 @@ function expandSeedTree(
 
     for (let dy = -radius; dy <= radius; dy++) {
         for (let dx = -radius; dx <= radius; dx++) {
-            if (dx === 0 && dy === 0) continue;
+            if (dx === 0 && dy === 0) {
+                continue;
+            }
             const nx = sx + dx;
             const ny = sy + dy;
-            if (nx < 0 || nx >= w || ny < 0 || ny >= h) continue;
+            if (nx < 0 || nx >= w || ny < 0 || ny >= h) {
+                continue;
+            }
 
             if (
                 tryPlaceTreeAt(

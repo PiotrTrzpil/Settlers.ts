@@ -43,13 +43,17 @@ export function useSpecialists(
         void tick.value;
 
         const g = game.value;
-        if (!g) return [];
+        if (!g) {
+            return [];
+        }
 
         const currentPlayer = g.currentPlayer;
         const entries: SpecialistEntry[] = [];
 
         for (const def of ALL_SPECIALISTS) {
-            if (!isUnitAvailableForRace(def.type, race.value)) continue;
+            if (!isUnitAvailableForRace(def.type, race.value)) {
+                continue;
+            }
 
             let liveCount = 0;
             for (const entity of g.state.entities) {

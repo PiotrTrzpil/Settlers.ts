@@ -99,10 +99,14 @@ export class TransportJobBuilder {
 
     /** Resolve a source pile position, falling back to building door or entity position. */
     private resolvePilePos(buildingId: number, pile: { x: number; y: number } | null): { x: number; y: number } {
-        if (pile) return pile;
+        if (pile) {
+            return pile;
+        }
         const entity = this.gameState.getEntityOrThrow(buildingId, 'transport building/pile');
         // Free piles: use entity position directly (not a building, no door offset)
-        if (entity.type !== EntityType.Building) return entity;
+        if (entity.type !== EntityType.Building) {
+            return entity;
+        }
         return getBuildingDoorPos(entity.x, entity.y, entity.race, entity.subType as BuildingType);
     }
 }

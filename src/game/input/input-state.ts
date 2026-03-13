@@ -86,14 +86,14 @@ export function createInputState(target: Ref<HTMLElement | null>, config: InputC
 
     function isMousePressed(button: MouseButton): boolean {
         switch (button) {
-        case MouseButton.Left:
-            return leftPressed.value;
-        case MouseButton.Right:
-            return rightPressed.value;
-        case MouseButton.Middle:
-            return middlePressed.value;
-        default:
-            return false;
+            case MouseButton.Left:
+                return leftPressed.value;
+            case MouseButton.Right:
+                return rightPressed.value;
+            case MouseButton.Middle:
+                return middlePressed.value;
+            default:
+                return false;
         }
     }
 
@@ -113,7 +113,9 @@ export function createInputState(target: Ref<HTMLElement | null>, config: InputC
     }
 
     function updateDrag(x: number, y: number, tileX?: number, tileY?: number): void {
-        if (!drag.value) return;
+        if (!drag.value) {
+            return;
+        }
 
         drag.value.currentX = x;
         drag.value.currentY = y;
@@ -182,15 +184,15 @@ export function handleKeyUp(state: InputState, code: string): void {
  */
 export function handlePointerDown(state: InputState, button: number): void {
     switch (button) {
-    case MouseButton.Left:
-        state.leftPressed.value = true;
-        break;
-    case MouseButton.Right:
-        state.rightPressed.value = true;
-        break;
-    case MouseButton.Middle:
-        state.middlePressed.value = true;
-        break;
+        case MouseButton.Left:
+            state.leftPressed.value = true;
+            break;
+        case MouseButton.Right:
+            state.rightPressed.value = true;
+            break;
+        case MouseButton.Middle:
+            state.middlePressed.value = true;
+            break;
     }
 }
 
@@ -199,15 +201,15 @@ export function handlePointerDown(state: InputState, button: number): void {
  */
 export function handlePointerUp(state: InputState, button: number): void {
     switch (button) {
-    case MouseButton.Left:
-        state.leftPressed.value = false;
-        break;
-    case MouseButton.Right:
-        state.rightPressed.value = false;
-        break;
-    case MouseButton.Middle:
-        state.middlePressed.value = false;
-        break;
+        case MouseButton.Left:
+            state.leftPressed.value = false;
+            break;
+        case MouseButton.Right:
+            state.rightPressed.value = false;
+            break;
+        case MouseButton.Middle:
+            state.middlePressed.value = false;
+            break;
     }
 }
 

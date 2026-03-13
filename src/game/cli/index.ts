@@ -20,6 +20,8 @@ export function createCli(game: GameCore): GameCli {
     const cli = new GameCli(game, [...actionCmds, ...economyCmds]);
     // Query commands need cli ref for help listing and log access — add after construction
     const queryCmds = createQueryCommands(() => cli.getCommands(), cli, cli);
-    for (const cmd of queryCmds) cli.registerCommand(cmd);
+    for (const cmd of queryCmds) {
+        cli.registerCommand(cmd);
+    }
     return cli;
 }

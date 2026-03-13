@@ -340,7 +340,9 @@ export class EntityVisualService {
 
         for (const state of this.states.values()) {
             const anim = state.animation;
-            if (!anim || !anim.playing) continue;
+            if (!anim || !anim.playing) {
+                continue;
+            }
 
             anim.elapsedMs += deltaMs;
 

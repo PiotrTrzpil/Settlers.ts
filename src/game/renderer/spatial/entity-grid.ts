@@ -147,7 +147,9 @@ export class EntityGrid {
         const newCellIndex = this.getCellIndex(entity.x, entity.y);
 
         // No change needed if same cell
-        if (oldCellIndex === newCellIndex) return;
+        if (oldCellIndex === newCellIndex) {
+            return;
+        }
 
         // Remove from old cell
         const oldCell = this.cells[oldCellIndex]!;
@@ -179,7 +181,9 @@ export class EntityGrid {
      */
     public removeEntity(entity: Entity): void {
         const cellIndex = this.entityCells.get(entity.id);
-        if (cellIndex === undefined) return;
+        if (cellIndex === undefined) {
+            return;
+        }
 
         const cell = this.cells[cellIndex]!;
         const idx = cell.entities.indexOf(entity);
@@ -243,8 +247,12 @@ export class EntityGrid {
         for (const cell of this.cells) {
             const count = cell.entities.length;
             totalEntities += count;
-            if (count > maxEntities) maxEntities = count;
-            if (count === 0) emptyCells++;
+            if (count > maxEntities) {
+                maxEntities = count;
+            }
+            if (count === 0) {
+                emptyCells++;
+            }
         }
 
         return {

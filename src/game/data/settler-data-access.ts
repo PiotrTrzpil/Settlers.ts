@@ -82,19 +82,21 @@ function filterWorkJobs(animLists: string[]): string[] {
 function deriveSearchType(info: SettlerValueInfo): SearchType | null {
     // Role-based fixed search types
     switch (info.role) {
-    case 'CARRIER_ROLE':
-        return SearchType.GOOD;
-    case 'BUILDER_ROLE':
-        return SearchType.CONSTRUCTION;
-    case 'DIGGER_ROLE':
-        return SearchType.CONSTRUCTION_DIG;
-    case 'HOUSE_WORKER_ROLE':
-        return SearchType.WORKPLACE;
+        case 'CARRIER_ROLE':
+            return SearchType.GOOD;
+        case 'BUILDER_ROLE':
+            return SearchType.CONSTRUCTION;
+        case 'DIGGER_ROLE':
+            return SearchType.CONSTRUCTION_DIG;
+        case 'HOUSE_WORKER_ROLE':
+            return SearchType.WORKPLACE;
     }
 
     // Free workers — derive from XML search types
     const searchTypes = info.searchTypes.filter(s => s !== 'SEARCH_NO_SEARCH');
-    if (searchTypes.length === 0) return null;
+    if (searchTypes.length === 0) {
+        return null;
+    }
 
     const nonSeed = searchTypes.find(s => !s.endsWith('_SEED_POS'));
     const primaryXml = nonSeed ?? searchTypes[0]!;
@@ -112,7 +114,9 @@ function deriveSearchType(info: SettlerValueInfo): SearchType | null {
  */
 function deriveSettlerConfig(info: SettlerValueInfo, settlerXmlId: string): SettlerConfig | null {
     const search = deriveSearchType(info);
-    if (search === null) return null;
+    if (search === null) {
+        return null;
+    }
 
     let workJobs = filterWorkJobs(info.animLists);
     let buildingJobsMap: Map<number, string[]> | undefined;
@@ -121,13 +125,17 @@ function deriveSettlerConfig(info: SettlerValueInfo, settlerXmlId: string): Sett
     if (workJobs.length === 0) {
         const { allJobs, buildingJobs } = collectBuildingAnimLists(settlerXmlId);
         workJobs = allJobs;
-        if (buildingJobs.size > 0) buildingJobsMap = buildingJobs;
+        if (buildingJobs.size > 0) {
+            buildingJobsMap = buildingJobs;
+        }
     } else {
         // Settlers that serve multiple building types (e.g. smelter → IronSmelter + SmeltGold,
         // smith → ToolSmith + WeaponSmith) list all jobs in their own animLists. We still need
         // the per-building job map so selectJob picks only the correct building's jobs.
         const { buildingJobs } = collectBuildingAnimLists(settlerXmlId);
-        if (buildingJobs.size > 1) buildingJobsMap = buildingJobs;
+        if (buildingJobs.size > 1) {
+            buildingJobsMap = buildingJobs;
+        }
     }
 
     // Derive plant/seed search type for dual-mode settlers (farmer, forester)
@@ -146,7 +154,9 @@ function findSettlerInfoAnyRace(xmlId: string): SettlerValueInfo | undefined {
     const loader = getGameDataLoader();
     for (const raceId of ALL_RACE_IDS) {
         const info = loader.getSettler(raceId, xmlId);
-        if (info) return info;
+        if (info) {
+            return info;
+        }
     }
     return undefined;
 }
@@ -167,11 +177,17 @@ function collectBuildingJobsForRace(
     buildingJobs: Map<number, string[]>
 ): boolean {
     const buildings = getGameDataLoader().getBuildingsForRace(raceId);
-    if (!buildings) return false;
+    if (!buildings) {
+        return false;
+    }
     for (const buildingInfo of buildings.values()) {
-        if (buildingInfo.inhabitant !== settlerXmlId || buildingInfo.animLists.length === 0) continue;
+        if (buildingInfo.inhabitant !== settlerXmlId || buildingInfo.animLists.length === 0) {
+            continue;
+        }
         const workJobs = filterWorkJobs(buildingInfo.animLists);
-        if (workJobs.length === 0) continue;
+        if (workJobs.length === 0) {
+            continue;
+        }
         allJobs.push(...workJobs);
         for (const bt of xmlIdToBuildingTypes(buildingInfo.id)) {
             buildingJobs.set(bt, workJobs);
@@ -184,7 +200,9 @@ function collectBuildingAnimLists(settlerXmlId: string): { allJobs: string[]; bu
     const allJobs: string[] = [];
     const buildingJobs = new Map<number, string[]>();
     for (const raceId of ALL_RACE_IDS) {
-        if (collectBuildingJobsForRace(raceId, settlerXmlId, allJobs, buildingJobs)) break;
+        if (collectBuildingJobsForRace(raceId, settlerXmlId, allJobs, buildingJobs)) {
+            break;
+        }
     }
     return { allJobs, buildingJobs };
 }
@@ -195,15 +213,21 @@ function collectBuildingAnimLists(settlerXmlId: string): { allJobs: string[]; bu
  */
 export function getSettlerConfig(race: Race, unitType: UnitType): SettlerConfig | undefined {
     const xmlId = UNIT_TYPE_TO_XML_SETTLER[unitType];
-    if (!xmlId) return undefined;
+    if (!xmlId) {
+        return undefined;
+    }
 
     const loader = getGameDataLoader();
-    if (!loader.isLoaded()) throw new Error('getSettlerConfig called before game data is loaded');
+    if (!loader.isLoaded()) {
+        throw new Error('getSettlerConfig called before game data is loaded');
+    }
 
     // Try specific race first, then any race (settler may only exist in one race's XML)
     const raceId = raceToRaceId(race);
     const info = loader.getSettler(raceId, xmlId) ?? findSettlerInfoAnyRace(xmlId);
-    if (!info) return undefined;
+    if (!info) {
+        return undefined;
+    }
 
     return deriveSettlerConfig(info, xmlId) ?? undefined;
 }
@@ -220,10 +244,14 @@ export function buildAllSettlerConfigs(): Map<UnitType, SettlerConfig> {
         const unitType = Number(unitTypeStr) as UnitType;
         const xmlId = UNIT_TYPE_TO_XML_SETTLER[unitType]!;
         const info = findSettlerInfoAnyRace(xmlId);
-        if (!info) continue;
+        if (!info) {
+            continue;
+        }
 
         const config = deriveSettlerConfig(info, xmlId);
-        if (config) configs.set(unitType, config);
+        if (config) {
+            configs.set(unitType, config);
+        }
     }
 
     // Military units: no autonomous work, but can execute dispatch jobs.

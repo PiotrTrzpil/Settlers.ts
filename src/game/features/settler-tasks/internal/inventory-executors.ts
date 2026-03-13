@@ -35,7 +35,9 @@ const GOOD_PREFIX = 'GOOD_';
  * Returns null when the string is empty or does not match any known material.
  */
 export function parseMaterial(entity: string): EMaterialType | null {
-    if (!entity) return null;
+    if (!entity) {
+        return null;
+    }
 
     const key = entity.startsWith(GOOD_PREFIX) ? entity.slice(GOOD_PREFIX.length) : entity;
 
@@ -96,8 +98,12 @@ const DEFAULT_INVENTORY_CYCLE_FRAMES = 5; // 0.5 seconds at CHOREO_FPS
 
 /** Compute effective duration in seconds for inventory nodes. */
 function resolveInventoryDuration(node: ChoreoNode): number {
-    if (node.duration === 0) return framesToSeconds(DEFAULT_INVENTORY_CYCLE_FRAMES);
-    if (node.duration <= 0) return 0; // duration=-1 or negative → instant
+    if (node.duration === 0) {
+        return framesToSeconds(DEFAULT_INVENTORY_CYCLE_FRAMES);
+    }
+    if (node.duration <= 0) {
+        return 0;
+    } // duration=-1 or negative → instant
     return framesToSeconds(node.duration);
 }
 
@@ -234,7 +240,9 @@ export const executeResourceGathering: InventoryExecutorFn = (
     ctx: InventoryExecutorContext
 ): TaskResult => {
     // No entity means no material to collect (e.g. geologist prospecting — work is already done).
-    if (!node.entity) return TaskResult.DONE;
+    if (!node.entity) {
+        return TaskResult.DONE;
+    }
 
     const material = requireMaterial(node, settler.id);
 

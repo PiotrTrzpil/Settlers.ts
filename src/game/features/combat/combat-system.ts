@@ -76,7 +76,9 @@ export class CombatSystem implements TickSystem, Persistable<SerializedCombatUni
     // ── Registration ──────────────────────────────────────────────────────
 
     register(entityId: number, player: number, unitType: UnitType): void {
-        if (this.states.has(entityId)) return;
+        if (this.states.has(entityId)) {
+            return;
+        }
         this.states.set(entityId, createCombatState(entityId, player, unitType));
     }
 
@@ -106,13 +108,17 @@ export class CombatSystem implements TickSystem, Persistable<SerializedCombatUni
      */
     releaseFromCombat(entityId: number): void {
         const state = this.states.get(entityId);
-        if (!state) return;
+        if (!state) {
+            return;
+        }
         const wasFighting = state.status === CombatStatus.Fighting;
         state.status = CombatStatus.Idle;
         state.targetId = null;
         state.attackTimer = 0;
         this.pursuitTimers.delete(entityId);
-        if (wasFighting) this.applyIdleAnimation(entityId);
+        if (wasFighting) {
+            this.applyIdleAnimation(entityId);
+        }
     }
 
     // ── Tick ──────────────────────────────────────────────────────────────
@@ -120,7 +126,9 @@ export class CombatSystem implements TickSystem, Persistable<SerializedCombatUni
     tick(dt: number): void {
         this.scanTimer += dt;
         const shouldScan = this.scanTimer >= SCAN_INTERVAL;
-        if (shouldScan) this.scanTimer = 0;
+        if (shouldScan) {
+            this.scanTimer = 0;
+        }
 
         // Accumulate pursuit timers
         for (const [id, t] of this.pursuitTimers) {
@@ -136,15 +144,17 @@ export class CombatSystem implements TickSystem, Persistable<SerializedCombatUni
                 }
 
                 switch (state.status) {
-                case CombatStatus.Idle:
-                    if (shouldScan) this.handleIdle(state, entity);
-                    break;
-                case CombatStatus.Pursuing:
-                    this.handlePursuing(state, entity, dt);
-                    break;
-                case CombatStatus.Fighting:
-                    this.handleFighting(state, entity, dt);
-                    break;
+                    case CombatStatus.Idle:
+                        if (shouldScan) {
+                            this.handleIdle(state, entity);
+                        }
+                        break;
+                    case CombatStatus.Pursuing:
+                        this.handlePursuing(state, entity, dt);
+                        break;
+                    case CombatStatus.Fighting:
+                        this.handleFighting(state, entity, dt);
+                        break;
                 }
             } catch (e) {
                 const err = e instanceof Error ? e : new Error(String(e));
@@ -157,7 +167,9 @@ export class CombatSystem implements TickSystem, Persistable<SerializedCombatUni
 
     private handleIdle(state: CombatState, entity: Entity): void {
         const target = this.findNearestEnemy(entity);
-        if (!target) return;
+        if (!target) {
+            return;
+        }
 
         state.targetId = target.id;
         state.status = CombatStatus.Pursuing;
@@ -169,7 +181,9 @@ export class CombatSystem implements TickSystem, Persistable<SerializedCombatUni
     private handlePursuing(state: CombatState, entity: Entity, _dt: number): void {
         // Validate target still exists and is alive
         const target = this.validateTarget(state, entity);
-        if (!target) return;
+        if (!target) {
+            return;
+        }
 
         // Keep animation direction in sync with movement controller
         const controller = this.gameState.movement.getController(state.entityId);
@@ -210,7 +224,9 @@ export class CombatSystem implements TickSystem, Persistable<SerializedCombatUni
 
     private handleFighting(state: CombatState, entity: Entity, dt: number): void {
         const target = this.validateTarget(state, entity);
-        if (!target) return;
+        if (!target) {
+            return;
+        }
 
         // Check if target moved out of range
         const dist = hexDistance(entity.x, entity.y, target.x, target.y);
@@ -245,7 +261,9 @@ export class CombatSystem implements TickSystem, Persistable<SerializedCombatUni
      */
     applyExternalDamage(attackerId: number, targetId: number, damage: number): void {
         const targetState = this.states.get(targetId);
-        if (!targetState) return;
+        if (!targetState) {
+            return;
+        }
 
         targetState.health -= damage;
 
@@ -263,7 +281,9 @@ export class CombatSystem implements TickSystem, Persistable<SerializedCombatUni
 
     private applyDamage(attacker: CombatState, targetEntity: Entity, damage: number): void {
         const targetState = this.states.get(targetEntity.id);
-        if (!targetState) return;
+        if (!targetState) {
+            return;
+        }
 
         targetState.health -= damage;
 
@@ -304,7 +324,9 @@ export class CombatSystem implements TickSystem, Persistable<SerializedCombatUni
                 }
 
                 // Restore idle animation if unit was fighting
-                if (wasFighting) this.applyIdleAnimation(other.entityId);
+                if (wasFighting) {
+                    this.applyIdleAnimation(other.entityId);
+                }
             }
         }
 
@@ -321,13 +343,21 @@ export class CombatSystem implements TickSystem, Persistable<SerializedCombatUni
         let bestDist = Infinity;
 
         for (const candidate of nearby) {
-            if (candidate.type !== EntityType.Unit) continue;
-            if (candidate.player === entity.player) continue;
-            if (!isUnitTypeMilitary(candidate.subType as UnitType)) continue;
+            if (candidate.type !== EntityType.Unit) {
+                continue;
+            }
+            if (candidate.player === entity.player) {
+                continue;
+            }
+            if (!isUnitTypeMilitary(candidate.subType as UnitType)) {
+                continue;
+            }
 
             // Only target units that are registered and alive
             const candidateState = this.states.get(candidate.id);
-            if (!candidateState || candidateState.health <= 0) continue;
+            if (!candidateState || candidateState.health <= 0) {
+                continue;
+            }
 
             const dist = hexDistance(entity.x, entity.y, candidate.x, candidate.y);
             if (dist < bestDist) {
@@ -372,7 +402,9 @@ export class CombatSystem implements TickSystem, Persistable<SerializedCombatUni
         const wasFighting = state.status === CombatStatus.Fighting;
         state.status = CombatStatus.Idle;
         state.attackTimer = 0;
-        if (wasFighting) this.applyIdleAnimation(state.entityId);
+        if (wasFighting) {
+            this.applyIdleAnimation(state.entityId);
+        }
     }
 
     // ── Animation helpers ─────────────────────────────────────────────────
@@ -404,7 +436,9 @@ export class CombatSystem implements TickSystem, Persistable<SerializedCombatUni
     /** Restore idle animation (stopped on frame 0 of walk). */
     private applyIdleAnimation(entityId: number): void {
         const entity = this.gameState.getEntity(entityId);
-        if (!entity) return;
+        if (!entity) {
+            return;
+        }
         const prefix = UNIT_XML_PREFIX[entity.subType as UnitType]!;
         this.visualService.applyIntent(entityId, {
             sequence: xmlKey(prefix, 'WALK'),
@@ -430,7 +464,9 @@ export class CombatSystem implements TickSystem, Persistable<SerializedCombatUni
     deserialize(data: SerializedCombatUnit[]): void {
         for (const s of data) {
             const state = this.states.get(s.entityId);
-            if (!state) continue;
+            if (!state) {
+                continue;
+            }
             state.health = s.health;
             state.maxHealth = s.maxHealth;
         }

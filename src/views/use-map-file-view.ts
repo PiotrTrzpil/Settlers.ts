@@ -110,18 +110,18 @@ function getChunkCategory(type: MapChunkType): ChunkInfo['category'] {
 /** Get icon for a chunk category */
 function getCategoryIcon(category: ChunkInfo['category']): string {
     switch (category) {
-    case 'general':
-        return '📋';
-    case 'landscape':
-        return '🗺️';
-    case 'entities':
-        return '🏠';
-    case 'player':
-        return '👤';
-    case 'savegame':
-        return '💾';
-    case 'unknown':
-        return '❓';
+        case 'general':
+            return '📋';
+        case 'landscape':
+            return '🗺️';
+        case 'entities':
+            return '🏠';
+        case 'player':
+            return '👤';
+        case 'savegame':
+            return '💾';
+        case 'unknown':
+            return '❓';
     }
 }
 
@@ -141,7 +141,9 @@ function analyzeBytes(data: Uint8Array): Record<number, number> {
     const counts: Record<number, number> = {};
     for (let i = 0; i < data.length; i++) {
         const val = data[i]!;
-        if (val === 0) continue;
+        if (val === 0) {
+            continue;
+        }
         counts[val] = (counts[val] || 0) + 1;
     }
     return counts;
@@ -227,7 +229,9 @@ function calculateStats(loader: IMapLoader): MapStats | null {
 
 /** Process entity data into display summary */
 function processEntityData(entityData: MapEntityData | undefined): EntitySummary | null {
-    if (!entityData) return null;
+    if (!entityData) {
+        return null;
+    }
 
     const summary: EntitySummary = {
         players: [],
@@ -306,8 +310,12 @@ function processEntityData(entityData: MapEntityData | undefined): EntitySummary
 
 /** Format file size in human-readable format */
 export function formatSize(bytes: number): string {
-    if (bytes < 1024) return `${bytes} B`;
-    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    if (bytes < 1024) {
+        return `${bytes} B`;
+    }
+    if (bytes < 1024 * 1024) {
+        return `${(bytes / 1024).toFixed(1)} KB`;
+    }
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
@@ -394,7 +402,9 @@ export function useMapFileView(getFileManager: () => FileManager | null): UseMap
     const error = ref<string | null>(null);
 
     const metadata = computed<MapMetadata | null>(() => {
-        if (!mapLoader.value || !mapFile.value) return null;
+        if (!mapLoader.value || !mapFile.value) {
+            return null;
+        }
 
         const loader = mapLoader.value;
         return {

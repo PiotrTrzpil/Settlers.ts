@@ -55,20 +55,28 @@ export class EntityIndex {
     /** Iterate entities of the given type (resolves IDs to Entity objects). */
     *ofType(type: EntityType): IterableIterator<Entity> {
         const ids = this.byType.get(type);
-        if (!ids) return;
+        if (!ids) {
+            return;
+        }
         for (const id of ids) {
             const entity = this.resolve(id);
-            if (entity) yield entity;
+            if (entity) {
+                yield entity;
+            }
         }
     }
 
     /** Iterate entities of the given type and player (resolves IDs to Entity objects). */
     *ofTypeAndPlayer(type: EntityType, player: number): IterableIterator<Entity> {
         const ids = this.byTypePlayer.get(typePlayerKey(type, player));
-        if (!ids) return;
+        if (!ids) {
+            return;
+        }
         for (const id of ids) {
             const entity = this.resolve(id);
-            if (entity) yield entity;
+            if (entity) {
+                yield entity;
+            }
         }
     }
 

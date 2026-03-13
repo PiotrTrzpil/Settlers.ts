@@ -121,7 +121,9 @@ export class GameCore {
     /** POPULATE — create all entities (buildings, settlers, stacks) as raw data. No lifecycle events. */
     private populate(mapLoader: IMapLoader): MapBuildingEntry[] {
         const entityData = mapLoader.entityData;
-        if (!entityData) return [];
+        if (!entityData) {
+            return [];
+        }
 
         // Build per-player race mapping
         for (const p of entityData.players) {
@@ -239,10 +241,14 @@ export class GameCore {
         for (let r = 0; r < Math.max(w, h) / 2; r++) {
             for (let dx = -r; dx <= r; dx++) {
                 for (let dy = -r; dy <= r; dy++) {
-                    if (Math.abs(dx) !== r && Math.abs(dy) !== r) continue;
+                    if (Math.abs(dx) !== r && Math.abs(dy) !== r) {
+                        continue;
+                    }
                     const tx = cx + dx;
                     const ty = cy + dy;
-                    if (tx < 0 || ty < 0 || tx >= w || ty >= h) continue;
+                    if (tx < 0 || ty < 0 || tx >= w || ty >= h) {
+                        continue;
+                    }
                     if (this.terrain.isBuildable(tx, ty)) {
                         return { x: tx, y: ty };
                     }

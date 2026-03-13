@@ -55,7 +55,9 @@ export class IndexedMap<K, V> {
 
     delete(key: K): boolean {
         const value = this.data.get(key);
-        if (value === undefined && !this.data.has(key)) return false;
+        if (value === undefined && !this.data.has(key)) {
+            return false;
+        }
         this.removeFromIndexes(key);
         this.data.delete(key);
         return true;
@@ -147,8 +149,12 @@ export class IndexedMap<K, V> {
 
     private resolveIndexKeys<IK>(entry: IndexEntry<IK, K>, key: K, value: V): IK[] {
         const result = entry.keyFn(key, value);
-        if (result === null) return [];
-        if (Array.isArray(result)) return result;
+        if (result === null) {
+            return [];
+        }
+        if (Array.isArray(result)) {
+            return result;
+        }
         return [result];
     }
 
@@ -163,7 +169,9 @@ export class IndexedMap<K, V> {
 
     private removeBucket<IK>(entry: IndexEntry<IK, K>, indexKey: IK, primaryKey: K): void {
         const bucket = entry.buckets.get(indexKey);
-        if (!bucket) return;
+        if (!bucket) {
+            return;
+        }
         bucket.delete(primaryKey);
         if (bucket.size === 0) {
             entry.buckets.delete(indexKey);

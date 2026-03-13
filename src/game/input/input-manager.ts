@@ -262,7 +262,9 @@ export class InputManager {
      */
     getCenterTile(): TileCoord | null {
         const el = this.target.value;
-        if (!el || !this.tileResolver) return null;
+        if (!el || !this.tileResolver) {
+            return null;
+        }
 
         const centerX = el.clientWidth / 2;
         const centerY = el.clientHeight / 2;
@@ -281,7 +283,9 @@ export class InputManager {
      */
     attach(): void {
         const el = this.target.value;
-        if (!el) return;
+        if (!el) {
+            return;
+        }
 
         el.addEventListener('pointerdown', this.boundHandlers.pointerdown);
         el.addEventListener('pointerup', this.boundHandlers.pointerup);
@@ -316,7 +320,9 @@ export class InputManager {
      * Clean up all resources.
      */
     destroy(): void {
-        if (this.isDestroyed) return;
+        if (this.isDestroyed) {
+            return;
+        }
         this.isDestroyed = true;
         this.detach();
         this.modes.clear();
@@ -343,7 +349,9 @@ export class InputManager {
      */
     getRenderState(): ModeRenderState | null {
         const mode = this.getCurrentMode();
-        if (!mode) return null;
+        if (!mode) {
+            return null;
+        }
 
         const context = this.createContext();
         return mode.getRenderState(context);
@@ -549,14 +557,18 @@ export class InputManager {
     }
 
     private handleKeyDown(e: KeyboardEvent): void {
-        if (this.isInputFocused()) return;
+        if (this.isInputFocused()) {
+            return;
+        }
 
         handleKeyDown(this.state, e.code);
 
         const action = this.findActionForKey(e.code, e.shiftKey, e.ctrlKey || e.metaKey, e.altKey);
         if (action) {
             const binding = this.config.bindings.find(b => b.action === action);
-            if (e.repeat && !binding?.repeatable) return;
+            if (e.repeat && !binding?.repeatable) {
+                return;
+            }
 
             if (action === InputAction.TogglePause && this._settings) {
                 this._settings.paused = !this._settings.paused;
@@ -594,7 +606,9 @@ export class InputManager {
 
     private isInputFocused(): boolean {
         const active = document.activeElement;
-        if (!active) return false;
+        if (!active) {
+            return false;
+        }
         const tag = active.tagName.toLowerCase();
         return tag === 'input' || tag === 'textarea' || tag === 'select';
     }

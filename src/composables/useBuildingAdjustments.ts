@@ -22,7 +22,9 @@ export interface AdjustGroup {
 /** Get the BuildingAdjustMode if currently registered. */
 function getAdjustMode(): BuildingAdjustMode | null {
     const input = getBridge().input;
-    if (!input) return null;
+    if (!input) {
+        return null;
+    }
     const mode = input.getMode('building-adjust');
     return mode instanceof BuildingAdjustMode ? mode : null;
 }
@@ -43,10 +45,14 @@ export function useBuildingAdjustments(selectedEntity: Ref<Entity | undefined>):
 
     const adjustGroups = computed<AdjustGroup[]>(() => {
         const entity = selectedEntity.value;
-        if (!entity || entity.type !== EntityType.Building) return [];
+        if (!entity || entity.type !== EntityType.Building) {
+            return [];
+        }
 
         const mode = getAdjustMode();
-        if (!mode) return [];
+        if (!mode) {
+            return [];
+        }
 
         const buildingType = entity.subType as BuildingType;
         const race = entity.race;
@@ -69,20 +75,28 @@ export function useBuildingAdjustments(selectedEntity: Ref<Entity | undefined>):
 
     const activeAdjustKey = computed<string | null>(() => {
         const mode = getAdjustMode();
-        if (!mode) return null;
+        if (!mode) {
+            return null;
+        }
         const active = mode.getActiveAdjustment();
         return active?.item.key ?? null;
     });
 
     function toggleAdjustItem(handler: BuildingAdjustHandler, item: AdjustableItem): void {
         const input = getBridge().input;
-        if (!input) return;
+        if (!input) {
+            return;
+        }
 
         const entity = selectedEntity.value;
-        if (!entity) return;
+        if (!entity) {
+            return;
+        }
 
         const mode = getAdjustMode();
-        if (!mode) return;
+        if (!mode) {
+            return;
+        }
 
         // If clicking the already-active item, deactivate
         const currentActive = mode.getActiveAdjustment();
@@ -104,10 +118,14 @@ export function useBuildingAdjustments(selectedEntity: Ref<Entity | undefined>):
 
     function getItemOffsetLabel(handler: BuildingAdjustHandler, item: AdjustableItem): string {
         const entity = selectedEntity.value;
-        if (!entity) return '';
+        if (!entity) {
+            return '';
+        }
 
         const offset = handler.getOffset(entity.subType as BuildingType, entity.race, item.key);
-        if (!offset) return '—';
+        if (!offset) {
+            return '—';
+        }
 
         if ('dx' in offset) {
             return `${offset.dx},${offset.dy}`;

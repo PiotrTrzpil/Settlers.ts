@@ -115,10 +115,18 @@ export function getFootprintBounds(tiles: TileCoord[]): {
     let maxY = tiles[0]!.y;
 
     for (const tile of tiles) {
-        if (tile.x < minX) minX = tile.x;
-        if (tile.x > maxX) maxX = tile.x;
-        if (tile.y < minY) minY = tile.y;
-        if (tile.y > maxY) maxY = tile.y;
+        if (tile.x < minX) {
+            minX = tile.x;
+        }
+        if (tile.x > maxX) {
+            maxX = tile.x;
+        }
+        if (tile.y < minY) {
+            minY = tile.y;
+        }
+        if (tile.y > maxY) {
+            maxY = tile.y;
+        }
     }
 
     return {

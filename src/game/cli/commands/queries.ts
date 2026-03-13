@@ -31,7 +31,9 @@ function fail(output: string): CliResult {
 
 function buildingStatusText(buildingId: number, ctx: CliContext): string {
     const site = ctx.game.services.constructionSiteManager.getSite(buildingId);
-    if (!site) return 'ready';
+    if (!site) {
+        return 'ready';
+    }
     return BuildingConstructionPhase[site.phase];
 }
 
@@ -44,13 +46,19 @@ function unitTypeName(subType: number): string {
 }
 
 function entityTypeName(entity: Entity): string {
-    if (entity.type === EntityType.Building) return buildingTypeName(entity.subType);
-    if (entity.type === EntityType.Unit) return unitTypeName(entity.subType);
+    if (entity.type === EntityType.Building) {
+        return buildingTypeName(entity.subType);
+    }
+    if (entity.type === EntityType.Unit) {
+        return unitTypeName(entity.subType);
+    }
     return EntityType[entity.type];
 }
 
 function carryingText(entity: Entity): string {
-    if (!entity.carrying) return '-';
+    if (!entity.carrying) {
+        return '-';
+    }
     return `${EMaterialType[entity.carrying.material]}x${entity.carrying.amount}`;
 }
 
@@ -61,14 +69,18 @@ function posText(entity: Entity): string {
 // ─── ls sub-handlers ──────────────────────────────────────────────────────────
 
 function limitRows(rows: string[][], limit: number): { rows: string[][]; truncated: number } {
-    if (limit <= 0 || rows.length <= limit) return { rows, truncated: 0 };
+    if (limit <= 0 || rows.length <= limit) {
+        return { rows, truncated: 0 };
+    }
     return { rows: rows.slice(0, limit), truncated: rows.length - limit };
 }
 
 function tableWithLimit(rows: string[][], headers: string[], limit: number, ctx: CliContext): string {
     const { rows: limited, truncated } = limitRows(rows, limit);
     let out = ctx.fmt.table(limited, headers);
-    if (truncated > 0) out += `\n... ${truncated} more (use --n to show more)`;
+    if (truncated > 0) {
+        out += `\n... ${truncated} more (use --n to show more)`;
+    }
     return out;
 }
 
@@ -77,17 +89,23 @@ function lsBuildings(state: GameState, player: number, limit: number, ctx: CliCo
     for (const e of state.entityIndex.ofTypeAndPlayer(EntityType.Building, player)) {
         rows.push([String(e.id), entityTypeName(e), posText(e), buildingStatusText(e.id, ctx)]);
     }
-    if (rows.length === 0) return ok('no buildings');
+    if (rows.length === 0) {
+        return ok('no buildings');
+    }
     return ok(tableWithLimit(rows, ['id', 'type', 'pos', 'status'], limit, ctx));
 }
 
 function lsUnits(state: GameState, player: number, militaryOnly: boolean, limit: number, ctx: CliContext): CliResult {
     const rows: string[][] = [];
     for (const e of state.entityIndex.ofTypeAndPlayer(EntityType.Unit, player)) {
-        if (militaryOnly && !isUnitTypeMilitary(e.subType as UnitType)) continue;
+        if (militaryOnly && !isUnitTypeMilitary(e.subType as UnitType)) {
+            continue;
+        }
         rows.push([String(e.id), entityTypeName(e), posText(e), carryingText(e)]);
     }
-    if (rows.length === 0) return ok(militaryOnly ? 'no military units' : 'no units');
+    if (rows.length === 0) {
+        return ok(militaryOnly ? 'no military units' : 'no units');
+    }
     return ok(tableWithLimit(rows, ['id', 'type', 'pos', 'carrying'], limit, ctx));
 }
 
@@ -105,9 +123,15 @@ function lsCommand(): CliCommand {
             const { state } = ctx.game;
             const limit = typeof args['n'] === 'number' ? args['n'] : 30;
 
-            if (subCmd === 'buildings') return lsBuildings(state, player, limit, ctx);
-            if (subCmd === 'units') return lsUnits(state, player, false, limit, ctx);
-            if (subCmd === 'military') return lsUnits(state, player, true, limit, ctx);
+            if (subCmd === 'buildings') {
+                return lsBuildings(state, player, limit, ctx);
+            }
+            if (subCmd === 'units') {
+                return lsUnits(state, player, false, limit, ctx);
+            }
+            if (subCmd === 'military') {
+                return lsUnits(state, player, true, limit, ctx);
+            }
             return fail(`unknown ls subcommand '${subCmd}'. use: buildings, units, military`);
         },
     };
@@ -121,26 +145,38 @@ function invCommand(): CliCommand {
         desc: 'Show building inventory',
         execute(args: CliArgs, ctx: CliContext): CliResult {
             const id = Number(args._[0]);
-            if (!Number.isFinite(id)) return fail('usage: inv <buildingId>');
+            if (!Number.isFinite(id)) {
+                return fail('usage: inv <buildingId>');
+            }
 
             const entity = ctx.game.state.getEntity(id);
-            if (!entity) return fail(`entity ${id} not found`);
-            if (entity.type !== EntityType.Building) return fail(`entity ${id} is not a building`);
+            if (!entity) {
+                return fail(`entity ${id} not found`);
+            }
+            if (entity.type !== EntityType.Building) {
+                return fail(`entity ${id} is not a building`);
+            }
 
             const invMgr = ctx.game.services.inventoryManager;
-            if (!invMgr.hasSlots(id)) return ok('no inventory');
+            if (!invMgr.hasSlots(id)) {
+                return ok('no inventory');
+            }
             const slots = invMgr.getSlots(id);
 
             const rows: string[][] = [];
             for (const slot of slots) {
-                if (slot.materialType === EMaterialType.NO_MATERIAL) continue;
+                if (slot.materialType === EMaterialType.NO_MATERIAL) {
+                    continue;
+                }
                 if (slot.kind === SlotKind.Input) {
                     rows.push(['in', EMaterialType[slot.materialType], `${slot.currentAmount}/${slot.maxCapacity}`]);
                 } else if (slot.kind === SlotKind.Output || slot.kind === SlotKind.Storage) {
                     rows.push(['out', EMaterialType[slot.materialType], `${slot.currentAmount}/${slot.maxCapacity}`]);
                 }
             }
-            if (rows.length === 0) return ok('inventory empty');
+            if (rows.length === 0) {
+                return ok('inventory empty');
+            }
             return ok(ctx.fmt.table(rows, ['dir', 'material', 'amt']));
         },
     };
@@ -154,10 +190,14 @@ function entityCommand(): CliCommand {
         desc: 'Show entity details',
         execute(args: CliArgs, ctx: CliContext): CliResult {
             const id = Number(args._[0]);
-            if (!Number.isFinite(id)) return fail('usage: e <entityId>');
+            if (!Number.isFinite(id)) {
+                return fail('usage: e <entityId>');
+            }
 
             const entity = ctx.game.state.getEntity(id);
-            if (!entity) return fail(`entity ${id} not found`);
+            if (!entity) {
+                return fail(`entity ${id} not found`);
+            }
 
             const entries: [string, string | number][] = [
                 ['id', entity.id],
@@ -167,8 +207,12 @@ function entityCommand(): CliCommand {
                 ['player', entity.player],
             ];
 
-            if (entity.carrying) entries.push(['carrying', carryingText(entity)]);
-            if (entity.hidden) entries.push(['hidden', 'true']);
+            if (entity.carrying) {
+                entries.push(['carrying', carryingText(entity)]);
+            }
+            if (entity.hidden) {
+                entries.push(['hidden', 'true']);
+            }
             if (entity.type === EntityType.Building) {
                 entries.push(['status', buildingStatusText(entity.id, ctx)]);
             }
@@ -223,19 +267,27 @@ function findCommand(): CliCommand {
         desc: 'Find entities of a given type (--n limits rows, default 30)',
         execute(args: CliArgs, ctx: CliContext): CliResult {
             const name = String(args._[0] ?? '');
-            if (!name) return fail('usage: find <BuildingType|UnitType> [--p N] [--n N]');
+            if (!name) {
+                return fail('usage: find <BuildingType|UnitType> [--p N] [--n N]');
+            }
             const limit = typeof args['n'] === 'number' ? args['n'] : 30;
 
             const resolved = resolveEntitySubType(name, ctx);
-            if (!resolved) return fail(`'${name}' is not a valid BuildingType or UnitType`);
+            if (!resolved) {
+                return fail(`'${name}' is not a valid BuildingType or UnitType`);
+            }
 
             const rows: string[][] = [];
             for (const e of ctx.game.state.entityIndex.ofTypeAndPlayer(resolved.entityType, ctx.player)) {
-                if (e.subType !== resolved.subType) continue;
+                if (e.subType !== resolved.subType) {
+                    continue;
+                }
                 rows.push([String(e.id), posText(e)]);
             }
 
-            if (rows.length === 0) return ok(`no ${name} found`);
+            if (rows.length === 0) {
+                return ok(`no ${name} found`);
+            }
             return ok(tableWithLimit(rows, ['id', 'pos'], limit, ctx));
         },
     };
@@ -266,9 +318,13 @@ function tickCommand(): CliCommand {
             // Game subclass has _gameLoop with running/paused state
             const game = ctx.game as unknown as Record<string, unknown>;
             const loop = game['_gameLoop'] as { isRunning?: boolean; ticksPaused?: boolean } | undefined;
-            if (!loop) return ok(`tick=${tick}`);
+            if (!loop) {
+                return ok(`tick=${tick}`);
+            }
             let status = 'stopped';
-            if (loop.isRunning) status = loop.ticksPaused ? 'paused' : 'running';
+            if (loop.isRunning) {
+                status = loop.ticksPaused ? 'paused' : 'running';
+            }
             return ok(`tick=${tick} status=${status}`);
         },
     };
@@ -285,7 +341,9 @@ function helpCommand(allCommands: () => CliCommand[]): CliCommand {
 
             if (cmdName) {
                 const found = allCommands().find(c => c.name === cmdName || c.aliases.includes(cmdName));
-                if (!found) return fail(`unknown command '${cmdName}'`);
+                if (!found) {
+                    return fail(`unknown command '${cmdName}'`);
+                }
                 const aliasStr = found.aliases.length > 0 ? ` (aliases: ${found.aliases.join(', ')})` : '';
                 return ok(`${found.usage}\n${found.desc}${aliasStr}`);
             }
@@ -329,7 +387,9 @@ function logCommand(logs: LogAccessor): CliCommand {
                 entries = entries.filter(e => e.level === levelFilter);
             }
 
-            if (entries.length === 0) return ok('no new logs');
+            if (entries.length === 0) {
+                return ok('no new logs');
+            }
             return ok(entries.map(formatLogEntry).join('\n'));
         },
     };
@@ -344,17 +404,29 @@ function safeStringify(value: unknown, maxDepth = 10): string {
     return JSON.stringify(
         value,
         function (_key, val: unknown) {
-            if (typeof val === 'function') return '[Function]';
+            if (typeof val === 'function') {
+                return '[Function]';
+            }
             if (val instanceof Map) {
-                if (depth >= maxDepth) return `[Map(${val.size})]`;
+                if (depth >= maxDepth) {
+                    return `[Map(${val.size})]`;
+                }
                 return Object.fromEntries(val);
             }
-            if (val instanceof Set) return `[Set(${val.size})]`;
-            if (val instanceof WeakMap || val instanceof WeakRef) return '[WeakRef]';
+            if (val instanceof Set) {
+                return `[Set(${val.size})]`;
+            }
+            if (val instanceof WeakMap || val instanceof WeakRef) {
+                return '[WeakRef]';
+            }
             if (typeof val === 'object' && val !== null) {
-                if (seen.has(val)) return '[Circular]';
+                if (seen.has(val)) {
+                    return '[Circular]';
+                }
                 seen.add(val);
-                if (depth >= maxDepth) return Array.isArray(val) ? `[Array(${val.length})]` : '[Object]';
+                if (depth >= maxDepth) {
+                    return Array.isArray(val) ? `[Array(${val.length})]` : '[Object]';
+                }
                 depth++;
                 return val;
             }
@@ -403,11 +475,17 @@ function jsCommand(): CliCommand {
             }
             try {
                 const scope = buildJsScope(ctx);
-                if (scopeNames.length === 0) scopeNames.push(...Object.keys(scope));
+                if (scopeNames.length === 0) {
+                    scopeNames.push(...Object.keys(scope));
+                }
                 const fn = new Function(...scopeNames, `return (${expr})`);
                 const result = fn(...scopeNames.map(k => scope[k]));
-                if (result === undefined) return ok('undefined');
-                if (typeof result === 'string') return ok(result);
+                if (result === undefined) {
+                    return ok('undefined');
+                }
+                if (typeof result === 'string') {
+                    return ok(result);
+                }
                 return ok(safeStringify(result));
             } catch (err: unknown) {
                 return fail(err instanceof Error ? err.message : String(err));
@@ -443,7 +521,9 @@ function playerCommand(cli: PlayerAccessor): CliCommand {
             // player <N> — set override
             if (arg !== undefined) {
                 const n = Number(arg);
-                if (!Number.isInteger(n)) return fail(`player index must be an integer, got '${arg}'`);
+                if (!Number.isInteger(n)) {
+                    return fail(`player index must be an integer, got '${arg}'`);
+                }
                 try {
                     cli.setPlayer(n);
                 } catch (err: unknown) {

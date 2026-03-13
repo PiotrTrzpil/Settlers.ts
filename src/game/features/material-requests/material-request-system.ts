@@ -116,22 +116,34 @@ export class MaterialRequestSystem implements TickSystem {
 
         for (const buildingId of this.dirtyBuildings) {
             const entity = this.gameState.getEntity(buildingId);
-            if (!entity || entity.type !== EntityType.Building) continue;
+            if (!entity || entity.type !== EntityType.Building) {
+                continue;
+            }
 
             const buildingType = entity.subType as BuildingType;
             const config = getInventoryConfig(buildingType, entity.race);
 
-            if (config.inputSlots.length === 0) continue;
-            if (this.constructionSiteManager.hasSite(entity.id)) continue;
+            if (config.inputSlots.length === 0) {
+                continue;
+            }
+            if (this.constructionSiteManager.hasSite(entity.id)) {
+                continue;
+            }
 
             this.requestMaterials(entity, config);
         }
 
         for (const buildingId of this.dirtyStorageAreas) {
             const entity = this.gameState.getEntity(buildingId);
-            if (!entity || entity.type !== EntityType.Building) continue;
-            if ((entity.subType as BuildingType) !== BuildingType.StorageArea) continue;
-            if (this.constructionSiteManager.hasSite(entity.id)) continue;
+            if (!entity || entity.type !== EntityType.Building) {
+                continue;
+            }
+            if ((entity.subType as BuildingType) !== BuildingType.StorageArea) {
+                continue;
+            }
+            if (this.constructionSiteManager.hasSite(entity.id)) {
+                continue;
+            }
             this.requestStorageImports(entity.id);
         }
 
@@ -146,15 +158,21 @@ export class MaterialRequestSystem implements TickSystem {
     /** Seed the dirty set with all operational buildings that have input slots or are StorageAreas. */
     private markAllOperationalDirty(): void {
         for (const entity of this.gameState.entities) {
-            if (entity.type !== EntityType.Building) continue;
-            if (this.constructionSiteManager.hasSite(entity.id)) continue;
+            if (entity.type !== EntityType.Building) {
+                continue;
+            }
+            if (this.constructionSiteManager.hasSite(entity.id)) {
+                continue;
+            }
             const buildingType = entity.subType as BuildingType;
             if (buildingType === BuildingType.StorageArea) {
                 this.dirtyStorageAreas.add(entity.id);
                 continue;
             }
             const config = getInventoryConfig(buildingType, entity.race);
-            if (config.inputSlots.length === 0) continue;
+            if (config.inputSlots.length === 0) {
+                continue;
+            }
             this.dirtyBuildings.add(entity.id);
         }
     }
@@ -167,7 +185,9 @@ export class MaterialRequestSystem implements TickSystem {
         for (const inputSlot of config.inputSlots) {
             // Sum capacity across all input/construction slots for this material
             const totalSpace = this.inventoryManager.getInputSpace(entity.id, inputSlot.materialType);
-            if (totalSpace <= 0) continue;
+            if (totalSpace <= 0) {
+                continue;
+            }
 
             const activeDemands = this.demandQueue.countDemands(entity.id, inputSlot.materialType);
             const activeJobs = this.jobStore.getActiveJobCountForDest(entity.id, inputSlot.materialType);
@@ -185,7 +205,9 @@ export class MaterialRequestSystem implements TickSystem {
     private requestStorageImports(buildingId: number): void {
         const directions = this.storageFilterManager.getDirections(buildingId);
         for (const [material] of directions) {
-            if (!this.storageFilterManager.isImportAllowed(buildingId, material)) continue;
+            if (!this.storageFilterManager.isImportAllowed(buildingId, material)) {
+                continue;
+            }
             this.requestStorageImportsForMaterial(buildingId, material);
         }
     }
@@ -202,11 +224,15 @@ export class MaterialRequestSystem implements TickSystem {
         const activeDemands = this.demandQueue.countDemands(buildingId, material);
         const activeJobs = this.jobStore.getActiveJobCountForDest(buildingId, material);
         const activeCount = activeDemands + activeJobs;
-        if (activeCount >= MAX_ACTIVE_IMPORTS_PER_MATERIAL) return;
+        if (activeCount >= MAX_ACTIVE_IMPORTS_PER_MATERIAL) {
+            return;
+        }
 
         // Estimate available capacity: claimed slots with space + free (NO_MATERIAL) slots
         const slots = this.inventoryManager.getSlots(buildingId);
-        if (slots.length === 0) return;
+        if (slots.length === 0) {
+            return;
+        }
 
         let estimatedCapacity = 0;
         for (const slot of slots) {
@@ -216,7 +242,9 @@ export class MaterialRequestSystem implements TickSystem {
                 estimatedCapacity += slot.maxCapacity;
             }
         }
-        if (estimatedCapacity <= 0) return;
+        if (estimatedCapacity <= 0) {
+            return;
+        }
 
         const needed = Math.min(estimatedCapacity, MAX_ACTIVE_IMPORTS_PER_MATERIAL - activeCount);
         for (let i = 0; i < needed; i++) {

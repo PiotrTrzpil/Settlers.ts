@@ -216,9 +216,15 @@ function getSavedState(): SavedJilState | null {
 function loadSavedState(): void {
     try {
         const saved = getSavedState();
-        if (!saved) return;
-        if (saved.viewMode === 'single' || saved.viewMode === 'grid') viewMode.value = saved.viewMode;
-        if (typeof saved.doAnimation === 'boolean') doAnimation.value = saved.doAnimation;
+        if (!saved) {
+            return;
+        }
+        if (saved.viewMode === 'single' || saved.viewMode === 'grid') {
+            viewMode.value = saved.viewMode;
+        }
+        if (typeof saved.doAnimation === 'boolean') {
+            doAnimation.value = saved.doAnimation;
+        }
         if (saved.gridDirection === 'all' || typeof saved.gridDirection === 'number') {
             gridDirection.value = saved.gridDirection;
         }
@@ -340,11 +346,16 @@ function formatWorkerName(key: string): string {
 }
 
 function addWorkerLabel(jobIndex: number, workerName: string, state: string): void {
-    if (jobIndex < 0) return;
+    if (jobIndex < 0) {
+        return;
+    }
     const label = `${workerName}: ${state}`;
     const existing = jobToWorkerLabels.get(jobIndex);
-    if (existing) existing.push(label);
-    else jobToWorkerLabels.set(jobIndex, [label]);
+    if (existing) {
+        existing.push(label);
+    } else {
+        jobToWorkerLabels.set(jobIndex, [label]);
+    }
 }
 
 for (const [workerKey, workerData] of Object.entries(SETTLER_JOB_INDICES)) {
@@ -365,14 +376,18 @@ function isSettlerFile(): boolean {
 
 /** Get carrier material label for a job (e.g., "Carrier: AGAVE"). Only for settler files. */
 function getCarrierMaterialLabel(jobIndex: number): string | null {
-    if (!isSettlerFile()) return null;
+    if (!isSettlerFile()) {
+        return null;
+    }
     const material = jobToCarrierMaterial.get(jobIndex);
     return material ? `Carrier: ${material}` : null;
 }
 
 /** Get worker state labels for a job (e.g., "Woodcutter: work.0"). Only for settler files. */
 function getWorkerLabel(jobIndex: number): string | null {
-    if (!isSettlerFile()) return null;
+    if (!isSettlerFile()) {
+        return null;
+    }
     const labels = jobToWorkerLabels.get(jobIndex);
     return labels ? labels.join(', ') : null;
 }
@@ -387,7 +402,9 @@ function isJobMapped(jobIndex: number): boolean {
 }
 
 function getCurrentFileId(): number | null {
-    if (!fileName.value) return null;
+    if (!fileName.value) {
+        return null;
+    }
     // eslint-disable-next-line sonarjs/slow-regex -- simple filename pattern, not user-controlled
     const match = /(\d+)\.jil$/i.exec(fileName.value);
     return match ? parseInt(match[1]!, 10) : null;
@@ -395,7 +412,9 @@ function getCurrentFileId(): number | null {
 
 function getNameForJob(jobIndex: number): string | null {
     const fileId = getCurrentFileId();
-    if (fileId === null) return null;
+    if (fileId === null) {
+        return null;
+    }
 
     // Check if it's a building file
     if (BUILDING_FILE_IDS.has(fileId)) {
@@ -418,16 +437,26 @@ function getBuildingForJob(jobIndex: number): string | null {
 // Get a combined label for dropdown display
 function getJobLabel(jobIndex: number): string {
     const buildingName = getBuildingForJob(jobIndex);
-    if (buildingName) return buildingName;
+    if (buildingName) {
+        return buildingName;
+    }
 
     const workerLabel = getWorkerLabel(jobIndex);
     const carrierLabel = getCarrierMaterialLabel(jobIndex);
 
-    if (workerLabel && carrierLabel) return `${workerLabel} | ${carrierLabel}`;
-    if (workerLabel) return workerLabel;
-    if (carrierLabel) return carrierLabel;
+    if (workerLabel && carrierLabel) {
+        return `${workerLabel} | ${carrierLabel}`;
+    }
+    if (workerLabel) {
+        return workerLabel;
+    }
+    if (carrierLabel) {
+        return carrierLabel;
+    }
 
-    if (isSettlerFile()) return '[?]';
+    if (isSettlerFile()) {
+        return '[?]';
+    }
     return '';
 }
 
@@ -448,13 +477,21 @@ function computeJobMetrics(): void {
     for (const item of jilList.value) {
         const dirItems = dil.getItems(item.offset, item.length);
         directionCounts.value.set(item.index, dirItems.length);
-        if (dirItems.length === 0) continue;
+        if (dirItems.length === 0) {
+            continue;
+        }
         const frameItems = gil.getItems(dirItems[0]!.offset, dirItems[0]!.length);
-        if (frameItems.length === 0) continue;
+        if (frameItems.length === 0) {
+            continue;
+        }
         const offset = gil.getImageOffset(frameItems[0]!.index);
         const img = gfx.readImage(offset, item.index);
-        if (img.width > mw) mw = img.width;
-        if (img.height > mh) mh = img.height;
+        if (img.width > mw) {
+            mw = img.width;
+        }
+        if (img.height > mh) {
+            mh = img.height;
+        }
     }
     maxSpriteWidth.value = mw || 60;
     maxSpriteHeight.value = mh || 60;
@@ -517,7 +554,9 @@ async function doLoad(fileId: string) {
 }
 
 function onSelectJil() {
-    if (!selectedJil.value || !dilFileReader.value) return;
+    if (!selectedJil.value || !dilFileReader.value) {
+        return;
+    }
 
     dilList.value = dilFileReader.value.getItems(selectedJil.value.offset, selectedJil.value.length);
     selectedDil.value = dilList.value[0] ?? null;
@@ -525,7 +564,9 @@ function onSelectJil() {
 }
 
 function onSelectDil() {
-    if (!selectedDil.value || !gilFileReader.value) return;
+    if (!selectedDil.value || !gilFileReader.value) {
+        return;
+    }
 
     gilList.value = gilFileReader.value.getItems(selectedDil.value.offset, selectedDil.value.length);
     selectedGil.value = gilList.value[0] ?? null;
@@ -534,7 +575,9 @@ function onSelectDil() {
 
 /** Render a specific GIL frame to the main canvas without touching select state. */
 function renderFrame(gilItem: IndexFileItem): void {
-    if (!gfxFileReader.value || !selectedJil.value || !gilFileReader.value) return;
+    if (!gfxFileReader.value || !selectedJil.value || !gilFileReader.value) {
+        return;
+    }
 
     const offset = gilFileReader.value.getImageOffset(gilItem.index);
     const gfx = gfxFileReader.value.readImage(offset, selectedJil.value.index);
@@ -547,18 +590,24 @@ function renderFrame(gilItem: IndexFileItem): void {
 
     const img = gfx.getImageData();
     const cavEl = ghCav.value;
-    if (!cavEl) return;
+    if (!cavEl) {
+        return;
+    }
 
     cavEl.width = img.width;
     cavEl.height = img.height;
     const context = cavEl.getContext('2d');
-    if (!context) return;
+    if (!context) {
+        return;
+    }
 
     context.putImageData(img, 0, 0);
 }
 
 function onSelectGil() {
-    if (!selectedGil.value) return;
+    if (!selectedGil.value) {
+        return;
+    }
     animFrameIndex = gilList.value.indexOf(selectedGil.value);
     renderFrame(selectedGil.value);
 }
@@ -574,10 +623,14 @@ let gridVisibleStart = 0;
 let gridVisibleEnd = 0;
 
 function onAnimate() {
-    if (!doAnimation.value) return;
+    if (!doAnimation.value) {
+        return;
+    }
 
     if (viewMode.value === 'single') {
-        if (!gilList.value.length) return;
+        if (!gilList.value.length) {
+            return;
+        }
         animFrameIndex = (animFrameIndex + 1) % gilList.value.length;
         renderFrame(gilList.value[animFrameIndex]!);
     } else {
@@ -593,21 +646,31 @@ function getSelectedDirection(): number {
 
 /** Render current animation frame for all visible grid items. */
 function renderGridAnimFrame(): void {
-    if (!gfxFileReader.value || !dilFileReader.value || !gilFileReader.value) return;
+    if (!gfxFileReader.value || !dilFileReader.value || !gilFileReader.value) {
+        return;
+    }
     const dir = getSelectedDirection();
 
     for (let i = gridVisibleStart; i < gridVisibleEnd; i++) {
         const item = jilList.value[i];
-        if (!item) continue;
+        if (!item) {
+            continue;
+        }
 
         const canvas = canvasRefs.get(`${item.index}-anim`);
-        if (!canvas) continue;
+        if (!canvas) {
+            continue;
+        }
 
         const dirItems = dilFileReader.value.getItems(item.offset, item.length);
-        if (dir >= dirItems.length) continue;
+        if (dir >= dirItems.length) {
+            continue;
+        }
 
         const frameItems = gilFileReader.value.getItems(dirItems[dir]!.offset, dirItems[dir]!.length);
-        if (frameItems.length === 0) continue;
+        if (frameItems.length === 0) {
+            continue;
+        }
 
         const frameIndex = gridAnimFrame % frameItems.length;
         const offset = gilFileReader.value.getImageOffset(frameItems[frameIndex]!.index);
@@ -618,21 +681,31 @@ function renderGridAnimFrame(): void {
 
 /** Render frame 0 of the selected direction for all visible grid items (static single-direction mode). */
 function renderGridStaticDirection(): void {
-    if (!gfxFileReader.value || !dilFileReader.value || !gilFileReader.value) return;
+    if (!gfxFileReader.value || !dilFileReader.value || !gilFileReader.value) {
+        return;
+    }
     const dir = getSelectedDirection();
 
     for (let i = gridVisibleStart; i < gridVisibleEnd; i++) {
         const item = jilList.value[i];
-        if (!item) continue;
+        if (!item) {
+            continue;
+        }
 
         const canvas = canvasRefs.get(`${item.index}-anim`);
-        if (!canvas) continue;
+        if (!canvas) {
+            continue;
+        }
 
         const dirItems = dilFileReader.value.getItems(item.offset, item.length);
-        if (dir >= dirItems.length) continue;
+        if (dir >= dirItems.length) {
+            continue;
+        }
 
         const frameItems = gilFileReader.value.getItems(dirItems[dir]!.offset, dirItems[dir]!.length);
-        if (frameItems.length === 0) continue;
+        if (frameItems.length === 0) {
+            continue;
+        }
 
         const offset = gilFileReader.value.getImageOffset(frameItems[0]!.index);
         const gfx = gfxFileReader.value.readImage(offset, item.index);
@@ -641,18 +714,26 @@ function renderGridStaticDirection(): void {
 }
 
 function renderJobSprite(item: IndexFileItem) {
-    if (!gfxFileReader.value || !dilFileReader.value || !gilFileReader.value) return;
+    if (!gfxFileReader.value || !dilFileReader.value || !gilFileReader.value) {
+        return;
+    }
 
     const dirItems = dilFileReader.value.getItems(item.offset, item.length);
-    if (dirItems.length === 0) return;
+    if (dirItems.length === 0) {
+        return;
+    }
 
     const maxDirs = Math.min(8, dirItems.length);
     for (let dirIdx = 0; dirIdx < maxDirs; dirIdx++) {
         const canvas = canvasRefs.get(`${item.index}-${dirIdx}`);
-        if (!canvas) continue;
+        if (!canvas) {
+            continue;
+        }
 
         const frameItems = gilFileReader.value.getItems(dirItems[dirIdx]!.offset, dirItems[dirIdx]!.length);
-        if (frameItems.length === 0) continue;
+        if (frameItems.length === 0) {
+            continue;
+        }
 
         const offset = gilFileReader.value.getImageOffset(frameItems[0]!.index);
         const gfx = gfxFileReader.value.readImage(offset, item.index);
@@ -680,7 +761,9 @@ function onGridVisible(startIndex: number, endIndex: number) {
     } else {
         for (let i = startIndex; i < endIndex; i++) {
             const item = jilList.value[i];
-            if (!item) continue;
+            if (!item) {
+                continue;
+            }
             renderJobSprite(item);
         }
     }
@@ -699,7 +782,9 @@ function onGridDirectionChange(): void {
         } else {
             for (let i = gridVisibleStart; i < gridVisibleEnd; i++) {
                 const item = jilList.value[i];
-                if (item) renderJobSprite(item);
+                if (item) {
+                    renderJobSprite(item);
+                }
             }
         }
     });
@@ -731,7 +816,9 @@ watch(doAnimation, animating => {
             } else {
                 for (let i = gridVisibleStart; i < gridVisibleEnd; i++) {
                     const item = jilList.value[i];
-                    if (item) renderJobSprite(item);
+                    if (item) {
+                        renderJobSprite(item);
+                    }
                 }
             }
         });

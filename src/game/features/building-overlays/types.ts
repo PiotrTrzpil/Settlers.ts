@@ -140,7 +140,9 @@ export interface BuildingOverlayInstance {
  */
 export function getOverlayFrame(instance: Readonly<BuildingOverlayInstance>): number {
     const { def, elapsedMs, frameCount } = instance;
-    if (def.frameDurationMs <= 0 || frameCount <= 1) return 0;
+    if (def.frameDurationMs <= 0 || frameCount <= 1) {
+        return 0;
+    }
 
     const rawFrame = Math.floor(elapsedMs / def.frameDurationMs);
     return def.loop ? rawFrame % frameCount : Math.min(rawFrame, frameCount - 1);

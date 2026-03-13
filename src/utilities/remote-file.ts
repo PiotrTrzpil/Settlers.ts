@@ -28,8 +28,12 @@ class FileCache {
     private static dbPromise: Promise<IDBDatabase | null> | null = null;
 
     private static async openDb(): Promise<IDBDatabase | null> {
-        if (this.db) return this.db;
-        if (this.dbPromise) return this.dbPromise;
+        if (this.db) {
+            return this.db;
+        }
+        if (this.dbPromise) {
+            return this.dbPromise;
+        }
 
         this.dbPromise = new Promise(resolve => {
             try {
@@ -55,7 +59,9 @@ class FileCache {
 
     static async get(key: string): Promise<ArrayBuffer | null> {
         const db = await this.openDb();
-        if (!db) return null;
+        if (!db) {
+            return null;
+        }
 
         return new Promise(resolve => {
             try {
@@ -72,7 +78,9 @@ class FileCache {
 
     static async set(key: string, data: ArrayBuffer): Promise<void> {
         const db = await this.openDb();
-        if (!db) return;
+        if (!db) {
+            return;
+        }
 
         try {
             const tx = db.transaction(this.STORE_NAME, 'readwrite');
@@ -116,7 +124,7 @@ export class RemoteFile {
         return new Promise((resolve, reject) => {
             const xhr = new XMLHttpRequest();
 
-            xhr.onload = async() => {
+            xhr.onload = async () => {
                 if (xhr.status >= 200 && xhr.status < 300) {
                     // Cache GFX files for future use
                     if (this.cacheEnabled && this.isCacheableFile(url)) {

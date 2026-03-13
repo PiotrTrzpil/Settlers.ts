@@ -360,7 +360,9 @@ export class LandscapeTextureMap {
      *  New texture objects share the same AtlasLayout, so they resolve to
      *  the correct atlas dest positions automatically. */
     public updateRiverConfig(rc: RiverConfig): void {
-        if (!this.riverSlots) return;
+        if (!this.riverSlots) {
+            return;
+        }
 
         // Remove old river Hex2 entries from lookup
         for (const key of this.riverHexKeys) {

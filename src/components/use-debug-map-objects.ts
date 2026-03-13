@@ -18,7 +18,9 @@ export function useDebugMapObjects(getGame: () => Game | null) {
 
     function updateMapObjectCounts() {
         const game = getGame();
-        if (!game) return;
+        if (!game) {
+            return;
+        }
 
         // Check if map has entity data with objects (trees)
         hasObjectTypeData.value = (game.mapLoader.entityData?.objects.length ?? 0) > 0;
@@ -32,7 +34,9 @@ export function useDebugMapObjects(getGame: () => Game | null) {
 
     function spawnCategory(category: MapObjectCategory) {
         const game = getGame();
-        if (!game) return;
+        if (!game) {
+            return;
+        }
 
         spawnTestObjects(game.state, game.terrain, category, 50);
         updateMapObjectCounts();
@@ -40,7 +44,9 @@ export function useDebugMapObjects(getGame: () => Game | null) {
 
     function spawnAllFromMap() {
         const game = getGame();
-        if (!game) return;
+        if (!game) {
+            return;
+        }
 
         const entityObjects = game.mapLoader.entityData?.objects;
         if (entityObjects && entityObjects.length > 0) {
@@ -55,7 +61,9 @@ export function useDebugMapObjects(getGame: () => Game | null) {
 
     function clearAllMapObjects() {
         const game = getGame();
-        if (!game) return;
+        if (!game) {
+            return;
+        }
 
         clearMapObjects(game.state);
         updateMapObjectCounts();
@@ -68,7 +76,9 @@ export function useDebugMapObjects(getGame: () => Game | null) {
         countUpdateInterval = setInterval(updateMapObjectCounts, 1000);
     });
     onUnmounted(() => {
-        if (countUpdateInterval) clearInterval(countUpdateInterval);
+        if (countUpdateInterval) {
+            clearInterval(countUpdateInterval);
+        }
     });
 
     return {

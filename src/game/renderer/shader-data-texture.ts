@@ -35,19 +35,19 @@ export class ShaderDataTexture extends ShaderTexture {
         const index = (x + y * this.width) * this.numberOfElements;
 
         switch (this.numberOfElements) {
-        case 1:
-            this.imgData[index + 0] = r;
-            break;
-        case 2:
-            this.imgData[index + 0] = r;
-            this.imgData[index + 1] = g;
-            break;
-        default:
-            this.imgData[index + 0] = r;
-            this.imgData[index + 1] = g;
-            this.imgData[index + 2] = b;
-            this.imgData[index + 3] = a;
-            break;
+            case 1:
+                this.imgData[index + 0] = r;
+                break;
+            case 2:
+                this.imgData[index + 0] = r;
+                this.imgData[index + 1] = g;
+                break;
+            default:
+                this.imgData[index + 0] = r;
+                this.imgData[index + 1] = g;
+                this.imgData[index + 2] = b;
+                this.imgData[index + 3] = a;
+                break;
         }
 
         this.dirty = true;
@@ -69,18 +69,18 @@ export class ShaderDataTexture extends ShaderTexture {
         let format: GLenum;
 
         switch (this.numberOfElements) {
-        case 1:
-            internalFormat = gl.R8;
-            format = gl.RED;
-            break;
-        case 2:
-            internalFormat = gl.RG8;
-            format = gl.RG;
-            break;
-        default:
-            internalFormat = gl.RGBA8;
-            format = gl.RGBA;
-            break;
+            case 1:
+                internalFormat = gl.R8;
+                format = gl.RED;
+                break;
+            case 2:
+                internalFormat = gl.RG8;
+                format = gl.RG;
+                break;
+            default:
+                internalFormat = gl.RGBA8;
+                format = gl.RGBA;
+                break;
         }
 
         const level = 0;

@@ -93,7 +93,9 @@ export class TriggerSystemImpl implements TriggerSystem {
      * - The trigger is already active for this building (idempotent guard)
      */
     fireTrigger(buildingId: number, triggerId: string): void {
-        if (!triggerId) return;
+        if (!triggerId) {
+            return;
+        }
 
         const building = this.gameState.getEntity(buildingId);
         if (!building) {
@@ -149,7 +151,9 @@ export class TriggerSystemImpl implements TriggerSystem {
      * Safe to call when the trigger is not active or the building is gone.
      */
     stopTrigger(buildingId: number, triggerId: string): void {
-        if (!triggerId) return;
+        if (!triggerId) {
+            return;
+        }
 
         const activeSet = this.activeTriggers.get(buildingId);
         if (!activeSet || !activeSet.has(triggerId)) {
@@ -185,7 +189,9 @@ export class TriggerSystemImpl implements TriggerSystem {
      * Call when a building is destroyed or when the game is reset.
      */
     clearBuilding(buildingId: number): void {
-        if (!this.activeTriggers.has(buildingId)) return;
+        if (!this.activeTriggers.has(buildingId)) {
+            return;
+        }
         this.activeTriggers.delete(buildingId);
         this.setWorkingOverlay(buildingId, false);
     }

@@ -86,7 +86,9 @@ interface GarrisonSlotDisplay {
 
 const swordsmanSlots = computed<GarrisonSlotDisplay[]>(() => {
     const g = garrison.value;
-    if (!g) return [];
+    if (!g) {
+        return [];
+    }
     return Array.from({ length: g.swordsmanSlots.max }, (_, i) => ({
         slotIndex: i,
         unitId: g.swordsmanSlots.units[i]?.unitId ?? null,
@@ -96,7 +98,9 @@ const swordsmanSlots = computed<GarrisonSlotDisplay[]>(() => {
 
 const bowmanSlots = computed<GarrisonSlotDisplay[]>(() => {
     const g = garrison.value;
-    if (!g) return [];
+    if (!g) {
+        return [];
+    }
     return Array.from({ length: g.bowmanSlots.max }, (_, i) => ({
         slotIndex: i,
         unitId: g.bowmanSlots.units[i]?.unitId ?? null,
@@ -105,7 +109,9 @@ const bowmanSlots = computed<GarrisonSlotDisplay[]>(() => {
 });
 
 function slotTitle(unitId: number | null): string {
-    if (unitId === null) return '';
+    if (unitId === null) {
+        return '';
+    }
     return garrison.value!.canEject(unitId) ? 'Click to release' : 'Last soldier — cannot release';
 }
 

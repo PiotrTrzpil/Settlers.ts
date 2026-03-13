@@ -46,7 +46,9 @@ export class TowerBowmanRenderPass implements PluggableRenderPass {
 
     draw(gl: WebGL2RenderingContext, projection: Float32Array, viewPoint: IViewPoint): void {
         const { ctx } = this;
-        if (!ctx.spriteManager?.hasSprites || !ctx.spriteBatchRenderer.isInitialized) return;
+        if (!ctx.spriteManager?.hasSprites || !ctx.spriteBatchRenderer.isInitialized) {
+            return;
+        }
 
         this.lastSpriteCount = 0;
 
@@ -63,13 +65,19 @@ export class TowerBowmanRenderPass implements PluggableRenderPass {
 
         // Iterate all buildings in the game state that have garrisons with bowmen
         for (const entity of ctx.sortedEntities) {
-            if (entity.type !== EntityType.Building) continue;
+            if (entity.type !== EntityType.Building) {
+                continue;
+            }
 
             const garrison = this.garrisonManager.getGarrison(entity.id);
-            if (!garrison || garrison.bowmanSlots.unitIds.length === 0) continue;
+            if (!garrison || garrison.bowmanSlots.unitIds.length === 0) {
+                continue;
+            }
 
             const slotPositions = getBowmanSlotPositions(entity.subType as BuildingType, entity.race);
-            if (!slotPositions) continue;
+            if (!slotPositions) {
+                continue;
+            }
 
             // Compute tower screen position (same as entity-sprite-pass for buildings)
             const worldPos = TilePicker.tileToWorld(
@@ -102,7 +110,9 @@ export class TowerBowmanRenderPass implements PluggableRenderPass {
         for (let i = 0; i < bowmanIds.length; i++) {
             const bowmanId = bowmanIds[i]!;
             const slot = slotPositions[i];
-            if (!slot) continue;
+            if (!slot) {
+                continue;
+            }
 
             const bowman = this.gameState.getEntityOrThrow(bowmanId, 'TowerBowmanRenderPass');
             const unitType = bowman.subType as UnitType;
@@ -123,7 +133,9 @@ export class TowerBowmanRenderPass implements PluggableRenderPass {
             const playback = makeIdlePlayback(direction);
 
             const sprite = ctx.spriteResolver.getUnitSpriteForDirection(unitType, playback, spriteDir, race);
-            if (!sprite) continue;
+            if (!sprite) {
+                continue;
+            }
 
             const x = towerX + slot.offsetX;
             const y = towerY + slot.offsetY;

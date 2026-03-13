@@ -189,19 +189,21 @@ export abstract class BasePlacementMode<TSubType = number> extends BaseInputMode
         // Only handles placement-relevant actions; others fall through to UNHANDLED
         // eslint-disable-next-line @typescript-eslint/switch-exhaustiveness-check -- partial: unknown actions fall through to UNHANDLED
         switch (action) {
-        case InputAction.CancelPlacement:
-        case InputAction.DeselectAll:
-            context.switchMode('select');
-            return HANDLED;
+            case InputAction.CancelPlacement:
+            case InputAction.DeselectAll:
+                context.switchMode('select');
+                return HANDLED;
 
-        default:
-            return UNHANDLED;
+            default:
+                return UNHANDLED;
         }
     }
 
     override onPointerDown(data: PointerData, context: InputContext): InputResult {
         const modeData = context.getModeData<PlacementModeData<TSubType>>();
-        if (!modeData) return UNHANDLED;
+        if (!modeData) {
+            return UNHANDLED;
+        }
 
         if (data.button === MouseButton.Left) {
             this.dragging = true;
@@ -294,7 +296,9 @@ export abstract class BasePlacementMode<TSubType = number> extends BaseInputMode
         this.lastPlacedTileX = modeData.previewX;
         this.lastPlacedTileY = modeData.previewY;
 
-        if (!modeData.previewValid) return;
+        if (!modeData.previewValid) {
+            return;
+        }
 
         const command = this.createPlacementCommand(modeData.previewX, modeData.previewY, modeData);
         const result = context.executeCommand(command);

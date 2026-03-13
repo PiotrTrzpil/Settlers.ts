@@ -187,22 +187,32 @@ export class SettlerTaskSystem implements TickSystem, Persistable<SerializedUnit
 
         config.eventBus.on('carrier:transportCancelled', ({ unitId: carrierId }) => {
             const runtime = this.runtimes.get(carrierId);
-            if (!runtime?.job) return;
+            if (!runtime?.job) {
+                return;
+            }
 
             const entity = this.gameState.getEntity(carrierId);
-            if (!entity) return;
+            if (!entity) {
+                return;
+            }
 
             const unitConfig = this.settlerConfigs.get(entity.subType as UnitType);
-            if (!unitConfig) return;
+            if (!unitConfig) {
+                return;
+            }
 
             this.interruptJobForCleanup(entity, unitConfig, runtime);
             runtime.job = null;
         });
 
         config.eventBus.on('settler-location:approachInterrupted', ({ unitId: settlerId, buildingId }) => {
-            if (!this.runtimes.has(settlerId)) return;
+            if (!this.runtimes.has(settlerId)) {
+                return;
+            }
             const runtime = this.runtimes.get(settlerId)!;
-            if (runtime.homeAssignment?.buildingId !== buildingId) return;
+            if (runtime.homeAssignment?.buildingId !== buildingId) {
+                return;
+            }
 
             runtime.homeAssignment = null;
             this.runtimes.reindex(settlerId);
@@ -230,9 +240,13 @@ export class SettlerTaskSystem implements TickSystem, Persistable<SerializedUnit
         // The old job's animation nodes (e.g. SW_WALK) don't exist for the Carrier type.
         // Carrier→specialist transforms are fine — the choreo continues with new-type nodes.
         config.eventBus.on('unit:transformed', ({ unitId, toType }) => {
-            if (toType !== UnitType.Carrier) return;
+            if (toType !== UnitType.Carrier) {
+                return;
+            }
             const runtime = this.runtimes.get(unitId);
-            if (!runtime) return;
+            if (!runtime) {
+                return;
+            }
 
             const entity = this.gameState.getEntity(unitId);
             if (entity && runtime.job) {
@@ -306,13 +320,17 @@ export class SettlerTaskSystem implements TickSystem, Persistable<SerializedUnit
 
     isManaged(entityId: number): boolean {
         const entity = this.gameState.getEntity(entityId);
-        if (!entity || entity.type !== EntityType.Unit) return false;
+        if (!entity || entity.type !== EntityType.Unit) {
+            return false;
+        }
         return this.settlerConfigs.has(entity.subType as UnitType);
     }
 
     isWorking(entityId: number): boolean {
         const runtime = this.runtimes.get(entityId);
-        if (!runtime) return false;
+        if (!runtime) {
+            return false;
+        }
         return runtime.state === SettlerState.WORKING || runtime.moveTask !== null;
     }
 
@@ -361,7 +379,9 @@ export class SettlerTaskSystem implements TickSystem, Persistable<SerializedUnit
 
     private getAssignedWorkplace(settlerId: number): Entity | null {
         const buildingId = this.getAssignedBuilding(settlerId);
-        if (buildingId === null) return null;
+        if (buildingId === null) {
+            return null;
+        }
         return this.gameState.getEntity(buildingId) ?? null;
     }
 
@@ -478,7 +498,9 @@ export class SettlerTaskSystem implements TickSystem, Persistable<SerializedUnit
         }
 
         const runtime = this.runtimes.get(entityId);
-        if (!runtime) return;
+        if (!runtime) {
+            return;
+        }
 
         const entity = this.gameState.getEntity(entityId);
         if (entity) {
@@ -507,8 +529,12 @@ export class SettlerTaskSystem implements TickSystem, Persistable<SerializedUnit
 
     private cleanupSettlerHandlers(entity: Entity, entityId: number, runtime: UnitRuntime): void {
         const config = this.settlerConfigs.get(entity.subType as UnitType);
-        if (!config) return;
-        if (runtime.job) this.interruptJobForCleanup(entity, config, runtime);
+        if (!config) {
+            return;
+        }
+        if (runtime.job) {
+            this.interruptJobForCleanup(entity, config, runtime);
+        }
         const posHandler = this.handlerRegistry.getPositionHandler(config.plantSearch ?? config.search);
         posHandler?.onSettlerRemoved?.(entityId);
     }
@@ -516,7 +542,9 @@ export class SettlerTaskSystem implements TickSystem, Persistable<SerializedUnit
     private onBuildingRemoved(buildingId: number): void {
         this.workerTracker.clearBuilding(buildingId);
         for (const [settlerId, runtime] of sortedEntries(this.runtimes.raw as Map<number, UnitRuntime>)) {
-            if (runtime.homeAssignment?.buildingId !== buildingId) continue;
+            if (runtime.homeAssignment?.buildingId !== buildingId) {
+                continue;
+            }
 
             runtime.homeAssignment = null;
             this.runtimes.reindex(settlerId);
@@ -540,14 +568,20 @@ export class SettlerTaskSystem implements TickSystem, Persistable<SerializedUnit
     tick(dt: number): void {
         const cats: [number, number, number, number, number, number] = [0, 0, 0, 0, 0, 0];
         const it = this.workerExecutor.idleTimings;
-        for (const k of Object.keys(it)) it[k] = 0;
+        for (const k of Object.keys(it)) {
+            it[k] = 0;
+        }
         this.workerExecutor.idleSearchCount = 0;
 
         const unitIds = this.gameState.entityIndex.idsOfType(EntityType.Unit);
         for (const id of unitIds) {
             const entity = this.gameState.getEntity(id);
-            if (!entity) continue;
-            if (isAngelUnitType(entity.subType as UnitType)) continue;
+            if (!entity) {
+                continue;
+            }
+            if (isAngelUnitType(entity.subType as UnitType)) {
+                continue;
+            }
 
             const start = performance.now();
             try {
@@ -570,7 +604,9 @@ export class SettlerTaskSystem implements TickSystem, Persistable<SerializedUnit
             'move-task': cats[TickCategory.MOVE_TASK],
             'idle-anim': cats[TickCategory.IDLE_ANIM],
         };
-        for (const [k, v] of Object.entries(it)) sub[`  ${k}`] = v;
+        for (const [k, v] of Object.entries(it)) {
+            sub[`  ${k}`] = v;
+        }
         this.lastSubTimings = sub;
     }
 

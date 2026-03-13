@@ -36,8 +36,12 @@ export class TransitionBlendPass implements IRenderPass {
 
     public draw(gl: WebGL2RenderingContext, projection: Float32Array, viewPoint: IViewPoint): void {
         const { ctx } = this;
-        if (this.queue.length === 0) return;
-        if (!ctx.spriteManager) return;
+        if (this.queue.length === 0) {
+            return;
+        }
+        if (!ctx.spriteManager) {
+            return;
+        }
 
         const paletteWidth = PALETTE_TEXTURE_WIDTH;
         const rowsPerPlayer = ctx.spriteManager.paletteManager.textureRowsPerPlayer;

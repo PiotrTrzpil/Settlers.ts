@@ -99,18 +99,18 @@ function countTreeStages(system: TreeSystem) {
     for (const [, state] of system.getAllTreeStates()) {
         total++;
         switch (state.stage) {
-        case TreeStage.Growing:
-            growing++;
-            break;
-        case TreeStage.Normal:
-            normal++;
-            break;
-        case TreeStage.Cutting:
-            cutting++;
-            break;
-        case TreeStage.Cut:
-            cut++;
-            break;
+            case TreeStage.Growing:
+                growing++;
+                break;
+            case TreeStage.Normal:
+                normal++;
+                break;
+            case TreeStage.Cutting:
+                cutting++;
+                break;
+            case TreeStage.Cut:
+                cut++;
+                break;
         }
     }
     return { total, growing, normal, cutting, cut };

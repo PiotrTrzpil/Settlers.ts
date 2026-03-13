@@ -81,15 +81,25 @@ export function useLayerPanel(onEmit: (value: LayerVisibility) => void): {
 
     const visibleCount = computed(() => {
         let count = 0;
-        if (visibility.buildings) count++;
-        if (visibility.units) count++;
-        if (visibility.piles) count++;
-        if (visibility.environment) count++;
+        if (visibility.buildings) {
+            count++;
+        }
+        if (visibility.units) {
+            count++;
+        }
+        if (visibility.piles) {
+            count++;
+        }
+        if (visibility.environment) {
+            count++;
+        }
         return count;
     });
 
     const isEnvironmentPartial = computed(() => {
-        if (!visibility.environment) return false;
+        if (!visibility.environment) {
+            return false;
+        }
         const layers = visibility.environmentLayers;
         const allTrue = layers.trees && layers.stones && layers.plants && layers.other;
         const allFalse = !layers.trees && !layers.stones && !layers.plants && !layers.other;
@@ -97,17 +107,27 @@ export function useLayerPanel(onEmit: (value: LayerVisibility) => void): {
     });
 
     const envBadgeColor = computed((): 'neutral' | 'warn' | 'success' => {
-        if (!visibility.environment) return 'neutral';
-        if (isEnvironmentPartial.value) return 'warn';
+        if (!visibility.environment) {
+            return 'neutral';
+        }
+        if (isEnvironmentPartial.value) {
+            return 'warn';
+        }
         return 'success';
     });
 
     const environmentStatusText = computed(() => {
-        if (!visibility.environment) return 'off';
+        if (!visibility.environment) {
+            return 'off';
+        }
         const layers = visibility.environmentLayers;
         const count = [layers.trees, layers.stones, layers.plants, layers.other].filter(Boolean).length;
-        if (count === 4) return 'all';
-        if (count === 0) return 'none';
+        if (count === 4) {
+            return 'all';
+        }
+        if (count === 0) {
+            return 'none';
+        }
         return `${count}/4`;
     });
 
@@ -143,8 +163,12 @@ export function useLayerPanel(onEmit: (value: LayerVisibility) => void): {
 
     const objectFilterLabel = computed(() => {
         const t = visibility.debugObjectTypeFilter;
-        if (t === null) return '';
-        if (t >= 1 && t <= 18) return `Tree type ${t}`;
+        if (t === null) {
+            return '';
+        }
+        if (t >= 1 && t <= 18) {
+            return `Tree type ${t}`;
+        }
         return `Raw type ${t}`;
     });
 

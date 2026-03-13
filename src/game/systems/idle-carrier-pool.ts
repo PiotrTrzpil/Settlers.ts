@@ -77,7 +77,9 @@ export class IdleCarrierPool {
         let bestDistSq = Infinity;
 
         for (const [id, , entity] of query(this.carrierRegistry.store, this.gameState.store)) {
-            if (!this.isAvailable(id, entity.player, player, filter)) continue;
+            if (!this.isAvailable(id, entity.player, player, filter)) {
+                continue;
+            }
 
             const dx = entity.x - nearX;
             const dy = entity.y - nearY;

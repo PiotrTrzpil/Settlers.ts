@@ -48,12 +48,16 @@ export function findApproachTileNear(
     terrain: TerrainData,
     gameState: GameState
 ): { x: number; y: number } | null {
-    if (isWalkable(x, y, terrain, gameState)) return { x, y };
+    if (isWalkable(x, y, terrain, gameState)) {
+        return { x, y };
+    }
 
     for (const [dx, dy] of EXTENDED_OFFSETS) {
         const nx = x + dx;
         const ny = y + dy;
-        if (isWalkable(nx, ny, terrain, gameState)) return { x: nx, y: ny };
+        if (isWalkable(nx, ny, terrain, gameState)) {
+            return { x: nx, y: ny };
+        }
     }
 
     return null;

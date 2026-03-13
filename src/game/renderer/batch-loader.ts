@@ -45,7 +45,9 @@ export class SafeLoadBatch<T> {
      * @param register - Function to register each item (called after GPU upload)
      */
     finalize(atlas: EntityTextureAtlas, gl: WebGL2RenderingContext, register: (item: T) => void): void {
-        if (this.items.length === 0) return;
+        if (this.items.length === 0) {
+            return;
+        }
 
         // GPU upload first
         atlas.update(gl);

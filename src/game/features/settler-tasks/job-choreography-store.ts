@@ -98,10 +98,14 @@ export class JobChoreographyStore {
     getJob(raceId: RaceId, jobId: string): ChoreoJob | undefined {
         const key = cacheKey(raceId, jobId);
         const cached = this.cache.get(key);
-        if (cached !== undefined) return cached;
+        if (cached !== undefined) {
+            return cached;
+        }
 
         const raw = this.loader.getJob(raceId, jobId);
-        if (raw === undefined) return undefined;
+        if (raw === undefined) {
+            return undefined;
+        }
 
         const converted = convertJob(raw);
         this.cache.set(key, converted);
@@ -122,11 +126,15 @@ export class JobChoreographyStore {
      */
     getJobsForSettler(raceId: RaceId, unitType: UnitType): ChoreoJob[] {
         const xmlSettlerId = UNIT_TYPE_TO_XML_SETTLER[unitType];
-        if (xmlSettlerId === undefined) return [];
+        if (xmlSettlerId === undefined) {
+            return [];
+        }
 
         // Try the requested race first, then fall back to any race
         const settlerInfo = this.loader.getSettler(raceId, xmlSettlerId) ?? this.findSettlerInfoAnyRace(xmlSettlerId);
-        if (settlerInfo === undefined) return [];
+        if (settlerInfo === undefined) {
+            return [];
+        }
 
         const jobs: ChoreoJob[] = [];
         for (const jobId of settlerInfo.animLists) {
@@ -142,7 +150,9 @@ export class JobChoreographyStore {
     private findSettlerInfoAnyRace(xmlSettlerId: string) {
         for (const id of ALL_RACE_IDS) {
             const info = this.loader.getSettler(id, xmlSettlerId);
-            if (info !== undefined) return info;
+            if (info !== undefined) {
+                return info;
+            }
         }
         return undefined;
     }

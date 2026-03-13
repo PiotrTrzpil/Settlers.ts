@@ -178,7 +178,9 @@ export class TextureMap16Bit extends ShaderTexture {
         for (let pass = 0; pass < 64 && queue.length > 0; pass++) {
             const next: number[] = [];
             for (const idx of queue) {
-                if (data[idx] !== MAGENTA) continue;
+                if (data[idx] !== MAGENTA) {
+                    continue;
+                }
                 const replaced = this.replaceFromNeighbor(idx, bx0, by0, bx1, by1);
                 if (replaced) {
                     this.enqueueMagentaNeighbors(idx, bx0, by0, bx1, by1, next);
@@ -198,7 +200,9 @@ export class TextureMap16Bit extends ShaderTexture {
         for (let y = by0; y < by1; y++) {
             for (let x = bx0; x < bx1; x++) {
                 const idx = y * size + x;
-                if (data[idx] !== MAGENTA) continue;
+                if (data[idx] !== MAGENTA) {
+                    continue;
+                }
                 if (this.hasNonMagentaNeighbor(x, y, bx0, by0, bx1, by1)) {
                     queue.push(idx);
                 }
@@ -237,7 +241,9 @@ export class TextureMap16Bit extends ShaderTexture {
         for (let d = 0; d < 4; d++) {
             const nx = x + DX[d]!;
             const ny = y + DY[d]!;
-            if (nx < bx0 || nx >= bx1 || ny < by0 || ny >= by1) continue;
+            if (nx < bx0 || nx >= bx1 || ny < by0 || ny >= by1) {
+                continue;
+            }
             const nv = data[ny * size + nx]!;
             if (nv !== MAGENTA) {
                 data[idx] = nv;

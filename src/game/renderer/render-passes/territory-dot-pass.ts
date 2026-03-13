@@ -26,9 +26,15 @@ export class TerritoryDotPass implements IRenderPass {
 
     public draw(gl: WebGL2RenderingContext, projection: Float32Array, viewPoint: IViewPoint): void {
         const { ctx } = this;
-        if (ctx.territoryDots.length === 0 && ctx.workAreaDots.length === 0) return;
-        if (!ctx.spriteManager?.hasSprites || !ctx.spriteBatchRenderer.isInitialized) return;
-        if (!ctx.spriteManager.hasTerritoryDotSprites()) return;
+        if (ctx.territoryDots.length === 0 && ctx.workAreaDots.length === 0) {
+            return;
+        }
+        if (!ctx.spriteManager?.hasSprites || !ctx.spriteBatchRenderer.isInitialized) {
+            return;
+        }
+        if (!ctx.spriteManager.hasTerritoryDotSprites()) {
+            return;
+        }
 
         ctx.spriteManager.spriteAtlas!.bindForRendering(gl);
         ctx.spriteManager.paletteManager.bind(gl);

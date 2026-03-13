@@ -51,7 +51,9 @@ class SafeLoadBatch<T> {
         this.items.push(item);
     }
     finalize(atlas: EntityTextureAtlas, gl: WebGL2RenderingContext, register: (item: T) => void): void {
-        if (this.items.length === 0) return;
+        if (this.items.length === 0) {
+            return;
+        }
         atlas.update(gl);
         for (const item of this.items) {
             register(item);
@@ -86,7 +88,9 @@ interface UnitFileCtx extends SpriteLoadContext {
 export async function loadUnitSpritesForRace(race: Race, ctx: SpriteLoadContext): Promise<boolean> {
     const fileId = `${SETTLER_FILE_NUMBERS[race]}`;
     const fileSet = await ctx.spriteLoader.loadFileSet(fileId);
-    if (!fileSet?.jilReader || !fileSet.dilReader) return false;
+    if (!fileSet?.jilReader || !fileSet.dilReader) {
+        return false;
+    }
 
     const fc: UnitFileCtx = { ...ctx, fileSet, paletteBase: getPaletteBase(ctx, fileId), race };
 
@@ -122,11 +126,15 @@ async function loadBaseUnits(ctx: UnitFileCtx): Promise<number> {
     for (const [typeStr, info] of unitEntries) {
         const unitType = Number(typeStr) as UnitType;
         const loadedDirs = allDirs.get(info.index);
-        if (!loadedDirs) continue;
+        if (!loadedDirs) {
+            continue;
+        }
         const directionFrames = toEntryMap(loadedDirs);
         if (directionFrames.size > 0) {
             const prefix = UNIT_XML_PREFIX[unitType];
-            if (!prefix) continue;
+            if (!prefix) {
+                continue;
+            }
             const walkKey = xmlKey(prefix, 'WALK');
             batch.add({ unitType, directionFrames, walkKey });
         }
@@ -166,14 +174,20 @@ async function loadCarrierVariants(ctx: UnitFileCtx): Promise<number> {
 
     for (const job of carrierJobs) {
         const loadedDirs = allDirs.get(job.jobIndex);
-        if (!loadedDirs) continue;
+        if (!loadedDirs) {
+            continue;
+        }
         const dirFrames = toEntryMap(loadedDirs);
-        if (dirFrames.size === 0) continue;
+        if (dirFrames.size === 0) {
+            continue;
+        }
         // Register carrier material walk under the XML name: C_WALK_{MATERIAL}
         // (these aren't in SETTLER_JOB_INDICES because there are too many —
         // CARRIER_MATERIAL_JOB_INDICES is generated from RESOURCE_JOB_INDICES)
         const materialName = EMaterialType[job.materialType];
-        if (!materialName) continue;
+        if (!materialName) {
+            continue;
+        }
         const seqKey = xmlKey('C', `WALK_${materialName}`);
         batch.add({ seqKey, frames: dirFrames });
     }
@@ -212,12 +226,18 @@ function collectAllAnimJobs(ctx: UnitFileCtx): AnimJob[] {
 
     for (const [workerKey, workerData] of Object.entries(SETTLER_JOB_INDICES)) {
         const unitType = SETTLER_KEY_TO_UNIT_TYPE[workerKey];
-        if (unitType === undefined) continue;
-        if (!isUnitAvailableForRace(unitType, race)) continue;
+        if (unitType === undefined) {
+            continue;
+        }
+        if (!isUnitAvailableForRace(unitType, race)) {
+            continue;
+        }
 
         for (const [fieldName, jobIndex] of Object.entries(workerData as SettlerAnimData)) {
             // Skip the base WALK field — already loaded by loadBaseUnits
-            if (stripXmlPrefix(fieldName) === 'WALK') continue;
+            if (stripXmlPrefix(fieldName) === 'WALK') {
+                continue;
+            }
 
             const dirCount = ctx.spriteLoader.getDirectionCount(fileSet, jobIndex);
             if (dirCount > 0) {
@@ -236,7 +256,9 @@ function collectAllAnimJobs(ctx: UnitFileCtx): AnimJob[] {
 async function loadAllWorkerAnimations(ctx: UnitFileCtx): Promise<number> {
     const { fileSet, race, paletteBase } = ctx;
     const animJobs = collectAllAnimJobs(ctx);
-    if (animJobs.length === 0) return 0;
+    if (animJobs.length === 0) {
+        return 0;
+    }
 
     type SeqData = { unitType: UnitType; seqKey: string; frames: Map<number, SpriteEntry[]> };
     const batch = new SafeLoadBatch<SeqData>();
@@ -247,9 +269,13 @@ async function loadAllWorkerAnimations(ctx: UnitFileCtx): Promise<number> {
 
     for (const job of animJobs) {
         const loadedDirs = allDirs.get(job.jobIndex);
-        if (!loadedDirs) continue;
+        if (!loadedDirs) {
+            continue;
+        }
         const dirFrames = toEntryMap(loadedDirs);
-        if (dirFrames.size === 0) continue;
+        if (dirFrames.size === 0) {
+            continue;
+        }
         batch.add({ unitType: job.unitType, seqKey: job.xmlFieldName, frames: dirFrames });
     }
 

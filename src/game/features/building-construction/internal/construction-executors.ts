@@ -42,7 +42,9 @@ export function createBuildStepExecutor(
     return (_settler, job) => {
         const siteId = job.metadata!['siteId'] as number;
         const site = constructionSiteManager.getSite(siteId);
-        if (!site) return TaskResult.DONE;
+        if (!site) {
+            return TaskResult.DONE;
+        }
 
         const progressPerMaterial = 1.0 / site.materials.totalCost;
         const progressPerCycle = progressPerMaterial / BUILD_CYCLES_PER_MATERIAL;

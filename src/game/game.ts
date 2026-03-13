@@ -283,7 +283,9 @@ export class Game extends GameCore {
     private restoreFeatureToggles(): void {
         try {
             const raw = localStorage.getItem(Game.FEATURE_STORAGE_KEY);
-            if (!raw) return;
+            if (!raw) {
+                return;
+            }
             const saved = JSON.parse(raw) as Record<string, boolean>;
             for (const [name, enabled] of Object.entries(saved)) {
                 this._gameLoop.setSystemEnabled(name, enabled);

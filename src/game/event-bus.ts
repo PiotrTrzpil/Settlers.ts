@@ -792,7 +792,9 @@ export class EventBus {
      */
     emit<K extends keyof GameEvents>(event: K, payload: GameEvents[K] & { level?: GameEventLevel }): void {
         const handlers = this.handlers.get(event as string);
-        if (!handlers) return;
+        if (!handlers) {
+            return;
+        }
 
         for (const handler of handlers) {
             if (this.strict) {

@@ -155,9 +155,15 @@ export class SoundManager implements IAudioManager {
             const stored = localStorage.getItem('settlers_sound_settings');
             if (stored) {
                 const settings = JSON.parse(stored);
-                if (typeof settings.masterVolume === 'number') this.setMasterVolume(settings.masterVolume);
-                if (typeof settings.musicVolume === 'number') this.setMusicVolume(settings.musicVolume);
-                if (typeof settings.musicEnabled === 'boolean') this.toggleMusic(settings.musicEnabled);
+                if (typeof settings.masterVolume === 'number') {
+                    this.setMasterVolume(settings.masterVolume);
+                }
+                if (typeof settings.musicVolume === 'number') {
+                    this.setMusicVolume(settings.musicVolume);
+                }
+                if (typeof settings.musicEnabled === 'boolean') {
+                    this.toggleMusic(settings.musicEnabled);
+                }
                 SoundManager.log.debug('Loaded sound settings');
             }
         } catch (e) {
@@ -179,7 +185,9 @@ export class SoundManager implements IAudioManager {
     }
 
     private setupAudioUnlock(): void {
-        if (this.audioUnlockSetup) return;
+        if (this.audioUnlockSetup) {
+            return;
+        }
         this.audioUnlockSetup = true;
 
         let unlocking = false; // Prevent multiple concurrent unlock attempts
@@ -255,7 +263,9 @@ export class SoundManager implements IAudioManager {
     }
 
     private async loadSndArchive(silPath: string, sndPath: string): Promise<void> {
-        if (!this.fileManager) return;
+        if (!this.fileManager) {
+            return;
+        }
 
         const silReader = await this.fileManager.readFile(silPath);
         const sndReader = await this.fileManager.readFile(sndPath);
@@ -363,10 +373,14 @@ export class SoundManager implements IAudioManager {
         let format: string[] | undefined;
 
         if (config.type === SoundType.SFX && config.path.startsWith('Snd:')) {
-            if (!this.sndReader) return null;
+            if (!this.sndReader) {
+                return null;
+            }
             const index = parseInt(config.path.split(':')[1]!, 10);
             const blobUrl = this.sndReader.getSound(index);
-            if (!blobUrl) return null;
+            if (!blobUrl) {
+                return null;
+            }
             src = [blobUrl];
             format = ['wav'];
         }

@@ -91,9 +91,13 @@ export class PilePositionResolver {
                 );
                 for (const pos of positions) {
                     const key = tileKey(pos.x, pos.y);
-                    if (usedPositions.has(key)) continue;
+                    if (usedPositions.has(key)) {
+                        continue;
+                    }
                     const occupant = this.gameState.getGroundEntityAt(pos.x, pos.y);
-                    if (occupant?.type === EntityType.StackedPile) continue;
+                    if (occupant?.type === EntityType.StackedPile) {
+                        continue;
+                    }
                     return pos;
                 }
                 throw new Error(

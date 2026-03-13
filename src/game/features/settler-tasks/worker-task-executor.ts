@@ -217,13 +217,17 @@ export class WorkerTaskExecutor {
         // If not, they stay inside (returnHomeAndWait is a no-op when already inside).
 
         // First visit: worker must walk to their building before starting work
-        if (homeBuilding && !this.ensureFirstVisit(settler, runtime, homeBuilding)) return false;
+        if (homeBuilding && !this.ensureFirstVisit(settler, runtime, homeBuilding)) {
+            return false;
+        }
 
         const searchKey = `find:${config.search}`;
         let t0 = performance.now();
         const targets = this.findTargets(settler, entityHandler, positionHandler, homeBuilding);
         this.addTiming(searchKey, performance.now() - t0);
-        if (!targets) return false; // error already logged
+        if (!targets) {
+            return false;
+        } // error already logged
 
         t0 = performance.now();
         const selected = this.jobSelector.selectJob(settler, config, targets.entity, homeBuilding, targets.position);
@@ -241,7 +245,9 @@ export class WorkerTaskExecutor {
             targets.entity
         );
         this.addTiming('canWork', performance.now() - t0);
-        if (shouldWait) return false;
+        if (shouldWait) {
+            return false;
+        }
 
         t0 = performance.now();
         this.lifecycle.startJob(settler, runtime, selected, targets.entity, homeBuilding, targets.position);
@@ -256,7 +262,9 @@ export class WorkerTaskExecutor {
 
     /** Ensure a worker has visited their home building. Returns true if ready to work. */
     private ensureFirstVisit(settler: Entity, runtime: WorkerRuntimeState, home: Entity): boolean {
-        if (runtime.homeAssignment!.hasVisited) return true;
+        if (runtime.homeAssignment!.hasVisited) {
+            return true;
+        }
         if (this.locationManager.isInside(settler.id, home.id)) {
             runtime.homeAssignment!.hasVisited = true;
             return true;
@@ -273,11 +281,15 @@ export class WorkerTaskExecutor {
         homeBuilding: Entity | null
     ): { entity: { entityId: number; x: number; y: number } | null; position: { x: number; y: number } | null } | null {
         const entity = entityHandler ? this.findEntityTarget(entityHandler, settler, homeBuilding) : null;
-        if (entity === undefined) return null;
+        if (entity === undefined) {
+            return null;
+        }
 
         const position =
             !entity && positionHandler ? this.findPositionTarget(positionHandler, settler, homeBuilding) : null;
-        if (position === undefined) return null;
+        if (position === undefined) {
+            return null;
+        }
 
         return { entity, position };
     }
@@ -327,7 +339,9 @@ export class WorkerTaskExecutor {
 
         const isPileAction = node.task === ChoreoTaskType.GET_GOOD || node.task === ChoreoTaskType.PUT_GOOD;
         const controller = isPileAction ? this.gameState.movement.getController(settler.id) : undefined;
-        if (controller) controller.busy = true;
+        if (controller) {
+            controller.busy = true;
+        }
 
         const result = this.lifecycle.executeNode(settler, job, node, dt);
 
@@ -427,10 +441,14 @@ export class WorkerTaskExecutor {
                 n.task === ChoreoTaskType.RESOURCE_GATHERING ||
                 n.task === ChoreoTaskType.RESOURCE_GATHERING_VIRTUAL
         );
-        if (!outputNode?.entity) return false;
+        if (!outputNode?.entity) {
+            return false;
+        }
 
         const material = this.parseMaterial(outputNode.entity);
-        if (material === null) return false;
+        if (material === null) {
+            return false;
+        }
 
         const slot = this.inventoryManager.findSlot(homeBuilding.id, material, 'output');
         return slot !== undefined && slot.currentAmount >= slot.maxCapacity;

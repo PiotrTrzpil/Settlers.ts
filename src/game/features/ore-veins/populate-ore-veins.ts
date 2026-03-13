@@ -26,21 +26,41 @@ const S4_STONE_MAX = 96;
 
 /** Map S4 resource byte to OreType. Returns None for non-ore values (fish, stone, wood). */
 function s4ValueToOreType(value: number): OreType {
-    if (value >= S4_COAL_MIN && value <= S4_COAL_MAX) return OreType.Coal;
-    if (value >= S4_IRON_MIN && value <= S4_IRON_MAX) return OreType.Iron;
-    if (value >= S4_GOLD_MIN && value <= S4_GOLD_MAX) return OreType.Gold;
-    if (value >= S4_SULPHUR_MIN && value <= S4_SULPHUR_MAX) return OreType.Sulfur;
-    if (value >= S4_STONE_MIN && value <= S4_STONE_MAX) return OreType.Stone;
+    if (value >= S4_COAL_MIN && value <= S4_COAL_MAX) {
+        return OreType.Coal;
+    }
+    if (value >= S4_IRON_MIN && value <= S4_IRON_MAX) {
+        return OreType.Iron;
+    }
+    if (value >= S4_GOLD_MIN && value <= S4_GOLD_MAX) {
+        return OreType.Gold;
+    }
+    if (value >= S4_SULPHUR_MIN && value <= S4_SULPHUR_MAX) {
+        return OreType.Sulfur;
+    }
+    if (value >= S4_STONE_MIN && value <= S4_STONE_MAX) {
+        return OreType.Stone;
+    }
     return OreType.None;
 }
 
 /** Extract the 1-16 amount from an S4 resource byte. */
 function s4ValueToAmount(value: number): number {
-    if (value >= S4_COAL_MIN && value <= S4_COAL_MAX) return value - S4_COAL_MIN + 1;
-    if (value >= S4_IRON_MIN && value <= S4_IRON_MAX) return value - S4_IRON_MIN + 1;
-    if (value >= S4_GOLD_MIN && value <= S4_GOLD_MAX) return value - S4_GOLD_MIN + 1;
-    if (value >= S4_SULPHUR_MIN && value <= S4_SULPHUR_MAX) return value - S4_SULPHUR_MIN + 1;
-    if (value >= S4_STONE_MIN && value <= S4_STONE_MAX) return value - S4_STONE_MIN + 1;
+    if (value >= S4_COAL_MIN && value <= S4_COAL_MAX) {
+        return value - S4_COAL_MIN + 1;
+    }
+    if (value >= S4_IRON_MIN && value <= S4_IRON_MAX) {
+        return value - S4_IRON_MIN + 1;
+    }
+    if (value >= S4_GOLD_MIN && value <= S4_GOLD_MAX) {
+        return value - S4_GOLD_MIN + 1;
+    }
+    if (value >= S4_SULPHUR_MIN && value <= S4_SULPHUR_MAX) {
+        return value - S4_SULPHUR_MIN + 1;
+    }
+    if (value >= S4_STONE_MIN && value <= S4_STONE_MAX) {
+        return value - S4_STONE_MIN + 1;
+    }
     return 0;
 }
 
@@ -54,10 +74,14 @@ export function loadOreVeinsFromResourceData(oreVeins: OreVeinData, resourceData
     const tileCount = Math.min(oreVeins.oreType.length, resourceData.length);
     for (let i = 0; i < tileCount; i++) {
         const raw = resourceData[i]!;
-        if (raw === 0) continue;
+        if (raw === 0) {
+            continue;
+        }
 
         const type = s4ValueToOreType(raw);
-        if (type === OreType.None) continue;
+        if (type === OreType.None) {
+            continue;
+        }
 
         const amount = s4ValueToAmount(raw);
         oreVeins.oreType[i] = type;
@@ -79,10 +103,14 @@ export function populateOreVeins(oreVeins: OreVeinData, terrain: TerrainData): v
 
     for (let y = 0; y < terrain.height; y++) {
         for (let x = 0; x < terrain.width; x++) {
-            if (!terrain.isRock(x, y)) continue;
+            if (!terrain.isRock(x, y)) {
+                continue;
+            }
 
             // 30% chance of empty
-            if (rng.next() < 0.3) continue;
+            if (rng.next() < 0.3) {
+                continue;
+            }
 
             const type = DISTRIBUTED_ORES[rng.nextInt(DISTRIBUTED_ORES.length)]!;
             const level = rng.nextInt(MAX_ORE_LEVEL) + 1;

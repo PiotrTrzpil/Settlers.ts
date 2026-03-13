@@ -105,7 +105,9 @@ export class UnitTransformer implements Persistable<SerializedUnitTransformer> {
         toolPile: { pileEntityId: number; x: number; y: number }
     ): boolean {
         const assigned = this.assignJob(carrierId, job, { x: toolPile.x, y: toolPile.y });
-        if (!assigned) return false;
+        if (!assigned) {
+            return false;
+        }
 
         this.registerTransform(carrierId, targetUnitType, toolMaterial, toolPile.pileEntityId);
 
@@ -128,7 +130,9 @@ export class UnitTransformer implements Persistable<SerializedUnitTransformer> {
         const job = createDirectTransformJob(targetUnitType);
         // No moveTo — carrier transforms in place; passing own position causes moveUnit to fail
         const assigned = this.assignJob(carrierId, job);
-        if (!assigned) return false;
+        if (!assigned) {
+            return false;
+        }
 
         const record: PendingTransform = {
             carrierId,
@@ -141,8 +145,12 @@ export class UnitTransformer implements Persistable<SerializedUnitTransformer> {
             purpose: 'unit-transform',
             onForcedRelease: unitId => {
                 const p = this.pending.get(unitId);
-                if (!p) return;
-                if (p.pileEntityId !== -1) this.toolSourceResolver.release(p.pileEntityId);
+                if (!p) {
+                    return;
+                }
+                if (p.pileEntityId !== -1) {
+                    this.toolSourceResolver.release(p.pileEntityId);
+                }
                 this.pending.delete(unitId);
                 log.debug(`Carrier ${unitId} removed during direct transform, reservation auto-released`);
             },
@@ -179,7 +187,9 @@ export class UnitTransformer implements Persistable<SerializedUnitTransformer> {
             purpose: 'unit-transform',
             onForcedRelease: unitId => {
                 const p = this.pending.get(unitId);
-                if (!p) return;
+                if (!p) {
+                    return;
+                }
                 this.toolSourceResolver.release(p.pileEntityId);
                 this.pending.delete(unitId);
                 log.debug(`Carrier ${unitId} removed during transform, reservation auto-released`);
@@ -198,7 +208,9 @@ export class UnitTransformer implements Persistable<SerializedUnitTransformer> {
     getPendingCountByType(unitType: UnitType): number {
         let count = 0;
         for (const p of this.pending.values()) {
-            if (p.targetUnitType === unitType) count++;
+            if (p.targetUnitType === unitType) {
+                count++;
+            }
         }
         return count;
     }
@@ -215,7 +227,9 @@ export class UnitTransformer implements Persistable<SerializedUnitTransformer> {
                 break;
             }
         }
-        if (!target) return false;
+        if (!target) {
+            return false;
+        }
 
         const fromType = target.subType as UnitType;
         const { id, x, y } = target;
@@ -234,10 +248,14 @@ export class UnitTransformer implements Persistable<SerializedUnitTransformer> {
         for (const [dx, dy] of EXTENDED_OFFSETS) {
             const tx = nearX + dx;
             const ty = nearY + dy;
-            if (this.gameState.getEntityAt(tx, ty)) continue;
+            if (this.gameState.getEntityAt(tx, ty)) {
+                continue;
+            }
             const pile = this.gameState.addEntity(EntityType.StackedPile, toolMaterial as number, tx, ty, 0);
             const pileState = this.gameState.piles.states.get(pile.id);
-            if (pileState) pileState.quantity = 1;
+            if (pileState) {
+                pileState.quantity = 1;
+            }
             this.eventBus.emit('pile:freePilePlaced', { entityId: pile.id, materialType: toolMaterial, quantity: 1 });
             log.debug(`Dropped ${EMaterialType[toolMaterial]} at (${tx}, ${ty})`);
             return;
@@ -289,7 +307,9 @@ export class UnitTransformer implements Persistable<SerializedUnitTransformer> {
         }
 
         this.unitReservation.release(carrierId);
-        if (p.pileEntityId !== -1) this.toolSourceResolver.release(p.pileEntityId);
+        if (p.pileEntityId !== -1) {
+            this.toolSourceResolver.release(p.pileEntityId);
+        }
         this.pending.delete(carrierId);
 
         const entity = this.gameState.getEntityOrThrow(carrierId, 'UnitTransformer.handleCompleted');
@@ -304,10 +324,14 @@ export class UnitTransformer implements Persistable<SerializedUnitTransformer> {
 
     private handleFailed(carrierId: number): void {
         const p = this.pending.get(carrierId);
-        if (!p) return;
+        if (!p) {
+            return;
+        }
 
         this.unitReservation.release(carrierId);
-        if (p.pileEntityId !== -1) this.toolSourceResolver.release(p.pileEntityId);
+        if (p.pileEntityId !== -1) {
+            this.toolSourceResolver.release(p.pileEntityId);
+        }
         this.pending.delete(carrierId);
 
         log.debug(`Transform failed for carrier ${carrierId}`);
@@ -342,14 +366,20 @@ export class UnitTransformer implements Persistable<SerializedUnitTransformer> {
             };
             this.pending.set(carrierId, record);
             // Restore tool pile reservation (skip for direct transforms where pileEntityId === -1)
-            if (entry.pileEntityId !== -1) this.toolSourceResolver.reserve(entry.pileEntityId);
+            if (entry.pileEntityId !== -1) {
+                this.toolSourceResolver.reserve(entry.pileEntityId);
+            }
             // Restore carrier reservation so it cannot be interrupted after load
             this.unitReservation.reserve(carrierId, {
                 purpose: 'unit-transform',
                 onForcedRelease: unitId => {
                     const p = this.pending.get(unitId);
-                    if (!p) return;
-                    if (p.pileEntityId !== -1) this.toolSourceResolver.release(p.pileEntityId);
+                    if (!p) {
+                        return;
+                    }
+                    if (p.pileEntityId !== -1) {
+                        this.toolSourceResolver.release(p.pileEntityId);
+                    }
                     this.pending.delete(unitId);
                 },
             });

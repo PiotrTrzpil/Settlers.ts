@@ -110,7 +110,9 @@ async function loadTreeSprites(ctx: FileCtx): Promise<number> {
     let totalLoaded = 0;
 
     for (const [typeStr, variantBases] of Object.entries(TREE_JOB_INDICES)) {
-        if (!Array.isArray(variantBases)) continue;
+        if (!Array.isArray(variantBases)) {
+            continue;
+        }
         const treeType = Number(typeStr) as MapObjectType;
         totalLoaded += await loadTreeTypeSprites(ctx, treeType, variantBases);
         await new Promise(r => setTimeout(r, 0));
@@ -134,7 +136,9 @@ async function loadStoneSprites(ctx: FileCtx): Promise<number> {
     // Collect all GIL indices across both variants
     const allIndices: number[] = [];
     for (const range of variants) {
-        for (let s = 0; s < range.count; s++) allIndices.push(range.start + s);
+        for (let s = 0; s < range.count; s++) {
+            allIndices.push(range.start + s);
+        }
     }
 
     const sprites = await loadGilSpriteBatch(
@@ -196,7 +200,9 @@ async function loadDecorationSprites(ctx: FileCtx): Promise<number> {
     let totalRegistered = 0;
     for (const [gilIndex, entityKeys] of byGilIndex) {
         const entry = sprites.get(gilIndex);
-        if (!entry) continue;
+        if (!entry) {
+            continue;
+        }
         for (const key of entityKeys) {
             ctx.registry.registerMapObject(key as MapObjectType, entry);
             totalRegistered++;
@@ -229,7 +235,9 @@ async function loadFlagSprites(ctx: FileCtx): Promise<number> {
     // Collect all GIL indices across all player colors
     const allIndices: number[] = [];
     for (const range of FLAG_RANGES) {
-        for (let f = 0; f < range.count; f++) allIndices.push(range.start + f);
+        for (let f = 0; f < range.count; f++) {
+            allIndices.push(range.start + f);
+        }
     }
 
     const sprites = await loadGilSpriteBatch(
@@ -317,7 +325,9 @@ async function loadResourceMapObjects(ctx: FileCtx): Promise<number> {
 
     for (const [typeStr, info] of Object.entries(mapObjectSpriteMap)) {
         // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- Partial<Record> values may be undefined at runtime
-        if (!info || info.file !== GFX_FILE_NUMBERS.RESOURCES) continue;
+        if (!info || info.file !== GFX_FILE_NUMBERS.RESOURCES) {
+            continue;
+        }
 
         const type = Number(typeStr) as MapObjectType;
 
@@ -405,7 +415,9 @@ export async function loadMapObjectSprites(ctx: SpriteLoadContext): Promise<bool
         ctx.spriteLoader.loadFileSet(`${GFX_FILE_NUMBERS.RESOURCES}`),
     ]);
 
-    if (!fileSet5) return false;
+    if (!fileSet5) {
+        return false;
+    }
 
     const fc5: FileCtx = {
         ...ctx,

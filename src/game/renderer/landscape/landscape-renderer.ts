@@ -91,7 +91,9 @@ export class LandscapeRenderer extends RendererBase implements IRenderer {
         // Extra Y rows for max terrain height displacement
         let maxH = 0;
         for (let i = 0; i < groundHeightMap.length; i++) {
-            if (groundHeightMap[i]! > maxH) maxH = groundHeightMap[i]!;
+            if (groundHeightMap[i]! > maxH) {
+                maxH = groundHeightMap[i]!;
+            }
         }
         this.heightMarginY = Math.ceil((maxH / 255) * TILE_HEIGHT_SCALE);
 
@@ -102,7 +104,9 @@ export class LandscapeRenderer extends RendererBase implements IRenderer {
 
     /** Toggle dark land gap filling (dilation). Recomputes the darkness buffer when changed. */
     public set darkLandDilation(value: boolean) {
-        if (value === this._darkLandDilation) return;
+        if (value === this._darkLandDilation) {
+            return;
+        }
         this._darkLandDilation = value;
         this.darknessMap = computeDarknessMap(this.mapSize, this.terrainAttributes, this.gameplayAttributes, value);
         this.darknessDirty = true;
@@ -163,8 +167,12 @@ export class LandscapeRenderer extends RendererBase implements IRenderer {
     public draw(gl: WebGL2RenderingContext, projection: Float32Array, viewPoint: IViewPoint): void {
         super.drawBase(gl, projection);
 
-        if (this.terrainDirty) this.rebuildTerrainBuffers();
-        if (this.darknessDirty) this.rebuildDarknessBuffer(gl);
+        if (this.terrainDirty) {
+            this.rebuildTerrainBuffers();
+        }
+        if (this.darknessDirty) {
+            this.rebuildDarknessBuffer(gl);
+        }
 
         const { numInstancesX, numInstancesY, startX, startY } = this.computeViewportInstances(gl, viewPoint);
         const sp = this.shaderProgram;
@@ -173,7 +181,9 @@ export class LandscapeRenderer extends RendererBase implements IRenderer {
         sp.bindTexture('u_texture', TEXTURE_UNIT_LANDSCAPE);
         sp.bindTexture('u_landTypeBuffer', TEXTURE_UNIT_LAND_TYPE);
         sp.bindTexture('u_landHeightBuffer', TEXTURE_UNIT_LAND_HEIGHT);
-        if (this.darknessBuffer) sp.bindTexture('u_darknessBuffer', TEXTURE_UNIT_DARKNESS);
+        if (this.darknessBuffer) {
+            sp.bindTexture('u_darknessBuffer', TEXTURE_UNIT_DARKNESS);
+        }
 
         // Uniforms
         sp.setVector2('viewPoint', viewPoint.x, viewPoint.y);
@@ -282,7 +292,9 @@ export class LandscapeRenderer extends RendererBase implements IRenderer {
     // ── Buffer rebuilds ─────────────────────────────────────────────
 
     private rebuildTerrainBuffers(): void {
-        if (!this.landTypeBuffer || !this.landHeightBuffer) return;
+        if (!this.landTypeBuffer || !this.landHeightBuffer) {
+            return;
+        }
 
         this.fillLandTypeBuffer(this.landTypeBuffer);
 
@@ -297,7 +309,9 @@ export class LandscapeRenderer extends RendererBase implements IRenderer {
     }
 
     private rebuildLandTypeBuffer(): void {
-        if (!this.landTypeBuffer) return;
+        if (!this.landTypeBuffer) {
+            return;
+        }
         this.fillLandTypeBuffer(this.landTypeBuffer);
     }
 
@@ -309,7 +323,9 @@ export class LandscapeRenderer extends RendererBase implements IRenderer {
             this.darknessBuffer.create(gl);
             return;
         }
-        if (!this.darknessBuffer) return;
+        if (!this.darknessBuffer) {
+            return;
+        }
 
         const map = this.darknessMap;
         for (let y = 0; y < this.mapSize.height; y++) {

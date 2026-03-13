@@ -59,7 +59,9 @@ export function getCombatStats(unitType: UnitType): CombatStats {
     const base = COMBAT_STATS[getBaseUnitType(unitType)] ?? DEFAULT_COMBAT_STATS;
     const level = getUnitLevel(unitType);
     const mult = LEVEL_MULTIPLIERS[level - 1] ?? 1;
-    if (mult === 1) return base;
+    if (mult === 1) {
+        return base;
+    }
     return {
         maxHealth: Math.round(base.maxHealth * mult),
         attackPower: Math.round(base.attackPower * mult),

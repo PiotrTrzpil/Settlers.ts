@@ -371,7 +371,9 @@ export class EntityRenderer extends RendererBase implements IRenderer {
      * Switch to a different race and reload building sprites.
      */
     public async setRace(race: Race): Promise<boolean> {
-        if (!this.spriteManager) return false;
+        if (!this.spriteManager) {
+            return false;
+        }
         return this.spriteManager.setRace(race);
     }
 
@@ -441,11 +443,15 @@ export class EntityRenderer extends RendererBase implements IRenderer {
     }
 
     public draw(gl: WebGL2RenderingContext, projection: Float32Array, viewPoint: IViewPoint): void {
-        if (!this.dynamicBuffer) return;
+        if (!this.dynamicBuffer) {
+            return;
+        }
         if (!this._spriteResolver) {
             throw new Error('EntityRenderer.draw() called before setContext() — spriteResolver not initialized');
         }
-        if (this.entities.length === 0 && !this.placementPreview) return;
+        if (this.entities.length === 0 && !this.placementPreview) {
+            return;
+        }
 
         this.spriteManager?.drainPendingUploads(gl);
 
@@ -553,7 +559,7 @@ export class EntityRenderer extends RendererBase implements IRenderer {
         textured: number;
         color: number;
         selection: number;
-        } {
+    } {
         return {
             cullSort: this.frameCullSortTime,
             entities: this.lastEntityDrawTime,
@@ -673,16 +679,16 @@ export class EntityRenderer extends RendererBase implements IRenderer {
      */
     private isEntityVisible(entity: Entity): boolean {
         switch (entity.type) {
-        case EntityType.Building:
-            return this.layerVisibility.buildings;
-        case EntityType.Unit:
-            return this.layerVisibility.units;
-        case EntityType.MapObject:
-            return isMapObjectVisible(this.layerVisibility, entity.subType as MapObjectType);
-        case EntityType.Decoration:
-        case EntityType.StackedPile:
-        case EntityType.None:
-            return true;
+            case EntityType.Building:
+                return this.layerVisibility.buildings;
+            case EntityType.Unit:
+                return this.layerVisibility.units;
+            case EntityType.MapObject:
+                return isMapObjectVisible(this.layerVisibility, entity.subType as MapObjectType);
+            case EntityType.Decoration:
+            case EntityType.StackedPile:
+            case EntityType.None:
+                return true;
         }
     }
 }

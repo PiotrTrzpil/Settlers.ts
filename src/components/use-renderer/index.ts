@@ -44,9 +44,13 @@ function buildPickerContext(
     canvas: Ref<HTMLCanvasElement | null>
 ): EntityPickerContext | null {
     const game = getGame();
-    if (!game || !renderer) return null;
+    if (!game || !renderer) {
+        return null;
+    }
     const el = canvas.value;
-    if (!el) return null;
+    if (!el) {
+        return null;
+    }
     return {
         mapSize: game.terrain.mapSize,
         groundHeight: game.terrain.groundHeight,
@@ -64,7 +68,9 @@ function buildPickerContext(
  */
 async function loadOverlaySpritesAndUpdateFrameCounts(er: EntityRenderer, game: Game): Promise<void> {
     const spriteManager = er.spriteManager;
-    if (!spriteManager) return;
+    if (!spriteManager) {
+        return;
+    }
 
     // Collect sprite refs for all races (overlays live in each race's GFX file)
     const manifest: { gfxFile: number; jobIndex: number; directionIndex?: number }[] = [];
@@ -73,7 +79,9 @@ async function loadOverlaySpritesAndUpdateFrameCounts(er: EntityRenderer, game: 
             manifest.push(def.spriteRef);
         }
     }
-    if (manifest.length === 0) return;
+    if (manifest.length === 0) {
+        return;
+    }
 
     // Check if overlays are already in the registry (cache hit with full overlay data).
     // Use .some() across the whole manifest — the first entry may fail to load (missing GFX job),
@@ -110,9 +118,13 @@ async function loadOverlaySpritesAndUpdateFrameCounts(er: EntityRenderer, game: 
 /** Check whether a building can be placed at (x, y), including the 1-tile footprint gap rule. */
 function canPlaceBuilding(getGame: () => Game | null, x: number, y: number, buildingType: BuildingType): boolean {
     const game = getGame();
-    if (!game) return false;
+    if (!game) {
+        return false;
+    }
     const race = game.playerRaces.get(game.currentPlayer);
-    if (race === undefined) return false;
+    if (race === undefined) {
+        return false;
+    }
     return canPlaceBuildingFootprint(
         game.terrain,
         game.state.groundOccupancy,
@@ -127,7 +139,9 @@ function canPlaceBuilding(getGame: () => Game | null, x: number, y: number, buil
 /** Create a ValidPositionGrid for the given building type when entering placement mode. */
 function createPlacementGrid(game: Game, buildingType: number, viewX: number, viewY: number): ValidPositionGrid | null {
     const race = game.playerRaces.get(game.currentPlayer);
-    if (race === undefined) return null;
+    if (race === undefined) {
+        return null;
+    }
     const request: GridComputeRequest = {
         buildingType,
         race,
@@ -232,7 +246,9 @@ function buildInputManager(deps: InputManagerDeps): InputManager {
     manager.registerMode(createBuildingAdjustMode(getGame));
     manager.attach();
     const r = getRenderer();
-    if (r) manager.getCamera().setViewPoint(r.viewPoint);
+    if (r) {
+        manager.getCamera().setViewPoint(r.viewPoint);
+    }
     return manager;
 }
 
@@ -243,7 +259,9 @@ function executeGameCommand(
     onTileClick: (tile: { x: number; y: number }) => void
 ): CommandResult {
     const game = getGame();
-    if (!game) return { success: false, error: 'Game not initialized' };
+    if (!game) {
+        return { success: false, error: 'Game not initialized' };
+    }
 
     if (command['type'] === 'select_at_tile' || command['type'] === 'move_selected_units') {
         const x = (command['x'] ?? command['targetX']) as number | undefined;
@@ -296,7 +314,9 @@ export function useRenderer({
      */
     function resolveTile(screenX: number, screenY: number): TileCoord | null {
         const game = getGame();
-        if (!game || !tilePicker || !renderer) return null;
+        if (!game || !tilePicker || !renderer) {
+            return null;
+        }
         return tilePicker.screenToTile(
             screenX,
             screenY,
@@ -325,7 +345,9 @@ export function useRenderer({
 
     /** Create and configure the InputManager with all modes registered. */
     function createInputManager(): void {
-        if (!canvas.value) return;
+        if (!canvas.value) {
+            return;
+        }
         inputManager = buildInputManager({
             canvas: canvas as Ref<HTMLElement | null>,
             getGame,
@@ -346,7 +368,9 @@ export function useRenderer({
      * Create and configure renderers for the current game.
      */
     function setupRenderers(game: Game): void {
-        if (!renderer) return;
+        if (!renderer) {
+            return;
+        }
 
         landscapeRenderer = new LandscapeRenderer(
             game.fileManager,
@@ -378,7 +402,9 @@ export function useRenderer({
      * Initialize GL resources and bind event handlers.
      */
     function initGLAndBindEvents(game: Game): void {
-        if (!renderer || !landscapeRenderer || !indicatorRenderer || !entityRenderer) return;
+        if (!renderer || !landscapeRenderer || !indicatorRenderer || !entityRenderer) {
+            return;
+        }
 
         const gl = renderer.gl;
         if (gl) {
@@ -427,7 +453,9 @@ export function useRenderer({
      */
     function initRenderer(): void {
         const game = getGame();
-        if (game == null || renderer == null) return;
+        if (game == null || renderer == null) {
+            return;
+        }
 
         debugStats.reset();
         game.viewState.reset();
@@ -435,7 +463,9 @@ export function useRenderer({
 
         // Inject game settings into ViewPoint and InputManager
         renderer.viewPoint.setSettings(game.settings.state);
-        if (inputManager) inputManager.setSettings(game.settings.state);
+        if (inputManager) {
+            inputManager.setSettings(game.settings.state);
+        }
 
         setupRenderers(game);
         initGLAndBindEvents(game);
@@ -470,7 +500,9 @@ export function useRenderer({
 
     onUnmounted(() => {
         const game = getGame();
-        if (game) game.destroy();
+        if (game) {
+            game.destroy();
+        }
 
         inputManager?.destroy();
         inputManager = null;
@@ -481,7 +513,9 @@ export function useRenderer({
     });
 
     async function setRace(race: Race): Promise<boolean> {
-        if (!entityRenderer) return false;
+        if (!entityRenderer) {
+            return false;
+        }
         return entityRenderer.setRace(race);
     }
 
@@ -495,7 +529,9 @@ export function useRenderer({
     const getInputManager = (): InputManager | null => inputManager;
 
     function getCamera(): { x: number; y: number; zoom: number } | null {
-        if (!renderer) return null;
+        if (!renderer) {
+            return null;
+        }
         return {
             x: renderer.viewPoint.x,
             y: renderer.viewPoint.y,
@@ -505,9 +541,13 @@ export function useRenderer({
 
     /** Center camera on the current player's start position (Castle), or first land tile, with standard zoom. */
     function centerOnPlayerStart(): void {
-        if (!renderer) return;
+        if (!renderer) {
+            return;
+        }
         const game = getGame();
-        if (!game) return;
+        if (!game) {
+            return;
+        }
         const pos = game.findPlayerStartPosition();
         if (pos) {
             renderer.viewPoint.setPosition(pos.x, pos.y);

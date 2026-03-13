@@ -128,23 +128,23 @@ function updateContent() {
     }
 
     switch (type.value) {
-    case 'hex':
-        content.value = toHex(props.value);
-        break;
-    case 'text':
-        content.value = toText(props.value);
-        break;
-    case 'img':
-        content.value = '';
-        {
-            const cavEl = cav.value;
-            if (cavEl) {
-                toImg(props.value, bytePerPixel.value, byteOffset.value, useWidth.value, props.height ?? 1, cavEl);
+        case 'hex':
+            content.value = toHex(props.value);
+            break;
+        case 'text':
+            content.value = toText(props.value);
+            break;
+        case 'img':
+            content.value = '';
+            {
+                const cavEl = cav.value;
+                if (cavEl) {
+                    toImg(props.value, bytePerPixel.value, byteOffset.value, useWidth.value, props.height ?? 1, cavEl);
+                }
             }
-        }
-        break;
-    default:
-        content.value = '';
+            break;
+        default:
+            content.value = '';
     }
 }
 

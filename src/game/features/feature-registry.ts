@@ -259,7 +259,9 @@ export class FeatureRegistry {
         const ids = [...this.instances.keys()].reverse();
         for (const id of ids) {
             const instance = this.instances.get(id);
-            if (!instance) throw new Error(`FeatureRegistry: instance ${id} missing from internal map (destroy)`);
+            if (!instance) {
+                throw new Error(`FeatureRegistry: instance ${id} missing from internal map (destroy)`);
+            }
             // Auto-unsubscribe ctx.on() subscriptions before feature destroy
             this.autoSubscriptions.get(id)?.unsubscribeAll();
             instance.destroy?.();
@@ -314,7 +316,9 @@ export class FeatureRegistry {
 
     /** Collect persistence entries from a feature instance. */
     private collectPersistables(instance: FeatureInstance): void {
-        if (instance.persistence === 'none') return;
+        if (instance.persistence === 'none') {
+            return;
+        }
         for (const entry of instance.persistence) {
             if ('persistKey' in entry) {
                 this.persistables.push({ persistable: entry as Persistable, after: [] });
@@ -367,7 +371,9 @@ export class FeatureRegistry {
         const visited = new Set<string>();
 
         const visit = (def: FeatureDefinition) => {
-            if (visited.has(def.id)) return;
+            if (visited.has(def.id)) {
+                return;
+            }
 
             if (visiting.has(def.id)) {
                 throw new Error(`Circular dependency detected involving '${def.id}'`);

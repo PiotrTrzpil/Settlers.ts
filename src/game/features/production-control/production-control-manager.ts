@@ -91,19 +91,21 @@ export class ProductionControlManager implements Persistable<SerializedProductio
      */
     peekNextRecipeIndex(buildingId: number): number | null {
         const state = this.states.get(buildingId);
-        if (!state) return null;
+        if (!state) {
+            return null;
+        }
 
         switch (state.mode) {
-        case ProductionMode.Even:
-            return state.roundRobinIndex % state.recipeCount;
-        case ProductionMode.Proportional:
-            return this.peekProportional(state);
-        case ProductionMode.Manual:
-            return state.queue.length > 0 ? state.queue[0]! : null;
-        default: {
-            const exhaustive: never = state.mode;
-            throw new Error(`ProductionControlManager: unknown mode '${exhaustive}' for building ${buildingId}.`);
-        }
+            case ProductionMode.Even:
+                return state.roundRobinIndex % state.recipeCount;
+            case ProductionMode.Proportional:
+                return this.peekProportional(state);
+            case ProductionMode.Manual:
+                return state.queue.length > 0 ? state.queue[0]! : null;
+            default: {
+                const exhaustive: never = state.mode;
+                throw new Error(`ProductionControlManager: unknown mode '${exhaustive}' for building ${buildingId}.`);
+            }
         }
     }
 
@@ -121,23 +123,25 @@ export class ProductionControlManager implements Persistable<SerializedProductio
      */
     getNextRecipeIndex(buildingId: number): number | null {
         const state = this.states.get(buildingId);
-        if (!state) return null; // No state — caller falls back to single-recipe path.
+        if (!state) {
+            return null;
+        } // No state — caller falls back to single-recipe path.
 
         let index: number;
 
         switch (state.mode) {
-        case ProductionMode.Even:
-            index = this.selectEven(state);
-            break;
-        case ProductionMode.Proportional:
-            index = this.selectProportional(state);
-            break;
-        case ProductionMode.Manual:
-            return this.selectManual(state);
-        default: {
-            const exhaustive: never = state.mode;
-            throw new Error(`ProductionControlManager: unknown mode '${exhaustive}' for building ${buildingId}.`);
-        }
+            case ProductionMode.Even:
+                index = this.selectEven(state);
+                break;
+            case ProductionMode.Proportional:
+                index = this.selectProportional(state);
+                break;
+            case ProductionMode.Manual:
+                return this.selectManual(state);
+            default: {
+                const exhaustive: never = state.mode;
+                throw new Error(`ProductionControlManager: unknown mode '${exhaustive}' for building ${buildingId}.`);
+            }
         }
 
         state.productionCounts.set(index, (state.productionCounts.get(index) ?? 0) + 1);
@@ -162,13 +166,17 @@ export class ProductionControlManager implements Persistable<SerializedProductio
      */
     private peekProportional(state: ProductionState): number {
         const totalProduced = [...state.productionCounts.values()].reduce((sum, c) => sum + c, 0);
-        if (totalProduced === 0) return state.roundRobinIndex % state.recipeCount;
+        if (totalProduced === 0) {
+            return state.roundRobinIndex % state.recipeCount;
+        }
 
         let totalWeight = 0;
         for (let i = 0; i < state.recipeCount; i++) {
             totalWeight += state.proportions.get(i) ?? 1;
         }
-        if (totalWeight === 0) return state.roundRobinIndex % state.recipeCount;
+        if (totalWeight === 0) {
+            return state.roundRobinIndex % state.recipeCount;
+        }
 
         let bestIndex = 0;
         let bestDeficit = -Infinity;
@@ -242,7 +250,9 @@ export class ProductionControlManager implements Persistable<SerializedProductio
      * Increments productionCounts for the chosen index.
      */
     private selectManual(state: ProductionState): number | null {
-        if (state.queue.length === 0) return null; // Building idles.
+        if (state.queue.length === 0) {
+            return null;
+        } // Building idles.
 
         const index = state.queue.shift()!;
         state.productionCounts.set(index, (state.productionCounts.get(index) ?? 0) + 1);

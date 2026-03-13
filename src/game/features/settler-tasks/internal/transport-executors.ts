@@ -30,8 +30,12 @@ const ARRIVAL_DIST_EXACT = 0;
 const DEFAULT_INVENTORY_CYCLE_FRAMES = 5; // 0.5 seconds at CHOREO_FPS
 
 function resolveInventoryDuration(node: ChoreoNode): number {
-    if (node.duration === 0) return framesToSeconds(DEFAULT_INVENTORY_CYCLE_FRAMES);
-    if (node.duration <= 0) return 0;
+    if (node.duration === 0) {
+        return framesToSeconds(DEFAULT_INVENTORY_CYCLE_FRAMES);
+    }
+    if (node.duration <= 0) {
+        return 0;
+    }
     return framesToSeconds(node.duration);
 }
 

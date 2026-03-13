@@ -118,7 +118,9 @@ export function registerGoodsAPI(runtime: LuaRuntime, context: GoodsAPIContext):
             amount,
         });
 
-        if (!result.success || !result.effects?.length) return -1;
+        if (!result.success || !result.effects?.length) {
+            return -1;
+        }
         return (result.effects[0] as { entityId: number }).entityId;
     });
 
@@ -155,7 +157,9 @@ export function registerGoodsAPI(runtime: LuaRuntime, context: GoodsAPIContext):
             amount,
         });
 
-        if (!result.success || !result.effects?.length) return -1;
+        if (!result.success || !result.effects?.length) {
+            return -1;
+        }
         return (result.effects[0] as { entityId: number }).entityId;
     });
 

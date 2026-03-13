@@ -21,7 +21,9 @@ function indexEnum(enumObj: Record<string, string | number>): EnumIndex {
     const validNames: string[] = [];
 
     for (const [key, value] of Object.entries(enumObj)) {
-        if (typeof value !== 'number') continue; // skip reverse mappings
+        if (typeof value !== 'number') {
+            continue;
+        } // skip reverse mappings
         byName.set(key.toLowerCase(), value);
         validNames.push(key);
         // Also index the numeric value as a string key
@@ -33,7 +35,9 @@ function indexEnum(enumObj: Record<string, string | number>): EnumIndex {
 
 function resolve(index: EnumIndex, label: string, input: string): number {
     const value = index.byName.get(input.toLowerCase());
-    if (value !== undefined) return value;
+    if (value !== undefined) {
+        return value;
+    }
     throw new Error(`unknown ${label} '${input}'. valid: ${index.validNames.join(', ')}`);
 }
 

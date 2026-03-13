@@ -99,7 +99,9 @@ export class CameraMode extends BaseInputMode {
     }
 
     override onPointerDown(data: PointerData, _context: InputContext): InputResult {
-        if (!this.viewPoint) return UNHANDLED;
+        if (!this.viewPoint) {
+            return UNHANDLED;
+        }
 
         // Middle or right mouse button starts camera drag
         if (data.button === MouseButton.Middle || data.button === MouseButton.Right) {
@@ -132,7 +134,9 @@ export class CameraMode extends BaseInputMode {
     }
 
     override onPointerMove(data: PointerData, _context: InputContext): InputResult {
-        if (!this.isDraggingCamera) return UNHANDLED;
+        if (!this.isDraggingCamera) {
+            return UNHANDLED;
+        }
 
         // Just store the current mouse position - camera position is computed in onUpdate
         this.currentScreenX = data.screenX;
@@ -152,7 +156,9 @@ export class CameraMode extends BaseInputMode {
     }
 
     override onWheel(data: PointerData, _context: InputContext): InputResult {
-        if (!this.viewPoint || data.wheelDelta === undefined) return UNHANDLED;
+        if (!this.viewPoint || data.wheelDelta === undefined) {
+            return UNHANDLED;
+        }
 
         const delta = this.config.invertZoom ? -data.wheelDelta : data.wheelDelta;
         const zoomSpeed = this._settings?.zoomSpeed ?? DEFAULT_ZOOM_SPEED;
@@ -172,7 +178,9 @@ export class CameraMode extends BaseInputMode {
     }
 
     override onUpdate(deltaTime: number, context: InputContext): void {
-        if (!this.viewPoint) return;
+        if (!this.viewPoint) {
+            return;
+        }
 
         // MOUSE DRAG: Compute camera position from current mouse position (frame-synchronized).
         // Only move the camera once movement exceeds the threshold — this prevents small

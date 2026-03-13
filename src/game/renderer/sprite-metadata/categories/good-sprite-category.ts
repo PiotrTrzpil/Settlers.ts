@@ -33,7 +33,9 @@ export class GoodSpriteCategory {
      */
     get(type: EMaterialType, direction: number = 0): SpriteEntry | null {
         const dirMap = this.entries.get(type);
-        if (!dirMap) return null;
+        if (!dirMap) {
+            return null;
+        }
         return dirMap.get(direction) ?? dirMap.get(0) ?? null;
     }
 
@@ -61,6 +63,8 @@ export class GoodSpriteCategory {
      */
     setEntries(entries: Map<EMaterialType, Map<number, SpriteEntry>>): void {
         this.entries.clear();
-        for (const [k, v] of entries) this.entries.set(k, v);
+        for (const [k, v] of entries) {
+            this.entries.set(k, v);
+        }
     }
 }

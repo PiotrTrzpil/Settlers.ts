@@ -81,9 +81,13 @@ function isStorageSourceAllowed(
     storageFilterManager: StorageFilterManager | undefined
 ): boolean {
     // No StorageArea↔StorageArea transfers
-    if (destIsStorage) return false;
+    if (destIsStorage) {
+        return false;
+    }
     // Must have export enabled
-    if (storageFilterManager && !storageFilterManager.isExportAllowed(sourceId, materialType)) return false;
+    if (storageFilterManager && !storageFilterManager.isExportAllowed(sourceId, materialType)) {
+        return false;
+    }
     return true;
 }
 

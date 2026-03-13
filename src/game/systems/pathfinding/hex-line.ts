@@ -22,9 +22,15 @@ import { TileCoord } from '../../entity';
  */
 function evenInterleave(a: Dir, countA: number, b: Dir, countB: number): Dir[] {
     const total = countA + countB;
-    if (total === 0) return [];
-    if (countB === 0) return Array.from({ length: countA }, () => ({ dx: a.dx, dy: a.dy }));
-    if (countA === 0) return Array.from({ length: countB }, () => ({ dx: b.dx, dy: b.dy }));
+    if (total === 0) {
+        return [];
+    }
+    if (countB === 0) {
+        return Array.from({ length: countA }, () => ({ dx: a.dx, dy: a.dy }));
+    }
+    if (countA === 0) {
+        return Array.from({ length: countB }, () => ({ dx: b.dx, dy: b.dy }));
+    }
 
     const result: Dir[] = [];
     let emittedA = 0;
@@ -133,8 +139,11 @@ function countDirTypes(dirs: Dir[]): Array<Dir & { count: number }> {
     const types: Array<Dir & { count: number }> = [];
     for (const d of dirs) {
         const existing = types.find(t => t.dx === d.dx && t.dy === d.dy);
-        if (existing) existing.count++;
-        else types.push({ dx: d.dx, dy: d.dy, count: 1 });
+        if (existing) {
+            existing.count++;
+        } else {
+            types.push({ dx: d.dx, dy: d.dy, count: 1 });
+        }
     }
     return types;
 }
@@ -152,9 +161,14 @@ function interleaveRuns(a: Dir, countA: number, b: Dir, countB: number, startWit
 
         if (remain > 0) {
             const run = Math.min(runLen, remain);
-            for (let j = 0; j < run; j++) result.push({ dx: dir.dx, dy: dir.dy });
-            if (emitA) remainA -= run;
-            else remainB -= run;
+            for (let j = 0; j < run; j++) {
+                result.push({ dx: dir.dx, dy: dir.dy });
+            }
+            if (emitA) {
+                remainA -= run;
+            } else {
+                remainB -= run;
+            }
         }
 
         emitA = !emitA;
@@ -189,13 +203,17 @@ function rebuildTilesFromDirs(start: TileCoord, dirs: Dir[]): TileCoord[] {
  */
 export function groupDirectionRuns(tiles: TileCoord[], maxRunLength?: number): TileCoord[] {
     const runLen = maxRunLength ?? _directionRunLength;
-    if (tiles.length <= 2 || runLen <= 1) return tiles;
+    if (tiles.length <= 2 || runLen <= 1) {
+        return tiles;
+    }
 
     const dirs = extractStepDirs(tiles);
     const dirTypes = countDirTypes(dirs);
 
     // Single direction or >2 directions — no regrouping needed
-    if (dirTypes.length !== 2) return tiles;
+    if (dirTypes.length !== 2) {
+        return tiles;
+    }
 
     const a = dirTypes[0]!;
     const b = dirTypes[1]!;

@@ -101,7 +101,9 @@ const moduleCache = new Map<Race, ModuleCacheEntry>();
 /** Get cached atlas data from module cache (null if not found or version mismatch) */
 export function getAtlasCache(race: Race): CachedAtlasData | null {
     const entry = moduleCache.get(race);
-    if (!entry) return null;
+    if (!entry) {
+        return null;
+    }
 
     // Version check - invalidate if schema changed
     if (entry.version !== BUILD_VERSION) {
@@ -208,14 +210,18 @@ export function startStreamingRead(
 
     /** Terminate worker only after both palette and done are received */
     const maybeTerminate = () => {
-        if (gotPalette && gotDone) worker.terminate();
+        if (gotPalette && gotDone) {
+            worker.terminate();
+        }
     };
 
     worker.onmessage = (e: MessageEvent<WorkerOutboundMessage>) => {
         const msg = e.data;
         if (msg.type === 'meta') {
             if (!msg.metaJson || msg.error) {
-                if (msg.error) log.debug(`Cache worker error: ${msg.error}`);
+                if (msg.error) {
+                    log.debug(`Cache worker error: ${msg.error}`);
+                }
                 worker.terminate();
                 resolveMeta(null);
                 return;
@@ -448,7 +454,9 @@ export async function clearAllIndexedDBCache(): Promise<void> {
 export function isCacheDisabled(): boolean {
     try {
         const stored = localStorage.getItem('settlers_game_settings');
-        if (!stored) return false;
+        if (!stored) {
+            return false;
+        }
         const settings = JSON.parse(stored);
         return settings.cacheDisabled === true;
     } catch {

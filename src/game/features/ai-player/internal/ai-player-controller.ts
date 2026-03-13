@@ -77,7 +77,9 @@ export class AiPlayerController {
      */
     evaluate(dt: number): void {
         this.ticksSinceEval++;
-        if (this.ticksSinceEval < this.evaluationInterval) return;
+        if (this.ticksSinceEval < this.evaluationInterval) {
+            return;
+        }
 
         this.ticksSinceEval = 0;
         this.decisionTree.tick(this, dt);

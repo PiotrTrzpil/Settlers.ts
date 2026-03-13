@@ -120,7 +120,9 @@ export class LuaScriptSystem {
      * Register all Lua API modules
      */
     private registerAPIs(): void {
-        if (!this.runtime) return;
+        if (!this.runtime) {
+            return;
+        }
 
         // Game API context
         const gameContext: GameAPIContext = {
@@ -236,7 +238,9 @@ export class LuaScriptSystem {
      * @param deltaTime Time since last tick in seconds
      */
     public tick(deltaTime: number): void {
-        if (!this.isInitialized || !this.eventDispatcher) return;
+        if (!this.isInitialized || !this.eventDispatcher) {
+            return;
+        }
 
         this.gameTime += deltaTime;
         this.tickCount++;
@@ -269,7 +273,9 @@ export class LuaScriptSystem {
      * @param args Arguments to pass to handlers
      */
     public dispatchEvent(event: ScriptEventType, ...args: unknown[]): void {
-        if (!this.eventDispatcher) return;
+        if (!this.eventDispatcher) {
+            return;
+        }
         this.eventDispatcher.dispatch(event, ...args);
     }
 
@@ -281,7 +287,9 @@ export class LuaScriptSystem {
      * @returns Return value from Lua function
      */
     public callFunction(name: string, ...args: unknown[]): unknown {
-        if (!this.runtime) return undefined;
+        if (!this.runtime) {
+            return undefined;
+        }
         return this.runtime.callFunction(name, ...args);
     }
 
@@ -289,7 +297,9 @@ export class LuaScriptSystem {
      * Check if a global function exists in the Lua environment.
      */
     public hasFunction(name: string): boolean {
-        if (!this.runtime) return false;
+        if (!this.runtime) {
+            return false;
+        }
         return this.runtime.hasFunction(name);
     }
 
@@ -297,7 +307,9 @@ export class LuaScriptSystem {
      * Get a global variable from Lua.
      */
     public getGlobal(name: string): unknown {
-        if (!this.runtime) return undefined;
+        if (!this.runtime) {
+            return undefined;
+        }
         return this.runtime.getGlobal(name);
     }
 
@@ -305,7 +317,9 @@ export class LuaScriptSystem {
      * Set a global variable in Lua.
      */
     public setGlobal(name: string, value: unknown): void {
-        if (!this.runtime) return;
+        if (!this.runtime) {
+            return;
+        }
         this.runtime.setGlobal(name, value);
     }
 

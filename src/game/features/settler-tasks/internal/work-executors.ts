@@ -30,8 +30,12 @@ const DEFAULT_WORK_CYCLE_FRAMES = 10; // 1.0 seconds at CHOREO_FPS
 
 /** Compute effective duration in seconds. Returns Infinity when duration === -1. */
 function resolveDurationSeconds(node: ChoreoNode): number {
-    if (node.duration === -1) return Infinity;
-    if (node.duration === 0) return framesToSeconds(DEFAULT_WORK_CYCLE_FRAMES);
+    if (node.duration === -1) {
+        return Infinity;
+    }
+    if (node.duration === 0) {
+        return framesToSeconds(DEFAULT_WORK_CYCLE_FRAMES);
+    }
     return framesToSeconds(node.duration);
 }
 
@@ -57,7 +61,9 @@ function fireTriggerOnStart(settler: Entity, node: ChoreoNode, job: ChoreoJobSta
 
 /** Call positionHandler.onWorkAtPositionComplete with error handling. */
 function callPositionComplete(settler: Entity, job: ChoreoJobState, ctx: WorkContext, label: string): void {
-    if (!ctx.positionHandler) return;
+    if (!ctx.positionHandler) {
+        return;
+    }
     // Use targetPos if available; fall back to settler's current position
     // (targetPos may have been cleared between nodes, but the settler is already at the target)
     const { positionHandler, handlerErrorLogger } = ctx;
@@ -93,7 +99,9 @@ function tickEntityWork(
         ctx.handlerErrorLogger,
         `onWorkTick ${label} failed for target ${job.targetId}`
     );
-    if (domainDone === undefined) return TaskResult.FAILED;
+    if (domainDone === undefined) {
+        return TaskResult.FAILED;
+    }
 
     // Domain-controlled (duration=-1): handler decides when work ends, but animation
     // must play at least one full cycle (progress >= 1) before completion takes effect.
@@ -119,7 +127,9 @@ function startEntityWork(
     ctx: WorkContext,
     label: string
 ): boolean {
-    if (job.workStarted) return true;
+    if (job.workStarted) {
+        return true;
+    }
     const ok = safeCall(
         () => {
             handler.onWorkStart?.(job.targetId!, settler.id);
@@ -128,7 +138,9 @@ function startEntityWork(
         ctx.handlerErrorLogger,
         `onWorkStart ${label} failed for target ${job.targetId}`
     );
-    if (!ok) return false;
+    if (!ok) {
+        return false;
+    }
     job.workStarted = true;
     return true;
 }
@@ -159,12 +171,16 @@ export function executeWork(
 
     // Entity handler path (digger/builder construction work)
     if (ctx.entityHandler && job.targetId !== null) {
-        if (!startEntityWork(settler, job, ctx.entityHandler, ctx, '')) return TaskResult.FAILED;
+        if (!startEntityWork(settler, job, ctx.entityHandler, ctx, '')) {
+            return TaskResult.FAILED;
+        }
         return tickEntityWork(settler, job, node, dt, ctx.entityHandler, ctx, '');
     }
 
     // Position handler path
-    if (!job.workStarted) job.workStarted = true;
+    if (!job.workStarted) {
+        job.workStarted = true;
+    }
 
     const result = tickDuration(job, dt, resolveDurationSeconds(node));
     if (result === TaskResult.DONE) {
@@ -197,7 +213,9 @@ export function executeWorkOnEntity(
     applyDirectionConstraint(settler, node, job, ctx);
     fireTriggerOnStart(settler, node, job, ctx);
 
-    if (!startEntityWork(settler, job, ctx.entityHandler, ctx, '')) return TaskResult.FAILED;
+    if (!startEntityWork(settler, job, ctx.entityHandler, ctx, '')) {
+        return TaskResult.FAILED;
+    }
     return tickEntityWork(settler, job, node, dt, ctx.entityHandler, ctx, '');
 }
 
@@ -217,11 +235,15 @@ export function executeWorkVirtual(
     dt: number,
     ctx: WorkContext
 ): TaskResult {
-    if (!job.workStarted) job.visible = false;
+    if (!job.workStarted) {
+        job.visible = false;
+    }
 
     applyDirectionConstraint(settler, node, job, ctx);
     fireTriggerOnStart(settler, node, job, ctx);
-    if (!job.workStarted) job.workStarted = true;
+    if (!job.workStarted) {
+        job.workStarted = true;
+    }
 
     const result = tickDuration(job, dt, resolveDurationSeconds(node));
     if (result === TaskResult.DONE) {
@@ -249,12 +271,16 @@ export function executeWorkOnEntityVirtual(
         return TaskResult.FAILED;
     }
 
-    if (!job.workStarted) job.visible = false;
+    if (!job.workStarted) {
+        job.visible = false;
+    }
 
     applyDirectionConstraint(settler, node, job, ctx);
     fireTriggerOnStart(settler, node, job, ctx);
 
-    if (!startEntityWork(settler, job, ctx.entityHandler, ctx, '(virtual)')) return TaskResult.FAILED;
+    if (!startEntityWork(settler, job, ctx.entityHandler, ctx, '(virtual)')) {
+        return TaskResult.FAILED;
+    }
     return tickEntityWork(settler, job, node, dt, ctx.entityHandler, ctx, '(virtual)');
 }
 

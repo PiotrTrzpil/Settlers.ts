@@ -82,7 +82,9 @@ export class MilitaryPlanner {
     launchAttack(): void {
         const castlePos = getPlayerBasePosition(this.gameState, this.player);
         const target = findNearestEnemyBase(this.gameState, this.player, castlePos.x, castlePos.y);
-        if (!target) return;
+        if (!target) {
+            return;
+        }
 
         const idleSoldiers = this.getIdleMilitaryUnits();
         for (const soldier of idleSoldiers) {

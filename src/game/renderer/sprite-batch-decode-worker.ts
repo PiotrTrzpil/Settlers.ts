@@ -116,7 +116,9 @@ interface ParsedSprite extends ParsedHeader {
 
 function decodeSprite(p: ParsedSprite, gfxBytes: Uint8Array): Uint16Array | null {
     const trimmedHeight = p.height - p.trimTop - p.trimBottom;
-    if (trimmedHeight <= 0) return null;
+    if (trimmedHeight <= 0) {
+        return null;
+    }
 
     const skipPixels = p.trimTop * p.width;
     const outputLength = trimmedHeight * p.width;

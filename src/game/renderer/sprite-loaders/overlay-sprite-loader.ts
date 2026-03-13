@@ -24,7 +24,9 @@ export async function loadOverlaySprites(
     for (const entry of manifest) {
         const dir = entry.directionIndex ?? 0;
         const key = `${entry.gfxFile}:${entry.jobIndex}:${dir}`;
-        if (seen.has(key)) continue;
+        if (seen.has(key)) {
+            continue;
+        }
         seen.add(key);
         unique.push({ gfxFile: entry.gfxFile, jobIndex: entry.jobIndex, directionIndex: dir });
     }
@@ -39,7 +41,9 @@ export async function loadOverlaySprites(
     const counts = await Promise.all(
         unique.map(async entry => {
             const fileSet = await ctx.spriteLoader.loadFileSet(String(entry.gfxFile));
-            if (!fileSet) return 0;
+            if (!fileSet) {
+                return 0;
+            }
 
             const paletteBase = ctx.paletteManager.getBaseOffset(String(entry.gfxFile));
             const anim = await ctx.spriteLoader.loadJobAnimation(

@@ -238,7 +238,9 @@ export function getLevelVariants(unitType: UnitType): readonly [UnitType, UnitTy
 /** Get the UnitType for a specific level of a leveled unit. Returns the input type if not leveled. */
 export function getUnitTypeAtLevel(unitType: UnitType, level: number): UnitType {
     const variants = getLevelVariants(unitType);
-    if (!variants) return unitType;
+    if (!variants) {
+        return unitType;
+    }
     return variants[Math.max(0, Math.min(2, level - 1))]!;
 }
 

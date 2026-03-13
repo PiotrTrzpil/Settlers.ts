@@ -53,7 +53,9 @@ function drawOverlayLabels(): void {
 
     const canvas = overlayCanvas.value;
     const glCanvas = cav.value;
-    if (!canvas || !glCanvas) return;
+    if (!canvas || !glCanvas) {
+        return;
+    }
 
     const dpr = window.devicePixelRatio || 1;
     const w = glCanvas.clientWidth;
@@ -66,12 +68,16 @@ function drawOverlayLabels(): void {
     }
 
     const ctx = canvas.getContext('2d');
-    if (!ctx) return;
+    if (!ctx) {
+        return;
+    }
 
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
     const labels = getDecoLabels();
-    if (labels.length === 0) return;
+    if (labels.length === 0) {
+        return;
+    }
 
     ctx.save();
     ctx.scale(dpr, dpr);
@@ -101,13 +107,17 @@ watchEffect(() => {
 });
 
 onUnmounted(() => {
-    if (overlayRafId) cancelAnimationFrame(overlayRafId);
+    if (overlayRafId) {
+        cancelAnimationFrame(overlayRafId);
+    }
 });
 
 // Compute selection box style from screen coordinates
 const selectionBoxStyle = computed(() => {
     const box = selectionBox.value;
-    if (!box) return {};
+    if (!box) {
+        return {};
+    }
 
     const left = Math.min(box.startScreenX, box.endScreenX);
     const top = Math.min(box.startScreenY, box.endScreenY);

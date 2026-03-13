@@ -9,14 +9,14 @@ export class MapLoader {
     /** return the map content of a loaded game */
     public static getLoader(reader: BinaryReader): IMapLoader | null {
         switch (MapLoader.getFileExtension(reader.filename).toLowerCase()) {
-        case 'exe':
-            return new SaveGameLoader(reader);
-        case 'map':
-            return new OriginalMapLoader(reader);
-        case 'edm':
-            return new OriginalMapLoader(reader);
-        default:
-            return null;
+            case 'exe':
+                return new SaveGameLoader(reader);
+            case 'map':
+                return new OriginalMapLoader(reader);
+            case 'edm':
+                return new OriginalMapLoader(reader);
+            default:
+                return null;
         }
     }
 

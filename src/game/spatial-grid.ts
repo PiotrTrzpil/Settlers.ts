@@ -90,12 +90,16 @@ export class SpatialGrid {
 
     remove(entityId: number): void {
         const ck = this.entityCell.get(entityId);
-        if (ck === undefined) return;
+        if (ck === undefined) {
+            return;
+        }
         this.entityCell.delete(entityId);
         const set = this.cells.get(ck);
         if (set) {
             set.delete(entityId);
-            if (set.size === 0) this.cells.delete(ck);
+            if (set.size === 0) {
+                this.cells.delete(ck);
+            }
         }
     }
 
@@ -116,7 +120,9 @@ export class SpatialGrid {
     private *yieldCell(set: Set<number>): IterableIterator<Entity> {
         for (const id of set) {
             const entity = this.resolve(id);
-            if (entity) yield entity;
+            if (entity) {
+                yield entity;
+            }
         }
     }
 
@@ -124,7 +130,9 @@ export class SpatialGrid {
     private *yieldCellForPlayer(set: Set<number>, player: number): IterableIterator<Entity> {
         for (const id of set) {
             const entity = this.resolve(id);
-            if (entity && this.getOwner(entity.x, entity.y) === player) yield entity;
+            if (entity && this.getOwner(entity.x, entity.y) === player) {
+                yield entity;
+            }
         }
     }
 
@@ -135,7 +143,9 @@ export class SpatialGrid {
         for (let row = minRow; row <= maxRow; row++) {
             for (let col = minCol; col <= maxCol; col++) {
                 const set = this.cells.get(row * this.maxCols + col);
-                if (set) yield* this.yieldCell(set);
+                if (set) {
+                    yield* this.yieldCell(set);
+                }
             }
         }
     }
@@ -143,9 +153,13 @@ export class SpatialGrid {
     /** Yield entities from a single cell that belong to a player's territory. */
     private *yieldOwnedCell(ck: number, player: number): IterableIterator<Entity> {
         const set = this.cells.get(ck);
-        if (!set) return;
+        if (!set) {
+            return;
+        }
         const state = this.cellState.get(ck);
-        if (!state) return;
+        if (!state) {
+            return;
+        }
 
         if (state.ownership === CellOwnership.FULL && state.player === player) {
             yield* this.yieldCell(set);
@@ -158,12 +172,16 @@ export class SpatialGrid {
     *nearbyForPlayer(cx: number, cy: number, radius: number, player: number): IterableIterator<Entity> {
         const { minCol, maxCol, minRow, maxRow } = this.cellRange(cx, cy, radius);
         const owned = this.playerCells.get(player);
-        if (!owned) return;
+        if (!owned) {
+            return;
+        }
 
         for (let row = minRow; row <= maxRow; row++) {
             for (let col = minCol; col <= maxCol; col++) {
                 const ck = row * this.maxCols + col;
-                if (owned.has(ck)) yield* this.yieldOwnedCell(ck, player);
+                if (owned.has(ck)) {
+                    yield* this.yieldOwnedCell(ck, player);
+                }
             }
         }
     }

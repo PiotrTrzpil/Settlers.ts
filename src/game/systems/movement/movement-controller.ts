@@ -68,7 +68,9 @@ export class MovementController {
 
     /** External state — derives from phase tag + transit status. */
     get state(): MovementState {
-        if (this._phase.tag === 'moving') return 'moving';
+        if (this._phase.tag === 'moving') {
+            return 'moving';
+        }
         // Idle phase but still sliding (e.g. after push without path) → report 'moving'
         return this.isInTransit ? 'moving' : 'idle';
     }
@@ -125,7 +127,9 @@ export class MovementController {
     }
 
     get nextWaypoint(): TileCoord | null {
-        if (this._phase.tag === 'idle') return null;
+        if (this._phase.tag === 'idle') {
+            return null;
+        }
         const { path, pathIndex } = this._phase;
         return pathIndex < path.length ? (path[pathIndex] ?? null) : null;
     }
@@ -139,7 +143,9 @@ export class MovementController {
     }
 
     get goal(): TileCoord | null {
-        if (this._phase.tag === 'idle') return null;
+        if (this._phase.tag === 'idle') {
+            return null;
+        }
         const { path } = this._phase;
         return path.length > 0 ? (path[path.length - 1] ?? null) : null;
     }
@@ -177,7 +183,9 @@ export class MovementController {
 
     /** Start following a new path from stationary state. */
     startPath(path: TileCoord[]): void {
-        if (path.length === 0) return;
+        if (path.length === 0) {
+            return;
+        }
 
         const visualBefore = this.computeVisualPosition();
 
@@ -277,7 +285,9 @@ export class MovementController {
 
     /** Execute a move to the next waypoint. Returns new position or null. */
     executeMove(): TileCoord | null {
-        if (!this.canMove()) return null;
+        if (!this.canMove()) {
+            return null;
+        }
 
         const p = this.activePathPhase();
         const wp = p.path[p.pathIndex]!;
@@ -303,7 +313,9 @@ export class MovementController {
 
     /** Handle path completion and transit completion. Call after processing all moves. */
     finalizeTick(): void {
-        if (this.hasPath) return;
+        if (this.hasPath) {
+            return;
+        }
 
         // Path exhausted — clean up phase
         if (this._phase.tag !== 'idle') {

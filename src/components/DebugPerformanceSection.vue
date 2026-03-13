@@ -18,8 +18,12 @@ import StatRow from './StatRow.vue';
 const stats = debugStats.state;
 
 const fpsClass = computed(() => {
-    if (stats.fps >= 55) return 'fps-good';
-    if (stats.fps >= 30) return 'fps-ok';
+    if (stats.fps >= 55) {
+        return 'fps-good';
+    }
+    if (stats.fps >= 30) {
+        return 'fps-ok';
+    }
     return 'fps-bad';
 });
 </script>

@@ -186,7 +186,9 @@ export function buildDecorationSpriteMap(): Map<number, DecorationSpriteRef> {
     // For untyped entries, use the raw byte value (also matches entity.subType).
     const byCategory = new Map<MapObjectCategory, number[]>();
     for (const entry of RAW_OBJECT_REGISTRY) {
-        if (LOADER_CATEGORIES.has(entry.category)) continue;
+        if (LOADER_CATEGORIES.has(entry.category)) {
+            continue;
+        }
         const list = byCategory.get(entry.category) ?? [];
         list.push(entry.type ?? entry.raw);
         byCategory.set(entry.category, list);
@@ -194,7 +196,9 @@ export function buildDecorationSpriteMap(): Map<number, DecorationSpriteRef> {
 
     for (const [category, rawValues] of byCategory) {
         const pool = CATEGORY_SPRITE_POOLS[category];
-        if (!pool?.length) continue;
+        if (!pool?.length) {
+            continue;
+        }
         for (let i = 0; i < rawValues.length; i++) {
             map.set(rawValues[i]!, pool[i % pool.length]!);
         }

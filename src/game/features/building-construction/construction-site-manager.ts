@@ -64,10 +64,18 @@ const DEFAULT_WORKER_COUNT = 2;
  * Thresholds match the design doc (docs/designs/building-construction-process.md).
  */
 function getWorkerCountFromFootprint(footprintTileCount: number): number {
-    if (footprintTileCount <= 30) return 2;
-    if (footprintTileCount <= 60) return 3;
-    if (footprintTileCount <= 100) return 4;
-    if (footprintTileCount <= 150) return 5;
+    if (footprintTileCount <= 30) {
+        return 2;
+    }
+    if (footprintTileCount <= 60) {
+        return 3;
+    }
+    if (footprintTileCount <= 100) {
+        return 4;
+    }
+    if (footprintTileCount <= 150) {
+        return 5;
+    }
     return 6;
 }
 
@@ -77,7 +85,9 @@ function getWorkerCountFromFootprint(footprintTileCount: number): number {
  */
 function getWorkerCount(buildingType: BuildingType, race: Race): number {
     const info = getBuildingInfo(race, buildingType);
-    if (!info) return DEFAULT_WORKER_COUNT;
+    if (!info) {
+        return DEFAULT_WORKER_COUNT;
+    }
     return getWorkerCountFromFootprint(getBuildingFootprintFromInfo(info).length);
 }
 
@@ -115,7 +125,9 @@ export class ConstructionSiteManager implements Persistable<SerializedConstructi
      */
     getSiteOrThrow(buildingId: number, context: string): ConstructionSite {
         const site = this.sites.get(buildingId);
-        if (!site) throw new Error(`ConstructionSiteManager[${context}]: no active site for buildingId ${buildingId}`);
+        if (!site) {
+            throw new Error(`ConstructionSiteManager[${context}]: no active site for buildingId ${buildingId}`);
+        }
         return site;
     }
 
@@ -312,14 +324,20 @@ export class ConstructionSiteManager implements Persistable<SerializedConstructi
      */
     reserveUnleveledTile(buildingId: number): { tileIndex: number; x: number; y: number } | null {
         const site = this.getSiteOrThrow(buildingId, 'reserveUnleveledTile');
-        if (!site.terrain.unleveledTiles || site.terrain.unleveledTiles.size === 0) return null;
+        if (!site.terrain.unleveledTiles || site.terrain.unleveledTiles.size === 0) {
+            return null;
+        }
 
         // Build set of unreserved tiles
         const unreserved: number[] = [];
         for (const idx of site.terrain.unleveledTiles) {
-            if (!site.terrain.reservedTiles.has(idx)) unreserved.push(idx);
+            if (!site.terrain.reservedTiles.has(idx)) {
+                unreserved.push(idx);
+            }
         }
-        if (unreserved.length === 0) return null;
+        if (unreserved.length === 0) {
+            return null;
+        }
 
         const tileIndex = unreserved[this.rng.nextInt(unreserved.length)]!;
         site.terrain.reservedTiles.add(tileIndex);
@@ -333,7 +351,9 @@ export class ConstructionSiteManager implements Persistable<SerializedConstructi
      */
     releaseReservedTile(buildingId: number, tileIndex: number): void {
         const site = this.getSite(buildingId);
-        if (site) site.terrain.reservedTiles.delete(tileIndex);
+        if (site) {
+            site.terrain.reservedTiles.delete(tileIndex);
+        }
     }
 
     /**
@@ -344,7 +364,9 @@ export class ConstructionSiteManager implements Persistable<SerializedConstructi
      */
     completeTile(buildingId: number, tileIndex: number): CapturedTerrainTile | null {
         const site = this.getSiteOrThrow(buildingId, 'completeTile');
-        if (!site.terrain.unleveledTiles || !site.terrain.unleveledTiles.has(tileIndex)) return null;
+        if (!site.terrain.unleveledTiles || !site.terrain.unleveledTiles.has(tileIndex)) {
+            return null;
+        }
 
         site.terrain.unleveledTiles.delete(tileIndex);
         site.terrain.reservedTiles.delete(tileIndex);
@@ -416,7 +438,9 @@ export class ConstructionSiteManager implements Persistable<SerializedConstructi
         // Find the maximum Y (lower border)
         let maxY = -Infinity;
         for (const tile of footprint) {
-            if (tile.y > maxY) maxY = tile.y;
+            if (tile.y > maxY) {
+                maxY = tile.y;
+            }
         }
 
         // Collect all tiles on the lower border
@@ -456,7 +480,9 @@ export class ConstructionSiteManager implements Persistable<SerializedConstructi
      */
     consumeNextMaterial(buildingId: number): EMaterialType | null {
         const site = this.sites.get(buildingId);
-        if (!site) return null;
+        if (!site) {
+            return null;
+        }
         const slots = this.inventoryManager.getSlots(buildingId);
 
         for (const cost of site.materials.costs) {
@@ -530,9 +556,15 @@ export class ConstructionSiteManager implements Persistable<SerializedConstructi
         let bestDist = Infinity;
 
         for (const site of this.sites.values()) {
-            if (site.player !== player) continue;
-            if (site.terrain.complete) continue;
-            if (site.terrain.slots.assigned.size >= site.terrain.slots.required) continue;
+            if (site.player !== player) {
+                continue;
+            }
+            if (site.terrain.complete) {
+                continue;
+            }
+            if (site.terrain.slots.assigned.size >= site.terrain.slots.required) {
+                continue;
+            }
 
             const dx = site.tileX - nearX;
             const dy = site.tileY - nearY;
@@ -558,10 +590,18 @@ export class ConstructionSiteManager implements Persistable<SerializedConstructi
         let bestDist = Infinity;
 
         for (const site of this.sites.values()) {
-            if (site.player !== player) continue;
-            if (!site.terrain.complete) continue;
-            if (site.building.slots.assigned.size >= site.building.slots.required) continue;
-            if (!this.hasAvailableMaterialsForSite(site)) continue;
+            if (site.player !== player) {
+                continue;
+            }
+            if (!site.terrain.complete) {
+                continue;
+            }
+            if (site.building.slots.assigned.size >= site.building.slots.required) {
+                continue;
+            }
+            if (!this.hasAvailableMaterialsForSite(site)) {
+                continue;
+            }
 
             const dx = site.tileX - nearX;
             const dy = site.tileY - nearY;
@@ -586,8 +626,9 @@ export class ConstructionSiteManager implements Persistable<SerializedConstructi
         const result: SerializedConstructionSite[] = [];
         for (const id of this.getAllSiteIds()) {
             const site = this.sites.get(id);
-            if (!site)
+            if (!site) {
                 throw new Error(`No construction site for building ${id} in ConstructionSiteManager.serializeSites`);
+            }
             result.push({
                 buildingId: site.buildingId,
                 buildingType: site.buildingType,

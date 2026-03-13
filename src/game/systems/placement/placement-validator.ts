@@ -40,18 +40,18 @@ export function validatePlacement(
     ctx: PlacementContext | UnitPlacementContext
 ): PlacementResult {
     switch (entityType) {
-    case 'building':
-        return validateBuildingPlacement(x, y, subType as BuildingType, ctx);
+        case 'building':
+            return validateBuildingPlacement(x, y, subType as BuildingType, ctx);
 
-    case 'pile':
-        return validateResourcePlacement(x, y, ctx);
+        case 'pile':
+            return validateResourcePlacement(x, y, ctx);
 
-    case 'unit':
-        return validateUnitPlacement(x, y, ctx as UnitPlacementContext);
+        case 'unit':
+            return validateUnitPlacement(x, y, ctx as UnitPlacementContext);
 
-    default:
-        // Unknown entity type - reject
-        return { canPlace: false, status: PlacementStatus.InvalidTerrain };
+        default:
+            // Unknown entity type - reject
+            return { canPlace: false, status: PlacementStatus.InvalidTerrain };
     }
 }
 
@@ -83,7 +83,9 @@ export function createPlacementValidator(
 ): PlacementValidator {
     return (x: number, y: number, subType: number) => {
         const ctx = getContext();
-        if (!ctx) return false;
+        if (!ctx) {
+            return false;
+        }
         return canPlaceEntity(entityType, subType, x, y, ctx);
     };
 }

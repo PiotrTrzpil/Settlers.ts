@@ -33,11 +33,15 @@ export interface ScriptLoadResult {
  * @returns The script path relative to Siedler4 folder, or null if cannot derive
  */
 export function deriveScriptPath(mapFilename: string): string | null {
-    if (!mapFilename) return null;
+    if (!mapFilename) {
+        return null;
+    }
 
     // Extract just the filename without path
     const filename = mapFilename.split('/').pop()?.split('\\').pop();
-    if (!filename) return null;
+    if (!filename) {
+        return null;
+    }
 
     // Remove extension (.map, .edm, .exe for savegames)
     const baseName = filename.replace(/\.(map|edm|exe)$/i, '');

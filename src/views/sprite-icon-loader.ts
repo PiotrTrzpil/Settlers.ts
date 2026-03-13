@@ -33,13 +33,23 @@ function findOpaqueBounds(
         right = 0;
     const len = width * height;
     for (let i = 0; i < len; i++) {
-        if (data[i * 4 + 3]! === 0) continue;
+        if (data[i * 4 + 3]! === 0) {
+            continue;
+        }
         const y = (i / width) | 0;
         const x = i % width;
-        if (y < top) top = y;
-        if (y > bottom) bottom = y;
-        if (x < left) left = x;
-        if (x > right) right = x;
+        if (y < top) {
+            top = y;
+        }
+        if (y > bottom) {
+            bottom = y;
+        }
+        if (x < left) {
+            left = x;
+        }
+        if (x > right) {
+            right = x;
+        }
     }
     return top <= bottom ? [top, left, bottom, right] : null;
 }
@@ -47,7 +57,9 @@ function findOpaqueBounds(
 /** Trim fully-transparent rows/columns from an ImageData. */
 function trimTransparent(src: ImageData): ImageData {
     const bounds = findOpaqueBounds(src.data, src.width, src.height);
-    if (!bounds) return src;
+    if (!bounds) {
+        return src;
+    }
     const [top, left, bottom, right] = bounds;
     const tw = right - left + 1;
     const th = bottom - top + 1;
@@ -65,14 +77,18 @@ function scaleImageData(src: ImageData, targetW: number, targetH: number): strin
     srcCanvas.width = src.width;
     srcCanvas.height = src.height;
     const srcCtx = srcCanvas.getContext('2d');
-    if (!srcCtx) return null;
+    if (!srcCtx) {
+        return null;
+    }
     srcCtx.putImageData(src, 0, 0);
 
     const dst = document.createElement('canvas');
     dst.width = targetW;
     dst.height = targetH;
     const dstCtx = dst.getContext('2d');
-    if (!dstCtx) return null;
+    if (!dstCtx) {
+        return null;
+    }
     dstCtx.imageSmoothingEnabled = true;
     dstCtx.imageSmoothingQuality = 'high';
     dstCtx.drawImage(srcCanvas, 0, 0, targetW, targetH);
@@ -93,7 +109,9 @@ const SPRITE_TRIM_BOTTOM = 3;
 /** Crop fixed pixel rows from top and bottom of an ImageData. */
 function cropRows(src: ImageData, top: number, bottom: number): ImageData {
     const newH = src.height - top - bottom;
-    if (newH <= 0 || newH === src.height) return src;
+    if (newH <= 0 || newH === src.height) {
+        return src;
+    }
     const out = new ImageData(src.width, newH);
     for (let y = 0; y < newH; y++) {
         const srcOff = (y + top) * src.width * 4;
@@ -105,13 +123,21 @@ function cropRows(src: ImageData, top: number, bottom: number): ImageData {
 /** Extract a sprite by JIL job (direction + frame 0) as trimmed ImageData. */
 function extractJobSprite(fileSet: LoadedGfxFileSet, jobIndex: number, direction: number): ImageData | null {
     const jobItem = fileSet.jilReader!.getItem(jobIndex);
-    if (!jobItem) return null;
+    if (!jobItem) {
+        return null;
+    }
     const dirItems = fileSet.dilReader!.getItems(jobItem.offset, jobItem.length);
-    if (direction >= dirItems.length) return null;
+    if (direction >= dirItems.length) {
+        return null;
+    }
     const frameItems = fileSet.gilReader.getItems(dirItems[direction]!.offset, dirItems[direction]!.length);
-    if (frameItems.length === 0) return null;
+    if (frameItems.length === 0) {
+        return null;
+    }
     const image = fileSet.gfxReader.getImage(frameItems[0]!.index);
-    if (!image || image.width === 0 || image.height === 0) return null;
+    if (!image || image.width === 0 || image.height === 0) {
+        return null;
+    }
     return trimTransparent(cropRows(image.getImageData(), SPRITE_TRIM_TOP, SPRITE_TRIM_BOTTOM));
 }
 
@@ -138,7 +164,9 @@ export async function loadBuildingIcons(
 ): Promise<Record<number, IconEntry>> {
     const loader = new SpriteLoader(fileManager);
     const fileSet = await loader.loadFileSet(String(race as number));
-    if (!fileSet?.jilReader || !fileSet.dilReader) return {};
+    if (!fileSet?.jilReader || !fileSet.dilReader) {
+        return {};
+    }
 
     // Collect trimmed sprites and track dimension range
     const sprites: { type: BuildingType; data: ImageData; dim: number }[] = [];
@@ -146,15 +174,25 @@ export async function loadBuildingIcons(
         maxDim = 0;
     for (const b of buildings) {
         const jobIndex = BUILDING_JOB_INDICES[b.type];
-        if (jobIndex === undefined) continue;
+        if (jobIndex === undefined) {
+            continue;
+        }
         const data = extractJobSprite(fileSet, jobIndex, 1);
-        if (!data) continue;
+        if (!data) {
+            continue;
+        }
         const dim = Math.max(data.width, data.height);
-        if (dim > maxDim) maxDim = dim;
-        if (dim < minDim) minDim = dim;
+        if (dim > maxDim) {
+            maxDim = dim;
+        }
+        if (dim < minDim) {
+            minDim = dim;
+        }
         sprites.push({ type: b.type, data, dim });
     }
-    if (maxDim === 0) return {};
+    if (maxDim === 0) {
+        return {};
+    }
 
     // Map sprite dimensions linearly to ICON_MIN..ICON_MAX
     const dimRange = maxDim - minDim || 1;
@@ -164,7 +202,9 @@ export async function loadBuildingIcons(
         const displaySize = Math.round(ICON_MIN_PX + t * (ICON_MAX_PX - ICON_MIN_PX));
         const scale = (displaySize * RENDER_SCALE) / dim;
         const url = scaleImageData(data, Math.round(data.width * scale), Math.round(data.height * scale));
-        if (url) icons[type] = { url, size: displaySize };
+        if (url) {
+            icons[type] = { url, size: displaySize };
+        }
     }
     return icons;
 }
@@ -182,22 +222,34 @@ export async function loadUnitIcons(
 ): Promise<Record<string, IconEntry>> {
     const loader = new SpriteLoader(fileManager);
     const fileSet = await loader.loadFileSet(String(SETTLER_FILE_NUMBERS[race]));
-    if (!fileSet?.jilReader || !fileSet.dilReader) return {};
+    if (!fileSet?.jilReader || !fileSet.dilReader) {
+        return {};
+    }
 
     const sprites: { id: string; data: ImageData; dim: number }[] = [];
     let minDim = Infinity,
         maxDim = 0;
     for (const u of units) {
         const jobIndex = getUnitJobIndex(u.type);
-        if (jobIndex === undefined || jobIndex < 0) continue;
+        if (jobIndex === undefined || jobIndex < 0) {
+            continue;
+        }
         const data = extractJobSprite(fileSet, jobIndex, 0);
-        if (!data) continue;
+        if (!data) {
+            continue;
+        }
         const dim = Math.max(data.width, data.height);
-        if (dim > maxDim) maxDim = dim;
-        if (dim < minDim) minDim = dim;
+        if (dim > maxDim) {
+            maxDim = dim;
+        }
+        if (dim < minDim) {
+            minDim = dim;
+        }
         sprites.push({ id: u.id, data, dim });
     }
-    if (maxDim === 0) return {};
+    if (maxDim === 0) {
+        return {};
+    }
 
     const dimRange = maxDim - minDim || 1;
     const icons: Record<string, IconEntry> = {};
@@ -206,7 +258,9 @@ export async function loadUnitIcons(
         const displaySize = Math.round(ICON_MIN_PX + t * (ICON_MAX_PX - ICON_MIN_PX));
         const scale = (displaySize * RENDER_SCALE) / dim;
         const url = scaleImageData(data, Math.round(data.width * scale), Math.round(data.height * scale));
-        if (url) icons[id] = { url, size: displaySize };
+        if (url) {
+            icons[id] = { url, size: displaySize };
+        }
     }
     return icons;
 }
@@ -218,19 +272,27 @@ export async function loadResourceIcons(
 ): Promise<Record<number, string>> {
     const loader = new SpriteLoader(fileManager);
     const fileSet = await loader.loadFileSet(String(GFX_FILE_NUMBERS.RESOURCES));
-    if (!fileSet?.jilReader || !fileSet.dilReader) return {};
+    if (!fileSet?.jilReader || !fileSet.dilReader) {
+        return {};
+    }
 
     const icons: Record<number, string> = {};
     for (const r of resources) {
         const jobIndex = RESOURCE_JOB_INDICES[r.type];
-        if (jobIndex === undefined) continue;
+        if (jobIndex === undefined) {
+            continue;
+        }
         const data = extractJobSprite(fileSet, jobIndex, 0);
-        if (!data) continue;
+        if (!data) {
+            continue;
+        }
         const canvas = document.createElement('canvas');
         canvas.width = data.width;
         canvas.height = data.height;
         const ctx = canvas.getContext('2d');
-        if (!ctx) continue;
+        if (!ctx) {
+            continue;
+        }
         ctx.putImageData(data, 0, 0);
         icons[r.type] = canvas.toDataURL();
     }

@@ -96,7 +96,9 @@ function selectImage(img: IGfxImage) {
 
 function onSelectItem() {
     const img = selectedItem.value;
-    if (!img || !ghCav.value) return;
+    if (!img || !ghCav.value) {
+        return;
+    }
 
     ghCav.value.width = img.width;
     ghCav.value.height = img.height;

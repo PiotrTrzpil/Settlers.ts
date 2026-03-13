@@ -61,13 +61,17 @@ export function isJobSelectable(
     positionTarget: { x: number; y: number } | null
 ): boolean {
     if (ENTITY_TARGET_TASKS.has(firstNode.task)) {
-        if (target) return true;
+        if (target) {
+            return true;
+        }
         // Position-only target: only pick jobs without WORK_ON_ENTITY nodes
         // (e.g. forester PLANT job, not farmer HARVEST which needs an entity to work on)
         return positionTarget !== null && !jobHasEntityWork(job);
     }
     // Self-searching jobs (SEARCH node first) don't need external target
-    if (firstNode.task === ChoreoTaskType.SEARCH) return true;
+    if (firstNode.task === ChoreoTaskType.SEARCH) {
+        return true;
+    }
     // Building-internal jobs require a home for position resolution
     return hasHome && BUILDING_INTERNAL_TASKS.has(firstNode.task);
 }
@@ -101,7 +105,9 @@ export class JobSelector {
 
         for (const jobId of jobs) {
             const job = this.choreographyStore.getJob(raceId, jobId);
-            if (!job?.nodes.length) continue;
+            if (!job?.nodes.length) {
+                continue;
+            }
             if (isJobSelectable(job.nodes[0]!, job, target, homeBuilding !== null, positionTarget ?? null)) {
                 return job;
             }

@@ -67,7 +67,9 @@ function adoptEarlyPrefetch(handle: EarlyPrefetchHandle): void {
 
     // Convert the raw meta promise (metaJson string) into a typed CacheStreamMeta
     prefetchMetaPromise = handle.metaPromise.then(raw => {
-        if (!raw) return null;
+        if (!raw) {
+            return null;
+        }
         const meta = JSON.parse(raw.metaJson) as CachedAtlasBase;
         return { meta, timings: raw.timings } as CacheStreamMeta;
     });
@@ -133,7 +135,9 @@ export function computeLayerPriority(
     allLayers.sort((a, b) => {
         const scoreA = layerScore.get(a) ?? 0;
         const scoreB = layerScore.get(b) ?? 0;
-        if (scoreB !== scoreA) return scoreB - scoreA;
+        if (scoreB !== scoreA) {
+            return scoreB - scoreA;
+        }
         return a - b;
     });
 
@@ -165,7 +169,9 @@ export class SpriteAtlasCacheManager {
      * Falls back to starting a fresh streaming read if no early prefetch is available.
      */
     public prefetch(race: Race): void {
-        if (isCacheDisabled() || prefetchMetaPromise) return;
+        if (isCacheDisabled() || prefetchMetaPromise) {
+            return;
+        }
 
         // Try to adopt the early prefetch (started at module-init time in main.ts)
         const earlyHandle = consumeEarlyPrefetch();
@@ -402,7 +408,9 @@ export class SpriteAtlasCacheManager {
         const streamMeta = await metaPromise;
         debugStats.state.loadTimings.cacheWait = Math.round(performance.now() - t0);
 
-        if (!streamMeta) return null;
+        if (!streamMeta) {
+            return null;
+        }
 
         const { meta } = streamMeta;
 
@@ -441,8 +449,12 @@ export class SpriteAtlasCacheManager {
         const layerBuffersForModuleCache: ArrayBuffer[] = new Array(meta.layerCount);
 
         const tryFireEssential = () => {
-            if (essentialFired) return;
-            if (!paletteReady || layersReceived < essentialCount) return;
+            if (essentialFired) {
+                return;
+            }
+            if (!paletteReady || layersReceived < essentialCount) {
+                return;
+            }
             essentialFired = true;
             const tEssential = performance.now();
             console.log(

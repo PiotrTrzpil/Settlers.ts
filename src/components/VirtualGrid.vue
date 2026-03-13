@@ -93,7 +93,9 @@ function emptyCellsForRow(rowIndex: number): number[] {
 
 function emitVisible() {
     const rows = virtualRows.value;
-    if (rows.length === 0) return;
+    if (rows.length === 0) {
+        return;
+    }
     const startRow = rows[0]!.index;
     const endRow = rows[rows.length - 1]!.index;
     const startIndex = startRow * columns.value;
@@ -137,7 +139,9 @@ defineExpose({
         return scrollEl.value?.scrollTop ?? 0;
     },
     setScrollOffset(offset: number) {
-        if (scrollEl.value) scrollEl.value.scrollTop = offset;
+        if (scrollEl.value) {
+            scrollEl.value.scrollTop = offset;
+        }
     },
 });
 </script>

@@ -148,16 +148,24 @@ interface SearchContext {
  */
 function canEnterTile(_nx: number, _ny: number, nIdx: number, ctx: SearchContext): boolean {
     // Already processed?
-    if (ctx.flags[nIdx]! & FLAG_CLOSED) return false;
+    if (ctx.flags[nIdx]! & FLAG_CLOSED) {
+        return false;
+    }
 
     // Impassable terrain?
-    if (!isPassable(ctx.terrain.groundType[nIdx]!)) return false;
+    if (!isPassable(ctx.terrain.groundType[nIdx]!)) {
+        return false;
+    }
 
     // Goal tile is always enterable (for building interaction / final position)
-    if (nIdx === ctx.goalIdx) return true;
+    if (nIdx === ctx.goalIdx) {
+        return true;
+    }
 
     // Building footprints block — integer-indexed bitmap (no string creation)
-    if (ctx.buildingBitmap[nIdx]) return false;
+    if (ctx.buildingBitmap[nIdx]) {
+        return false;
+    }
 
     return true;
 }
@@ -190,7 +198,9 @@ function computePriority(
     // Range 0-6 vs MOVE_COST=10 gives meaningful guidance without bad paths.
     const targetDir = getApproxDirection(cx, cy, ctx.goalX, ctx.goalY);
     let dirDiff = Math.abs(direction - targetDir);
-    if (dirDiff > 3) dirDiff = 6 - dirDiff;
+    if (dirDiff > 3) {
+        dirDiff = 6 - dirDiff;
+    }
     const directionPenalty = dirDiff * 2;
 
     return gCost + h + directionPenalty;
@@ -206,12 +216,16 @@ function processNeighbor(cx: number, cy: number, currentIdx: number, direction: 
 
     // Bounds check
     const { mapWidth, mapHeight } = ctx.terrain;
-    if (nx < 0 || nx >= mapWidth || ny < 0 || ny >= mapHeight) return;
+    if (nx < 0 || nx >= mapWidth || ny < 0 || ny >= mapHeight) {
+        return;
+    }
 
     const nIdx = nx + ny * mapWidth;
 
     // Passability check
-    if (!canEnterTile(nx, ny, nIdx, ctx)) return;
+    if (!canEnterTile(nx, ny, nIdx, ctx)) {
+        return;
+    }
 
     // Compute tentative g-cost
     const tentativeG = ctx.gCost[currentIdx]! + MOVE_COST;
@@ -271,10 +285,16 @@ function diagnoseNeighbor(
     const nx = startX + dx;
     const ny = startY + dy;
     const pos = `d${d}(${nx},${ny})`;
-    if (nx < 0 || nx >= mapWidth || ny < 0 || ny >= mapHeight) return pos + ':OOB';
+    if (nx < 0 || nx >= mapWidth || ny < 0 || ny >= mapHeight) {
+        return pos + ':OOB';
+    }
     const nIdx = nx + ny * mapWidth;
-    if (!isPassable(groundType[nIdx]!)) return pos + ':terrain';
-    if (_buildingBitmap[nIdx]) return pos + ':building';
+    if (!isPassable(groundType[nIdx]!)) {
+        return pos + ':terrain';
+    }
+    if (_buildingBitmap[nIdx]) {
+        return pos + ':building';
+    }
     return pos + ':closed';
 }
 
@@ -344,7 +364,9 @@ function buildFinalPath(
 ): TileCoord[] {
     const rawPath = reconstructPath(goalIdx, parent, mapWidth);
     const smoothed = smoothPath(rawPath, startX, startY, { groundType, mapWidth, mapHeight, buildingOccupancy });
-    if (_debugPathCallback) _debugPathCallback(rawPath, smoothed);
+    if (_debugPathCallback) {
+        _debugPathCallback(rawPath, smoothed);
+    }
     return smoothed;
 }
 
@@ -429,7 +451,9 @@ export function findPathAStar(
         const currentIdx = openQueue.popMin();
 
         // Skip if already processed (can happen with duplicate insertions)
-        if (flags[currentIdx]! & FLAG_CLOSED) continue;
+        if (flags[currentIdx]! & FLAG_CLOSED) {
+            continue;
+        }
         flags[currentIdx] = FLAG_CLOSED;
         nodesSearched++;
 

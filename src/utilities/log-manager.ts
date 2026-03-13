@@ -166,18 +166,18 @@ export class LogManager {
         }
 
         switch (msg.type) {
-        case LogType.Error:
-            console.error(formatted);
-            break;
-        case LogType.Warn:
-            console.warn(formatted);
-            break;
-        case LogType.Info:
-            console.info(formatted);
-            break;
-        case LogType.Debug:
-            console.log(formatted);
-            break;
+            case LogType.Error:
+                console.error(formatted);
+                break;
+            case LogType.Warn:
+                console.warn(formatted);
+                break;
+            case LogType.Info:
+                console.info(formatted);
+                break;
+            case LogType.Debug:
+                console.log(formatted);
+                break;
         }
     }
 }

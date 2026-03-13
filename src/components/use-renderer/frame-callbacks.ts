@@ -68,7 +68,9 @@ function applyAnimationAndCombat(b: RenderContextBuilder, g: Game): void {
         .directionTransitionGetter(visualService.getDirectionTransition.bind(visualService))
         .healthRatioGetter(entityId => {
             const cs = g.services.combatSystem.getState(entityId);
-            if (!cs) return null;
+            if (!cs) {
+                return null;
+            }
             return cs.maxHealth > 0 ? cs.health / cs.maxHealth : 1;
         });
 }
@@ -144,10 +146,14 @@ function collectWorkAreaVisualization(
     inputManager: InputManager | null,
     game: Game
 ): { circles: readonly CircleRenderData[]; dots: readonly TerritoryDotRenderData[] } {
-    if (!inputManager) return EMPTY_WORK_AREA_VIS;
+    if (!inputManager) {
+        return EMPTY_WORK_AREA_VIS;
+    }
 
     const mode = inputManager.getMode('building-adjust');
-    if (!(mode instanceof BuildingAdjustMode)) return EMPTY_WORK_AREA_VIS;
+    if (!(mode instanceof BuildingAdjustMode)) {
+        return EMPTY_WORK_AREA_VIS;
+    }
 
     const active = mode.getActiveAdjustment();
     if (!active || active.item.category !== 'work-area' || !(active.handler instanceof WorkAreaAdjustHandler)) {

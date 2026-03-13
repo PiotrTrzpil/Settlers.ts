@@ -144,7 +144,9 @@ export class BuildingIndicatorRenderer implements IRenderer {
      */
     public destroy(): void {
         const gl = this.gl;
-        if (!gl) return;
+        if (!gl) {
+            return;
+        }
 
         if (this.dynamicBuffer) {
             gl.deleteBuffer(this.dynamicBuffer);
@@ -175,7 +177,9 @@ export class BuildingIndicatorRenderer implements IRenderer {
         }
 
         const positions = this.grid.getPositions();
-        if (positions.length === 0) return;
+        if (positions.length === 0) {
+            return;
+        }
 
         // Setup shader
         this.shaderProgram.use();
@@ -184,7 +188,9 @@ export class BuildingIndicatorRenderer implements IRenderer {
         this.batchCount = 0;
         this.batchPositions(positions, viewPoint);
 
-        if (this.batchCount === 0) return;
+        if (this.batchCount === 0) {
+            return;
+        }
 
         this.uploadAndDraw(gl);
     }
@@ -202,8 +208,12 @@ export class BuildingIndicatorRenderer implements IRenderer {
         const maxY = centerY + visibleHeight;
 
         for (const pos of positions) {
-            if (this.batchCount >= MAX_BATCH_INDICATORS) break;
-            if (pos.x < minX || pos.x > maxX || pos.y < minY || pos.y > maxY) continue;
+            if (this.batchCount >= MAX_BATCH_INDICATORS) {
+                break;
+            }
+            if (pos.x < minX || pos.x > maxX || pos.y < minY || pos.y > maxY) {
+                continue;
+            }
 
             const isHovered = this.hoveredTile && this.hoveredTile.x === pos.x && this.hoveredTile.y === pos.y;
             const worldPos = TilePicker.tileToWorld(
@@ -304,20 +314,20 @@ export class BuildingIndicatorRenderer implements IRenderer {
      */
     public static getStatusDescription(status: PlacementStatus): string {
         switch (status) {
-        case PlacementStatus.InvalidTerrain:
-            return 'Cannot build: Invalid terrain';
-        case PlacementStatus.Occupied:
-            return 'Cannot build: Occupied';
-        case PlacementStatus.TooSteep:
-            return 'Cannot build: Too steep';
-        case PlacementStatus.Difficult:
-            return 'Can build: Uneven terrain';
-        case PlacementStatus.Medium:
-            return 'Can build: Slight slope';
-        case PlacementStatus.Easy:
-            return 'Can build: Flat terrain';
-        case PlacementStatus.OutOfTerritory:
-            return 'Cannot build: Outside territory';
+            case PlacementStatus.InvalidTerrain:
+                return 'Cannot build: Invalid terrain';
+            case PlacementStatus.Occupied:
+                return 'Cannot build: Occupied';
+            case PlacementStatus.TooSteep:
+                return 'Cannot build: Too steep';
+            case PlacementStatus.Difficult:
+                return 'Can build: Uneven terrain';
+            case PlacementStatus.Medium:
+                return 'Can build: Slight slope';
+            case PlacementStatus.Easy:
+                return 'Can build: Flat terrain';
+            case PlacementStatus.OutOfTerritory:
+                return 'Cannot build: Outside territory';
         }
     }
 }

@@ -73,10 +73,14 @@ export class BuildingOverlayManager implements TickSystem {
      * or if the building already has overlays registered.
      */
     addBuilding(entityId: number, buildingType: BuildingType, race: Race): void {
-        if (this.overlaysByEntity.has(entityId)) return;
+        if (this.overlaysByEntity.has(entityId)) {
+            return;
+        }
 
         const defs = this.registry.getOverlays(buildingType, race);
-        if (defs.length === 0) return;
+        if (defs.length === 0) {
+            return;
+        }
 
         const instances = defs.map(def => createInstance(def, entityId));
         this.overlaysByEntity.set(entityId, instances);
@@ -103,7 +107,9 @@ export class BuildingOverlayManager implements TickSystem {
      */
     setWorking(entityId: number, working: boolean): void {
         const instances = this.overlaysByEntity.get(entityId);
-        if (!instances) return;
+        if (!instances) {
+            return;
+        }
 
         for (const inst of instances) {
             const shouldBeActive = evaluateCondition(inst.def.condition, working);
@@ -135,7 +141,9 @@ export class BuildingOverlayManager implements TickSystem {
      */
     setFrameCount(entityId: number, overlayKey: string, frameCount: number): void {
         const instances = this.overlaysByEntity.get(entityId);
-        if (!instances) return;
+        if (!instances) {
+            return;
+        }
 
         for (const inst of instances) {
             if (inst.def.key === overlayKey) {
@@ -174,7 +182,9 @@ export class BuildingOverlayManager implements TickSystem {
         for (const [entityId, instances] of this.overlaysByEntity) {
             try {
                 for (const inst of instances) {
-                    if (!inst.active || inst.def.frameDurationMs <= 0) continue;
+                    if (!inst.active || inst.def.frameDurationMs <= 0) {
+                        continue;
+                    }
                     inst.elapsedMs += dtMs;
                 }
             } catch (e) {
@@ -194,8 +204,12 @@ export class BuildingOverlayManager implements TickSystem {
         this.overlaysByEntity.clear();
 
         for (const entity of this.entityProvider.entities) {
-            if (entity.type !== EntityType.Building) continue;
-            if (constructionSiteManager.hasSite(entity.id)) continue;
+            if (entity.type !== EntityType.Building) {
+                continue;
+            }
+            if (constructionSiteManager.hasSite(entity.id)) {
+                continue;
+            }
 
             this.addBuilding(entity.id, entity.subType as BuildingType, entity.race);
         }
@@ -223,11 +237,11 @@ function createInstance(def: Readonly<BuildingOverlayDef>, entityId: number): Bu
 
 function evaluateCondition(condition: OverlayCondition, working: boolean): boolean {
     switch (condition) {
-    case OverlayCondition.Always:
-        return true;
-    case OverlayCondition.Working:
-        return working;
-    case OverlayCondition.Idle:
-        return !working;
+        case OverlayCondition.Always:
+            return true;
+        case OverlayCondition.Working:
+            return working;
+        case OverlayCondition.Idle:
+            return !working;
     }
 }

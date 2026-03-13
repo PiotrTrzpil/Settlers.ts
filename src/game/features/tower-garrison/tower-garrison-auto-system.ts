@@ -57,7 +57,9 @@ export class AutoGarrisonSystem implements TickSystem {
 
     tick(_dt: number): void {
         this.tickAccumulator++;
-        if (this.tickAccumulator < SCAN_INTERVAL_TICKS) return;
+        if (this.tickAccumulator < SCAN_INTERVAL_TICKS) {
+            return;
+        }
         this.tickAccumulator = 0;
 
         try {
@@ -98,13 +100,17 @@ export class AutoGarrisonSystem implements TickSystem {
     }
 
     private scanBuilding(buildingId: number): void {
-        if (!this.manager.needsAutoGarrison(buildingId)) return;
+        if (!this.manager.needsAutoGarrison(buildingId)) {
+            return;
+        }
 
         const building = this.gameState.getEntityOrThrow(buildingId, 'AutoGarrisonSystem.scanBuilding');
         const door = getBuildingDoorPos(building.x, building.y, building.race, building.subType as BuildingType);
 
         const candidateId = this.findNearestIdleSoldier(building.player, door.x, door.y, buildingId);
-        if (candidateId === null) return;
+        if (candidateId === null) {
+            return;
+        }
 
         this.executeCommand({
             type: 'garrison_units',
@@ -117,9 +123,15 @@ export class AutoGarrisonSystem implements TickSystem {
 
     /** Check if a unit is eligible for auto-garrison dispatch to a specific tower. */
     private isEligibleCandidate(entityId: number, unitType: UnitType, buildingId: number): boolean {
-        if (!getGarrisonRole(unitType)) return false;
-        if (this.unitReservation.isReserved(entityId)) return false;
-        if (this.manager.hasDispatchFailed(entityId, buildingId)) return false;
+        if (!getGarrisonRole(unitType)) {
+            return false;
+        }
+        if (this.unitReservation.isReserved(entityId)) {
+            return false;
+        }
+        if (this.manager.hasDispatchFailed(entityId, buildingId)) {
+            return false;
+        }
         return true;
     }
 
@@ -135,7 +147,9 @@ export class AutoGarrisonSystem implements TickSystem {
         let bestBowmanDist = Infinity;
 
         for (const entity of this.gameState.entityIndex.ofTypeAndPlayer(EntityType.Unit, player)) {
-            if (!this.isEligibleCandidate(entity.id, entity.subType as UnitType, buildingId)) continue;
+            if (!this.isEligibleCandidate(entity.id, entity.subType as UnitType, buildingId)) {
+                continue;
+            }
 
             const dist = Math.max(Math.abs(entity.x - doorX), Math.abs(entity.y - doorY));
             const role = getGarrisonRole(entity.subType as UnitType)!;

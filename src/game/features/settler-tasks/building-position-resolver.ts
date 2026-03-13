@@ -123,10 +123,14 @@ export class BuildingPositionResolverImpl implements BuildingPositionResolver {
      */
     getSourcePilePosition(buildingId: number, material: string): { x: number; y: number } | null {
         const materialType = parseMaterialString(material);
-        if (materialType === null) return null;
+        if (materialType === null) {
+            return null;
+        }
 
         const pos = this.resolvePileFromRegistry(buildingId, materialType, SlotKind.Input);
-        if (pos) return pos;
+        if (pos) {
+            return pos;
+        }
 
         // Construction sites have no XML pile data — resolve via construction pile candidates
         return this.resolveConstructionPilePosition(buildingId, materialType);
@@ -141,7 +145,9 @@ export class BuildingPositionResolverImpl implements BuildingPositionResolver {
      */
     getDestinationPilePosition(buildingId: number, material: string): { x: number; y: number } | null {
         const materialType = parseMaterialString(material);
-        if (materialType === null) return null;
+        if (materialType === null) {
+            return null;
+        }
 
         return this.resolvePileFromRegistry(buildingId, materialType, SlotKind.Output);
     }
@@ -149,7 +155,9 @@ export class BuildingPositionResolverImpl implements BuildingPositionResolver {
     getWorkAreaRadius(buildingId: number): number {
         const building = this.gameState.getEntityOrThrow(buildingId, 'getWorkAreaRadius');
         assertIsBuilding(building, buildingId);
-        if (!this.workAreaStore.hasWorkArea(building.subType as BuildingType, building.race)) return 0;
+        if (!this.workAreaStore.hasWorkArea(building.subType as BuildingType, building.race)) {
+            return 0;
+        }
         return this.workAreaStore.getRadius(building.subType as BuildingType, building.race);
     }
 
@@ -167,7 +175,9 @@ export class BuildingPositionResolverImpl implements BuildingPositionResolver {
     ): { x: number; y: number } | null {
         const building = this.gameState.getEntityOrThrow(buildingId, 'resolvePileFromRegistry');
         // Free piles are not buildings — return null so caller falls back to entity position
-        if (building.type !== EntityType.Building) return null;
+        if (building.type !== EntityType.Building) {
+            return null;
+        }
         assertIsBuilding(building, buildingId);
 
         const registry = this.getPileRegistry();
@@ -186,7 +196,9 @@ export class BuildingPositionResolverImpl implements BuildingPositionResolver {
             building.x,
             building.y
         );
-        if (pos) return pos;
+        if (pos) {
+            return pos;
+        }
 
         // Storage buildings: look up the live pile slot via BuildingInventoryManager
         if (registry.hasStoragePiles(building.subType as BuildingType, building.race)) {
@@ -197,7 +209,9 @@ export class BuildingPositionResolverImpl implements BuildingPositionResolver {
                     (s.kind === SlotKind.Output || s.kind === SlotKind.Storage) &&
                     s.entityId !== null
             );
-            if (matchingSlot) return matchingSlot.position;
+            if (matchingSlot) {
+                return matchingSlot.position;
+            }
             return null;
         }
 

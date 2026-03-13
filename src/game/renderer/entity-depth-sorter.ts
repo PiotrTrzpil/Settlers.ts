@@ -38,7 +38,9 @@ export class EntityDepthSorter {
      */
     public sortByDepth(entities: Entity[], ctx: DepthSortContext): void {
         const count = entities.length;
-        if (count === 0) return;
+        if (count === 0) {
+            return;
+        }
 
         // Ensure arrays are large enough
         if (this.depthKeys.length < count) {
@@ -74,20 +76,22 @@ export class EntityDepthSorter {
      * Get sprite entry for an entity (if available).
      */
     private getSpriteEntry(entity: Entity, spriteManager: SpriteRenderManager | null): SpriteEntry | null {
-        if (!spriteManager) return null;
+        if (!spriteManager) {
+            return null;
+        }
 
         switch (entity.type) {
-        case EntityType.Building:
-            return spriteManager.getBuilding(entity.subType as BuildingType, entity.race);
-        case EntityType.MapObject:
-            return spriteManager.getMapObject(entity.subType as MapObjectType);
-        case EntityType.Unit:
-            return spriteManager.getUnit(entity.subType as UnitType, 0, entity.race);
-        case EntityType.StackedPile:
-            return spriteManager.getGoodSprite(entity.subType as EMaterialType);
-        case EntityType.Decoration:
-        case EntityType.None:
-            return null;
+            case EntityType.Building:
+                return spriteManager.getBuilding(entity.subType as BuildingType, entity.race);
+            case EntityType.MapObject:
+                return spriteManager.getMapObject(entity.subType as MapObjectType);
+            case EntityType.Unit:
+                return spriteManager.getUnit(entity.subType as UnitType, 0, entity.race);
+            case EntityType.StackedPile:
+                return spriteManager.getGoodSprite(entity.subType as EMaterialType);
+            case EntityType.Decoration:
+            case EntityType.None:
+                return null;
         }
     }
 
@@ -110,24 +114,24 @@ export class EntityDepthSorter {
             let depthFactor: number;
 
             switch (entity.type) {
-            case EntityType.Building:
-                depthFactor = DEPTH_FACTOR_BUILDING;
-                break;
-            case EntityType.MapObject:
-                depthFactor = DEPTH_FACTOR_MAP_OBJECT;
-                break;
-            case EntityType.Unit:
-                depthFactor = DEPTH_FACTOR_UNIT;
-                break;
-            case EntityType.StackedPile:
-                depthFactor = DEPTH_FACTOR_PILE;
-                break;
-            case EntityType.Decoration:
-                depthFactor = DEPTH_FACTOR_BUILDING;
-                break;
-            case EntityType.None:
-                depthFactor = 1.0;
-                break;
+                case EntityType.Building:
+                    depthFactor = DEPTH_FACTOR_BUILDING;
+                    break;
+                case EntityType.MapObject:
+                    depthFactor = DEPTH_FACTOR_MAP_OBJECT;
+                    break;
+                case EntityType.Unit:
+                    depthFactor = DEPTH_FACTOR_UNIT;
+                    break;
+                case EntityType.StackedPile:
+                    depthFactor = DEPTH_FACTOR_PILE;
+                    break;
+                case EntityType.Decoration:
+                    depthFactor = DEPTH_FACTOR_BUILDING;
+                    break;
+                case EntityType.None:
+                    depthFactor = 1.0;
+                    break;
             }
 
             // Depth point = base position + offset to the depth line within sprite

@@ -48,7 +48,9 @@ export function findNearestEntity(
     const radiusSq = radius * radius;
 
     for (const entity of entities) {
-        if (!filter(entity)) continue;
+        if (!filter(entity)) {
+            continue;
+        }
         const dx = entity.x - x;
         const dy = entity.y - y;
         const distSq = dx * dx + dy * dy;
@@ -92,9 +94,15 @@ export interface FindEmptySpotConfig {
 
 /** Check whether a tile is a valid empty spot given the config constraints. */
 function isValidSpot(tile: { x: number; y: number }, config: FindEmptySpotConfig): boolean {
-    if (tile.x < 0 || tile.y < 0) return false;
-    if (config.gameState.getGroundEntityAt(tile.x, tile.y)) return false;
-    if (config.requireFreeNeighbors && !hasFreNeighbors(config.gameState, tile.x, tile.y)) return false;
+    if (tile.x < 0 || tile.y < 0) {
+        return false;
+    }
+    if (config.gameState.getGroundEntityAt(tile.x, tile.y)) {
+        return false;
+    }
+    if (config.requireFreeNeighbors && !hasFreNeighbors(config.gameState, tile.x, tile.y)) {
+        return false;
+    }
     if (
         config.minDistanceSq > 0 &&
         isTooClose(
@@ -104,8 +112,9 @@ function isValidSpot(tile: { x: number; y: number }, config: FindEmptySpotConfig
             config.minDistanceSq,
             config.proximityFilter
         )
-    )
+    ) {
         return false;
+    }
     return true;
 }
 
@@ -118,7 +127,9 @@ function collectCandidates(cx: number, cy: number, config: FindEmptySpotConfig):
 
     for (let radius = minRadius; radius <= config.searchRadius; radius++) {
         for (const tile of ringTiles(cx, cy, radius)) {
-            if (!isValidSpot(tile, config)) continue;
+            if (!isValidSpot(tile, config)) {
+                continue;
+            }
             const dx = tile.x - cx;
             const dy = tile.y - cy;
             candidates.push({ x: tile.x, y: tile.y, distSq: dx * dx + dy * dy });
@@ -130,7 +141,9 @@ function collectCandidates(cx: number, cy: number, config: FindEmptySpotConfig):
         if (candidates.length > 0) {
             const nextMinDistSq = (radius + 1) * (radius + 1);
             const maxCandidateDistSq = candidates.reduce((max, c) => Math.max(max, c.distSq), 0);
-            if (nextMinDistSq > maxCandidateDistSq) break;
+            if (nextMinDistSq > maxCandidateDistSq) {
+                break;
+            }
         }
     }
 
@@ -166,7 +179,9 @@ export function findEmptySpot(
     config: FindEmptySpotConfig
 ): { entityId: null; x: number; y: number } | null {
     const candidates = collectCandidates(cx, cy, config);
-    if (candidates.length === 0) return null;
+    if (candidates.length === 0) {
+        return null;
+    }
 
     const pick = pickClosest(candidates, config.rng);
     return { entityId: null, x: pick.x, y: pick.y };
@@ -180,11 +195,15 @@ function isTooClose(
     filter: (entity: Entity) => boolean
 ): boolean {
     for (const entity of entities) {
-        if (!filter(entity)) continue;
+        if (!filter(entity)) {
+            continue;
+        }
 
         const dx = entity.x - x;
         const dy = entity.y - y;
-        if (dx * dx + dy * dy < minDistanceSq) return true;
+        if (dx * dx + dy * dy < minDistanceSq) {
+            return true;
+        }
     }
     return false;
 }
@@ -198,7 +217,9 @@ const CARDINAL_OFFSETS = [
 
 function hasFreNeighbors(gameState: GameState, x: number, y: number): boolean {
     for (const { dx, dy } of CARDINAL_OFFSETS) {
-        if (gameState.getGroundEntityAt(x + dx, y + dy)) return false;
+        if (gameState.getGroundEntityAt(x + dx, y + dy)) {
+            return false;
+        }
     }
     return true;
 }

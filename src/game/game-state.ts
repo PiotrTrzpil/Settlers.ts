@@ -116,15 +116,15 @@ class UnitStateMap implements UnitStateLookup {
 /** Determine entity selectability from type + subtype (no explicit override). */
 function resolveEntitySelectable(type: EntityType, subType: number): boolean | undefined {
     switch (type) {
-    case EntityType.Unit:
-        return isUnitTypeSelectable(subType as UnitType);
-    case EntityType.Building:
-        return true;
-    case EntityType.MapObject:
-    case EntityType.StackedPile:
-    case EntityType.Decoration:
-    case EntityType.None:
-        return false;
+        case EntityType.Unit:
+            return isUnitTypeSelectable(subType as UnitType);
+        case EntityType.Building:
+            return true;
+        case EntityType.MapObject:
+        case EntityType.StackedPile:
+        case EntityType.Decoration:
+        case EntityType.None:
+            return false;
     }
 }
 
@@ -340,8 +340,12 @@ export class GameState {
             selectable: resolvedSelectable,
         };
 
-        if (data.carrying) entity.carrying = data.carrying;
-        if (data.hidden) entity.hidden = data.hidden;
+        if (data.carrying) {
+            entity.carrying = data.carrying;
+        }
+        if (data.hidden) {
+            entity.hidden = data.hidden;
+        }
 
         this.entities.push(entity);
         this.entityMap.set(entity.id, entity);
@@ -373,7 +377,9 @@ export class GameState {
 
         // Route to correct occupancy layer.
         // Decoration entities (flags, signs) are visual-only — no occupancy.
-        if (type === EntityType.Decoration) return;
+        if (type === EntityType.Decoration) {
+            return;
+        }
 
         if (type === EntityType.Building) {
             this.addBuildingOccupancy(entity, subType, x, y, completed);
@@ -440,7 +446,9 @@ export class GameState {
      */
     public clearBuildingFootprintBlock(buildingId: number): void {
         const entity = this.entityMap.get(buildingId);
-        if (!entity || entity.type !== EntityType.Building) return;
+        if (!entity || entity.type !== EntityType.Building) {
+            return;
+        }
         const blockArea = getBuildingBlockArea(entity.x, entity.y, entity.subType as BuildingType, entity.race);
         for (const tile of blockArea) {
             this.buildingOccupancy.delete(tileKey(tile.x, tile.y));
@@ -453,7 +461,9 @@ export class GameState {
      */
     public restoreBuildingFootprintBlock(buildingId: number): void {
         const entity = this.entityMap.get(buildingId);
-        if (!entity || entity.type !== EntityType.Building) return;
+        if (!entity || entity.type !== EntityType.Building) {
+            return;
+        }
         const blockArea = getBuildingBlockArea(entity.x, entity.y, entity.subType as BuildingType, entity.race);
         const passableKeys = getBuildingPassableTiles(
             entity.x,
@@ -472,7 +482,9 @@ export class GameState {
 
     public removeEntity(id: number): void {
         const entity = this.entityMap.get(id);
-        if (!entity) return;
+        if (!entity) {
+            return;
+        }
 
         const index = this.entities.indexOf(entity);
         if (index >= 0) {
@@ -534,14 +546,18 @@ export class GameState {
     /** Get the ground entity (building/map-object/pile) at a tile, or undefined. */
     public getGroundEntityAt(x: number, y: number): Entity | undefined {
         const id = this.groundOccupancy.get(tileKey(x, y));
-        if (id === undefined) return undefined;
+        if (id === undefined) {
+            return undefined;
+        }
         return this.entityMap.get(id);
     }
 
     /** Get the unit at a tile, or undefined. */
     public getUnitAt(x: number, y: number): Entity | undefined {
         const id = this.unitOccupancy.get(tileKey(x, y));
-        if (id === undefined) return undefined;
+        if (id === undefined) {
+            return undefined;
+        }
         return this.entityMap.get(id);
     }
 
@@ -613,7 +629,9 @@ export class GameState {
      */
     public clearTileOccupancy(entityId: number): void {
         const entity = this.entityMap.get(entityId);
-        if (!entity) return;
+        if (!entity) {
+            return;
+        }
         const key = tileKey(entity.x, entity.y);
         if (this.unitOccupancy.get(key) === entityId) {
             this.unitOccupancy.delete(key);
@@ -625,7 +643,9 @@ export class GameState {
      */
     public restoreTileOccupancy(entityId: number): void {
         const entity = this.entityMap.get(entityId);
-        if (!entity) return;
+        if (!entity) {
+            return;
+        }
         const key = tileKey(entity.x, entity.y);
         this.unitOccupancy.set(key, entityId);
     }
@@ -633,7 +653,9 @@ export class GameState {
     /** Update occupancy when a unit moves. Only units move, so always uses unitOccupancy. */
     public updateEntityPosition(id: number, newX: number, newY: number): void {
         const entity = this.entityMap.get(id);
-        if (!entity) return;
+        if (!entity) {
+            return;
+        }
 
         // Clear old occupancy if this entity still owns the tile
         const oldKey = tileKey(entity.x, entity.y);

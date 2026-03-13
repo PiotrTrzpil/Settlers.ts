@@ -22,13 +22,23 @@ export class ToolSourceResolver {
         let bestDistSq = Infinity;
 
         for (const entity of this.gameState.entities) {
-            if (entity.type !== EntityType.StackedPile) continue;
-            if (entity.subType !== (material as number)) continue;
-            if (entity.player !== player) continue;
-            if (this.reservedPiles.has(entity.id)) continue;
+            if (entity.type !== EntityType.StackedPile) {
+                continue;
+            }
+            if (entity.subType !== (material as number)) {
+                continue;
+            }
+            if (entity.player !== player) {
+                continue;
+            }
+            if (this.reservedPiles.has(entity.id)) {
+                continue;
+            }
 
             const kind = this.gameState.piles.getKind(entity.id);
-            if (kind.kind !== SlotKind.Free) continue;
+            if (kind.kind !== SlotKind.Free) {
+                continue;
+            }
 
             const dx = entity.x - nearX;
             const dy = entity.y - nearY;

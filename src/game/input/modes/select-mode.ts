@@ -36,52 +36,52 @@ export class SelectMode extends BaseInputMode {
         // Only handles actions relevant to select mode; others fall through to UNHANDLED
         // eslint-disable-next-line @typescript-eslint/switch-exhaustiveness-check -- partial: unknown actions fall through to UNHANDLED
         switch (action) {
-        case InputAction.DeselectAll:
-            context.executeCommand({ type: 'select', entityId: null });
-            return HANDLED;
+            case InputAction.DeselectAll:
+                context.executeCommand({ type: 'select', entityId: null });
+                return HANDLED;
 
-        case InputAction.Delete: {
-            const data = context.getModeData<{ selectedEntityId: number | null }>();
-            if (data?.selectedEntityId != null) {
-                context.executeCommand({ type: 'remove_entity', entityId: data.selectedEntityId });
+            case InputAction.Delete: {
+                const data = context.getModeData<{ selectedEntityId: number | null }>();
+                if (data?.selectedEntityId != null) {
+                    context.executeCommand({ type: 'remove_entity', entityId: data.selectedEntityId });
+                }
+                return HANDLED;
             }
-            return HANDLED;
-        }
 
-        case InputAction.SpawnCarrier: {
-            const tile = context.currentTile;
-            const race = context.localPlayerRace;
-            if (tile && race !== null) {
-                context.executeCommand({
-                    type: 'spawn_unit',
-                    unitType: UnitType.Carrier,
-                    x: tile.x,
-                    y: tile.y,
-                    player: 0,
-                    race,
-                });
+            case InputAction.SpawnCarrier: {
+                const tile = context.currentTile;
+                const race = context.localPlayerRace;
+                if (tile && race !== null) {
+                    context.executeCommand({
+                        type: 'spawn_unit',
+                        unitType: UnitType.Carrier,
+                        x: tile.x,
+                        y: tile.y,
+                        player: 0,
+                        race,
+                    });
+                }
+                return HANDLED;
             }
-            return HANDLED;
-        }
 
-        case InputAction.SpawnSwordsman: {
-            const tile = context.currentTile;
-            const race = context.localPlayerRace;
-            if (tile && race !== null) {
-                context.executeCommand({
-                    type: 'spawn_unit',
-                    unitType: UnitType.Swordsman1,
-                    x: tile.x,
-                    y: tile.y,
-                    player: 0,
-                    race,
-                });
+            case InputAction.SpawnSwordsman: {
+                const tile = context.currentTile;
+                const race = context.localPlayerRace;
+                if (tile && race !== null) {
+                    context.executeCommand({
+                        type: 'spawn_unit',
+                        unitType: UnitType.Swordsman1,
+                        x: tile.x,
+                        y: tile.y,
+                        player: 0,
+                        race,
+                    });
+                }
+                return HANDLED;
             }
-            return HANDLED;
-        }
 
-        default:
-            return UNHANDLED;
+            default:
+                return UNHANDLED;
         }
     }
 

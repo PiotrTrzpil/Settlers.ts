@@ -120,12 +120,16 @@ export class UnitStateMachine {
             }
             const wasWorking = runtime.state === SettlerState.WORKING;
             const didSearch = this.updateSettler(unit, config, runtime, dt);
-            if (wasWorking) return TickCategory.JOB_EXEC;
+            if (wasWorking) {
+                return TickCategory.JOB_EXEC;
+            }
             return didSearch ? TickCategory.IDLE_SEARCH : TickCategory.IDLE_SKIP;
         }
 
         // Skip idle updates for units actively in combat (combat system manages their animation)
-        if (this.isInCombat(unit.id)) return TickCategory.COMBAT_SKIP;
+        if (this.isInCombat(unit.id)) {
+            return TickCategory.COMBAT_SKIP;
+        }
 
         // Handle idle state for non-configured units
         const controller = this.gameState.movement.getController(unit.id);
@@ -142,7 +146,9 @@ export class UnitStateMachine {
      */
     updateDirectionTracking(unit: Entity, runtime: UnitRuntime): void {
         const controller = this.gameState.movement.getController(unit.id);
-        if (!controller) return;
+        if (!controller) {
+            return;
+        }
 
         const currentDirection = controller.direction;
         if (currentDirection !== runtime.lastDirection) {
@@ -201,38 +207,38 @@ export class UnitStateMachine {
     private updateSettler(settler: Entity, config: SettlerConfig, runtime: UnitRuntime, dt: number): boolean {
         let didSearch = false;
         switch (runtime.state) {
-        case SettlerState.IDLE:
-            // Dispatch-only units (military) and carriers skip idle work search.
-            if (config.search !== SearchType.GOOD && config.search !== SearchType.NONE) {
-                if (runtime.idleSearchReady) {
-                    didSearch = true;
-                    this.handleIdle(settler, config, runtime);
+            case SettlerState.IDLE:
+                // Dispatch-only units (military) and carriers skip idle work search.
+                if (config.search !== SearchType.GOOD && config.search !== SearchType.NONE) {
+                    if (runtime.idleSearchReady) {
+                        didSearch = true;
+                        this.handleIdle(settler, config, runtime);
+                    }
                 }
-            }
-            // Also handle idle turning when not working (handleIdle may change state to WORKING)
-            // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- handleIdle mutates runtime.state
-            if (runtime.state === SettlerState.IDLE) {
-                const controller = this.gameState.movement.getController(settler.id);
-                this.animController.updateIdleUnit(
-                    settler,
-                    runtime.idleState,
-                    dt,
-                    controller?.state,
-                    controller?.direction
-                );
-            }
-            break;
+                // Also handle idle turning when not working (handleIdle may change state to WORKING)
+                // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- handleIdle mutates runtime.state
+                if (runtime.state === SettlerState.IDLE) {
+                    const controller = this.gameState.movement.getController(settler.id);
+                    this.animController.updateIdleUnit(
+                        settler,
+                        runtime.idleState,
+                        dt,
+                        controller?.state,
+                        controller?.direction
+                    );
+                }
+                break;
 
-        case SettlerState.WORKING:
-            this.handleWorking(settler, config, runtime, dt);
-            break;
+            case SettlerState.WORKING:
+                this.handleWorking(settler, config, runtime, dt);
+                break;
 
-        case SettlerState.INTERRUPTED:
-            // Return to idle after interruption — search immediately on next tick
-            runtime.state = SettlerState.IDLE;
-            runtime.job = null;
-            runtime.idleSearchReady = true;
-            break;
+            case SettlerState.INTERRUPTED:
+                // Return to idle after interruption — search immediately on next tick
+                runtime.state = SettlerState.IDLE;
+                runtime.job = null;
+                runtime.idleSearchReady = true;
+                break;
         }
         return didSearch;
     }

@@ -299,7 +299,9 @@ export class EntityTextureAtlas extends ShaderTexture {
      * Must be called with the atlas texture already bound (via bindAsArray).
      */
     private ensureCapacity(gl: WebGL2RenderingContext): void {
-        if (this.layers.length <= this.gpuCapacity) return;
+        if (this.layers.length <= this.gpuCapacity) {
+            return;
+        }
 
         const newCapacity = Math.min(
             Math.max(this.layers.length, this.gpuCapacity * 2, MIN_GPU_CAPACITY),
@@ -336,7 +338,9 @@ export class EntityTextureAtlas extends ShaderTexture {
     /** Upload a single layer's dirty sub-region to GPU. */
     private uploadDirtyLayer(gl: WebGL2RenderingContext, layerIndex: number): void {
         const dirty = this.dirtyRegions[layerIndex];
-        if (!dirty) return;
+        if (!dirty) {
+            return;
+        }
 
         const isFullLayer =
             dirty.minX === 0 && dirty.minY === 0 && dirty.maxX === LAYER_SIZE && dirty.maxY === LAYER_SIZE;
@@ -479,8 +483,12 @@ export class EntityTextureAtlas extends ShaderTexture {
 
         let uploaded = 0;
         for (let i = 0; i < this.dirtyRegions.length; i++) {
-            if (!this.dirtyRegions[i]) continue;
-            if (!wasReallocated && uploaded >= maxLayers) return true;
+            if (!this.dirtyRegions[i]) {
+                continue;
+            }
+            if (!wasReallocated && uploaded >= maxLayers) {
+                return true;
+            }
             this.uploadDirtyLayer(gl, i);
             uploaded++;
         }
@@ -490,7 +498,9 @@ export class EntityTextureAtlas extends ShaderTexture {
     /** Whether any layers have pending GPU uploads. */
     public get hasPendingUploads(): boolean {
         for (let i = 0; i < this.dirtyRegions.length; i++) {
-            if (this.dirtyRegions[i]) return true;
+            if (this.dirtyRegions[i]) {
+                return true;
+            }
         }
         return false;
     }
@@ -517,7 +527,9 @@ export class EntityTextureAtlas extends ShaderTexture {
      * Call before draw calls to ensure the atlas is on the correct texture unit.
      */
     public bindForRendering(gl: WebGL2RenderingContext): void {
-        if (!this.texture) return;
+        if (!this.texture) {
+            return;
+        }
         gl.activeTexture(gl.TEXTURE0 + this.textureIndex);
         gl.bindTexture(gl.TEXTURE_2D_ARRAY, this.texture);
     }
@@ -567,7 +579,9 @@ export class EntityTextureAtlas extends ShaderTexture {
      * Used for generating icon thumbnails (e.g. resource icons in UI).
      */
     public extractRegion(region: AtlasRegion, paletteData?: Uint8Array, paletteBaseOffset = 0): ImageData | null {
-        if (region.layer >= this.layers.length) return null;
+        if (region.layer >= this.layers.length) {
+            return null;
+        }
         if (region.x + region.width > LAYER_SIZE || region.y + region.height > LAYER_SIZE) {
             return null;
         }
@@ -590,8 +604,12 @@ export class EntityTextureAtlas extends ShaderTexture {
 
     /** Resolve a single atlas pixel index to an RGBA uint32 value. */
     private resolvePixel(rawIndex: number, paletteData: Uint8Array | undefined, paletteBaseOffset: number): number {
-        if (rawIndex === 0) return 0x00000000; // transparent
-        if (rawIndex === 1) return 0x40000000; // shadow
+        if (rawIndex === 0) {
+            return 0x00000000;
+        } // transparent
+        if (rawIndex === 1) {
+            return 0x40000000;
+        } // shadow
 
         const index = rawIndex + paletteBaseOffset;
         if (paletteData && index * 4 + 3 < paletteData.length) {

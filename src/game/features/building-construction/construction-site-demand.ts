@@ -112,7 +112,9 @@ export class ConstructionSiteDemandSystem implements TickSystem {
     /** Cancel all demands for a removed site, release workers. */
     onSiteRemoved(siteId: number): void {
         const siteDemands = this.demands.get(siteId);
-        if (!siteDemands) return;
+        if (!siteDemands) {
+            return;
+        }
 
         for (const demand of siteDemands) {
             this.releaseDemandResources(demand);
@@ -167,13 +169,19 @@ export class ConstructionSiteDemandSystem implements TickSystem {
     /** Called when materials are delivered — re-create builder demands for vacant slots. */
     onMaterialsDelivered(siteId: number): void {
         const site = this.siteManager.getSite(siteId);
-        if (!site || !site.terrain.complete) return;
-        if (!this.siteManager.hasAvailableMaterials(siteId)) return;
+        if (!site || !site.terrain.complete) {
+            return;
+        }
+        if (!this.siteManager.hasAvailableMaterials(siteId)) {
+            return;
+        }
 
         const existing = this.demands.get(siteId) ?? [];
         const activeBuilders = existing.filter(d => d.role === 'builder').length;
         const count = site.building.slots.required - activeBuilders;
-        if (count <= 0) return;
+        if (count <= 0) {
+            return;
+        }
 
         for (let i = 0; i < count; i++) {
             existing.push({
@@ -194,7 +202,9 @@ export class ConstructionSiteDemandSystem implements TickSystem {
     /** Called when a worker's choreo job completes — push next assignment. */
     onWorkerJobCompleted(workerId: number, siteId: number): void {
         const demand = this.findDemandForWorker(workerId, siteId);
-        if (!demand) return;
+        if (!demand) {
+            return;
+        }
 
         if (demand.role === 'digger') {
             this.pushNextDiggerJob(demand);
@@ -206,7 +216,9 @@ export class ConstructionSiteDemandSystem implements TickSystem {
     /** Called when a worker's choreo job fails — release and re-demand. */
     onWorkerJobFailed(workerId: number, siteId: number): void {
         const demand = this.findDemandForWorker(workerId, siteId);
-        if (!demand) return;
+        if (!demand) {
+            return;
+        }
 
         // Release tile reservation if any
         if (demand.reservedTileIndex !== null) {
@@ -237,7 +249,9 @@ export class ConstructionSiteDemandSystem implements TickSystem {
 
     registerEvents(): void {
         this.subscriptions.subscribe(this.eventBus, 'settler:taskCompleted', ({ unitId, jobId }) => {
-            if (!CONSTRUCTION_JOB_IDS.has(jobId)) return;
+            if (!CONSTRUCTION_JOB_IDS.has(jobId)) {
+                return;
+            }
             const siteId = this.findSiteForWorker(unitId);
             if (siteId !== null) {
                 this.onWorkerJobCompleted(unitId, siteId);
@@ -245,7 +259,9 @@ export class ConstructionSiteDemandSystem implements TickSystem {
         });
 
         this.subscriptions.subscribe(this.eventBus, 'settler:taskFailed', ({ unitId, jobId }) => {
-            if (!CONSTRUCTION_JOB_IDS.has(jobId)) return;
+            if (!CONSTRUCTION_JOB_IDS.has(jobId)) {
+                return;
+            }
             const siteId = this.findSiteForWorker(unitId);
             if (siteId !== null) {
                 this.onWorkerJobFailed(unitId, siteId);
@@ -275,7 +291,9 @@ export class ConstructionSiteDemandSystem implements TickSystem {
 
     tick(dt: number): void {
         this.timer += dt;
-        if (this.timer < TICK_INTERVAL) return;
+        if (this.timer < TICK_INTERVAL) {
+            return;
+        }
         this.timer -= TICK_INTERVAL;
         this.drainDemands();
     }
@@ -293,7 +311,9 @@ export class ConstructionSiteDemandSystem implements TickSystem {
             }
 
             for (const demand of siteDemands) {
-                if (demand.workerId !== null) continue;
+                if (demand.workerId !== null) {
+                    continue;
+                }
                 this.tryFulfill(demand);
             }
         }
@@ -317,7 +337,9 @@ export class ConstructionSiteDemandSystem implements TickSystem {
 
     private dispatchSpecialist(unitId: number, demand: ConstructionWorkerDemand): void {
         const job = this.buildFirstJob(demand);
-        if (!job) return;
+        if (!job) {
+            return;
+        }
 
         const assigned = this.assignJob(unitId, job);
         if (!assigned) {
@@ -338,17 +360,23 @@ export class ConstructionSiteDemandSystem implements TickSystem {
     ): void {
         // Recruitment cap limits auto-creation of new workers from carriers.
         // Idle specialists bypass this cap (handled in tryFulfill before this).
-        if (this.remainingRecruitmentCap(demand.role, demand.player) <= 0) return;
+        if (this.remainingRecruitmentCap(demand.role, demand.player) <= 0) {
+            return;
+        }
 
         // Pre-reserve work resources before dispatching — if no work is available,
         // skip recruitment entirely.
         let reservedTile: { tileIndex: number; x: number; y: number } | null = null;
         if (demand.role === 'digger') {
             reservedTile = this.siteManager.reserveUnleveledTile(demand.siteId);
-            if (!reservedTile) return;
+            if (!reservedTile) {
+                return;
+            }
             demand.reservedTileIndex = reservedTile.tileIndex;
         } else {
-            if (!this.siteManager.hasAvailableMaterials(demand.siteId)) return;
+            if (!this.siteManager.hasAvailableMaterials(demand.siteId)) {
+                return;
+            }
         }
 
         const carrierId = this.dispatchRecruitment(unitType, demand.player, {
@@ -404,13 +432,17 @@ export class ConstructionSiteDemandSystem implements TickSystem {
 
     private buildDiggerJob(demand: ConstructionWorkerDemand): ChoreoJobState | null {
         const tile = this.siteManager.reserveUnleveledTile(demand.siteId);
-        if (!tile) return null;
+        if (!tile) {
+            return null;
+        }
         demand.reservedTileIndex = tile.tileIndex;
         return buildDigTileJob(tile.x, tile.y, demand.siteId, tile.tileIndex);
     }
 
     private buildBuilderJob(demand: ConstructionWorkerDemand): ChoreoJobState | null {
-        if (!this.siteManager.hasAvailableMaterials(demand.siteId)) return null;
+        if (!this.siteManager.hasAvailableMaterials(demand.siteId)) {
+            return null;
+        }
         const pos = this.siteManager.getRandomBuilderWorkPos(demand.siteId);
         return buildBuildStepJob(pos.x, pos.y, demand.siteId);
     }
@@ -495,14 +527,18 @@ export class ConstructionSiteDemandSystem implements TickSystem {
 
     private findDemandForWorker(workerId: number, siteId: number): ConstructionWorkerDemand | null {
         const siteDemands = this.demands.get(siteId);
-        if (!siteDemands) return null;
+        if (!siteDemands) {
+            return null;
+        }
         return siteDemands.find(d => d.workerId === workerId) ?? null;
     }
 
     private findSiteForWorker(workerId: number): number | null {
         for (const [siteId, siteDemands] of this.demands) {
             for (const d of siteDemands) {
-                if (d.workerId === workerId) return siteId;
+                if (d.workerId === workerId) {
+                    return siteId;
+                }
             }
         }
         return null;
@@ -510,11 +546,17 @@ export class ConstructionSiteDemandSystem implements TickSystem {
 
     private removeDemand(demand: ConstructionWorkerDemand): void {
         const siteDemands = this.demands.get(demand.siteId);
-        if (!siteDemands) return;
+        if (!siteDemands) {
+            return;
+        }
 
         const idx = siteDemands.indexOf(demand);
-        if (idx !== -1) siteDemands.splice(idx, 1);
-        if (siteDemands.length === 0) this.demands.delete(demand.siteId);
+        if (idx !== -1) {
+            siteDemands.splice(idx, 1);
+        }
+        if (siteDemands.length === 0) {
+            this.demands.delete(demand.siteId);
+        }
     }
 
     private claimSlot(demand: ConstructionWorkerDemand): void {
@@ -527,7 +569,9 @@ export class ConstructionSiteDemandSystem implements TickSystem {
 
     private releaseDemandResources(demand: ConstructionWorkerDemand): void {
         // Site may have been removed (building completed/destroyed) — skip slot release
-        if (!this.siteManager.getSite(demand.siteId)) return;
+        if (!this.siteManager.getSite(demand.siteId)) {
+            return;
+        }
 
         if (demand.reservedTileIndex !== null) {
             this.siteManager.releaseReservedTile(demand.siteId, demand.reservedTileIndex);

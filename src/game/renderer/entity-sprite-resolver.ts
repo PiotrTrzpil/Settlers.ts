@@ -109,7 +109,9 @@ export class EntitySpriteResolver {
 
     /** Building sprite with construction state. */
     private getBuilding(entity: Entity): { sprite: SpriteEntry | null; progress: number } {
-        if (!this.sprites) return { sprite: null, progress: 1 };
+        if (!this.sprites) {
+            return { sprite: null, progress: 1 };
+        }
 
         const renderState = this.getBuildingRenderState(entity.id);
         const buildingType = entity.subType as BuildingType;
@@ -149,10 +151,14 @@ export class EntitySpriteResolver {
 
     /** Map object sprite with layer visibility check. */
     private getMapObject(entity: Entity): SpriteEntry | null {
-        if (!this.sprites) return null;
+        if (!this.sprites) {
+            return null;
+        }
 
         // When decoration textures are disabled, skip all environment sprites (trees, stones, plants, crops, etc.)
-        if (!this.layerVisibility.decorationTextures) return null;
+        if (!this.layerVisibility.decorationTextures) {
+            return null;
+        }
 
         const vs = this.getVisualState(entity.id);
         const variation = vs?.variation ?? 0;
@@ -162,7 +168,9 @@ export class EntitySpriteResolver {
             const entry = this.sprites.getAnimatedEntity(entity.type, entity.subType, entity.race);
             if (entry) {
                 const frame = resolveAnimationFrame(vs.animation, entry.animationData, entity.type, entity.subType);
-                if (frame) return frame;
+                if (frame) {
+                    return frame;
+                }
             }
         }
 
@@ -171,9 +179,13 @@ export class EntitySpriteResolver {
 
     /** Stacked resource sprite based on quantity. */
     private getPileSprite(entity: Entity): SpriteEntry | null {
-        if (!this.sprites) return null;
+        if (!this.sprites) {
+            return null;
+        }
         const state = this.pileStates.get(entity.id);
-        if (!state) throw new Error(`No resource state for entity ${entity.id} (${entity.subType})`);
+        if (!state) {
+            throw new Error(`No resource state for entity ${entity.id} (${entity.subType})`);
+        }
         const quantity = state.quantity;
         const direction = Math.max(0, Math.min(quantity - 1, 7));
         return this.sprites.getGoodSprite(entity.subType as EMaterialType, direction) ?? null;
@@ -188,10 +200,14 @@ export class EntitySpriteResolver {
             progress: 1,
             transitionData: null,
         };
-        if (!this.sprites) return noSprite;
+        if (!this.sprites) {
+            return noSprite;
+        }
 
         const vs = this.getVisualState(entity.id);
-        if (!vs) return noSprite;
+        if (!vs) {
+            return noSprite;
+        }
 
         // Detect direction transition — resolve both direction sprites up-front
         const transition = this.getDirectionTransition(entity.id);
@@ -249,11 +265,15 @@ export class EntitySpriteResolver {
         spriteDir: number,
         race?: number
     ): SpriteEntry | null {
-        if (!this.sprites) return null;
+        if (!this.sprites) {
+            return null;
+        }
 
         const fallback = this.sprites.getUnit(unitType, spriteDir, race);
         const animatedEntry = this.sprites.getAnimatedEntity(EntityType.Unit, unitType, race);
-        if (!animatedEntry) return fallback;
+        if (!animatedEntry) {
+            return fallback;
+        }
 
         return getAnimatedSpriteForDirection(
             playback,
@@ -273,7 +293,9 @@ export class EntitySpriteResolver {
     private readonly hasTexturedSpriteMap: Record<EntityType, (entity: Entity) => boolean> = {
         [EntityType.Building]: entity => !!this.sprites?.getBuilding(entity.subType as BuildingType, entity.race),
         [EntityType.MapObject]: entity => {
-            if (!this.layerVisibility.decorationTextures) return false;
+            if (!this.layerVisibility.decorationTextures) {
+                return false;
+            }
             return !!this.sprites?.getMapObject(entity.subType as MapObjectType);
         },
         [EntityType.StackedPile]: entity => !!this.sprites?.getGoodSprite(entity.subType as EMaterialType),
@@ -284,7 +306,9 @@ export class EntitySpriteResolver {
 
     /** Check if entity has a sprite available (for color fallback decisions). */
     hasTexturedSprite(entity: Entity): boolean {
-        if (!this.sprites) return false;
+        if (!this.sprites) {
+            return false;
+        }
         return this.hasTexturedSpriteMap[entity.type](entity);
     }
 
@@ -296,7 +320,9 @@ export class EntitySpriteResolver {
         race?: number,
         level?: number
     ): SpriteEntry | null {
-        if (!this.sprites) return null;
+        if (!this.sprites) {
+            return null;
+        }
 
         switch (entityType) {
             case 'building':
@@ -314,7 +340,9 @@ export class EntitySpriteResolver {
 
     /** Get unit preview sprite — each leveled UnitType has its own registered sprites. */
     private getUnitPreviewSprite(unitType: UnitType, race?: number, _level?: number): SpriteEntry | null {
-        if (!this.sprites) return null;
+        if (!this.sprites) {
+            return null;
+        }
         return this.sprites.getUnit(unitType, 0, race);
     }
 }

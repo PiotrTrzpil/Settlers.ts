@@ -120,17 +120,25 @@ async function loadBuildingSpritesForFile(
         // Load all buildings for this file (skip buildings unavailable to this race)
         for (const [typeStr, info] of Object.entries(spriteMap)) {
             // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- Partial<Record> values may be undefined
-            if (!info || info.file !== fileNum) continue;
+            if (!info || info.file !== fileNum) {
+                continue;
+            }
             const buildingType = Number(typeStr) as BuildingType;
-            if (!isBuildingAvailableForRace(buildingType, race)) continue;
+            if (!isBuildingAvailableForRace(buildingType, race)) {
+                continue;
+            }
 
             const sprites = await loadOneBuildingSprites(ctx, fileSet, buildingType, info, paletteBase, race);
-            if (sprites) batch.add({ buildingType, ...sprites });
+            if (sprites) {
+                batch.add({ buildingType, ...sprites });
+            }
         }
 
         // Finalize: GPU upload → register
         batch.finalize(ctx.atlas, ctx.gl, data => {
-            if (!data.constructionEntry && !data.completedEntry) return;
+            if (!data.constructionEntry && !data.completedEntry) {
+                return;
+            }
 
             if (data.animationFrames) {
                 const frames = new Map([[BUILDING_DIRECTION.COMPLETED, data.animationFrames]]);
@@ -170,7 +178,9 @@ export async function loadBuildingSprites(
         spriteMapsPerRace.set(r, spriteMap);
         for (const info of Object.values(spriteMap)) {
             // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- Partial values
-            if (info) buildingFiles.add(info.file);
+            if (info) {
+                buildingFiles.add(info.file);
+            }
         }
     }
 
@@ -203,7 +213,9 @@ export function collectBuildingFileNumbers(): Set<number> {
         const spriteMap = getBuildingSpriteMap(r);
         for (const info of Object.values(spriteMap)) {
             // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- Partial values
-            if (info) buildingFiles.add(info.file);
+            if (info) {
+                buildingFiles.add(info.file);
+            }
         }
     }
     return buildingFiles;

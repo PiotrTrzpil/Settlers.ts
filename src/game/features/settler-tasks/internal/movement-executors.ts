@@ -62,11 +62,15 @@ function tryIssuePath(
     }
     const moved = ctx.gameState.movement.moveUnit(settler.id, targetX, targetY);
     if (!moved) {
-        if (job) job.pathRetryCountdown = PATH_RETRY_COOLDOWN;
+        if (job) {
+            job.pathRetryCountdown = PATH_RETRY_COOLDOWN;
+        }
         log.debug(`moveToPosition: path failed for settler ${settler.id}, retrying in ${PATH_RETRY_COOLDOWN} ticks`);
         return false;
     }
-    if (job) job.pathRetryCountdown = 0;
+    if (job) {
+        job.pathRetryCountdown = 0;
+    }
     return true;
 }
 
@@ -86,7 +90,9 @@ export function moveToPosition(
     }
 
     if (hexDistance(settler.x, settler.y, targetX, targetY) <= arrivalDist && controller.state === 'idle') {
-        if (node.dir !== -1) controller.setDirection(node.dir);
+        if (node.dir !== -1) {
+            controller.setDirection(node.dir);
+        }
         return TaskResult.DONE;
     }
 
@@ -124,7 +130,9 @@ function resolveAssignedBuildingId(settler: Entity, ctx: MovementContext): numbe
 function findMaterialInAdjacentNode(job: ChoreoJobState, taskType: ChoreoTaskType): string | undefined {
     for (let i = job.nodeIndex + 1; i < job.nodes.length; i++) {
         const n = job.nodes[i]!;
-        if (n.task === taskType && n.entity) return n.entity;
+        if (n.task === taskType && n.entity) {
+            return n.entity;
+        }
         // Also check virtual variants
         if (taskType === ChoreoTaskType.GET_GOOD && n.task === ChoreoTaskType.GET_GOOD_VIRTUAL && n.entity) {
             return n.entity;
@@ -147,7 +155,9 @@ function makeGoToTarget(arrivalDist: number): MovementExecutorFn {
         if (job.waypoints) {
             let wpIndex = 0;
             for (let i = 0; i < job.nodeIndex; i++) {
-                if (job.nodes[i]!.task === ChoreoTaskType.GO_TO_TARGET) wpIndex++;
+                if (job.nodes[i]!.task === ChoreoTaskType.GO_TO_TARGET) {
+                    wpIndex++;
+                }
             }
             const wp = job.waypoints[wpIndex]!;
             job.targetPos = { x: wp.x, y: wp.y };
@@ -243,7 +253,9 @@ export const executeGoToDestinationPile: MovementExecutorFn = (settler, job, nod
 
 /** Try entity handler search. Returns null when entityHandler is absent. */
 function searchViaEntityHandler(settler: Entity, job: ChoreoJobState, ctx: MovementContext): TaskResult | null {
-    if (!ctx.entityHandler) return null;
+    if (!ctx.entityHandler) {
+        return null;
+    }
     const { entityHandler, handlerErrorLogger } = ctx;
 
     const result = safeCall(
@@ -251,7 +263,9 @@ function searchViaEntityHandler(settler: Entity, job: ChoreoJobState, ctx: Movem
         handlerErrorLogger,
         `SEARCH findTarget failed for settler ${settler.id}`
     );
-    if (result === undefined) return TaskResult.FAILED;
+    if (result === undefined) {
+        return TaskResult.FAILED;
+    }
 
     if (result) {
         job.targetId = result.entityId;
@@ -260,7 +274,9 @@ function searchViaEntityHandler(settler: Entity, job: ChoreoJobState, ctx: Movem
         return TaskResult.DONE;
     }
 
-    if (entityHandler.shouldWaitForWork) return TaskResult.CONTINUE;
+    if (entityHandler.shouldWaitForWork) {
+        return TaskResult.CONTINUE;
+    }
     log.debug(`executeSearch: settler ${settler.id} found no entity target`);
     return TaskResult.FAILED;
 }
@@ -278,7 +294,9 @@ function getPositionSearchCenter(settler: Entity, ctx: MovementContext): { x: nu
 
 /** Try position handler search. Returns null when positionHandler is absent. */
 function searchViaPositionHandler(settler: Entity, job: ChoreoJobState, ctx: MovementContext): TaskResult | null {
-    if (!ctx.positionHandler) return null;
+    if (!ctx.positionHandler) {
+        return null;
+    }
     const { positionHandler, handlerErrorLogger } = ctx;
     const center = getPositionSearchCenter(settler, ctx);
 
@@ -287,7 +305,9 @@ function searchViaPositionHandler(settler: Entity, job: ChoreoJobState, ctx: Mov
         handlerErrorLogger,
         `SEARCH findPosition failed for settler ${settler.id}`
     );
-    if (pos === undefined) return TaskResult.FAILED;
+    if (pos === undefined) {
+        return TaskResult.FAILED;
+    }
 
     if (pos) {
         job.targetPos = { x: pos.x, y: pos.y };
@@ -295,7 +315,9 @@ function searchViaPositionHandler(settler: Entity, job: ChoreoJobState, ctx: Mov
         return TaskResult.DONE;
     }
 
-    if (positionHandler.shouldWaitForWork) return TaskResult.CONTINUE;
+    if (positionHandler.shouldWaitForWork) {
+        return TaskResult.CONTINUE;
+    }
     log.debug(`executeSearch: settler ${settler.id} found no position target`);
     return TaskResult.FAILED;
 }
@@ -310,10 +332,14 @@ function searchViaPositionHandler(settler: Entity, job: ChoreoJobState, ctx: Mov
  */
 export const executeSearch: MovementExecutorFn = (settler, job, _node, _dt, ctx) => {
     const entityResult = searchViaEntityHandler(settler, job, ctx);
-    if (entityResult !== null) return entityResult;
+    if (entityResult !== null) {
+        return entityResult;
+    }
 
     const posResult = searchViaPositionHandler(settler, job, ctx);
-    if (posResult !== null) return posResult;
+    if (posResult !== null) {
+        return posResult;
+    }
 
     log.warn(`executeSearch: settler ${settler.id} has no handler in context`);
     return TaskResult.FAILED;

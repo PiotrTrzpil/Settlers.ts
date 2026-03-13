@@ -25,11 +25,17 @@ export function spiralSearch(
     for (let r = 0; r < limit; r++) {
         for (let dx = -r; dx <= r; dx++) {
             for (let dy = -r; dy <= r; dy++) {
-                if (Math.abs(dx) !== r && Math.abs(dy) !== r) continue; // perimeter only
+                if (Math.abs(dx) !== r && Math.abs(dy) !== r) {
+                    continue;
+                } // perimeter only
                 const x = cx + dx;
                 const y = cy + dy;
-                if (x < 0 || y < 0 || x >= w || y >= h) continue;
-                if (predicate(x, y)) return { x, y };
+                if (x < 0 || y < 0 || x >= w || y >= h) {
+                    continue;
+                }
+                if (predicate(x, y)) {
+                    return { x, y };
+                }
             }
         }
     }

@@ -34,7 +34,9 @@ function naturalSort(a: IFileSource, b: IFileSource): number {
 
 /** Load previously selected file path from localStorage */
 function loadStoredSelection(): string | null {
-    if (!props.storageKey) return null;
+    if (!props.storageKey) {
+        return null;
+    }
     try {
         return localStorage.getItem(props.storageKey);
     } catch {
@@ -44,7 +46,9 @@ function loadStoredSelection(): string | null {
 
 /** Save selected file path to localStorage */
 function saveSelection(path: string): void {
-    if (!props.storageKey) return;
+    if (!props.storageKey) {
+        return;
+    }
     try {
         localStorage.setItem(props.storageKey, path);
     } catch {

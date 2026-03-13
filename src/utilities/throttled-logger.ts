@@ -54,7 +54,9 @@ export class ThrottledLogger {
      */
     error(message: string, error: Error): boolean {
         const finalMessage = this.shouldLog(message);
-        if (finalMessage === null) return false;
+        if (finalMessage === null) {
+            return false;
+        }
         this.log.error(finalMessage, error);
         return true;
     }
@@ -65,7 +67,9 @@ export class ThrottledLogger {
      */
     warn(message: string): boolean {
         const finalMessage = this.shouldLog(message);
-        if (finalMessage === null) return false;
+        if (finalMessage === null) {
+            return false;
+        }
         this.log.warn(finalMessage);
         return true;
     }

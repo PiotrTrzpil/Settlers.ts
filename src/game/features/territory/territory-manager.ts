@@ -70,7 +70,9 @@ export class TerritoryManager {
     /** Register a territory-generating building */
     addBuilding(entityId: number, x: number, y: number, player: number, buildingType: BuildingType): void {
         const radius = TERRITORY_RADIUS[buildingType];
-        if (radius === undefined) return;
+        if (radius === undefined) {
+            return;
+        }
 
         this.buildings.set(entityId, { x, y, player, radius });
         this.dirty = true;
@@ -112,21 +114,27 @@ export class TerritoryManager {
     /** Check if a tile is within a specific player's territory */
     isInTerritory(x: number, y: number, player: number): boolean {
         this.recomputeIfDirty();
-        if (x < 0 || y < 0 || x >= this.mapWidth || y >= this.mapHeight) return false;
+        if (x < 0 || y < 0 || x >= this.mapWidth || y >= this.mapHeight) {
+            return false;
+        }
         return this.territoryGrid[y * this.mapWidth + x] === player + 1;
     }
 
     /** Check if a tile is within any player's territory */
     isInAnyTerritory(x: number, y: number): boolean {
         this.recomputeIfDirty();
-        if (x < 0 || y < 0 || x >= this.mapWidth || y >= this.mapHeight) return false;
+        if (x < 0 || y < 0 || x >= this.mapWidth || y >= this.mapHeight) {
+            return false;
+        }
         return this.territoryGrid[y * this.mapWidth + x] !== 0;
     }
 
     /** Get the owning player of a tile (-1 if unclaimed) */
     getOwner(x: number, y: number): number {
         this.recomputeIfDirty();
-        if (x < 0 || y < 0 || x >= this.mapWidth || y >= this.mapHeight) return -1;
+        if (x < 0 || y < 0 || x >= this.mapWidth || y >= this.mapHeight) {
+            return -1;
+        }
         const value = this.territoryGrid[y * this.mapWidth + x]!;
         return value === 0 ? -1 : value - 1;
     }
@@ -146,7 +154,9 @@ export class TerritoryManager {
     // ─────────────────────────────────────────────────────────────
 
     private recomputeIfDirty(): void {
-        if (!this.dirty) return;
+        if (!this.dirty) {
+            return;
+        }
         this.dirty = false;
         this.recompute();
         this.onRecomputed?.();
@@ -220,7 +230,9 @@ export class TerritoryManager {
             const rowOffset = y * w;
             for (let x = 0; x < w; x++) {
                 const owner = this.territoryGrid[rowOffset + x]!;
-                if (owner === 0) continue;
+                if (owner === 0) {
+                    continue;
+                }
                 if (this.isBoundaryTile(x, y, owner)) {
                     dots.push({ x, y, player: owner - 1 });
                 }
@@ -236,9 +248,13 @@ export class TerritoryManager {
             const ny = y + GRID_DELTA_Y[d]!;
 
             // Map edge counts as boundary
-            if (nx < 0 || ny < 0 || nx >= this.mapWidth || ny >= this.mapHeight) return true;
+            if (nx < 0 || ny < 0 || nx >= this.mapWidth || ny >= this.mapHeight) {
+                return true;
+            }
 
-            if (this.territoryGrid[ny * this.mapWidth + nx] !== owner) return true;
+            if (this.territoryGrid[ny * this.mapWidth + nx] !== owner) {
+                return true;
+            }
         }
         return false;
     }

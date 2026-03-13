@@ -26,7 +26,9 @@ export class GroundOverlayPass implements IRenderPass {
     public draw(gl: WebGL2RenderingContext, _projection: Float32Array, viewPoint: IViewPoint): void {
         const { ctx } = this;
         const hasWorkAreas = ctx.workAreaCircles.length > 0;
-        if (!hasWorkAreas) return;
+        if (!hasWorkAreas) {
+            return;
+        }
 
         this.setupAttributes(gl, viewPoint);
 
@@ -44,7 +46,9 @@ export class GroundOverlayPass implements IRenderPass {
     /** Draw building footprint overlays (called after entity sprites for on-top rendering). */
     public drawFootprints(gl: WebGL2RenderingContext, _projection: Float32Array, viewPoint: IViewPoint): void {
         const { ctx } = this;
-        if (!ctx.renderSettings.showBuildingFootprint) return;
+        if (!ctx.renderSettings.showBuildingFootprint) {
+            return;
+        }
 
         this.setupAttributes(gl, viewPoint);
 

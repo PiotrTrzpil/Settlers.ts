@@ -333,7 +333,9 @@ const { constructionInfo } = useConstructionInfo(gameRef, selectedEntity, tick);
 
 const selectedBuildingId = computed<number | null>(() => {
     const entity = selectedEntity.value;
-    if (!entity || entity.type !== EntityType.Building) return null;
+    if (!entity || entity.type !== EntityType.Building) {
+        return null;
+    }
     return entity.id;
 });
 
@@ -347,7 +349,9 @@ watch(selectedEntityId, () => (confirmingDestroy.value = false));
 
 function destroyBuilding(): void {
     const entity = selectedEntity.value;
-    if (!entity || !props.game) return;
+    if (!entity || !props.game) {
+        return;
+    }
     props.game.execute({ type: 'remove_entity', entityId: entity.id });
     confirmingDestroy.value = false;
 }

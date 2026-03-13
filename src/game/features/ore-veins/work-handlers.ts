@@ -31,7 +31,9 @@ export function createGeologistHandler(
         type: WorkHandlerType.POSITION,
 
         findPosition: (x: number, y: number, settlerId?: number) => {
-            if (settlerId !== undefined && exhaustedSettlers.has(settlerId)) return null;
+            if (settlerId !== undefined && exhaustedSettlers.has(settlerId)) {
+                return null;
+            }
 
             // Resolve (or record) the fixed origin for this geologist
             let cx = x;

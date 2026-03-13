@@ -88,7 +88,9 @@ export class ValidPositionGrid {
      * `maxTiles` tiles. Returns true when the entire map has been evaluated.
      */
     computeChunk(maxTiles: number): boolean {
-        if (this.complete) return true;
+        if (this.complete) {
+            return true;
+        }
 
         let processed = 0;
 
@@ -139,7 +141,9 @@ export class ValidPositionGrid {
     getEntry(x: number, y: number): ValidPositionEntry | null {
         const idx = this.mapSizeRef.toIndex(x, y);
         const posIdx = this.positionIndexByTile.get(idx);
-        if (posIdx === undefined) return null;
+        if (posIdx === undefined) {
+            return null;
+        }
         return this.positions[posIdx]!;
     }
 
@@ -200,10 +204,14 @@ export class ValidPositionGrid {
 
     /** Evaluate a single tile and add to valid set if placement succeeds. */
     private evaluateTile(x: number, y: number): void {
-        if (x < 0 || x >= this.mapWidth || y < 0 || y >= this.mapHeight) return;
+        if (x < 0 || x >= this.mapWidth || y < 0 || y >= this.mapHeight) {
+            return;
+        }
 
         const result = validateBuildingPlacement(x, y, this.request.buildingType, this.ctx);
-        if (!result.canPlace) return;
+        if (!result.canPlace) {
+            return;
+        }
 
         const footprint = getBuildingFootprint(x, y, this.request.buildingType, this.request.race);
         const heightRange = computeHeightRange(footprint, this.groundHeightRef, this.mapSizeRef);
@@ -222,7 +230,9 @@ export class ValidPositionGrid {
         this.validSet.delete(tileIdx);
 
         const posIdx = this.positionIndexByTile.get(tileIdx);
-        if (posIdx === undefined) return;
+        if (posIdx === undefined) {
+            return;
+        }
 
         const lastIdx = this.positions.length - 1;
         if (posIdx !== lastIdx) {

@@ -26,8 +26,12 @@ const SIGN_LIFETIME = 300;
 
 /** Quantize internal ore level (1-16) to visual richness tier (0=LOW, 1=MED, 2=RICH). */
 function levelToVariation(level: number): number {
-    if (level <= 5) return 0;
-    if (level <= 10) return 1;
+    if (level <= 5) {
+        return 0;
+    }
+    if (level <= 10) {
+        return 1;
+    }
     return 2;
 }
 
@@ -91,7 +95,9 @@ export class ResourceSignSystem implements TickSystem, Persistable<SerializedRes
 
         const result = this.executeCommand({ type: 'spawn_map_object', objectType: signType, x, y, variation });
         const effect = result.effects?.[0];
-        if (!effect || effect.type !== 'entity_created') return;
+        if (!effect || effect.type !== 'entity_created') {
+            return;
+        }
         this.signs.set(effect.entityId, { x, y, expiresAt: this.elapsed + SIGN_LIFETIME });
     }
 

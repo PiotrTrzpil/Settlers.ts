@@ -26,7 +26,9 @@ export class ChoreoSystem {
     /** Dispatch to the registered executor for the node's task type. Throws if unregistered. */
     execute(settler: Entity, job: ChoreoJobState, node: ChoreoNode, dt: number): TaskResult {
         const executor = this.executors.get(node.task);
-        if (!executor) throw new Error(`No choreo executor registered for task: ${String(node.task)}`);
+        if (!executor) {
+            throw new Error(`No choreo executor registered for task: ${String(node.task)}`);
+        }
         return executor(settler, job, node, dt);
     }
 }

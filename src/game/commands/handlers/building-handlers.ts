@@ -68,8 +68,12 @@ function spawnUnitsNear(
     let spawned = 0;
     for (let radius = 1; radius <= 4 && spawned < count; radius++) {
         for (const tile of ringTiles(bx, by, radius)) {
-            if (spawned >= count) break;
-            if (!isSpawnableTile(deps, tile.x, tile.y)) continue;
+            if (spawned >= count) {
+                break;
+            }
+            if (!isSpawnableTile(deps, tile.x, tile.y)) {
+                continue;
+            }
 
             const spawnedEntity = state.addUnit(unitType, tile.x, tile.y, player, { selectable });
 
@@ -97,7 +101,9 @@ function spawnWorkerInsideBuilding(
     const { state, eventBus } = deps;
     const buildingType = entity.subType as BuildingType;
     const workerInfo = getBuildingWorkerInfo(entity.race, buildingType);
-    if (!workerInfo) return;
+    if (!workerInfo) {
+        return;
+    }
 
     // Spawn the worker at the door tile but hidden (already inside the building).
     // No occupancy — the building owns the door tile. The task system will assign

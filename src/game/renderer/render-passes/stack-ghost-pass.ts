@@ -22,8 +22,12 @@ export class StackGhostPass implements IRenderPass {
 
     public draw(gl: WebGL2RenderingContext, projection: Float32Array, viewPoint: IViewPoint): void {
         const { ctx } = this;
-        if (ctx.stackGhosts.length === 0) return;
-        if (!ctx.spriteManager?.hasSprites || !ctx.spriteBatchRenderer.isInitialized) return;
+        if (ctx.stackGhosts.length === 0) {
+            return;
+        }
+        if (!ctx.spriteManager?.hasSprites || !ctx.spriteBatchRenderer.isInitialized) {
+            return;
+        }
 
         ctx.spriteManager.spriteAtlas!.bindForRendering(gl);
         ctx.spriteManager.paletteManager.bind(gl);
@@ -50,7 +54,9 @@ export class StackGhostPass implements IRenderPass {
 
             for (let v = 0; v < ghost.count; v++) {
                 const rawSprite = ctx.spriteResolver.getPreviewSprite('pile', ghost.materialType, v);
-                if (!rawSprite) continue;
+                if (!rawSprite) {
+                    continue;
+                }
 
                 const sprite = scaleSprite(rawSprite);
                 ctx.spriteBatchRenderer.addSprite(gl, worldPos.worldX, worldPos.worldY, sprite, 0, 1, 1, 1, 0.5);

@@ -77,7 +77,9 @@ export function defineStateMachine<TContext>() {
                 config[currentState].onEnter?.(context);
 
                 const transitionTo = (newState: TState): boolean => {
-                    if (newState === currentState) return false;
+                    if (newState === currentState) {
+                        return false;
+                    }
 
                     // Exit old state
                     config[currentState].onExit?.(context);
@@ -105,17 +107,23 @@ export function defineStateMachine<TContext>() {
 
                     send(event: string): boolean {
                         const transitions = config[currentState].transitions;
-                        if (!transitions) return false;
+                        if (!transitions) {
+                            return false;
+                        }
 
                         const target = transitions[event];
-                        if (!target) return false;
+                        if (!target) {
+                            return false;
+                        }
 
                         return transitionTo(target);
                     },
 
                     tick(dt: number): void {
                         const stateConfig = config[currentState];
-                        if (!stateConfig.onTick) return;
+                        if (!stateConfig.onTick) {
+                            return;
+                        }
 
                         const event = stateConfig.onTick(context, dt);
                         if (event) {

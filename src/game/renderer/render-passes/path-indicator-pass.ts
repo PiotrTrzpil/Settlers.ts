@@ -21,7 +21,9 @@ export class PathIndicatorPass implements IRenderPass {
     }
 
     public draw(gl: WebGL2RenderingContext, _projection: Float32Array, viewPoint: IViewPoint): void {
-        if (!this.ctx.layerVisibility.showPathfinding) return;
+        if (!this.ctx.layerVisibility.showPathfinding) {
+            return;
+        }
 
         this.overlay.drawSelectedUnitPath(
             gl,

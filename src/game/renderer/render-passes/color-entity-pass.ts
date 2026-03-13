@@ -50,7 +50,9 @@ export class ColorEntityPass implements IRenderPass {
         ctx.debugDecoLabels.length = 0;
 
         for (const entity of ctx.sortedEntities) {
-            if (this.shouldSkip(entity)) continue;
+            if (this.shouldSkip(entity)) {
+                continue;
+            }
 
             const appearance = this.getAppearance(entity);
             const worldPos = this.getEntityWorldPos(entity, viewPoint);
@@ -83,12 +85,13 @@ export class ColorEntityPass implements IRenderPass {
     private getAppearance(entity: Entity): { color: readonly number[]; scale: number; isDecoration: boolean } {
         const isSelected = this.ctx.selectedEntityIds.has(entity.id);
         const isDecoration = entity.type === EntityType.MapObject;
-        if (isSelected)
+        if (isSelected) {
             return {
                 color: [1.0, 1.0, 0.0, 1.0],
                 scale: isDecoration ? 0.8 : this.getEntityScale(entity.type),
                 isDecoration,
             };
+        }
         const baseColor = isDecoration
             ? decoHueToRgb(entity.subType)
             : PLAYER_COLORS[entity.player % PLAYER_COLORS.length]!;
@@ -97,8 +100,12 @@ export class ColorEntityPass implements IRenderPass {
     }
 
     private getEntityScale(entityType: EntityType): number {
-        if (entityType === EntityType.Building) return BUILDING_SCALE;
-        if (entityType === EntityType.StackedPile) return PILE_SCALE;
+        if (entityType === EntityType.Building) {
+            return BUILDING_SCALE;
+        }
+        if (entityType === EntityType.StackedPile) {
+            return PILE_SCALE;
+        }
         return UNIT_SCALE;
     }
 
@@ -140,9 +147,15 @@ export class ColorEntityPass implements IRenderPass {
     }
 
     private resolveEntityName(entity: Entity): string {
-        if (entity.type === EntityType.Unit) return UnitType[entity.subType] ?? `Unit#${entity.subType}`;
-        if (entity.type === EntityType.Building) return BuildingType[entity.subType] ?? `Bld#${entity.subType}`;
-        if (entity.type === EntityType.StackedPile) return EMaterialType[entity.subType] ?? `Pile#${entity.subType}`;
+        if (entity.type === EntityType.Unit) {
+            return UnitType[entity.subType] ?? `Unit#${entity.subType}`;
+        }
+        if (entity.type === EntityType.Building) {
+            return BuildingType[entity.subType] ?? `Bld#${entity.subType}`;
+        }
+        if (entity.type === EntityType.StackedPile) {
+            return EMaterialType[entity.subType] ?? `Pile#${entity.subType}`;
+        }
         return `${entity.type}#${entity.subType}`;
     }
 

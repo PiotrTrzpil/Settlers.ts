@@ -333,11 +333,15 @@ const {
 /** Blur non-text inputs after interaction so keyboard focus returns to the game. */
 function blurNonTextInput(e: Event): void {
     const active = document.activeElement as HTMLElement | null;
-    if (!active) return;
+    if (!active) {
+        return;
+    }
     const tag = active.tagName;
     const isNonTextInput =
         tag === 'SELECT' || tag === 'BUTTON' || (tag === 'INPUT' && (active as HTMLInputElement).type === 'checkbox');
-    if (!isNonTextInput) return;
+    if (!isNonTextInput) {
+        return;
+    }
 
     if (e.type === 'change') {
         // SELECT changed value — blur after Vue re-renders
@@ -370,7 +374,9 @@ function buildPlayerList(g: Game): { index: number; label: string }[] {
 
 function onPlayerChange() {
     const g = game.value;
-    if (!g) return;
+    if (!g) {
+        return;
+    }
     g.currentPlayer = currentPlayer.value;
 }
 
@@ -378,7 +384,9 @@ function onPlayerChange() {
 watch(
     game,
     g => {
-        if (!g) return;
+        if (!g) {
+            return;
+        }
         currentPlayer.value = g.currentPlayer;
         availablePlayers.value = buildPlayerList(g);
     },
@@ -389,14 +397,18 @@ watch(
 const placeBuildingsCompleted = computed({
     get: () => game.value?.settings.state.placeBuildingsCompleted ?? false,
     set: (value: boolean) => {
-        if (game.value) game.value.settings.state.placeBuildingsCompleted = value;
+        if (game.value) {
+            game.value.settings.state.placeBuildingsCompleted = value;
+        }
     },
 });
 
 const placeBuildingsWithWorker = computed({
     get: () => game.value?.settings.state.placeBuildingsWithWorker ?? false,
     set: (value: boolean) => {
-        if (game.value) game.value.settings.state.placeBuildingsWithWorker = value;
+        if (game.value) {
+            game.value.settings.state.placeBuildingsWithWorker = value;
+        }
     },
 });
 
@@ -431,14 +443,18 @@ const savedCamera = ref<{ x: number; y: number; zoom: number } | null>(null);
 // Clearing localStorage ensures loadCameraState also returns null (HMR saves survive otherwise).
 watch(game, newGame => {
     savedCamera.value = null;
-    if (newGame) clearCameraState(getCurrentMapId());
+    if (newGame) {
+        clearCameraState(getCurrentMapId());
+    }
 });
 
 // Save current camera to localStorage (used on unload and antialias recreation)
 function persistCamera(): void {
     const mapId = getCurrentMapId();
     const cam = rendererRef.value?.getCamera?.();
-    if (cam && mapId) saveCameraState(mapId, cam);
+    if (cam && mapId) {
+        saveCameraState(mapId, cam);
+    }
 }
 
 // Watch for graphics settings changes that require context recreation
@@ -464,436 +480,4 @@ onBeforeUnmount(() => {
 });
 </script>
 
-<style scoped>
-/* ===== ROOT WRAPPER ===== */
-.map-view-root {
-    display: flex;
-    flex-direction: column;
-    flex: 1;
-    min-height: 0;
-}
-
-/* ===== MAIN GAME LAYOUT ===== */
-.game-layout {
-    display: flex;
-    flex: 1;
-    min-height: 0;
-    background: #0d0a05;
-}
-
-/* ===== LEFT SIDEBAR ===== */
-.sidebar {
-    width: 180px;
-    min-width: 180px;
-    background: linear-gradient(180deg, #2c1e0e 0%, #1a1209 100%);
-    border-right: 3px solid #5c3d1a;
-    display: flex;
-    flex-direction: column;
-    overflow-y: auto;
-}
-
-.sidebar-tabs {
-    display: flex;
-    border-bottom: 2px solid #5c3d1a;
-}
-
-.tab-btn {
-    flex: 1;
-    padding: 6px 4px;
-    background: #1a1209;
-    color: #8a7040;
-    border: none;
-    border-bottom: 3px solid transparent;
-    cursor: pointer;
-    font-size: 13px;
-    font-weight: bold;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    transition:
-        background 0.15s,
-        color 0.15s;
-}
-
-.tab-btn:hover {
-    background: #2c1e0e;
-    color: #c8a96e;
-}
-
-.tab-btn.active {
-    background: #3a2810;
-    color: #e8c87e;
-    border-bottom-color: #d4a030;
-}
-
-.tab-content {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    gap: 0;
-    padding: 2px 6px;
-    overflow-y: auto;
-}
-
-.building-option {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    padding: 6px 8px;
-    margin-bottom: 4px;
-    background: #2c1e0e;
-    border: 1px solid #4a3218;
-    border-radius: 3px;
-    color: #c8a96e;
-    font-size: 11px;
-    cursor: pointer;
-    flex-shrink: 0;
-}
-
-.building-option:hover {
-    background: #3a2810;
-    border-color: #6a4a20;
-}
-
-.resource-params {
-    padding: 8px;
-    background: #2c1e0e;
-    border-bottom: 1px solid #4a3218;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    font-size: 12px;
-    color: #c8a96e;
-    flex-shrink: 0;
-}
-
-.amount-input {
-    width: 40px;
-    background: #1a1209;
-    border: 1px solid #4a3218;
-    color: #e8c87e;
-    border-radius: 3px;
-    padding: 2px 4px;
-}
-
-/* ===== SIDEBAR BUTTONS ===== */
-.sidebar-btn {
-    display: flex;
-    align-items: center;
-    gap: 4px;
-    width: 100%;
-    padding: 0 6px;
-    background: #2c1e0e;
-    color: #c8a96e;
-    border: 1px solid #4a3218;
-    border-radius: 3px;
-    cursor: pointer;
-    font-size: 11px;
-    text-align: left;
-    transition:
-        background 0.15s,
-        border-color 0.15s;
-}
-
-.sidebar-btn:hover {
-    background: #3a2810;
-    border-color: #6a4a20;
-}
-
-.sidebar-btn.active {
-    background: #4a3518;
-    border-color: #d4a030;
-    color: #ffe8a0;
-    box-shadow: inset 0 0 8px rgba(212, 160, 48, 0.2);
-}
-
-.sidebar-btn:disabled {
-    opacity: 0.35;
-    cursor: default;
-}
-
-.btn-icon {
-    font-size: 14px;
-    width: 56px;
-    height: 56px;
-    text-align: center;
-    flex-shrink: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: radial-gradient(circle, rgba(212, 160, 48, 0.35) 0%, rgba(212, 160, 48, 0.08) 60%, transparent 100%);
-    border-radius: 3px;
-}
-
-.building-icon-img {
-    object-fit: contain;
-}
-
-.sidebar-btn.active .btn-icon {
-    background: radial-gradient(circle, rgba(212, 160, 48, 0.3) 0%, transparent 70%);
-}
-
-.sidebar-btn.active .building-icon-img {
-    filter: brightness(1.3) drop-shadow(0 0 3px #ffd700);
-}
-
-.resource-icon {
-    max-width: 52px;
-    max-height: 52px;
-    object-fit: contain;
-    filter: drop-shadow(1px 1px 0 rgba(0, 0, 0, 0.5));
-}
-
-.btn-label {
-    flex: 1;
-}
-
-/* ===== CANVAS AREA ===== */
-.canvas-area {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    min-width: 0;
-    position: relative;
-}
-
-.info-bar {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 12px;
-    padding: 6px 12px;
-    background: #1a1209;
-    border-bottom: 2px solid #5c3d1a;
-    align-items: center;
-    z-index: 10;
-}
-
-.map-selector {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-}
-
-.info-label {
-    font-weight: bold;
-    color: #d4b27a;
-    font-size: 13px;
-}
-
-.no-game-fallback {
-    display: flex;
-    flex-direction: column;
-    flex: 1;
-    min-height: 0;
-}
-
-.mode-indicator {
-    padding: 3px 8px;
-    background: #2c1e0e;
-    border: 1px solid #4a3218;
-    border-radius: 3px;
-    color: #c8a96e;
-    font-size: 12px;
-}
-
-.mode-indicator strong {
-    color: #e8c87e;
-}
-
-.tile-info,
-.entity-info {
-    padding: 3px 8px;
-    background: #1a2a1a;
-    border: 1px solid #2a4a2a;
-    border-radius: 3px;
-    color: #80c080;
-    font-size: 12px;
-}
-
-.sidebar-selector {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 2px 8px;
-    background: #1a1209;
-    border-bottom: 1px solid #3a2810;
-    color: #c8a96e;
-    font-size: 13px;
-}
-
-.sidebar-selector + .sidebar-tabs {
-    border-top: 1px solid #5c3d1a;
-}
-
-.sidebar-selector label {
-    font-weight: bold;
-    color: #d4b27a;
-    width: 46px;
-    flex-shrink: 0;
-}
-
-.sidebar-selector select {
-    flex: 1;
-    min-width: 0;
-    background: #2c1e0e;
-    color: #c8a96e;
-    border: 1px solid #4a3218;
-    border-radius: 4px;
-    padding: 2px 6px;
-    font-size: 13px;
-    cursor: pointer;
-}
-
-.sidebar-selector select:hover {
-    border-color: #6a4a20;
-    background: #3a2810;
-}
-
-/* Canvas fills remaining space */
-.game-canvas {
-    flex: 1;
-    min-height: 0;
-}
-
-/* Left panels container (selection info) — positioned below the info bar */
-.left-panels {
-    position: absolute;
-    top: 44px;
-    left: 8px;
-    display: flex;
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 8px;
-    z-index: 100;
-    max-height: calc(100% - 52px);
-    pointer-events: none;
-}
-
-/* Right panels container */
-.right-panels {
-    position: absolute;
-    top: 8px;
-    right: 8px;
-    display: flex;
-    align-items: flex-start;
-    gap: 8px;
-    z-index: 100;
-    max-height: calc(100% - 16px);
-    pointer-events: none;
-}
-
-.game-canvas :deep(.cav) {
-    width: 100%;
-    height: 100%;
-    display: block;
-    margin: 0;
-    border: none;
-}
-
-/* Stale save data warning modal */
-.stale-save-backdrop {
-    position: absolute;
-    inset: 0;
-    background: rgba(0, 0, 0, 0.65);
-    z-index: 300;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
-
-.stale-save-dialog {
-    background: #1a1209;
-    border: 2px solid #c8a24e;
-    border-radius: 8px;
-    padding: 28px 36px;
-    max-width: 440px;
-    text-align: center;
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
-}
-
-.stale-save-title {
-    color: #f0c040;
-    font-size: 20px;
-    font-weight: 700;
-    margin: 0 0 12px;
-}
-
-.stale-save-message {
-    color: #d4c4a0;
-    font-size: 14px;
-    line-height: 1.5;
-    margin: 0 0 20px;
-}
-
-.stale-save-actions {
-    display: flex;
-    justify-content: center;
-    gap: 12px;
-}
-
-.stale-save-btn {
-    padding: 8px 20px;
-    border-radius: 4px;
-    font-size: 14px;
-    font-weight: 600;
-    cursor: pointer;
-    border: 1px solid transparent;
-    transition: background 0.15s;
-}
-
-.stale-save-btn--discard {
-    background: #c84040;
-    color: #fff;
-    border-color: #e05050;
-}
-
-.stale-save-btn--discard:hover {
-    background: #e04848;
-}
-
-/* Ticks-paused warning overlay */
-.ticks-paused-overlay {
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    font-size: 48px;
-    font-weight: 900;
-    letter-spacing: 6px;
-    color: rgba(255, 60, 60, 0.7);
-    text-shadow:
-        0 0 20px rgba(0, 0, 0, 0.8),
-        0 2px 4px rgba(0, 0, 0, 0.6);
-    pointer-events: none;
-    z-index: 200;
-    user-select: none;
-    animation: pulse-pause 2s ease-in-out infinite;
-}
-
-@keyframes pulse-pause {
-    0%,
-    100% {
-        opacity: 0.7;
-    }
-    50% {
-        opacity: 0.3;
-    }
-}
-
-/* ===== SCROLLBAR ===== */
-.sidebar::-webkit-scrollbar {
-    width: 6px;
-}
-
-.sidebar::-webkit-scrollbar-track {
-    background: #1a1209;
-}
-
-.sidebar::-webkit-scrollbar-thumb {
-    background: #4a3218;
-    border-radius: 3px;
-}
-
-.sidebar::-webkit-scrollbar-thumb:hover {
-    background: #5c3d1a;
-}
-</style>
+<style scoped src="./map-view.css"></style>

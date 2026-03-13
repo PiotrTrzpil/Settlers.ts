@@ -136,7 +136,9 @@ export class WorkerJobLifecycle {
     }
 
     completeJob(settler: Entity, runtime: WorkerRuntimeState): void {
-        if (!runtime.job) return;
+        if (!runtime.job) {
+            return;
+        }
         const job = runtime.job;
 
         if (job.activeTrigger) {
@@ -147,7 +149,9 @@ export class WorkerJobLifecycle {
         }
 
         const controller = this.gameState.movement.getController(settler.id);
-        if (controller) controller.busy = false;
+        if (controller) {
+            controller.busy = false;
+        }
 
         log.debug(`Settler ${settler.id} completed job ${job.jobId}`);
 
@@ -186,7 +190,9 @@ export class WorkerJobLifecycle {
     }
 
     interruptJob(settler: Entity, config: SettlerConfig, runtime: WorkerRuntimeState): void {
-        if (!runtime.job) return;
+        if (!runtime.job) {
+            return;
+        }
 
         const entityHandler = this.handlerRegistry.getEntityHandler(config.search);
         const job = runtime.job;
@@ -217,7 +223,9 @@ export class WorkerJobLifecycle {
         }
 
         const controller = this.gameState.movement.getController(settler.id);
-        if (controller) controller.busy = false;
+        if (controller) {
+            controller.busy = false;
+        }
 
         log.debug(`Settler ${settler.id} interrupted job ${job.jobId}`);
 
@@ -248,7 +256,9 @@ export class WorkerJobLifecycle {
         // Settler is already inside their building — nothing to do.
         // This can happen when enterBuilding() removed the movement controller
         // but the settler hasn't marked hasVisited yet on the next idle tick.
-        if (this.locationManager.isInside(settler.id)) return;
+        if (this.locationManager.isInside(settler.id)) {
+            return;
+        }
 
         const controller = this.gameState.movement.getController(settler.id);
         if (!controller) {
@@ -362,7 +372,9 @@ export class WorkerJobLifecycle {
     }
 
     private applyChoreoAnimation(settler: Entity, node: ChoreoNode): void {
-        if (!node.jobPart) return;
+        if (!node.jobPart) {
+            return;
+        }
         const resolution: JobPartResolution = this.jobPartResolver.resolve(node.jobPart, settler);
         this.animController.applyChoreoAnimation(settler, resolution);
         if (this.verbose) {

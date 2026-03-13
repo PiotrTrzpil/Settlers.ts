@@ -71,7 +71,9 @@ export class BuildingConstructionSystem implements TickSystem {
     /** Set terrain context for terrain modification during construction */
     setTerrainContext(ctx: TerrainContext | undefined): void {
         this.terrainContext = ctx;
-        if (ctx) this.rebuildTerrainForRestoredSites(ctx);
+        if (ctx) {
+            this.rebuildTerrainForRestoredSites(ctx);
+        }
     }
 
     /**
@@ -81,7 +83,9 @@ export class BuildingConstructionSystem implements TickSystem {
      * (before sites existed).
      */
     rebuildAfterRestore(): void {
-        if (this.terrainContext) this.rebuildTerrainForRestoredSites(this.terrainContext);
+        if (this.terrainContext) {
+            this.rebuildTerrainForRestoredSites(this.terrainContext);
+        }
     }
 
     /**
@@ -97,7 +101,9 @@ export class BuildingConstructionSystem implements TickSystem {
         // Use getAllSiteIds() — returns a snapshot array, safe to iterate while emitting events that remove sites
         for (const siteId of this.constructionSiteManager.getAllSiteIds()) {
             const site = this.constructionSiteManager.getSite(siteId);
-            if (!site) continue; // removed by a previous iteration's building:completed
+            if (!site) {
+                continue;
+            } // removed by a previous iteration's building:completed
 
             this.rebuildSingleSite(site, groundType, groundHeight, mapSize);
         }
@@ -125,7 +131,9 @@ export class BuildingConstructionSystem implements TickSystem {
         }
 
         // Complete buildings that finished construction but site wasn't removed before save
-        if (this.tryCompleteRestoredSite(site)) return;
+        if (this.tryCompleteRestoredSite(site)) {
+            return;
+        }
 
         // Re-emit worker-needed events — worker assignments are empty after restore
         this.reemitWorkerNeeded(site);
@@ -143,7 +151,9 @@ export class BuildingConstructionSystem implements TickSystem {
             site.phase === BuildingConstructionPhase.CompletedRising ||
             site.phase === BuildingConstructionPhase.Completed;
 
-        if (!isConstructionDone && !isTerminalPhase) return false;
+        if (!isConstructionDone && !isTerminalPhase) {
+            return false;
+        }
 
         this.eventBus.emit('building:completed', {
             buildingId: site.buildingId,
@@ -213,7 +223,9 @@ export class BuildingConstructionSystem implements TickSystem {
         // construction:diggingStarted → TerrainLeveling phase transition
         this.subscriptions.subscribe(this.eventBus, 'construction:diggingStarted', ({ buildingId }) => {
             const site = this.constructionSiteManager.getSite(buildingId);
-            if (!site) return;
+            if (!site) {
+                return;
+            }
             site.phase = BuildingConstructionPhase.TerrainLeveling;
         });
 
@@ -222,7 +234,9 @@ export class BuildingConstructionSystem implements TickSystem {
             this.eventBus,
             'construction:tileCompleted',
             ({ x, y, targetHeight, isFootprint }) => {
-                if (!this.terrainContext) return;
+                if (!this.terrainContext) {
+                    return;
+                }
                 const { groundType, groundHeight, mapSize } = this.terrainContext.terrain;
                 const modified = applySingleTileLeveling(
                     x,
@@ -243,7 +257,9 @@ export class BuildingConstructionSystem implements TickSystem {
         // Construction piles are placed outside the block area so carriers can always deliver.
         this.subscriptions.subscribe(this.eventBus, 'construction:levelingComplete', ({ buildingId }) => {
             const site = this.constructionSiteManager.getSite(buildingId);
-            if (!site) return;
+            if (!site) {
+                return;
+            }
             // Mark terrain as fully modified (individual tiles already applied via tileCompleted events)
             if (site.terrain.originalTerrain && !site.terrain.modified) {
                 site.terrain.modified = true;
@@ -282,14 +298,18 @@ export class BuildingConstructionSystem implements TickSystem {
         // construction:buildingStarted → ConstructionRising
         this.subscriptions.subscribe(this.eventBus, 'construction:buildingStarted', ({ buildingId }) => {
             const site = this.constructionSiteManager.getSite(buildingId);
-            if (!site) return;
+            if (!site) {
+                return;
+            }
             site.phase = BuildingConstructionPhase.ConstructionRising;
         });
 
         // construction:progressComplete → building:completed (builder-driven, no timer)
         this.subscriptions.subscribe(this.eventBus, 'construction:progressComplete', ({ buildingId }) => {
             const site = this.constructionSiteManager.getSite(buildingId);
-            if (!site) return;
+            if (!site) {
+                return;
+            }
             const { buildingType, race } = site;
             this.eventBus.emit('building:completed', {
                 buildingId,
@@ -325,7 +345,9 @@ export class BuildingConstructionSystem implements TickSystem {
 
     private tickSite(entityId: number, _dt: number): void {
         const site = this.constructionSiteManager.getSite(entityId);
-        if (!site) return;
+        if (!site) {
+            return;
+        }
 
         if (site.phase === BuildingConstructionPhase.Evacuating) {
             this.tickEvacuation(entityId, site);
@@ -353,7 +375,9 @@ export class BuildingConstructionSystem implements TickSystem {
         // movement are invisible to tileOccupancy.
         const unitIds = new Set<number>();
         for (const e of this.state.entities) {
-            if (e.type !== EntityType.Unit) continue;
+            if (e.type !== EntityType.Unit) {
+                continue;
+            }
             if (blockKeys.has(tileKey(e.x, e.y))) {
                 unitIds.add(e.id);
             }
@@ -393,11 +417,15 @@ export class BuildingConstructionSystem implements TickSystem {
         for (let radius = 1; radius <= 10; radius++) {
             for (const tile of ringTiles(cx, cy, radius)) {
                 const key = tileKey(tile.x, tile.y);
-                if (footprintKeys.has(key)) continue;
+                if (footprintKeys.has(key)) {
+                    continue;
+                }
                 // Check ground occupancy — buildings own footprint tiles in groundOccupancy
                 // but those are filtered by footprintKeys above, so any remaining
                 // ground occupant (map object, pile) is a real blocker.
-                if (this.state.getGroundEntityAt(tile.x, tile.y)) continue;
+                if (this.state.getGroundEntityAt(tile.x, tile.y)) {
+                    continue;
+                }
                 return tile;
             }
         }
@@ -444,8 +472,12 @@ export class BuildingConstructionSystem implements TickSystem {
     private onBuildingRemoved(entityId: number): void {
         this.pendingEvacuations.delete(entityId);
         const site = this.constructionSiteManager.getSite(entityId);
-        if (!site || !site.terrain.originalTerrain) return;
-        if (!this.terrainContext) return;
+        if (!site || !site.terrain.originalTerrain) {
+            return;
+        }
+        if (!this.terrainContext) {
+            return;
+        }
         const { groundType, groundHeight, mapSize } = this.terrainContext.terrain;
         const modified = restoreOriginalTerrain(site.terrain.originalTerrain, groundType, groundHeight, mapSize);
         if (modified && this.terrainContext.onTerrainModified) {

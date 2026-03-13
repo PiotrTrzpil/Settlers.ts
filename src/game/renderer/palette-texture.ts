@@ -317,12 +317,16 @@ export class PaletteTextureManager {
      * and createPlayerPalettes() has been called.
      */
     public upload(gl: WebGL2RenderingContext): void {
-        if (this.totalColors === 0) return;
+        if (this.totalColors === 0) {
+            return;
+        }
 
         const width = PALETTE_TEXTURE_WIDTH;
         const height = this.rowsPerPlayer * this.numPlayerRows;
 
-        if (!this.dirty && this.gpuWidth === width && this.gpuHeight === height) return;
+        if (!this.dirty && this.gpuWidth === width && this.gpuHeight === height) {
+            return;
+        }
 
         if (!this.texture) {
             this.texture = gl.createTexture();
@@ -376,7 +380,9 @@ export class PaletteTextureManager {
      * Call before draw calls that need palette lookup.
      */
     public bind(gl: WebGL2RenderingContext): void {
-        if (!this.texture) return;
+        if (!this.texture) {
+            return;
+        }
         gl.activeTexture(gl.TEXTURE0 + this.textureUnit);
         gl.bindTexture(gl.TEXTURE_2D, this.texture);
     }
@@ -389,7 +395,9 @@ export class PaletteTextureManager {
         if (this.fullPaletteBuffer) {
             return this.fullPaletteBuffer;
         }
-        if (this.paletteUsedBytes === 0) return null;
+        if (this.paletteUsedBytes === 0) {
+            return null;
+        }
         return this.paletteBuffer.subarray(0, this.paletteUsedBytes);
     }
 

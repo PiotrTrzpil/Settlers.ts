@@ -71,7 +71,9 @@ export const CATEGORY_ENTITY_TYPE: Record<string, string> = {
 /** Extract numeric field from payload by name, with fallback keys. */
 export function extractNum(payload: Record<string, unknown>, ...keys: string[]): number | undefined {
     for (const key of keys) {
-        if (typeof payload[key] === 'number') return payload[key];
+        if (typeof payload[key] === 'number') {
+            return payload[key];
+        }
     }
     return undefined;
 }

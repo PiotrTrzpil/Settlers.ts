@@ -35,10 +35,16 @@ function getEligibleRole(
     gameState: GameState
 ): GarrisonRole | null {
     const unit = gameState.getEntity(unitId);
-    if (!unit) return null;
+    if (!unit) {
+        return null;
+    }
     const role = getGarrisonRole(unit.subType as UnitType);
-    if (!role) return null;
-    if (manager.getTowerIdForEnRouteUnit(unitId) === buildingId) return null;
+    if (!role) {
+        return null;
+    }
+    if (manager.getTowerIdForEnRouteUnit(unitId) === buildingId) {
+        return null;
+    }
     return role;
 }
 
@@ -56,7 +62,9 @@ function filterAcceptedUnits(
 
     for (const unitId of unitIds) {
         const role = getEligibleRole(unitId, buildingId, manager, gameState);
-        if (!role) continue;
+        if (!role) {
+            continue;
+        }
 
         if (role === 'swordsman' && remainingSwordsman > 0) {
             remainingSwordsman--;
@@ -197,11 +205,17 @@ export function executeGarrisonSelectedUnitsCommand(
 ): GarrisonSelectedResult {
     // Silent: user right-clicks on any tile — most won't be garrison buildings.
     const building = ctx.gameState.getGroundEntityAt(cmd.tileX, cmd.tileY);
-    if (!building || building.type !== EntityType.Building) return 'not_garrison_building';
-    if (!getGarrisonCapacity(building.subType as BuildingType)) return 'not_garrison_building';
+    if (!building || building.type !== EntityType.Building) {
+        return 'not_garrison_building';
+    }
+    if (!getGarrisonCapacity(building.subType as BuildingType)) {
+        return 'not_garrison_building';
+    }
 
     const selectedUnits = ctx.gameState.selection.getSelectedByType(EntityType.Unit);
-    if (selectedUnits.length === 0) return 'garrison_building_blocked';
+    if (selectedUnits.length === 0) {
+        return 'garrison_building_blocked';
+    }
 
     const unitIds = selectedUnits.map(u => u.id);
     const ok = executeGarrisonUnitsCommand({ type: 'garrison_units', buildingId: building.id, unitIds }, ctx);
@@ -227,7 +241,9 @@ export function executeUngarrisonUnitCommand(
     gameState: GameState
 ): boolean {
     const building = gameState.getEntity(cmd.buildingId);
-    if (!building) return false;
+    if (!building) {
+        return false;
+    }
 
     const garrison = manager.getGarrison(cmd.buildingId);
     if (!garrison) {
@@ -237,10 +253,14 @@ export function executeUngarrisonUnitCommand(
 
     const inSwordsmanSlots = garrison.swordsmanSlots.unitIds.includes(cmd.unitId);
     const inBowmanSlots = garrison.bowmanSlots.unitIds.includes(cmd.unitId);
-    if (!inSwordsmanSlots && !inBowmanSlots) return false;
+    if (!inSwordsmanSlots && !inBowmanSlots) {
+        return false;
+    }
 
     const totalGarrisoned = garrison.swordsmanSlots.unitIds.length + garrison.bowmanSlots.unitIds.length;
-    if (totalGarrisoned === 1) return false;
+    if (totalGarrisoned === 1) {
+        return false;
+    }
 
     manager.ejectUnit(cmd.unitId, cmd.buildingId);
     return true;

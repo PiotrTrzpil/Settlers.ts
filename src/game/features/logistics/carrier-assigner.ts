@@ -130,12 +130,18 @@ export class CarrierAssigner {
      */
     // eslint-disable-next-line sonarjs/function-return-type -- discriminated union return is intentional
     tryAssignBest(demand: DemandEntry, candidates: readonly RequestMatchResult[]): AssignResult {
-        if (candidates.length === 0) return null;
-        if (candidates.length === 1) return this.tryAssignMatch(demand, candidates[0]!);
+        if (candidates.length === 0) {
+            return null;
+        }
+        if (candidates.length === 1) {
+            return this.tryAssignMatch(demand, candidates[0]!);
+        }
 
         const destBuilding = this.gameState.getEntityOrThrow(demand.buildingId, 'dest building');
         const ranked = this.rankByTotalTrip(candidates, destBuilding.x, destBuilding.y);
-        if (!ranked) return 'no_carrier';
+        if (!ranked) {
+            return 'no_carrier';
+        }
 
         if (ranked.busyCarrier) {
             return this.tryQueueForBusyCarrier(demand, ranked.match, ranked.busyCarrier);
@@ -159,7 +165,9 @@ export class CarrierAssigner {
         const filter = this.buildFilter();
         for (const candidate of candidates) {
             const source = this.gameState.getEntity(candidate.sourceBuilding);
-            if (!source) continue;
+            if (!source) {
+                continue;
+            }
 
             const dx2 = source.x - destX;
             const dy2 = source.y - destY;
@@ -204,7 +212,9 @@ export class CarrierAssigner {
         );
         const busyResult = this.findBestBusyCarrier(sourceBuilding.x, sourceBuilding.y, match.playerId);
 
-        if (!idleResult && !busyResult) return 'no_carrier';
+        if (!idleResult && !busyResult) {
+            return 'no_carrier';
+        }
 
         // If busy carrier beats idle, queue instead of assign
         if (busyResult && (!idleResult || busyResult.estimatedCostSq < idleResult.distSq)) {
@@ -273,14 +283,20 @@ export class CarrierAssigner {
 
         const pickedUpCarriers = this.byPhase.get(TransportPhase.PickedUp);
         for (const carrierId of pickedUpCarriers) {
-            if (this.preAssignmentQueue.has(carrierId)) continue;
+            if (this.preAssignmentQueue.has(carrierId)) {
+                continue;
+            }
 
             const carrier = this.gameState.getEntity(carrierId);
-            if (!carrier || carrier.player !== playerId) continue;
+            if (!carrier || carrier.player !== playerId) {
+                continue;
+            }
 
             const record = this.activeJobs.get(carrierId)!;
             const dest = this.gameState.getEntity(record.destBuilding);
-            if (!dest) continue;
+            if (!dest) {
+                continue;
+            }
 
             // Cost: carrier→dest + dest→newSource
             const cdx = carrier.x - dest.x;
@@ -362,7 +378,9 @@ export class CarrierAssigner {
      * Adapt the optional CarrierFilter (entity-based) to CarrierEligibilityFilter (id-based).
      */
     private buildFilter(): ((entityId: number) => boolean) | undefined {
-        if (!this.carrierFilter) return undefined;
+        if (!this.carrierFilter) {
+            return undefined;
+        }
         const cf = this.carrierFilter;
         return (entityId: number) => {
             const entity = this.gameState.getEntityOrThrow(entityId, 'carrier filter');

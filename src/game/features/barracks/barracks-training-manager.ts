@@ -83,7 +83,9 @@ export class BarracksTrainingManager implements Persistable<SerializedBarracksTr
      */
     initBarracks(buildingId: number, race: Race): void {
         const recipeSet = getTrainingRecipeSet(race);
-        if (recipeSet.recipes.length === 0) return;
+        if (recipeSet.recipes.length === 0) {
+            return;
+        }
 
         this.barracksRaces.set(buildingId, race);
         this.pcm.initBuilding(buildingId, recipeSet.recipes.length);
@@ -133,11 +135,15 @@ export class BarracksTrainingManager implements Persistable<SerializedBarracksTr
 
     private tryStartTraining(buildingId: number): void {
         const race = this.barracksRaces.get(buildingId);
-        if (!race) throw new Error(`No race for barracks ${buildingId} in BarracksTrainingManager`);
+        if (!race) {
+            throw new Error(`No race for barracks ${buildingId} in BarracksTrainingManager`);
+        }
 
         // 1. Peek at the next recipe WITHOUT consuming it from the queue
         const recipeIndex = this.pcm.peekNextRecipeIndex(buildingId);
-        if (recipeIndex === null) return;
+        if (recipeIndex === null) {
+            return;
+        }
 
         const recipeSet = getTrainingRecipeSet(race);
         const recipe = recipeSet.recipes[recipeIndex];
@@ -147,12 +153,16 @@ export class BarracksTrainingManager implements Persistable<SerializedBarracksTr
         }
 
         // 2. Verify inventory holds all required inputs
-        if (!this.hasInputs(buildingId, recipe)) return;
+        if (!this.hasInputs(buildingId, recipe)) {
+            return;
+        }
 
         // 3. Locate an idle carrier for this player
         const barracks = this.gameState.getEntityOrThrow(buildingId, 'barracks for training');
         const carrierId = this.idleCarrierPool.findNearest(barracks.x, barracks.y, barracks.player);
-        if (carrierId === null) return;
+        if (carrierId === null) {
+            return;
+        }
 
         // 4. All conditions met — now commit the recipe (consume from queue in manual mode)
         this.pcm.getNextRecipeIndex(buildingId);
@@ -261,7 +271,9 @@ export class BarracksTrainingManager implements Persistable<SerializedBarracksTr
     /** Get all available training recipes for a barracks. */
     getRecipes(buildingId: number): readonly TrainingRecipe[] {
         const race = this.barracksRaces.get(buildingId);
-        if (!race) return [];
+        if (!race) {
+            return [];
+        }
         return getTrainingRecipes(race);
     }
 

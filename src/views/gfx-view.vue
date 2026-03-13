@@ -102,7 +102,9 @@ function selectImage(img: IGfxImage, index: number) {
 
 function onSelectItem() {
     const img = selectedItem.value;
-    if (!img || !mainCanvas.value) return;
+    if (!img || !mainCanvas.value) {
+        return;
+    }
     renderImageToCanvas(img, mainCanvas.value);
 }
 </script>

@@ -573,11 +573,15 @@ export type SettlerAnimData = Readonly<Record<string, number>>;
  */
 export function stripXmlPrefix(key: string): string {
     const first = key.indexOf('_');
-    if (first === -1) return key;
+    if (first === -1) {
+        return key;
+    }
     const rest = key.slice(first + 1);
     // Check if next segment is a level number (e.g., SML01_WALK → strip 'SML01_')
     const levelMatch = /^(\d{2})_(.+)$/.exec(rest);
-    if (levelMatch) return levelMatch[2]!;
+    if (levelMatch) {
+        return levelMatch[2]!;
+    }
     return rest;
 }
 
@@ -587,11 +591,15 @@ export function stripXmlPrefix(key: string): string {
  */
 function extractXmlPrefix(key: string): string {
     const first = key.indexOf('_');
-    if (first === -1) return key;
+    if (first === -1) {
+        return key;
+    }
     const prefix = key.slice(0, first);
     const rest = key.slice(first + 1);
     const levelMatch = /^(\d{2})_/.exec(rest);
-    if (levelMatch) return `${prefix}${levelMatch[1]}`;
+    if (levelMatch) {
+        return `${prefix}${levelMatch[1]}`;
+    }
     return prefix;
 }
 
@@ -609,10 +617,14 @@ function isIdleField(key: string): boolean {
 /** Extract the first walk or idle job index — used for base JIL index. */
 function extractBaseIndex(data: SettlerAnimData): number | undefined {
     for (const [key, value] of Object.entries(data)) {
-        if (isWalkField(key)) return value;
+        if (isWalkField(key)) {
+            return value;
+        }
     }
     for (const [key, value] of Object.entries(data)) {
-        if (isIdleField(key)) return value;
+        if (isIdleField(key)) {
+            return value;
+        }
     }
     return undefined;
 }
@@ -626,7 +638,9 @@ export const UNIT_XML_PREFIX: Readonly<Partial<Record<UnitType, string>>> = (() 
     const result: Partial<Record<UnitType, string>> = {};
     for (const [workerKey, workerData] of Object.entries(SETTLER_JOB_INDICES)) {
         const unitType = SETTLER_KEY_TO_UNIT_TYPE[workerKey];
-        if (unitType === undefined) continue;
+        if (unitType === undefined) {
+            continue;
+        }
         const firstField = Object.keys(workerData)[0];
         if (firstField) {
             result[unitType] = extractXmlPrefix(firstField);
@@ -643,8 +657,12 @@ function computeUnitBaseJobIndices(): Partial<Record<UnitType, number>> {
     const result: Partial<Record<UnitType, number>> = {};
     for (const [workerKey, workerData] of Object.entries(SETTLER_JOB_INDICES)) {
         const unitType = SETTLER_KEY_TO_UNIT_TYPE[workerKey];
-        if (unitType === undefined) continue;
-        if (result[unitType] !== undefined) continue;
+        if (unitType === undefined) {
+            continue;
+        }
+        if (result[unitType] !== undefined) {
+            continue;
+        }
 
         const baseIdx = extractBaseIndex(workerData as Record<string, number>);
         if (baseIdx !== undefined && baseIdx >= 0) {
@@ -854,9 +872,13 @@ export function resolveOverlayJilEntry(
     entry: OverlayJilEntry | null,
     parentJobIndex?: number
 ): { jobIndex: number; directionIndex: number } | null {
-    if (!entry) return null;
+    if (!entry) {
+        return null;
+    }
     const jobIndex = entry.job ?? parentJobIndex;
-    if (jobIndex === undefined) return null;
+    if (jobIndex === undefined) {
+        return null;
+    }
     return { jobIndex, directionIndex: entry.dir ?? 0 };
 }
 

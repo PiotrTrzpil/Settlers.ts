@@ -63,7 +63,9 @@ export class PreAssignmentQueue {
      */
     flush(carrierId: number): QueuedAssignment | null {
         const assignment = this.entries.get(carrierId);
-        if (!assignment) return null;
+        if (!assignment) {
+            return null;
+        }
         this.entries.delete(carrierId);
         return assignment;
     }
@@ -75,7 +77,9 @@ export class PreAssignmentQueue {
      */
     cancel(carrierId: number): void {
         const assignment = this.entries.get(carrierId);
-        if (!assignment) return;
+        if (!assignment) {
+            return;
+        }
         this.entries.delete(carrierId);
         this.cancelRecord(assignment.record);
     }

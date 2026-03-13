@@ -64,7 +64,9 @@ export const SELECTION_INDICATOR_MANIFEST = new GilSpriteManifest(HUD_GFX_FILE, 
 /** Resolve a sprite from the selection indicator manifest. Throws if not loaded (programming error). */
 function resolveFromManifest(gilIndex: number, spriteManager: SpriteRenderManager): SpriteEntry {
     const sprite = SELECTION_INDICATOR_MANIFEST.resolve(gilIndex, spriteManager.spriteRegistry!);
-    if (!sprite) throw new Error(`Selection indicator sprite GIL ${gilIndex} not loaded — bump CACHE_SCHEMA_VERSION`);
+    if (!sprite) {
+        throw new Error(`Selection indicator sprite GIL ${gilIndex} not loaded — bump CACHE_SCHEMA_VERSION`);
+    }
     return sprite;
 }
 
@@ -89,16 +91,24 @@ function zoomScaledSprite(
  * Returns null for entities that don't use sprite-based selection (e.g. buildings).
  */
 export function getSelectionBracketGilIndex(entity: Entity): number | null {
-    if (entity.type !== EntityType.Unit) return null;
+    if (entity.type !== EntityType.Unit) {
+        return null;
+    }
 
     const unitType = entity.subType as UnitType;
 
-    if (unitType === UnitType.SquadLeader) return SPRITES.MILITARY_LEADER;
+    if (unitType === UnitType.SquadLeader) {
+        return SPRITES.MILITARY_LEADER;
+    }
 
     if (isUnitTypeMilitary(unitType)) {
         const level = getUnitLevel(unitType);
-        if (level === 3) return SPRITES.MILITARY_LVL3;
-        if (level === 2) return SPRITES.MILITARY_LVL2;
+        if (level === 3) {
+            return SPRITES.MILITARY_LVL3;
+        }
+        if (level === 2) {
+            return SPRITES.MILITARY_LVL2;
+        }
         return SPRITES.MILITARY_LVL1;
     }
 
@@ -121,7 +131,9 @@ export function resolveSelectionIndicator(
     currentZoom: number
 ): SpriteEntry | null {
     const gilIndex = getSelectionBracketGilIndex(entity);
-    if (gilIndex === null) return null;
+    if (gilIndex === null) {
+        return null;
+    }
     const sprite = resolveFromManifest(gilIndex, spriteManager);
     // Center horizontally; anchor bottom edge at draw position so it sits above the head.
     return zoomScaledSprite(sprite, SELECTION_INDICATOR_BASE_SCALE, currentZoom, 'bottom');

@@ -38,12 +38,16 @@ export function loadGameDataFromFiles(basePath: string): GameData {
 
     function readXml(filename: string): string | null {
         const filePath = resolve(absPath, filename);
-        if (!existsSync(filePath)) return null;
+        if (!existsSync(filePath)) {
+            return null;
+        }
         return readFileSync(filePath, 'utf-8');
     }
 
     function parseOrEmpty<T>(filename: string, xml: string | null, parser: (xml: string) => T, empty: T): T {
-        if (xml === null) return empty;
+        if (xml === null) {
+            return empty;
+        }
         try {
             return parser(xml);
         } catch (e) {

@@ -67,18 +67,26 @@ export class TowerGarrisonManager implements Persistable<SerializedTowerGarrison
 
         this.eventBus.on('settler-location:entered', ({ unitId: settlerId, buildingId }) => {
             const garrison = this.garrisons.get(buildingId);
-            if (!garrison) return;
+            if (!garrison) {
+                return;
+            }
 
             const unit = this.gameState.getEntity(settlerId);
-            if (!unit) return;
+            if (!unit) {
+                return;
+            }
             const role = getGarrisonRole(unit.subType as UnitType);
-            if (!role) return;
+            if (!role) {
+                return;
+            }
 
             this.finalizeGarrison(settlerId, buildingId);
         });
 
         this.eventBus.on('settler-location:approachInterrupted', ({ unitId: settlerId }) => {
-            if (!this.unitReservation.isReserved(settlerId)) return;
+            if (!this.unitReservation.isReserved(settlerId)) {
+                return;
+            }
             this.unitReservation.release(settlerId);
             log.debug(`Unit ${settlerId} approach interrupted — reservation released`);
         });
@@ -131,7 +139,9 @@ export class TowerGarrisonManager implements Persistable<SerializedTowerGarrison
      */
     removeTower(buildingId: number): void {
         const garrison = this.garrisons.get(buildingId);
-        if (!garrison) return;
+        if (!garrison) {
+            return;
+        }
 
         const tower = this.gameState.getEntityOrThrow(buildingId, 'TowerGarrisonManager.removeTower');
 
@@ -170,8 +180,12 @@ export class TowerGarrisonManager implements Persistable<SerializedTowerGarrison
     /** Returns the tower ID this unit is walking to, or undefined if not en-route. */
     getTowerIdForEnRouteUnit(unitId: number): number | undefined {
         const location = this.locationManager.getLocation(unitId);
-        if (location === null || location.status !== SettlerBuildingStatus.Approaching) return undefined;
-        if (!this.garrisons.has(location.buildingId)) return undefined;
+        if (location === null || location.status !== SettlerBuildingStatus.Approaching) {
+            return undefined;
+        }
+        if (!this.garrisons.has(location.buildingId)) {
+            return undefined;
+        }
         return location.buildingId;
     }
 
@@ -184,10 +198,15 @@ export class TowerGarrisonManager implements Persistable<SerializedTowerGarrison
         let bowman = 0;
         for (const unitId of this.locationManager.getApproaching(buildingId)) {
             const unit = this.gameState.getEntity(unitId);
-            if (!unit) continue;
+            if (!unit) {
+                continue;
+            }
             const role = getGarrisonRole(unit.subType as UnitType);
-            if (role === 'swordsman') swordsman++;
-            else if (role === 'bowman') bowman++;
+            if (role === 'swordsman') {
+                swordsman++;
+            } else if (role === 'bowman') {
+                bowman++;
+            }
         }
         return { swordsman, bowman };
     }
@@ -212,10 +231,14 @@ export class TowerGarrisonManager implements Persistable<SerializedTowerGarrison
      */
     canFitUnit(buildingId: number, unitType: UnitType): boolean {
         const garrison = this.garrisons.get(buildingId);
-        if (!garrison) return false;
+        if (!garrison) {
+            return false;
+        }
 
         const role = getGarrisonRole(unitType);
-        if (!role) return false;
+        if (!role) {
+            return false;
+        }
 
         const slots = role === 'swordsman' ? garrison.swordsmanSlots : garrison.bowmanSlots;
         return slots.unitIds.length < slots.max;
@@ -227,10 +250,14 @@ export class TowerGarrisonManager implements Persistable<SerializedTowerGarrison
      */
     needsAutoGarrison(buildingId: number): boolean {
         const garrison = this.garrisons.get(buildingId);
-        if (!garrison) return false;
+        if (!garrison) {
+            return false;
+        }
 
         const totalGarrisoned = garrison.swordsmanSlots.unitIds.length + garrison.bowmanSlots.unitIds.length;
-        if (totalGarrisoned > 0) return false;
+        if (totalGarrisoned > 0) {
+            return false;
+        }
 
         return this.locationManager.getApproaching(buildingId).length === 0;
     }
@@ -254,7 +281,9 @@ export class TowerGarrisonManager implements Persistable<SerializedTowerGarrison
             purpose: 'garrison',
             onForcedRelease: id => {
                 const garrison = this.garrisons.get(towerId);
-                if (!garrison) return;
+                if (!garrison) {
+                    return;
+                }
                 removeFromArray(garrison.swordsmanSlots.unitIds, id);
                 removeFromArray(garrison.bowmanSlots.unitIds, id);
                 log.debug(`Garrisoned unit ${id} removed externally, slot cleared`);
@@ -357,7 +386,9 @@ export class TowerGarrisonManager implements Persistable<SerializedTowerGarrison
                     purpose: 'garrison',
                     onForcedRelease: id => {
                         const garrison = this.garrisons.get(buildingId);
-                        if (!garrison) return;
+                        if (!garrison) {
+                            return;
+                        }
                         removeFromArray(garrison.swordsmanSlots.unitIds, id);
                         removeFromArray(garrison.bowmanSlots.unitIds, id);
                     },
@@ -397,7 +428,9 @@ export class TowerGarrisonManager implements Persistable<SerializedTowerGarrison
 
     private releaseGarrisonedUnit(unitId: number, tower: Entity): void {
         const unit = this.gameState.getEntity(unitId);
-        if (!unit) return; // May have been removed externally already
+        if (!unit) {
+            return;
+        } // May have been removed externally already
 
         this.unitReservation.release(unitId);
         // entity.hidden = false is handled by locationManager.onBuildingRemoved (fires before this)
@@ -418,7 +451,9 @@ export class TowerGarrisonManager implements Persistable<SerializedTowerGarrison
 /** Remove a value from an array in-place. Returns true if the value was found and removed. */
 function removeFromArray(arr: number[], value: number): boolean {
     const index = arr.indexOf(value);
-    if (index === -1) return false;
+    if (index === -1) {
+        return false;
+    }
     arr.splice(index, 1);
     return true;
 }

@@ -108,10 +108,18 @@ export class GameDataLoader {
         let totalJobs = 0;
         let totalTriggers = 0;
         let totalSettlers = 0;
-        for (const [, raceData] of this.data.buildings) totalBuildings += raceData.buildings.size;
-        for (const [, raceData] of this.data.jobs) totalJobs += raceData.jobs.size;
-        for (const [, raceData] of this.data.buildingTriggers) totalTriggers += raceData.triggers.size;
-        for (const [, raceData] of this.data.settlers) totalSettlers += raceData.settlers.size;
+        for (const [, raceData] of this.data.buildings) {
+            totalBuildings += raceData.buildings.size;
+        }
+        for (const [, raceData] of this.data.jobs) {
+            totalJobs += raceData.jobs.size;
+        }
+        for (const [, raceData] of this.data.buildingTriggers) {
+            totalTriggers += raceData.triggers.size;
+        }
+        for (const [, raceData] of this.data.settlers) {
+            totalSettlers += raceData.settlers.size;
+        }
 
         log.debug(
             `Game data loaded in ${elapsed}ms: ${totalBuildings} buildings, ${totalJobs} jobs, ` +

@@ -101,23 +101,33 @@ const KNOWN_MATERIAL_NAMES: ReadonlySet<string> = new Set([
  * like ANIMAL, FIRSTGOOD, STEEL, PLANT are left untouched.
  */
 function fixJobPartEntityMismatch(node: JobNode, _jobId: string): void {
-    if (!node.entity.startsWith(GOOD_PREFIX)) return;
+    if (!node.entity.startsWith(GOOD_PREFIX)) {
+        return;
+    }
 
     const entityMaterial = node.entity.slice(GOOD_PREFIX.length); // e.g., 'IRONORE'
     const underscoreIdx = node.jobPart.indexOf('_');
-    if (underscoreIdx === -1) return;
+    if (underscoreIdx === -1) {
+        return;
+    }
 
     const prefix = node.jobPart.slice(0, underscoreIdx + 1); // e.g., 'SME_'
     const action = node.jobPart.slice(underscoreIdx + 1); // e.g., 'PICKUP_GOLDORE'
 
     for (const actionPrefix of MATERIAL_ACTION_PREFIXES) {
-        if (!action.startsWith(actionPrefix)) continue;
+        if (!action.startsWith(actionPrefix)) {
+            continue;
+        }
         const jobPartMaterial = action.slice(actionPrefix.length); // e.g., 'GOLDORE'
-        if (!jobPartMaterial || jobPartMaterial === entityMaterial) return;
+        if (!jobPartMaterial || jobPartMaterial === entityMaterial) {
+            return;
+        }
 
         // Only correct when the jobPart suffix is a known specific material name.
         // Generic animation names (ANIMAL, STEEL, PLANT, OIL, etc.) are left alone.
-        if (!KNOWN_MATERIAL_NAMES.has(jobPartMaterial)) return;
+        if (!KNOWN_MATERIAL_NAMES.has(jobPartMaterial)) {
+            return;
+        }
 
         const fixed = `${prefix}${actionPrefix}${entityMaterial}`;
         node.jobPart = fixed;
@@ -139,7 +149,9 @@ function propagateResourceGatheringEntity(nodes: JobNode[]): void {
 
     for (let i = 0; i < nodes.length; i++) {
         const node = nodes[i]!;
-        if (!RES_TASKS.includes(node.task) || node.entity) continue;
+        if (!RES_TASKS.includes(node.task) || node.entity) {
+            continue;
+        }
 
         // Search forward for nearest PUT_GOOD with an entity
         for (let j = i + 1; j < nodes.length; j++) {
@@ -168,7 +180,9 @@ function propagateResourceGatheringEntity(nodes: JobNode[]): void {
 function fixVintnerHarvestJob(nodes: JobNode[]): void {
     // Find the RESOURCE_GATHERING node with GOOD_WINE after GO_TO_TARGET
     const resIdx = nodes.findIndex((n, i) => i > 0 && n.task === 'RESOURCE_GATHERING' && n.entity === 'GOOD_WINE');
-    if (resIdx === -1) return;
+    if (resIdx === -1) {
+        return;
+    }
 
     const resNode = nodes[resIdx]!;
 
@@ -226,7 +240,9 @@ export function parseJobInfo(xmlContent: string): Map<RaceId, RaceJobData> {
         const raceEl = raceElements[i]!;
         const raceId = raceEl.getAttribute('id') as RaceId;
         // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- getAttribute may return null despite cast
-        if (!raceId) continue;
+        if (!raceId) {
+            continue;
+        }
 
         const jobs = new Map<string, JobInfo>();
         const jobElements = raceEl.getElementsByTagName('job');

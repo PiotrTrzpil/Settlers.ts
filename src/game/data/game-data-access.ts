@@ -158,13 +158,19 @@ function ensureXmlIdMap(): Map<string, BuildingType[]> {
         for (const [btStr, xmlId] of Object.entries(BUILDING_TYPE_TO_XML_ID)) {
             const bt = Number(btStr) as BuildingType;
             const arr = xmlIdToBuildingTypeMap.get(xmlId);
-            if (arr) arr.push(bt);
-            else xmlIdToBuildingTypeMap.set(xmlId, [bt]);
+            if (arr) {
+                arr.push(bt);
+            } else {
+                xmlIdToBuildingTypeMap.set(xmlId, [bt]);
+            }
         }
         for (const [xmlId, bt] of ORIENTATION_VARIANTS) {
             const arr = xmlIdToBuildingTypeMap.get(xmlId);
-            if (arr) arr.push(bt);
-            else xmlIdToBuildingTypeMap.set(xmlId, [bt]);
+            if (arr) {
+                arr.push(bt);
+            } else {
+                xmlIdToBuildingTypeMap.set(xmlId, [bt]);
+            }
         }
     }
     return xmlIdToBuildingTypeMap;
@@ -173,7 +179,9 @@ function ensureXmlIdMap(): Map<string, BuildingType[]> {
 /** Resolve XML building ID → BuildingType(s). Used by settler-data-access for building-sourced jobs. */
 export function xmlIdToBuildingTypes(xmlId: string): BuildingType[] {
     const types = ensureXmlIdMap().get(xmlId);
-    if (!types) throw new Error(`No BuildingType mapping for XML ID: ${xmlId}`);
+    if (!types) {
+        throw new Error(`No BuildingType mapping for XML ID: ${xmlId}`);
+    }
     return types;
 }
 
@@ -186,9 +194,13 @@ export function xmlIdToBuildingTypes(xmlId: string): BuildingType[] {
  */
 export function getBuildingInfo(race: Race, buildingType: BuildingType): BuildingInfo | undefined {
     const loader = getGameDataLoader();
-    if (!loader.isLoaded()) throw new Error('getBuildingInfo called before game data is loaded');
+    if (!loader.isLoaded()) {
+        throw new Error('getBuildingInfo called before game data is loaded');
+    }
     const xmlId = BUILDING_TYPE_TO_XML_ID[buildingType];
-    if (!xmlId) throw new Error(`No XML mapping for BuildingType ${BuildingType[buildingType]}`);
+    if (!xmlId) {
+        throw new Error(`No XML mapping for BuildingType ${BuildingType[buildingType]}`);
+    }
     return loader.getBuilding(RACE_TO_RACE_ID[race], xmlId) ?? undefined;
 }
 
@@ -200,9 +212,13 @@ export function getBuildingInfo(race: Race, buildingType: BuildingType): Buildin
  */
 export function getBuildingDoorOffset(race: Race, buildingType: BuildingType): { dx: number; dy: number } | null {
     const info = getBuildingInfo(race, buildingType);
-    if (!info) throw new Error(`No BuildingInfo found for ${BuildingType[buildingType]} / race ${Race[race]}`);
+    if (!info) {
+        throw new Error(`No BuildingInfo found for ${BuildingType[buildingType]} / race ${Race[race]}`);
+    }
     const { xOffset, yOffset } = info.door;
-    if (xOffset === 0 && yOffset === 0) return null;
+    if (xOffset === 0 && yOffset === 0) {
+        return null;
+    }
     return { dx: xOffset, dy: yOffset };
 }
 
@@ -354,17 +370,25 @@ export const S4_TO_MATERIAL_TYPE: Partial<Record<S4GoodType, EMaterialType>> = {
 
 /** Convert XML settler string (e.g. "SETTLER_WOODCUTTER") to UnitType. */
 function xmlSettlerToUnitType(xmlSettler: string): UnitType | undefined {
-    if (!xmlSettler) return undefined;
+    if (!xmlSettler) {
+        return undefined;
+    }
     const name = xmlSettler.replace('SETTLER_', '');
-    if (!(name in S4SettlerType)) return undefined;
+    if (!(name in S4SettlerType)) {
+        return undefined;
+    }
     return S4_TO_UNIT_TYPE[S4SettlerType[name as keyof typeof S4SettlerType]];
 }
 
 /** Convert XML good string (e.g. "GOOD_PICKAXE") to EMaterialType. */
 export function xmlGoodToMaterialType(xmlGood: string): EMaterialType | undefined {
-    if (!xmlGood || xmlGood === 'GOOD_NO_GOOD') return undefined;
+    if (!xmlGood || xmlGood === 'GOOD_NO_GOOD') {
+        return undefined;
+    }
     const name = xmlGood.replace('GOOD_', '');
-    if (!(name in S4GoodType)) return undefined;
+    if (!(name in S4GoodType)) {
+        return undefined;
+    }
     return S4_TO_MATERIAL_TYPE[S4GoodType[name as keyof typeof S4GoodType]];
 }
 
@@ -384,10 +408,14 @@ export interface BuildingWorkerInfo {
  */
 export function getBuildingWorkerInfo(race: Race, buildingType: BuildingType): BuildingWorkerInfo | undefined {
     const info = getBuildingInfo(race, buildingType);
-    if (!info?.inhabitant) return undefined;
+    if (!info?.inhabitant) {
+        return undefined;
+    }
 
     const unitType = xmlSettlerToUnitType(info.inhabitant);
-    if (unitType === undefined) return undefined;
+    if (unitType === undefined) {
+        return undefined;
+    }
 
     const tool = xmlGoodToMaterialType(info.tool);
     return { unitType, tool };
@@ -400,14 +428,18 @@ export function getBuildingWorkerInfo(race: Race, buildingType: BuildingType): B
  */
 export function getWorkerBuildingTypes(race: Race, unitType: UnitType): ReadonlySet<BuildingType> | undefined {
     const loader = getGameDataLoader();
-    if (!loader.isLoaded()) throw new Error('getWorkerBuildingTypes called before game data is loaded');
+    if (!loader.isLoaded()) {
+        throw new Error('getWorkerBuildingTypes called before game data is loaded');
+    }
 
     let raceMap = workerBuildingCache.get(race);
     if (!raceMap) {
         raceMap = new Map<UnitType, Set<BuildingType>>();
         for (const btStr of Object.keys(BUILDING_TYPE_TO_XML_ID)) {
             const bt = Number(btStr) as BuildingType;
-            if (!isBuildingAvailableForRace(bt, race)) continue;
+            if (!isBuildingAvailableForRace(bt, race)) {
+                continue;
+            }
             const workerInfo = getBuildingWorkerInfo(race, bt);
             if (workerInfo) {
                 let set = raceMap.get(workerInfo.unitType);
@@ -711,11 +743,17 @@ const MAP_OBJECT_TYPE_TO_XML_ID: Partial<Record<MapObjectType, string>> = {
  */
 export function getMapObjectInfo(type: MapObjectType): ObjectInfo {
     const loader = getGameDataLoader();
-    if (!loader.isLoaded()) throw new Error('getMapObjectInfo called before game data is loaded');
+    if (!loader.isLoaded()) {
+        throw new Error('getMapObjectInfo called before game data is loaded');
+    }
     const xmlId = MAP_OBJECT_TYPE_TO_XML_ID[type];
-    if (!xmlId) throw new Error(`No XML mapping for MapObjectType ${MapObjectType[type]}`);
+    if (!xmlId) {
+        throw new Error(`No XML mapping for MapObjectType ${MapObjectType[type]}`);
+    }
     const info = loader.getObject(xmlId);
-    if (!info) throw new Error(`No ObjectInfo found for ${xmlId}`);
+    if (!info) {
+        throw new Error(`No ObjectInfo found for ${xmlId}`);
+    }
     return info;
 }
 

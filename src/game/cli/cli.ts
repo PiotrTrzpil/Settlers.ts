@@ -94,7 +94,9 @@ export class GameCli {
     }
 
     private installConsoleCapture(): void {
-        if (typeof window === 'undefined') return;
+        if (typeof window === 'undefined') {
+            return;
+        }
         const levels = ['log', 'warn', 'error'] as const;
         for (const level of levels) {
             const original = console[level].bind(console);
@@ -102,7 +104,9 @@ export class GameCli {
                 original(...args);
                 const msg = args.map(a => (typeof a === 'string' ? a : JSON.stringify(a))).join(' ');
                 this.logBuffer.push({ level, time: Date.now(), msg });
-                if (this.logBuffer.length > MAX_LOG_ENTRIES) this.logBuffer.shift();
+                if (this.logBuffer.length > MAX_LOG_ENTRIES) {
+                    this.logBuffer.shift();
+                }
             };
         }
     }
@@ -154,7 +158,9 @@ export class GameCli {
         const seen = new Set<string>();
         const result: CliCommand[] = [];
         for (const cmd of this.commands.values()) {
-            if (seen.has(cmd.name)) continue;
+            if (seen.has(cmd.name)) {
+                continue;
+            }
             seen.add(cmd.name);
             result.push(cmd);
         }

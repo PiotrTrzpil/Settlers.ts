@@ -182,9 +182,15 @@ export function registerSettlersAPI(runtime: LuaRuntime, context: SettlersAPICon
             const rangeSq = range * range;
 
             for (const entity of context.gameState.entities) {
-                if (entity.type !== EntityType.Unit) continue;
-                if (entity.subType !== internalType) continue;
-                if (entity.player !== player) continue;
+                if (entity.type !== EntityType.Unit) {
+                    continue;
+                }
+                if (entity.subType !== internalType) {
+                    continue;
+                }
+                if (entity.player !== player) {
+                    continue;
+                }
 
                 const dx = entity.x - x;
                 const dy = entity.y - y;

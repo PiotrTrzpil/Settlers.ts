@@ -134,7 +134,9 @@ export class TimelineCapture {
     }
 
     private flushBuffer(): void {
-        if (this.buffer.length === 0) return;
+        if (this.buffer.length === 0) {
+            return;
+        }
         const entries = this.buffer;
         this.buffer = [];
         this.onFlush?.(entries);

@@ -73,7 +73,9 @@ export class ChoreoBuilder {
         this.nodes.push(node(ChoreoTaskType.GO_TO_TARGET));
         if (this._goToCount === 0) {
             this._targetPos = { x, y };
-            if (entityId !== undefined) this._targetId = entityId;
+            if (entityId !== undefined) {
+                this._targetId = entityId;
+            }
         }
         this.waypoints.push(entityId !== undefined ? { x, y, entityId } : { x, y });
         this._goToCount++;
@@ -155,7 +157,9 @@ export class ChoreoBuilder {
 
     /** Merge typed metadata. */
     meta(data: Record<string, number | string>): this {
-        if (!this._metadata) this._metadata = {};
+        if (!this._metadata) {
+            this._metadata = {};
+        }
         Object.assign(this._metadata, data);
         return this;
     }
@@ -163,10 +167,18 @@ export class ChoreoBuilder {
     /** Build the final ChoreoJobState. */
     build(): ChoreoJobState {
         const job = createChoreoJobState(this.jobId, this.nodes);
-        if (this._targetId !== null) job.targetId = this._targetId;
-        if (this._targetPos) job.targetPos = this._targetPos;
-        if (this.waypoints.length > 1) job.waypoints = this.waypoints;
-        if (this._metadata) job.metadata = this._metadata;
+        if (this._targetId !== null) {
+            job.targetId = this._targetId;
+        }
+        if (this._targetPos) {
+            job.targetPos = this._targetPos;
+        }
+        if (this.waypoints.length > 1) {
+            job.waypoints = this.waypoints;
+        }
+        if (this._metadata) {
+            job.metadata = this._metadata;
+        }
         return job;
     }
 }

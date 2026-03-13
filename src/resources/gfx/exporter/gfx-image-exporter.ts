@@ -95,9 +95,15 @@ export class GfxImageExporter {
             const hasPi4 = await this.fileReader.exists(pi4Path);
             const hasGil = await this.fileReader.exists(gilPath);
 
-            if (!hasGil) continue;
-            if (!hasPa6 && !hasP46) continue;
-            if (!hasPil && !hasPi4) continue;
+            if (!hasGil) {
+                continue;
+            }
+            if (!hasPa6 && !hasP46) {
+                continue;
+            }
+            if (!hasPil && !hasPi4) {
+                continue;
+            }
 
             const hasJil = await this.fileReader.exists(jilPath);
             const hasDil = await this.fileReader.exists(dilPath);

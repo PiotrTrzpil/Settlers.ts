@@ -25,7 +25,9 @@ let pruneTimer: ReturnType<typeof setInterval> | null = null;
 let toast: ReturnType<typeof useToast> | null = null;
 
 function getToast(): ReturnType<typeof useToast> {
-    if (!toast) toast = useToast();
+    if (!toast) {
+        toast = useToast();
+    }
     return toast;
 }
 
@@ -42,7 +44,9 @@ function isThrottled(key: string): boolean {
 
 /** Start the prune timer if not already running */
 function ensurePruneTimer(): void {
-    if (pruneTimer !== null) return;
+    if (pruneTimer !== null) {
+        return;
+    }
     pruneTimer = setInterval(() => {
         const now = performance.now();
         for (const [key, time] of throttle) {
@@ -63,7 +67,9 @@ function ensurePruneTimer(): void {
  */
 export function toastError(source: string, message: string): void {
     const key = `error:${source}:${message}`;
-    if (isThrottled(key)) return;
+    if (isThrottled(key)) {
+        return;
+    }
     getToast().error(`[${source}] ${message}`, { timeout: 8000 });
 }
 
@@ -72,7 +78,9 @@ export function toastError(source: string, message: string): void {
  */
 export function toastWarn(source: string, message: string): void {
     const key = `warn:${source}:${message}`;
-    if (isThrottled(key)) return;
+    if (isThrottled(key)) {
+        return;
+    }
     getToast().warning(`[${source}] ${message}`, { timeout: 6000 });
 }
 

@@ -104,7 +104,9 @@ export function isResourceDeposit(_objectType: MapObjectType): boolean {
 
 /** Check if a specific environment sub-layer is visible */
 export function isEnvironmentSubLayerVisible(visibility: LayerVisibility, subLayer: EnvironmentSubLayer): boolean {
-    if (!visibility.environment) return false;
+    if (!visibility.environment) {
+        return false;
+    }
     return visibility.environmentLayers[subLayer];
 }
 
@@ -128,7 +130,9 @@ export function isMapObjectVisible(visibility: LayerVisibility, objectType: MapO
     }
 
     // Other map objects use the Environment layer and sub-layers
-    if (!visibility.environment) return false;
+    if (!visibility.environment) {
+        return false;
+    }
 
     const subLayer = getEnvironmentSubLayer(objectType);
     return visibility.environmentLayers[subLayer];
@@ -154,7 +158,9 @@ export function saveLayerVisibility(visibility: LayerVisibility): void {
 export function loadLayerVisibility(): LayerVisibility {
     try {
         const stored = localStorage.getItem(STORAGE_KEY);
-        if (!stored) return { ...DEFAULT_LAYER_VISIBILITY };
+        if (!stored) {
+            return { ...DEFAULT_LAYER_VISIBILITY };
+        }
 
         const parsed = JSON.parse(stored) as Partial<LayerVisibility>;
         const defaults = DEFAULT_LAYER_VISIBILITY;

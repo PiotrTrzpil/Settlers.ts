@@ -48,14 +48,18 @@ export class EntitySpritePass implements IRenderPass {
 
     public draw(gl: WebGL2RenderingContext, projection: Float32Array, viewPoint: IViewPoint): void {
         const { ctx } = this;
-        if (!ctx.spriteManager?.hasSprites || !ctx.spriteBatchRenderer.isInitialized) return;
+        if (!ctx.spriteManager?.hasSprites || !ctx.spriteBatchRenderer.isInitialized) {
+            return;
+        }
 
         profiler.beginPhase('textured');
 
         // Enable alpha-to-coverage for smooth sprite edges when MSAA is active
         const samples = gl.getParameter(gl.SAMPLES) as number;
         const useAlphaToCoverage = samples > 1;
-        if (useAlphaToCoverage) gl.enable(gl.SAMPLE_ALPHA_TO_COVERAGE);
+        if (useAlphaToCoverage) {
+            gl.enable(gl.SAMPLE_ALPHA_TO_COVERAGE);
+        }
 
         ctx.spriteManager.spriteAtlas!.bindForRendering(gl);
         ctx.spriteManager.paletteManager.bind(gl);
@@ -74,12 +78,16 @@ export class EntitySpritePass implements IRenderPass {
 
         for (const entity of ctx.sortedEntities) {
             const resolved = ctx.spriteResolver.resolve(entity);
-            if (resolved.skip) continue;
+            if (resolved.skip) {
+                continue;
+            }
             if (resolved.transitioning && resolved.transitionData) {
                 this.blendPass.queueTransition(entity, resolved.transitionData);
                 continue;
             }
-            if (!resolved.sprite) continue;
+            if (!resolved.sprite) {
+                continue;
+            }
 
             const worldPos = this.getEntityWorldPos(entity, viewPoint);
             this.emitEntitySprite(gl, entity, resolved, worldPos);
@@ -92,7 +100,9 @@ export class EntitySpritePass implements IRenderPass {
 
         this.lastDrawCalls = ctx.spriteBatchRenderer.endSpriteBatch(gl);
 
-        if (useAlphaToCoverage) gl.disable(gl.SAMPLE_ALPHA_TO_COVERAGE);
+        if (useAlphaToCoverage) {
+            gl.disable(gl.SAMPLE_ALPHA_TO_COVERAGE);
+        }
 
         profiler.endPhase('textured');
 
@@ -165,7 +175,9 @@ export class EntitySpritePass implements IRenderPass {
     ): void {
         const { ctx } = this;
         for (const overlay of overlays) {
-            if (overlay.layer !== layer) continue;
+            if (overlay.layer !== layer) {
+                continue;
+            }
             const x = buildingWorldPos.worldX + overlay.worldOffsetX;
             const y = buildingWorldPos.worldY + overlay.worldOffsetY;
             const row = overlay.teamColored ? playerRow : 0;
@@ -199,7 +211,9 @@ export class EntitySpritePass implements IRenderPass {
      */
     private emitSelectionIndicators(gl: WebGL2RenderingContext, viewPoint: IViewPoint): void {
         for (const entity of this.ctx.sortedEntities) {
-            if (!this.ctx.selectedEntityIds.has(entity.id)) continue;
+            if (!this.ctx.selectedEntityIds.has(entity.id)) {
+                continue;
+            }
             if (entity.type === EntityType.Building) {
                 this.emitBuildingSelectionIndicator(gl, entity, viewPoint);
             } else if (entity.type === EntityType.Unit) {
@@ -213,11 +227,15 @@ export class EntitySpritePass implements IRenderPass {
         const zoom = viewPoint.zoom;
 
         const indicator = resolveSelectionIndicator(entity, ctx.spriteManager!, zoom);
-        if (!indicator) return;
+        if (!indicator) {
+            return;
+        }
 
         // Resolve the unit's own sprite to find where its top edge is
         const resolved = ctx.spriteResolver.resolve(entity);
-        if (!resolved.sprite) return;
+        if (!resolved.sprite) {
+            return;
+        }
         const unitSprite = scaleSprite(resolved.sprite, getSpriteScale(entity));
 
         const worldPos = this.getEntityWorldPos(entity, viewPoint);
@@ -240,7 +258,9 @@ export class EntitySpritePass implements IRenderPass {
 
     private emitBuildingSelectionIndicator(gl: WebGL2RenderingContext, entity: Entity, viewPoint: IViewPoint): void {
         const { ctx } = this;
-        if (!ctx.spriteManager) return;
+        if (!ctx.spriteManager) {
+            return;
+        }
 
         const footprint = getBuildingFootprint(entity.x, entity.y, entity.subType as BuildingType, entity.race);
         const bounds = calculateFootprintBounds(footprint, ctx.mapSize, ctx.groundHeight, viewPoint.x, viewPoint.y);

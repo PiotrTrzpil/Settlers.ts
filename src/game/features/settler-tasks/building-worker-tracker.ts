@@ -62,11 +62,14 @@ export class BuildingWorkerTracker {
 
     /** Release a worker's building assignment, decrementing its occupant count. */
     release(settlerId: number, runtime: UnitRuntime): void {
-        if (!runtime.homeAssignment) return;
+        if (!runtime.homeAssignment) {
+            return;
+        }
         const buildingId = runtime.homeAssignment.buildingId;
         const count = this.occupants.get(buildingId);
-        if (count === undefined)
+        if (count === undefined) {
             throw new Error(`No occupant count for building ${buildingId} in BuildingWorkerTracker.release`);
+        }
         if (count <= 1) {
             this.occupants.delete(buildingId);
         } else {
@@ -88,10 +91,14 @@ export class BuildingWorkerTracker {
     /** Emit building:workerLost if the building still exists (not being destroyed). */
     private emitWorkerLost(buildingId: number, settlerId: number): void {
         const building = this.gameState.getEntity(buildingId);
-        if (!building) return;
+        if (!building) {
+            return;
+        }
         const player = building.player;
         const race = this.gameState.playerRaces.get(player);
-        if (race === undefined) return;
+        if (race === undefined) {
+            return;
+        }
         this.eventBus.emit('building:workerLost', {
             buildingId,
             buildingType: building.subType as BuildingType,
@@ -126,13 +133,23 @@ export class BuildingWorkerTracker {
         let bestDistSq = Infinity;
 
         for (const [entityId, runtime] of this.runtimes) {
-            if (runtime.state !== SettlerState.IDLE) continue;
-            if (runtime.homeAssignment !== null) continue;
+            if (runtime.state !== SettlerState.IDLE) {
+                continue;
+            }
+            if (runtime.homeAssignment !== null) {
+                continue;
+            }
 
             const entity = this.gameState.getEntity(entityId);
-            if (!entity) continue;
-            if (entity.subType !== unitType) continue;
-            if (entity.player !== player) continue;
+            if (!entity) {
+                continue;
+            }
+            if (entity.subType !== unitType) {
+                continue;
+            }
+            if (entity.player !== player) {
+                continue;
+            }
 
             const dx = entity.x - nearX;
             const dy = entity.y - nearY;
@@ -167,7 +184,9 @@ export class BuildingWorkerTracker {
      */
     releaseAssignment(settlerId: number): void {
         const runtime = this.getOrCreateRuntime(settlerId);
-        if (!runtime.homeAssignment) return;
+        if (!runtime.homeAssignment) {
+            return;
+        }
         const buildingId = runtime.homeAssignment.buildingId;
         const count = this.occupants.get(buildingId);
         if (count !== undefined) {

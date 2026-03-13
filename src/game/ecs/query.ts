@@ -23,7 +23,9 @@ export function query(...stores: ComponentStore<unknown>[]): Array<[number, ...u
     // Pick the smallest store to iterate
     let smallest = stores[0]!;
     for (let i = 1; i < stores.length; i++) {
-        if (stores[i]!.size < smallest.size) smallest = stores[i]!;
+        if (stores[i]!.size < smallest.size) {
+            smallest = stores[i]!;
+        }
     }
 
     const results: Array<[number, ...unknown[]]> = [];
@@ -39,7 +41,9 @@ export function query(...stores: ComponentStore<unknown>[]): Array<[number, ...u
             }
             values.push(val);
         }
-        if (allPresent) results.push([id, ...values]);
+        if (allPresent) {
+            results.push([id, ...values]);
+        }
     }
 
     return results;
@@ -51,7 +55,9 @@ export function query(...stores: ComponentStore<unknown>[]): Array<[number, ...u
 export function queryCount(...stores: ComponentStore<unknown>[]): number {
     let smallest = stores[0]!;
     for (let i = 1; i < stores.length; i++) {
-        if (stores[i]!.size < smallest.size) smallest = stores[i]!;
+        if (stores[i]!.size < smallest.size) {
+            smallest = stores[i]!;
+        }
     }
 
     let count = 0;
@@ -63,7 +69,9 @@ export function queryCount(...stores: ComponentStore<unknown>[]): number {
                 break;
             }
         }
-        if (allPresent) count++;
+        if (allPresent) {
+            count++;
+        }
     }
     return count;
 }

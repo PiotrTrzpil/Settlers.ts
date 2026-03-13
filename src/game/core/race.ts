@@ -45,7 +45,9 @@ export function loadSavedRace(): Race {
         const stored = localStorage.getItem(RACE_STORAGE_KEY);
         if (stored !== null) {
             const parsed = Number(stored);
-            if (AVAILABLE_RACES.includes(parsed as Race)) return parsed as Race;
+            if (AVAILABLE_RACES.includes(parsed as Race)) {
+                return parsed as Race;
+            }
         }
     } catch {
         // localStorage not available

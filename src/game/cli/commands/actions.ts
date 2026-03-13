@@ -27,25 +27,35 @@ function exec(ctx: CliContext, cmd: Command): CliResult {
 /** Parse a positional as a required integer, throw with context on failure. */
 function reqInt(args: CliArgs, index: number, label: string): number {
     const raw = args._[index];
-    if (raw === undefined) throw new Error(`missing required argument: ${label}`);
+    if (raw === undefined) {
+        throw new Error(`missing required argument: ${label}`);
+    }
     const n = Number(raw);
-    if (!Number.isInteger(n)) throw new Error(`${label} must be an integer, got '${raw}'`);
+    if (!Number.isInteger(n)) {
+        throw new Error(`${label} must be an integer, got '${raw}'`);
+    }
     return n;
 }
 
 /** Parse a positional as an optional integer with a default. */
 function optInt(args: CliArgs, index: number, defaultVal: number): number {
     const raw = args._[index];
-    if (raw === undefined) return defaultVal;
+    if (raw === undefined) {
+        return defaultVal;
+    }
     const n = Number(raw);
-    if (!Number.isInteger(n)) throw new Error(`expected integer, got '${raw}'`);
+    if (!Number.isInteger(n)) {
+        throw new Error(`expected integer, got '${raw}'`);
+    }
     return n;
 }
 
 /** Parse a required string positional. */
 function reqStr(args: CliArgs, index: number, label: string): string {
     const raw = args._[index];
-    if (raw === undefined) throw new Error(`missing required argument: ${label}`);
+    if (raw === undefined) {
+        throw new Error(`missing required argument: ${label}`);
+    }
     return String(raw);
 }
 
@@ -69,14 +79,14 @@ function resolveProductionMode(input: string): ProductionMode {
 
 function resolveStorageDirection(input: string): StorageDirection | null {
     switch (input.toLowerCase()) {
-    case 'import':
-        return StorageDirection.Import;
-    case 'export':
-        return StorageDirection.Export;
-    case 'null':
-        return null;
-    default:
-        throw new Error(`unknown storage direction '${input}'. valid: import, export, null`);
+        case 'import':
+            return StorageDirection.Import;
+        case 'export':
+            return StorageDirection.Export;
+        case 'null':
+            return null;
+        default:
+            throw new Error(`unknown storage direction '${input}'. valid: import, export, null`);
     }
 }
 
@@ -117,7 +127,9 @@ function recruitCommand(): CliCommand {
             const count = optInt(args, 1, 1);
             const unitType = ctx.resolveUnit(typeName);
             const race = ctx.game.playerRaces.get(ctx.player);
-            if (race === undefined) throw new Error(`no race found for player ${ctx.player}`);
+            if (race === undefined) {
+                throw new Error(`no race found for player ${ctx.player}`);
+            }
             return exec(ctx, {
                 type: 'recruit_specialist',
                 unitType,
@@ -166,11 +178,15 @@ function garrisonCommand(): CliCommand {
         usage: 'gar <buildingId> <unitId1> [unitId2...]',
         desc: 'Garrison units into a building',
         execute(args: CliArgs, ctx: CliContext): CliResult {
-            if (args._.length < 2) throw new Error('usage: gar <buildingId> <unitId1> [unitId2...]');
+            if (args._.length < 2) {
+                throw new Error('usage: gar <buildingId> <unitId1> [unitId2...]');
+            }
             const buildingId = reqInt(args, 0, 'buildingId');
             const unitIds = args._.slice(1).map((v: string | number, i: number) => {
                 const n = Number(v);
-                if (!Number.isInteger(n)) throw new Error(`unitId[${i}] must be an integer, got '${v}'`);
+                if (!Number.isInteger(n)) {
+                    throw new Error(`unitId[${i}] must be an integer, got '${v}'`);
+                }
                 return n;
             });
             return exec(ctx, { type: 'garrison_units', buildingId, unitIds });

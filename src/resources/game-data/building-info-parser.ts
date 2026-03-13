@@ -18,7 +18,9 @@ import { parseXML, getChildText, getChildNumber, getChildBool, getValueArray } f
 
 function parsePositionOffset(parent: Element, tagName: string): PositionOffset {
     const el = parent.getElementsByTagName(tagName)[0];
-    if (!el) return { xOffset: 0, yOffset: 0 };
+    if (!el) {
+        return { xOffset: 0, yOffset: 0 };
+    }
 
     return {
         xOffset: getChildNumber(el, 'xOffset'),
@@ -28,7 +30,9 @@ function parsePositionOffset(parent: Element, tagName: string): PositionOffset {
 
 function parseBoundingRect(parent: Element): BoundingRect {
     const el = parent.getElementsByTagName('bitBoundingRect')[0];
-    if (!el) return { minX: 0, maxX: 0, minY: 0, maxY: 0 };
+    if (!el) {
+        return { minX: 0, maxX: 0, minY: 0, maxY: 0 };
+    }
 
     return {
         minX: getChildNumber(el, 'minX'),
@@ -61,7 +65,9 @@ function parseBuilderInfo(builderEl: Element): BuilderInfo {
 
 function parsePatchSound(patchEl: Element): PatchSound | null {
     const soundEl = patchEl.getElementsByTagName('sound')[0];
-    if (!soundEl) return null;
+    if (!soundEl) {
+        return null;
+    }
     return {
         def: getChildText(soundEl, 'def'),
         frame: getChildNumber(soundEl, 'frame'),
@@ -133,7 +139,9 @@ function parseBuilding(buildingEl: Element): BuildingInfo {
         for (let i = 0; i < animListElements.length; i++) {
             // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- textContent may be null at runtime despite TS type
             const text = animListElements[i]!.textContent?.trim();
-            if (text) animLists.push(text);
+            if (text) {
+                animLists.push(text);
+            }
         }
     }
 
@@ -197,7 +205,9 @@ export function parseBuildingInfo(xmlContent: string): Map<RaceId, RaceBuildingD
         const raceEl = raceElements[i]!;
         const raceId = raceEl.getAttribute('id') as RaceId;
         // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- getAttribute may return null despite cast
-        if (!raceId) continue;
+        if (!raceId) {
+            continue;
+        }
 
         const buildings = new Map<string, BuildingInfo>();
         const buildingElements = raceEl.getElementsByTagName('building');

@@ -50,7 +50,9 @@ export function connectGameCli(url: string = DEFAULT_URL): Promise<GameCliClient
         ws.on('message', (data: WebSocket.Data) => {
             const msg = JSON.parse(data.toString()) as WsResultMessage;
             const entry = pending.get(msg.id);
-            if (!entry) return;
+            if (!entry) {
+                return;
+            }
             clearTimeout(entry.timer);
             pending.delete(msg.id);
             entry.resolve({ ok: msg.ok, output: msg.output });

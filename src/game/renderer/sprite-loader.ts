@@ -178,7 +178,9 @@ export class SpriteLoader {
         paletteBaseOffset: number
     ): Promise<LoadedSprite | null> {
         const gfxImage = this.getJobImage(fileSet, config);
-        if (!gfxImage) return null;
+        if (!gfxImage) {
+            return null;
+        }
         return this.packSpriteIntoAtlas(gfxImage, atlas, paletteBaseOffset);
     }
 
@@ -260,7 +262,9 @@ export class SpriteLoader {
             gfxImage = fileSet.gfxReader.getImage(gilIndex);
         }
 
-        if (!gfxImage) return null;
+        if (!gfxImage) {
+            return null;
+        }
         return this.packSpriteIntoAtlas(gfxImage, atlas, paletteBaseOffset, trimOverride);
     }
 
@@ -301,7 +305,9 @@ export class SpriteLoader {
         trimBottom: number
     ): Uint16Array {
         const newHeight = height - trimTop - trimBottom;
-        if (newHeight <= 0 || newHeight === height) return indices;
+        if (newHeight <= 0 || newHeight === height) {
+            return indices;
+        }
 
         const trimmed = new Uint16Array(width * newHeight);
         for (let y = 0; y < newHeight; y++) {
@@ -516,10 +522,14 @@ export class SpriteLoader {
      * Returns 0 if job doesn't exist or JIL/DIL not available.
      */
     public getDirectionCount(fileSet: LoadedGfxFileSet, jobIndex: number): number {
-        if (!fileSet.jilReader || !fileSet.dilReader) return 0;
+        if (!fileSet.jilReader || !fileSet.dilReader) {
+            return 0;
+        }
 
         const jobItem = fileSet.jilReader.getItem(jobIndex);
-        if (!jobItem) return 0;
+        if (!jobItem) {
+            return 0;
+        }
 
         const dirItems = fileSet.dilReader.getItems(jobItem.offset, jobItem.length);
         return dirItems.length;
@@ -538,7 +548,9 @@ export class SpriteLoader {
         paletteBaseOffset: number
     ): Promise<Map<number, LoadedSprite[]> | null> {
         const directionCount = this.getDirectionCount(fileSet, jobIndex);
-        if (directionCount === 0) return null;
+        if (directionCount === 0) {
+            return null;
+        }
 
         // Load all directions in parallel — atlas.reserve() is sync and safe to interleave
         const promises = Array.from({ length: directionCount }, (_, dir) =>
@@ -567,7 +579,9 @@ export class SpriteLoader {
         paletteBaseOffset: number,
         trimTop: number
     ): LoadedSprite | null {
-        if (sr.height <= 0 || sr.width <= 0) return null;
+        if (sr.height <= 0 || sr.width <= 0) {
+            return null;
+        }
 
         const region = atlas.reserve(sr.width, sr.height);
         if (!region) {
@@ -600,10 +614,14 @@ export class SpriteLoader {
         trim: SpriteTrim
     ): { manifest: BatchSpriteDescriptor[]; dirIndices: number[] } | null {
         const jobItem = fileSet.jilReader!.getItem(jobIndex);
-        if (!jobItem) return null;
+        if (!jobItem) {
+            return null;
+        }
 
         const dirItems = fileSet.dilReader!.getItems(jobItem.offset, jobItem.length);
-        if (dirItems.length === 0) return null;
+        if (dirItems.length === 0) {
+            return null;
+        }
 
         const manifest: BatchSpriteDescriptor[] = [];
         const dirIndices: number[] = [];
@@ -634,7 +652,9 @@ export class SpriteLoader {
 
         for (const jobIndex of jobIndices) {
             const built = this.buildJobManifest(fileSet, jobIndex, trim);
-            if (!built) continue;
+            if (!built) {
+                continue;
+            }
             for (let i = 0; i < built.manifest.length; i++) {
                 manifest.push(built.manifest[i]!);
                 entryMap.push({ jobIndex, dir: built.dirIndices[i]! });
@@ -678,14 +698,18 @@ export class SpriteLoader {
     ): Promise<Map<number, Map<number, LoadedSprite[]>>> {
         const result = new Map<number, Map<number, LoadedSprite[]>>();
 
-        if (!fileSet.jilReader || !fileSet.dilReader) return result;
+        if (!fileSet.jilReader || !fileSet.dilReader) {
+            return result;
+        }
 
         const pool = getDecoderPool();
 
         // Build one big manifest for all jobs
         const trim = SpriteLoader.DEFAULT_TRIM;
         const { manifest, entryMap } = this.buildMultiJobManifest(fileSet, jobIndices, trim);
-        if (manifest.length === 0) return result;
+        if (manifest.length === 0) {
+            return result;
+        }
 
         const batchResult = await pool.decodeBatch(fileSet.gfxReader.getBuffer(), manifest);
 
@@ -697,7 +721,9 @@ export class SpriteLoader {
                 paletteBaseOffset,
                 trim.top
             );
-            if (!sprite) continue;
+            if (!sprite) {
+                continue;
+            }
             SpriteLoader.insertIntoJobMap(result, entryMap[i]!.jobIndex, entryMap[i]!.dir, sprite);
         }
 
@@ -720,7 +746,9 @@ export class SpriteLoader {
     ): Promise<Map<number, LoadedSprite>> {
         const resultMap = new Map<number, LoadedSprite>();
 
-        if (gilIndices.length === 0) return resultMap;
+        if (gilIndices.length === 0) {
+            return resultMap;
+        }
 
         const pool = getDecoderPool();
 
@@ -758,7 +786,9 @@ export class SpriteLoader {
                 paletteBaseOffset,
                 trim.top
             );
-            if (sprite) resultMap.set(gilIndices[i]!, sprite);
+            if (sprite) {
+                resultMap.set(gilIndices[i]!, sprite);
+            }
         }
 
         return resultMap;
@@ -769,7 +799,9 @@ export class SpriteLoader {
      * Uses jilReader.length directly to get total count including null entries.
      */
     public getJobCount(fileSet: LoadedGfxFileSet): number {
-        if (!fileSet.jilReader) return 0;
+        if (!fileSet.jilReader) {
+            return 0;
+        }
         return fileSet.jilReader.length;
     }
 

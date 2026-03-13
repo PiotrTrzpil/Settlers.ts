@@ -26,7 +26,9 @@ export class WorkAreaStore implements Persistable<SerializedWorkAreaOffset[]> {
     getOffset(buildingType: BuildingType, race: Race, buildingId?: number): TileOffset {
         if (buildingId !== undefined) {
             const inst = this.instanceOffsets.get(buildingId);
-            if (inst) return inst;
+            if (inst) {
+                return inst;
+            }
         }
         return this.getDefaultOffset(buildingType, race);
     }
@@ -34,7 +36,9 @@ export class WorkAreaStore implements Persistable<SerializedWorkAreaOffset[]> {
     /** Get the default work area offset from XML workingPos data. */
     private getDefaultOffset(buildingType: BuildingType, race: Race): TileOffset {
         const info = getBuildingInfo(race, buildingType);
-        if (!info) throw new Error(`No BuildingInfo for ${buildingType} / race ${race}`);
+        if (!info) {
+            throw new Error(`No BuildingInfo for ${buildingType} / race ${race}`);
+        }
         const { xOffset, yOffset } = info.workingPos;
         return { dx: xOffset, dy: yOffset };
     }
@@ -42,7 +46,9 @@ export class WorkAreaStore implements Persistable<SerializedWorkAreaOffset[]> {
     /** Get the work area radius (in tiles) for a building type+race from XML data. */
     getRadius(buildingType: BuildingType, race: Race): number {
         const info = getBuildingInfo(race, buildingType);
-        if (!info) throw new Error(`No BuildingInfo for ${buildingType} / race ${race}`);
+        if (!info) {
+            throw new Error(`No BuildingInfo for ${buildingType} / race ${race}`);
+        }
         return info.workingAreaRadius;
     }
 

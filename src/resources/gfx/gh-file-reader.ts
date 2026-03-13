@@ -86,20 +86,20 @@ export class GhFileReader {
             let img: IGfxImage;
 
             switch (imageType) {
-            case 0:
-                img = new GfxImage16Bit(reader, 128, rowCount);
-                break;
-            case 1:
-                img = new GfxImage16Bit(reader, 256, rowCount);
-                break;
-            case 2:
-                img = new GfxImageWithPalette(reader, 128, rowCount);
-                break;
-            case 3:
-                img = new GfxImageWithPalette(reader, 256, rowCount);
-                break;
-            default:
-                return;
+                case 0:
+                    img = new GfxImage16Bit(reader, 128, rowCount);
+                    break;
+                case 1:
+                    img = new GfxImage16Bit(reader, 256, rowCount);
+                    break;
+                case 2:
+                    img = new GfxImageWithPalette(reader, 128, rowCount);
+                    break;
+                case 3:
+                    img = new GfxImageWithPalette(reader, 256, rowCount);
+                    break;
+                default:
+                    return;
             }
 
             img.flag1 = flag1;

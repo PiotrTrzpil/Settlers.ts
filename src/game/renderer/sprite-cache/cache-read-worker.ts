@@ -160,11 +160,17 @@ async function handleSetPriority(req: CacheSetPriorityRequest): Promise<void> {
 
     // Deliver layers in the requested priority order
     for (const layerIndex of req.layerOrder) {
-        if (layerIndex >= layerReadPromises.length) continue;
+        if (layerIndex >= layerReadPromises.length) {
+            continue;
+        }
         const buffer = await layerReadPromises[layerIndex]!;
-        if (!buffer) continue;
+        if (!buffer) {
+            continue;
+        }
 
-        if (delivered === 0) firstLayerMs = Math.round(performance.now() - t0);
+        if (delivered === 0) {
+            firstLayerMs = Math.round(performance.now() - t0);
+        }
         totalBytes += buffer.byteLength;
         delivered++;
 

@@ -153,7 +153,9 @@ export class RenderProfiler {
      * Begin a new frame. Call at the start of draw().
      */
     public beginFrame(): void {
-        if (this.level === 'none') return;
+        if (this.level === 'none') {
+            return;
+        }
 
         this.frameStart = performance.now();
         this.currentMetrics = this.createEmptyMetrics();
@@ -165,7 +167,9 @@ export class RenderProfiler {
      * End the current frame. Call at the end of draw().
      */
     public endFrame(): void {
-        if (this.level === 'none') return;
+        if (this.level === 'none') {
+            return;
+        }
 
         this.currentMetrics.frameTimeUs = (performance.now() - this.frameStart) * 1000;
 
@@ -191,7 +195,9 @@ export class RenderProfiler {
      * Begin timing a named phase.
      */
     public beginPhase(name: string): void {
-        if (this.level === 'none') return;
+        if (this.level === 'none') {
+            return;
+        }
         this.phaseStarts.set(name, performance.now());
     }
 
@@ -199,24 +205,28 @@ export class RenderProfiler {
      * End timing a named phase.
      */
     public endPhase(name: string): void {
-        if (this.level === 'none') return;
+        if (this.level === 'none') {
+            return;
+        }
 
         const start = this.phaseStarts.get(name);
-        if (start === undefined) return;
+        if (start === undefined) {
+            return;
+        }
 
         const durationUs = (performance.now() - start) * 1000;
 
         // Map phase names to metrics
         switch (name) {
-        case 'cull':
-            this.currentMetrics.cullTimeUs = durationUs;
-            break;
-        case 'sort':
-            this.currentMetrics.sortTimeUs = durationUs;
-            break;
-        case 'draw':
-            this.currentMetrics.drawTimeUs = durationUs;
-            break;
+            case 'cull':
+                this.currentMetrics.cullTimeUs = durationUs;
+                break;
+            case 'sort':
+                this.currentMetrics.sortTimeUs = durationUs;
+                break;
+            case 'draw':
+                this.currentMetrics.drawTimeUs = durationUs;
+                break;
         }
     }
 
@@ -224,7 +234,9 @@ export class RenderProfiler {
      * Record entity counts.
      */
     public recordEntities(total: number, visible: number, culled: number): void {
-        if (this.level === 'none') return;
+        if (this.level === 'none') {
+            return;
+        }
 
         this.currentMetrics.totalEntities = total;
         this.currentMetrics.visibleEntities = visible;
@@ -235,7 +247,9 @@ export class RenderProfiler {
      * Record a draw call.
      */
     public recordDrawCall(triangles: number): void {
-        if (this.level === 'none') return;
+        if (this.level === 'none') {
+            return;
+        }
 
         this.currentMetrics.drawCallCount++;
         this.currentMetrics.triangleCount += triangles;
@@ -245,7 +259,9 @@ export class RenderProfiler {
      * Record a batch flush.
      */
     public recordBatchFlush(spriteCount: number): void {
-        if (this.level === 'none') return;
+        if (this.level === 'none') {
+            return;
+        }
 
         this.currentMetrics.batchFlushCount++;
         this.trace(`batch flush: ${spriteCount} sprites`);
@@ -255,7 +271,9 @@ export class RenderProfiler {
      * Record transitioning units count.
      */
     public recordTransitioningUnits(count: number): void {
-        if (this.level === 'none') return;
+        if (this.level === 'none') {
+            return;
+        }
         this.currentMetrics.transitioningUnits = count;
     }
 
@@ -263,7 +281,9 @@ export class RenderProfiler {
      * Record position cache size.
      */
     public recordCacheSize(size: number): void {
-        if (this.level === 'none') return;
+        if (this.level === 'none') {
+            return;
+        }
         this.currentMetrics.positionCacheSize = size;
     }
 
@@ -271,7 +291,9 @@ export class RenderProfiler {
      * Add a trace message (only logged in trace mode).
      */
     public trace(message: string): void {
-        if (this.level !== 'trace') return;
+        if (this.level !== 'trace') {
+            return;
+        }
         this.traceBuffer.push(message);
     }
 

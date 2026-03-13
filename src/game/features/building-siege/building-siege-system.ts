@@ -128,12 +128,20 @@ export class BuildingSiegeSystem implements TickSystem {
     onMovementStopped(entityId: number): void {
         try {
             const unit = this.gameState.getEntity(entityId);
-            if (!unit) return;
-            if (unit.type !== EntityType.Unit) return;
-            if (!this.isSwordsman(unit.subType as UnitType)) return;
+            if (!unit) {
+                return;
+            }
+            if (unit.type !== EntityType.Unit) {
+                return;
+            }
+            if (!this.isSwordsman(unit.subType as UnitType)) {
+                return;
+            }
             // Skip units already committed to another task (e.g., en-route to friendly garrison)
             // but allow units in a siege (they're reserved by us)
-            if (this.unitReservation.isReserved(entityId) && !this.isInAnySiege(entityId)) return;
+            if (this.unitReservation.isReserved(entityId) && !this.isInAnySiege(entityId)) {
+                return;
+            }
 
             this.tryBeginOrJoinSiege(entityId, unit);
         } catch (e) {
@@ -172,7 +180,9 @@ export class BuildingSiegeSystem implements TickSystem {
      */
     cancelSiege(buildingId: number): void {
         const siege = this.sieges.get(buildingId);
-        if (!siege) return;
+        if (!siege) {
+            return;
+        }
 
         // Release attackers from combat and reservations so they return to idle
         for (const attackerId of siege.attackerIds) {
@@ -196,7 +206,9 @@ export class BuildingSiegeSystem implements TickSystem {
 
     tick(_dt: number): void {
         this.tickCounter++;
-        if (this.tickCounter < TICK_CHECK_INTERVAL) return;
+        if (this.tickCounter < TICK_CHECK_INTERVAL) {
+            return;
+        }
         this.tickCounter = 0;
 
         // Process existing sieges
@@ -234,25 +246,25 @@ export class BuildingSiegeSystem implements TickSystem {
         }
 
         switch (siege.phase) {
-        case SiegePhase.Approaching:
-            // Check if any attacker has arrived at the door
-            if (this.hasAttackerAtDoor(siege, building)) {
-                this.advanceSiege(buildingId, siege);
-            }
-            break;
-        case SiegePhase.Fighting:
-            // Validate active defender still exists
-            if (siege.activeDefenderId !== null) {
-                const defender = this.gameState.getEntity(siege.activeDefenderId);
-                if (!defender) {
-                    siege.activeDefenderId = null;
+            case SiegePhase.Approaching:
+                // Check if any attacker has arrived at the door
+                if (this.hasAttackerAtDoor(siege, building)) {
                     this.advanceSiege(buildingId, siege);
                 }
-            }
-            break;
-        case SiegePhase.Capturing:
-            // Capture is handled immediately in advanceSiege — this is a transient state
-            break;
+                break;
+            case SiegePhase.Fighting:
+                // Validate active defender still exists
+                if (siege.activeDefenderId !== null) {
+                    const defender = this.gameState.getEntity(siege.activeDefenderId);
+                    if (!defender) {
+                        siege.activeDefenderId = null;
+                        this.advanceSiege(buildingId, siege);
+                    }
+                }
+                break;
+            case SiegePhase.Capturing:
+                // Capture is handled immediately in advanceSiege — this is a transient state
+                break;
         }
     }
 
@@ -260,11 +272,15 @@ export class BuildingSiegeSystem implements TickSystem {
 
     private tryBeginOrJoinSiege(unitId: number, unit: { x: number; y: number; player: number }): void {
         const target = this.findNearbyEnemyGarrison(unit, BUILDING_SEARCH_RADIUS);
-        if (!target) return;
+        if (!target) {
+            return;
+        }
 
         // Create or join siege state first (tracks this attacker, prevents over-commitment)
         const siege = this.getOrCreateSiege(unitId, target, unit.player);
-        if (!siege) return; // already at max attackers
+        if (!siege) {
+            return;
+        } // already at max attackers
 
         const door = getBuildingDoorPos(target.x, target.y, target.race, target.subType as BuildingType);
         const doorDist = Math.max(Math.abs(unit.x - door.x), Math.abs(unit.y - door.y));
@@ -291,9 +307,15 @@ export class BuildingSiegeSystem implements TickSystem {
         let bestDist = Infinity;
 
         for (const candidate of nearby) {
-            if (candidate.type !== EntityType.Building) continue;
-            if (candidate.player === unit.player) continue;
-            if (!isGarrisonBuildingType(candidate.subType as BuildingType)) continue;
+            if (candidate.type !== EntityType.Building) {
+                continue;
+            }
+            if (candidate.player === unit.player) {
+                continue;
+            }
+            if (!isGarrisonBuildingType(candidate.subType as BuildingType)) {
+                continue;
+            }
 
             // Measure distance to the door, not the building center
             const door = getBuildingDoorPos(
@@ -326,8 +348,12 @@ export class BuildingSiegeSystem implements TickSystem {
     private getOrCreateSiege(unitId: number, building: Entity, attackerPlayer: number): SiegeState | null {
         const existing = this.sieges.get(building.id);
         if (existing) {
-            if (existing.attackerIds.includes(unitId)) return existing;
-            if (existing.attackerIds.length >= MAX_SIEGE_ATTACKERS) return null;
+            if (existing.attackerIds.includes(unitId)) {
+                return existing;
+            }
+            if (existing.attackerIds.length >= MAX_SIEGE_ATTACKERS) {
+                return null;
+            }
             existing.attackerIds.push(unitId);
             this.reserveAttacker(unitId);
             log.debug(`Swordsman ${unitId} joined siege on building ${building.id}`);
@@ -359,7 +385,9 @@ export class BuildingSiegeSystem implements TickSystem {
     }
 
     private reserveAttacker(unitId: number): void {
-        if (this.unitReservation.isReserved(unitId)) return;
+        if (this.unitReservation.isReserved(unitId)) {
+            return;
+        }
         this.unitReservation.reserve(unitId, {
             purpose: 'siege-attacker',
             onForcedRelease: id => {
@@ -418,7 +446,9 @@ export class BuildingSiegeSystem implements TickSystem {
      * CombatState to Fighting with targetId = defender.
      */
     private assignAttackersToCombat(siege: SiegeState): void {
-        if (siege.activeDefenderId === null) return;
+        if (siege.activeDefenderId === null) {
+            return;
+        }
 
         const defenderId = siege.activeDefenderId;
         const defenderState = this.combatSystem.getState(defenderId);
@@ -433,7 +463,9 @@ export class BuildingSiegeSystem implements TickSystem {
 
         // Set defender to fight the first attacker
         const firstAttackerId = siege.attackerIds[0];
-        if (firstAttackerId === undefined) return;
+        if (firstAttackerId === undefined) {
+            return;
+        }
 
         defenderState.status = CombatStatus.Fighting;
         defenderState.targetId = firstAttackerId;
@@ -519,10 +551,14 @@ export class BuildingSiegeSystem implements TickSystem {
      */
     private tryGarrisonCapturingUnit(buildingId: number, siege: SiegeState): void {
         const capturingUnitId = siege.attackerIds[0];
-        if (capturingUnitId === undefined) return;
+        if (capturingUnitId === undefined) {
+            return;
+        }
 
         const capturingUnit = this.gameState.getEntity(capturingUnitId);
-        if (!capturingUnit) return;
+        if (!capturingUnit) {
+            return;
+        }
 
         this.unitReservation.reserve(capturingUnitId, {
             purpose: 'garrison-en-route',
@@ -561,9 +597,13 @@ export class BuildingSiegeSystem implements TickSystem {
 
         for (const attackerId of siege.attackerIds) {
             const attacker = this.gameState.getEntity(attackerId);
-            if (!attacker) continue;
+            if (!attacker) {
+                continue;
+            }
             const dist = Math.max(Math.abs(attacker.x - door.x), Math.abs(attacker.y - door.y));
-            if (dist <= DOOR_ARRIVAL_DISTANCE) return true;
+            if (dist <= DOOR_ARRIVAL_DISTANCE) {
+                return true;
+            }
         }
         return false;
     }
@@ -572,7 +612,9 @@ export class BuildingSiegeSystem implements TickSystem {
     private removeAttacker(entityId: number): void {
         for (const [buildingId, siege] of this.sieges) {
             const idx = siege.attackerIds.indexOf(entityId);
-            if (idx === -1) continue;
+            if (idx === -1) {
+                continue;
+            }
 
             siege.attackerIds.splice(idx, 1);
             this.unitReservation.release(entityId);
@@ -599,7 +641,9 @@ export class BuildingSiegeSystem implements TickSystem {
     /** Returns true if the unit is already part of any active siege. */
     private isInAnySiege(unitId: number): boolean {
         for (const siege of this.sieges.values()) {
-            if (siege.attackerIds.includes(unitId)) return true;
+            if (siege.attackerIds.includes(unitId)) {
+                return true;
+            }
         }
         return false;
     }
@@ -616,8 +660,12 @@ export class BuildingSiegeSystem implements TickSystem {
 
         for (const buildingId of buildings) {
             const building = this.gameState.getEntity(buildingId);
-            if (!building) continue;
-            if (!isGarrisonBuildingType(building.subType as BuildingType)) continue;
+            if (!building) {
+                continue;
+            }
+            if (!isGarrisonBuildingType(building.subType as BuildingType)) {
+                continue;
+            }
             this.scanNearbyIdleSwordsmen(building);
         }
     }
@@ -625,7 +673,9 @@ export class BuildingSiegeSystem implements TickSystem {
     private scanNearbyIdleSwordsmen(building: Entity): void {
         const nearby = this.gameState.getEntitiesInRadius(building.x, building.y, IDLE_SCAN_RADIUS);
         for (const unit of nearby) {
-            if (!this.isIdleEnemySwordsman(unit, building.player)) continue;
+            if (!this.isIdleEnemySwordsman(unit, building.player)) {
+                continue;
+            }
 
             try {
                 this.tryBeginOrJoinSiege(unit.id, unit);

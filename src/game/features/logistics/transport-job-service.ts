@@ -50,7 +50,9 @@ function resolveStorageAreaSlot(
 ): number {
     // First: find already-claimed slot with space
     const claimed = inventoryManager.findSlot(destBuilding, material, SlotKind.Storage);
-    if (claimed !== undefined) return claimed.id;
+    if (claimed !== undefined) {
+        return claimed.id;
+    }
 
     // Then: claim a free (unclaimed) slot
     const free = inventoryManager.findSlot(destBuilding, EMaterialType.NO_MATERIAL, SlotKind.Storage);
@@ -108,11 +110,15 @@ export function activate(
 ): TransportJobRecord | null {
     const currentAmount = deps.inventoryManager.getOutputAmount(sourceBuilding, material);
     const available = deps.jobStore.getAvailableSupply(sourceBuilding, material, currentAmount);
-    if (available < amount) return null;
+    if (available < amount) {
+        return null;
+    }
 
     // Resolve destination slot — atomic with source reservation
     const slotId = resolveDestinationSlot(destBuilding, material, deps);
-    if (slotId === -1) return null;
+    if (slotId === -1) {
+        return null;
+    }
 
     const record: TransportJobRecord = {
         id: deps.jobStore.allocateJobId(),

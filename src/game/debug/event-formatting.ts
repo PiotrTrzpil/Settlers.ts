@@ -80,10 +80,15 @@ export const EventFmt = {
     // Entity lifecycle
     'entity:created': (e: GameEvents['entity:created']) => {
         let typeName = `sub=${e.subType}`;
-        if (e.entityType === EntityType.Building) typeName = BuildingType[e.subType]!;
-        else if (e.entityType === EntityType.Unit) typeName = UnitType[e.subType]!;
-        else if (e.entityType === EntityType.StackedPile) typeName = EMaterialType[e.subType]!;
-        else if (e.entityType === EntityType.MapObject) typeName = MapObjectType[e.subType] ?? `sub=${e.subType}`;
+        if (e.entityType === EntityType.Building) {
+            typeName = BuildingType[e.subType]!;
+        } else if (e.entityType === EntityType.Unit) {
+            typeName = UnitType[e.subType]!;
+        } else if (e.entityType === EntityType.StackedPile) {
+            typeName = EMaterialType[e.subType]!;
+        } else if (e.entityType === EntityType.MapObject) {
+            typeName = MapObjectType[e.subType] ?? `sub=${e.subType}`;
+        }
         return `${typeName} at (${e.x},${e.y})`;
     },
 

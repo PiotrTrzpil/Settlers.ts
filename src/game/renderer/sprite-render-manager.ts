@@ -140,7 +140,9 @@ export class SpriteRenderManager {
      * No-op if race is already set (prevents overwriting during HMR).
      */
     public setInitialRace(race: Race): void {
-        if (this._currentRace !== null) return;
+        if (this._currentRace !== null) {
+            return;
+        }
         this._currentRace = race;
     }
 
@@ -162,7 +164,9 @@ export class SpriteRenderManager {
      * overlap with landscape init. No-op if the race has not been set yet.
      */
     public prefetchCache(): void {
-        if (this._currentRace === null) return;
+        if (this._currentRace === null) {
+            return;
+        }
         this.cacheManager.prefetch(this._currentRace);
     }
 
@@ -185,7 +189,9 @@ export class SpriteRenderManager {
         const currentLabel = this._currentRace !== null ? Race[this._currentRace] : 'none';
         SpriteRenderManager.log.debug(`setRace called: ${Race[race]} (current: ${currentLabel})`);
 
-        if (race === this._currentRace) return true;
+        if (race === this._currentRace) {
+            return true;
+        }
         if (!this.glContext) {
             SpriteRenderManager.log.debug('setRace failed: no GL context');
             return false;
@@ -216,7 +222,9 @@ export class SpriteRenderManager {
      */
     public getBuilding(type: BuildingType, race?: number): SpriteEntry | null {
         const resolvedRace = race ?? this._currentRace;
-        if (resolvedRace === null) return null;
+        if (resolvedRace === null) {
+            return null;
+        }
         return this._spriteRegistry?.getBuilding(type, resolvedRace) ?? null;
     }
 
@@ -225,7 +233,9 @@ export class SpriteRenderManager {
      */
     public getBuildingConstruction(type: BuildingType, race?: number): SpriteEntry | null {
         const resolvedRace = race ?? this._currentRace;
-        if (resolvedRace === null) return null;
+        if (resolvedRace === null) {
+            return null;
+        }
         return this._spriteRegistry?.getBuildingConstruction(type, resolvedRace) ?? null;
     }
 
@@ -325,7 +335,9 @@ export class SpriteRenderManager {
      * Handles palette lookup internally — callers don't need to know about palettes.
      */
     public extractSpriteAsImageData(region: AtlasRegion, paletteBaseOffset = 0): ImageData | null {
-        if (!this._spriteAtlas) return null;
+        if (!this._spriteAtlas) {
+            return null;
+        }
         const paletteData = this._paletteManager.getPaletteData() ?? undefined;
         return this._spriteAtlas.extractRegion(region, paletteData, paletteBaseOffset);
     }
@@ -338,7 +350,9 @@ export class SpriteRenderManager {
         const race = this._currentRace;
         const atlas = this._spriteAtlas;
         const registry = this._spriteRegistry;
-        if (!race || !atlas || !registry) return;
+        if (!race || !atlas || !registry) {
+            return;
+        }
         void this.cacheManager.save(race, atlas, registry, this.textureUnit, this._paletteManager);
     }
 
@@ -357,7 +371,9 @@ export class SpriteRenderManager {
         const gl = this.glContext;
         const atlas = this._spriteAtlas;
         const registry = this._spriteRegistry;
-        if (!gl || !atlas || !registry) return 0;
+        if (!gl || !atlas || !registry) {
+            return 0;
+        }
 
         return loadOverlaySprites(manifest, {
             spriteLoader: this.spriteLoader,
@@ -554,7 +570,9 @@ export class SpriteRenderManager {
             const spriteMap = getBuildingSpriteMap(r);
             for (const info of Object.values(spriteMap)) {
                 // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- Partial values
-                if (info) files.add(info.file);
+                if (info) {
+                    files.add(info.file);
+                }
             }
         }
         return Array.from(files).map(String);

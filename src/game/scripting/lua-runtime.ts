@@ -333,22 +333,22 @@ export class LuaRuntime {
         const type = lua.lua_type(this.L, idx);
 
         switch (type) {
-        case lua.LUA_TNIL:
-            return undefined;
-        case lua.LUA_TBOOLEAN:
-            return lua.lua_toboolean(this.L, idx);
-        case lua.LUA_TNUMBER:
-            return lua.lua_tonumber(this.L, idx);
-        case lua.LUA_TSTRING:
-            return toJsStr(lua.lua_tostring(this.L, idx));
-        case lua.LUA_TTABLE:
-            return this.tableToObject(idx);
-        case lua.LUA_TFUNCTION:
-            // Store function reference
-            lua.lua_pushvalue(this.L, idx);
-            return lauxlib.luaL_ref(this.L, lua.LUA_REGISTRYINDEX);
-        default:
-            return undefined;
+            case lua.LUA_TNIL:
+                return undefined;
+            case lua.LUA_TBOOLEAN:
+                return lua.lua_toboolean(this.L, idx);
+            case lua.LUA_TNUMBER:
+                return lua.lua_tonumber(this.L, idx);
+            case lua.LUA_TSTRING:
+                return toJsStr(lua.lua_tostring(this.L, idx));
+            case lua.LUA_TTABLE:
+                return this.tableToObject(idx);
+            case lua.LUA_TFUNCTION:
+                // Store function reference
+                lua.lua_pushvalue(this.L, idx);
+                return lauxlib.luaL_ref(this.L, lua.LUA_REGISTRYINDEX);
+            default:
+                return undefined;
         }
     }
 

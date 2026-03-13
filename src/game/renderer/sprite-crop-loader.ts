@@ -61,7 +61,9 @@ export async function loadCropSprites(
                 atlas,
                 paletteBaseOffset
             );
-            if (sprite) matureFrames.push(sprite.entry);
+            if (sprite) {
+                matureFrames.push(sprite.entry);
+            }
         }
         if (matureFrames.length > 0) {
             batch.add({

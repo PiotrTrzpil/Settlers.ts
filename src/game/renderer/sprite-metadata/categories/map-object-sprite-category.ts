@@ -58,6 +58,8 @@ export class MapObjectSpriteCategory {
      */
     setEntries(entries: Map<MapObjectType, SpriteEntry[]>): void {
         this.entries.clear();
-        for (const [k, v] of entries) this.entries.set(k, v);
+        for (const [k, v] of entries) {
+            this.entries.set(k, v);
+        }
     }
 }

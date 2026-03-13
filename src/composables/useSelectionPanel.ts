@@ -51,9 +51,13 @@ export function useSelectionPanel(game: Ref<Game | null>): {
     const selectedEntity = computed<Entity | undefined>(() => {
         // eslint-disable-next-line sonarjs/void-use -- intentionally touch reactive tick to trigger re-evaluation
         void tick.value;
-        if (!game.value) return undefined;
+        if (!game.value) {
+            return undefined;
+        }
         const entityId = game.value.viewState.state.selectedEntityId;
-        if (entityId === null) return undefined;
+        if (entityId === null) {
+            return undefined;
+        }
         const entity = game.value.state.getEntity(entityId);
         // Return a shallow copy so Vue detects changes to entity properties
         return entity ? { ...entity } : undefined;
@@ -66,7 +70,9 @@ export function useSelectionPanel(game: Ref<Game | null>): {
 
     const entityTypeName = computed(() => {
         const entity = selectedEntity.value;
-        if (!entity) return '';
+        if (!entity) {
+            return '';
+        }
 
         if (entity.type === EntityType.Unit) {
             const config = UNIT_TYPE_CONFIG[entity.subType as UnitType];
@@ -84,20 +90,22 @@ export function useSelectionPanel(game: Ref<Game | null>): {
 
     const entityIcon = computed(() => {
         const entity = selectedEntity.value;
-        if (!entity) return '?';
+        if (!entity) {
+            return '?';
+        }
 
         if (entity.type === EntityType.Unit) {
             const unitType = entity.subType as UnitType;
             const category = getUnitCategory(unitType);
             switch (category) {
-            case UnitCategory.Military:
-                return '⚔️';
-            case UnitCategory.Religious:
-                return '🙏';
-            case UnitCategory.Specialist:
-                return '🎯';
-            case UnitCategory.Worker:
-                return '👷';
+                case UnitCategory.Military:
+                    return '⚔️';
+                case UnitCategory.Religious:
+                    return '🙏';
+                case UnitCategory.Specialist:
+                    return '🎯';
+                case UnitCategory.Worker:
+                    return '👷';
             }
         }
 
@@ -110,23 +118,33 @@ export function useSelectionPanel(game: Ref<Game | null>): {
 
     const unitCategory = computed(() => {
         const entity = selectedEntity.value;
-        if (!entity || entity.type !== EntityType.Unit) return '';
+        if (!entity || entity.type !== EntityType.Unit) {
+            return '';
+        }
         return getUnitCategory(entity.subType as UnitType);
     });
 
     const carriedMaterial = computed(() => {
         const entity = selectedEntity.value;
-        if (!entity || entity.type !== EntityType.Unit) return null;
+        if (!entity || entity.type !== EntityType.Unit) {
+            return null;
+        }
         const material = entity.carrying?.material;
-        if (material === undefined) return null;
+        if (material === undefined) {
+            return null;
+        }
         return EMaterialType[material];
     });
 
     const buildingSize = computed(() => {
         const entity = selectedEntity.value;
-        if (!entity || entity.type !== EntityType.Building) return '';
+        if (!entity || entity.type !== EntityType.Building) {
+            return '';
+        }
         const info = getBuildingInfo(entity.race, entity.subType as BuildingType);
-        if (!info) return '';
+        if (!info) {
+            return '';
+        }
         const w = info.boundingRect.maxX - info.boundingRect.minX + 1;
         const h = info.boundingRect.maxY - info.boundingRect.minY + 1;
         return `${w}x${h}`;
@@ -134,8 +152,12 @@ export function useSelectionPanel(game: Ref<Game | null>): {
 
     const buildingStatus = computed(() => {
         const entity = selectedEntity.value;
-        if (!entity || entity.type !== EntityType.Building) return null;
-        if (!game.value) return null;
+        if (!entity || entity.type !== EntityType.Building) {
+            return null;
+        }
+        if (!game.value) {
+            return null;
+        }
 
         const isUnderConstruction = game.value.services.constructionSiteManager.hasSite(entity.id);
         return isUnderConstruction ? 'building' : 'completed';
@@ -145,13 +167,17 @@ export function useSelectionPanel(game: Ref<Game | null>): {
         // eslint-disable-next-line sonarjs/void-use -- intentionally touch reactive tick to trigger re-evaluation
         void tick.value;
         const entity = selectedEntity.value;
-        if (!entity || entity.type !== EntityType.Building || !game.value) return new Set<number>();
+        if (!entity || entity.type !== EntityType.Building || !game.value) {
+            return new Set<number>();
+        }
         return game.value.services.settlerTaskSystem.getWorkersForBuilding(entity.id);
     });
 
     const playerColor = computed(() => {
         const entity = selectedEntity.value;
-        if (!entity) return PLAYER_COLORS[0];
+        if (!entity) {
+            return PLAYER_COLORS[0];
+        }
         return PLAYER_COLORS[entity.player % PLAYER_COLORS.length];
     });
 

@@ -17,7 +17,9 @@ import type { SpriteEntry, AnimatedSpriteEntry } from '../types';
  * throughout the animation.
  */
 function stabilizeFrameAnchors(frames: SpriteEntry[]): SpriteEntry[] {
-    if (frames.length <= 1) return frames;
+    if (frames.length <= 1) {
+        return frames;
+    }
     const ref = frames[0]!;
     return frames.map(f =>
         f.offsetX === ref.offsetX && f.offsetY === ref.offsetY
@@ -62,18 +64,26 @@ export class AnimatedEntityCategory {
         race?: number,
         walkSequenceKey?: string
     ): void {
-        if (directionFrames.size === 0) return;
+        if (directionFrames.size === 0) {
+            return;
+        }
 
         const directionMap = new Map<number, AnimationSequence>();
         let firstFrame: SpriteEntry | null = null;
 
         for (const [direction, frames] of directionFrames) {
-            if (frames.length === 0) continue;
-            if (!firstFrame) firstFrame = frames[0]!;
+            if (frames.length === 0) {
+                continue;
+            }
+            if (!firstFrame) {
+                firstFrame = frames[0]!;
+            }
             directionMap.set(direction, { frames, frameDurationMs, loop });
         }
 
-        if (!firstFrame) return;
+        if (!firstFrame) {
+            return;
+        }
 
         const sequences = new Map<string, Map<number, AnimationSequence>>();
 
@@ -148,11 +158,15 @@ export class AnimatedEntityCategory {
             race !== undefined
                 ? this.byRace.get(race)?.get(entityType)?.get(subType)
                 : this.sharedEntities.get(entityType)?.get(subType);
-        if (!entry) return;
+        if (!entry) {
+            return;
+        }
 
         const directionMap = new Map<number, AnimationSequence>();
         for (const [direction, frames] of directionFrames) {
-            if (frames.length === 0) continue;
+            if (frames.length === 0) {
+                continue;
+            }
             directionMap.set(direction, { frames: stabilizeFrameAnchors(frames), frameDurationMs, loop });
         }
 
@@ -168,7 +182,9 @@ export class AnimatedEntityCategory {
     getEntry(entityType: EntityType, subType: number, race?: number): AnimatedSpriteEntry | null {
         if (race !== undefined) {
             const raceEntry = this.byRace.get(race)?.get(entityType)?.get(subType);
-            if (raceEntry) return raceEntry;
+            if (raceEntry) {
+                return raceEntry;
+            }
         }
         return this.sharedEntities.get(entityType)?.get(subType) ?? null;
     }

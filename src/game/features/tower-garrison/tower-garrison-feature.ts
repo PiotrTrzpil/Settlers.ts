@@ -76,7 +76,9 @@ export const TowerGarrisonFeature: FeatureDefinition = {
         });
 
         ctx.on('building:completed', ({ buildingId, buildingType }) => {
-            if (isGarrisonBuildingType(buildingType)) manager.initTower(buildingId, buildingType);
+            if (isGarrisonBuildingType(buildingType)) {
+                manager.initTower(buildingId, buildingType);
+            }
         });
 
         ctx.on('building:removed', ({ buildingId }) => {
@@ -158,8 +160,12 @@ export const TowerGarrisonFeature: FeatureDefinition = {
                         cmd as GarrisonSelectedUnitsCommand,
                         cmdCtx
                     );
-                    if (result === 'success') return commandSuccess();
-                    if (result === 'not_garrison_building') return commandFailed('not_garrison_building');
+                    if (result === 'success') {
+                        return commandSuccess();
+                    }
+                    if (result === 'not_garrison_building') {
+                        return commandFailed('not_garrison_building');
+                    }
                     return commandFailed('No garrison slot available for selected units');
                 },
                 ungarrison_unit: cmd =>

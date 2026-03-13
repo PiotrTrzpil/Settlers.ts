@@ -58,16 +58,16 @@ const TROJAN_DRINK: readonly BuildStep[] = [
 
 function getDrinkChain(race: Race): readonly BuildStep[] {
     switch (race) {
-    case Race.Roman:
-        return ROMAN_DRINK;
-    case Race.Viking:
-        return VIKING_DRINK;
-    case Race.Mayan:
-        return MAYAN_DRINK;
-    case Race.Trojan:
-        return TROJAN_DRINK;
-    case Race.DarkTribe:
-        throw new Error('getBuildOrder: DarkTribe is not supported (deferred scope)');
+        case Race.Roman:
+            return ROMAN_DRINK;
+        case Race.Viking:
+            return VIKING_DRINK;
+        case Race.Mayan:
+            return MAYAN_DRINK;
+        case Race.Trojan:
+            return TROJAN_DRINK;
+        case Race.DarkTribe:
+            throw new Error('getBuildOrder: DarkTribe is not supported (deferred scope)');
     }
 }
 

@@ -56,19 +56,29 @@ export function useProductionControl(
 
         const game = gameRef.value;
         const entity = selectedEntity.value;
-        if (!game || !entity) return null;
-        if (entity.type !== EntityType.Building) return null;
+        if (!game || !entity) {
+            return null;
+        }
+        if (entity.type !== EntityType.Building) {
+            return null;
+        }
 
         const bt = entity.subType as BuildingType;
-        if (!hasMultipleRecipes(bt)) return null;
+        if (!hasMultipleRecipes(bt)) {
+            return null;
+        }
 
         const recipeSet = getRecipeSet(bt);
-        if (!recipeSet) return null;
+        if (!recipeSet) {
+            return null;
+        }
 
         const pcm = game.services.productionControlManager;
 
         const prodState = pcm.getProductionState(entity.id);
-        if (!prodState) return null;
+        if (!prodState) {
+            return null;
+        }
 
         const recipes: RecipeInfo[] = [];
         for (let i = 0; i < recipeSet.recipes.length; i++) {
@@ -96,28 +106,36 @@ export function useProductionControl(
     function setMode(mode: ProductionMode): void {
         const entity = selectedEntity.value;
         const game = gameRef.value;
-        if (!entity || !game) return;
+        if (!entity || !game) {
+            return;
+        }
         game.execute({ type: 'set_production_mode', buildingId: entity.id, mode });
     }
 
     function setProportion(recipeIndex: number, weight: number): void {
         const entity = selectedEntity.value;
         const game = gameRef.value;
-        if (!entity || !game) return;
+        if (!entity || !game) {
+            return;
+        }
         game.execute({ type: 'set_recipe_proportion', buildingId: entity.id, recipeIndex, weight });
     }
 
     function addToQueue(recipeIndex: number): void {
         const entity = selectedEntity.value;
         const game = gameRef.value;
-        if (!entity || !game) return;
+        if (!entity || !game) {
+            return;
+        }
         game.execute({ type: 'add_to_production_queue', buildingId: entity.id, recipeIndex });
     }
 
     function removeFromQueue(recipeIndex: number): void {
         const entity = selectedEntity.value;
         const game = gameRef.value;
-        if (!entity || !game) return;
+        if (!entity || !game) {
+            return;
+        }
         game.execute({ type: 'remove_from_production_queue', buildingId: entity.id, recipeIndex });
     }
 

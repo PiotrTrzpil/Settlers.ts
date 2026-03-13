@@ -55,18 +55,26 @@ export class UnitSpriteCategory {
             // No race specified — find in any loaded race (legacy callers only)
             for (const raceMap of this.byRace.values()) {
                 dirMap = raceMap.get(type);
-                if (dirMap) break;
+                if (dirMap) {
+                    break;
+                }
             }
-            if (!dirMap) return null;
+            if (!dirMap) {
+                return null;
+            }
         }
         return dirMap.get(direction) ?? dirMap.get(0) ?? null;
     }
 
     private warnMissing(type: UnitType, race: number): void {
         // Don't warn if this race hasn't finished loading yet — the sprite may arrive soon
-        if (!this._loadedRaces.has(race)) return;
+        if (!this._loadedRaces.has(race)) {
+            return;
+        }
         const key = `${race}:${type}`;
-        if (this._warnedUnits.has(key)) return;
+        if (this._warnedUnits.has(key)) {
+            return;
+        }
         this._warnedUnits.add(key);
         console.warn(`[SpriteRegistry] No sprite for unit ${UnitType[type]} (race=${Race[race]})`);
     }
@@ -77,7 +85,9 @@ export class UnitSpriteCategory {
 
     getCount(): number {
         let count = 0;
-        for (const raceMap of this.byRace.values()) count += raceMap.size;
+        for (const raceMap of this.byRace.values()) {
+            count += raceMap.size;
+        }
         return count;
     }
 

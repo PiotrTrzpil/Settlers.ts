@@ -31,8 +31,12 @@ function isFootprintInBounds(footprint: TileCoord[], ctx: PlacementContext): boo
 function checkTileBasics(tile: TileCoord, ctx: PlacementContext, isMine: boolean): PlacementStatus | null {
     const idx = ctx.mapSize.toIndex(tile.x, tile.y);
     const terrainOk = isMine ? isMineBuildable(ctx.groundType[idx]!) : isBuildable(ctx.groundType[idx]!);
-    if (!terrainOk) return PlacementStatus.InvalidTerrain;
-    if (ctx.groundOccupancy.has(tileKey(tile.x, tile.y))) return PlacementStatus.Occupied;
+    if (!terrainOk) {
+        return PlacementStatus.InvalidTerrain;
+    }
+    if (ctx.groundOccupancy.has(tileKey(tile.x, tile.y))) {
+        return PlacementStatus.Occupied;
+    }
     return null;
 }
 
@@ -41,10 +45,14 @@ function checkTileBasics(tile: TileCoord, ctx: PlacementContext, isMine: boolean
  * Returns the first rejection status, or null if all tiles pass.
  */
 function checkPlacementFilter(footprint: TileCoord[], ctx: PlacementContext): PlacementStatus | null {
-    if (!ctx.placementFilter || ctx.player === undefined) return null;
+    if (!ctx.placementFilter || ctx.player === undefined) {
+        return null;
+    }
     for (const tile of footprint) {
         const rejection = ctx.placementFilter(tile.x, tile.y, ctx.player);
-        if (rejection !== null) return rejection;
+        if (rejection !== null) {
+            return rejection;
+        }
     }
     return null;
 }

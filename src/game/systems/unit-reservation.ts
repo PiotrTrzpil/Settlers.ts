@@ -48,7 +48,9 @@ export class UnitReservationRegistry {
     constructor(eventBus: EventBus) {
         this.subscriptions.subscribe(eventBus, 'entity:removed', ({ entityId }) => {
             const info = this.reservations.get(entityId);
-            if (!info) return;
+            if (!info) {
+                return;
+            }
             this.reservations.delete(entityId);
             info.onForcedRelease?.(entityId);
         });

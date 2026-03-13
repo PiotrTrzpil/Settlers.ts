@@ -89,7 +89,9 @@ export class BuildingDemandSystem implements TickSystem {
             this.eventBus,
             'building:completed',
             ({ buildingId, buildingType, race, spawnWorker }) => {
-                if (spawnWorker) return;
+                if (spawnWorker) {
+                    return;
+                }
                 this.addDemandFromBuilding(buildingId, buildingType, race);
             }
         );
@@ -128,7 +130,9 @@ export class BuildingDemandSystem implements TickSystem {
 
     tick(dt: number): void {
         this.timer += dt;
-        if (this.timer < TICK_INTERVAL) return;
+        if (this.timer < TICK_INTERVAL) {
+            return;
+        }
         this.timer -= TICK_INTERVAL;
         this.drainDemands();
     }
@@ -138,13 +142,19 @@ export class BuildingDemandSystem implements TickSystem {
     // ================================================================
 
     private addDemandFromBuilding(buildingId: number, buildingType: number, race: Race): void {
-        if (this.demands.has(buildingId)) return; // already pending
+        if (this.demands.has(buildingId)) {
+            return;
+        } // already pending
 
         const entity = this.gameState.getEntity(buildingId);
-        if (!entity) return;
+        if (!entity) {
+            return;
+        }
 
         const workerInfo = getBuildingWorkerInfo(race, buildingType);
-        if (!workerInfo) return;
+        if (!workerInfo) {
+            return;
+        }
 
         const demand: BuildingDemand = {
             buildingId,
@@ -166,7 +176,9 @@ export class BuildingDemandSystem implements TickSystem {
     private drainDemands(): void {
         for (const [buildingId, demand] of this.demands) {
             // Skip already committed demands
-            if (demand.committedUnitId !== null) continue;
+            if (demand.committedUnitId !== null) {
+                continue;
+            }
 
             // Discard if building no longer exists
             if (!this.gameState.getEntity(buildingId)) {
@@ -193,7 +205,9 @@ export class BuildingDemandSystem implements TickSystem {
         const carrierId = this.dispatchRecruitment(demand.unitType, demand.player, {
             target: { x: building.x, y: building.y },
         });
-        if (carrierId === null) return; // retry next tick
+        if (carrierId === null) {
+            return;
+        } // retry next tick
 
         demand.committedUnitId = carrierId;
         log.debug(`Carrier ${carrierId} recruiting for building ${demand.buildingId}`);
@@ -203,7 +217,9 @@ export class BuildingDemandSystem implements TickSystem {
         const job = choreo('WORKER_DISPATCH').goToDoorAndEnter(demand.buildingId).build();
 
         const assigned = this.assignJob(unitId, job);
-        if (!assigned) return;
+        if (!assigned) {
+            return;
+        }
 
         this.assignWorkerToBuilding(unitId, demand.buildingId);
         demand.committedUnitId = unitId;
@@ -227,7 +243,9 @@ export class BuildingDemandSystem implements TickSystem {
     }
 
     private handleJobFinished(unitId: number, jobId: string): void {
-        if (!this.isDispatchJob(jobId)) return;
+        if (!this.isDispatchJob(jobId)) {
+            return;
+        }
 
         // Find and remove the demand committed to this unit
         for (const [buildingId, demand] of this.demands) {
@@ -240,7 +258,9 @@ export class BuildingDemandSystem implements TickSystem {
     }
 
     private handleJobFailed(unitId: number, jobId: string): void {
-        if (!this.isDispatchJob(jobId)) return;
+        if (!this.isDispatchJob(jobId)) {
+            return;
+        }
 
         // Reset committed unit so demand can be retried
         for (const demand of this.demands.values()) {

@@ -126,8 +126,12 @@ function goToTile(): void {
         .split(/[\s,;]+/)
         .filter(Boolean)
         .map(Number);
-    if (parts.length < 2 || parts[0] === undefined || parts[1] === undefined) return;
-    if (!isFinite(parts[0]) || !isFinite(parts[1])) return;
+    if (parts.length < 2 || parts[0] === undefined || parts[1] === undefined) {
+        return;
+    }
+    if (!isFinite(parts[0]) || !isFinite(parts[1])) {
+        return;
+    }
     window.__settlers__?.viewpoint?.setPosition(parts[0], parts[1]);
 }
 
@@ -137,7 +141,9 @@ const gotoEntityError = ref('');
 function goToEntity(): void {
     gotoEntityError.value = '';
     const id = Number(gotoEntityId.value);
-    if (!isFinite(id) || gotoEntityId.value === '') return;
+    if (!isFinite(id) || gotoEntityId.value === '') {
+        return;
+    }
     const entity = props.game.state.getEntity(id);
     if (!entity) {
         gotoEntityError.value = `Entity ${id} not found`;
@@ -178,11 +184,21 @@ function onTreeExpansionChange(val: boolean): void {
 // Pathfinding straightness hint
 const straightnessHint = computed(() => {
     const v = settings.pathStraightness;
-    if (v <= 1) return 'Max zigzag (shortest path)';
-    if (v <= 3) return 'High zigzag';
-    if (v <= 6) return 'Moderate zigzag';
-    if (v <= 10) return 'Moderate straightness';
-    if (v <= 15) return 'Straight paths';
+    if (v <= 1) {
+        return 'Max zigzag (shortest path)';
+    }
+    if (v <= 3) {
+        return 'High zigzag';
+    }
+    if (v <= 6) {
+        return 'Moderate zigzag';
+    }
+    if (v <= 10) {
+        return 'Moderate straightness';
+    }
+    if (v <= 15) {
+        return 'Straight paths';
+    }
     return 'Very straight (sharp turns)';
 });
 
@@ -198,7 +214,9 @@ const selectAllUnits = computed({
 watch(
     () => debugStats.state.selectAllUnits,
     newValue => {
-        if (newValue) return;
+        if (newValue) {
+            return;
+        }
         props.game.state.selection.deselectWhere(
             e => e.type === EntityType.Unit && !isUnitTypeSelectable(e.subType as UnitType)
         );

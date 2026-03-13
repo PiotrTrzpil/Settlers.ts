@@ -20,22 +20,24 @@ const log = createLogger('AnimationHelpers');
 const warnedAnimKeys = new Set<string>();
 
 function warnOnce(key: string, msg: () => string): void {
-    if (warnedAnimKeys.has(key)) return;
+    if (warnedAnimKeys.has(key)) {
+        return;
+    }
     warnedAnimKeys.add(key);
     log.warn(msg());
 }
 
 function entityLabel(entityType: EntityType, subType: number): string {
     switch (entityType) {
-    case EntityType.Unit:
-        return `Unit/${UnitType[subType] ?? subType}`;
-    case EntityType.Building:
-        return `Building/${BuildingType[subType] ?? subType}`;
-    case EntityType.None:
-    case EntityType.MapObject:
-    case EntityType.StackedPile:
-    case EntityType.Decoration:
-        return `${EntityType[entityType]}/${subType}`;
+        case EntityType.Unit:
+            return `Unit/${UnitType[subType] ?? subType}`;
+        case EntityType.Building:
+            return `Building/${BuildingType[subType] ?? subType}`;
+        case EntityType.None:
+        case EntityType.MapObject:
+        case EntityType.StackedPile:
+        case EntityType.Decoration:
+            return `${EntityType[entityType]}/${subType}`;
     }
 }
 

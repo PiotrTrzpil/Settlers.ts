@@ -130,9 +130,15 @@ export function hasMultipleRecipes(buildingType: BuildingType): boolean {
 
 function buildingInfoToCosts(info: BuildingInfo): readonly ConstructionCost[] {
     const costs: ConstructionCost[] = [];
-    if (info.stone > 0) costs.push({ material: EMaterialType.STONE, count: info.stone });
-    if (info.boards > 0) costs.push({ material: EMaterialType.BOARD, count: info.boards });
-    if (info.gold > 0) costs.push({ material: EMaterialType.GOLDBAR, count: info.gold });
+    if (info.stone > 0) {
+        costs.push({ material: EMaterialType.STONE, count: info.stone });
+    }
+    if (info.boards > 0) {
+        costs.push({ material: EMaterialType.BOARD, count: info.boards });
+    }
+    if (info.gold > 0) {
+        costs.push({ material: EMaterialType.GOLDBAR, count: info.gold });
+    }
     return costs;
 }
 
@@ -142,7 +148,9 @@ function buildingInfoToCosts(info: BuildingInfo): readonly ConstructionCost[] {
  */
 export function getConstructionCosts(buildingType: BuildingType, race: Race): readonly ConstructionCost[] {
     const info = getBuildingInfo(race, buildingType);
-    if (!info) throw new Error(`No BuildingInfo for ${BuildingType[buildingType]} / ${Race[race]}`);
+    if (!info) {
+        throw new Error(`No BuildingInfo for ${BuildingType[buildingType]} / ${Race[race]}`);
+    }
     return buildingInfoToCosts(info);
 }
 
@@ -150,14 +158,20 @@ export function getConstructionCosts(buildingType: BuildingType, race: Race): re
 export function getBuildingTypesWithCosts(): BuildingType[] {
     const result: BuildingType[] = [];
     for (const val of Object.values(BuildingType)) {
-        if (typeof val !== 'number') continue;
+        if (typeof val !== 'number') {
+            continue;
+        }
         const bt = val as BuildingType;
-        if (!hasBuildingXmlMapping(bt)) continue;
+        if (!hasBuildingXmlMapping(bt)) {
+            continue;
+        }
         const hasCosts = AVAILABLE_RACES.some(race => {
             const info = getBuildingInfo(race, bt);
             return info && (info.stone > 0 || info.boards > 0 || info.gold > 0);
         });
-        if (hasCosts) result.push(bt);
+        if (hasCosts) {
+            result.push(bt);
+        }
     }
     return result;
 }
@@ -166,13 +180,17 @@ export function getBuildingTypesWithCosts(): BuildingType[] {
 export function getConstructionCostRaceMap(
     buildingType: BuildingType
 ): ReadonlyMap<Race, readonly ConstructionCost[]> | undefined {
-    if (!hasBuildingXmlMapping(buildingType)) return undefined;
+    if (!hasBuildingXmlMapping(buildingType)) {
+        return undefined;
+    }
     const raceMap = new Map<Race, readonly ConstructionCost[]>();
     for (const race of AVAILABLE_RACES) {
         const info = getBuildingInfo(race, buildingType);
         if (info) {
             const costs = buildingInfoToCosts(info);
-            if (costs.length > 0) raceMap.set(race, costs);
+            if (costs.length > 0) {
+                raceMap.set(race, costs);
+            }
         }
     }
     return raceMap.size > 0 ? raceMap : undefined;
@@ -206,7 +224,9 @@ export function getBuildingTypesRequestingMaterial(material: EMaterialType): Bui
         }
     }
     for (const [buildingType, recipeSet] of BUILDING_RECIPE_SETS) {
-        if (result.includes(buildingType)) continue;
+        if (result.includes(buildingType)) {
+            continue;
+        }
         if (recipeSet.recipes.some(r => r.inputs.includes(material))) {
             result.push(buildingType);
         }

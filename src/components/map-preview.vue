@@ -21,10 +21,14 @@ const hasPreviewData = ref(false);
 
 function renderPreview() {
     const canvasEl = canvas.value;
-    if (!canvasEl || !props.mapLoader) return;
+    if (!canvasEl || !props.mapLoader) {
+        return;
+    }
 
     const ctx = canvasEl.getContext('2d');
-    if (!ctx) return;
+    if (!ctx) {
+        return;
+    }
 
     try {
         const landscape = props.mapLoader.landscape;
@@ -91,7 +95,9 @@ function renderPreview() {
 
 function onMouseMove(event: MouseEvent) {
     const canvasEl = canvas.value;
-    if (!canvasEl || !props.mapLoader?.mapSize) return;
+    if (!canvasEl || !props.mapLoader?.mapSize) {
+        return;
+    }
 
     const rect = canvasEl.getBoundingClientRect();
     const x = event.clientX - rect.left;

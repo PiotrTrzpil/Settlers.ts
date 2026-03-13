@@ -240,8 +240,12 @@ export class Renderer {
 
             const elapsed = performance.now() - start;
 
-            if (i === 0) landscapeTime = elapsed;
-            if (i === 1) indicatorTime = elapsed;
+            if (i === 0) {
+                landscapeTime = elapsed;
+            }
+            if (i === 1) {
+                indicatorTime = elapsed;
+            }
             if ('getLastFrameTiming' in r) {
                 entityTiming = (r as EntityRenderer).getLastFrameTiming();
             }

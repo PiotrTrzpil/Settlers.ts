@@ -27,7 +27,9 @@ export class DiagnosticsRegistry {
     /** Get diagnostics for a specific feature. */
     get(featureId: string): FeatureDiagnostics | undefined {
         const provider = this.providers.get(featureId);
-        if (!provider) return undefined;
+        if (!provider) {
+            return undefined;
+        }
         return provider();
     }
 }

@@ -39,7 +39,9 @@ export class ConstructionRequestSystem implements TickSystem {
 
     tick(dt: number): void {
         this.accumulator += dt;
-        if (this.accumulator < ConstructionRequestSystem.TICK_INTERVAL) return;
+        if (this.accumulator < ConstructionRequestSystem.TICK_INTERVAL) {
+            return;
+        }
         this.accumulator -= ConstructionRequestSystem.TICK_INTERVAL;
         this.processSites();
     }
@@ -64,7 +66,9 @@ export class ConstructionRequestSystem implements TickSystem {
             for (const slot of slots) {
                 totalSpace += slot.maxCapacity - slot.currentAmount;
             }
-            if (totalSpace <= 0) continue;
+            if (totalSpace <= 0) {
+                continue;
+            }
 
             const activeDemands = this.demandQueue.countDemands(buildingId, cost.material);
             const activeJobs = this.jobStore.getActiveJobCountForDest(buildingId, cost.material);

@@ -104,7 +104,9 @@ export class Decompress extends Packer {
                     done = true;
                     break;
                 }
-                if (result === 'error') break;
+                if (result === 'error') {
+                    break;
+                }
             } else if (!this.fromDictionary(inData, writer, codeWord)) {
                 Decompress.log.error('Bad dictionary entry!');
                 break;

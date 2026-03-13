@@ -68,7 +68,9 @@ export class BuildingSpriteCategory {
     private getFallback(type: BuildingType): BuildingSpriteEntries | null {
         for (const raceMap of this.byRace.values()) {
             const entry = raceMap.get(type);
-            if (entry) return entry;
+            if (entry) {
+                return entry;
+            }
         }
         return null;
     }
@@ -79,7 +81,9 @@ export class BuildingSpriteCategory {
 
     getCount(): number {
         let count = 0;
-        for (const raceMap of this.byRace.values()) count += raceMap.size;
+        for (const raceMap of this.byRace.values()) {
+            count += raceMap.size;
+        }
         return count;
     }
 

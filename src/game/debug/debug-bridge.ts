@@ -61,7 +61,11 @@ export interface SettlersBridge {
  * Safe to call in Node.js (returns a throwaway object).
  */
 export function getBridge(): SettlersBridge {
-    if (typeof window === 'undefined') return {};
-    if (!window.__settlers__) window.__settlers__ = {};
+    if (typeof window === 'undefined') {
+        return {};
+    }
+    if (!window.__settlers__) {
+        window.__settlers__ = {};
+    }
     return window.__settlers__;
 }

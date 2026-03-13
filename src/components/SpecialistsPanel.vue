@@ -73,7 +73,9 @@ const specialists = useSpecialists(gameRef, tick, raceRef);
 
 function recruit(unitType: UnitType, count: number): void {
     const g = props.game;
-    if (!g) return;
+    if (!g) {
+        return;
+    }
     const cam = count > 0 ? props.getCameraCenter() : null;
     g.execute({
         type: 'recruit_specialist',

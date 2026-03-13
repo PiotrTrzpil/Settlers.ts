@@ -93,7 +93,9 @@ export class BuildingPileRegistry {
     ): TileCoord | null {
         const slots = this.getPileSlots(buildingType, race);
         const slot = slots.find(s => s.material === material);
-        if (!slot) return null;
+        if (!slot) {
+            return null;
+        }
         return { x: buildingX + slot.dx, y: buildingY + slot.dy };
     }
 
@@ -108,7 +110,9 @@ export class BuildingPileRegistry {
     ): TileCoord | null {
         const slots = this.getPileSlots(buildingType, race);
         const slot = slots.find(s => s.material === material && s.slotType === slotType);
-        if (!slot) return null;
+        if (!slot) {
+            return null;
+        }
         return { x: buildingX + slot.dx, y: buildingY + slot.dy };
     }
 
@@ -125,14 +129,20 @@ export class BuildingPileRegistry {
 
     private registerBuildingPiles(race: Race, xmlId: string, buildingInfo: BuildingInfo): void {
         const buildingTypes = getBuildingTypesByXmlId(xmlId);
-        if (!buildingTypes) return;
+        if (!buildingTypes) {
+            return;
+        }
 
         const { pileSlots, storageSlots } = this.convertPiles(buildingInfo);
 
         for (const bt of buildingTypes) {
             const key = registryKey(bt, race);
-            if (pileSlots.length > 0) this.slots.set(key, pileSlots);
-            if (storageSlots.length > 0) this.storagePositions.set(key, storageSlots);
+            if (pileSlots.length > 0) {
+                this.slots.set(key, pileSlots);
+            }
+            if (storageSlots.length > 0) {
+                this.storagePositions.set(key, storageSlots);
+            }
         }
     }
 
@@ -154,7 +164,9 @@ export class BuildingPileRegistry {
             const slotType = pile.type === PileSlotType.Output ? SlotKind.Output : SlotKind.Input;
 
             const material = xmlGoodToMaterialType(pile.good);
-            if (material === undefined) continue;
+            if (material === undefined) {
+                continue;
+            }
 
             pileSlots.push({ material, slotType, dx, dy });
         }

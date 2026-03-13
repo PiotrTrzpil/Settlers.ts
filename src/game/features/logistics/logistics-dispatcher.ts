@@ -265,7 +265,9 @@ export class LogisticsDispatcher implements TickSystem {
 
     /** Track a successful assignment result — queued assignments skip jobStore until flushed. */
     private trackAssignmentResult(result: AssignmentSuccess | { queued: true }): void {
-        if ('queued' in result) return;
+        if ('queued' in result) {
+            return;
+        }
         this.jobStore.jobs.set(result.carrierId, result.record);
     }
 
@@ -300,19 +302,25 @@ export class LogisticsDispatcher implements TickSystem {
         return {
             getJob: jobId => {
                 for (const record of jobs.values()) {
-                    if (record.id === jobId) return record;
+                    if (record.id === jobId) {
+                        return record;
+                    }
                 }
                 return undefined;
             },
             pickUp: jobId => {
                 const record = findJobById(jobs, jobId);
-                if (!record) return false;
+                if (!record) {
+                    return false;
+                }
                 TransportJobService.pickUp(record, deps);
                 return true;
             },
             deliver: jobId => {
                 const record = findJobById(jobs, jobId);
-                if (!record) return false;
+                if (!record) {
+                    return false;
+                }
                 TransportJobService.deliver(record, deps);
                 return true;
             },
@@ -331,7 +339,9 @@ export class LogisticsDispatcher implements TickSystem {
      */
     private flushQueuedAssignment(carrierId: number): void {
         const queued = this.preAssignmentQueue.flush(carrierId);
-        if (!queued) return;
+        if (!queued) {
+            return;
+        }
 
         const success = this.jobAssigner.assignJob(queued.carrierId, queued.job, queued.moveTo);
         if (success) {
@@ -436,7 +446,9 @@ export interface BuildingCleanupResult {
 /** Find a job record by ID across all active jobs, or return undefined. */
 function findJobById(jobs: { values(): Iterable<TransportJobRecord> }, jobId: number): TransportJobRecord | undefined {
     for (const record of jobs.values()) {
-        if (record.id === jobId) return record;
+        if (record.id === jobId) {
+            return record;
+        }
     }
     return undefined;
 }

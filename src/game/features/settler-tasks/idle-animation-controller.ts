@@ -31,7 +31,9 @@ export interface RngSource {
 
 function getPrefix(unit: Entity): string {
     const prefix = UNIT_XML_PREFIX[unit.subType as UnitType];
-    if (!prefix) throw new Error(`No XML prefix for UnitType ${UnitType[unit.subType] ?? unit.subType}`);
+    if (!prefix) {
+        throw new Error(`No XML prefix for UnitType ${UnitType[unit.subType] ?? unit.subType}`);
+    }
     return prefix;
 }
 
@@ -93,7 +95,9 @@ export class IdleAnimationController {
         if (idleState.idleTime >= idleState.nextIdleTurnTime) {
             // Animation state may be missing during cleanup
             const vs = this.visualService.getState(unit.id);
-            if (!vs?.animation) return;
+            if (!vs?.animation) {
+                return;
+            }
             const newDirection = this.getAdjacentDirection(vs.animation.direction);
             this.visualService.setDirection(unit.id, newDirection);
 
@@ -122,7 +126,9 @@ export class IdleAnimationController {
         let sequence: string;
         if (unit.carrying) {
             const materialName = EMaterialType[unit.carrying.material];
-            if (!materialName) throw new Error(`Unknown EMaterialType: ${unit.carrying.material}`);
+            if (!materialName) {
+                throw new Error(`Unknown EMaterialType: ${unit.carrying.material}`);
+            }
             sequence = xmlKey(prefix, `WALK_${materialName}`);
         } else {
             sequence = xmlKey(prefix, 'WALK');

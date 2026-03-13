@@ -15,7 +15,9 @@ import { type SpriteLoadContext, getPaletteBase } from '../sprite-load-context';
 export async function loadGoodSprites(ctx: SpriteLoadContext): Promise<boolean> {
     const fileId = `${GFX_FILE_NUMBERS.RESOURCES}`;
     const fileSet = await ctx.spriteLoader.loadFileSet(fileId);
-    if (!fileSet?.jilReader || !fileSet.dilReader) return false;
+    if (!fileSet?.jilReader || !fileSet.dilReader) {
+        return false;
+    }
 
     const paletteBase = getPaletteBase(ctx, fileId);
 
@@ -24,11 +26,15 @@ export async function loadGoodSprites(ctx: SpriteLoadContext): Promise<boolean> 
 
     for (const [typeStr, info] of Object.entries(getResourceSpriteMap())) {
         // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- Partial<Record> values may be undefined at runtime
-        if (!info) continue;
+        if (!info) {
+            continue;
+        }
         const type = Number(typeStr) as EMaterialType;
 
         const loadedDirs = await ctx.spriteLoader.loadJobAllDirections(fileSet, info.index, ctx.atlas, paletteBase);
-        if (!loadedDirs) continue;
+        if (!loadedDirs) {
+            continue;
+        }
 
         for (const [dir, sprites] of loadedDirs) {
             if (sprites.length > 0) {

@@ -37,7 +37,9 @@ export function executeWait(
     dt: number,
     _ctx: ControlContext
 ): TaskResult {
-    if (node.duration <= 0) return TaskResult.DONE;
+    if (node.duration <= 0) {
+        return TaskResult.DONE;
+    }
     return tickDuration(job, dt, framesToSeconds(node.duration));
 }
 

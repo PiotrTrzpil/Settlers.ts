@@ -18,7 +18,9 @@ export function parseSettlerValues(xmlContent: string): Map<RaceId, RaceSettlerV
         // Only iterate direct <settler> children of <race>, not nested ones
         for (let j = 0; j < raceEl.children.length; j++) {
             const child = raceEl.children[j]!;
-            if (child.tagName !== 'settler') continue;
+            if (child.tagName !== 'settler') {
+                continue;
+            }
 
             const id = child.getAttribute('id') ?? '';
             const animLists = getTextArray(child, 'animList');

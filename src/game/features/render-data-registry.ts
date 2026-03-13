@@ -29,9 +29,13 @@ export class RenderDataRegistry {
      */
     get<T>(featureId: string, key: string): (() => T) | undefined {
         const featureContribs = this.contributions.get(featureId);
-        if (!featureContribs) return undefined;
+        if (!featureContribs) {
+            return undefined;
+        }
         const getter = featureContribs.get(key);
-        if (!getter) return undefined;
+        if (!getter) {
+            return undefined;
+        }
         return getter as () => T;
     }
 

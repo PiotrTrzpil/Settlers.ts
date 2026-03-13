@@ -35,7 +35,9 @@ export const BuildingOverlayFeature: FeatureDefinition = {
 
         ctx.on('building:completed', ({ buildingId, buildingType }) => {
             const entity = ctx.gameState.getEntity(buildingId);
-            if (!entity) return;
+            if (!entity) {
+                return;
+            }
             buildingOverlayManager.addBuilding(buildingId, buildingType, entity.race);
         });
 

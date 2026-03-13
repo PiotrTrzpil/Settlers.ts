@@ -28,12 +28,16 @@ export const VictoryConditionsFeature: FeatureDefinition = {
         ctx.on('building:completed', ({ buildingType, ...rest }) => {
             // building:completed has no 'player' directly — look up entity
             const entity = ctx.gameState.getEntity(rest.buildingId);
-            if (entity) victorySystem.onBuildingCompleted(buildingType, entity.player);
+            if (entity) {
+                victorySystem.onBuildingCompleted(buildingType, entity.player);
+            }
         });
 
         ctx.on('building:removed', ({ buildingId, buildingType }) => {
             const entity = ctx.gameState.getEntity(buildingId);
-            if (entity) victorySystem.onBuildingRemoved(buildingType, entity.player);
+            if (entity) {
+                victorySystem.onBuildingRemoved(buildingType, entity.player);
+            }
         });
 
         ctx.on('building:ownerChanged', ({ buildingType, oldPlayer, newPlayer }) => {

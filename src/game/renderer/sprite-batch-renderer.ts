@@ -141,7 +141,9 @@ export class SpriteBatchRenderer {
         paletteRowsPerPlayer: number,
         edgeAA: boolean
     ): void {
-        if (!this.spriteShaderProgram) return;
+        if (!this.spriteShaderProgram) {
+            return;
+        }
 
         this.spriteShaderProgram.use();
         this.spriteShaderProgram.setMatrix('projection', projection);
@@ -164,7 +166,9 @@ export class SpriteBatchRenderer {
         paletteWidth: number,
         paletteRowsPerPlayer: number
     ): void {
-        if (!this.spriteBlendShaderProgram) return;
+        if (!this.spriteBlendShaderProgram) {
+            return;
+        }
 
         this.spriteBlendShaderProgram.use();
         this.spriteBlendShaderProgram.setMatrix('projection', projection);
@@ -190,7 +194,9 @@ export class SpriteBatchRenderer {
         tintB: number,
         tintA: number
     ): void {
-        if (!this.spriteBatchData) return;
+        if (!this.spriteBatchData) {
+            return;
+        }
 
         if (this.batchOffset + FLOATS_PER_ENTITY > this.spriteBatchData.length) {
             this.flushSpriteBatch(gl);
@@ -225,7 +231,9 @@ export class SpriteBatchRenderer {
         tintA: number,
         verticalProgress: number
     ): void {
-        if (!this.spriteBatchData) return;
+        if (!this.spriteBatchData) {
+            return;
+        }
 
         if (this.batchOffset + FLOATS_PER_ENTITY > this.spriteBatchData.length) {
             this.flushSpriteBatch(gl);
@@ -262,7 +270,9 @@ export class SpriteBatchRenderer {
         tintB: number,
         tintA: number
     ): void {
-        if (!this.spriteBlendBatchData) return;
+        if (!this.spriteBlendBatchData) {
+            return;
+        }
 
         if (this.blendBatchOffset + FLOATS_PER_BLEND_ENTITY > this.spriteBlendBatchData.length) {
             this.flushBlendBatch(gl);
@@ -319,7 +329,9 @@ export class SpriteBatchRenderer {
         tintB: number,
         tintA: number
     ): number {
-        if (!this.spriteBatchData) return offset;
+        if (!this.spriteBatchData) {
+            return offset;
+        }
 
         const data = this.spriteBatchData;
         const { atlasRegion: region, offsetX, offsetY, widthWorld, heightWorld, paletteBaseOffset } = entry;
@@ -430,7 +442,9 @@ export class SpriteBatchRenderer {
         tintA: number,
         verticalProgress: number
     ): number {
-        if (!this.spriteBatchData) return offset;
+        if (!this.spriteBatchData) {
+            return offset;
+        }
 
         const data = this.spriteBatchData;
         const { atlasRegion: region, offsetX, offsetY, widthWorld, heightWorld, paletteBaseOffset } = entry;
@@ -549,7 +563,9 @@ export class SpriteBatchRenderer {
         tintB: number,
         tintA: number
     ): number {
-        if (!this.spriteBlendBatchData) return offset;
+        if (!this.spriteBlendBatchData) {
+            return offset;
+        }
 
         const data = this.spriteBlendBatchData;
 
@@ -678,7 +694,9 @@ export class SpriteBatchRenderer {
      * Flush the sprite batch buffer to GPU and draw.
      */
     private flushSpriteBatch(gl: WebGL2RenderingContext): void {
-        if (!this.spriteBuffer || !this.spriteBatchData || this.batchOffset === 0) return;
+        if (!this.spriteBuffer || !this.spriteBatchData || this.batchOffset === 0) {
+            return;
+        }
 
         gl.bindBuffer(gl.ARRAY_BUFFER, this.spriteBuffer);
         gl.bufferData(gl.ARRAY_BUFFER, this.spriteBatchData.subarray(0, this.batchOffset), gl.DYNAMIC_DRAW);
@@ -716,7 +734,9 @@ export class SpriteBatchRenderer {
      * Flush the blend sprite batch buffer to GPU and draw.
      */
     private flushBlendBatch(gl: WebGL2RenderingContext): void {
-        if (!this.spriteBlendBuffer || !this.spriteBlendBatchData || this.blendBatchOffset === 0) return;
+        if (!this.spriteBlendBuffer || !this.spriteBlendBatchData || this.blendBatchOffset === 0) {
+            return;
+        }
 
         gl.bindBuffer(gl.ARRAY_BUFFER, this.spriteBlendBuffer);
         gl.bufferData(gl.ARRAY_BUFFER, this.spriteBlendBatchData.subarray(0, this.blendBatchOffset), gl.DYNAMIC_DRAW);

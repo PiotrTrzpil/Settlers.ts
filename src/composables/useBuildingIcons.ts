@@ -33,7 +33,7 @@ async function loadIconGfx(fileManager: FileManager, race: Race): Promise<GfxFil
         return loadingPromises.get(race)!;
     }
 
-    const loadPromise = (async(): Promise<GfxFileReader | null> => {
+    const loadPromise = (async (): Promise<GfxFileReader | null> => {
         try {
             const fileId = BUILDING_ICON_FILE_NUMBERS[race].toString();
             const fileNameList: { [key: string]: string } = {
@@ -91,7 +91,9 @@ async function loadIconGfx(fileManager: FileManager, race: Race): Promise<GfxFil
 function getIconIndex(race: Race, buildingType: BuildingType, selected = false): number {
     const raceIcons = BUILDING_ICON_INDICES[race];
     const indices = raceIcons[buildingType];
-    if (!indices) return -1;
+    if (!indices) {
+        return -1;
+    }
     return selected ? indices[1] : indices[0];
 }
 
@@ -137,7 +139,9 @@ function getCachedIconUrl(
     }
 
     const iconIndex = getIconIndex(race, buildingType, selected);
-    if (iconIndex < 0) return null;
+    if (iconIndex < 0) {
+        return null;
+    }
 
     const dataUrl = renderIconToDataUrl(gfxReader, iconIndex);
 
@@ -158,7 +162,9 @@ export function useBuildingIcons(fileManager: Ref<FileManager | null>, currentRa
     const selectedIconUrls = ref<Map<BuildingType, string>>(new Map());
 
     async function loadIconsForRace(race: Race) {
-        if (!fileManager.value) return;
+        if (!fileManager.value) {
+            return;
+        }
 
         const reader = await loadIconGfx(fileManager.value, race);
         if (!reader) {

@@ -198,7 +198,9 @@ export function registerMapAPI(runtime: LuaRuntime, context: MapAPIContext): voi
             }
         }
 
-        if (count === 0) return false;
+        if (count === 0) {
+            return false;
+        }
 
         const avgHeight = Math.round(totalHeight / count);
 

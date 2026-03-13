@@ -15,7 +15,9 @@ import type { WorkAreaAdjustHandler } from '@/game/input/building-adjust/work-ar
 /** Get the BuildingAdjustMode if currently registered. */
 function getAdjustMode(): BuildingAdjustMode | null {
     const input = getBridge().input;
-    if (!input) return null;
+    if (!input) {
+        return null;
+    }
     const mode = input.getMode('building-adjust');
     return mode instanceof BuildingAdjustMode ? mode : null;
 }
@@ -32,26 +34,36 @@ export function useWorkAreaAdjustment(selectedEntity: Ref<Entity | undefined>): 
 } {
     const hasWorkAreaFlag = computed(() => {
         const entity = selectedEntity.value;
-        if (!entity || entity.type !== EntityType.Building) return false;
+        if (!entity || entity.type !== EntityType.Building) {
+            return false;
+        }
         return hasWorkArea(entity.subType as BuildingType, entity.race);
     });
 
     const isWorkAreaActive = computed(() => {
         const mode = getAdjustMode();
-        if (!mode) return false;
+        if (!mode) {
+            return false;
+        }
         const active = mode.getActiveAdjustment();
         return active?.item.category === 'work-area' && active.buildingId === selectedEntity.value?.id;
     });
 
     function toggleWorkArea(): void {
         const input = getBridge().input;
-        if (!input) return;
+        if (!input) {
+            return;
+        }
 
         const entity = selectedEntity.value;
-        if (!entity) return;
+        if (!entity) {
+            return;
+        }
 
         const mode = getAdjustMode();
-        if (!mode) return;
+        if (!mode) {
+            return;
+        }
 
         // If already active, deactivate
         if (isWorkAreaActive.value) {
@@ -65,8 +77,12 @@ export function useWorkAreaAdjustment(selectedEntity: Ref<Entity | undefined>): 
         // Find the work-area handler and use the per-instance item
         const handlers = mode.getHandlers();
         for (const handler of handlers) {
-            if (handler.category !== 'work-area') continue;
-            if (!('getInstanceItem' in handler)) continue;
+            if (handler.category !== 'work-area') {
+                continue;
+            }
+            if (!('getInstanceItem' in handler)) {
+                continue;
+            }
             const waHandler = handler as unknown as WorkAreaAdjustHandler;
 
             if (input.getModeName() !== 'building-adjust') {

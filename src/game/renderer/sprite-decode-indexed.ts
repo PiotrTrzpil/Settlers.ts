@@ -33,7 +33,9 @@ export function decodeRLEIndexed(
         pos++;
 
         if (value <= 1) {
-            if (pos >= bufferLength) break;
+            if (pos >= bufferLength) {
+                break;
+            }
             const count = buffer[pos]!;
             pos++;
             for (let i = 0; i < count && srcIdx < totalPixels; i++) {

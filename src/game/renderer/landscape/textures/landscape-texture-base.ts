@@ -17,7 +17,9 @@ export class LandscapeTextureBase {
         srcY: number
     ): void {
         // Skip if this source position was already copied (shared by multiple textures)
-        if (this.layout.has(srcX, srcY)) return;
+        if (this.layout.has(srcX, srcY)) {
+            return;
+        }
 
         const dest = destTextureMap.reserve(width, width);
 

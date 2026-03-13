@@ -346,7 +346,9 @@ function formatCategory(category: string): string {
 }
 
 function getBarWidth(count: number, total: number): string {
-    if (total === 0) return '0%';
+    if (total === 0) {
+        return '0%';
+    }
     // Scale so max is around 80% for visual clarity
     const maxPercent = 80;
     return Math.min(maxPercent, (count / total) * 100 * 2).toFixed(1) + '%';
