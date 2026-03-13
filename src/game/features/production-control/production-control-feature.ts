@@ -47,7 +47,7 @@ export const ProductionControlFeature: FeatureDefinition = {
 
         return {
             exports: { productionControlManager } satisfies ProductionControlExports,
-            persistence: [productionControlManager],
+            persistence: [productionControlManager.persistentStore],
             commands: {
                 set_production_mode: cmd => executeSetProductionMode(prodDeps, cmd as SetProductionModeCommand),
                 set_recipe_proportion: cmd => executeSetRecipeProportion(prodDeps, cmd as SetRecipeProportionCommand),

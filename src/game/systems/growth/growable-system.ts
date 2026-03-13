@@ -54,6 +54,19 @@ export interface PlantingCapable {
     plantEntity(x: number, y: number, settlerId: number): void;
 }
 
+/** Mutable map API shared by Map and PersistentMap — used for states storage */
+export interface MutableEntityMap<T> {
+    get(entityId: number): T | undefined;
+    has(entityId: number): boolean;
+    set(entityId: number, value: T): void;
+    delete(entityId: number): boolean;
+    readonly size: number;
+    entries(): IterableIterator<[number, T]>;
+    keys(): IterableIterator<number>;
+    values(): IterableIterator<T>;
+    clear(): void;
+}
+
 export interface GrowableSystemConfig {
     gameState: GameState;
     visualService: EntityVisualService;
@@ -68,7 +81,7 @@ export interface GrowableSystemConfig {
  */
 // prettier-ignore
 export abstract class GrowableSystem<TState extends GrowableState = GrowableState> implements TickSystem, PlantingCapable {
-    protected readonly states = new Map<number, TState>();
+    protected readonly states: MutableEntityMap<TState> = new Map<number, TState>();
     protected readonly gameState: GameState;
     protected readonly visualService: EntityVisualService;
     protected readonly config: GrowableConfig;

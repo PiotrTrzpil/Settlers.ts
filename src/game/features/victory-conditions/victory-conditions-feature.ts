@@ -7,8 +7,11 @@
  */
 
 import type { FeatureDefinition, FeatureContext, FeatureDiagnostics } from '../feature';
+import type { BuildingConstructionExports } from '../building-construction/building-construction-feature';
 import { VictoryConditionsSystem } from './victory-conditions-system';
 import type { GameResult } from './victory-conditions-system';
+import { EntityType } from '../../entity';
+import { BuildingType } from '../../buildings/building-type';
 
 export interface VictoryConditionsExports {
     victorySystem: VictoryConditionsSystem;
@@ -16,8 +19,10 @@ export interface VictoryConditionsExports {
 
 export const VictoryConditionsFeature: FeatureDefinition = {
     id: 'victory-conditions',
+    dependencies: ['building-construction'],
 
     create(ctx: FeatureContext) {
+        const { constructionSiteManager } = ctx.getFeature<BuildingConstructionExports>('building-construction');
         const victorySystem = new VictoryConditionsSystem({
             gameState: ctx.gameState,
             eventBus: ctx.eventBus,
@@ -51,6 +56,19 @@ export const VictoryConditionsFeature: FeatureDefinition = {
             systemGroup: 'Victory',
             exports,
             persistence: 'none',
+            onRestoreComplete() {
+                for (const e of ctx.gameState.entities) {
+                    if (e.type !== EntityType.Building) {
+                        continue;
+                    }
+                    if (constructionSiteManager.hasSite(e.id)) {
+                        continue;
+                    }
+                    if ((e.subType as BuildingType) === BuildingType.Castle) {
+                        victorySystem.onBuildingCompleted(BuildingType.Castle, e.player);
+                    }
+                }
+            },
             diagnostics: (): FeatureDiagnostics => {
                 const result: GameResult = victorySystem.getResult();
                 const active = victorySystem.getActivePlayers();

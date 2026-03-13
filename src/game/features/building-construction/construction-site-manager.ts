@@ -24,7 +24,7 @@ import { getBuildingFootprintFromInfo } from '@/resources/game-data';
 import type { SeededRng } from '../../core/rng';
 import { type ComponentStore, mapStore } from '../../ecs';
 import { BuildingConstructionPhase, type CapturedTerrainTile, type ConstructionSite } from './types';
-import type { Persistable } from '@/game/persistence';
+import { PersistentMap, type StoreSerializer } from '@/game/persistence/persistent-store';
 import type { TileCoord } from '../../core/coordinates';
 import { assignConstructionPilePositions } from '../../systems/inventory/construction-pile-positions';
 import type { BuildingInventoryManager } from '../../systems/inventory/building-inventory';
@@ -38,7 +38,6 @@ import { SlotKind } from '../../core/pile-kind';
  * workers are re-assigned by the settler task system on load.
  */
 export interface SerializedConstructionSite {
-    buildingId: number;
     buildingType: BuildingType;
     race: Race;
     player: number;
@@ -49,9 +48,89 @@ export interface SerializedConstructionSite {
     levelingComplete: boolean;
     constructionProgress: number;
     /** Per-material consumed counts. */
-    consumedMaterials: Array<[EMaterialType, number]>;
+    consumedMaterials: Map<EMaterialType, number>;
     consumedAmount: number;
     terrainModified: boolean;
+}
+
+// ── Construction site store serializer ──
+
+/** Serialized form with buildingId included so the StoreSerializer can restore it. */
+type PersistedConstructionSite = SerializedConstructionSite & { buildingId: number };
+
+/**
+ * StoreSerializer for ConstructionSite.
+ * Converts between the full in-memory ConstructionSite and the lean PersistedConstructionSite.
+ * Derived fields (constructionCosts, workerCount, pilePositions) are recomputed on deserialize.
+ */
+function makeConstructionSiteSerializer(): StoreSerializer<ConstructionSite> {
+    return {
+        serialize(site: ConstructionSite): PersistedConstructionSite {
+            return {
+                buildingId: site.buildingId,
+                buildingType: site.buildingType,
+                race: site.race,
+                player: site.player,
+                tileX: site.tileX,
+                tileY: site.tileY,
+                phase: site.phase,
+                levelingProgress: site.terrain.progress,
+                levelingComplete: site.terrain.complete,
+                constructionProgress: site.building.progress,
+                consumedMaterials: new Map(site.materials.consumed),
+                consumedAmount: site.materials.consumedAmount,
+                terrainModified: site.terrain.modified,
+            };
+        },
+        deserialize(raw: unknown): ConstructionSite {
+            const data = raw as PersistedConstructionSite;
+            const constructionCosts = getConstructionCosts(data.buildingType, data.race);
+            const totalCost = constructionCosts.reduce((sum, c) => sum + c.count, 0);
+            const workerCount = getWorkerCount(data.buildingType, data.race);
+            const pilePositions = assignConstructionPilePositions(data.buildingType, data.race, data.tileX, data.tileY);
+            return {
+                buildingId: data.buildingId,
+                buildingType: data.buildingType,
+                race: data.race,
+                player: data.player,
+                tileX: data.tileX,
+                tileY: data.tileY,
+                phase:
+                    data.phase === BuildingConstructionPhase.Evacuating
+                        ? BuildingConstructionPhase.WaitingForBuilders
+                        : data.phase,
+                terrain: {
+                    slots: {
+                        required: workerCount,
+                        assigned: new Set(),
+                        started: data.levelingProgress > 0,
+                    },
+                    progress: data.levelingProgress,
+                    complete: data.levelingComplete,
+                    originalTerrain: null,
+                    modified: data.terrainModified,
+                    unleveledTiles: null,
+                    reservedTiles: new Set(),
+                    totalLevelingTiles: 0,
+                },
+                materials: {
+                    costs: constructionCosts,
+                    totalCost,
+                    consumedAmount: data.consumedAmount,
+                    consumed: new Map<EMaterialType, number>(data.consumedMaterials),
+                },
+                building: {
+                    slots: {
+                        required: workerCount,
+                        assigned: new Set(),
+                        started: data.constructionProgress > 0,
+                    },
+                    progress: data.constructionProgress,
+                },
+                pilePositions,
+            };
+        },
+    };
 }
 
 // ── Worker count helpers ──
@@ -100,12 +179,14 @@ function getWorkerCount(buildingType: BuildingType, race: Race): number {
  * by `removeSite` when construction finishes or is cancelled. Internal methods
  * that require the site to exist throw with context rather than returning silently.
  */
-export class ConstructionSiteManager implements Persistable<SerializedConstructionSite[]> {
-    readonly persistKey = 'constructionSites' as const;
-    private readonly sites = new Map<number, ConstructionSite>();
+export class ConstructionSiteManager {
+    readonly persistentStore = new PersistentMap<ConstructionSite>(
+        'constructionSites',
+        makeConstructionSiteSerializer()
+    );
 
     /** Uniform read-only view for cross-cutting queries */
-    readonly store: ComponentStore<ConstructionSite> = mapStore(this.sites);
+    readonly store: ComponentStore<ConstructionSite> = mapStore(this.persistentStore.raw);
 
     private readonly eventBus: EventBus;
     private readonly rng: SeededRng;
@@ -124,7 +205,7 @@ export class ConstructionSiteManager implements Persistable<SerializedConstructi
      * Use for all mutation operations that require the site to exist.
      */
     getSiteOrThrow(buildingId: number, context: string): ConstructionSite {
-        const site = this.sites.get(buildingId);
+        const site = this.persistentStore.get(buildingId);
         if (!site) {
             throw new Error(`ConstructionSiteManager[${context}]: no active site for buildingId ${buildingId}`);
         }
@@ -146,7 +227,7 @@ export class ConstructionSiteManager implements Persistable<SerializedConstructi
         tileX: number,
         tileY: number
     ): void {
-        if (this.sites.has(buildingId)) {
+        if (this.persistentStore.has(buildingId)) {
             throw new Error(`ConstructionSiteManager: site already registered for buildingId ${buildingId}`);
         }
 
@@ -186,7 +267,7 @@ export class ConstructionSiteManager implements Persistable<SerializedConstructi
             pilePositions,
         };
 
-        this.sites.set(buildingId, site);
+        this.persistentStore.set(buildingId, site);
         this.eventBus.emit('construction:workerNeeded', { role: 'digger', buildingId, x: tileX, y: tileY, player });
     }
 
@@ -229,31 +310,31 @@ export class ConstructionSiteManager implements Persistable<SerializedConstructi
 
     /** Remove the construction site record. No-op if it doesn't exist. */
     removeSite(buildingId: number): void {
-        this.sites.delete(buildingId);
+        this.persistentStore.delete(buildingId);
     }
 
     /** Return the site for `buildingId`, or undefined if not registered. */
     getSite(buildingId: number): ConstructionSite | undefined {
-        return this.sites.get(buildingId);
+        return this.persistentStore.get(buildingId);
     }
 
     // ── Queries ──
 
     /** True when a construction site exists for this building (i.e. not yet operational). */
     hasSite(buildingId: number): boolean {
-        return this.sites.has(buildingId);
+        return this.persistentStore.has(buildingId);
     }
 
     /**
      * Get all active site IDs sorted in ascending order for deterministic iteration.
      */
     getAllSiteIds(): number[] {
-        return [...this.sites.keys()].sort((a, b) => a - b);
+        return [...this.persistentStore.keys()].sort((a, b) => a - b);
     }
 
     /** Iterate over all active construction sites. */
     getAllActiveSites(): IterableIterator<ConstructionSite> {
-        return this.sites.values();
+        return this.persistentStore.values();
     }
 
     // ── Digger management ──
@@ -479,7 +560,7 @@ export class ConstructionSiteManager implements Persistable<SerializedConstructi
      * beyond what's already been consumed. Returns the material type, or null if none.
      */
     consumeNextMaterial(buildingId: number): EMaterialType | null {
-        const site = this.sites.get(buildingId);
+        const site = this.persistentStore.get(buildingId);
         if (!site) {
             return null;
         }
@@ -532,7 +613,7 @@ export class ConstructionSiteManager implements Persistable<SerializedConstructi
         material: EMaterialType,
         pileIndex: number = 0
     ): TileCoord | undefined {
-        return this.sites.get(buildingId)?.pilePositions.get(material)?.[pileIndex];
+        return this.persistentStore.get(buildingId)?.pilePositions.get(material)?.[pileIndex];
     }
 
     /**
@@ -540,7 +621,7 @@ export class ConstructionSiteManager implements Persistable<SerializedConstructi
      * Returns undefined if the site doesn't exist or has no positions for that material.
      */
     getConstructionPilePositions(buildingId: number, material: EMaterialType): readonly TileCoord[] | undefined {
-        return this.sites.get(buildingId)?.pilePositions.get(material);
+        return this.persistentStore.get(buildingId)?.pilePositions.get(material);
     }
 
     // ── Worker queries ──
@@ -555,7 +636,7 @@ export class ConstructionSiteManager implements Persistable<SerializedConstructi
         let bestId: number | undefined;
         let bestDist = Infinity;
 
-        for (const site of this.sites.values()) {
+        for (const site of this.persistentStore.values()) {
             if (site.player !== player) {
                 continue;
             }
@@ -589,7 +670,7 @@ export class ConstructionSiteManager implements Persistable<SerializedConstructi
         let bestId: number | undefined;
         let bestDist = Infinity;
 
-        for (const site of this.sites.values()) {
+        for (const site of this.persistentStore.values()) {
             if (site.player !== player) {
                 continue;
             }
@@ -614,115 +695,5 @@ export class ConstructionSiteManager implements Persistable<SerializedConstructi
         }
 
         return bestId;
-    }
-
-    // ── Persistence ──
-
-    /**
-     * Serialize all active construction sites for game state persistence.
-     * Worker assignments are NOT serialized — workers re-assigned by settler task system on load.
-     */
-    serializeSites(): SerializedConstructionSite[] {
-        const result: SerializedConstructionSite[] = [];
-        for (const id of this.getAllSiteIds()) {
-            const site = this.sites.get(id);
-            if (!site) {
-                throw new Error(`No construction site for building ${id} in ConstructionSiteManager.serializeSites`);
-            }
-            result.push({
-                buildingId: site.buildingId,
-                buildingType: site.buildingType,
-                race: site.race,
-                player: site.player,
-                tileX: site.tileX,
-                tileY: site.tileY,
-                phase: site.phase,
-                levelingProgress: site.terrain.progress,
-                levelingComplete: site.terrain.complete,
-                constructionProgress: site.building.progress,
-                consumedMaterials: [...site.materials.consumed.entries()],
-                consumedAmount: site.materials.consumedAmount,
-                terrainModified: site.terrain.modified,
-            });
-        }
-        return result;
-    }
-
-    // ── Persistable implementation ──
-
-    serialize(): SerializedConstructionSite[] {
-        return this.serializeSites();
-    }
-
-    deserialize(data: SerializedConstructionSite[]): void {
-        for (const site of data) {
-            this.restoreSite(site);
-        }
-    }
-
-    /**
-     * Restore a previously serialized construction site.
-     * Worker assignments are left empty — settler task system re-assigns on load.
-     * terrain.originalTerrain is not restored — terrain is already in its modified state.
-     */
-    restoreSite(data: SerializedConstructionSite): void {
-        if (this.sites.has(data.buildingId)) {
-            throw new Error(
-                `ConstructionSiteManager: site already registered for buildingId ${data.buildingId} (during restore)`
-            );
-        }
-
-        const constructionCosts = getConstructionCosts(data.buildingType, data.race);
-        const totalCost = constructionCosts.reduce((sum, c) => sum + c.count, 0);
-        const workerCount = getWorkerCount(data.buildingType, data.race);
-
-        const pilePositions = assignConstructionPilePositions(data.buildingType, data.race, data.tileX, data.tileY);
-
-        const site: ConstructionSite = {
-            buildingId: data.buildingId,
-            buildingType: data.buildingType,
-            race: data.race,
-            player: data.player,
-            tileX: data.tileX,
-            tileY: data.tileY,
-            // Evacuating is a transient sub-frame state — restore as WaitingForBuilders
-            phase:
-                data.phase === BuildingConstructionPhase.Evacuating
-                    ? BuildingConstructionPhase.WaitingForBuilders
-                    : data.phase,
-            terrain: {
-                slots: {
-                    required: workerCount,
-                    assigned: new Set(),
-                    started: data.levelingProgress > 0,
-                },
-                progress: data.levelingProgress,
-                complete: data.levelingComplete,
-                // originalTerrain + unleveledTiles are rebuilt from live map data
-                // in BuildingConstructionSystem.rebuildTerrainForRestoredSites()
-                originalTerrain: null,
-                modified: data.terrainModified,
-                unleveledTiles: null,
-                reservedTiles: new Set(),
-                totalLevelingTiles: 0,
-            },
-            materials: {
-                costs: constructionCosts,
-                totalCost,
-                consumedAmount: data.consumedAmount,
-                consumed: new Map<EMaterialType, number>(data.consumedMaterials),
-            },
-            building: {
-                slots: {
-                    required: workerCount,
-                    assigned: new Set(),
-                    started: data.constructionProgress > 0,
-                },
-                progress: data.constructionProgress,
-            },
-            pilePositions,
-        };
-
-        this.sites.set(data.buildingId, site);
     }
 }

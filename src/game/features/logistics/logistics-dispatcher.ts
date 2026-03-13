@@ -212,6 +212,23 @@ export class LogisticsDispatcher implements TickSystem {
     }
 
     /**
+     * Cancel all transport jobs still in Reserved phase.
+     *
+     * After keyframe restore, carrier choreo tasks are transient and lost.
+     * Jobs in Reserved phase have an assigned carrier that will never start
+     * its pickup task. Cancelling frees the carrier and returns the demand
+     * to the queue so normal matching re-dispatches on the next tick.
+     */
+    cancelReservedJobs(): void {
+        const reservedCarriers = [...this.jobStore.byPhase.get(TransportPhase.Reserved)];
+        for (const carrierId of reservedCarriers) {
+            const record = this.jobStore.jobs.get(carrierId)!;
+            TransportJobService.cancel(record, 'restore_cleanup', this.transportJobDeps);
+            this.jobStore.jobs.delete(carrierId);
+        }
+    }
+
+    /**
      * Main tick — assign pending demands to available carriers and check for stalls.
      */
     tick(dt: number): void {

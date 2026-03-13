@@ -16,24 +16,14 @@
  */
 
 import type { FeatureContext } from '../feature';
-import type { Persistable } from '@/game/persistence';
 import { EntityType, getUnitTypeSpeed, type UnitType } from '@/game/entity';
 import { CLEANUP_PRIORITY } from '@/game/systems/entity-cleanup-registry';
 import { createLogger } from '@/utilities/logger';
-import {
-    SettlerBuildingStatus,
-    type ISettlerBuildingLocationManager,
-    type SettlerBuildingLocation,
-    type SerializedSettlerLocations,
-} from './types';
+import { SettlerBuildingStatus, type ISettlerBuildingLocationManager, type SettlerBuildingLocation } from './types';
 
 const log = createLogger('SettlerBuildingLocationManager');
 
-export class SettlerBuildingLocationManager
-    implements ISettlerBuildingLocationManager, Persistable<SerializedSettlerLocations>
-{
-    readonly persistKey = 'settler-building-locations' as const;
-
+export class SettlerBuildingLocationManager implements ISettlerBuildingLocationManager {
     /** Maps settlerId → { buildingId, status } for both approaching and inside states. */
     private readonly locationMap = new Map<number, SettlerBuildingLocation>();
 
@@ -201,58 +191,6 @@ export class SettlerBuildingLocationManager
             }
         }
         return result;
-    }
-
-    // =========================================================================
-    // Persistable
-    // =========================================================================
-
-    serialize(): SerializedSettlerLocations {
-        const entries: SerializedSettlerLocations['entries'] = [];
-        for (const [settlerId, location] of this.locationMap) {
-            // Only persist "Inside" entries — "Approaching" is transient movement state
-            // that cannot be reliably reconstructed (the settler's choreo may target a
-            // different building after restore).
-            if (location.status === SettlerBuildingStatus.Inside) {
-                entries.push({ settlerId, buildingId: location.buildingId, status: location.status });
-            }
-        }
-        return { entries };
-    }
-
-    deserialize(data: SerializedSettlerLocations): void {
-        this.locationMap.clear();
-        let skipped = 0;
-        for (const entry of data.entries) {
-            // Validate both settler and building still exist — stale data from
-            // version mismatches or partial saves must not crash.
-            const settler = this.ctx.gameState.getEntity(entry.settlerId);
-            const building = this.ctx.gameState.getEntity(entry.buildingId);
-            if (!settler || !building) {
-                log.debug(
-                    `Skipping stale location entry: settler ${entry.settlerId} ` +
-                        `(exists=${!!settler}), building ${entry.buildingId} (exists=${!!building})`
-                );
-                skipped++;
-                continue;
-            }
-
-            this.locationMap.set(entry.settlerId, {
-                buildingId: entry.buildingId,
-                status: entry.status,
-            });
-            if (entry.status === SettlerBuildingStatus.Inside) {
-                settler.hidden = true;
-                // Remove controller + unitOccupancy (entity:created may have added them)
-                this.ctx.gameState.movement.removeController(entry.settlerId);
-                this.ctx.gameState.clearTileOccupancy(entry.settlerId);
-            }
-            // Approaching: entity stays visible; feature will re-issue movement on its own onTerrainReady
-        }
-        if (skipped > 0) {
-            log.debug(`Skipped ${skipped} stale settler location entries`);
-        }
-        log.debug(`Deserialized: ${this.locationMap.size} settler location entries`);
     }
 
     // =========================================================================

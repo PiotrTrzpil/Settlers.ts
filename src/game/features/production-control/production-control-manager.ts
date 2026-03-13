@@ -12,8 +12,7 @@
 
 import { ProductionMode, type ProductionState } from './types';
 import { type ComponentStore, mapStore } from '../../ecs';
-import type { Persistable } from '@/game/persistence';
-import type { SerializedProductionControl } from '@/game/state/game-state-persistence';
+import { PersistentMap } from '@/game/persistence/persistent-store';
 
 /**
  * Manages runtime production state for all multi-recipe buildings.
@@ -25,12 +24,11 @@ import type { SerializedProductionControl } from '@/game/state/game-state-persis
  * const recipeIndex = manager.getNextRecipeIndex(buildingId);
  * ```
  */
-export class ProductionControlManager implements Persistable<SerializedProductionControl[]> {
-    readonly persistKey = 'productionControl' as const;
-    private readonly states: Map<number, ProductionState> = new Map();
+export class ProductionControlManager {
+    readonly persistentStore = new PersistentMap<ProductionState>('productionControl');
 
     /** Uniform read-only view for cross-cutting queries */
-    readonly store: ComponentStore<ProductionState> = mapStore(this.states);
+    readonly store: ComponentStore<ProductionState> = mapStore(this.persistentStore.raw);
 
     // =========================================================================
     // Lifecycle
@@ -65,7 +63,7 @@ export class ProductionControlManager implements Persistable<SerializedProductio
             recipeCount,
         };
 
-        this.states.set(buildingId, state);
+        this.persistentStore.set(buildingId, state);
     }
 
     /**
@@ -74,7 +72,7 @@ export class ProductionControlManager implements Persistable<SerializedProductio
      * @param buildingId  Entity ID of the building.
      */
     removeBuilding(buildingId: number): void {
-        this.states.delete(buildingId);
+        this.persistentStore.delete(buildingId);
     }
 
     // =========================================================================
@@ -90,7 +88,7 @@ export class ProductionControlManager implements Persistable<SerializedProductio
      * Returns null when the building has no state or manual mode queue is empty.
      */
     peekNextRecipeIndex(buildingId: number): number | null {
-        const state = this.states.get(buildingId);
+        const state = this.persistentStore.get(buildingId);
         if (!state) {
             return null;
         }
@@ -122,7 +120,7 @@ export class ProductionControlManager implements Persistable<SerializedProductio
      * @param buildingId  Entity ID of the building.
      */
     getNextRecipeIndex(buildingId: number): number | null {
-        const state = this.states.get(buildingId);
+        const state = this.persistentStore.get(buildingId);
         if (!state) {
             return null;
         } // No state — caller falls back to single-recipe path.
@@ -339,62 +337,7 @@ export class ProductionControlManager implements Persistable<SerializedProductio
      * @param buildingId Entity ID of the building.
      */
     getProductionState(buildingId: number): Readonly<ProductionState> | undefined {
-        return this.states.get(buildingId);
-    }
-
-    // =========================================================================
-    // Persistable
-    // =========================================================================
-
-    serialize(): SerializedProductionControl[] {
-        const result: SerializedProductionControl[] = [];
-        for (const [buildingId, state] of this.states) {
-            const proportions: Array<{ index: number; weight: number }> = [];
-            for (const [index, weight] of state.proportions) {
-                proportions.push({ index, weight });
-            }
-
-            const productionCounts: Array<{ index: number; count: number }> = [];
-            for (const [index, count] of state.productionCounts) {
-                productionCounts.push({ index, count });
-            }
-
-            result.push({
-                buildingId,
-                mode: state.mode,
-                recipeCount: state.recipeCount,
-                roundRobinIndex: state.roundRobinIndex,
-                proportions,
-                queue: [...state.queue],
-                productionCounts,
-            });
-        }
-        return result;
-    }
-
-    deserialize(data: SerializedProductionControl[]): void {
-        for (const entry of data) {
-            const proportions = new Map<number, number>();
-            for (const p of entry.proportions) {
-                proportions.set(p.index, p.weight);
-            }
-
-            const productionCounts = new Map<number, number>();
-            for (const pc of entry.productionCounts) {
-                productionCounts.set(pc.index, pc.count);
-            }
-
-            const state: ProductionState = {
-                mode: entry.mode as ProductionMode,
-                recipeCount: entry.recipeCount,
-                roundRobinIndex: entry.roundRobinIndex,
-                proportions,
-                queue: [...entry.queue],
-                productionCounts,
-            };
-
-            this.states.set(entry.buildingId, state);
-        }
+        return this.persistentStore.get(buildingId);
     }
 
     // =========================================================================
@@ -406,7 +349,7 @@ export class ProductionControlManager implements Persistable<SerializedProductio
      * Use for operations that require an existing state (setMode, setProportion, etc.).
      */
     private requireState(buildingId: number): ProductionState {
-        const state = this.states.get(buildingId);
+        const state = this.persistentStore.get(buildingId);
         if (!state) {
             throw new Error(
                 `ProductionControlManager: no state for building ${buildingId}. ` +

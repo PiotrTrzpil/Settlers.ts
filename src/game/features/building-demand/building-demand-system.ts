@@ -141,7 +141,7 @@ export class BuildingDemandSystem implements TickSystem {
     // Internal — demand creation
     // ================================================================
 
-    private addDemandFromBuilding(buildingId: number, buildingType: number, race: Race): void {
+    addDemandFromBuilding(buildingId: number, buildingType: number, race: Race): void {
         if (this.demands.has(buildingId)) {
             return;
         } // already pending

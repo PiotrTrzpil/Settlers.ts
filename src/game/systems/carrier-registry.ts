@@ -7,10 +7,9 @@
  */
 
 import type { EntityProvider } from '../entity';
+import { EntityType, UnitType } from '../entity';
 import { type ComponentStore, setStore } from '../ecs';
 import { createLogger } from '@/utilities/logger';
-import type { Persistable } from '@/game/persistence';
-import type { SerializedCarrier } from '@/game/state/game-state-persistence';
 
 const log = createLogger('CarrierRegistry');
 
@@ -18,9 +17,7 @@ export interface CarrierRegistryConfig {
     entityProvider: EntityProvider;
 }
 
-export class CarrierRegistry implements Persistable<SerializedCarrier[]> {
-    readonly persistKey = 'carriers' as const;
-
+export class CarrierRegistry {
     private readonly entityProvider: EntityProvider;
     private readonly ids = new Set<number>();
 
@@ -62,25 +59,17 @@ export class CarrierRegistry implements Persistable<SerializedCarrier[]> {
         this.ids.clear();
     }
 
-    // ── Persistable ───────────────────────────────────────────────
-
-    serialize(): SerializedCarrier[] {
-        return [...this.ids].map(entityId => ({ entityId }));
-    }
-
-    deserialize(data: SerializedCarrier[]): void {
-        for (const c of data) {
-            this.restore(c.entityId);
+    /**
+     * Rebuild carrier registry from the entity table after replay/restore.
+     * Scans all entities and registers those with UnitType.Carrier.
+     */
+    rebuildFromEntities(): void {
+        this.ids.clear();
+        for (const entity of this.entityProvider.entities) {
+            if (entity.type === EntityType.Unit && entity.subType === UnitType.Carrier) {
+                this.ids.add(entity.id);
+            }
         }
-    }
-
-    /** Restore without emitting events (used by persistence during load). */
-    restore(entityId: number): void {
-        const entity = this.entityProvider.getEntity(entityId);
-        if (!entity) {
-            console.warn(`Cannot restore carrier: entity ${entityId} not found, skipping`);
-            return;
-        }
-        this.ids.add(entityId);
+        log.debug(`Rebuilt carrier registry: ${this.ids.size} carriers`);
     }
 }

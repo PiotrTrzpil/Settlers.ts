@@ -63,11 +63,6 @@ export interface ISettlerBuildingLocationManager {
     getApproaching(buildingId: number): readonly number[];
 }
 
-// Persistence shape — only "Inside" entries are persisted (Approaching is transient)
-export interface SerializedSettlerLocations {
-    entries: Array<{ settlerId: number; buildingId: number; status: SettlerBuildingStatus }>;
-}
-
 export interface SettlerLocationExports {
     locationManager: ISettlerBuildingLocationManager;
 }

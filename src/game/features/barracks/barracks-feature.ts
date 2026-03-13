@@ -11,8 +11,10 @@ import type { InventoryExports } from '../inventory';
 import type { CarrierFeatureExports } from '../carriers';
 import type { ProductionControlExports } from '../production-control/production-control-feature';
 import type { SettlerTaskExports } from '../settler-tasks/settler-tasks-feature';
+import type { BuildingConstructionExports } from '../building-construction/building-construction-feature';
 import { BarracksTrainingManager } from './barracks-training-manager';
 import { BuildingType } from '../../buildings/building-type';
+import { EntityType } from '../../entity';
 
 export interface BarracksExports {
     barracksTrainingManager: BarracksTrainingManager;
@@ -20,13 +22,14 @@ export interface BarracksExports {
 
 export const BarracksFeature: FeatureDefinition = {
     id: 'barracks',
-    dependencies: ['inventory', 'carriers', 'settler-tasks', 'production-control'],
+    dependencies: ['inventory', 'carriers', 'settler-tasks', 'production-control', 'building-construction'],
 
     create(ctx: FeatureContext) {
         const { inventoryManager } = ctx.getFeature<InventoryExports>('inventory');
         const { carrierRegistry, idleCarrierPool } = ctx.getFeature<CarrierFeatureExports>('carriers');
         const { settlerTaskSystem } = ctx.getFeature<SettlerTaskExports>('settler-tasks');
         const { productionControlManager } = ctx.getFeature<ProductionControlExports>('production-control');
+        const { constructionSiteManager } = ctx.getFeature<BuildingConstructionExports>('building-construction');
 
         const barracksTrainingManager = new BarracksTrainingManager({
             gameState: ctx.gameState,
@@ -58,7 +61,20 @@ export const BarracksFeature: FeatureDefinition = {
             systems: [barracksTrainingManager],
             systemGroup: 'Military',
             exports: { barracksTrainingManager } satisfies BarracksExports,
-            persistence: [{ persistable: barracksTrainingManager, after: ['productionControl'] }],
+            persistence: [],
+            onRestoreComplete() {
+                for (const e of ctx.gameState.entities) {
+                    if (e.type !== EntityType.Building) {
+                        continue;
+                    }
+                    if (constructionSiteManager.hasSite(e.id)) {
+                        continue;
+                    }
+                    if (e.subType === BuildingType.Barrack) {
+                        barracksTrainingManager.initBarracks(e.id, e.race);
+                    }
+                }
+            },
         };
     },
 };

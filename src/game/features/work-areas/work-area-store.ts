@@ -13,19 +13,16 @@ import type { Race } from '../../core/race';
 import type { TileOffset } from '../../input/building-adjust/types';
 import { hasWorkArea } from './types';
 import { getBuildingInfo } from '../../data/game-data-access';
-import type { Persistable } from '@/game/persistence';
+import { PersistentMap } from '@/game/persistence/persistent-store';
 
-type SerializedWorkAreaOffset = { entityId: number; dx: number; dy: number };
-
-export class WorkAreaStore implements Persistable<SerializedWorkAreaOffset[]> {
-    readonly persistKey = 'workAreaOffsets' as const;
-    /** Per-instance overrides (entityId → offset) */
-    private readonly instanceOffsets = new Map<number, TileOffset>();
+export class WorkAreaStore {
+    /** Per-instance overrides (entityId → offset), auto-persisted. */
+    readonly persistentStore = new PersistentMap<TileOffset>('workAreaOffsets');
 
     /** Get the tile offset for a building (instance override → XML workingPos) */
     getOffset(buildingType: BuildingType, race: Race, buildingId?: number): TileOffset {
         if (buildingId !== undefined) {
-            const inst = this.instanceOffsets.get(buildingId);
+            const inst = this.persistentStore.get(buildingId);
             if (inst) {
                 return inst;
             }
@@ -54,12 +51,12 @@ export class WorkAreaStore implements Persistable<SerializedWorkAreaOffset[]> {
 
     /** Set a per-instance override */
     setInstanceOffset(buildingId: number, offset: TileOffset): void {
-        this.instanceOffsets.set(buildingId, { dx: offset.dx, dy: offset.dy });
+        this.persistentStore.set(buildingId, { dx: offset.dx, dy: offset.dy });
     }
 
     /** Remove a per-instance override (e.g. when building is destroyed) */
     removeInstance(buildingId: number): void {
-        this.instanceOffsets.delete(buildingId);
+        this.persistentStore.delete(buildingId);
     }
 
     /** Check if a building type supports work areas (derived from XML workingAreaRadius > 0) */
@@ -77,32 +74,5 @@ export class WorkAreaStore implements Persistable<SerializedWorkAreaOffset[]> {
     ): { x: number; y: number } {
         const offset = this.getOffset(buildingType, race, buildingId);
         return { x: buildingX + offset.dx, y: buildingY + offset.dy };
-    }
-
-    // ── Persistable ───────────────────────────────────────────────
-
-    serialize(): SerializedWorkAreaOffset[] {
-        return this.serializeInstanceOffsets();
-    }
-
-    deserialize(data: SerializedWorkAreaOffset[]): void {
-        this.restoreInstanceOffsets(data);
-    }
-
-    /** Serialize instance offsets for game state persistence. */
-    serializeInstanceOffsets(): Array<{ entityId: number; dx: number; dy: number }> {
-        const result: Array<{ entityId: number; dx: number; dy: number }> = [];
-        for (const [entityId, offset] of this.instanceOffsets) {
-            result.push({ entityId, dx: offset.dx, dy: offset.dy });
-        }
-        return result;
-    }
-
-    /** Restore instance offsets from saved game state. */
-    restoreInstanceOffsets(data: Array<{ entityId: number; dx: number; dy: number }>): void {
-        this.instanceOffsets.clear();
-        for (const entry of data) {
-            this.instanceOffsets.set(entry.entityId, { dx: entry.dx, dy: entry.dy });
-        }
     }
 }

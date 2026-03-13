@@ -60,7 +60,7 @@ export const RecruitFeature: FeatureDefinition = {
 
         return {
             systems: [recruitSystem],
-            persistence: [unitTransformer],
+            persistence: [],
             exports: { recruitSystem, unitTransformer } satisfies RecruitExports,
             destroy: () => {
                 unitTransformer.unregisterEvents();

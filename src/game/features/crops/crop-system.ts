@@ -23,8 +23,7 @@ import type { EntityVisualService } from '../../animation/entity-visual-service'
 import type { Command, CommandResult } from '../../commands';
 import { findEmptySpot } from '../../systems/spatial-search';
 import type { EventBus } from '../../event-bus';
-import type { Persistable } from '@/game/persistence';
-import type { SerializedCrop } from '@/game/state/game-state-persistence';
+import { PersistentMap } from '@/game/persistence/persistent-store';
 
 // ── Stages ────────────────────────────────────────────────────
 
@@ -106,8 +105,13 @@ export interface CropSystemConfig extends CoreDeps {
     executeCommand: (cmd: Command) => CommandResult;
 }
 
-export class CropSystem extends GrowableSystem<CropState> implements Persistable<SerializedCrop[]> {
-    readonly persistKey = 'crops' as const;
+export class CropSystem extends GrowableSystem<CropState> {
+    /** PersistentMap shadows GrowableSystem.states — same Map API, adds auto-persistence. */
+    protected override readonly states = new PersistentMap<CropState>('crops');
+    /** Expose for feature persistence registration. */
+    get persistentStore(): PersistentMap<CropState> {
+        return this.states;
+    }
     private readonly eventBus: EventBus;
 
     constructor(cfg: CropSystemConfig) {
@@ -299,35 +303,6 @@ export class CropSystem extends GrowableSystem<CropState> implements Persistable
             this.log.debug(`Settler ${settlerId} planted ${MapObjectType[cropType]} at (${x}, ${y})`);
         } else {
             this.log.debug(`Settler ${settlerId}: cannot plant at (${x}, ${y}): ${result.error}`);
-        }
-    }
-
-    // ── Persistable ──────────────────────────────────────────────
-
-    serialize(): SerializedCrop[] {
-        const result: SerializedCrop[] = [];
-        for (const [entityId, state] of this.getAllCropStates()) {
-            result.push({
-                entityId,
-                stage: state.stage,
-                cropType: state.cropType,
-                progress: state.progress,
-                decayTimer: state.decayTimer,
-                currentOffset: state.currentOffset,
-            });
-        }
-        return result;
-    }
-
-    deserialize(data: SerializedCrop[]): void {
-        for (const c of data) {
-            this.restoreCropState(c.entityId, {
-                stage: c.stage,
-                cropType: c.cropType,
-                progress: c.progress,
-                decayTimer: c.decayTimer,
-                currentOffset: c.currentOffset,
-            });
         }
     }
 

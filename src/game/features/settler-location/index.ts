@@ -19,11 +19,11 @@ export const SettlerLocationFeature: FeatureDefinition = {
         const locationManager = new SettlerBuildingLocationManager(ctx);
         return {
             exports: { locationManager } satisfies SettlerLocationExports,
-            persistence: [locationManager],
+            persistence: [],
         };
     },
 };
 
 export type { ISettlerBuildingLocationManager, SettlerLocationExports } from './types';
 export { SettlerBuildingStatus } from './types';
-export type { SettlerBuildingLocation, ApproachInterruptedEvent, SerializedSettlerLocations } from './types';
+export type { SettlerBuildingLocation, ApproachInterruptedEvent } from './types';

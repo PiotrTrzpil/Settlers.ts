@@ -82,7 +82,7 @@ export const CombatFeature: FeatureDefinition = {
         return {
             systems: [combatSystem, deathAngelSystem],
             exports: { combatSystem } satisfies CombatExports,
-            persistence: [combatSystem],
+            persistence: [],
         };
     },
 };

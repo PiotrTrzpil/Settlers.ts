@@ -58,7 +58,10 @@ export const CarrierFeature: FeatureDefinition = {
                     isTransportBusy = fn;
                 },
             } satisfies CarrierFeatureExports,
-            persistence: [carrierRegistry],
+            persistence: [],
+            onRestoreComplete() {
+                carrierRegistry.rebuildFromEntities();
+            },
         };
     },
 };

@@ -55,6 +55,12 @@ export const LogisticsDispatcherFeature: FeatureDefinition = {
             systemGroup: 'Logistics',
             persistence: [jobStore.jobs, jobStore.nextJobIdStore],
             exports: { logisticsDispatcher } satisfies LogisticsDispatcherExports,
+            onRestoreComplete() {
+                // Carrier choreo tasks are transient — after keyframe restore, jobs in
+                // Reserved phase have carriers that will never start pickup. Cancel them
+                // so demands re-enter the queue and get re-matched on the next tick.
+                logisticsDispatcher.cancelReservedJobs();
+            },
         };
     },
 };

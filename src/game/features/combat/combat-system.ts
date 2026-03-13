@@ -23,8 +23,6 @@ import type { EntityVisualService } from '../../animation/entity-visual-service'
 import { createLogger } from '@/utilities/logger';
 import { sortedEntries } from '@/utilities/collections';
 import type { Command, CommandResult } from '../../commands';
-import type { Persistable } from '@/game/persistence';
-import type { SerializedCombatUnit } from '@/game/state/game-state-persistence';
 
 const log = createLogger('CombatSystem');
 
@@ -51,9 +49,7 @@ export interface CombatSystemConfig extends CoreDeps {
     executeCommand: (cmd: Command) => CommandResult;
 }
 
-export class CombatSystem implements TickSystem, Persistable<SerializedCombatUnit[]> {
-    readonly persistKey = 'combat' as const;
-
+export class CombatSystem implements TickSystem {
     private readonly states = new Map<number, CombatState>();
     private readonly gameState: GameState;
     private readonly eventBus: EventBus;
@@ -445,30 +441,5 @@ export class CombatSystem implements TickSystem, Persistable<SerializedCombatUni
             loop: false,
             stopped: true,
         });
-    }
-
-    // ── Persistable ───────────────────────────────────────────────
-
-    serialize(): SerializedCombatUnit[] {
-        const result: SerializedCombatUnit[] = [];
-        for (const [entityId, state] of this.states) {
-            result.push({
-                entityId,
-                health: state.health,
-                maxHealth: state.maxHealth,
-            });
-        }
-        return result;
-    }
-
-    deserialize(data: SerializedCombatUnit[]): void {
-        for (const s of data) {
-            const state = this.states.get(s.entityId);
-            if (!state) {
-                continue;
-            }
-            state.health = s.health;
-            state.maxHealth = s.maxHealth;
-        }
     }
 }

@@ -11,12 +11,3 @@ export interface BuildingGarrisonState {
     swordsmanSlots: GarrisonSlotSet;
     bowmanSlots: GarrisonSlotSet;
 }
-
-export interface SerializedTowerGarrison {
-    garrisons: Array<{
-        buildingId: number;
-        swordsmanUnitIds: number[];
-        bowmanUnitIds: number[];
-    }>;
-    // enRoute is no longer persisted here — approaching state is owned by SettlerBuildingLocationManager
-}

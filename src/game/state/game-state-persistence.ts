@@ -11,7 +11,6 @@ import type { GameCore } from '../game-core';
 import { EntityType } from '../entity';
 import type { CarryingState } from '../entity';
 import type { Race } from '../core/race';
-import type { EMaterialType } from '../economy/material-type';
 import type { TreeStage } from '../features/trees/tree-system';
 import type { StoneStage } from '../features/stones/stone-system';
 
@@ -66,27 +65,12 @@ export interface GameStateSnapshot {
 // These types are used by individual feature Persistable implementations.
 // They are NOT fields on GameStateSnapshot — feature data lives under dynamic
 // persist keys via the PersistenceRegistry.
+//
+// With superjson at the boundary, Maps/Sets are preserved natively.
+// Entity/building IDs are Map keys rather than embedded fields.
 // ─────────────────────────────────────────────────────────────────────────────
 
-export interface SerializedInventorySlot {
-    materialType: EMaterialType;
-    current: number;
-    max: number;
-}
-
-export interface SerializedBuildingInventory {
-    entityId: number;
-    buildingType: number;
-    inputSlots: SerializedInventorySlot[];
-    outputSlots: SerializedInventorySlot[];
-}
-
-export interface SerializedCarrier {
-    entityId: number;
-}
-
 export interface SerializedTree {
-    entityId: number;
     stage: TreeStage;
     progress: number;
     stumpTimer: number;
@@ -95,14 +79,12 @@ export interface SerializedTree {
 }
 
 export interface SerializedStone {
-    entityId: number;
     stage: StoneStage;
     variant: number;
     level: number;
 }
 
 export interface SerializedCrop {
-    entityId: number;
     stage: number;
     cropType: number;
     progress: number;
@@ -110,72 +92,13 @@ export interface SerializedCrop {
     currentOffset: number;
 }
 
-export interface SerializedStorageFilter {
-    buildingId: number;
-    materials: number[];
-    /** Per-material direction (StorageDirection). Missing = legacy data, default to Both. */
-    directions?: number[];
-}
-
 export interface SerializedProductionControl {
-    buildingId: number;
     mode: string;
     recipeCount: number;
     roundRobinIndex: number;
-    proportions: Array<{ index: number; weight: number }>;
+    proportions: Map<number, number>;
     queue: number[];
-    productionCounts: Array<{ index: number; count: number }>;
-}
-
-export interface SerializedPendingSpawn {
-    buildingEntityId: number;
-    remaining: number;
-    timer: number;
-    unitType: number;
-    count: number;
-    spawnInterval: number;
-}
-
-export interface SerializedResourceSign {
-    elapsed: number;
-    signs: Array<{ entityId: number; x: number; y: number; expiresAt: number }>;
-}
-
-export interface SerializedCombatUnit {
-    entityId: number;
-    health: number;
-    maxHealth: number;
-}
-
-export interface SerializedBarracksTraining {
-    races: Array<{ buildingId: number; race: number }>;
-    activeTrainings: Array<{
-        buildingId: number;
-        carrierId: number;
-        recipe: { inputs: Array<{ material: number; count: number }>; unitType: number; level: number };
-    }>;
-}
-
-export interface SerializedUnitTransformer {
-    pendingTransforms: Array<{
-        carrierId: number;
-        targetUnitType: number;
-        toolMaterial: number;
-        pileEntityId: number;
-    }>;
-}
-
-export interface SerializedRequest {
-    id: number;
-    buildingId: number;
-    materialType: EMaterialType;
-    amount: number;
-    priority: number;
-    timestamp: number;
-    status: string;
-    assignedCarrier: number | null;
-    sourceBuilding: number | null;
-    assignedAt: number | null;
+    productionCounts: Map<number, number>;
 }
 
 /** Current map identifier for save/load matching */
@@ -438,10 +361,10 @@ function restoreEntities(game: GameCore, snapshot: GameStateSnapshot): void {
     // Extract construction site IDs so we can distinguish completed buildings from sites.
     // Completed buildings need buildingOccupancy set at creation time (via completed flag).
     const constructionSiteIds = new Set<number>();
-    const sites = snapshot['constructionSites'] as Array<{ buildingId: number }> | undefined;
+    const sites = snapshot['constructionSites'] as Map<number, unknown> | undefined;
     if (sites) {
-        for (const site of sites) {
-            constructionSiteIds.add(site.buildingId);
+        for (const buildingId of sites.keys()) {
+            constructionSiteIds.add(buildingId);
         }
     }
 
@@ -526,6 +449,9 @@ export function restoreFromSnapshot(game: GameCore, snapshot: GameStateSnapshot)
     // 5. Restore all feature state via registry (topological order handles dependencies).
     // deserializeAll() overwrites default state created by entity:created events.
     game.services.persistenceRegistry.deserializeAll(snapshot as unknown as Record<string, unknown>);
+
+    // 5a. Rebuild inventory reverse index (buildingId → slotIds) from restored slot data.
+    game.services.inventoryManager.rebuildInventoryIndex();
 
     // 6. Rebuild derived state that is not owned by features.
     game.services.buildingOverlayManager.rebuildFromExistingEntities(game.services.constructionSiteManager);

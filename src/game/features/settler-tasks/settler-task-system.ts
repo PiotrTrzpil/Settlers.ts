@@ -7,7 +7,6 @@
 import type { GameState } from '../../game-state';
 import type { CoreDeps } from '../feature';
 import type { TickSystem } from '../../core/tick-system';
-import type { Persistable } from '../../persistence/types';
 import { EntityType, UnitType, type Entity } from '../../entity';
 import type { EventBus } from '../../event-bus';
 import { isAngelUnitType } from '../../core/unit-types';
@@ -17,7 +16,6 @@ import { sortedEntries } from '@/utilities/collections';
 import { SearchType, SettlerState, type JobState, type WorkHandler, type SettlerConfig } from './types';
 import type { TransportJobOps } from './choreo-types';
 import { buildAllSettlerConfigs } from '../../data/settler-data-access';
-import { serializeRuntime, deserializeJob, type SerializedUnitRuntime } from './settler-task-serialization';
 import type { BuildingInventoryManager, BuildingPileRegistry } from '../inventory';
 import { createWorkplaceHandler, createCarrierHandler } from './work-handlers';
 import type { EntityVisualService } from '../../animation/entity-visual-service';
@@ -67,7 +65,7 @@ export interface SettlerTaskSystemConfig extends CoreDeps {
     locationManager: ISettlerBuildingLocationManager;
 }
 
-export class SettlerTaskSystem implements TickSystem, Persistable<SerializedUnitRuntime[]> {
+export class SettlerTaskSystem implements TickSystem {
     private readonly gameState: GameState;
     private readonly eventBus: EventBus;
     private readonly inventoryManager: BuildingInventoryManager;
@@ -264,38 +262,6 @@ export class SettlerTaskSystem implements TickSystem, Persistable<SerializedUnit
         log.debug(
             `Loaded ${this.settlerConfigs.size} settler configs, ${this.choreographyStore.cacheSize} cached jobs`
         );
-    }
-
-    readonly persistKey = 'settlerTasks' as const;
-
-    serialize(): SerializedUnitRuntime[] {
-        const result: SerializedUnitRuntime[] = [];
-        for (const [entityId, runtime] of this.runtimes) {
-            result.push(serializeRuntime(entityId, runtime));
-        }
-        return result;
-    }
-
-    deserialize(data: SerializedUnitRuntime[]): void {
-        this.runtimes.clear();
-        this.workerTracker.occupants.clear();
-
-        for (const entry of data) {
-            const entity = this.gameState.getEntityOrThrow(entry.entityId, 'settler-task restore');
-
-            const runtime = this.getRuntime(entity.id);
-            runtime.state = entry.state as SettlerState;
-            runtime.lastDirection = entry.lastDirection;
-
-            if (entry.homeAssignment) {
-                this.workerTracker.claim(entity.id, runtime, entry.homeAssignment.buildingId, true);
-                runtime.homeAssignment!.hasVisited = entry.homeAssignment.hasVisited;
-            }
-
-            if (entry.job) {
-                runtime.job = deserializeJob(entry.job);
-            }
-        }
     }
 
     setTransportJobOps(ops: TransportJobOps): void {

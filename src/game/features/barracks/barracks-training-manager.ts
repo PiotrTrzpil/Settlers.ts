@@ -18,7 +18,6 @@ import type { ProductionControlManager } from '@/game/features/production-contro
 import type { EventBus } from '@/game/event-bus';
 import { type Race } from '@/game/core/race';
 import { UnitType } from '@/game/core/unit-types';
-import { type EMaterialType } from '@/game/economy/material-type';
 import { BuildingType } from '@/game/buildings/building-type';
 import { getBuildingDoorPos } from '@/game/data/game-data-access';
 import { choreo, type ChoreoJobState } from '@/game/features/settler-tasks/choreo-types';
@@ -28,8 +27,6 @@ import { createLogger } from '@/utilities/logger';
 import type { IdleCarrierPool } from '@/game/features/carriers';
 import type { UnitReservationRegistry } from '@/game/systems/unit-reservation';
 import { sortedEntries } from '@/utilities/collections';
-import type { Persistable } from '@/game/persistence';
-import type { SerializedBarracksTraining } from '@/game/state/game-state-persistence';
 
 const log = createLogger('BarracksTraining');
 
@@ -45,8 +42,7 @@ export interface BarracksTrainingManagerConfig extends CoreDeps {
     unitReservation: UnitReservationRegistry;
 }
 
-export class BarracksTrainingManager implements Persistable<SerializedBarracksTraining> {
-    readonly persistKey = 'barracksTraining' as const;
+export class BarracksTrainingManager {
     private readonly gameState: GameState;
     private readonly inventoryManager: BuildingInventoryManager;
     private readonly carrierRegistry: CarrierRegistry;
@@ -280,69 +276,6 @@ export class BarracksTrainingManager implements Persistable<SerializedBarracksTr
     /** Returns true if a barracks has an active training session in progress. */
     isTraining(buildingId: number): boolean {
         return this.activeTrainings.has(buildingId);
-    }
-
-    // =========================================================================
-    // Persistable
-    // =========================================================================
-
-    serialize(): SerializedBarracksTraining {
-        const races: SerializedBarracksTraining['races'] = [];
-        for (const [buildingId, race] of this.barracksRaces) {
-            races.push({ buildingId, race: race as number });
-        }
-
-        const activeTrainings: SerializedBarracksTraining['activeTrainings'] = [];
-        for (const [buildingId, state] of this.activeTrainings) {
-            activeTrainings.push({
-                buildingId,
-                carrierId: state.carrierId,
-                recipe: {
-                    inputs: state.recipe.inputs.map(i => ({ material: i.material as number, count: i.count })),
-                    unitType: state.recipe.unitType as number,
-                    level: state.recipe.soldierLevel,
-                },
-            });
-        }
-
-        return { races, activeTrainings };
-    }
-
-    deserialize(data: SerializedBarracksTraining): void {
-        this.barracksRaces.clear();
-        for (const entry of data.races) {
-            this.barracksRaces.set(entry.buildingId, entry.race as Race);
-        }
-
-        this.activeTrainings.clear();
-        for (const entry of data.activeTrainings) {
-            const recipe: TrainingRecipe = {
-                inputs: entry.recipe.inputs.map(i => ({
-                    material: i.material as EMaterialType,
-                    count: i.count,
-                })),
-                unitType: entry.recipe.unitType as UnitType,
-                soldierLevel: entry.recipe.level,
-            };
-            this.activeTrainings.set(entry.buildingId, {
-                recipe,
-                carrierId: entry.carrierId,
-            });
-            // Restore reservation so the carrier cannot be interrupted after load.
-            const buildingId = entry.buildingId;
-            const carrierId = entry.carrierId;
-            this.unitReservation.reserve(carrierId, {
-                purpose: 'barracks-training',
-                onForcedRelease: () => {
-                    this.activeTrainings.delete(buildingId);
-                    this.eventBus.emit('barracks:trainingInterrupted', {
-                        buildingId,
-                        reason: 'carrier_killed',
-                        level: 'warn',
-                    });
-                },
-            });
-        }
     }
 }
 

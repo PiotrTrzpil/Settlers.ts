@@ -37,8 +37,6 @@ import { UnitType } from '../../core/unit-types';
 import { EMaterialType } from '../../economy/material-type';
 import type { CarrierRegistry } from '../carrier-registry';
 import type { UnitReservationRegistry } from '../unit-reservation';
-import type { Persistable } from '@/game/persistence';
-import type { SerializedUnitTransformer } from '@/game/state/game-state-persistence';
 import { createLogger } from '@/utilities/logger';
 import { createDirectTransformJob } from './recruitment-job';
 import { ToolSourceResolver } from './tool-source-resolver';
@@ -61,9 +59,7 @@ interface PendingTransform {
     pileEntityId: number;
 }
 
-export class UnitTransformer implements Persistable<SerializedUnitTransformer> {
-    readonly persistKey = 'unitTransformer' as const;
-
+export class UnitTransformer {
     private readonly gameState: GameState;
     private readonly eventBus: EventBus;
     private readonly carrierRegistry: CarrierRegistry;
@@ -335,54 +331,5 @@ export class UnitTransformer implements Persistable<SerializedUnitTransformer> {
         this.pending.delete(carrierId);
 
         log.debug(`Transform failed for carrier ${carrierId}`);
-    }
-
-    // =========================================================================
-    // Persistable
-    // =========================================================================
-
-    serialize(): SerializedUnitTransformer {
-        const pendingTransforms: SerializedUnitTransformer['pendingTransforms'] = [];
-        for (const p of this.pending.values()) {
-            pendingTransforms.push({
-                carrierId: p.carrierId,
-                targetUnitType: p.targetUnitType as number,
-                toolMaterial: p.toolMaterial !== null ? (p.toolMaterial as number) : -1,
-                pileEntityId: p.pileEntityId,
-            });
-        }
-        return { pendingTransforms };
-    }
-
-    deserialize(data: SerializedUnitTransformer): void {
-        this.pending.clear();
-        for (const entry of data.pendingTransforms) {
-            const carrierId = entry.carrierId;
-            const record: PendingTransform = {
-                carrierId,
-                targetUnitType: entry.targetUnitType as UnitType,
-                toolMaterial: entry.toolMaterial === -1 ? null : (entry.toolMaterial as EMaterialType),
-                pileEntityId: entry.pileEntityId,
-            };
-            this.pending.set(carrierId, record);
-            // Restore tool pile reservation (skip for direct transforms where pileEntityId === -1)
-            if (entry.pileEntityId !== -1) {
-                this.toolSourceResolver.reserve(entry.pileEntityId);
-            }
-            // Restore carrier reservation so it cannot be interrupted after load
-            this.unitReservation.reserve(carrierId, {
-                purpose: 'unit-transform',
-                onForcedRelease: unitId => {
-                    const p = this.pending.get(unitId);
-                    if (!p) {
-                        return;
-                    }
-                    if (p.pileEntityId !== -1) {
-                        this.toolSourceResolver.release(p.pileEntityId);
-                    }
-                    this.pending.delete(unitId);
-                },
-            });
-        }
     }
 }

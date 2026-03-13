@@ -7,10 +7,13 @@
 import type { FeatureDefinition, FeatureContext } from '../feature';
 import type { SettlerTaskExports } from '../settler-tasks';
 import type { RecruitExports } from '../recruit';
+import type { BuildingConstructionExports } from '../building-construction/building-construction-feature';
 import { BuildingDemandSystem } from './building-demand-system';
 import type { SettlerLocationExports } from '../settler-location/types';
 import { ChoreoTaskType } from '@/game/systems/choreo';
 import { createEnterBuildingExecutor } from '../settler-tasks/internal/dispatch-executors';
+import { EntityType } from '../../entity';
+import { BUILDING_SPAWN_ON_COMPLETE } from '../building-construction/spawn-units';
 
 export interface BuildingDemandExports {
     buildingDemandSystem: BuildingDemandSystem;
@@ -18,12 +21,13 @@ export interface BuildingDemandExports {
 
 export const BuildingDemandFeature: FeatureDefinition = {
     id: 'building-demand',
-    dependencies: ['settler-tasks', 'recruit', 'settler-location'],
+    dependencies: ['settler-tasks', 'recruit', 'settler-location', 'building-construction'],
 
     create(ctx: FeatureContext) {
         const { settlerTaskSystem, choreoSystem } = ctx.getFeature<SettlerTaskExports>('settler-tasks');
         const { locationManager } = ctx.getFeature<SettlerLocationExports>('settler-location');
         const { recruitSystem } = ctx.getFeature<RecruitExports>('recruit');
+        const { constructionSiteManager } = ctx.getFeature<BuildingConstructionExports>('building-construction');
 
         const buildingDemandSystem = new BuildingDemandSystem({
             gameState: ctx.gameState,
@@ -47,6 +51,22 @@ export const BuildingDemandFeature: FeatureDefinition = {
                 buildingDemandSystem,
             } satisfies BuildingDemandExports,
             persistence: 'none',
+            onRestoreComplete() {
+                for (const e of ctx.gameState.entities) {
+                    if (e.type !== EntityType.Building) {
+                        continue;
+                    }
+                    if (constructionSiteManager.hasSite(e.id)) {
+                        continue;
+                    }
+                    // Buildings that auto-spawn units on completion (residences)
+                    // already have their workers — skip them.
+                    if (BUILDING_SPAWN_ON_COMPLETE[e.subType]) {
+                        continue;
+                    }
+                    buildingDemandSystem.addDemandFromBuilding(e.id, e.subType, e.race);
+                }
+            },
             destroy: () => {
                 buildingDemandSystem.unregisterEvents();
             },

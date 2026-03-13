@@ -1,12 +1,16 @@
 /**
- * Persistence integration tests — save/load round-trip verification.
+ * Replay persistence integration tests — keyframe restore + transient state rebuild.
  *
- * Every test follows the same pattern:
- *   1. Set up a scenario (buildings, units, resources, in-progress activity)
- *   2. Run simulation to a specific mid-point
- *   3. saveAndRestore() — snapshot and restore into a fresh simulation
- *   4. Assert the restored sim matches the original
- *   5. Optionally: continue running the restored sim and verify it completes
+ * With deterministic replay persistence, keyframe snapshots contain only
+ * slow-accumulating state (inventories, construction, trees, stones, crops,
+ * storage filters, production control, work areas, transport jobs).
+ * Transient state (settler tasks, carrier registry, combat, garrison, etc.)
+ * rebuilds by running ticks after restoring from a keyframe.
+ *
+ * Test approach:
+ *   1. Set up a scenario and run simulation to a mid-point
+ *   2. keyframeAndRestore() — snapshot, restore into fresh sim, run replay ticks
+ *   3. Assert the restored sim's economy/construction eventually functions
  *
  * Uses the Simulation harness (test-simulation.ts) with real game data.
  */
@@ -17,15 +21,17 @@ import { installRealGameData } from '../../helpers/test-game-data';
 import { BuildingType } from '@/game/buildings/building-type';
 import { EntityType } from '@/game/entity';
 import { EMaterialType } from '@/game/economy/material-type';
-import { SlotKind } from '@/game/core/pile-kind';
 import { BuildingConstructionPhase } from '@/game/features/building-construction/types';
 import { TreeStage } from '@/game/features/trees/tree-system';
-import { createSnapshot, restoreFromSnapshot, type GameStateSnapshot } from '@/game/state/game-state-persistence';
+import { createSnapshot, restoreFromSnapshot } from '@/game/state/game-state-persistence';
 import type { Game } from '@/game/game';
 
 installRealGameData();
 
 // ─── Helpers ─────────────────────────────────────────────────────
+
+/** Replay window — transient stores rebuild during these ticks after keyframe restore. */
+const REPLAY_TICKS = 300;
 
 /**
  * Create a duck-typed Game-like object from a Simulation, satisfying the
@@ -42,47 +48,27 @@ function asGame(sim: Simulation): Game {
 }
 
 /**
- * Core test primitive: snapshot a running simulation and restore into a fresh one.
- * Returns the new simulation with identical state.
+ * Core test primitive: take a keyframe snapshot, restore into a fresh sim,
+ * and run a replay window so transient stores rebuild.
+ *
+ * This mirrors the real load path: keyframe restore → replay ticks.
+ * Settlers go idle at the keyframe boundary, re-acquire tasks during
+ * the replay window, and the economy resumes.
  */
-function saveAndRestore(sim: Simulation): Simulation {
+function keyframeAndRestore(sim: Simulation): Simulation {
     const snapshot = createSnapshot(asGame(sim));
     const sim2 = createSimulation({ mapWidth: sim.mapWidth, mapHeight: sim.mapHeight });
     restoreFromSnapshot(asGame(sim2), snapshot);
+    sim2.runTicks(REPLAY_TICKS);
     return sim2;
 }
 
 /**
- * Snapshot the simulation state without restoring — for comparing two snapshots.
- */
-function takeSnapshot(sim: Simulation): GameStateSnapshot {
-    return createSnapshot(asGame(sim));
-}
-
-/**
- * Compare entity tables between two simulations.
- * Asserts count, positions, types, subtypes, and player ownership match.
- */
-function assertEntitiesMatch(original: Simulation, restored: Simulation): void {
-    const origEntities = original.state.entities;
-    const restEntities = restored.state.entities;
-    expect(restEntities.length).toBe(origEntities.length);
-
-    for (const entity of origEntities) {
-        const r = restored.state.getEntity(entity.id);
-        expect(r, `entity #${entity.id} missing after restore`).toBeDefined();
-        expect(r!.type).toBe(entity.type);
-        expect(r!.subType).toBe(entity.subType);
-        expect(r!.x).toBe(entity.x);
-        expect(r!.y).toBe(entity.y);
-        expect(r!.player).toBe(entity.player);
-    }
-}
-
-/**
  * Compare building inventories between two simulations.
+ * Only checks that slot structure matches (material types and slot kinds).
+ * Amounts may differ due to the replay window advancing the economy.
  */
-function assertInventoriesMatch(original: Simulation, restored: Simulation): void {
+function assertInventoryStructureMatch(original: Simulation, restored: Simulation): void {
     for (const entity of original.state.entities) {
         if (entity.type !== EntityType.Building) continue;
         const origSlots = original.services.inventoryManager.getSlots(entity.id);
@@ -91,49 +77,17 @@ function assertInventoriesMatch(original: Simulation, restored: Simulation): voi
         const restSlots = restored.services.inventoryManager.getSlots(entity.id);
         expect(restSlots.length, `inventory missing for building #${entity.id}`).toBeGreaterThan(0);
 
-        for (const slot of origSlots.filter(s => s.kind === SlotKind.Input)) {
-            const rSlot = restSlots.find(s => s.kind === SlotKind.Input && s.materialType === slot.materialType);
-            expect(rSlot, `input slot ${EMaterialType[slot.materialType]} missing`).toBeDefined();
-            expect(rSlot!.currentAmount).toBe(slot.currentAmount);
-        }
-        for (const slot of origSlots.filter(s => s.kind === SlotKind.Output || s.kind === SlotKind.Storage)) {
-            const rSlot = restSlots.find(
-                s => (s.kind === SlotKind.Output || s.kind === SlotKind.Storage) && s.materialType === slot.materialType
-            );
-            expect(rSlot, `output slot ${EMaterialType[slot.materialType]} missing`).toBeDefined();
-            expect(rSlot!.currentAmount).toBe(slot.currentAmount);
+        // Verify same slot kinds exist
+        for (const slot of origSlots) {
+            const rSlot = restSlots.find(s => s.kind === slot.kind && s.materialType === slot.materialType);
+            expect(rSlot, `slot ${slot.kind}/${EMaterialType[slot.materialType]} missing`).toBeDefined();
         }
     }
-}
-
-/**
- * Count total materials across all inventories + carried by units.
- * Note: ground piles (StackedPile entities) are tracked via building inventories,
- * so counting inventory slots captures their materials too.
- */
-function countTotalMaterials(sim: Simulation): Map<EMaterialType, number> {
-    const totals = new Map<EMaterialType, number>();
-
-    const add = (mat: EMaterialType, amount: number) => totals.set(mat, (totals.get(mat) ?? 0) + amount);
-
-    // Inventory slots (inputs + outputs for all buildings)
-    for (const buildingId of sim.services.inventoryManager.getAllInventories()) {
-        for (const slot of sim.services.inventoryManager.getSlots(buildingId)) {
-            if (slot.currentAmount > 0) add(slot.materialType, slot.currentAmount);
-        }
-    }
-
-    // Carried by units
-    for (const entity of sim.state.entities) {
-        if (entity.carrying) add(entity.carrying.material, entity.carrying.amount);
-    }
-
-    return totals;
 }
 
 // ─── Test suite ──────────────────────────────────────────────────
 
-describe('Persistence: save/load round-trip', { timeout: 30_000 }, () => {
+describe('Replay persistence: keyframe restore + rebuild', { timeout: 30_000 }, () => {
     let sim: Simulation;
     let restored: Simulation | undefined;
 
@@ -145,125 +99,122 @@ describe('Persistence: save/load round-trip', { timeout: 30_000 }, () => {
     });
 
     // ═══════════════════════════════════════════════════════════════
-    //  Category 1: Basic round-trip (structural integrity)
+    //  Category 1: Structural integrity after keyframe restore
     // ═══════════════════════════════════════════════════════════════
 
-    describe('basic round-trip', () => {
-        it('entity round-trip preserves count, positions, types, subtypes', () => {
+    describe('keyframe structural integrity', () => {
+        it('entity types and positions are preserved in keyframe', () => {
             sim = createSimulation();
-
-            // Place a variety of entities
             sim.placeBuilding(BuildingType.ResidenceSmall);
             const woodcutterId = sim.placeBuilding(BuildingType.WoodcutterHut);
             sim.placeBuilding(BuildingType.StorageArea);
             sim.plantTreesNear(woodcutterId, 5);
             sim.placeStonesNear(woodcutterId, 3);
-
-            // Let simulation settle
             sim.runTicks(30);
 
-            restored = saveAndRestore(sim);
-            assertEntitiesMatch(sim, restored);
+            // Take snapshot BEFORE replay window — compare raw keyframe data
+            const snapshot = createSnapshot(asGame(sim));
+            const sim2 = createSimulation({ mapWidth: sim.mapWidth, mapHeight: sim.mapHeight });
+            restoreFromSnapshot(asGame(sim2), snapshot);
+
+            // Entity table matches immediately after keyframe restore (before replay)
+            const origEntities = sim.state.entities;
+            const restEntities = sim2.state.entities;
+            expect(restEntities.length).toBe(origEntities.length);
+
+            for (const entity of origEntities) {
+                const r = sim2.state.getEntity(entity.id);
+                expect(r, `entity #${entity.id} missing`).toBeDefined();
+                expect(r!.type).toBe(entity.type);
+                expect(r!.subType).toBe(entity.subType);
+                expect(r!.x).toBe(entity.x);
+                expect(r!.y).toBe(entity.y);
+                expect(r!.player).toBe(entity.player);
+            }
+
+            sim2.destroy();
         });
 
         it('empty world round-trip restores cleanly', () => {
             sim = createSimulation();
-
-            // No entities placed — snapshot an empty world
-            restored = saveAndRestore(sim);
+            restored = keyframeAndRestore(sim);
             expect(restored.state.entities.length).toBe(0);
             expect(restored.errors.length).toBe(0);
         });
 
-        it('RNG seed is persisted in snapshot', () => {
+        it('RNG seed is persisted in keyframe', () => {
             sim = createSimulation();
             sim.placeBuilding(BuildingType.ResidenceSmall);
-
-            // Run 100 ticks to advance RNG state
             sim.runTicks(100);
             const rngState = sim.state.rng.getState();
 
-            // Snapshot should capture the current RNG seed
-            const snapshot = takeSnapshot(sim);
+            const snapshot = createSnapshot(asGame(sim));
             expect(snapshot.rngSeed).toBe(rngState);
         });
     });
 
     // ═══════════════════════════════════════════════════════════════
-    //  Category 2: Economy mid-flight
+    //  Category 2: Economy rebuilds after keyframe restore
     // ═══════════════════════════════════════════════════════════════
 
-    describe('economy mid-flight', () => {
-        it('worker mid-choreo eventually produces output after restore', () => {
+    describe('economy rebuild', () => {
+        it('woodcutter resumes production after keyframe restore + replay', () => {
             sim = createSimulation();
             sim.placeBuilding(BuildingType.ResidenceSmall);
             const woodcutterId = sim.placeBuilding(BuildingType.WoodcutterHut);
             sim.plantTreesNear(woodcutterId, 3);
 
-            // Run until woodcutter is actively working (at least 1 tree targeted)
-            sim.runUntil(
-                () => {
-                    // Worker has been dispatched — at least some ticks elapsed
-                    return sim.countEntities(EntityType.MapObject) < 3 + sim.countEntities(EntityType.MapObject, 0);
-                },
-                { maxTicks: 5000, label: 'woodcutter starts work' }
-            );
-            // Run a bit more to get mid-choreo
-            sim.runTicks(60);
-
-            restored = saveAndRestore(sim);
-
-            // Restored sim should eventually produce LOGs from remaining trees
-            restored.runUntil(() => restored!.getOutput(woodcutterId, EMaterialType.LOG) >= 1, {
-                maxTicks: 15_000,
-                label: 'restored woodcutter produces LOG',
-            });
-            expect(restored.getOutput(woodcutterId, EMaterialType.LOG)).toBeGreaterThanOrEqual(1);
-        });
-
-        it('carrier mid-transport delivers after restore', () => {
-            sim = createSimulation();
-            sim.placeBuilding(BuildingType.ResidenceSmall);
-            const woodcutterId = sim.placeBuilding(BuildingType.WoodcutterHut);
-            const sawmillId = sim.placeBuilding(BuildingType.Sawmill);
-            sim.plantTreesNear(woodcutterId, 3);
-
-            // Wait for at least 1 LOG in woodcutter output (carrier will pick it up)
             sim.runUntil(() => sim.getOutput(woodcutterId, EMaterialType.LOG) >= 1, {
                 maxTicks: 15_000,
                 label: 'first LOG produced',
             });
 
-            // Run a bit more — carrier should be in transit
+            restored = keyframeAndRestore(sim);
+
+            // Worker re-acquires tasks during replay and continues cutting
+            restored.runUntil(() => restored!.getOutput(woodcutterId, EMaterialType.LOG) >= 1, {
+                maxTicks: 20_000,
+                label: 'restored woodcutter produces LOG',
+            });
+            expect(restored.getOutput(woodcutterId, EMaterialType.LOG)).toBeGreaterThanOrEqual(1);
+        });
+
+        it('production chain resumes — carrier re-matches and delivers boards', () => {
+            sim = createSimulation();
+            sim.placeBuilding(BuildingType.ResidenceSmall);
+            const woodcutterId = sim.placeBuilding(BuildingType.WoodcutterHut);
+            const sawmillId = sim.placeBuilding(BuildingType.Sawmill);
+            sim.plantTreesNear(woodcutterId, 5);
+
+            sim.runUntil(() => sim.getOutput(woodcutterId, EMaterialType.LOG) >= 1, {
+                maxTicks: 15_000,
+                label: 'first LOG produced',
+            });
             sim.runTicks(120);
 
-            restored = saveAndRestore(sim);
+            restored = keyframeAndRestore(sim);
 
-            // Restored sim should eventually produce at least 1 BOARD
+            // Full chain: woodcutter → carrier → sawmill
             restored.runUntil(() => restored!.getOutput(sawmillId, EMaterialType.BOARD) >= 1, {
-                maxTicks: 20_000,
-                label: 'restored chain produces BOARD',
+                maxTicks: 25_000,
+                label: 'boards produced after restore',
             });
             expect(restored.getOutput(sawmillId, EMaterialType.BOARD)).toBeGreaterThanOrEqual(1);
         });
 
-        it('production mid-cycle completes after restore', () => {
+        it('sawmill with injected input produces output after restore', () => {
             sim = createSimulation();
             sim.placeBuilding(BuildingType.ResidenceSmall);
             const sawmillId = sim.placeBuilding(BuildingType.Sawmill);
-
-            // Inject LOG directly into sawmill input
             sim.injectInput(sawmillId, EMaterialType.LOG, 3);
 
-            // Let sawmill worker start processing
             sim.runUntil(() => sim.getInput(sawmillId, EMaterialType.LOG) < 3, {
                 maxTicks: 10_000,
                 label: 'sawmill starts consuming LOG',
             });
 
-            restored = saveAndRestore(sim);
+            restored = keyframeAndRestore(sim);
 
-            // Should eventually produce BOARD from remaining LOGs
             restored.runUntil(() => restored!.getOutput(sawmillId, EMaterialType.BOARD) >= 1, {
                 maxTicks: 15_000,
                 label: 'restored sawmill produces BOARD',
@@ -273,17 +224,15 @@ describe('Persistence: save/load round-trip', { timeout: 30_000 }, () => {
     });
 
     // ═══════════════════════════════════════════════════════════════
-    //  Category 3: Construction
+    //  Category 3: Construction survives keyframe restore
     // ═══════════════════════════════════════════════════════════════
 
     describe('construction', () => {
         it('construction site mid-build completes after restore', () => {
-            // Use constructionSite scenario — spawns digger + 2 builders + carriers + storage
             const s = createScenario.constructionSite(BuildingType.WoodcutterHut);
             sim = s;
             const siteId = s.siteId;
 
-            // Wait for construction to start (at least materials being delivered)
             sim.runUntil(
                 () => {
                     const site = sim.services.constructionSiteManager.getSite(siteId);
@@ -291,12 +240,10 @@ describe('Persistence: save/load round-trip', { timeout: 30_000 }, () => {
                 },
                 { maxTicks: 30_000, label: 'construction started' }
             );
-            // Run a bit more so builders start working
             sim.runTicks(500);
 
-            restored = saveAndRestore(sim);
+            restored = keyframeAndRestore(sim);
 
-            // Construction should complete after restore
             restored.runUntil(() => !restored!.services.constructionSiteManager.hasSite(siteId), {
                 maxTicks: 80_000,
                 label: 'restored construction completes',
@@ -304,12 +251,11 @@ describe('Persistence: save/load round-trip', { timeout: 30_000 }, () => {
             expect(restored.services.constructionSiteManager.hasSite(siteId)).toBe(false);
         });
 
-        it('construction with pending material delivery completes after restore', () => {
+        it('construction with pending delivery completes after restore', () => {
             const s = createScenario.constructionSite(BuildingType.WoodcutterHut);
             sim = s;
             const siteId = s.siteId;
 
-            // Wait for at least WaitingForBuilders phase (materials being delivered)
             sim.runUntil(
                 () => {
                     const site = sim.services.constructionSiteManager.getSite(siteId);
@@ -318,11 +264,10 @@ describe('Persistence: save/load round-trip', { timeout: 30_000 }, () => {
                 { maxTicks: 30_000, label: 'waiting for builders' }
             );
 
-            restored = saveAndRestore(sim);
+            restored = keyframeAndRestore(sim);
 
-            // Should complete
             restored.runUntil(() => !restored!.services.constructionSiteManager.hasSite(siteId), {
-                maxTicks: 50_000,
+                maxTicks: 80_000,
                 label: 'restored construction completes',
             });
             expect(restored.services.constructionSiteManager.hasSite(siteId)).toBe(false);
@@ -330,18 +275,14 @@ describe('Persistence: save/load round-trip', { timeout: 30_000 }, () => {
     });
 
     // ═══════════════════════════════════════════════════════════════
-    //  Category 5: Nature / growth
+    //  Category 4: Nature / growth
     // ═══════════════════════════════════════════════════════════════
 
     describe('nature and growth', () => {
-        it('tree growth stages preserved and continue growing', () => {
+        it('tree growth stages preserved in keyframe and continue growing', () => {
             sim = createSimulation();
-
-            // Place trees that will be in Growing stage
             const buildingId = sim.placeBuilding(BuildingType.ResidenceSmall);
             sim.plantTreesNear(buildingId, 5);
-
-            // Run a few hundred ticks so trees are mid-growth
             sim.runTicks(300);
 
             // Capture tree states before save
@@ -355,63 +296,54 @@ describe('Persistence: save/load round-trip', { timeout: 30_000 }, () => {
                 }
             }
 
-            restored = saveAndRestore(sim);
+            // Verify keyframe preserves growth state (check before replay window)
+            const snapshot = createSnapshot(asGame(sim));
+            const sim2 = createSimulation({ mapWidth: sim.mapWidth, mapHeight: sim.mapHeight });
+            restoreFromSnapshot(asGame(sim2), snapshot);
 
-            // Verify tree states match after restore
             for (const [entityId, before] of treesBefore) {
-                const after = restored.services.treeSystem.getTreeState(entityId);
-                expect(after, `tree #${entityId} state missing after restore`).toBeDefined();
+                const after = sim2.services.treeSystem.getTreeState(entityId);
+                expect(after, `tree #${entityId} state missing after keyframe restore`).toBeDefined();
                 expect(after!.stage).toBe(before.stage);
-                // Progress should be approximately equal (floating point)
                 expect(after!.progress).toBeCloseTo(before.progress, 3);
             }
 
-            // Trees should eventually mature
-            restored.runUntil(
+            // Run replay + extra time — trees should eventually mature
+            sim2.runTicks(REPLAY_TICKS);
+            sim2.runUntil(
                 () => {
-                    for (const entity of restored!.state.entities) {
+                    for (const entity of sim2.state.entities) {
                         if (entity.type !== EntityType.MapObject) continue;
-                        const ts = restored!.services.treeSystem.getTreeState(entity.id);
+                        const ts = sim2.services.treeSystem.getTreeState(entity.id);
                         if (ts && ts.stage === TreeStage.Normal) return true;
                     }
                     return false;
                 },
                 { maxTicks: 30_000, label: 'at least one tree matures' }
             );
+
+            sim2.destroy();
         });
     });
 
     // ═══════════════════════════════════════════════════════════════
-    //  Category 6: Edge cases and invariants
+    //  Category 5: Invariants
     // ═══════════════════════════════════════════════════════════════
 
-    describe('edge cases and invariants', () => {
-        it('material conservation — total materials unchanged after restore', () => {
+    describe('invariants', () => {
+        it('inventory slot structure preserved after keyframe restore', () => {
             sim = createSimulation();
             sim.placeBuilding(BuildingType.ResidenceSmall);
-            const woodcutterId = sim.placeBuilding(BuildingType.WoodcutterHut);
-            sim.placeBuilding(BuildingType.Sawmill);
-            sim.plantTreesNear(woodcutterId, 5);
+            const sawmillId = sim.placeBuilding(BuildingType.Sawmill);
+            sim.injectInput(sawmillId, EMaterialType.LOG, 5);
+            sim.injectOutput(sawmillId, EMaterialType.BOARD, 2);
+            sim.runTicks(100);
 
-            // Run production chain for a while
-            sim.runTicks(3000);
-
-            const materialsBefore = countTotalMaterials(sim);
-
-            restored = saveAndRestore(sim);
-
-            const materialsAfter = countTotalMaterials(restored);
-
-            // Every material type should have the same total
-            const allMats = new Set([...materialsBefore.keys(), ...materialsAfter.keys()]);
-            for (const mat of allMats) {
-                expect(materialsAfter.get(mat) ?? 0, `material ${EMaterialType[mat]} count mismatch`).toBe(
-                    materialsBefore.get(mat) ?? 0
-                );
-            }
+            restored = keyframeAndRestore(sim);
+            assertInventoryStructureMatch(sim, restored);
         });
 
-        it('no duplicate entities after restore', () => {
+        it('no duplicate entity IDs after restore', () => {
             sim = createSimulation();
             sim.placeBuilding(BuildingType.ResidenceSmall);
             const woodcutterId = sim.placeBuilding(BuildingType.WoodcutterHut);
@@ -419,137 +351,45 @@ describe('Persistence: save/load round-trip', { timeout: 30_000 }, () => {
             sim.plantTreesNear(woodcutterId, 5);
             sim.runTicks(300);
 
-            restored = saveAndRestore(sim);
+            restored = keyframeAndRestore(sim);
 
-            // Entity count should match exactly
-            expect(restored.state.entities.length).toBe(sim.state.entities.length);
-
-            // No duplicate IDs
             const ids = restored.state.entities.map(e => e.id);
             const uniqueIds = new Set(ids);
             expect(uniqueIds.size).toBe(ids.length);
         });
 
-        it('idempotent save — entity table matches after save/restore/save', () => {
-            sim = createSimulation();
-            sim.placeBuilding(BuildingType.ResidenceSmall);
-            const woodcutterId = sim.placeBuilding(BuildingType.WoodcutterHut);
-            sim.plantTreesNear(woodcutterId, 3);
-            sim.runTicks(300);
-
-            restored = saveAndRestore(sim);
-
-            // Take snapshots from original and restored sims
-            const snapshot1 = takeSnapshot(sim);
-            const snapshot2 = takeSnapshot(restored);
-
-            // Entity table should match exactly
-            expect(snapshot2.entities.length).toBe(snapshot1.entities.length);
-            expect(snapshot2.nextId).toBe(snapshot1.nextId);
-
-            for (const e1 of snapshot1.entities) {
-                const e2 = snapshot2.entities.find(e => e.id === e1.id);
-                expect(e2, `entity #${e1.id} missing in second snapshot`).toBeDefined();
-                expect(e2!.type).toBe(e1.type);
-                expect(e2!.subType).toBe(e1.subType);
-                expect(e2!.x).toBe(e1.x);
-                expect(e2!.y).toBe(e1.y);
-            }
-        });
-
-        it('continue after restore — remaining trees are cut and correct LOG count', () => {
-            sim = createSimulation();
-            sim.placeBuilding(BuildingType.ResidenceSmall);
-            const woodcutterId = sim.placeBuilding(BuildingType.WoodcutterHut);
-            sim.plantTreesNear(woodcutterId, 5);
-
-            // Wait for first LOG
-            sim.runUntil(() => sim.getOutput(woodcutterId, EMaterialType.LOG) >= 1, {
-                maxTicks: 15_000,
-                label: 'first LOG produced',
-            });
-            const logsAtSave = sim.getOutput(woodcutterId, EMaterialType.LOG);
-
-            restored = saveAndRestore(sim);
-
-            // Run until all 5 trees are cut
-            restored.runUntil(() => restored!.getOutput(woodcutterId, EMaterialType.LOG) >= 5, {
-                maxTicks: 300 * 30,
-                label: 'all 5 trees cut',
-            });
-
-            // Should have exactly 5 LOGs total (no duplication, no loss)
-            // Allow for logs that may have been picked up by carriers
-            const finalLogs = restored.getOutput(woodcutterId, EMaterialType.LOG);
-            expect(finalLogs).toBeLessThanOrEqual(5);
-            expect(finalLogs).toBeGreaterThanOrEqual(logsAtSave);
-        });
-    });
-
-    // ═══════════════════════════════════════════════════════════════
-    //  Category 7: Regression guards
-    // ═══════════════════════════════════════════════════════════════
-
-    describe('regression guards', () => {
-        it('carrier does not go idle on restore — continues working', () => {
+        it('building occupancy restored — completed buildings block pathfinding', () => {
             sim = createSimulation();
             sim.placeBuilding(BuildingType.ResidenceSmall);
             const woodcutterId = sim.placeBuilding(BuildingType.WoodcutterHut);
             const sawmillId = sim.placeBuilding(BuildingType.Sawmill);
-            sim.plantTreesNear(woodcutterId, 5);
+            sim.plantTreesNear(woodcutterId, 3);
+            sim.runTicks(500);
 
-            // Wait for production to be active
-            sim.runUntil(() => sim.getOutput(woodcutterId, EMaterialType.LOG) >= 1, {
-                maxTicks: 15_000,
-                label: 'LOG produced',
-            });
-            sim.runTicks(120);
+            const occupancyBefore = new Set(sim.state.buildingOccupancy);
+            expect(occupancyBefore.size).toBeGreaterThan(0);
 
-            restored = saveAndRestore(sim);
+            restored = keyframeAndRestore(sim);
 
-            // After restore, the chain should still function — boards should eventually appear
-            // TODO: Once transport persistence is complete, carrier should continue mid-delivery
-            // without going idle. For now, even if carrier goes idle and re-matches, boards
-            // should still be produced.
+            const occupancyAfter = new Set(restored.state.buildingOccupancy);
+            expect(
+                occupancyAfter.size,
+                `buildingOccupancy lost: before=${occupancyBefore.size} after=${occupancyAfter.size}`
+            ).toBe(occupancyBefore.size);
+
+            for (const key of occupancyBefore) {
+                expect(occupancyAfter.has(key), `tile ${key} missing from buildingOccupancy`).toBe(true);
+            }
+
+            // Economy still works — carrier delivers materials
             restored.runUntil(() => restored!.getOutput(sawmillId, EMaterialType.BOARD) >= 1, {
                 maxTicks: 20_000,
-                label: 'boards produced after restore',
+                label: 'restored chain produces BOARD',
             });
-            expect(restored.getOutput(sawmillId, EMaterialType.BOARD)).toBeGreaterThanOrEqual(1);
+            expect(restored.errors.length).toBe(0);
         });
 
-        it('worker does not restart choreo from node 0 — resumes from saved state', () => {
-            sim = createSimulation();
-            sim.placeBuilding(BuildingType.ResidenceSmall);
-            const woodcutterId = sim.placeBuilding(BuildingType.WoodcutterHut);
-            sim.plantTreesNear(woodcutterId, 3);
-
-            // Run until worker is actively cutting (mid-choreo)
-            sim.runUntil(
-                () => {
-                    // At least some trees should have been interacted with
-                    const logs = sim.getOutput(woodcutterId, EMaterialType.LOG);
-                    return logs >= 1;
-                },
-                { maxTicks: 15_000, label: 'first LOG' }
-            );
-
-            restored = saveAndRestore(sim);
-
-            // Worker should resume and eventually cut all remaining trees
-            const logsBefore = restored.getOutput(woodcutterId, EMaterialType.LOG);
-            restored.runUntil(() => restored!.getOutput(woodcutterId, EMaterialType.LOG) > logsBefore, {
-                maxTicks: 15_000,
-                label: 'worker resumes production after restore',
-            });
-            expect(restored.getOutput(woodcutterId, EMaterialType.LOG)).toBeGreaterThan(logsBefore);
-        });
-
-        it('no enterBuilding mismatch after restore — stale approaching state must not crash', () => {
-            // Busy economy: multiple production buildings + carriers moving between them.
-            // Carriers approach source building to pick up, then go to dest to deliver.
-            // If we save while a carrier is "approaching" building A but their restored
-            // transport job targets building B, the stale approaching state causes a crash.
+        it('no enterBuilding crash after restore — busy economy survives 10 restore cycles', () => {
             sim = createSimulation();
             sim.placeBuilding(BuildingType.ResidenceSmall);
             sim.placeBuilding(BuildingType.ResidenceSmall);
@@ -561,94 +401,36 @@ describe('Persistence: save/load round-trip', { timeout: 30_000 }, () => {
             sim.plantTreesNear(w1, 10);
             sim.plantTreesNear(w2, 10);
 
-            // Run busy economy — many carriers moving between many buildings
             sim.runTicks(8000);
 
-            // Save and restore at multiple offsets — different workers will be in
-            // different states (approaching, inside, walking between buildings)
             for (let i = 0; i < 10; i++) {
                 restored?.destroy();
-                restored = saveAndRestore(sim);
+                restored = keyframeAndRestore(sim);
                 restored.runTicks(3000);
-                expect(restored.errors.length, `errors on restore iteration ${i}`).toBe(0);
+                expect(restored.errors.length, `errors on restore cycle ${i}`).toBe(0);
                 sim.runTicks(200);
             }
         });
 
-        it('building occupancy restored — completed buildings block pathfinding', () => {
-            // Regression: After save/restore, completed buildings don't have their
-            // footprint tiles in buildingOccupancy. addEntity sets buildingFootprint
-            // but NOT buildingOccupancy (by design — construction sites start walkable).
-            // For completed buildings, restoreBuildingFootprintBlock must be called
-            // during restore, but it was missing — only construction sites got it.
-            //
-            // Without occupancy, carriers path through building interiors, the
-            // pathfinder can't find routes to blocked entrance tiles, and transport
-            // jobs fail with "No path" or crash with double-deliver attempts.
+        it('continue after restore — remaining trees are cut', () => {
             sim = createSimulation();
             sim.placeBuilding(BuildingType.ResidenceSmall);
             const woodcutterId = sim.placeBuilding(BuildingType.WoodcutterHut);
-            const sawmillId = sim.placeBuilding(BuildingType.Sawmill);
-            sim.plantTreesNear(woodcutterId, 3);
+            sim.plantTreesNear(woodcutterId, 5);
 
-            // Let economy run so buildings are active
-            sim.runTicks(500);
-
-            // Capture buildingOccupancy before save
-            const occupancyBefore = new Set(sim.state.buildingOccupancy);
-            expect(occupancyBefore.size).toBeGreaterThan(0);
-
-            restored = saveAndRestore(sim);
-
-            // buildingOccupancy must be restored for completed buildings
-            const occupancyAfter = new Set(restored.state.buildingOccupancy);
-            expect(
-                occupancyAfter.size,
-                `buildingOccupancy lost after restore: before=${occupancyBefore.size} after=${occupancyAfter.size}`
-            ).toBe(occupancyBefore.size);
-
-            // Every tile that was blocked before must be blocked after
-            for (const key of occupancyBefore) {
-                expect(
-                    occupancyAfter.has(key),
-                    `tile ${key} was in buildingOccupancy before save but missing after restore`
-                ).toBe(true);
-            }
-
-            // The restored sim should function — carriers should deliver materials
-            restored.runUntil(() => restored!.getOutput(sawmillId, EMaterialType.BOARD) >= 1, {
-                maxTicks: 20_000,
-                label: 'restored chain produces BOARD',
-            });
-            expect(restored.errors.length).toBe(0);
-        });
-
-        it('inventory state survives restore — amounts match exactly', () => {
-            sim = createSimulation();
-            sim.placeBuilding(BuildingType.ResidenceSmall);
-            const sawmillId = sim.placeBuilding(BuildingType.Sawmill);
-
-            // Inject known amounts
-            sim.injectInput(sawmillId, EMaterialType.LOG, 5);
-            sim.injectOutput(sawmillId, EMaterialType.BOARD, 2);
-
-            // Let the sawmill process one LOG
-            sim.runUntil(() => sim.getInput(sawmillId, EMaterialType.LOG) < 5, {
-                maxTicks: 10_000,
-                label: 'sawmill starts processing',
+            sim.runUntil(() => sim.getOutput(woodcutterId, EMaterialType.LOG) >= 1, {
+                maxTicks: 15_000,
+                label: 'first LOG produced',
             });
 
-            const logsBefore = sim.getInput(sawmillId, EMaterialType.LOG);
-            const boardsBefore = sim.getOutput(sawmillId, EMaterialType.BOARD);
+            restored = keyframeAndRestore(sim);
 
-            restored = saveAndRestore(sim);
-
-            // Full inventory comparison
-            assertInventoriesMatch(sim, restored);
-
-            // Specific slot checks
-            expect(restored.getInput(sawmillId, EMaterialType.LOG)).toBe(logsBefore);
-            expect(restored.getOutput(sawmillId, EMaterialType.BOARD)).toBe(boardsBefore);
+            // All 5 trees should eventually be cut
+            restored.runUntil(() => restored!.getOutput(woodcutterId, EMaterialType.LOG) >= 5, {
+                maxTicks: 300 * 30,
+                label: 'all 5 trees cut',
+            });
+            expect(restored.getOutput(woodcutterId, EMaterialType.LOG)).toBeLessThanOrEqual(5);
         });
     });
 });

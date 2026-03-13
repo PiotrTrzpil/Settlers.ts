@@ -101,9 +101,7 @@ export const SettlerTaskFeature: FeatureDefinition = {
             systems: [settlerTaskSystem],
             systemGroup: 'Units',
             exports,
-            persistence: [
-                { persistable: settlerTaskSystem, after: ['carriers', 'constructionSites', 'buildingInventories'] },
-            ],
+            persistence: [],
             onTerrainReady(terrain: TerrainData) {
                 // Water handler -- needs terrain to find river tiles
                 settlerTaskSystem.registerWorkHandler(

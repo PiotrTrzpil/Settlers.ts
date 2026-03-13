@@ -196,7 +196,11 @@ export class GameServices {
                 inventoryManager: this.inventoryManager,
                 storageFilterManager: this.storageFilterManager,
             },
-            [{ persistable: this.inventoryManager, after: ['constructionSites'] }, this.storageFilterManager]
+            [
+                { persistable: this.inventoryManager.slotStore, after: ['constructionSites'] },
+                this.inventoryManager.nextSlotIdStore,
+                this.storageFilterManager.persistentStore,
+            ]
         );
 
         // 3a. Movement system — instantiated directly (not a feature).
@@ -304,8 +308,7 @@ export class GameServices {
         for (const { persistable, after } of this.featureRegistry.getPersistables()) {
             this.persistenceRegistry.register(persistable, after);
         }
-        // Manual registration for non-feature-owned persistable
-        this.persistenceRegistry.register(gameState.piles);
+        // stacked-pile-manager: persistence removed — state rebuilds during replay
 
         // 6. Wire pile registry to settler-tasks (cross-feature, conditional).
         if (constrExports.pileRegistry) {

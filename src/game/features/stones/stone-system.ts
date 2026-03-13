@@ -15,8 +15,7 @@ import { OBJECT_TYPE_CATEGORY } from '../../systems/map-objects';
 import { createLogger } from '@/utilities/logger';
 import { findEmptySpot } from '../../systems/spatial-search';
 import type { Command, CommandResult } from '../../commands';
-import type { Persistable } from '@/game/persistence';
-import type { SerializedStone } from '@/game/state/game-state-persistence';
+import { PersistentMap } from '@/game/persistence/persistent-store';
 
 const log = createLogger('StoneSystem');
 
@@ -59,15 +58,13 @@ export interface StoneSystemConfig {
 /**
  * Manages stone mining depletion and variant assignment.
  */
-export class StoneSystem implements Persistable<SerializedStone[]> {
-    readonly persistKey = 'stones' as const;
-
+export class StoneSystem {
     private gameState: GameState;
     private readonly visualService: EntityVisualService;
     private readonly executeCommand: (cmd: Command) => CommandResult;
 
-    /** Internal state storage: entityId -> StoneState */
-    private readonly states = new Map<number, StoneState>();
+    /** Persistent state storage: entityId → StoneState */
+    readonly persistentStore = new PersistentMap<StoneState>('stones');
 
     constructor(cfg: StoneSystemConfig) {
         this.gameState = cfg.gameState;
@@ -113,7 +110,7 @@ export class StoneSystem implements Persistable<SerializedStone[]> {
             variant,
             level: initialLevel ?? STONE_FULL_LEVEL,
         };
-        this.states.set(entityId, state);
+        this.persistentStore.set(entityId, state);
 
         this.visualService.setVariation(entityId, this.getVariation(state));
     }
@@ -133,29 +130,29 @@ export class StoneSystem implements Persistable<SerializedStone[]> {
             variant: data.variant,
             level: data.level,
         };
-        this.states.set(entityId, state);
+        this.persistentStore.set(entityId, state);
         // State may already be initialized from register(); just update the variation
         this.visualService.setVariation(entityId, this.getVariation(state));
     }
 
     /** Remove stone state when entity is removed. */
     unregister(entityId: number): void {
-        this.states.delete(entityId);
+        this.persistentStore.delete(entityId);
     }
 
     /** Check if stone can be mined (is in Normal stage). */
     canMine(entityId: number): boolean {
-        return this.states.get(entityId)?.stage === StoneStage.Normal;
+        return this.persistentStore.get(entityId)?.stage === StoneStage.Normal;
     }
 
     /** Check if stone is currently being mined. */
     isMining(entityId: number): boolean {
-        return this.states.get(entityId)?.stage === StoneStage.Mining;
+        return this.persistentStore.get(entityId)?.stage === StoneStage.Mining;
     }
 
     /** Start mining (called by stonecutter work handler). */
     startMining(entityId: number): void {
-        const state = this.states.get(entityId);
+        const state = this.persistentStore.get(entityId);
         if (!state || state.stage !== StoneStage.Normal) {
             return;
         }
@@ -170,7 +167,7 @@ export class StoneSystem implements Persistable<SerializedStone[]> {
      * returns false.
      */
     completeMining(entityId: number): boolean {
-        const state = this.states.get(entityId);
+        const state = this.persistentStore.get(entityId);
         if (!state || state.stage !== StoneStage.Mining) {
             return false;
         }
@@ -190,7 +187,7 @@ export class StoneSystem implements Persistable<SerializedStone[]> {
 
     /** Cancel mining (stonecutter interrupted). Keeps current depletion level. */
     cancelMining(entityId: number): void {
-        const state = this.states.get(entityId);
+        const state = this.persistentStore.get(entityId);
         if (state && state.stage === StoneStage.Mining) {
             state.stage = StoneStage.Normal;
         }
@@ -198,7 +195,7 @@ export class StoneSystem implements Persistable<SerializedStone[]> {
 
     /** Get stone state by entity ID. */
     getStoneState(entityId: number): StoneState | undefined {
-        return this.states.get(entityId);
+        return this.persistentStore.get(entityId);
     }
 
     /**
@@ -230,39 +227,14 @@ export class StoneSystem implements Persistable<SerializedStone[]> {
         return placed;
     }
 
-    // ── Persistable ───────────────────────────────────────────────
-
-    serialize(): SerializedStone[] {
-        const result: SerializedStone[] = [];
-        for (const [entityId, state] of this.states) {
-            result.push({
-                entityId,
-                stage: state.stage,
-                variant: state.variant,
-                level: state.level,
-            });
-        }
-        return result;
-    }
-
-    deserialize(data: SerializedStone[]): void {
-        for (const s of data) {
-            this.restoreStoneState(s.entityId, {
-                stage: s.stage,
-                variant: s.variant,
-                level: s.level,
-            });
-        }
-    }
-
     /** Get stats for debugging. */
     getStats(): { total: number; mining: number } {
         let mining = 0;
-        for (const state of this.states.values()) {
+        for (const state of this.persistentStore.values()) {
             if (state.stage === StoneStage.Mining) {
                 mining++;
             }
         }
-        return { total: this.states.size, mining };
+        return { total: this.persistentStore.size, mining };
     }
 }

@@ -6,12 +6,13 @@ Replace the fragile snapshot-based persistence with a **deterministic replay** s
 
 ## Current State
 
-- **What exists**: `GameStateSnapshot` captures entity table + terrain + 23 feature stores via `PersistenceRegistry`. Each feature implements `Persistable` with custom `serialize()`/`deserialize()` methods. Stored as JSON in localStorage.
+- **What exists**: `GameStateSnapshot` captures entity table + terrain + 19 feature stores via `PersistenceRegistry`. Each feature implements `Persistable` with custom `serialize()`/`deserialize()` methods. Stored as superjson in localStorage (`SNAPSHOT_VERSION` 13). The superjson migration (commit `a82ccca`) means Map/Set types now round-trip natively — no manual conversion needed.
 - **What keeps breaking**: Every feature that adds/changes internal state must update its serializer. Missing a field → silent data loss on restore. Changing a field type → old snapshots break (no migration, just a global `SNAPSHOT_VERSION` bump that invalidates ALL saves). Two-phase restore (create entities → overwrite defaults) is fragile — event handlers see partially-initialized state.
 - **What makes replay viable**: Commands are already deterministic (seeded RNG, fixed-point math, deterministic iteration order). Tick systems mutate state directly but deterministically — same inputs always produce same outputs.
-- **What stays**: Entity table in keyframe snapshots, terrain snapshots, `PersistentMap`/`PersistentValue` for the 17 stores that hold primary state.
-- **What changes**: Primary persistence path becomes command journal + tick replay. Snapshots become optimization (keyframes), not the source of truth. 6 derived/transient stores are deleted entirely — their state is rebuilt on load.
-- **What gets deleted**: 6 custom `Persistable` implementations (carriers, residenceSpawns, resourceSigns, combat, transportNextJobId, inFlightTracking). The remaining 17 move to generic `PersistentMap`/`PersistentValue` auto-serialization — no custom serialize/deserialize methods.
+- **What stays**: Entity table in keyframe snapshots, terrain snapshots, `PersistentMap`/`PersistentValue` for the 8 stores that hold primary state.
+- **What changes**: Primary persistence path becomes command journal + tick replay. Snapshots become optimization (keyframes), not the source of truth. 11 derived/transient stores are deleted entirely — their state is rebuilt on load.
+- **What gets deleted**: 11 custom `Persistable` implementations (see "DROP from keyframes" table below). The remaining 8 move to generic `PersistentMap`/`PersistentValue` auto-serialization — no custom serialize/deserialize methods.
+- **Already completed**: `building-owned-deliveries.md` consolidated 5 scattered logistics stores into `TransportJobStore` (wraps `PersistentIndexedMap<TransportJobRecord>`, already auto-serialized). Old stores (`requests`, `inventoryReservations`, `inFlightTracking`, `transportNextJobId`) no longer exist. Superjson migration (`SNAPSHOT_VERSION` 13) enables native Map/Set persistence.
 
 ### State Mutation Audit — Why Replay Works
 
@@ -29,42 +30,39 @@ Not all state changes go through commands. Tick systems and event handlers mutat
 
 **Conclusion**: Replaying the same commands at the same tick numbers on the same initial state produces identical event sequences and therefore identical state. No refactoring of event handlers is needed.
 
-### Persistence Surface Reduction — From 23 Custom Serializers to 0
+### Persistence Surface Reduction — From 19 Custom Serializers to 0
 
-The current codebase has **23 `Persistable` implementations**, each with hand-written `serialize()`/`deserialize()` methods. This is the root cause of constant breakage. With replay, most of this state **doesn't need to be in keyframes at all** — it rebuilds during the 300-tick replay window.
+The current codebase has **19 `Persistable` implementations** (down from 23 after the `building-owned-deliveries` consolidation removed 4 logistics stores), each with hand-written `serialize()`/`deserialize()` methods. This is the root cause of constant breakage. With replay, most of this state **doesn't need to be in keyframes at all** — it rebuilds during the 300-tick replay window.
 
 #### Key insight: replay as state recovery
 
 A keyframe only needs state that takes **longer than 300 ticks to rebuild**. Anything that rebuilds within the replay window can be dropped from keyframes entirely — settlers re-acquire tasks, logistics re-dispatches, combat re-scans. The 300-tick replay does the work that custom deserializers used to do, but correctly and without maintenance.
 
+> **Note**: The superjson migration means `PersistentMap<T>` can store Map/Set types directly — no need to convert internal `Map<K,V>` to `Record<string,V>` for JSON safety. This simplifies the "convert to auto-serialization" path below.
+
 #### Categorization: what keyframes actually need
 
 **KEEP in keyframes (9 stores)** — slow-accumulating state, all with auto-serialization:
 
-| persistKey | Why needed | Serialization |
-|---|---|---|
-| `buildingInventories` | Accumulated over thousands of ticks | `PersistentMap<InventoryState>` (auto) |
-| `constructionSites` | Construction progress (hundreds of ticks) | `PersistentMap<ConstructionSiteState>` (auto) |
-| `trees` | Growth timers (thousands of ticks) | `PersistentMap<TreeState>` (auto) |
-| `stones` | Depletion level (thousands of ticks) | `PersistentMap<StoneState>` (auto) |
-| `crops` | Growth + decay timers (thousands of ticks) | `PersistentMap<CropState>` (auto) |
-| `storageFilters` | User configuration (command-driven) | `PersistentMap<FilterConfig>` (auto) |
-| `productionControl` | User configuration (command-driven) | `PersistentMap<ProductionConfig>` (auto) |
-| `workAreaOffsets` | User configuration (command-driven) | `PersistentMap<WorkAreaOffset>` (auto) |
-| `transportJobs` | Transport SSoT — active delivery jobs (see `building-owned-deliveries.md`) | `PersistentIndexedMap<TransportJobRecord>` (auto) |
+| persistKey | Why needed | Serialization | Status |
+|---|---|---|---|
+| `buildingInventories` | Accumulated over thousands of ticks | `PersistentMap<InventoryState>` (auto) | Convert (currently custom) |
+| `constructionSites` | Construction progress (hundreds of ticks) | `PersistentMap<ConstructionSiteState>` (auto) | Convert (currently custom) |
+| `trees` | Growth timers (thousands of ticks) | `PersistentMap<TreeState>` (auto) | Convert (currently custom) |
+| `stones` | Depletion level (thousands of ticks) | `PersistentMap<StoneState>` (auto) | Convert (currently custom) |
+| `crops` | Growth + decay timers (thousands of ticks) | `PersistentMap<CropState>` (auto) | Convert (currently custom) |
+| `storageFilters` | User configuration (command-driven) | `PersistentMap<FilterConfig>` (auto) | Convert (currently custom) |
+| `productionControl` | User configuration (command-driven) | `PersistentMap<ProductionConfig>` (auto) | Convert (currently custom) |
+| `workAreaOffsets` | User configuration (command-driven) | `PersistentMap<WorkAreaOffset>` (auto) | Convert (currently custom) |
+| `transportJobs` | Transport SSoT — active delivery jobs | `PersistentIndexedMap<TransportJobRecord>` (auto) | **Done** — already auto-serialized |
 
-All 9 use generic `PersistentMap`/`PersistentIndexedMap` auto-serialization. Zero custom serializers.
+8 need conversion to generic `PersistentMap`; 1 (`transportJobs`) is already auto-serialized via `PersistentIndexedMap`. Target: zero custom serializers.
 
-**DROP from keyframes (14 stores)** — state that rebuilds within 300 ticks of replay:
+**DROP from keyframes (10 stores)** — state that rebuilds within 300 ticks of replay:
 
 | persistKey | Recovery time | What happens on load |
 |---|---|---|
 | `settlerTasks` | ~30 ticks | Settlers go idle, re-acquire tasks during replay. Carried goods returned to source via cleanup. **Eliminates the hardest serializer (122 lines, function references).** |
-| `transportJobs` | ~5-50 ticks | Logistics dispatcher re-matches requests to carriers during replay |
-| `requests` | ~5-50 ticks | Material request system re-evaluates building needs during replay |
-| `inventoryReservations` | Instant | Rebuilt when requests are re-created |
-| `inFlightTracking` | Instant | Rebuilt when transport jobs are re-created |
-| `transportNextJobId` | Instant | Derived from job counter |
 | `carriers` | Instant | Scan entities for `UnitType.Carrier` |
 | `combat` | 1 tick | Proximity scan finds targets immediately |
 | `settler-building-locations` | ~10-30 ticks | Settlers re-enter buildings during replay; `entity.hidden` set by event handlers |
@@ -75,9 +73,11 @@ All 9 use generic `PersistentMap`/`PersistentIndexedMap` auto-serialization. Zer
 | `resourceSigns` | N/A | Ephemeral; clear on load |
 | `resourceQuantities` | ~10 ticks | Pile quantities rebuilt from inventory + entity state during replay |
 
+> **Note**: 4 old logistics stores (`requests`, `inventoryReservations`, `inFlightTracking`, `transportNextJobId`) already removed by the `building-owned-deliveries` consolidation. `transportJobs` moved to KEEP (via `PersistentIndexedMap`, already auto-serialized).
+
 #### Preserving transport state without task serialization
 
-**Prerequisite**: `docs/designs/building-owned-deliveries.md` — consolidates 5 scattered logistics stores into `TransportJobStore` (single source of truth, wraps `PersistentIndexedMap<TransportJobRecord>`). `DemandQueue` replaces `RequestManager` as a transient, non-persisted demand queue. `entity.carrying` stays as physical material location + animation.
+**Already implemented** (`building-owned-deliveries.md`): 5 scattered logistics stores consolidated into `TransportJobStore` (single source of truth, wraps `PersistentIndexedMap<TransportJobRecord>` at `src/game/features/logistics/transport-job-store.ts`). `DemandQueue` replaces `RequestManager` as a transient, non-persisted demand queue. `entity.carrying` stays as physical material location + animation.
 
 `TransportJobStore` is the transport continuity mechanism for keyframes:
 
@@ -91,9 +91,9 @@ All 9 use generic `PersistentMap`/`PersistentIndexedMap` auto-serialization. Zer
 
 | Metric | Before | After |
 |---|---|---|
-| Custom `serialize()`/`deserialize()` methods | 23 | **0** |
-| Stores in keyframes | 23 | **9** (all auto-serialized) |
-| Lines of serialization code | ~800+ | **~0** (PersistentMap handles it) |
+| Custom `serialize()`/`deserialize()` methods | 19 (was 23 pre-deliveries) | **0** |
+| Stores in keyframes | 19 | **9** (all auto-serialized) |
+| Lines of serialization code | ~600+ | **~0** (PersistentMap handles it) |
 | Keyframe size | Large (all feature state) | **~40% smaller** |
 | Risk of breakage on feature change | High | **Near zero** — journal replays through game logic |
 
@@ -106,9 +106,9 @@ All 9 use generic `PersistentMap`/`PersistentIndexedMap` auto-serialization. Zer
   - Commands + tick count are the canonical save format, not state snapshots
   - Keyframe snapshots taken every N ticks (~300, ~10 seconds) as replay acceleration
   - Command journal stored in IndexedDB (not localStorage — no 5MB limit)
-  - 14 of 23 Persistable stores dropped from keyframes (rebuilt during 300-tick replay)
+  - 10 of 19 remaining Persistable stores dropped from keyframes (rebuilt during 300-tick replay); 4 old logistics stores already removed by `building-owned-deliveries`
   - Remaining 9 use generic PersistentMap auto-serialization — zero custom serialize/deserialize methods
-  - Transport continuity via `TransportJobStore` (`PersistentIndexedMap`, per `building-owned-deliveries.md`)
+  - Transport continuity via `TransportJobStore` (`PersistentIndexedMap` — already implemented and auto-serialized)
   - Selection commands excluded from journal (UI-only, not game state)
   - Stale keyframes degrade gracefully (longer replay) rather than breaking saves
 - **Assumptions**:
@@ -151,7 +151,7 @@ Tick rate is **30 tps** (`game-loop.ts`). Headless tick speed from test evidence
 | 4 | IndexedDB Store | Persist journal + keyframes to IndexedDB with session management | — | `src/game/persistence/indexed-db-store.ts` |
 | 5 | Save/Load Integration | Wire replay persistence into GameCore lifecycle, replace auto-save | 1, 2, 3, 4 | `src/game/state/game-state-persistence.ts` (modify) |
 | 6 | Determinism Validator | Debug tool: replay from keyframe and compare state hash | 3 | `src/game/debug/determinism-validator.ts` |
-| 7 | Persistable Migration | Delete 6 derived stores, convert 17 custom Persistables to PersistentMap/Value | — | Multiple feature files (see details) |
+| 7 | Persistable Migration | Delete 10 derived stores, convert 8 custom Persistables to PersistentMap/Value | — | Multiple feature files (see details) |
 
 ## Shared Contracts
 
@@ -204,10 +204,11 @@ interface SaveSession {
 
 // ─── Simulation Settings (determinism-affecting) ───────────
 
-/** Settings that affect simulation outcome — must match for replay */
+/** Settings that affect simulation outcome — must match for replay.
+ *  Currently only pathStraightness affects determinism (controls hex-line direction run length).
+ *  treeExpansion was removed — it's a debug stat counter, not a setting. */
 interface SimulationSettings {
   pathStraightness: number;
-  treeExpansion: boolean;
 }
 
 // ─── Replay Engine ─────────────────────────────────────────
@@ -294,9 +295,8 @@ interface StateHash {
 **Files**: Multiple feature files (see file map)
 **Key decisions**:
 
-**Delete persistence entirely (15 stores)** — remove `Persistable` implementation, `persistKey`, `serialize()`, `deserialize()`, and feature `persistence` registration. All state rebuilds during 300-tick replay:
+**Delete persistence entirely (10 stores)** — remove `Persistable` implementation, `persistKey`, `serialize()`, `deserialize()`, and feature `persistence` registration. All state rebuilds during 300-tick replay:
 - `settlerTasks` — the biggest win: eliminates 122-line serializer with function references. Settlers idle at keyframe, re-acquire tasks during replay. Add `onRestoreComplete()` to return carried goods.
-- `transportJobs`, `requests`, `inventoryReservations`, `inFlightTracking`, `transportNextJobId` — logistics chain re-evaluates within ~50 ticks of replay
 - `carriers` — scan entities for `UnitType.Carrier` in `onRestoreComplete()`
 - `combat` — proximity scan on next tick
 - `settler-building-locations` — settlers re-enter buildings during replay via event handlers
@@ -304,10 +304,12 @@ interface StateHash {
 - `barracksTraining`, `unitTransformer` — short-lived transient state
 - `residenceSpawns`, `resourceSigns`, `resourceQuantities` — transient/derived
 
+> Old logistics stores (`requests`, `inventoryReservations`, `inFlightTracking`, `transportNextJobId`) already removed by `building-owned-deliveries` consolidation.
+
 **Convert to auto-serialization (8 stores)** — replace custom `implements Persistable<T>` with `PersistentMap<T>`:
 - `buildingInventories`, `constructionSites`, `trees`, `stones`, `crops` — slow-accumulating state
 - `storageFilters`, `productionControl`, `workAreaOffsets` — user configuration
-- State types must be JSON-safe — convert any internal `Map<K,V>` to `Record<string,V>`
+- Superjson handles Map/Set natively — no need to convert to `Record<string,V>`
 
 **Carried-goods cleanup hook** — single `onRestoreComplete()` callback:
 - Scan entities with `entity.carrying` set
@@ -331,12 +333,8 @@ interface StateHash {
 |------|--------|
 | `src/game/game-core.ts` | Add `currentTick` counter, wrap `execute()` for journaling |
 | `src/game/state/game-state-persistence.ts` | Replace auto-save with journal flush + keyframe, add migration path, add carried-goods cleanup |
-| **Remove persistence (15 files):** | |
-| `src/game/features/settler-tasks/settler-task-system.ts` | Remove Persistable + 122-line serializer |
-| `src/game/features/logistics/logistics-dispatcher.ts` | Remove PersistentIndexedMap + PersistentValue |
-| `src/game/features/logistics/request-manager.ts` | Remove Persistable |
-| `src/game/features/logistics/inventory-reservation.ts` | Remove PersistentValue |
-| `src/game/features/logistics/in-flight-tracker.ts` | Remove PersistentValue |
+| **Remove persistence (10 files):** | |
+| `src/game/features/settler-tasks/settler-task-system.ts` | Remove Persistable + 122-line serializer (also delete `settler-task-serialization.ts`) |
 | `src/game/systems/carrier-registry.ts` | Remove Persistable, add `rebuildFromEntities()` |
 | `src/game/features/combat/combat-system.ts` | Remove Persistable |
 | `src/game/features/settler-location/settler-building-location-manager.ts` | Remove Persistable |
@@ -346,7 +344,7 @@ interface StateHash {
 | `src/game/features/building-construction/residence-spawner.ts` | Remove Persistable |
 | `src/game/features/ore-veins/resource-sign-system.ts` | Remove Persistable |
 | `src/game/state/stacked-pile-manager.ts` | Remove Persistable |
-| **Convert to auto-serialization (8 files):** | |
+| **Convert to auto-serialization (8 files — superjson handles Map/Set natively):** | |
 | `src/game/systems/inventory/building-inventory.ts` | Replace custom Persistable → `PersistentMap<InventoryState>` |
 | `src/game/features/building-construction/construction-site-manager.ts` | Replace custom Persistable → `PersistentMap<ConstructionSiteState>` |
 | `src/game/features/trees/tree-system.ts` | Replace custom Persistable → `PersistentMap<TreeState>` |

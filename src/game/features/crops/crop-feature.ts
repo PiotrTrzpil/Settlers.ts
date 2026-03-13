@@ -71,7 +71,7 @@ export const CropFeature: FeatureDefinition = {
         return {
             systems: [cropSystem],
             exports: { cropSystem } satisfies CropFeatureExports,
-            persistence: [cropSystem],
+            persistence: [cropSystem.persistentStore],
             commands: {
                 plant_crop: cmd => executePlantCrop(cropDeps, cmd as PlantCropCommand),
             },

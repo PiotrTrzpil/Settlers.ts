@@ -10,6 +10,7 @@ import { IMapLoader } from '@/resources/map/imap-loader';
 import { GameState } from './game-state';
 import { GameServices } from './game-services';
 import { type Command, type CommandResult, CommandHandlerRegistry, registerAllHandlers } from './commands';
+import { CommandJournal } from './persistence/command-journal';
 import { TerrainData } from './terrain';
 import { populateMapObjectsFromEntityData } from './systems/map-objects';
 import { expandTrees } from './features/trees/tree-expansion';
@@ -55,6 +56,12 @@ export class GameCore {
     get placementFilter(): PlacementFilter | null {
         return this._placementFilter;
     }
+
+    /** Simulation tick counter — incremented in tick(), used by journal + keyframes */
+    public currentTick = 0;
+
+    /** Command journal — records commands with tick annotations for replay persistence */
+    public readonly journal = new CommandJournal();
 
     /** Current player index */
     public currentPlayer = 0;
@@ -185,9 +192,13 @@ export class GameCore {
 
     // ─── Commands ───────────────────────────────────────────────
 
-    /** Execute a command against the game state */
+    /** Execute a command against the game state, recording to journal for replay */
     public execute(cmd: Command): CommandResult {
-        return this.commandRegistry.execute(cmd);
+        const result = this.commandRegistry.execute(cmd);
+        if (result.success) {
+            this.journal.record(cmd);
+        }
+        return result;
     }
 
     // ─── Tick ───────────────────────────────────────────────────
@@ -199,6 +210,8 @@ export class GameCore {
 
     /** Advance the simulation by one tick. */
     public tick(dt: number): void {
+        this.currentTick++;
+        this.journal.advanceTick();
         for (const { system } of this.services.getTickSystems()) {
             system.tick(dt);
         }

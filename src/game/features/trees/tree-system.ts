@@ -20,8 +20,7 @@ import type { EntityVisualService } from '../../animation/entity-visual-service'
 import type { Command, CommandResult } from '../../commands';
 import { TREE_JOB_OFFSET, TREE_JOBS_PER_TYPE, TREE_JOB_INDICES } from '../../renderer/sprite-metadata/jil-indices';
 import type { EventBus } from '../../event-bus';
-import type { Persistable } from '@/game/persistence';
-import type { SerializedTree } from '@/game/state/game-state-persistence';
+import { PersistentMap } from '@/game/persistence/persistent-store';
 
 /**
  * Logical tree stage (game state).
@@ -86,8 +85,13 @@ export interface TreeSystemConfig extends CoreDeps {
     executeCommand: (cmd: Command) => CommandResult;
 }
 
-export class TreeSystem extends GrowableSystem<TreeState> implements Persistable<SerializedTree[]> {
-    readonly persistKey = 'trees' as const;
+export class TreeSystem extends GrowableSystem<TreeState> {
+    /** PersistentMap shadows GrowableSystem.states — same Map API, adds auto-persistence. */
+    protected override readonly states = new PersistentMap<TreeState>('trees');
+    /** Expose for feature persistence registration. */
+    get persistentStore(): PersistentMap<TreeState> {
+        return this.states;
+    }
     private readonly eventBus: EventBus;
 
     constructor(cfg: TreeSystemConfig) {
@@ -282,35 +286,6 @@ export class TreeSystem extends GrowableSystem<TreeState> implements Persistable
             state.stage = TreeStage.Normal;
             state.progress = 0;
             this.updateVisual(entityId, state);
-        }
-    }
-
-    // ── Persistable ───────────────────────────────────────────────
-
-    serialize(): SerializedTree[] {
-        const result: SerializedTree[] = [];
-        for (const [entityId, state] of this.getAllTreeStates()) {
-            result.push({
-                entityId,
-                stage: state.stage,
-                progress: state.progress,
-                stumpTimer: state.stumpTimer,
-                currentOffset: state.currentOffset,
-                variant: state.variant,
-            });
-        }
-        return result;
-    }
-
-    deserialize(data: SerializedTree[]): void {
-        for (const t of data) {
-            this.restoreTreeState(t.entityId, {
-                stage: t.stage,
-                progress: t.progress,
-                stumpTimer: t.stumpTimer,
-                currentOffset: t.currentOffset,
-                variant: t.variant ?? 0,
-            });
         }
     }
 

@@ -105,7 +105,7 @@ export const BuildingConstructionFeature: FeatureDefinition = {
             systems: [constructionSystem, residenceSpawner, constructionRequestSystem],
             systemGroup: 'Buildings',
             exports,
-            persistence: [constructionSiteManager, residenceSpawner],
+            persistence: [constructionSiteManager.persistentStore],
             onTerrainReady(terrain: TerrainData) {
                 constructionSystem.setTerrainContext({
                     terrain,

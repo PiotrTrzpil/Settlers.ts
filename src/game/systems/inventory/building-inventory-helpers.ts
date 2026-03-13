@@ -17,7 +17,6 @@ import { BUILDING_PRODUCTIONS, type Recipe } from '../../economy/building-produc
 // ── Serialization types ──────────────────────────────────────────────────────
 
 export interface SerializedPileSlot {
-    id: number;
     materialType: EMaterialType;
     currentAmount: number;
     maxCapacity: number;
@@ -30,7 +29,7 @@ export interface SerializedPileSlot {
 
 export interface SerializedBuildingInventory {
     nextSlotId: number;
-    slots: SerializedPileSlot[];
+    slots: Map<number, SerializedPileSlot>;
 }
 
 // ── Pile entity helpers ──────────────────────────────────────────────────────

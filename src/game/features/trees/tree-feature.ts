@@ -63,7 +63,7 @@ export const TreeFeature: FeatureDefinition = {
         return {
             systems: [treeSystem],
             exports: { treeSystem } satisfies TreeFeatureExports,
-            persistence: [treeSystem],
+            persistence: [treeSystem.persistentStore],
             commands: {
                 plant_tree: cmd => executePlantTree(treeDeps, cmd as PlantTreeCommand),
                 plant_trees_area: cmd => executePlantTreesArea({ treeSystem }, cmd as PlantTreesAreaCommand),

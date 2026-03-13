@@ -11,8 +11,6 @@ import type { TickSystem } from '../../core/tick-system';
 import type { GameState } from '../../game-state';
 import type { EventBus } from '../../event-bus';
 import type { BuildingSpawnConfig } from './types';
-import type { Persistable } from '@/game/persistence';
-import type { SerializedPendingSpawn } from '@/game/state/game-state-persistence';
 import { BuildingType } from '../../buildings/types';
 import { getBuildingDoorPos } from '../../data/game-data-access';
 import { getUnitLevel } from '../../core/unit-types';
@@ -29,8 +27,7 @@ export interface ResidenceSpawnerConfig {
     eventBus: EventBus;
 }
 
-export class ResidenceSpawnerSystem implements TickSystem, Persistable<SerializedPendingSpawn[]> {
-    readonly persistKey = 'residenceSpawns' as const;
+export class ResidenceSpawnerSystem implements TickSystem {
     private readonly pending: PendingSpawn[] = [];
     private readonly gameState: GameState;
     private readonly eventBus: EventBus;
@@ -123,34 +120,5 @@ export class ResidenceSpawnerSystem implements TickSystem, Persistable<Serialize
     /** Number of pending spawn entries (for testing) */
     get pendingCount(): number {
         return this.pending.length;
-    }
-
-    // ── Persistable ───────────────────────────────────────────────
-
-    serialize(): SerializedPendingSpawn[] {
-        return this.pending.map(p => ({
-            buildingEntityId: p.buildingEntityId,
-            remaining: p.remaining,
-            timer: p.timer,
-            unitType: p.config.unitType,
-            count: p.config.count,
-            spawnInterval: p.config.spawnInterval!,
-        }));
-    }
-
-    deserialize(data: SerializedPendingSpawn[]): void {
-        this.pending.length = 0;
-        for (const s of data) {
-            this.pending.push({
-                buildingEntityId: s.buildingEntityId,
-                remaining: s.remaining,
-                timer: s.timer,
-                config: {
-                    unitType: s.unitType,
-                    count: s.count,
-                    spawnInterval: s.spawnInterval,
-                },
-            });
-        }
     }
 }

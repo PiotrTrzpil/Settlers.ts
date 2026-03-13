@@ -17,11 +17,9 @@ import type { ComponentStore } from '../../ecs';
 import type { GameState } from '../../game-state';
 import type { Command, CommandResult } from '../../commands';
 import type { EventBus } from '../../event-bus';
-import type { Persistable } from '@/game/persistence';
+import { PersistentMap, PersistentValue } from '@/game/persistence/persistent-store';
 import { createLogger } from '@/utilities/logger';
 import {
-    type SerializedBuildingInventory,
-    type SerializedPileSlot,
     spawnPileEntity,
     updatePileEntity,
     removePileEntity,
@@ -52,15 +50,13 @@ export type SlotPositionResolver = (
     building: Entity,
     configs: ReadonlyArray<{ materialType: EMaterialType; kind: SlotKind }>
 ) => Array<TileCoord | null>;
-export class BuildingInventoryManager implements Persistable<SerializedBuildingInventory> {
-    readonly persistKey = 'buildingInventories' as const;
-
-    /** All slots, indexed by stable slotId. */
-    private slots = new Map<number, PileSlot>();
-    /** buildingId → set of slotIds. */
+export class BuildingInventoryManager {
+    /** All slots, indexed by stable slotId — auto-persisted. */
+    readonly slotStore = new PersistentMap<PileSlot>('buildingInventories');
+    /** Slot ID counter — auto-persisted. */
+    readonly nextSlotIdStore = new PersistentValue<number>('buildingInventoryNextSlotId', 1);
+    /** buildingId → set of slotIds (derived index, rebuilt after restore). */
     private inventorySlots = new Map<number, Set<number>>();
-    /** Monotonically increasing slot ID counter. */
-    private nextSlotId = 1;
 
     /**
      * ComponentStore for ECS queries — wraps inventorySlots map with a BuildingInventoryView.
@@ -191,7 +187,7 @@ export class BuildingInventoryManager implements Persistable<SerializedBuildingI
         const { executeCommand, gameState } = this.getDeps();
 
         for (const slotId of slotIds) {
-            const slot = this.slots.get(slotId)!;
+            const slot = this.slotStore.get(slotId)!;
             if (slot.entityId !== null && slot.currentAmount > 0 && slot.kind !== SlotKind.Free) {
                 // Building destroyed with materials remaining — convert pile to free pile
                 const pileEntity = gameState.getEntity(slot.entityId);
@@ -206,7 +202,7 @@ export class BuildingInventoryManager implements Persistable<SerializedBuildingI
                     removePileEntity(slot, executeCommand);
                 }
             }
-            this.slots.delete(slotId);
+            this.slotStore.delete(slotId);
         }
         this.inventorySlots.delete(buildingId);
     }
@@ -265,11 +261,11 @@ export class BuildingInventoryManager implements Persistable<SerializedBuildingI
         return toWithdraw;
     }
     getSlot(slotId: number): PileSlot | undefined {
-        return this.slots.get(slotId);
+        return this.slotStore.get(slotId);
     }
 
     getSlotOrThrow(slotId: number, context: string): PileSlot {
-        const slot = this.slots.get(slotId);
+        const slot = this.slotStore.get(slotId);
         if (!slot) {
             throw new Error(`BuildingInventoryManager: slot ${slotId} not found [${context}]`);
         }
@@ -282,7 +278,7 @@ export class BuildingInventoryManager implements Persistable<SerializedBuildingI
         if (!ids) {
             return [];
         }
-        return Array.from(ids, id => this.slots.get(id)!);
+        return Array.from(ids, id => this.slotStore.get(id)!);
     }
 
     /** All slot IDs for a building. */
@@ -308,7 +304,7 @@ export class BuildingInventoryManager implements Persistable<SerializedBuildingI
             resolvedKind = kind;
         }
         for (const id of ids) {
-            const slot = this.slots.get(id)!;
+            const slot = this.slotStore.get(id)!;
             if (slot.materialType === material && slot.kind === resolvedKind && slot.currentAmount < slot.maxCapacity) {
                 return slot;
             }
@@ -339,7 +335,7 @@ export class BuildingInventoryManager implements Persistable<SerializedBuildingI
         }
         const result: { slot: PileSlot; slotId: number }[] = [];
         for (const id of ids) {
-            const slot = this.slots.get(id)!;
+            const slot = this.slotStore.get(id)!;
             if (slot.materialType === material && (slot.kind === SlotKind.Output || slot.kind === SlotKind.Storage)) {
                 result.push({ slot, slotId: id });
             }
@@ -397,7 +393,7 @@ export class BuildingInventoryManager implements Persistable<SerializedBuildingI
         }
         let total = 0;
         for (const id of ids) {
-            const slot = this.slots.get(id)!;
+            const slot = this.slotStore.get(id)!;
             if (slot.materialType === material && slot.kind === SlotKind.Input) {
                 total += slot.maxCapacity - slot.currentAmount;
             }
@@ -476,7 +472,7 @@ export class BuildingInventoryManager implements Persistable<SerializedBuildingI
         const result: number[] = [];
         for (const [buildingId, slotIds] of this.inventorySlots) {
             for (const id of slotIds) {
-                const slot = this.slots.get(id)!;
+                const slot = this.slotStore.get(id)!;
                 if (
                     (slot.kind === SlotKind.Output || slot.kind === SlotKind.Storage || slot.kind === SlotKind.Free) &&
                     slot.materialType === material &&
@@ -494,7 +490,7 @@ export class BuildingInventoryManager implements Persistable<SerializedBuildingI
         const result: number[] = [];
         for (const [buildingId, slotIds] of this.inventorySlots) {
             for (const id of slotIds) {
-                const slot = this.slots.get(id)!;
+                const slot = this.slotStore.get(id)!;
                 if (
                     slot.kind === SlotKind.Input &&
                     slot.materialType === material &&
@@ -523,7 +519,8 @@ export class BuildingInventoryManager implements Persistable<SerializedBuildingI
         quantity: number,
         position: { x: number; y: number }
     ): void {
-        const slotId = this.nextSlotId++;
+        const slotId = this.nextSlotIdStore.get();
+        this.nextSlotIdStore.set(slotId + 1);
         const slot: PileSlot = {
             id: slotId,
             materialType: material,
@@ -534,51 +531,25 @@ export class BuildingInventoryManager implements Persistable<SerializedBuildingI
             kind: SlotKind.Free,
             buildingId: entityId, // use pile entity ID as "building" for output queries
         };
-        this.slots.set(slotId, slot);
+        this.slotStore.set(slotId, slot);
         this.getInventorySlotSet(entityId).add(slotId);
     }
 
     clear(): void {
-        this.slots.clear();
+        this.slotStore.clear();
+        this.nextSlotIdStore.set(1);
         this.inventorySlots.clear();
     }
-    serialize(): SerializedBuildingInventory {
-        const serializedSlots: SerializedPileSlot[] = [];
-        for (const slot of this.slots.values()) {
-            serializedSlots.push({
-                id: slot.id,
-                materialType: slot.materialType,
-                currentAmount: slot.currentAmount,
-                maxCapacity: slot.maxCapacity,
-                x: slot.position.x,
-                y: slot.position.y,
-                entityId: slot.entityId,
-                kind: slot.kind,
-                buildingId: slot.buildingId,
-            });
-        }
-        return { nextSlotId: this.nextSlotId, slots: serializedSlots };
-    }
 
-    deserialize(data: SerializedBuildingInventory): void {
-        this.slots.clear();
+    /**
+     * Rebuild the buildingId → slotIds reverse index from the slotStore.
+     * Must be called after the PersistentMap is restored from a snapshot.
+     */
+    rebuildInventoryIndex(): void {
         this.inventorySlots.clear();
-        this.nextSlotId = data.nextSlotId;
-
-        for (const s of data.slots) {
-            const slot: PileSlot = {
-                id: s.id,
-                materialType: s.materialType,
-                currentAmount: s.currentAmount,
-                maxCapacity: s.maxCapacity,
-                position: { x: s.x, y: s.y },
-                entityId: s.entityId,
-                kind: s.kind,
-                buildingId: s.buildingId,
-            };
-            this.slots.set(s.id, slot);
-            if (s.buildingId !== null) {
-                this.getInventorySlotSet(s.buildingId).add(s.id);
+        for (const slot of this.slotStore.values()) {
+            if (slot.buildingId !== null) {
+                this.getInventorySlotSet(slot.buildingId).add(slot.id);
             }
         }
     }
@@ -589,7 +560,8 @@ export class BuildingInventoryManager implements Persistable<SerializedBuildingI
     }
 
     private addSlot(buildingId: number, cfg: SlotConfig, kind: SlotKind, position: TileCoord): void {
-        const slotId = this.nextSlotId++;
+        const slotId = this.nextSlotIdStore.get();
+        this.nextSlotIdStore.set(slotId + 1);
         const slot: PileSlot = {
             id: slotId,
             materialType: cfg.materialType,
@@ -600,7 +572,7 @@ export class BuildingInventoryManager implements Persistable<SerializedBuildingI
             kind,
             buildingId,
         };
-        this.slots.set(slotId, slot);
+        this.slotStore.set(slotId, slot);
         this.getInventorySlotSet(buildingId).add(slotId);
         log.debug(
             `createSlot: building=${buildingId}, slotId=${slotId}, kind=${kind}, material=${EMaterialType[cfg.materialType]}`
@@ -622,7 +594,7 @@ export class BuildingInventoryManager implements Persistable<SerializedBuildingI
             return undefined;
         }
         for (const id of ids) {
-            const slot = this.slots.get(id)!;
+            const slot = this.slotStore.get(id)!;
             if (slot.materialType === material && slot.kind === SlotKind.Input) {
                 return slot;
             }
@@ -636,7 +608,7 @@ export class BuildingInventoryManager implements Persistable<SerializedBuildingI
             return undefined;
         }
         for (const id of ids) {
-            const slot = this.slots.get(id)!;
+            const slot = this.slotStore.get(id)!;
             if (
                 slot.materialType === material &&
                 (slot.kind === SlotKind.Output || slot.kind === SlotKind.Storage || slot.kind === SlotKind.Free)

@@ -10,14 +10,9 @@ import { MAX_PILE_SIZE, EntityType, type Entity, type EntityProvider } from '../
 import type { EMaterialType } from '../economy';
 import { type PileKind, getOwnerBuildingId, SlotKind } from '../core/pile-kind';
 import { type ComponentStore, mapStore } from '../ecs';
-import type { Persistable } from '@/game/persistence';
 import type { SpatialGrid } from '../spatial-grid';
 
-type SerializedResourceQuantity = { entityId: number; quantity: number };
-
-export class StackedPileManager implements Persistable<SerializedResourceQuantity[]> {
-    readonly persistKey = 'resourceQuantities' as const;
-
+export class StackedPileManager {
     /** Stacked resource state tracking (quantity of items in each stack) */
     public readonly states: Map<number, StackedPileState> = new Map();
 
@@ -138,29 +133,6 @@ export class StackedPileManager implements Persistable<SerializedResourceQuantit
             }
         }
         return nearest;
-    }
-
-    // ── Persistable ───────────────────────────────────────────────
-
-    serialize(): SerializedResourceQuantity[] {
-        const result: SerializedResourceQuantity[] = [];
-        for (const [entityId, state] of this.states) {
-            result.push({ entityId, quantity: state.quantity });
-        }
-        return result;
-    }
-
-    deserialize(data: SerializedResourceQuantity[]): void {
-        this.states.clear();
-        for (const rq of data) {
-            // Create state with default Free kind — BuildingInventoryManager.restoreComplete()
-            // will assign the correct PileKind after all persistables are restored.
-            this.states.set(rq.entityId, {
-                entityId: rq.entityId,
-                quantity: rq.quantity,
-                kind: { kind: SlotKind.Free },
-            });
-        }
     }
 
     // ─────────────────────────────────────────────────────────────────────────

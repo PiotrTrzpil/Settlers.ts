@@ -17,18 +17,16 @@ import type { GameState } from '@/game/game-state';
 import type { EventBus } from '@/game/event-bus';
 import type { CoreDeps } from '../feature';
 import type { UnitReservationRegistry } from '@/game/systems/unit-reservation';
-import type { Persistable } from '@/game/persistence';
 import type { TerrainData } from '@/game/terrain';
 import type { ISettlerBuildingLocationManager } from '@/game/features/settler-location/types';
 import { SettlerBuildingStatus } from '@/game/features/settler-location/types';
 import { UnitType } from '@/game/core/unit-types';
 import { BuildingType } from '@/game/buildings/building-type';
 import { getBuildingDoorPos } from '@/game/data/game-data-access';
-import { sortedEntries } from '@/utilities/collections';
 import { createLogger } from '@/utilities/logger';
 import { findBuildingApproachTile } from '@/game/buildings/approach';
 import { getGarrisonCapacity, getGarrisonRole } from './internal/garrison-capacity';
-import type { BuildingGarrisonState, SerializedTowerGarrison } from './types';
+import type { BuildingGarrisonState } from './types';
 
 const log = createLogger('TowerGarrisonManager');
 
@@ -38,9 +36,7 @@ export interface TowerGarrisonManagerConfig extends CoreDeps {
     releaseWorkerAssignment: (settlerId: number) => void;
 }
 
-export class TowerGarrisonManager implements Persistable<SerializedTowerGarrison> {
-    readonly persistKey = 'towerGarrison' as const;
-
+export class TowerGarrisonManager {
     private readonly gameState: GameState;
     private readonly eventBus: EventBus;
     private readonly unitReservation: UnitReservationRegistry;
@@ -342,65 +338,6 @@ export class TowerGarrisonManager implements Persistable<SerializedTowerGarrison
 
         this.eventBus.emit('garrison:unitExited', { buildingId: towerId, unitId, unitType: unit.subType as UnitType });
         log.debug(`Unit ${unitId} ejected from tower ${towerId}`);
-    }
-
-    // =========================================================================
-    // Persistable
-    // =========================================================================
-
-    serialize(): SerializedTowerGarrison {
-        const garrisons: SerializedTowerGarrison['garrisons'] = [];
-        for (const [, state] of sortedEntries(this.garrisons)) {
-            garrisons.push({
-                buildingId: state.buildingId,
-                swordsmanUnitIds: [...state.swordsmanSlots.unitIds],
-                bowmanUnitIds: [...state.bowmanSlots.unitIds],
-            });
-        }
-
-        return { garrisons };
-    }
-
-    deserialize(data: SerializedTowerGarrison): void {
-        this.garrisons.clear();
-        for (const entry of data.garrisons) {
-            const tower = this.gameState.getEntityOrThrow(entry.buildingId, 'TowerGarrisonManager.deserialize');
-            const capacity = getGarrisonCapacity(tower.subType as BuildingType);
-            if (!capacity) {
-                throw new Error(
-                    `TowerGarrisonManager.deserialize: building ${entry.buildingId} has no garrison capacity`
-                );
-            }
-
-            this.garrisons.set(entry.buildingId, {
-                buildingId: entry.buildingId,
-                swordsmanSlots: { max: capacity.swordsmanSlots, unitIds: [...entry.swordsmanUnitIds] },
-                bowmanSlots: { max: capacity.bowmanSlots, unitIds: [...entry.bowmanUnitIds] },
-            });
-
-            // Garrisoned units keep their reservation (they must not be player-moved).
-            // Restore onForcedRelease so killed-while-garrisoned still cleans up the slot.
-            const buildingId = entry.buildingId;
-            for (const unitId of [...entry.swordsmanUnitIds, ...entry.bowmanUnitIds]) {
-                this.unitReservation.reserve(unitId, {
-                    purpose: 'garrison',
-                    onForcedRelease: id => {
-                        const garrison = this.garrisons.get(buildingId);
-                        if (!garrison) {
-                            return;
-                        }
-                        removeFromArray(garrison.swordsmanSlots.unitIds, id);
-                        removeFromArray(garrison.bowmanSlots.unitIds, id);
-                    },
-                });
-            }
-        }
-
-        // En-route units are restored by SettlerBuildingLocationManager (it persists approaching state).
-        // Move tasks are NOT re-issued here — the feature does that in onTerrainReady, after pathfinding
-        // is available. Reservations for en-route units are restored there too (via markEnRoute).
-
-        log.debug(`Deserialized: ${this.garrisons.size} towers`);
     }
 
     // =========================================================================

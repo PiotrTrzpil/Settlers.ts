@@ -17,6 +17,9 @@ import type { FeatureDefinition, FeatureContext, FeatureInstance } from '../feat
 import type { SettlerTaskExports } from '@/game/features/settler-tasks/settler-tasks-feature';
 import type { SettlerLocationExports } from '@/game/features/settler-location/types';
 import type { CombatExports } from '@/game/features/combat';
+import type { BuildingConstructionExports } from '../building-construction/building-construction-feature';
+import { EntityType } from '../../entity';
+import { BuildingType } from '../../buildings/building-type';
 import { TowerGarrisonManager } from './tower-garrison-manager';
 import { AutoGarrisonSystem } from './tower-garrison-auto-system';
 import { TowerCombatSystem } from './internal/tower-combat-system';
@@ -46,12 +49,13 @@ export interface TowerGarrisonExports {
 
 export const TowerGarrisonFeature: FeatureDefinition = {
     id: 'tower-garrison',
-    dependencies: ['settler-tasks', 'settler-location', 'combat'],
+    dependencies: ['settler-tasks', 'settler-location', 'combat', 'building-construction'],
 
     create(ctx: FeatureContext): FeatureInstance {
         const { settlerTaskSystem } = ctx.getFeature<SettlerTaskExports>('settler-tasks');
         const { locationManager } = ctx.getFeature<SettlerLocationExports>('settler-location');
         const { combatSystem } = ctx.getFeature<CombatExports>('combat');
+        const { constructionSiteManager } = ctx.getFeature<BuildingConstructionExports>('building-construction');
 
         const manager = new TowerGarrisonManager({
             gameState: ctx.gameState,
@@ -109,7 +113,21 @@ export const TowerGarrisonFeature: FeatureDefinition = {
                     create: () => new TowerBowmanRenderPass(manager, ctx.gameState, towerBowmanTargets),
                 },
             ],
-            persistence: [manager],
+            persistence: [],
+            onRestoreComplete() {
+                for (const e of ctx.gameState.entities) {
+                    if (e.type !== EntityType.Building) {
+                        continue;
+                    }
+                    if (constructionSiteManager.hasSite(e.id)) {
+                        continue;
+                    }
+                    const bt = e.subType as BuildingType;
+                    if (isGarrisonBuildingType(bt)) {
+                        manager.initTower(e.id, bt);
+                    }
+                }
+            },
             onTerrainReady(terrain) {
                 manager.setTerrain(terrain);
                 // Re-build WORKER_DISPATCH choreo jobs for units that were
