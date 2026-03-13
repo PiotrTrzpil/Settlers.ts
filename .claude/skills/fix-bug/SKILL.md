@@ -47,8 +47,15 @@ $ARGUMENTS
 Now that you have a failing test, investigate properly:
 
 - Use the timeline DB to trace exactly what happened during the test
-- Use `trace_call_path`, `find_references`, `query_graph` to understand the code flow
+- Use `trace_call_path`, `find_references`, `query_graph` to understand the code flow (see `docs/CODEBASE_MEMORY.md` for full graph workflow reference)
 - Read targeted code sections as needed
+
+**codebase-memory-mcp graph tools for investigation** (see `docs/CODEBASE_MEMORY.md`). **Run all applicable queries in parallel using multiple agents** — investigation speed matters, and these queries are independent. Batch them into 2-3 parallel agents to get results in seconds:
+- `search_graph(name_pattern='.*symptom.*', label='Function')` — find the function where the symptom appears
+- `trace_call_path(function_name='X', direction='inbound', depth=3, risk_labels=true)` — trace inbound callers with risk classification (CRITICAL/HIGH/MEDIUM/LOW by hop distance)
+- `query_graph('MATCH (f)-[:USES_TYPE]->(t) WHERE f.name = "X" RETURN t.name, t.file LIMIT 20')` — check type dependencies (useful when bug may be type mismatch or missing field)
+- `query_graph('MATCH (m:Module)-[:TESTS_FILE]->(t:Module) WHERE t.name CONTAINS "X" RETURN m.name LIMIT 10')` — find existing test files for the affected module
+- `search_code(pattern='error message text')` — find string literals and error messages not in the graph
 
 Ask yourself:
 - **Why does this bug exist?** Missing invariant? Confusing API? Insufficient types? Copy-paste error?
@@ -62,9 +69,10 @@ Ask yourself:
 3. Apply any scoped systemic improvements (better types, validation, API clarification)
 4. Run `pnpm lint` to validate
 
-### 5. Sweep for Similar Issues
+### 5. Assess Blast Radius and Sweep for Similar Issues
 
-Search the codebase for the same pattern:
+After editing, use the graph to validate your fix doesn't have unexpected impact:
+- `detect_changes(scope='unstaged', depth=2)` — maps your git diff to affected symbols + callers classified by risk
 - Use Grep to find similar code structures
 - Check if other modules have the same vulnerability
 - Fix any duplicates found
