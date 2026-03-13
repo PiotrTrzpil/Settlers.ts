@@ -1,7 +1,6 @@
 import { defineConfig } from 'vitest/config';
 import vue from '@vitejs/plugin-vue';
 import glsl from 'vite-plugin-glsl';
-import wasm from 'vite-plugin-wasm';
 import { resolve } from 'path';
 import { computeSourceHash } from './tests/e2e/source-hash';
 import { devWriteFilePlugin } from './vite-plugins/dev-write-file';
@@ -9,7 +8,7 @@ import { cliWsPlugin } from './vite-plugins/cli-ws-plugin';
 
 // Only include polyfills in browser builds, not in test environment
 const isTest = process.env['VITEST'] === 'true';
-// Fast build skips fengari/node-polyfills (incompatible with rolldown-vite)
+// Fast build skips fengari/node-polyfills
 const isFastBuild = process.env['FAST_BUILD'] === '1';
 
 // Deterministic run ID shared by all Vitest workers → single timeline DB per run
@@ -25,7 +24,6 @@ if (isTest) {
 const plugins: any[] = [
     vue({ features: { optionsAPI: false } }),
     glsl(),
-    wasm(),
     devWriteFilePlugin(resolve(__dirname)),
     cliWsPlugin(),
 ];

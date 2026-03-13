@@ -66,7 +66,6 @@ export class ScriptService implements TickSystem {
 
     /**
      * Initialize the Lua runtime. Call before loading scripts.
-     * Note: This is now async due to wasmoon's WASM loading.
      */
     // eslint-disable-next-line @typescript-eslint/require-await -- kept async for API compatibility
     public async initialize(): Promise<void> {

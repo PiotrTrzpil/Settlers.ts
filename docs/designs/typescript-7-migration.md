@@ -2,7 +2,7 @@
 
 ## Overview
 
-Migrate Settlers.ts from TypeScript 5.9.3 to TypeScript 7.0 (the Go-native rewrite, "Project Corsa"). TS 7.0 delivers ~10x faster compilation but drops several legacy compiler options and changes defaults. The project is already well-positioned (ESNext target, `strict: true`, `bundler` module resolution, heavy `import type` usage), so the migration is low-risk with focused tsconfig and tooling updates.
+Migrate Settlers.ts to TypeScript 7.0 (the Go-native rewrite, "Project Corsa"). TS 7.0 delivers ~10x faster compilation but drops several legacy compiler options and changes defaults. The native Go compiler is published as `@typescript/native-preview` (providing the `tsgo` CLI), separate from the `typescript` npm package which stays at 5.9.x for tooling compatibility. The project is already well-positioned (ESNext target, `strict: true`, `bundler` module resolution, heavy `import type` usage), so the migration is low-risk with focused tsconfig and tooling updates.
 
 ## Current State
 
@@ -22,7 +22,7 @@ Migrate Settlers.ts from TypeScript 5.9.3 to TypeScript 7.0 (the Go-native rewri
   - Keep `const enum` declarations (TS 7.0 still supports them with `isolatedModules`)
   - Do NOT migrate enums to `as const` objects — enums are idiomatic in this project and TS 7.0 doesn't remove them
   - Remove `esModuleInterop` and `allowSyntheticDefaultImports` (redundant in TS 7.0's ESM-native mode)
-- **Assumptions**: `vue-tsc` v3.x will ship TS 7.0 support (Vue Language Tools tracks TS majors quickly). `typescript-eslint` v9+ will support TS 7.0. If either lags, we pin and defer that subsystem.
+- **Assumptions**: `vue-tsc` v3.x will ship TS 7.0 support (Vue Language Tools tracks TS majors quickly). `typescript-eslint` v9+ will support TS 7.0. If either lags, we pin and defer that subsystem. `typescript` (JS-based) stays at `~5.9.3` throughout since both depend on it.
 - **Scope**: tsconfig changes, dependency upgrades, fix type errors. NOT a code style migration (no enum→const object, no namespace removal).
 
 ## Conventions
@@ -77,15 +77,22 @@ No new types or APIs — this is a tooling migration. The contract is: **all exi
 
 | Package | Current | Target | Notes |
 |---------|---------|--------|-------|
-| `typescript` | `~5.9.3` | `~7.0.x` | Core upgrade |
-| `vue-tsc` | `^3.2.5` | Latest TS 7.0-compatible | Check Vue Language Tools releases |
-| `typescript-eslint` | `^8.56.0` | `^9.x` or latest TS 7.0-compatible | May need major bump |
-| `oxlint` | `^1.54.0` | Latest | Verify `--type-aware` still works with TS 7.0 |
+| `@typescript/native-preview` | — | `latest` | ADD — the native Go compiler (`tsgo` CLI) |
+| `typescript` | `~5.9.3` | `~5.9.3` (keep) | KEEP — `vue-tsc` and `typescript-eslint` still depend on it |
+| `vue-tsc` | `^3.2.5` | Latest TS-compatible | Check Vue Language Tools releases |
+| `typescript-eslint` | `^8.56.0` | `^9.x` or latest | May need major bump |
+| `oxlint` | `^1.54.0` | Latest | Verify `--type-aware` still works |
 | `oxlint-tsgolint` | `^0.16.0` | Latest | Companion plugin for oxlint |
 | `tsx` | `^4.21.0` | Latest | Uses esbuild, not tsc — likely unaffected |
 
+**Key facts about the TS 7.0 native compiler:**
+- Published as `@typescript/native-preview` on npm (not `typescript@7.0`)
+- Provides the `tsgo` CLI command (replaces `tsc` for type-checking)
+- `typescript` (JS-based) remains at `~5.9.3` because `vue-tsc` wraps it and `typescript-eslint` depends on it
+- `vue-tsc` continues to use the JS-based `tsc` internally for Vue SFC support — `tsgo` cannot replace it yet
+
 **Process:**
-1. `pnpm add -D typescript@~7.0`
+1. `pnpm add -D @typescript/native-preview`
 2. `pnpm add -D vue-tsc@latest`
 3. `pnpm add -D typescript-eslint@latest`
 4. `pnpm add -D oxlint@latest oxlint-tsgolint@latest`
@@ -109,7 +116,7 @@ Expected low volume based on codebase analysis:
 - **Stricter type narrowing**: TS 7.0 may narrow some types differently. Fix on a case-by-case basis.
 - **`esModuleInterop` removal**: Default imports from CJS modules (`import foo from 'cjs-pkg'`) may need to become `import * as foo from 'cjs-pkg'`. Scan for affected imports if errors appear.
 
-**Process**: Run `vue-tsc --noEmit`, collect errors, fix in batches.
+**Process**: Run `tsgo --noEmit` (pure TS) and `vue-tsc --noEmit` (Vue SFCs), collect errors, fix in batches.
 
 ### 5. Validation
 - `pnpm lint 2>&1 | tee /tmp/lint.txt` — must pass clean
@@ -124,7 +131,7 @@ Expected low volume based on codebase analysis:
 |------|--------|
 | `tsconfig.json` | Remove deprecated options, verify remaining |
 | `scripts/gfx-export/tsconfig.json` | Same |
-| `package.json` | Bump TS + tooling dependencies |
+| `package.json` | Add `@typescript/native-preview`; bump vue-tsc, typescript-eslint, oxlint |
 | `pnpm-lock.yaml` | Auto-generated |
 | `eslint.config.mjs` | Update if typescript-eslint API changes |
 | `src/**/*.ts` (if needed) | Fix type errors from stricter checking |
@@ -134,7 +141,7 @@ None expected.
 
 ## Verification
 
-1. **Type-check passes**: `vue-tsc --noEmit` exits 0
+1. **Type-check passes**: `vue-tsc --noEmit` exits 0 (Vue SFCs); `tsgo --noEmit` exits 0 (pure TS files)
 2. **Lint passes**: `pnpm lint` exits 0 with no new errors
 3. **All unit tests pass**: `pnpm test:unit` — same pass count as before
 4. **Build succeeds**: `pnpm build` produces working output

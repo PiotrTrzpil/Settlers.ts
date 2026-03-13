@@ -11,8 +11,6 @@
     "jsx": "preserve",
     "moduleResolution": "bundler",
     "skipLibCheck": true,
-    "esModuleInterop": true,
-    "allowSyntheticDefaultImports": true,
     "sourceMap": true,
     "types": [
       "vite/client",
