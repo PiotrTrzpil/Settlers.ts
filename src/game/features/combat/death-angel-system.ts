@@ -45,7 +45,7 @@ export class DeathAngelSystem implements TickSystem {
     register(entityId: number, unitType: UnitType): void {
         const prefix = UNIT_XML_PREFIX[unitType];
         if (!prefix) {
-            throw new Error(`No XML prefix for UnitType ${UnitType[unitType]}`);
+            throw new Error(`No XML prefix for UnitType ${unitType}`);
         }
         const sequenceKey = xmlKey(prefix, 'WALK');
         this.angels.set(entityId, { entityId, elapsed: 0, sequenceKey });

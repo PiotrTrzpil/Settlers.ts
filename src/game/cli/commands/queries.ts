@@ -17,6 +17,7 @@ import { SlotKind } from '@/game/core/pile-kind';
 import type { GameState } from '@/game/game-state';
 import { resolveViewport, parseLayers, type MapSizePreset } from '../map-symbols';
 import { renderMapText } from '../map-renderer';
+import { createCliPlacementGrid } from '../placement-grid';
 import { findCommand, atCommand } from './spatial-queries';
 import { ok, fail, entityTypeName, posText, tableWithLimit } from './helpers';
 
@@ -34,7 +35,7 @@ function carryingText(entity: Entity): string {
     if (!entity.carrying) {
         return '-';
     }
-    return `${EMaterialType[entity.carrying.material]}x${entity.carrying.amount}`;
+    return `${entity.carrying.material}x${entity.carrying.amount}`;
 }
 
 // ─── ls sub-handlers ──────────────────────────────────────────────────────────
@@ -124,9 +125,9 @@ function invCommand(): CliCommand {
                     continue;
                 }
                 if (slot.kind === SlotKind.Input) {
-                    rows.push(['in', EMaterialType[slot.materialType], `${slot.currentAmount}/${slot.maxCapacity}`]);
+                    rows.push(['in', slot.materialType, `${slot.currentAmount}/${slot.maxCapacity}`]);
                 } else if (slot.kind === SlotKind.Output || slot.kind === SlotKind.Storage) {
-                    rows.push(['out', EMaterialType[slot.materialType], `${slot.currentAmount}/${slot.maxCapacity}`]);
+                    rows.push(['out', slot.materialType, `${slot.currentAmount}/${slot.maxCapacity}`]);
                 }
             }
             if (rows.length === 0) {
@@ -183,13 +184,13 @@ function mapCommand(): CliCommand {
     return {
         name: 'map',
         aliases: [],
-        usage: 'map <x> <y> [radius|sm|md|lg|xl] [--layer terrain,buildings,units,objects,piles]',
+        usage: 'map <x> <y> [radius|sm|md|lg|xl] [--layer ...] [--place BuildingType]',
         desc: 'Text grid of terrain and entities around a point',
         execute(args: CliArgs, ctx: CliContext): CliResult {
             const cx = Number(args._[0]);
             const cy = Number(args._[1]);
             if (!Number.isFinite(cx) || !Number.isFinite(cy)) {
-                return fail('usage: map <x> <y> [radius|sm|md|lg|xl] [--layer ...]');
+                return fail('usage: map <x> <y> [radius|sm|md|lg|xl] [--layer ...] [--place BuildingType]');
             }
 
             const sizeArg = String(args._[2] ?? 'sm');
@@ -209,7 +210,22 @@ function mapCommand(): CliCommand {
             }
 
             const viewport = resolveViewport(cx, cy, sizeOrRadius, ctx.game.terrain);
-            return ok(renderMapText(ctx.game, viewport, layers));
+
+            const placeArg = typeof args['place'] === 'string' ? args['place'] : undefined;
+            let placementGrid = null;
+            if (placeArg) {
+                const buildingType = ctx.resolveBuilding(placeArg);
+                placementGrid = createCliPlacementGrid(
+                    ctx.game,
+                    buildingType,
+                    viewport.cx,
+                    viewport.cy,
+                    ctx.player,
+                    viewport.radius
+                );
+            }
+
+            return ok(renderMapText(ctx.game, viewport, { layers, placementGrid }));
         },
     };
 }

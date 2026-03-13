@@ -23,6 +23,7 @@ function makeSettler(overrides: Partial<Entity> = {}): Entity {
         player: 0,
         subType: UnitType.Woodcutter,
         race: Race.Roman,
+        operational: true,
         ...overrides,
     };
 }

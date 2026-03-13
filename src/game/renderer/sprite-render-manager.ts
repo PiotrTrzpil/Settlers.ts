@@ -251,21 +251,25 @@ export class SpriteRenderManager {
     /**
      * Get animated entity data for any entity type. O(1) lookup.
      */
-    public getAnimatedEntity(entityType: EntityType, subType: number, race?: number): AnimatedSpriteEntry | null {
+    public getAnimatedEntity(
+        entityType: EntityType,
+        subType: number | string,
+        race?: number
+    ): AnimatedSpriteEntry | null {
         return this._spriteRegistry?.getAnimatedEntity(entityType, subType, race) ?? null;
     }
 
     /**
      * Check if any entity type has animation frames. O(1) lookup.
      */
-    public hasAnimation(entityType: EntityType, subType: number, race?: number): boolean {
+    public hasAnimation(entityType: EntityType, subType: number | string, race?: number): boolean {
         return this._spriteRegistry?.hasAnimation(entityType, subType, race) ?? false;
     }
 
     /**
      * Get animation data for any entity type. O(1) lookup.
      */
-    public getAnimationData(entityType: EntityType, subType: number, race?: number): AnimationData | null {
+    public getAnimationData(entityType: EntityType, subType: number | string, race?: number): AnimationData | null {
         const entry = this._spriteRegistry?.getAnimatedEntity(entityType, subType, race);
         return entry?.animationData ?? null;
     }
@@ -276,9 +280,9 @@ export class SpriteRenderManager {
      */
     public asAnimationProvider(): AnimationDataProvider {
         return {
-            getAnimationData: (entityType: EntityType, subType: number, race?: number) =>
+            getAnimationData: (entityType: EntityType, subType: number | string, race?: number) =>
                 this.getAnimationData(entityType, subType, race),
-            hasAnimation: (entityType: EntityType, subType: number, race?: number) =>
+            hasAnimation: (entityType: EntityType, subType: number | string, race?: number) =>
                 this.hasAnimation(entityType, subType, race),
         };
     }

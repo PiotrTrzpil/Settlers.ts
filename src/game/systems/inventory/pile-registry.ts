@@ -56,9 +56,9 @@ function deserializeKey(s: string): PileSlotKey {
     }
     const [buildingIdStr, slotKind, materialStr] = parts as [string, string, string];
     const buildingId = parseInt(buildingIdStr, 10);
-    const material = parseInt(materialStr, 10) as EMaterialType;
-    if (isNaN(buildingId) || isNaN(material)) {
-        throw new Error(`PileRegistry: key "${s}" contains non-numeric buildingId or material`);
+    const material = materialStr as EMaterialType;
+    if (isNaN(buildingId) || !materialStr) {
+        throw new Error(`PileRegistry: key "${s}" contains invalid buildingId or material`);
     }
     const rawIndex = parts.length === 4 ? parseInt(parts[3]!, 10) : 0;
     const pileIndex = rawIndex > 0 ? rawIndex : undefined;

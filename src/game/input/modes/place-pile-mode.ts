@@ -44,7 +44,7 @@ export class PlacePileMode extends BasePlacementMode<EMaterialType> {
     }
 
     protected getSubTypeName(subType: EMaterialType): string {
-        return EMaterialType[subType];
+        return subType;
     }
 
     /**

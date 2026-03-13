@@ -10,7 +10,6 @@ import type { Entity } from '@/game/entity';
 import { EntityType, UnitType, BuildingType } from '@/game/entity';
 import { getBuildingInfo } from '@/game/data/game-data-access';
 import { UNIT_TYPE_CONFIG, getUnitCategory, UnitCategory } from '@/game/core/unit-types';
-import { EMaterialType } from '@/game/economy';
 import type { Game } from '@/game/game';
 
 // Player colors for display
@@ -133,7 +132,7 @@ export function useSelectionPanel(game: Ref<Game | null>): {
         if (material === undefined) {
             return null;
         }
-        return EMaterialType[material];
+        return material;
     });
 
     const buildingSize = computed(() => {

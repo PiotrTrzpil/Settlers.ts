@@ -241,7 +241,7 @@ export function buildAllSettlerConfigs(): Map<UnitType, SettlerConfig> {
     const configs = new Map<UnitType, SettlerConfig>();
 
     for (const unitTypeStr of Object.keys(UNIT_TYPE_TO_XML_SETTLER)) {
-        const unitType = Number(unitTypeStr) as UnitType;
+        const unitType = unitTypeStr as UnitType;
         const xmlId = UNIT_TYPE_TO_XML_SETTLER[unitType]!;
         const info = findSettlerInfoAnyRace(xmlId);
         if (!info) {
@@ -256,7 +256,7 @@ export function buildAllSettlerConfigs(): Map<UnitType, SettlerConfig> {
 
     // Military units: no autonomous work, but can execute dispatch jobs.
     for (const unitType of Object.keys(UNIT_TYPE_CONFIG)) {
-        const ut = Number(unitType) as UnitType;
+        const ut = unitType as UnitType;
         if (!configs.has(ut) && isUnitTypeMilitary(ut)) {
             configs.set(ut, DISPATCH_ONLY_CONFIG);
         }

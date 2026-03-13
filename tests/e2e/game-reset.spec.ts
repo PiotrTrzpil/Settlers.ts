@@ -29,7 +29,7 @@ test.describe('Game State Reset', { tag: '@smoke' }, () => {
         await gp.actions.placeBuilding(1, woodcutterTile.x, woodcutterTile.y);
 
         // Spawn a carrier so logistics can create reservations
-        await gp.actions.spawnUnit(0);
+        await gp.actions.spawnUnit('Carrier');
 
         // Let the game tick so logistics dispatches requests/reservations
         await gp.wait.waitForFrames(30);
@@ -83,7 +83,7 @@ test.describe('Game State Reset', { tag: '@smoke' }, () => {
         await gp.actions.placeBuilding(1, tile2.x, tile2.y);
         await expect(gp).toHaveBuildingCount(1);
 
-        await gp.actions.spawnUnit(0);
+        await gp.actions.spawnUnit('Carrier');
         await gp.wait.waitForUnitCount(1, Timeout.DEFAULT);
     });
 });

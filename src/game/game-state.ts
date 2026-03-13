@@ -136,7 +136,7 @@ export class GameState {
 
     public addEntity(
         type: EntityType,
-        subType: number,
+        subType: number | string,
         x: number,
         y: number,
         player: number,
@@ -159,6 +159,10 @@ export class GameState {
         const entityRace: Race = race ?? Race.Roman;
         const resolvedSelectable = selectable !== undefined ? selectable : resolveEntitySelectable(type, subType);
 
+        // Buildings start non-operational (under construction) unless explicitly completed.
+        // All other entity types are operational by default.
+        const operational = type === EntityType.Building ? (completed ?? false) : true;
+
         const entity: Entity = {
             id: this.nextId++,
             type,
@@ -168,6 +172,7 @@ export class GameState {
             subType,
             race: entityRace,
             selectable: resolvedSelectable,
+            operational,
         };
 
         this.entities.push(entity);
@@ -204,7 +209,7 @@ export class GameState {
     public restoreEntity(data: {
         id: number;
         type: EntityType;
-        subType: number;
+        subType: number | string;
         x: number;
         y: number;
         player: number;
@@ -224,6 +229,7 @@ export class GameState {
             subType: data.subType,
             race,
             selectable: resolvedSelectable,
+            operational: true,
         };
 
         if (data.carrying) {
@@ -251,7 +257,7 @@ export class GameState {
     private addSpatialAndOccupancy(
         entity: Entity,
         type: EntityType,
-        subType: number,
+        subType: number | string,
         x: number,
         y: number,
         completed?: boolean
@@ -277,7 +283,13 @@ export class GameState {
     }
 
     /** Register building footprint in ground occupancy. */
-    private addBuildingOccupancy(entity: Entity, subType: number, x: number, y: number, completed?: boolean): void {
+    private addBuildingOccupancy(
+        entity: Entity,
+        subType: number | string,
+        x: number,
+        y: number,
+        completed?: boolean
+    ): void {
         // buildingOccupancy is NOT set here by default — construction sites start walkable.
         // Completed buildings set it via restoreBuildingFootprintBlock (excludes door tiles).
         const footprint = getBuildingFootprint(x, y, subType as BuildingType, entity.race);
@@ -292,7 +304,13 @@ export class GameState {
     }
 
     /** Register a non-building, non-unit entity (MapObject, StackedPile) in ground occupancy. */
-    private addGroundEntityOccupancy(entityId: number, type: EntityType, subType: number, x: number, y: number): void {
+    private addGroundEntityOccupancy(
+        entityId: number,
+        type: EntityType,
+        subType: number | string,
+        x: number,
+        y: number
+    ): void {
         const key = tileKey(x, y);
         if (type === EntityType.MapObject) {
             const occupantId = this.groundOccupancy.get(key);

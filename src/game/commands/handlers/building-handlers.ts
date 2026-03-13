@@ -43,7 +43,7 @@ export interface SpawnBuildingUnitsDeps {
     eventBus: EventBus;
 }
 
-type UnitSpawnEffect = { type: 'unit_spawned'; entityId: number; unitType: number; x: number; y: number };
+type UnitSpawnEffect = { type: 'unit_spawned'; entityId: number; unitType: UnitType; x: number; y: number };
 
 function isSpawnableTile(deps: SpawnBuildingUnitsDeps, x: number, y: number): boolean {
     return (
@@ -58,7 +58,7 @@ function spawnUnitsNear(
     deps: SpawnBuildingUnitsDeps,
     bx: number,
     by: number,
-    unitType: number,
+    unitType: UnitType,
     count: number,
     player: number,
     selectable: boolean | undefined,
@@ -79,7 +79,7 @@ function spawnUnitsNear(
 
             eventBus.emit('unit:spawned', {
                 unitId: spawnedEntity.id,
-                unitType: unitType as UnitType,
+                unitType,
                 x: tile.x,
                 y: tile.y,
                 player,

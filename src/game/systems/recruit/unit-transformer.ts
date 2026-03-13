@@ -109,7 +109,7 @@ export class UnitTransformer {
         this.registerTransform(carrierId, targetUnitType, toolMaterial, toolPile.pileEntityId);
 
         log.debug(
-            `Carrier ${carrierId} dispatched to transform into ${UnitType[targetUnitType]} (pile ${toolPile.pileEntityId})`
+            `Carrier ${carrierId} dispatched to transform into ${targetUnitType} (pile ${toolPile.pileEntityId})`
         );
         return true;
     }
@@ -153,7 +153,7 @@ export class UnitTransformer {
             },
         });
 
-        log.debug(`Carrier ${carrierId} dispatched for direct transform into ${UnitType[targetUnitType]}`);
+        log.debug(`Carrier ${carrierId} dispatched for direct transform into ${targetUnitType}`);
         return true;
     }
 
@@ -193,9 +193,7 @@ export class UnitTransformer {
             },
         });
 
-        log.debug(
-            `Registered pending transform: carrier ${carrierId} → ${UnitType[targetUnitType]} (pile ${pileEntityId})`
-        );
+        log.debug(`Registered pending transform: carrier ${carrierId} → ${targetUnitType} (pile ${pileEntityId})`);
     }
 
     isPending(carrierId: number): boolean {
@@ -233,7 +231,7 @@ export class UnitTransformer {
         target.subType = UnitType.Carrier;
         this.carrierRegistry.register(id);
         this.eventBus.emit('unit:transformed', { unitId: id, fromType, toType: UnitType.Carrier, level: 'info' });
-        log.debug(`Dismissed ${UnitType[fromType]} (entity ${id}), returned to carrier pool`);
+        log.debug(`Dismissed ${fromType} (entity ${id}), returned to carrier pool`);
 
         if (toolMaterial !== null) {
             this.dropTool(toolMaterial, x, y);
@@ -248,12 +246,12 @@ export class UnitTransformer {
             if (this.gameState.getEntityAt(tx, ty)) {
                 continue;
             }
-            const pile = this.gameState.addEntity(EntityType.StackedPile, toolMaterial as number, tx, ty, 0);
+            const pile = this.gameState.addEntity(EntityType.StackedPile, toolMaterial, tx, ty, 0);
             this.eventBus.emit('pile:freePilePlaced', { entityId: pile.id, materialType: toolMaterial, quantity: 1 });
-            log.debug(`Dropped ${EMaterialType[toolMaterial]} at (${tx}, ${ty})`);
+            log.debug(`Dropped ${toolMaterial} at (${tx}, ${ty})`);
             return;
         }
-        log.warn(`Could not find free tile to drop ${EMaterialType[toolMaterial]} near (${nearX}, ${nearY})`);
+        log.warn(`Could not find free tile to drop ${toolMaterial} near (${nearX}, ${nearY})`);
     }
 
     // =========================================================================
@@ -312,7 +310,7 @@ export class UnitTransformer {
         entity.carrying = undefined;
 
         this.eventBus.emit('unit:transformed', { unitId: carrierId, fromType, toType: targetUnitType, level: 'info' });
-        log.debug(`Carrier ${carrierId} transformed from ${UnitType[fromType]} to ${UnitType[targetUnitType]}`);
+        log.debug(`Carrier ${carrierId} transformed from ${fromType} to ${targetUnitType}`);
     }
 
     private handleFailed(carrierId: number): void {

@@ -31,7 +31,7 @@ export function isInAnySiege(unitId: number, sieges: ReadonlyMap<number, SiegeSt
 /** Check if any attacker is within door arrival distance of the building. */
 export function hasAttackerAtDoor(
     siege: SiegeState,
-    building: { x: number; y: number; race: Race; subType: number },
+    building: { x: number; y: number; race: Race; subType: number | string },
     gameState: GameState
 ): boolean {
     const door = getBuildingDoorPos(building.x, building.y, building.race, building.subType as BuildingType);

@@ -125,13 +125,13 @@ export class EntitySpriteResolver {
             const fallback = this.sprites.getBuilding(buildingType, entity.race);
             const vs = this.getVisualState(entity.id);
             if (vs?.animation) {
-                const animEntry = this.sprites.getAnimatedEntity(entity.type, entity.subType, entity.race);
+                const animEntry = this.sprites.getAnimatedEntity(entity.type, entity.subType as number, entity.race);
                 if (animEntry) {
                     const frame = resolveAnimationFrame(
                         vs.animation,
                         animEntry.animationData,
                         entity.type,
-                        entity.subType
+                        entity.subType as number
                     );
                     if (frame) {
                         sprite = frame;
@@ -165,9 +165,14 @@ export class EntitySpriteResolver {
         const staticSprite = this.sprites.getMapObject(entity.subType as MapObjectType, variation);
 
         if (vs?.animation) {
-            const entry = this.sprites.getAnimatedEntity(entity.type, entity.subType, entity.race);
+            const entry = this.sprites.getAnimatedEntity(entity.type, entity.subType as number, entity.race);
             if (entry) {
-                const frame = resolveAnimationFrame(vs.animation, entry.animationData, entity.type, entity.subType);
+                const frame = resolveAnimationFrame(
+                    vs.animation,
+                    entry.animationData,
+                    entity.type,
+                    entity.subType as number
+                );
                 if (frame) {
                     return frame;
                 }
@@ -240,13 +245,14 @@ export class EntitySpriteResolver {
         const staticSprite = this.sprites.getUnit(entity.subType as UnitType, spriteDir, entity.race);
 
         if (vs.animation) {
-            const entry = this.sprites.getAnimatedEntity(entity.type, entity.subType, entity.race);
+            const unitType = entity.subType as UnitType;
+            const entry = this.sprites.getAnimatedEntity(entity.type, unitType, entity.race);
             if (entry) {
                 const frame = resolveAnimationFrame(
                     vs.animation,
                     entry.animationData,
                     entity.type,
-                    entity.subType,
+                    unitType,
                     spriteDir
                 );
                 if (frame) {
@@ -315,7 +321,7 @@ export class EntitySpriteResolver {
     /** Get sprite for placement preview by entity type. Exhaustive switch ensures compile-time safety. */
     getPreviewSprite(
         entityType: PlacementEntityType,
-        subType: number,
+        subType: number | string,
         variation?: number,
         race?: number,
         level?: number
@@ -328,7 +334,7 @@ export class EntitySpriteResolver {
             case 'building':
                 return this.sprites.getBuilding(subType as BuildingType, race);
             case 'pile':
-                return this.sprites.getGoodSprite(subType as EMaterialType, variation ?? 0);
+                return this.sprites.getGoodSprite(subType as unknown as EMaterialType, variation ?? 0);
             case 'unit':
                 return this.getUnitPreviewSprite(subType as UnitType, race, level ?? 1);
             default: {

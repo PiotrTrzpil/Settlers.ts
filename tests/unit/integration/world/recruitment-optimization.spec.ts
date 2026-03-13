@@ -188,9 +188,7 @@ describe('Recruitment optimization (integration)', { timeout: 30_000 }, () => {
         expect(pileAEntity).toBeUndefined();
         // Pile B should still exist
         expect(
-            sim.state.entities.filter(
-                e => e.type === EntityType.StackedPile && e.subType === (EMaterialType.PICKAXE as number)
-            )
+            sim.state.entities.filter(e => e.type === EntityType.StackedPile && e.subType === EMaterialType.PICKAXE)
         ).toHaveLength(1);
         expect(sim.errors).toHaveLength(0);
     });
@@ -234,9 +232,7 @@ describe('Recruitment optimization (integration)', { timeout: 30_000 }, () => {
         expect(pileAEntity).toBeUndefined();
         // Pile B should still exist
         expect(
-            sim.state.entities.filter(
-                e => e.type === EntityType.StackedPile && e.subType === (EMaterialType.PICKAXE as number)
-            )
+            sim.state.entities.filter(e => e.type === EntityType.StackedPile && e.subType === EMaterialType.PICKAXE)
         ).toHaveLength(1);
         expect(sim.errors).toHaveLength(0);
     });

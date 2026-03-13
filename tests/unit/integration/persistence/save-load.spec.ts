@@ -74,7 +74,7 @@ function assertInventoryStructureMatch(original: Simulation, restored: Simulatio
 
         for (const slot of origSlots) {
             const rSlot = restSlots.find(s => s.kind === slot.kind && s.materialType === slot.materialType);
-            expect(rSlot, `slot ${slot.kind}/${EMaterialType[slot.materialType]} missing`).toBeDefined();
+            expect(rSlot, `slot ${slot.kind}/${slot.materialType} missing`).toBeDefined();
         }
     }
 }

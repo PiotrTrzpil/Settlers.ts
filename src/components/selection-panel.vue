@@ -94,14 +94,14 @@
                                         <div class="recipe-controls">
                                             <button
                                                 class="recipe-btn"
-                                                @click="setRecipeProportion(recipe.output, recipe.weight - 1)"
+                                                @click="setRecipeProportion(recipe.index, recipe.weight - 1)"
                                             >
                                                 -
                                             </button>
                                             <span class="recipe-weight">{{ recipe.weight }}</span>
                                             <button
                                                 class="recipe-btn"
-                                                @click="setRecipeProportion(recipe.output, recipe.weight + 1)"
+                                                @click="setRecipeProportion(recipe.index, recipe.weight + 1)"
                                             >
                                                 +
                                             </button>
@@ -124,13 +124,10 @@
                                     >
                                         <span class="recipe-name">{{ recipe.outputName }}</span>
                                         <div class="recipe-controls">
-                                            <button class="recipe-btn" @click="addToProductionQueue(recipe.output)">
+                                            <button class="recipe-btn" @click="addToProductionQueue(recipe.index)">
                                                 +1
                                             </button>
-                                            <button
-                                                class="recipe-btn"
-                                                @click="removeFromProductionQueue(recipe.output)"
-                                            >
+                                            <button class="recipe-btn" @click="removeFromProductionQueue(recipe.index)">
                                                 -1
                                             </button>
                                         </div>

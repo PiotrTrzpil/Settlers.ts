@@ -234,7 +234,7 @@ export class SpriteMetadataSerializer {
         // Shared animated entities (map objects, resources)
         if (data.animatedEntities) {
             for (const [entityType, subTypeArr] of data.animatedEntities) {
-                const subTypeMap = new Map<number, AnimatedSpriteEntry>();
+                const subTypeMap = new Map<number | string, AnimatedSpriteEntry>();
                 for (const [subType, entryData] of subTypeArr) {
                     subTypeMap.set(subType, deserializeAnimEntry(entryData));
                 }
@@ -246,7 +246,7 @@ export class SpriteMetadataSerializer {
         if (data.animatedByRace) {
             for (const [race, entityTypeArr] of data.animatedByRace) {
                 for (const [entityType, subTypeArr] of entityTypeArr) {
-                    const subTypeMap = new Map<number, AnimatedSpriteEntry>();
+                    const subTypeMap = new Map<number | string, AnimatedSpriteEntry>();
                     for (const [subType, entryData] of subTypeArr) {
                         subTypeMap.set(subType, deserializeAnimEntry(entryData));
                     }
@@ -269,7 +269,7 @@ export class SpriteMetadataSerializer {
         if (!legacyData) {
             return;
         }
-        const subTypeMap = new Map<number, AnimatedSpriteEntry>();
+        const subTypeMap = new Map<number | string, AnimatedSpriteEntry>();
         for (const [type, entryData] of legacyData) {
             subTypeMap.set(type, deserializeAnimEntry(entryData));
         }

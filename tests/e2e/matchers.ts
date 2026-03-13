@@ -37,7 +37,7 @@ export { test } from '@playwright/test';
 
 export interface EntityFilter {
     type?: number;
-    subType?: number;
+    subType?: number | string;
     player?: number;
     x?: number;
     y?: number;
@@ -103,7 +103,7 @@ export const expect = baseExpect.extend({
      */
     async toHaveEntity(gp: GamePage, filter: EntityFilter, options?: MatcherOptions) {
         const timeout = options?.timeout ?? DEFAULT_TIMEOUT;
-        let lastEntities: Array<{ type: number; subType: number; player: number; x: number; y: number }> = [];
+        let lastEntities: Array<{ type: number; subType: number | string; player: number; x: number; y: number }> = [];
 
         try {
             await baseExpect

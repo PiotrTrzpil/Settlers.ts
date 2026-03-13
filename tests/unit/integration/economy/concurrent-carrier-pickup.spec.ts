@@ -33,7 +33,7 @@ describe('Concurrent carrier pickup (real game data)', { timeout: 60_000 }, () =
         // Track failed tasks and cancelled transports
         const taskFailures: Array<{ unitId: number; failedStep: string; nodeIndex: number }> = [];
         const transportCancellations: Array<{ carrierId: number; reason: string }> = [];
-        const pickupFailures: Array<{ entityId: number; material: number }> = [];
+        const pickupFailures: Array<{ entityId: number; material: EMaterialType }> = [];
 
         sim.eventBus.on('settler:taskFailed', e => {
             taskFailures.push({ unitId: e.unitId, failedStep: e.failedStep, nodeIndex: e.nodeIndex });
@@ -75,7 +75,7 @@ describe('Concurrent carrier pickup (real game data)', { timeout: 60_000 }, () =
         // Track events
         const taskFailures: Array<{ unitId: number; failedStep: string; nodeIndex: number }> = [];
         const transportCancellations: Array<{ carrierId: number; reason: string }> = [];
-        const pickupFailures: Array<{ entityId: number; material: number }> = [];
+        const pickupFailures: Array<{ entityId: number; material: EMaterialType }> = [];
         let deliveryCount = 0;
 
         sim.eventBus.on('settler:taskFailed', e => {

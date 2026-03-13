@@ -10,7 +10,6 @@ import type { AnimationPlayback } from '../animation/entity-visual-service';
 import type { AnimationData } from '../animation/animation';
 import type { SpriteEntry } from './sprite-metadata';
 import { EntityType } from '../entity';
-import { UnitType } from '../core/unit-types';
 import { BuildingType } from '../buildings/building-type';
 import { createLogger } from '@/utilities/logger';
 
@@ -27,12 +26,12 @@ function warnOnce(key: string, msg: () => string): void {
     log.warn(msg());
 }
 
-function entityLabel(entityType: EntityType, subType: number): string {
+function entityLabel(entityType: EntityType, subType: number | string): string {
     switch (entityType) {
         case EntityType.Unit:
-            return `Unit/${UnitType[subType] ?? subType}`;
+            return `Unit/${String(subType)}`;
         case EntityType.Building:
-            return `Building/${BuildingType[subType] ?? subType}`;
+            return `Building/${typeof subType === 'number' ? (BuildingType[subType] ?? subType) : subType}`;
         case EntityType.None:
         case EntityType.MapObject:
         case EntityType.StackedPile:
@@ -46,8 +45,8 @@ function entityLabel(entityType: EntityType, subType: number): string {
  * Decouples animation consumers from the sprite loading/management implementation.
  */
 export interface AnimationDataProvider {
-    getAnimationData(entityType: EntityType, subType: number, race: number): AnimationData | null;
-    hasAnimation(entityType: EntityType, subType: number, race: number): boolean;
+    getAnimationData(entityType: EntityType, subType: number | string, race: number): AnimationData | null;
+    hasAnimation(entityType: EntityType, subType: number | string, race: number): boolean;
 }
 
 /**
@@ -65,7 +64,7 @@ export function resolveAnimationFrame(
     playback: AnimationPlayback,
     animationData: AnimationData,
     eType?: EntityType,
-    eSubType?: number,
+    eSubType?: number | string,
     spriteDirection?: number
 ): SpriteEntry | null {
     const label = eType !== undefined && eSubType !== undefined ? entityLabel(eType, eSubType) : 'unknown';
@@ -112,7 +111,7 @@ export function getAnimatedSprite(
     animationData: AnimationData | undefined,
     fallbackSprite: SpriteEntry | null,
     eType?: EntityType,
-    eSubType?: number
+    eSubType?: number | string
 ): SpriteEntry | null {
     if (!playback || !animationData) {
         return fallbackSprite;
@@ -159,7 +158,7 @@ export function getAnimatedSpriteForDirection(
     direction: number,
     fallbackSprite: SpriteEntry | null,
     eType?: EntityType,
-    eSubType?: number
+    eSubType?: number | string
 ): SpriteEntry | null {
     if (!animationData) {
         return fallbackSprite;

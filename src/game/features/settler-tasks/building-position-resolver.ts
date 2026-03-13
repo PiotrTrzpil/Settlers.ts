@@ -32,9 +32,9 @@ import { SlotKind } from '../../core/pile-kind';
 function parseMaterialString(material: string): EMaterialType | null {
     // Strip optional 'GOOD_' prefix that appears in some jobInfo.xml entity fields
     const key = material.startsWith('GOOD_') ? material.slice(5) : material;
-    // EMaterialType is a numeric enum — index with the string key and guard against reverse lookups
+    // EMaterialType is a string enum — values ARE the string keys.
     const value = (EMaterialType as Record<string, unknown>)[key];
-    return typeof value === 'number' ? (value as EMaterialType) : null;
+    return typeof value === 'string' ? (value as EMaterialType) : null;
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -184,7 +184,7 @@ export class BuildingPositionResolverImpl implements BuildingPositionResolver {
         if (!registry) {
             throw new Error(
                 `BuildingPileRegistry not available when resolving ${slotType} pile ` +
-                    `for ${EMaterialType[material]} at building ${buildingId} (${BuildingType[building.subType]})`
+                    `for ${material} at building ${buildingId} (${BuildingType[building.subType as number]})`
             );
         }
 

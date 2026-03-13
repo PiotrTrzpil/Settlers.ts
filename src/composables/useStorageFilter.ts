@@ -72,7 +72,7 @@ export function useStorageFilter(
 
         return DROPPABLE_MATERIALS.map(m => ({
             material: m,
-            name: EMaterialType[m],
+            name: m,
             direction: sfm ? sfm.getDirection(e.id, m) : null,
         }));
     });

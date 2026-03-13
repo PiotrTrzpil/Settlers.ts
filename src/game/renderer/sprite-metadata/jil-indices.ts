@@ -846,7 +846,7 @@ export const RESOURCE_JOB_INDICES: Partial<Record<EMaterialType, number>> = {
  * E.g., AGAVE resource is job #1, carrier with AGAVE is job #2.
  */
 export const CARRIER_MATERIAL_JOB_INDICES: Partial<Record<EMaterialType, number>> = Object.fromEntries(
-    Object.entries(RESOURCE_JOB_INDICES).map(([type, idx]) => [Number(type), idx + 1])
+    Object.entries(RESOURCE_JOB_INDICES).map(([type, idx]) => [type, idx + 1])
 ) as Partial<Record<EMaterialType, number>>;
 
 // Building overlay JIL indices are in jil-overlay-indices.ts

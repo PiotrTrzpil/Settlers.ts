@@ -18,7 +18,7 @@
  *   import { test, expect } from './fixtures';
  *
  *   test('my test', async ({ gp }) => {
- *       await gp.actions.spawnUnit(1);
+ *       await gp.actions.spawnUnit('Builder');
  *   });
  *
  * ## Notes

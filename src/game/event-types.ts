@@ -56,7 +56,7 @@ export interface GameEventBase {
     /** Entity type tag for timeline enrichment (e.g. EntityType.Tree, EntityType.StackedPile). */
     entityType?: EntityType;
     /** Optional unit type for timeline enrichment. */
-    unitType?: number;
+    unitType?: UnitType;
     /** Optional building type for timeline enrichment. */
     buildingType?: number;
 }

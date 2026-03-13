@@ -3,35 +3,85 @@
  */
 
 import type { GameCore } from '@/game/game-core';
+import type { ValidPositionGrid } from '@/game/systems/placement/valid-position-grid';
+import type { GameState } from '@/game/game-state';
+import type { TerrainData } from '@/game/terrain/terrain-data';
 import type { MapLayerFilter, MapViewport } from './map-symbols';
 import { renderTileSymbol, buildLegend } from './map-symbols';
 
+export interface MapRenderOptions {
+    layers: MapLayerFilter;
+    /** When set, overlay placement validity from the precomputed grid. */
+    placementGrid?: ValidPositionGrid | null;
+}
+
+interface GridBounds {
+    minX: number;
+    maxX: number;
+    minY: number;
+    maxY: number;
+    cx: number;
+    cy: number;
+}
+
 /** Render the map viewport to a multi-line string (header + grid + legend). */
-export function renderMapText(game: GameCore, viewport: MapViewport, layers: MapLayerFilter): string {
-    const { terrain, state } = game;
+export function renderMapText(game: GameCore, viewport: MapViewport, options: MapRenderOptions): string {
     const { cx, cy, radius } = viewport;
+    const { placementGrid } = options;
 
-    const minX = Math.max(0, cx - radius);
-    const maxX = Math.min(terrain.width - 1, cx + radius);
-    const minY = Math.max(0, cy - radius);
-    const maxY = Math.min(terrain.height - 1, cy + radius);
+    const bounds: GridBounds = {
+        minX: Math.max(0, cx - radius),
+        maxX: Math.min(game.terrain.width - 1, cx + radius),
+        minY: Math.max(0, cy - radius),
+        maxY: Math.min(game.terrain.height - 1, cy + radius),
+        cx,
+        cy,
+    };
 
-    const yLabelWidth = String(maxY).length;
+    if (placementGrid) {
+        return renderPlacementGrid(placementGrid, bounds);
+    }
+    return renderNormalGrid(game.terrain, game.state, options.layers, bounds);
+}
+
+function renderGridHeader(bounds: GridBounds): { yLabelWidth: number; headerLines: string[] } {
+    const yLabelWidth = String(bounds.maxY).length;
+    const pad = ' '.repeat(yLabelWidth + 1);
+
+    const units: string[] = [];
+    const tens: string[] = [];
+    const hundreds: string[] = [];
+
+    for (let x = bounds.minX; x <= bounds.maxX; x++) {
+        if (x === bounds.cx) {
+            units.push('*');
+            tens.push('*');
+            hundreds.push('*');
+        } else {
+            units.push(String(x % 10));
+            tens.push(x % 10 === 0 ? String(Math.floor(x / 10) % 10) : ' ');
+            hundreds.push(x % 10 === 0 && x >= 100 ? String(Math.floor(x / 100) % 10) : ' ');
+        }
+    }
+
     const lines: string[] = [];
+    if (bounds.maxX >= 100) {
+        lines.push(pad + hundreds.join(''));
+    }
+    lines.push(pad + tens.join(''));
+    lines.push(pad + units.join(''));
+    return { yLabelWidth, headerLines: lines };
+}
+
+function renderNormalGrid(terrain: TerrainData, state: GameState, layers: MapLayerFilter, bounds: GridBounds): string {
+    const { yLabelWidth, headerLines } = renderGridHeader(bounds);
+    const lines: string[] = [...headerLines];
     const usedSymbols = new Set<string>();
 
-    // X-axis header
-    const xNums: string[] = [];
-    for (let x = minX; x <= maxX; x++) {
-        xNums.push(x === cx ? '*' : String(x % 10));
-    }
-    lines.push(' '.repeat(yLabelWidth + 1) + xNums.join(''));
-
-    // Grid rows
-    for (let y = minY; y <= maxY; y++) {
+    for (let y = bounds.minY; y <= bounds.maxY; y++) {
         let row = '';
-        for (let x = minX; x <= maxX; x++) {
-            if (x === cx && y === cy) {
+        for (let x = bounds.minX; x <= bounds.maxX; x++) {
+            if (x === bounds.cx && y === bounds.cy) {
                 row += '+';
                 continue;
             }
@@ -41,15 +91,32 @@ export function renderMapText(game: GameCore, viewport: MapViewport, layers: Map
             usedSymbols.add(sym);
             row += sym;
         }
-        const label = String(y).padStart(yLabelWidth);
-        lines.push(`${label} ${row}`);
+        lines.push(`${String(y).padStart(yLabelWidth)} ${row}`);
     }
 
-    // Legend
     const legend = buildLegend(usedSymbols);
     if (legend) {
         lines.push('', legend);
     }
+    return lines.join('\n');
+}
 
+function renderPlacementGrid(grid: ValidPositionGrid, bounds: GridBounds): string {
+    const { yLabelWidth, headerLines } = renderGridHeader(bounds);
+    const lines: string[] = [...headerLines];
+
+    for (let y = bounds.minY; y <= bounds.maxY; y++) {
+        let row = '';
+        for (let x = bounds.minX; x <= bounds.maxX; x++) {
+            if (x === bounds.cx && y === bounds.cy) {
+                row += '+';
+            } else {
+                row += grid.isValid(x, y) ? 'o' : '.';
+            }
+        }
+        lines.push(`${String(y).padStart(yLabelWidth)} ${row}`);
+    }
+
+    lines.push('', 'o=can place .=cannot place');
     return lines.join('\n');
 }

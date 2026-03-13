@@ -4,6 +4,7 @@
 
 import { ref, type Ref } from 'vue';
 import type { Game } from '@/game/game';
+import { UnitType } from '@/game/entity';
 import type { BuildingAdjustHandler } from '@/game/input/building-adjust/types';
 import { BuildingAdjustMode } from '@/game/input';
 import { WorkAreaAdjustHandler } from '@/game/input/building-adjust';
@@ -75,11 +76,11 @@ export function handleModeChange(
 
         // Update resource type
         vs.placePileType =
-            newMode === 'place_pile' && data?.['resourceType'] !== undefined ? (data['resourceType'] as number) : 0;
+            newMode === 'place_pile' && data?.['resourceType'] !== undefined ? (data['resourceType'] as string) : '';
 
         // Update unit type
         vs.placeUnitType =
-            newMode === 'place_unit' && data?.['unitType'] !== undefined ? (data['unitType'] as number) : 0;
+            newMode === 'place_unit' && data?.['unitType'] !== undefined ? (data['unitType'] as UnitType) : '';
 
         // Sync with game for backward compatibility
         game.mode = newMode;

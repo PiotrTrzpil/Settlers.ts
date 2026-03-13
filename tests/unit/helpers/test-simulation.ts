@@ -325,7 +325,7 @@ export class Simulation {
             y: pos.y,
         });
         if (!result.success) {
-            throw new Error(`Failed to place ${EMaterialType[material]} at (${pos.x}, ${pos.y}): ${result.error}`);
+            throw new Error(`Failed to place ${material} at (${pos.x}, ${pos.y}): ${result.error}`);
         }
         return this.resultEntityId(result);
     }
@@ -340,7 +340,7 @@ export class Simulation {
             y,
         });
         if (!result.success) {
-            throw new Error(`Failed to place ${EMaterialType[material]} at (${x}, ${y}): ${result.error}`);
+            throw new Error(`Failed to place ${material} at (${x}, ${y}): ${result.error}`);
         }
         return this.resultEntityId(result);
     }
@@ -358,7 +358,7 @@ export class Simulation {
             y: pos.y,
         });
         if (!result.success) {
-            throw new Error(`Failed to place ${EMaterialType[material]} near building ${buildingId}: ${result.error}`);
+            throw new Error(`Failed to place ${material} near building ${buildingId}: ${result.error}`);
         }
     }
 
@@ -471,7 +471,7 @@ export class Simulation {
             race: Race.Roman,
         });
         if (!result.success) {
-            throw new Error(`Failed to spawn ${UnitType[unitType]} at (${x}, ${y}): ${result.error}`);
+            throw new Error(`Failed to spawn ${unitType} at (${x}, ${y}): ${result.error}`);
         }
         return this.resultEntityId(result);
     }
@@ -503,10 +503,7 @@ export class Simulation {
             const existing = im.findSlotWithSpace(buildingId, material, SlotKind.Storage);
             if (!existing) {
                 const free = im.findSlotWithSpace(buildingId, EMaterialType.NO_MATERIAL, SlotKind.Storage);
-                if (!free)
-                    throw new Error(
-                        `injectOutput: no free slot on StorageArea ${buildingId} for ${EMaterialType[material]}`
-                    );
+                if (!free) throw new Error(`injectOutput: no free slot on StorageArea ${buildingId} for ${material}`);
                 im.setSlotMaterial(free.slotId, material);
             }
             const sfm = this.services.storageFilterManager;
@@ -526,7 +523,7 @@ export class Simulation {
         return this.services.inventoryManager.getInputAmount(buildingId, material);
     }
 
-    countEntities(type: EntityType, subType?: number): number {
+    countEntities(type: EntityType, subType?: number | string): number {
         return this.state.entities.filter(e => e.type === type && (subType === undefined || e.subType === subType))
             .length;
     }

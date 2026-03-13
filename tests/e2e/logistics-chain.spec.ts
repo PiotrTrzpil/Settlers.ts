@@ -1,4 +1,5 @@
 import { test, expect } from './fixtures';
+import { EMaterialType } from '@/game/economy/material-type';
 
 /**
  * E2E tests for the full logistics chain.
@@ -21,8 +22,8 @@ const SAWMILL = 3;
 const RESIDENCE_SMALL = 29;
 
 // EMaterialType enum values
-const LOG = 0;
-const BOARD = 9;
+const LOG = EMaterialType.LOG;
+const BOARD = EMaterialType.BOARD;
 
 test.describe('Logistics Chain', { tag: '@slow' }, () => {
     test('wood production chain: tree → log → board', async ({ gp }) => {

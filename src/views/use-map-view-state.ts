@@ -43,7 +43,7 @@ export function setupUIState() {
 
     const resourceAmount = ref(1);
     const hoveredTile = ref<TileCoord | null>(null);
-    const resourceIcons = ref<Record<number, string>>({});
+    const resourceIcons = ref<Record<string, string>>({});
     const buildingIcons = ref<Record<number, IconEntry>>({});
     const unitIcons = ref<Record<string, IconEntry>>({});
     const specialistIcons = ref<Record<string, IconEntry>>({});
@@ -100,8 +100,8 @@ export function setupComputedState(game: ShallowRef<Game | null>, selectedRace?:
     // Mode state - sourced from the game's view state
     const currentMode = computed(() => game.value?.viewState.state.mode ?? 'select');
     const placeBuildingType = computed(() => game.value?.viewState.state.placeBuildingType ?? 0);
-    const placeResourceType = computed(() => game.value?.viewState.state.placePileType ?? 0);
-    const placeUnitType = computed(() => game.value?.viewState.state.placeUnitType ?? 0);
+    const placeResourceType = computed(() => game.value?.viewState.state.placePileType ?? '');
+    const placeUnitType = computed(() => game.value?.viewState.state.placeUnitType ?? '');
 
     const layerCounts = computed<LayerCounts>(() => {
         const vs = game.value?.viewState.state;

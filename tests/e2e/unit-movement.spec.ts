@@ -11,7 +11,7 @@ import { test, expect } from './fixtures';
 
 test.describe('Unit Movement', { tag: '@smoke' }, () => {
     test('unit starts moving immediately after command and completes path', { tag: '@slow' }, async ({ gs }) => {
-        const unit = await gs.actions.spawnUnit(1);
+        const unit = await gs.actions.spawnUnit('Builder');
         expect(unit).not.toBeNull();
 
         // Use 10 tiles so path isn't consumed before we can check it at 4x speed
@@ -47,7 +47,7 @@ test.describe('Unit Movement', { tag: '@smoke' }, () => {
     });
 
     test('unit movement is smooth (no teleporting)', { tag: '@slow' }, async ({ gs }) => {
-        const unit = await gs.actions.spawnUnit(1);
+        const unit = await gs.actions.spawnUnit('Builder');
         expect(unit).not.toBeNull();
 
         // Move 5 tiles east
@@ -76,7 +76,7 @@ test.describe('Unit Movement', { tag: '@smoke' }, () => {
         // Spawn 3 units at nearby positions
         const units: Array<{ id: number; x: number; y: number }> = [];
         for (let i = 0; i < 3; i++) {
-            const unit = await gs.actions.spawnUnit(1, center.x + i * 2, center.y);
+            const unit = await gs.actions.spawnUnit('Builder', center.x + i * 2, center.y);
             if (unit) units.push(unit);
         }
         expect(units.length).toBe(3);
@@ -117,7 +117,7 @@ test.describe('Unit Movement', { tag: '@smoke' }, () => {
     });
 
     test('movement command while already moving updates path correctly', async ({ gs }) => {
-        const unit = await gs.actions.spawnUnit(1);
+        const unit = await gs.actions.spawnUnit('Builder');
         expect(unit).not.toBeNull();
 
         await test.step('start initial movement east', async () => {
@@ -156,7 +156,7 @@ test.describe('Unit Movement', { tag: '@smoke' }, () => {
 
         // Spawn and move a unit using helpers
         // Use longer distance (15 tiles) so movement is still in progress when we check
-        const unit = await gs.actions.spawnUnit(1);
+        const unit = await gs.actions.spawnUnit('Builder');
         expect(unit).not.toBeNull();
         await gs.actions.moveUnit(unit!.id, unit!.x + 15, unit!.y);
 

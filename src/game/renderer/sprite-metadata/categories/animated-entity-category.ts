@@ -33,13 +33,13 @@ export class AnimatedEntityCategory {
      * Shared animated entities (map objects, resources — race-independent).
      * Maps EntityType -> subType -> AnimatedSpriteEntry
      */
-    private readonly sharedEntities: Map<EntityType, Map<number, AnimatedSpriteEntry>> = new Map();
+    private readonly sharedEntities: Map<EntityType, Map<number | string, AnimatedSpriteEntry>> = new Map();
 
     /**
      * Per-race animated entities (buildings and units).
      * Maps Race -> EntityType -> subType -> AnimatedSpriteEntry
      */
-    private readonly byRace: Map<number, Map<EntityType, Map<number, AnimatedSpriteEntry>>> = new Map();
+    private readonly byRace: Map<number, Map<EntityType, Map<number | string, AnimatedSpriteEntry>>> = new Map();
 
     /**
      * Register an animated entity with multiple directions and frames.
@@ -57,7 +57,7 @@ export class AnimatedEntityCategory {
     // eslint-disable-next-line sonarjs/cognitive-complexity -- multi-path animation setup
     register(
         entityType: EntityType,
-        subType: number,
+        subType: number | string,
         directionFrames: Map<number, SpriteEntry[]>,
         frameDurationMs: number = ANIMATION_DEFAULTS.FRAME_DURATION_MS,
         loop: boolean = true,
@@ -147,7 +147,7 @@ export class AnimatedEntityCategory {
      */
     registerSequence(
         entityType: EntityType,
-        subType: number,
+        subType: number | string,
         sequenceKey: string,
         directionFrames: Map<number, SpriteEntry[]>,
         frameDurationMs: number = ANIMATION_DEFAULTS.FRAME_DURATION_MS,
@@ -179,7 +179,7 @@ export class AnimatedEntityCategory {
      * Get animated entity data. Checks race-specific storage first (for buildings/units),
      * then falls back to shared storage (for map objects, resources).
      */
-    getEntry(entityType: EntityType, subType: number, race?: number): AnimatedSpriteEntry | null {
+    getEntry(entityType: EntityType, subType: number | string, race?: number): AnimatedSpriteEntry | null {
         if (race !== undefined) {
             const raceEntry = this.byRace.get(race)?.get(entityType)?.get(subType);
             if (raceEntry) {
@@ -192,7 +192,7 @@ export class AnimatedEntityCategory {
     /**
      * Check if an entity type/subtype has animation data.
      */
-    hasAnimation(entityType: EntityType, subType: number, race?: number): boolean {
+    hasAnimation(entityType: EntityType, subType: number | string, race?: number): boolean {
         return this.getEntry(entityType, subType, race)?.isAnimated ?? false;
     }
 
@@ -204,25 +204,25 @@ export class AnimatedEntityCategory {
     /**
      * Expose internal maps for serialization.
      */
-    getSharedEntities(): Map<EntityType, Map<number, AnimatedSpriteEntry>> {
+    getSharedEntities(): Map<EntityType, Map<number | string, AnimatedSpriteEntry>> {
         return this.sharedEntities;
     }
 
-    getByRace(): Map<number, Map<EntityType, Map<number, AnimatedSpriteEntry>>> {
+    getByRace(): Map<number, Map<EntityType, Map<number | string, AnimatedSpriteEntry>>> {
         return this.byRace;
     }
 
     /**
      * Directly insert into shared entities (used during deserialization).
      */
-    setSharedEntry(entityType: EntityType, subTypeMap: Map<number, AnimatedSpriteEntry>): void {
+    setSharedEntry(entityType: EntityType, subTypeMap: Map<number | string, AnimatedSpriteEntry>): void {
         this.sharedEntities.set(entityType, subTypeMap);
     }
 
     /**
      * Directly insert into race-specific map (used during deserialization).
      */
-    setByRaceEntry(race: number, entityType: EntityType, subTypeMap: Map<number, AnimatedSpriteEntry>): void {
+    setByRaceEntry(race: number, entityType: EntityType, subTypeMap: Map<number | string, AnimatedSpriteEntry>): void {
         let raceMap = this.byRace.get(race);
         if (!raceMap) {
             raceMap = new Map();

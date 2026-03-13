@@ -95,8 +95,8 @@ const SYMBOL_LEGEND: Record<string, string> = {
 
 // ─── Symbol Resolution ───────────────────────────────────────────────────────
 
-function unitSymbol(subType: number): string {
-    const ut = subType as UnitType;
+function unitSymbol(subType: UnitType): string {
+    const ut = subType;
     if (ut === UnitType.Carrier) {
         return 'c';
     }
@@ -210,19 +210,19 @@ export function renderTileSymbol(
 ): string {
     // Unit layer (entity from unitOccupancy)
     if (entity && entity.type === EntityType.Unit && layers.units) {
-        return unitSymbol(entity.subType);
+        return unitSymbol(entity.subType as UnitType);
     }
 
     // Ground entity layers (buildings, piles, map objects)
     if (groundEntity) {
         if (groundEntity.type === EntityType.Building && layers.buildings) {
-            return buildingSymbol(groundEntity.subType);
+            return buildingSymbol(groundEntity.subType as number);
         }
         if (groundEntity.type === EntityType.StackedPile && layers.piles) {
             return 'P';
         }
         if (groundEntity.type === EntityType.MapObject && layers.objects) {
-            return mapObjectSymbol(groundEntity.subType);
+            return mapObjectSymbol(groundEntity.subType as number);
         }
     }
 

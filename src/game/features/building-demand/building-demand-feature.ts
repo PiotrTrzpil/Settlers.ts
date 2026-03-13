@@ -61,10 +61,10 @@ export const BuildingDemandFeature: FeatureDefinition = {
                     }
                     // Buildings that auto-spawn units on completion (residences)
                     // already have their workers — skip them.
-                    if (BUILDING_SPAWN_ON_COMPLETE[e.subType]) {
+                    if (BUILDING_SPAWN_ON_COMPLETE[e.subType as number]) {
                         continue;
                     }
-                    buildingDemandSystem.addDemandFromBuilding(e.id, e.subType, e.race);
+                    buildingDemandSystem.addDemandFromBuilding(e.id, e.subType as number, e.race);
                 }
             },
             destroy: () => {

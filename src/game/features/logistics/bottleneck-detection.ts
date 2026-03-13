@@ -22,22 +22,22 @@ export interface BottleneckDiag {
     relatedEntities: number[];
 }
 
-function buildingTypeNameSafe(subType: number): string {
+function buildingTypeNameSafe(subType: number | string): string {
     return BuildingType[subType as BuildingType] || `#${subType}`;
 }
 
-function unitTypeNameSafe(subType: number): string {
-    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- subType is arbitrary number, not necessarily a valid UnitType
+function unitTypeNameSafe(subType: number | string): string {
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- subType is arbitrary value, not necessarily a valid UnitType
     return UNIT_TYPE_CONFIG[subType as UnitType]?.name ?? `#${subType}`;
 }
 
-function entityLabel(gameState: GameState, id: number, nameOf: (sub: number) => string): string {
+function entityLabel(gameState: GameState, id: number, nameOf: (sub: number | string) => string): string {
     const e = gameState.getEntity(id);
     return e ? `${nameOf(e.subType)}#${id}` : `#${id}`;
 }
 
-function isNonCarrierWorker(subType: number): boolean {
-    return subType !== UnitType.Carrier && !isUnitTypeMilitary(subType as UnitType);
+function isNonCarrierWorker(subType: UnitType): boolean {
+    return subType !== UnitType.Carrier && !isUnitTypeMilitary(subType);
 }
 
 function scanBuildings(gameState: GameState, inventoryManager: BuildingInventoryManager, player: number) {
@@ -79,7 +79,7 @@ function countCarrierStatus(config: SnapshotConfig, player: number) {
 function findIdleWorkers(gameState: GameState, settlerTaskSystem: SettlerTaskSystem, player: number): number[] {
     const idleWorkers: number[] = [];
     for (const entity of gameState.entityIndex.ofTypeAndPlayer(EntityType.Unit, player)) {
-        if (!isNonCarrierWorker(entity.subType)) {
+        if (!isNonCarrierWorker(entity.subType as UnitType)) {
             continue;
         }
         if (settlerTaskSystem.getSettlerState(entity.id) === SettlerState.IDLE) {
@@ -87,6 +87,18 @@ function findIdleWorkers(gameState: GameState, settlerTaskSystem: SettlerTaskSys
         }
     }
     return idleWorkers;
+}
+
+function countDemandsForPlayer(config: SnapshotConfig, player: number): number {
+    const { demandQueue, gameState } = config;
+    let count = 0;
+    for (const demand of demandQueue.getAllDemands()) {
+        const building = gameState.getEntity(demand.buildingId);
+        if (building && building.player === player) {
+            count++;
+        }
+    }
+    return count;
 }
 
 /**
@@ -98,7 +110,7 @@ export function detectBottlenecks(config: SnapshotConfig, player: number): Bottl
 
     const { fullOutputBuildings } = scanBuildings(gameState, inventoryManager, player);
     const carriers = countCarrierStatus(config, player);
-    const demandCount = config.demandQueue.size;
+    const demandCount = countDemandsForPlayer(config, player);
     const idleWorkers = findIdleWorkers(gameState, settlerTaskSystem, player);
 
     emitBottleneckDiags(diags, gameState, fullOutputBuildings, carriers, demandCount, idleWorkers);

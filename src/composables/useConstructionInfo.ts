@@ -9,7 +9,6 @@
 import { computed, type Ref } from 'vue';
 import type { Entity } from '@/game/entity';
 import { EntityType } from '@/game/entity';
-import { EMaterialType } from '@/game/economy';
 import { BuildingConstructionPhase } from '@/game/features/building-construction';
 import type { Game } from '@/game/game';
 
@@ -96,7 +95,7 @@ export function useConstructionInfo(
         const materials: ConstructionMaterialInfo[] = site.materials.costs.map(cost => {
             const throughput = game.value!.services.inventoryManager.getThroughput(entity.id, cost.material);
             return {
-                name: EMaterialType[cost.material],
+                name: cost.material,
                 delivered: throughput.totalIn,
                 required: cost.count,
             };

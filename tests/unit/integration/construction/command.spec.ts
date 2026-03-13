@@ -5,7 +5,7 @@ import {
     applyTerrainLeveling,
     CONSTRUCTION_SITE_GROUND_TYPE,
 } from '@/game/features/building-construction';
-import { BuildingType, EntityType } from '@/game/entity';
+import { BuildingType, EntityType, UnitType } from '@/game/entity';
 import { Race } from '@/game/core/race';
 import { TERRAIN, setTerrainAt, blockColumn } from '../../helpers/test-map';
 import { Simulation } from '../../helpers/test-simulation';
@@ -52,7 +52,7 @@ describe('Command System – edge cases', () => {
         it('should fail when no path exists', () => {
             sim.execute({
                 type: 'spawn_unit',
-                unitType: 0,
+                unitType: UnitType.Carrier,
                 x: 5,
                 y: 5,
                 player: 0,

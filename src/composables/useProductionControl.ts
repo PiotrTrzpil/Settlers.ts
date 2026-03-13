@@ -86,7 +86,7 @@ export function useProductionControl(
             recipes.push({
                 index: i,
                 output: r.output,
-                outputName: EMaterialType[r.output],
+                outputName: r.output,
                 weight: prodState.proportions.get(i) ?? 1,
             });
         }
@@ -97,7 +97,7 @@ export function useProductionControl(
             recipes,
             queue: prodState.queue.map(idx => {
                 const r = recipeSet.recipes[idx];
-                return r ? EMaterialType[r.output] : `Recipe ${idx}`;
+                return r ? r.output : `Recipe ${idx}`;
             }),
             queueRaw: [...prodState.queue],
         };

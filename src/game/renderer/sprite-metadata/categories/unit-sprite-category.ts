@@ -76,7 +76,7 @@ export class UnitSpriteCategory {
             return;
         }
         this._warnedUnits.add(key);
-        console.warn(`[SpriteRegistry] No sprite for unit ${UnitType[type]} (race=${Race[race]})`);
+        console.warn(`[SpriteRegistry] No sprite for unit ${type} (race=${Race[race]})`);
     }
 
     hasSprites(): boolean {

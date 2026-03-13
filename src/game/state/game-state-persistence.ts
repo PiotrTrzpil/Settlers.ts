@@ -16,8 +16,8 @@ const STORAGE_KEY = 'settlers_game_state';
 const INITIAL_STATE_KEY = 'settlers_initial_state';
 const LAST_MAP_KEY = 'settlers_last_map';
 const AUTO_SAVE_INTERVAL_MS = 5000; // Save every 5 seconds
-// Bumped: migrated serialization to superjson (native Map/Set support)
-const SNAPSHOT_VERSION = 13;
+// Bumped: UnitType converted from numeric to string enum (saves with numeric values are incompatible)
+const SNAPSHOT_VERSION = 14;
 
 /**
  * Snapshot format: metadata + entity table + terrain + dynamic feature data.
@@ -34,7 +34,7 @@ export interface GameStateSnapshot {
     entities: Array<{
         id: number;
         type: EntityType;
-        subType: number;
+        subType: number | string;
         x: number;
         y: number;
         player: number;
@@ -42,6 +42,7 @@ export interface GameStateSnapshot {
         race?: Race;
         carrying?: CarryingState;
         hidden?: boolean;
+        operational?: boolean;
     }>;
     /** Entity ID counter — ensures new entities don't collide with restored ones */
     nextId: number;
@@ -189,6 +190,7 @@ export function createSnapshot(game: GameCore): GameStateSnapshot {
         race: e.race,
         carrying: e.carrying,
         hidden: e.hidden || undefined,
+        operational: e.operational,
     }));
 
     return {

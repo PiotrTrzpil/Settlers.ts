@@ -103,7 +103,7 @@ export class UnitStateMap implements UnitStateLookup {
 }
 
 /** Determine entity selectability from type + subtype (no explicit override). */
-export function resolveEntitySelectable(type: EntityType, subType: number): boolean | undefined {
+export function resolveEntitySelectable(type: EntityType, subType: number | string): boolean | undefined {
     switch (type) {
         case EntityType.Unit:
             return isUnitTypeSelectable(subType as UnitType);

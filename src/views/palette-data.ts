@@ -145,13 +145,10 @@ export const ALL_UNITS: { type: UnitType; id: string; name: string; icon: string
 // Runtime check in development: ensure all UnitType values are in ALL_UNITS
 if (import.meta.env.DEV) {
     const unitTypesInArray = new Set(ALL_UNITS.map(u => u.type));
-    const allUnitTypes = Object.values(UnitType).filter((v): v is UnitType => typeof v === 'number');
+    const allUnitTypes = Object.values(UnitType).filter((v): v is UnitType => typeof v === 'string');
     const missing = allUnitTypes.filter(t => !unitTypesInArray.has(t));
     if (missing.length > 0) {
-        console.error(
-            'ALL_UNITS is missing UnitTypes:',
-            missing.map(t => UnitType[t])
-        );
+        console.error('ALL_UNITS is missing UnitTypes:', missing);
     }
 }
 
@@ -175,10 +172,10 @@ export const ALL_SPECIALISTS: SpecialistDef[] = [
 
 /** Resources available in the UI (derived from droppable materials) */
 export const ALL_RESOURCES = DROPPABLE_MATERIALS.map(type => {
-    const name = EMaterialType[type].charAt(0) + EMaterialType[type].slice(1).toLowerCase().replace('_', ' ');
+    const name = type.charAt(0) + type.slice(1).toLowerCase().replace('_', ' ');
     return {
         type,
-        id: EMaterialType[type].toLowerCase(),
+        id: type.toLowerCase(),
         name,
         icon: '📦', // Placeholder, will be replaced by texture
     };

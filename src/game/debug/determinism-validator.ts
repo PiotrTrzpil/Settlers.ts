@@ -50,6 +50,15 @@ function crc32OfUint32Array(data: Uint32Array): number {
 
 // ─── StateHash computation ─────────────────────────────────────────────────
 
+/** Stable 32-bit hash of a string (djb2). Used for string subType values. */
+function hashString(s: string): number {
+    let h = 5381;
+    for (let i = 0; i < s.length; i++) {
+        h = (((h << 5) + h) ^ s.charCodeAt(i)) >>> 0;
+    }
+    return h;
+}
+
 /** Number of fields per entity tuple: (id, x, y, subType, player) */
 const ENTITY_TUPLE_WIDTH = 5;
 
@@ -79,7 +88,7 @@ export function computeStateHash(game: GameCore): StateHash {
         tuples[base + 0] = e.id;
         tuples[base + 1] = e.x;
         tuples[base + 2] = e.y;
-        tuples[base + 3] = e.subType;
+        tuples[base + 3] = typeof e.subType === 'string' ? hashString(e.subType) : e.subType;
         tuples[base + 4] = e.player;
     }
 

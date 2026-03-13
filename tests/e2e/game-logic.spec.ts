@@ -267,7 +267,7 @@ fixtureTest.describe('Entity Selection', { tag: '@smoke' }, () => {
 
     fixtureTest('selecting and deselecting a swordsman updates selection state', async ({ gp }) => {
         // Swordsman (UnitType 2) is Military category → selectable
-        const unit = await gp.actions.spawnUnit(2);
+        const unit = await gp.actions.spawnUnit('Swordsman1');
         fixtureExpect(unit).not.toBeNull();
 
         // Select, verify, then deselect — all reads are atomic with the execute call

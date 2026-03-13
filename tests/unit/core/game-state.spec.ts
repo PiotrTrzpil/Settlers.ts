@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { createGameState, addUnit, addBuilding } from '../helpers/test-game';
 import type { GameState } from '@/game/game-state';
-import { BuildingType } from '@/game/entity';
+import { BuildingType, UnitType } from '@/game/entity';
 
 // Note: Basic add/remove/getEntityAt/selection tests are covered by flow tests
 // in flows/. This file focuses on edge cases and invariants only.
@@ -21,7 +21,7 @@ describe('GameState – edge cases', () => {
     it('should assign incrementing IDs', () => {
         const { entity: e1 } = addUnit(state, 0, 0);
         const e2 = addBuilding(state, 1, 1, BuildingType.WoodcutterHut, 0);
-        const { entity: e3 } = addUnit(state, 2, 2, { subType: 1 });
+        const { entity: e3 } = addUnit(state, 2, 2, { subType: UnitType.Builder });
 
         expect(e1.id).toBe(1);
         expect(e2.id).toBe(2);

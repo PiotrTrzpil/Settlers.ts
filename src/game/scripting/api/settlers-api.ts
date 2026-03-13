@@ -91,7 +91,7 @@ export const S4_SETTLER_TYPES = {
  * Map S4 settler types to internal UnitType values
  * Returns the internal type, or the S4 value if not yet implemented
  */
-function mapS4ToInternalType(s4Type: number): number {
+function mapS4ToInternalType(s4Type: number): UnitType {
     // Map implemented types
     const mapping: Record<number, UnitType> = {
         [S4_SETTLER_TYPES.CARRIER]: UnitType.Carrier,
@@ -107,7 +107,11 @@ function mapS4ToInternalType(s4Type: number): number {
         [S4_SETTLER_TYPES.GEOLOGIST]: UnitType.Geologist,
     };
 
-    return mapping[s4Type] ?? s4Type;
+    const mapped = mapping[s4Type];
+    if (!mapped) {
+        throw new Error(`Unknown S4 settler type: ${s4Type} — add mapping in settlers-api.ts`);
+    }
+    return mapped;
 }
 
 export interface SettlersAPIContext {
@@ -245,8 +249,9 @@ export function registerSettlersAPI(runtime: LuaRuntime, context: SettlersAPICon
         return entity !== undefined && entity.type === EntityType.Unit;
     });
 
-    // Settlers.GetType(entityId) - Get settler's type
-    runtime.registerFunction('Settlers', 'GetType', (entityId: number) => {
+    // Settlers.GetType(entityId) - Get settler's type (returns string name or -1 if not a unit)
+    // eslint-disable-next-line sonarjs/function-return-type -- S4 Lua API convention: -1 sentinel for not-found
+    runtime.registerFunction('Settlers', 'GetType', (entityId: number): string | number => {
         const entity = context.gameState.getEntity(entityId);
         if (entity && entity.type === EntityType.Unit) {
             return entity.subType;

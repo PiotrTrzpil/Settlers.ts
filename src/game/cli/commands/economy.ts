@@ -318,7 +318,7 @@ function formatBuildingCounts(
 ): void {
     const counts = new Map<number, number>();
     for (const e of state.entityIndex.ofTypeAndPlayer(EntityType.Building, player)) {
-        counts.set(e.subType, (counts.get(e.subType) ?? 0) + 1);
+        counts.set(e.subType as number, (counts.get(e.subType as number) ?? 0) + 1);
     }
     if (counts.size > 0) {
         lines.push('=== Buildings ===');
@@ -364,7 +364,7 @@ function formatStorageMaterials(
     }
     if (totals.size > 0) {
         lines.push('=== Materials (storage) ===');
-        const rows = [...totals.entries()].map(([mt, n]) => [EMaterialType[mt], String(n)]);
+        const rows = [...totals.entries()].map(([mt, n]) => [mt, String(n)]);
         lines.push(ctx.fmt.table(rows, ['material', 'total']));
     } else {
         lines.push('no materials in storage');

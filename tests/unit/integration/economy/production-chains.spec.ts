@@ -187,7 +187,7 @@ describe('Economy – mine & smelting chains', { timeout: 5000 }, () => {
         const failures: string[] = [];
         sim.eventBus.on('carrier:assignmentFailed', e => {
             failures.push(
-                `${e.reason} req=${e.requestId} src=${e.sourceBuilding} dst=${e.destBuilding} mat=${EMaterialType[e.material]}`
+                `${e.reason} req=${e.requestId} src=${e.sourceBuilding} dst=${e.destBuilding} mat=${e.material}`
             );
         });
 
@@ -212,7 +212,7 @@ describe('Economy – mine & smelting chains', { timeout: 5000 }, () => {
         sim.eventBus.on('inventory:changed', e => {
             if (e.slotType === 'output') {
                 console.log(
-                    `[output] building=${e.buildingId} mat=${EMaterialType[e.materialType]} ${e.previousAmount}->${e.newAmount}`
+                    `[output] building=${e.buildingId} mat=${e.materialType} ${e.previousAmount}->${e.newAmount}`
                 );
             }
         });
@@ -419,7 +419,7 @@ describe('Economy – barracks training', { timeout: 5000 }, () => {
     it('barracks training: manual mode queues specific soldier types', () => {
         sim = createSimulation({ mapWidth: 256, mapHeight: 256 });
 
-        const trained: { unitType: number; level: number }[] = [];
+        const trained: { unitType: UnitType; level: number }[] = [];
         sim.eventBus.on('barracks:trainingCompleted', e => {
             trained.push({ unitType: e.unitType, level: e.soldierLevel });
         });

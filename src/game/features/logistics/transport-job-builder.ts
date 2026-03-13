@@ -9,7 +9,6 @@
  * (JOB_CARRIER_TRANSPORT_GOOD) was just 4 trivial nodes with no real data.
  */
 
-import { EMaterialType } from '../../economy';
 import { EntityType } from '../../entity';
 import { BuildingType } from '../../buildings/building-type';
 import { getBuildingDoorPos } from '../../data/game-data-access';
@@ -58,18 +57,17 @@ export class TransportJobBuilder {
      * Resolves pile positions and sets up transport data for the choreography executors.
      */
     build(record: TransportJobRecord): JobState {
-        const materialName = EMaterialType[record.material];
         // Source building's output pile = where the carrier picks up
         const sourcePos = this.resolvePilePos(
             record.sourceBuilding,
-            this.positionResolver.getSourcePilePosition(record.sourceBuilding, materialName)
+            this.positionResolver.getSourcePilePosition(record.sourceBuilding, record.material)
         );
         // Destination slot's position comes directly from the PileSlot — no resolver indirection
         const destSlot = this.inventoryManager.getSlot(record.slotId);
         if (!destSlot) {
             throw new Error(
                 `TransportJobBuilder.build: slot ${record.slotId} not found for job ${record.id} ` +
-                    `(dest building ${record.destBuilding}, material ${materialName})`
+                    `(dest building ${record.destBuilding}, material ${record.material})`
             );
         }
         const destPos = destSlot.position;

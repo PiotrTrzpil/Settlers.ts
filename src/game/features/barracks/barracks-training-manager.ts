@@ -17,7 +17,6 @@ import type { SettlerTaskSystem } from '@/game/features/settler-tasks';
 import type { ProductionControlManager } from '@/game/features/production-control';
 import type { EventBus } from '@/game/event-bus';
 import { type Race } from '@/game/core/race';
-import { UnitType } from '@/game/core/unit-types';
 import { BuildingType } from '@/game/buildings/building-type';
 import { getBuildingDoorPos } from '@/game/data/game-data-access';
 import { choreo, type ChoreoJobState } from '@/game/features/settler-tasks/choreo-types';
@@ -204,7 +203,7 @@ export class BarracksTrainingManager {
         });
 
         log.debug(
-            `Barracks ${buildingId}: started training ${UnitType[recipe.unitType]} L${recipe.soldierLevel}, carrier ${carrierId}`
+            `Barracks ${buildingId}: started training ${recipe.unitType} L${recipe.soldierLevel}, carrier ${carrierId}`
         );
     }
 

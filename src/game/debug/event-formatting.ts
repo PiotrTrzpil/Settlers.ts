@@ -14,7 +14,6 @@
 import { BuildingType } from '../buildings/building-type';
 import { UnitType } from '../core/unit-types';
 import { EntityType } from '../entity';
-import { EMaterialType } from '../economy/material-type';
 import { MapObjectType } from '../types/map-object-types';
 import type { GameEvents } from '../event-bus';
 
@@ -38,7 +37,7 @@ export const EventFmt = {
     'terrain:modified': (e: GameEvents['terrain:modified']) =>
         e.x !== undefined ? `${e.reason} at (${e.x},${e.y})` : e.reason,
 
-    'unit:spawned': (e: GameEvents['unit:spawned']) => `${UnitType[e.unitType]} at (${e.x},${e.y})`,
+    'unit:spawned': (e: GameEvents['unit:spawned']) => `${e.unitType} at (${e.x},${e.y})`,
 
     'unit:movementStopped': (e: GameEvents['unit:movementStopped']) => `dir=${e.direction}`,
 
@@ -81,13 +80,13 @@ export const EventFmt = {
     'entity:created': (e: GameEvents['entity:created']) => {
         let typeName = `sub=${e.subType}`;
         if (e.entityType === EntityType.Building) {
-            typeName = BuildingType[e.subType]!;
+            typeName = BuildingType[e.subType as number]!;
         } else if (e.entityType === EntityType.Unit) {
-            typeName = UnitType[e.subType]!;
+            typeName = e.subType as UnitType;
         } else if (e.entityType === EntityType.StackedPile) {
-            typeName = EMaterialType[e.subType]!;
+            typeName = String(e.subType);
         } else if (e.entityType === EntityType.MapObject) {
-            typeName = MapObjectType[e.subType] ?? `sub=${e.subType}`;
+            typeName = MapObjectType[e.subType as number] ?? `sub=${e.subType}`;
         }
         return `${typeName} at (${e.x},${e.y})`;
     },
@@ -132,40 +131,36 @@ export const EventFmt = {
 
     'carrier:arrivedForDelivery': (e: GameEvents['carrier:arrivedForDelivery']) => `at #${e.buildingId}`,
 
-    'carrier:assigned': (e: GameEvents['carrier:assigned']) =>
-        `${EMaterialType[e.material]} #${e.sourceBuilding}→#${e.destBuilding}`,
+    'carrier:assigned': (e: GameEvents['carrier:assigned']) => `${e.material} #${e.sourceBuilding}→#${e.destBuilding}`,
 
     'carrier:pickupComplete': (e: GameEvents['carrier:pickupComplete']) =>
-        `${EMaterialType[e.material]} ×${e.amount} from #${e.fromBuilding}`,
+        `${e.material} ×${e.amount} from #${e.fromBuilding}`,
 
     'carrier:deliveryComplete': (e: GameEvents['carrier:deliveryComplete']) =>
-        `${EMaterialType[e.material]} ×${e.amount} to #${e.toBuilding}`,
+        `${e.material} ×${e.amount} to #${e.toBuilding}`,
 
     'carrier:assignmentFailed': (e: GameEvents['carrier:assignmentFailed']) =>
         parts(
             `${e.reason}:`,
-            `${EMaterialType[e.material]} #${e.sourceBuilding}→#${e.destBuilding}`,
+            `${e.material} #${e.sourceBuilding}→#${e.destBuilding}`,
             e.unitId !== undefined && `carrier=#${e.unitId}`
         ),
 
-    'carrier:pickupFailed': (e: GameEvents['carrier:pickupFailed']) =>
-        `${EMaterialType[e.material]} from #${e.fromBuilding}`,
+    'carrier:pickupFailed': (e: GameEvents['carrier:pickupFailed']) => `${e.material} from #${e.fromBuilding}`,
 
-    'inventory:changed': (e: GameEvents['inventory:changed']) =>
-        `${EMaterialType[e.materialType]} ${e.previousAmount}→${e.newAmount}`,
-    'storage:directionChanged': (e: GameEvents['storage:directionChanged']) =>
-        `#${e.buildingId} ${EMaterialType[e.materialType]}`,
+    'inventory:changed': (e: GameEvents['inventory:changed']) => `${e.materialType} ${e.previousAmount}→${e.newAmount}`,
+    'storage:directionChanged': (e: GameEvents['storage:directionChanged']) => `#${e.buildingId} ${e.materialType}`,
 
-    'logistics:noMatch': (e: GameEvents['logistics:noMatch']) => `${EMaterialType[e.materialType]} req=${e.requestId}`,
+    'logistics:noMatch': (e: GameEvents['logistics:noMatch']) => `${e.materialType} req=${e.requestId}`,
 
     'logistics:noCarrier': (e: GameEvents['logistics:noCarrier']) =>
-        `${EMaterialType[e.materialType]} #${e.sourceBuilding}→#${e.buildingId}`,
+        `${e.materialType} #${e.sourceBuilding}→#${e.buildingId}`,
 
     'logistics:buildingCleanedUp': (e: GameEvents['logistics:buildingCleanedUp']) =>
         `reqs=${e.requestsCancelled} jobs=${e.jobsCancelled}`,
 
     'logistics:demandCreated': (e: GameEvents['logistics:demandCreated']) =>
-        `${EMaterialType[e.materialType]} ×${e.amount} pri=${e.priority} bld=#${e.buildingId}`,
+        `${e.materialType} ×${e.amount} pri=${e.priority} bld=#${e.buildingId}`,
 
     'production:modeChanged': (e: GameEvents['production:modeChanged']) => `${e.mode}`,
 
@@ -191,10 +186,10 @@ export const EventFmt = {
     'construction:workerNeeded': (e: GameEvents['construction:workerNeeded']) =>
         `${e.role} @ (${e.x},${e.y}) player=${e.player}`,
 
-    'construction:materialDelivered': (e: GameEvents['construction:materialDelivered']) => EMaterialType[e.material],
+    'construction:materialDelivered': (e: GameEvents['construction:materialDelivered']) => e.material,
 
     'construction:materialOverflowed': (e: GameEvents['construction:materialOverflowed']) =>
-        `${EMaterialType[e.material]} x${e.amount}`,
+        `${e.material} x${e.amount}`,
 
     'construction:buildingStarted': () => '',
     'construction:progressComplete': () => '',
@@ -207,36 +202,33 @@ export const EventFmt = {
     'barracks:trainingStarted': (e: GameEvents['barracks:trainingStarted']) => `carrier=#${e.unitId}`,
 
     'barracks:trainingCompleted': (e: GameEvents['barracks:trainingCompleted']) =>
-        `${UnitType[e.unitType]} L${e.soldierLevel} → #${e.unitId}`,
+        `${e.unitType} L${e.soldierLevel} → #${e.unitId}`,
 
     'barracks:trainingInterrupted': (e: GameEvents['barracks:trainingInterrupted']) => e.reason,
 
     'carrier:transportCancelled': (e: GameEvents['carrier:transportCancelled']) => `req=${e.requestId} ${e.reason}`,
 
     'logistics:demandConsumed': (e: GameEvents['logistics:demandConsumed']) =>
-        `${EMaterialType[e.materialType]} demand=#${e.demandId} bld=#${e.buildingId}`,
+        `${e.materialType} demand=#${e.demandId} bld=#${e.buildingId}`,
 
     'logistics:demandFulfilled': (e: GameEvents['logistics:demandFulfilled']) =>
-        `${EMaterialType[e.materialType]} demand=#${e.demandId} bld=#${e.buildingId}`,
+        `${e.materialType} demand=#${e.demandId} bld=#${e.buildingId}`,
 
-    'pile:freePilePlaced': (e: GameEvents['pile:freePilePlaced']) =>
-        `#${e.entityId} ${EMaterialType[e.materialType]} ×${e.quantity}`,
+    'pile:freePilePlaced': (e: GameEvents['pile:freePilePlaced']) => `#${e.entityId} ${e.materialType} ×${e.quantity}`,
 
     'recruitment:started': (e: GameEvents['recruitment:started']) =>
-        `carrier=#${e.unitId} → ${UnitType[e.targetUnitType]} pile=#${e.pileEntityId} site=#${e.buildingId}`,
+        `carrier=#${e.unitId} → ${e.targetUnitType} pile=#${e.pileEntityId} site=#${e.buildingId}`,
 
-    'recruitment:completed': (e: GameEvents['recruitment:completed']) =>
-        `carrier=#${e.unitId} → ${UnitType[e.targetUnitType]}`,
+    'recruitment:completed': (e: GameEvents['recruitment:completed']) => `carrier=#${e.unitId} → ${e.targetUnitType}`,
 
     'recruitment:failed': (e: GameEvents['recruitment:failed']) => `carrier=#${e.unitId} ${e.reason}`,
 
-    'unit:transformed': (e: GameEvents['unit:transformed']) =>
-        `#${e.unitId} ${UnitType[e.fromType]} → ${UnitType[e.toType]}`,
+    'unit:transformed': (e: GameEvents['unit:transformed']) => `#${e.unitId} ${e.fromType} → ${e.toType}`,
 
     'garrison:unitEntered': (e: GameEvents['garrison:unitEntered']) =>
-        `${UnitType[e.unitType]} #${e.unitId} entered tower=#${e.buildingId}`,
+        `${e.unitType} #${e.unitId} entered tower=#${e.buildingId}`,
     'garrison:unitExited': (e: GameEvents['garrison:unitExited']) =>
-        `${UnitType[e.unitType]} #${e.unitId} exited tower=#${e.buildingId}`,
+        `${e.unitType} #${e.unitId} exited tower=#${e.buildingId}`,
     'garrison:bowmanFired': (e: GameEvents['garrison:bowmanFired']) =>
         `bowman=#${e.unitId} in tower=#${e.buildingId} fired at #${e.targetId} for ${e.damage} dmg`,
     'settler-location:approachInterrupted': (e: GameEvents['settler-location:approachInterrupted']) =>

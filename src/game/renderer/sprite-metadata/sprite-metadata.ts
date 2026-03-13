@@ -168,7 +168,7 @@ export function getGoodSpriteMap(): Partial<Record<EMaterialType, ResourceSprite
     const result: Partial<Record<EMaterialType, ResourceSpriteInfo>> = {};
 
     for (const [typeStr, jobIndex] of Object.entries(RESOURCE_JOB_INDICES)) {
-        result[Number(typeStr) as EMaterialType] = {
+        result[typeStr as EMaterialType] = {
             file: GFX_FILE_NUMBERS.RESOURCES,
             index: jobIndex,
         };
@@ -196,7 +196,7 @@ export function getUnitSpriteMap(race: Race): Partial<Record<UnitType, UnitSprit
     const result: Partial<Record<UnitType, UnitSpriteInfo>> = {};
 
     for (const [typeStr, jobIndex] of Object.entries(UNIT_BASE_JOB_INDICES)) {
-        const unitType = Number(typeStr) as UnitType;
+        const unitType = typeStr as UnitType;
         if (isUnitAvailableForRace(unitType, race)) {
             result[unitType] = {
                 file: fileNum,
@@ -495,7 +495,7 @@ export class SpriteMetadataRegistry {
      */
     public registerAnimatedEntity(
         entityType: EntityType,
-        subType: number,
+        subType: number | string,
         directionFrames: Map<number, SpriteEntry[]>,
         frameDurationMs: number = ANIMATION_DEFAULTS.FRAME_DURATION_MS,
         loop: boolean = true,
@@ -514,7 +514,7 @@ export class SpriteMetadataRegistry {
      */
     public registerAnimationSequence(
         entityType: EntityType,
-        subType: number,
+        subType: number | string,
         sequenceKey: string,
         directionFrames: Map<number, SpriteEntry[]>,
         frameDurationMs: number = ANIMATION_DEFAULTS.FRAME_DURATION_MS,
@@ -528,14 +528,18 @@ export class SpriteMetadataRegistry {
      * Get animated entity data. Checks race-specific storage first (for buildings/units),
      * then falls back to shared storage (for map objects, resources).
      */
-    public getAnimatedEntity(entityType: EntityType, subType: number, race?: number): AnimatedSpriteEntry | null {
+    public getAnimatedEntity(
+        entityType: EntityType,
+        subType: number | string,
+        race?: number
+    ): AnimatedSpriteEntry | null {
         return this.animated.getEntry(entityType, subType, race);
     }
 
     /**
      * Check if an entity type/subtype has animation data.
      */
-    public hasAnimation(entityType: EntityType, subType: number, race?: number): boolean {
+    public hasAnimation(entityType: EntityType, subType: number | string, race?: number): boolean {
         return this.animated.hasAnimation(entityType, subType, race);
     }
 
@@ -641,7 +645,7 @@ export class SpriteMetadataRegistry {
     /**
      * Get atlas layers for units — only direction 0 (right-facing static sprite).
      */
-    public getLayersForUnits(types: Set<number>, race: number): Set<number> {
+    public getLayersForUnits(types: Set<UnitType>, race: number): Set<number> {
         const layers = new Set<number>();
         const raceMap = this.units.getRaceMap().get(race);
         if (!raceMap) {

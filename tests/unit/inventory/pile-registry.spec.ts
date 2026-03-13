@@ -32,6 +32,7 @@ function makeStackedResourceEntity(id: number, x: number, y: number, material: E
         player: 0,
         subType: material,
         race: Race.Roman,
+        operational: true,
     };
 }
 
@@ -121,7 +122,16 @@ describe('PileRegistry', () => {
         const entB = makeStackedResourceEntity(2, 6, 4, EMaterialType.STONE);
         const entC = makeStackedResourceEntity(3, 7, 8, EMaterialType.BOARD);
         // Non-resource entity should be skipped
-        const unit: Entity = { id: 4, type: EntityType.Unit, x: 0, y: 0, player: 0, subType: 0, race: Race.Roman };
+        const unit: Entity = {
+            id: 4,
+            type: EntityType.Unit,
+            x: 0,
+            y: 0,
+            player: 0,
+            subType: 0,
+            race: Race.Roman,
+            operational: true,
+        };
         // Free pile should be skipped
         const freeEnt = makeStackedResourceEntity(5, 9, 9, EMaterialType.STONE);
 

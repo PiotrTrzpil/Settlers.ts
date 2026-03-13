@@ -23,16 +23,16 @@ export function buildingTypeName(subType: number): string {
     return BuildingType[subType as BuildingType];
 }
 
-export function unitTypeName(subType: number): string {
-    return UNIT_TYPE_CONFIG[subType as UnitType].name;
+export function unitTypeName(subType: UnitType): string {
+    return UNIT_TYPE_CONFIG[subType].name;
 }
 
 export function entityTypeName(entity: Entity): string {
     if (entity.type === EntityType.Building) {
-        return buildingTypeName(entity.subType);
+        return buildingTypeName(entity.subType as number);
     }
     if (entity.type === EntityType.Unit) {
-        return unitTypeName(entity.subType);
+        return unitTypeName(entity.subType as UnitType);
     }
     return EntityType[entity.type];
 }

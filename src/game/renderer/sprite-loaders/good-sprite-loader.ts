@@ -29,7 +29,7 @@ export async function loadGoodSprites(ctx: SpriteLoadContext): Promise<boolean> 
         if (!info) {
             continue;
         }
-        const type = Number(typeStr) as EMaterialType;
+        const type = typeStr as EMaterialType;
 
         const loadedDirs = await ctx.spriteLoader.loadJobAllDirections(fileSet, info.index, ctx.atlas, paletteBase);
         if (!loadedDirs) {

@@ -19,7 +19,7 @@ export interface GameState {
 export interface EntityInfo {
     id: number;
     type: number;
-    subType: number;
+    subType: number | string;
     x: number;
     y: number;
     player: number;
@@ -28,7 +28,7 @@ export interface EntityInfo {
 export interface BuildingResult {
     id: number;
     type: number;
-    subType: number;
+    subType: number | string;
     x: number;
     y: number;
     player: number;
@@ -37,7 +37,7 @@ export interface BuildingResult {
 export interface ResourceResult {
     id: number;
     type: number;
-    subType: number;
+    subType: number | string;
     x: number;
     y: number;
     amount: number;
@@ -46,7 +46,7 @@ export interface ResourceResult {
 export interface UnitResult {
     id: number;
     type: number;
-    subType: number;
+    subType: number | string;
     x: number;
     y: number;
 }
@@ -59,8 +59,8 @@ export interface TerrainInfo {
 
 export interface PlacementPreview {
     previewBuildingType: number | null;
-    previewMaterialType: number | null;
-    placementPreview: { entityType: string; subType: number } | null;
+    previewMaterialType: number | string | null;
+    placementPreview: { entityType: string; subType: number | string } | null;
 }
 
 export interface BatchPlacementResult {
@@ -71,7 +71,7 @@ export interface BatchPlacementResult {
 
 export interface EntityFilter {
     type?: number;
-    subType?: number;
+    subType?: number | string;
     player?: number;
 }
 
@@ -176,7 +176,7 @@ export async function getPlacementPreview(page: Page): Promise<PlacementPreview 
             ? { entityType: renderer.placementPreview.entityType, subType: renderer.placementPreview.subType }
             : null;
         return {
-            previewBuildingType: preview?.entityType === 'building' ? preview.subType : null,
+            previewBuildingType: preview?.entityType === 'building' ? (preview.subType as number) : null,
             previewMaterialType: preview?.entityType === 'pile' ? preview.subType : null,
             placementPreview: preview,
         };

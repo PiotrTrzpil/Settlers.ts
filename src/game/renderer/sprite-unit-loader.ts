@@ -124,7 +124,7 @@ async function loadBaseUnits(ctx: UnitFileCtx): Promise<number> {
     const allDirs = await ctx.spriteLoader.loadMultiJobBatch(fileSet, jobIndices, ctx.atlas, paletteBase);
 
     for (const [typeStr, info] of unitEntries) {
-        const unitType = Number(typeStr) as UnitType;
+        const unitType = typeStr as UnitType;
         const loadedDirs = allDirs.get(info.index);
         if (!loadedDirs) {
             continue;
@@ -164,8 +164,8 @@ async function loadCarrierVariants(ctx: UnitFileCtx): Promise<number> {
     const { fileSet, race, paletteBase } = ctx;
 
     const carrierJobs = Object.entries(CARRIER_MATERIAL_JOB_INDICES)
-        .filter(([typeStr]) => isMaterialAvailableForRace(Number(typeStr) as EMaterialType, ctx.race))
-        .map(([typeStr, jobIndex]) => ({ jobIndex, materialType: Number(typeStr) as EMaterialType }));
+        .filter(([typeStr]) => isMaterialAvailableForRace(typeStr as EMaterialType, ctx.race))
+        .map(([typeStr, jobIndex]) => ({ jobIndex, materialType: typeStr as EMaterialType }));
 
     const batch = new SafeLoadBatch<{ seqKey: string; frames: Map<number, SpriteEntry[]> }>();
 
@@ -184,11 +184,8 @@ async function loadCarrierVariants(ctx: UnitFileCtx): Promise<number> {
         // Register carrier material walk under the XML name: C_WALK_{MATERIAL}
         // (these aren't in SETTLER_JOB_INDICES because there are too many —
         // CARRIER_MATERIAL_JOB_INDICES is generated from RESOURCE_JOB_INDICES)
-        const materialName = EMaterialType[job.materialType];
-        if (!materialName) {
-            continue;
-        }
-        const seqKey = xmlKey('C', `WALK_${materialName}`);
+        // job.materialType is a string enum value (e.g. 'LOG'), use directly as the name
+        const seqKey = xmlKey('C', `WALK_${job.materialType}`);
         batch.add({ seqKey, frames: dirFrames });
     }
 

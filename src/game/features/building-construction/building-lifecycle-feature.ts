@@ -111,6 +111,7 @@ export class BuildingLifecycleHandler {
     }
 
     private onBuildingCompleted({ buildingId, buildingType, race }: GameEvents['building:completed']): void {
+        this.gameState.getEntityOrThrow(buildingId, 'building:completed').operational = true;
         this.constructionSiteManager.removeSite(buildingId);
 
         // Construction slots should be fully consumed by builders before completion.

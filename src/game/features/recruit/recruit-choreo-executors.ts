@@ -60,7 +60,7 @@ export function createTransformRecruitExecutor(
             return TaskResult.DONE;
         }
 
-        const targetUnitType = job.metadata!['unitType'] as number as UnitType;
+        const targetUnitType = job.metadata!['unitType'] as UnitType;
         eventBus.emit('recruitment:completed', {
             unitId: settler.id,
             unitType: settler.subType as UnitType,
@@ -69,7 +69,7 @@ export function createTransformRecruitExecutor(
         });
         log.debug(
             `TRANSFORM_RECRUIT: settler ${settler.id} picked up ${material} from pile ${pileEntityId}, ` +
-                `target type ${UnitType[targetUnitType]}`
+                `target type ${targetUnitType}`
         );
         return TaskResult.DONE;
     };
@@ -83,14 +83,14 @@ export function createTransformRecruitExecutor(
  */
 export function createTransformDirectExecutor(eventBus: EventBus): ChoreoExecutor {
     return (settler: Entity, job: ChoreoJobState) => {
-        const targetUnitType = job.metadata!['unitType'] as number as UnitType;
+        const targetUnitType = job.metadata!['unitType'] as UnitType;
         eventBus.emit('recruitment:completed', {
             unitId: settler.id,
             unitType: settler.subType as UnitType,
             targetUnitType,
             level: 'info',
         });
-        log.debug(`TRANSFORM_DIRECT: settler ${settler.id} transforming directly into ${UnitType[targetUnitType]}`);
+        log.debug(`TRANSFORM_DIRECT: settler ${settler.id} transforming directly into ${targetUnitType}`);
         return TaskResult.DONE;
     };
 }

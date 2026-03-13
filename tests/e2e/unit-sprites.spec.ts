@@ -24,7 +24,7 @@ test.describe('Unit Sprite Loading', { tag: ['@requires-assets', '@slow'] }, () 
         expect(registrySize).toBeGreaterThan(0);
 
         // Spawn a swordsman via game.execute()
-        const unit = await gpAssets.actions.spawnUnit(6); // Swordsman = UnitType 6
+        const unit = await gpAssets.actions.spawnUnit('Swordsman1'); // Swordsman = UnitType 6
         expect(unit).not.toBeNull();
 
         await expect(gpAssets).toHaveEntity({ type: 1 }); // EntityType.Unit

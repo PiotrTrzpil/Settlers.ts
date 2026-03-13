@@ -1,4 +1,6 @@
 import type { GameCore } from '@/game/game-core';
+import type { EMaterialType } from '@/game/economy/material-type';
+import type { UnitType } from '@/game/core/unit-types';
 
 /** Result of a CLI command execution. */
 export interface CliResult {
@@ -40,9 +42,9 @@ export interface CliContext {
     /** Resolve a building name to BuildingType (case-insensitive, throws on unknown) */
     resolveBuilding(name: string): number;
     /** Resolve a unit name to UnitType (case-insensitive, throws on unknown) */
-    resolveUnit(name: string): number;
+    resolveUnit(name: string): UnitType;
     /** Resolve a material name to EMaterialType (case-insensitive, throws on unknown) */
-    resolveMaterial(name: string): number;
+    resolveMaterial(name: string): EMaterialType;
     /** Format a compact output table */
     fmt: OutputFormatter;
 }

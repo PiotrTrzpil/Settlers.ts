@@ -9,7 +9,6 @@ import type { Entity } from '@/game/entity';
 import { EntityType } from '@/game/entity';
 import { UnitType } from '@/game/core/unit-types';
 import { BuildingType } from '@/game/buildings/building-type';
-import { EMaterialType } from '@/game/economy/material-type';
 import type { IViewPoint } from '../i-view-point';
 import type { IRenderPass, ColorEntityContext } from './types';
 import { TilePicker } from '@/game/input/tile-picker';
@@ -93,7 +92,7 @@ export class ColorEntityPass implements IRenderPass {
             };
         }
         const baseColor = isDecoration
-            ? decoHueToRgb(entity.subType)
+            ? decoHueToRgb(entity.subType as number)
             : PLAYER_COLORS[entity.player % PLAYER_COLORS.length]!;
         const scale = isDecoration ? 0.8 : this.getEntityScale(entity.type);
         return { color: baseColor, scale, isDecoration };
@@ -118,12 +117,12 @@ export class ColorEntityPass implements IRenderPass {
     ): void {
         const clipX = projection[0]! * worldPos.worldX + projection[12]!;
         const clipY = projection[5]! * worldPos.worldY + projection[13]!;
-        const rawByte = subTypeToRawByte(entity.subType);
+        const rawByte = subTypeToRawByte(entity.subType as number);
         this.ctx.debugDecoLabels.push({
             screenX: (clipX * 0.5 + 0.5) * canvasW,
             screenY: (-clipY * 0.5 + 0.5) * canvasH,
             type: rawByte,
-            hue: decoTypeToHue(entity.subType),
+            hue: decoTypeToHue(entity.subType as number),
         });
     }
 
@@ -140,7 +139,7 @@ export class ColorEntityPass implements IRenderPass {
         this.ctx.debugDecoLabels.push({
             screenX: (clipX * 0.5 + 0.5) * canvasW,
             screenY: (-clipY * 0.5 + 0.5) * canvasH,
-            type: entity.subType,
+            type: entity.subType as number,
             hue: 0,
             name,
         });
@@ -148,13 +147,13 @@ export class ColorEntityPass implements IRenderPass {
 
     private resolveEntityName(entity: Entity): string {
         if (entity.type === EntityType.Unit) {
-            return UnitType[entity.subType] ?? `Unit#${entity.subType}`;
+            return String(entity.subType as UnitType);
         }
         if (entity.type === EntityType.Building) {
-            return BuildingType[entity.subType] ?? `Bld#${entity.subType}`;
+            return BuildingType[entity.subType as number] ?? `Bld#${entity.subType}`;
         }
         if (entity.type === EntityType.StackedPile) {
-            return EMaterialType[entity.subType] ?? `Pile#${entity.subType}`;
+            return String(entity.subType);
         }
         return `${entity.type}#${entity.subType}`;
     }

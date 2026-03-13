@@ -6,7 +6,7 @@
  */
 
 import type { Entity } from '../../../entity';
-import { UnitType, getUnitTypeAtLevel } from '../../../entity';
+import { getUnitTypeAtLevel } from '../../../entity';
 import { ringTiles } from '../../../systems/spatial-search';
 import { createLogger } from '@/utilities/logger';
 import { TaskResult } from '../types';
@@ -171,7 +171,7 @@ export function executeChangeTypeAtBarracks(
 
     log.debug(
         `CHANGE_TYPE_AT_BARRACKS: carrier ${settler.id} converted to soldier ${soldierId} ` +
-            `(${UnitType[unitType]} L${recipe.soldierLevel}) at barracks ${buildingId}`
+            `(${unitType} L${recipe.soldierLevel}) at barracks ${buildingId}`
     );
 
     return TaskResult.DONE;

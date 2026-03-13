@@ -126,7 +126,7 @@ export function setupIconLoading(
     game: ShallowRef<Game | null>,
     getFileManager: () => FileManager,
     currentPlayerRace: Ref<Race>,
-    resourceIcons: Ref<Record<number, string>>,
+    resourceIcons: Ref<Record<string, string>>,
     buildingIcons: Ref<Record<number, IconEntry>>,
     unitIcons: Ref<Record<string, IconEntry>>,
     specialistIcons: Ref<Record<string, IconEntry>>

@@ -15,7 +15,7 @@ import { test, expect } from './fixtures';
 
 test.describe('Animation During Movement', { tag: '@slow' }, () => {
     test('walk animation plays during movement and stops at destination', async ({ gs }) => {
-        const unit = await gs.actions.spawnUnit(1);
+        const unit = await gs.actions.spawnUnit('Builder');
         expect(unit).not.toBeNull();
 
         // Use longer distance (15 tiles) so movement is still in progress during assertions
@@ -63,7 +63,7 @@ test.describe('Animation During Movement', { tag: '@slow' }, () => {
         // Use 1x speed for more animation samples during movement
         await gs.actions.setGameSpeed(1.0);
 
-        const unit = await gs.actions.spawnUnit(1);
+        const unit = await gs.actions.spawnUnit('Builder');
         expect(unit).not.toBeNull();
 
         await gs.actions.moveUnit(unit!.id, unit!.x + 15, unit!.y);
@@ -84,7 +84,7 @@ test.describe('Animation During Movement', { tag: '@slow' }, () => {
         // Use 1x speed for direction observation
         await gs.actions.setGameSpeed(1.0);
 
-        const unit = await gs.actions.spawnUnit(1);
+        const unit = await gs.actions.spawnUnit('Builder');
         expect(unit).not.toBeNull();
 
         // Move east first
@@ -113,7 +113,7 @@ test.describe('Movement Events', { tag: '@slow' }, () => {
     test('movementStopped event fires when unit reaches destination', async ({ gs }) => {
         const { getEvents } = await gs.queries.captureMovementEvents();
 
-        const unit = await gs.actions.spawnUnit(1);
+        const unit = await gs.actions.spawnUnit('Builder');
         expect(unit).not.toBeNull();
 
         const targetX = unit!.x + 2;

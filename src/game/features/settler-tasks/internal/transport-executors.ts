@@ -11,7 +11,6 @@
  */
 
 import { type Entity, clearCarrying } from '../../../entity';
-import { EMaterialType } from '../../../economy';
 import { createLogger } from '@/utilities/logger';
 import { TaskResult, framesToSeconds, tickDuration } from '../../../systems/choreo/types';
 import type { ChoreoJobState, ChoreoNode, TransportData } from '../../../systems/choreo/types';
@@ -129,9 +128,7 @@ export function executeTransportPickup(
         job.carryingGood = material;
         td.amount = withdrawn;
 
-        log.debug(
-            `Carrier ${settler.id} picked up ${withdrawn} of ${EMaterialType[material]} from building ${sourceBuildingId}`
-        );
+        log.debug(`Carrier ${settler.id} picked up ${withdrawn} of ${material} from building ${sourceBuildingId}`);
 
         ctx.eventBus.emit('carrier:pickupComplete', {
             unitId: settler.id,
@@ -204,7 +201,7 @@ export function executeTransportDeliver(
         if (!settler.carrying) {
             throw new Error(
                 `Carrier ${settler.id}: TRANSPORT_DELIVER called but settler is not carrying anything ` +
-                    `(job: material=${EMaterialType[material]})`
+                    `(job: material=${material})`
             );
         }
 
@@ -214,9 +211,7 @@ export function executeTransportDeliver(
 
         const overflow = amount - deposited;
         if (overflow > 0) {
-            log.warn(
-                `Carrier ${settler.id}: ${overflow} of ${EMaterialType[material]} overflow at building ${destBuildingId}`
-            );
+            log.warn(`Carrier ${settler.id}: ${overflow} of ${material} overflow at building ${destBuildingId}`);
             ctx.eventBus.emit('construction:materialOverflowed', {
                 buildingId: destBuildingId,
                 material,
@@ -227,9 +222,7 @@ export function executeTransportDeliver(
 
         job.carryingGood = null;
 
-        log.debug(
-            `Carrier ${settler.id} delivered ${deposited} of ${EMaterialType[material]} to building ${destBuildingId}`
-        );
+        log.debug(`Carrier ${settler.id} delivered ${deposited} of ${material} to building ${destBuildingId}`);
 
         ctx.eventBus.emit('carrier:deliveryComplete', {
             unitId: settler.id,

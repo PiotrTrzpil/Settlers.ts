@@ -58,7 +58,7 @@ export interface PlaceBuildingCommand {
 
 export interface PlacePileCommand {
     type: 'place_pile';
-    materialType: number; // EMaterialType
+    materialType: EMaterialType;
     amount: number;
     x: number;
     y: number;
@@ -190,7 +190,7 @@ export interface RemoveFromProductionQueueCommand {
 
 export interface ScriptAddGoodsCommand {
     type: 'script_add_goods';
-    materialType: number;
+    materialType: number | string;
     x: number;
     y: number;
     amount: number;
@@ -208,7 +208,7 @@ export interface ScriptAddBuildingCommand {
 
 export interface ScriptAddSettlersCommand {
     type: 'script_add_settlers';
-    unitType: number;
+    unitType: UnitType;
     x: number;
     y: number;
     player: number;

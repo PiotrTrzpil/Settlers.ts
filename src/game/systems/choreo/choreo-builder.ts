@@ -9,6 +9,7 @@ import type { GameState } from '@/game/game-state';
 import type { TerrainData } from '@/game/terrain';
 import { findBuildingApproachTile } from '@/game/buildings/approach';
 import { ChoreoTaskType, createChoreoJobState, type ChoreoNode, type ChoreoJobState } from './types';
+import type { UnitType } from '@/game/core/unit-types';
 
 // ─────────────────────────────────────────────────────────────
 // Context injection for building-aware helpers
@@ -83,14 +84,14 @@ export class ChoreoBuilder {
     }
 
     /** Add a TRANSFORM_RECRUIT node and stash unitType in metadata. */
-    transformRecruit(targetUnitType: number): this {
+    transformRecruit(targetUnitType: UnitType): this {
         this.nodes.push(node(ChoreoTaskType.TRANSFORM_RECRUIT));
         this.meta({ unitType: targetUnitType });
         return this;
     }
 
     /** Add a TRANSFORM_DIRECT node and stash unitType in metadata. */
-    transformDirect(targetUnitType: number): this {
+    transformDirect(targetUnitType: UnitType): this {
         this.nodes.push(node(ChoreoTaskType.TRANSFORM_DIRECT));
         this.meta({ unitType: targetUnitType });
         return this;

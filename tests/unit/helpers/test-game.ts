@@ -88,9 +88,9 @@ export function addUnit(
     state: GameState,
     x: number,
     y: number,
-    options: { player?: number; subType?: number; race?: Race } = {}
+    options: { player?: number; subType?: UnitType; race?: Race } = {}
 ): { entity: Entity; unitState: UnitStateView } {
-    const entity = state.addEntity(EntityType.Unit, options.subType ?? 0, x, y, options.player ?? 0, {
+    const entity = state.addEntity(EntityType.Unit, options.subType ?? UnitType.Carrier, x, y, options.player ?? 0, {
         race: options.race ?? Race.Roman,
     });
     const unitState = state.unitStates.get(entity.id);

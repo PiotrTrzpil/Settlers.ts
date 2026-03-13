@@ -5,58 +5,58 @@
 
 export enum EMaterialType {
     // Raw resources
-    LOG = 0,
-    STONE = 1,
-    COAL = 2,
-    IRONORE = 3,
-    GOLDORE = 4,
-    GRAIN = 5,
-    PIG = 6,
-    WATER = 7,
-    FISH = 8,
+    LOG = 'LOG',
+    STONE = 'STONE',
+    COAL = 'COAL',
+    IRONORE = 'IRONORE',
+    GOLDORE = 'GOLDORE',
+    GRAIN = 'GRAIN',
+    PIG = 'PIG',
+    WATER = 'WATER',
+    FISH = 'FISH',
 
     // Processed materials
-    BOARD = 9,
-    IRONBAR = 10,
-    GOLDBAR = 11,
-    FLOUR = 12,
-    BREAD = 13,
-    MEAT = 14,
-    WINE = 15,
+    BOARD = 'BOARD',
+    IRONBAR = 'IRONBAR',
+    GOLDBAR = 'GOLDBAR',
+    FLOUR = 'FLOUR',
+    BREAD = 'BREAD',
+    MEAT = 'MEAT',
+    WINE = 'WINE',
 
     // Tools
-    AXE = 16,
-    PICKAXE = 17,
-    SAW = 18,
-    HAMMER = 19,
-    SCYTHE = 20,
-    ROD = 21,
+    AXE = 'AXE',
+    PICKAXE = 'PICKAXE',
+    SAW = 'SAW',
+    HAMMER = 'HAMMER',
+    SCYTHE = 'SCYTHE',
+    ROD = 'ROD',
 
     // Weapons
-    SWORD = 22,
-    BOW = 23,
+    SWORD = 'SWORD',
+    BOW = 'BOW',
 
     // Additional resources
-    SULFUR = 24,
-    ARMOR = 25, // Leader helmets/equipment
-    BATTLEAXE = 26, // Heavy battle axes (different from tool axe)
-    AGAVE = 27, // Mayan crop/plant
-    BLOWGUN = 28, // Mayan weapon
-    GOAT = 29, // Mayan livestock
-    MEAD = 30, // Honey wine
-    HONEY = 31, // Raw honey (for mead)
-    SHEEP = 32, // Livestock
-    SHOVEL = 33, // Tool for pioneers/landscapers
-    CATAPULT = 34, // Siege ammunition
-    GOOSE = 35, // Livestock (geese)
-    TEQUILA = 36, // Mayan drink
-    SUNFLOWER = 37, // Trojan crop
-    SUNFLOWEROIL = 38, // Trojan drink
-    AMMO = 39, // Ammunition (crossbow bolts)
-    GUNPOWDER = 40, // Gunpowder for cannons
+    SULFUR = 'SULFUR',
+    ARMOR = 'ARMOR', // Leader helmets/equipment
+    BATTLEAXE = 'BATTLEAXE', // Heavy battle axes (different from tool axe)
+    AGAVE = 'AGAVE', // Mayan crop/plant
+    BLOWGUN = 'BLOWGUN', // Mayan weapon
+    GOAT = 'GOAT', // Mayan livestock
+    MEAD = 'MEAD', // Honey wine
+    HONEY = 'HONEY', // Raw honey (for mead)
+    SHEEP = 'SHEEP', // Livestock
+    SHOVEL = 'SHOVEL', // Tool for pioneers/landscapers
+    CATAPULT = 'CATAPULT', // Siege ammunition
+    GOOSE = 'GOOSE', // Livestock (geese)
+    TEQUILA = 'TEQUILA', // Mayan drink
+    SUNFLOWER = 'SUNFLOWER', // Trojan crop
+    SUNFLOWEROIL = 'SUNFLOWEROIL', // Trojan drink
+    AMMO = 'AMMO', // Ammunition (crossbow bolts)
+    GUNPOWDER = 'GUNPOWDER', // Gunpowder for cannons
 
     // Special
-    NO_MATERIAL = 99,
+    NO_MATERIAL = 'NO_MATERIAL',
 }
 
 export interface MaterialTypeConfig {

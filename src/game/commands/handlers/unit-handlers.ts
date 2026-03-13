@@ -12,7 +12,6 @@ import type { RecruitSpecialistCommand } from '../command-types';
 import { SPECIALIST_TOOL_MAP } from '../../systems/recruit/specialist-tool-map';
 import type { RecruitSystem } from '../../systems/recruit/recruit-system';
 import type { UnitTransformer } from '../../systems/recruit/unit-transformer';
-import { UnitType } from '../../core/unit-types';
 
 export interface SpawnUnitDeps {
     state: GameState;
@@ -182,7 +181,7 @@ export interface RecruitSpecialistDeps {
 export function executeRecruitSpecialist(deps: RecruitSpecialistDeps, cmd: RecruitSpecialistCommand): CommandResult {
     const toolMaterial = SPECIALIST_TOOL_MAP[cmd.unitType];
     if (toolMaterial === undefined) {
-        return commandFailed(`Unknown specialist type: ${UnitType[cmd.unitType]}`);
+        return commandFailed(`Unknown specialist type: ${cmd.unitType}`);
     }
 
     if (cmd.count > 0) {

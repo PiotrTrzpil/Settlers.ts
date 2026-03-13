@@ -166,10 +166,10 @@ export function getSpriteScale(entity: Entity): number {
     if (entity.type !== EntityType.MapObject) {
         return ENTITY_SCALE;
     }
-    if (entity.subType <= MapObjectType.TreeOliveSmall) {
+    if ((entity.subType as number) <= MapObjectType.TreeOliveSmall) {
         return ENTITY_SCALE;
     }
-    if (entity.subType === MapObjectType.ResourceStone) {
+    if ((entity.subType as number) === MapObjectType.ResourceStone) {
         return ENTITY_SCALE;
     }
     return DECORATION_SCALE;

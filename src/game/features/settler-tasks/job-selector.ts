@@ -101,7 +101,7 @@ export class JobSelector {
         const raceId = raceToRaceId(settler.race);
 
         // For settlers with building-sourced jobs (e.g. miners), filter to the assigned building's jobs
-        const jobs = (homeBuilding && config.buildingJobs?.get(homeBuilding.subType)) ?? config.jobs;
+        const jobs = (homeBuilding && config.buildingJobs?.get(homeBuilding.subType as number)) ?? config.jobs;
 
         for (const jobId of jobs) {
             const job = this.choreographyStore.getJob(raceId, jobId);

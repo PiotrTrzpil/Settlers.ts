@@ -320,7 +320,7 @@ export async function waitForMovementIdle(
 export async function waitForBuildingOutput(
     page: Page,
     buildingId: number,
-    materialType: number,
+    materialType: number | string,
     minAmount: number,
     timeout: number = Timeout.DEFAULT
 ): Promise<void> {
@@ -341,7 +341,7 @@ export async function waitForBuildingOutput(
 export async function waitForBuildingInput(
     page: Page,
     buildingId: number,
-    materialType: number,
+    materialType: number | string,
     minAmount: number,
     timeout: number = Timeout.DEFAULT
 ): Promise<void> {

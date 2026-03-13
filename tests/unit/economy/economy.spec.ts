@@ -17,7 +17,7 @@ import { installRealGameData, resetTestGameData } from '../helpers/test-game-dat
 
 describe('Material Types', () => {
     it('should have a config for every EMaterialType value', () => {
-        const materialValues = Object.values(EMaterialType).filter(v => typeof v === 'number') as EMaterialType[];
+        const materialValues = Object.values(EMaterialType) as EMaterialType[];
 
         for (const mat of materialValues) {
             expect(MATERIAL_CONFIGS.has(mat)).toBe(true);

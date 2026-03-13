@@ -16,14 +16,16 @@ import { isUnitAvailableForRace, isBuildingAvailableForRace } from '@/game/data/
  * Uses gpEmptyMap fixture (empty flat map with real sprite assets, skips in CI if unavailable).
  */
 
-/** Extract all numeric values from a TypeScript numeric enum. */
+/** Extract all numeric values from a numeric enum (BuildingType remains numeric). */
 function enumValues<T extends Record<string, string | number>>(enumObj: T): number[] {
     return Object.values(enumObj).filter((v): v is number => typeof v === 'number');
 }
 
 const ALL_BUILDING_TYPES = enumValues(BuildingType);
-const ALL_UNIT_TYPES = enumValues(UnitType);
-const ALL_MATERIAL_TYPES = enumValues(EMaterialType).filter(v => v !== EMaterialType.NO_MATERIAL);
+const ALL_UNIT_TYPES = Object.values(UnitType) as UnitType[];
+const ALL_MATERIAL_TYPES = (Object.values(EMaterialType) as EMaterialType[]).filter(
+    v => v !== EMaterialType.NO_MATERIAL
+);
 
 /** Hide all UI panels so screenshots show only the canvas. */
 async function hideUI(page: import('@playwright/test').Page): Promise<void> {
@@ -93,7 +95,7 @@ test.describe('Entity Rendering Catalog', { tag: ['@requires-assets', '@screensh
             const missing = await gpEmptyMap.sprites.getEntitiesWithoutSprites();
             const missingUnits = missing.filter(m => m.entityType === EntityType.Unit);
             if (missingUnits.length > 0) {
-                const names = missingUnits.map(m => `Unit ${UnitType[m.subType] ?? m.subType} (race=${m.race})`);
+                const names = missingUnits.map(m => `Unit ${m.subType as UnitType} (race=${m.race})`);
                 console.log(`[${raceName}] ${missingUnits.length} units without sprites: ${names.join(', ')}`);
             }
 
@@ -165,7 +167,7 @@ test.describe('Entity Rendering Catalog', { tag: ['@requires-assets', '@screensh
             const missingBuildings = missing.filter(m => m.entityType === EntityType.Building);
             if (missingBuildings.length > 0) {
                 const names = missingBuildings.map(
-                    m => `Building ${BuildingType[m.subType] ?? m.subType} (race=${m.race})`
+                    m => `Building ${BuildingType[m.subType as number] ?? m.subType} (race=${m.race})`
                 );
                 console.log(`[${raceName}] ${missingBuildings.length} buildings without sprites: ${names.join(', ')}`);
             }
@@ -185,7 +187,7 @@ test.describe('Entity Rendering Catalog', { tag: ['@requires-assets', '@screensh
         // Ensure clean slate — remove any entities from previous test
         await page.evaluate(() => window.__settlers__!.game!.clearAllEntities());
 
-        const placedCount = await page.evaluate((materialTypes: number[]) => {
+        const placedCount = await page.evaluate((materialTypes: EMaterialType[]) => {
             const game = window.__settlers__!.game!;
             const w = game.terrain.mapSize.width;
             const h = game.terrain.mapSize.height;
@@ -224,7 +226,7 @@ test.describe('Entity Rendering Catalog', { tag: ['@requires-assets', '@screensh
         const missing = await gpEmptyMap.sprites.getEntitiesWithoutSprites();
         const missingPiles = missing.filter(m => m.entityType === EntityType.StackedPile);
         if (missingPiles.length > 0) {
-            const names = missingPiles.map(m => `Pile ${EMaterialType[m.subType] ?? m.subType}`);
+            const names = missingPiles.map(m => `Pile ${m.subType}`);
             console.log(`${missingPiles.length} piles without sprites: ${names.join(', ')}`);
         }
 

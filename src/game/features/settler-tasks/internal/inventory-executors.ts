@@ -41,9 +41,9 @@ export function parseMaterial(entity: string): EMaterialType | null {
 
     const key = entity.startsWith(GOOD_PREFIX) ? entity.slice(GOOD_PREFIX.length) : entity;
 
-    // EMaterialType keys are UPPER_CASE identifiers — check for a direct name match.
+    // EMaterialType is a string enum — values ARE the string keys.
     const value = (EMaterialType as Record<string, unknown>)[key];
-    if (typeof value === 'number') {
+    if (typeof value === 'string') {
         return value as EMaterialType;
     }
 
@@ -139,15 +139,14 @@ export const executeGetGood: InventoryExecutorFn = (
         const withdrawn = ctx.materialTransfer.pickUp(settler.id, buildingId, material, 1, false);
         if (withdrawn === 0) {
             log.warn(
-                `GET_GOOD: settler ${settler.id} — building ${buildingId} has no ` +
-                    `${EMaterialType[material]} in input inventory`
+                `GET_GOOD: settler ${settler.id} — building ${buildingId} has no ` + `${material} in input inventory`
             );
             return TaskResult.FAILED;
         }
 
         job.carryingGood = material;
 
-        log.debug(`GET_GOOD: settler ${settler.id} withdrew ${EMaterialType[material]} from building ${buildingId}`);
+        log.debug(`GET_GOOD: settler ${settler.id} withdrew ${material} from building ${buildingId}`);
     }
 
     return tickDuration(job, dt, resolveInventoryDuration(node));
@@ -183,13 +182,10 @@ function depositWorkerGood(
         if (deposited === 0) {
             log.warn(
                 `PUT_GOOD: settler ${settler.id} — building ${buildingId} output full for ` +
-                    `${EMaterialType[explicitMaterial]}, material lost`
+                    `${explicitMaterial}, material lost`
             );
         } else {
-            log.debug(
-                `PUT_GOOD: settler ${settler.id} deposited ${EMaterialType[explicitMaterial]} ` +
-                    `to building ${buildingId}`
-            );
+            log.debug(`PUT_GOOD: settler ${settler.id} deposited ${explicitMaterial} ` + `to building ${buildingId}`);
         }
         clearCarrying(settler);
     } else {
@@ -249,7 +245,7 @@ export const executeResourceGathering: InventoryExecutorFn = (
     ctx.materialTransfer.produce(settler.id, material, 1);
     job.carryingGood = material;
 
-    log.debug(`RESOURCE_GATHERING: settler ${settler.id} gathered ${EMaterialType[material]}`);
+    log.debug(`RESOURCE_GATHERING: settler ${settler.id} gathered ${material}`);
     return TaskResult.DONE;
 };
 
@@ -272,14 +268,12 @@ export const executeLoadGood: InventoryExecutorFn = (
 
     const withdrawn = ctx.materialTransfer.pickUp(settler.id, buildingId, material, 1, false);
     if (withdrawn === 0) {
-        log.warn(
-            `LOAD_GOOD: settler ${settler.id} — building ${buildingId} has no ${EMaterialType[material]} in input inventory`
-        );
+        log.warn(`LOAD_GOOD: settler ${settler.id} — building ${buildingId} has no ${material} in input inventory`);
         return TaskResult.FAILED;
     }
 
     job.carryingGood = material;
 
-    log.debug(`LOAD_GOOD: settler ${settler.id} loaded ${EMaterialType[material]} from building ${buildingId}`);
+    log.debug(`LOAD_GOOD: settler ${settler.id} loaded ${material} from building ${buildingId}`);
     return TaskResult.DONE;
 };

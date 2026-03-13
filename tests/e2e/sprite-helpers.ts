@@ -113,7 +113,7 @@ export interface MissingSpriteInfo {
     entityId: number;
     entityType: number;
     entityTypeName: string;
-    subType: number;
+    subType: number | string;
     subTypeName: string;
     race: number;
 }
@@ -151,7 +151,7 @@ export async function getEntitiesWithoutSprites(page: Page): Promise<MissingSpri
             entityId: number;
             entityType: number;
             entityTypeName: string;
-            subType: number;
+            subType: number | string;
             subTypeName: string;
             race: number;
         }> = [];

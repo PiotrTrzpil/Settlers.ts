@@ -13,7 +13,7 @@ import { EntityType } from '@/game/entity';
 import { Race } from '@/game/core/race';
 
 function makeBuildingEntity(id: number, race: Race = Race.Roman): Entity {
-    return { id, type: EntityType.Building, subType: 0, x: 0, y: 0, player: 0, race };
+    return { id, type: EntityType.Building, subType: 0, x: 0, y: 0, player: 0, race, operational: true };
 }
 
 function makeTriggerDef(id: string): BuildingTrigger {
@@ -96,7 +96,16 @@ describe('TriggerSystemImpl', () => {
         expect(setWorkingOverlay).not.toHaveBeenCalled();
 
         // Non-building entity
-        entities.set(77, { id: 77, type: EntityType.Unit, subType: 0, x: 0, y: 0, player: 0, race: Race.Roman });
+        entities.set(77, {
+            id: 77,
+            type: EntityType.Unit,
+            subType: 0,
+            x: 0,
+            y: 0,
+            player: 0,
+            race: Race.Roman,
+            operational: true,
+        });
         triggers.set(TRIGGER_A, makeTriggerDef(TRIGGER_A));
         system.fireTrigger(77, TRIGGER_A);
         expect(setWorkingOverlay).not.toHaveBeenCalled();

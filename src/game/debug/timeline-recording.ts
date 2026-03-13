@@ -8,9 +8,8 @@
  * No side effects, no DB access, no I/O.
  */
 
-import { EntityType, UnitType } from '@/game/entity';
+import { EntityType } from '@/game/entity';
 import { BuildingType } from '@/game/buildings/building-type';
-import { EMaterialType } from '@/game/economy/material-type';
 import { EventFmt } from '@/game/debug/event-formatting';
 import type { SerializedTimelineEntry } from '@/game/cli/types';
 import type { InventorySlot } from '@/game/systems/inventory/inventory-slot';
@@ -21,7 +20,7 @@ export function formatSlots(slots: InventorySlot[]): string {
     const parts: string[] = [];
     for (const slot of slots) {
         if (slot.currentAmount > 0) {
-            parts.push(`${EMaterialType[slot.materialType]}×${slot.currentAmount}`);
+            parts.push(`${slot.materialType}×${slot.currentAmount}`);
         }
     }
     return parts.join(',');
@@ -139,12 +138,11 @@ export function recordTimelineEvent(
     const y = extractNum(payload, 'y');
     const level = typeof payload['level'] === 'string' ? payload['level'] : undefined;
     const rawEntityType = extractNum(payload, 'entityType');
-    const rawUnitType = extractNum(payload, 'unitType');
     const rawBuildingType = extractNum(payload, 'buildingType');
     if (!entityType && rawEntityType !== undefined) {
         entityType = EntityType[rawEntityType];
     }
-    const unitType = rawUnitType !== undefined ? UnitType[rawUnitType] : undefined;
+    const unitType = typeof payload['unitType'] === 'string' ? payload['unitType'] : undefined;
     const buildingType = rawBuildingType !== undefined ? BuildingType[rawBuildingType] : undefined;
 
     // Use inventory slotType as label (preserves input/output distinction)

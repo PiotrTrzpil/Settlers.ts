@@ -6,6 +6,7 @@
  */
 import type { Page } from '@playwright/test';
 import type { BuildingResult, ResourceResult, UnitResult, BatchPlacementResult } from './game-action-types';
+import type { UnitType } from '@/game/core/unit-types';
 
 // Re-export all types and query functions so existing imports keep working
 export type {
@@ -105,7 +106,7 @@ export async function placeResource(
             if (!game) return null;
             const cmdResult = game.execute({
                 type: 'place_pile',
-                materialType: mt,
+                materialType: mt as any,
                 x: posX,
                 y: posY,
                 amount: amt,
@@ -136,7 +137,7 @@ export async function placeResource(
  */
 export async function spawnUnit(
     page: Page,
-    unitType = 1,
+    unitType: string = 'Carrier',
     x?: number,
     y?: number,
     player = 0
@@ -149,7 +150,7 @@ export async function spawnUnit(
             const spawnY = posY ?? Math.floor(game.terrain.mapSize.height / 2);
             const cmdResult = game.execute({
                 type: 'spawn_unit',
-                unitType: ut,
+                unitType: ut as UnitType,
                 x: spawnX,
                 y: spawnY,
                 player: p,
@@ -283,7 +284,7 @@ export async function placeMultiple(page: Page, count: number, spec: PlacementSp
                 const mt = s.materialTypes ? s.materialTypes[idx % s.materialTypes.length]! : idx % 3;
                 return game.execute({
                     type: 'place_pile',
-                    materialType: mt,
+                    materialType: mt as any,
                     amount: idx + 1,
                     x: tx,
                     y: ty,

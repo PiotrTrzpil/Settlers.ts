@@ -12,7 +12,10 @@ import { getGroundTypeName } from '@/resources/map/s4-types';
 import { ok, fail, entityTypeName, posText, tableWithLimit } from './helpers';
 
 /** Try resolving as BuildingType, then UnitType. Returns null on failure. */
-function resolveEntitySubType(name: string, ctx: CliContext): { entityType: EntityType; subType: number } | null {
+function resolveEntitySubType(
+    name: string,
+    ctx: CliContext
+): { entityType: EntityType; subType: number | string } | null {
     try {
         return { entityType: EntityType.Building, subType: ctx.resolveBuilding(name) };
     } catch {

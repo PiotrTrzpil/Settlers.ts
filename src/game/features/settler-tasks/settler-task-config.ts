@@ -18,6 +18,7 @@ import type { ChoreoSystem } from '../../systems/choreo';
 import type { ISettlerBuildingLocationManager } from '../settler-location/types';
 import type { TickScheduler } from '../../systems/tick-scheduler';
 import type { UnitRuntime } from './unit-state-machine';
+import type { EMaterialType } from '../../economy';
 
 export interface SettlerTaskSystemConfig extends CoreDeps {
     tickScheduler: TickScheduler;
@@ -44,7 +45,7 @@ export interface SettlerDebugEntry {
     taskIndex: number | null;
     progress: number | null;
     targetId: number | null;
-    carryingGood: number | null;
+    carryingGood: EMaterialType | null;
     assignedBuilding: number | null;
 }
 

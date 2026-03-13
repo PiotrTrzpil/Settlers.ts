@@ -19,7 +19,7 @@ function findTileViolations(sim: Simulation, tick: number): string[] {
         if (e.type !== EntityType.Unit) continue;
         if (e.hidden) continue;
         const key = tileKey(e.x, e.y);
-        const eType = UnitType[e.subType] ?? `?${e.subType}`;
+        const eType = e.subType as UnitType;
         const existing = tileToUnit.get(key);
         if (existing) {
             const occupant = sim.state.unitOccupancy.get(key);

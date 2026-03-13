@@ -69,7 +69,14 @@ export function connectCliWs(cli: GameCli): CliWsHandle | undefined {
             }
 
             const msg = data as WsCommandMessage;
-            const result = cli.run(msg.cmd);
+            let result: { ok: boolean; output: string };
+            try {
+                result = cli.run(msg.cmd);
+            } catch (err: unknown) {
+                const errMsg = err instanceof Error ? err.message : String(err);
+                console.error(`[cli-ws] command "${msg.cmd}" threw:`, err);
+                result = { ok: false, output: `internal error: ${errMsg}` };
+            }
             const response: WsResultMessage = {
                 id: msg.id,
                 ok: result.ok,

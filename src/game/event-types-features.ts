@@ -83,7 +83,7 @@ export interface GameEventsFeatures {
     'entity:created': GameEventBase & {
         entityId: number;
         entityType: import('./entity').EntityType;
-        subType: number;
+        subType: number | string;
         x: number;
         y: number;
         player: number;

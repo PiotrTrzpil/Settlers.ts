@@ -1,7 +1,8 @@
-import { EntityType } from '../../entity';
+import { EntityType, UnitType } from '../../entity';
 import type { GameState } from '../../game-state';
 import type { EventBus } from '../../event-bus';
 import { BuildingType } from '../../buildings/types';
+import { EMaterialType } from '../../economy';
 import type {
     ScriptAddGoodsCommand,
     ScriptAddBuildingCommand,
@@ -23,7 +24,7 @@ export function executeScriptAddGoods(deps: ScriptDeps, cmd: ScriptAddGoodsComma
     // Register free pile — FreePileHandler creates the inventory slot
     eventBus.emit('pile:freePilePlaced', {
         entityId: entity.id,
-        materialType: cmd.materialType,
+        materialType: cmd.materialType as EMaterialType,
         quantity: cmd.amount,
     });
 
@@ -48,7 +49,7 @@ export function executeScriptAddBuilding(deps: ScriptDeps, cmd: ScriptAddBuildin
 
 export function executeScriptAddSettlers(deps: ScriptDeps, cmd: ScriptAddSettlersCommand): CommandResult {
     const { state, eventBus } = deps;
-    const effects: { type: 'unit_spawned'; entityId: number; unitType: number; x: number; y: number }[] = [];
+    const effects: { type: 'unit_spawned'; entityId: number; unitType: UnitType; x: number; y: number }[] = [];
 
     for (let i = 0; i < cmd.amount; i++) {
         const offsetX = cmd.x + (i % 3);

@@ -59,7 +59,7 @@ export interface Entity {
     x: number;
     y: number;
     player: number;
-    subType: number;
+    subType: number | string;
     /** Whether this entity can be selected by the player. Defaults to true if not specified. */
     selectable?: boolean;
 
@@ -94,6 +94,14 @@ export interface Entity {
      * Used by debug tools (e.g., stack-adjust preview sprites).
      */
     depthBias?: number;
+
+    /**
+     * Whether this entity is in its functional/operational state.
+     * Buildings: false during construction, true when completed.
+     * Trees: false while growing, true when mature and harvestable.
+     * Defaults to true for entities that don't have a construction/growth phase.
+     */
+    operational: boolean;
 }
 
 /**

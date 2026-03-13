@@ -30,7 +30,7 @@ function findUnit(sim: Simulation, unitType: UnitType, player = 0): number {
             return e.id;
         }
     }
-    throw new Error(`No ${UnitType[unitType]} found for player ${player}`);
+    throw new Error(`No ${unitType} found for player ${player}`);
 }
 
 function diagnoseWorker(sim: Simulation, unitType: UnitType): string {

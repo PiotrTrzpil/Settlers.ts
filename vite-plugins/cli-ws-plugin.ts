@@ -128,41 +128,70 @@ export function cliWsPlugin(): Plugin {
 
                 ws.on('close', () => {
                     if (ws === executor) {
-                        executor = null;
+                        onExecutorClose();
                     } else {
-                        commanders.delete(ws);
-                        // Clean up timeline subscription
-                        if (timelineSubscribers.delete(ws)) {
-                            // If no subscribers remain, tell executor to stop
-                            if (timelineSubscribers.size === 0 && executor && executor.readyState === WebSocket.OPEN) {
-                                sendTo(executor, {
-                                    type: 'timeline:unsubscribe',
-                                });
-                            }
-                        }
-                        // Drop any pending/queued commands from this commander
-                        if (pending?.commander === ws) {
-                            pending = null;
-                            drainQueue();
-                        }
-                        // Remove queued commands from the disconnected commander
-                        for (let i = queue.length - 1; i >= 0; i--) {
-                            if (queue[i]!.commander === ws) queue.splice(i, 1);
-                        }
+                        onCommanderClose(ws);
                     }
                 });
             });
+
+            /** Fail a pending command, notifying the commander if still connected. */
+            function failPending(reason: string): void {
+                if (!pending) return;
+                if (pending.commander.readyState === WebSocket.OPEN) {
+                    sendTo(pending.commander, { id: pending.id, ok: false, output: reason });
+                }
+                pending = null;
+            }
+
+            function onExecutorClose(): void {
+                executor = null;
+                failPending('game disconnected (executor closed)');
+                // Fail all queued commands too
+                for (const entry of queue.splice(0)) {
+                    if (entry.commander.readyState === WebSocket.OPEN) {
+                        sendTo(entry.commander, {
+                            id: entry.msg.id,
+                            ok: false,
+                            output: 'game disconnected (executor closed)',
+                        });
+                    }
+                }
+            }
+
+            function onCommanderClose(ws: WebSocket): void {
+                commanders.delete(ws);
+                // Clean up timeline subscription
+                if (timelineSubscribers.delete(ws)) {
+                    if (timelineSubscribers.size === 0 && executor && executor.readyState === WebSocket.OPEN) {
+                        sendTo(executor, { type: 'timeline:unsubscribe' });
+                    }
+                }
+                // Drop any pending/queued commands from this commander
+                if (pending?.commander === ws) {
+                    pending = null;
+                    drainQueue();
+                }
+                for (let i = queue.length - 1; i >= 0; i--) {
+                    if (queue[i]!.commander === ws) queue.splice(i, 1);
+                }
+            }
 
             function registerExecutor(ws: WebSocket): void {
                 if (executor && executor.readyState === WebSocket.OPEN) {
                     executor.close(1000, 'replaced by new executor');
                 }
+                // If a command was in-flight when the old executor disconnected
+                // (e.g. HMR reload), fail it so the relay is unblocked.
+                failPending('game reloaded — executor reconnected, please retry');
                 executor = ws;
                 // Fresh game = fresh timeline (HMR reload resets ticks to 0)
                 timelineWriter?.reset();
                 // Always subscribe — the relay records timeline to SQLite,
                 // plus re-sync any external subscribers
                 sendTo(ws, { type: 'timeline:subscribe' } as WsControlMessage);
+                // Drain any commands that were queued while executor was disconnected
+                drainQueue();
             }
 
             function handleCommanderMessage(ws: WebSocket, msg: WsCommandMessage): void {

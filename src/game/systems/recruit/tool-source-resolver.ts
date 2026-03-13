@@ -28,7 +28,7 @@ export class ToolSourceResolver {
             if (entity.type !== EntityType.StackedPile) {
                 continue;
             }
-            if (entity.subType !== (material as number)) {
+            if (entity.subType !== material) {
                 continue;
             }
             if (entity.player !== player) {

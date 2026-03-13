@@ -196,7 +196,7 @@ export class WorkerTaskExecutor {
             this.idleEarlyExitCount++;
             this.missingHandlerLogger.warn(
                 `No work handler registered for search type: ${config.search}. ` +
-                    `Settler ${settler.id} (${UnitType[settler.subType]}) will stay idle until feature is implemented.`
+                    `Settler ${settler.id} (${settler.subType as UnitType}) will stay idle until feature is implemented.`
             );
             return false;
         }
@@ -321,7 +321,7 @@ export class WorkerTaskExecutor {
     handleWorking(settler: Entity, config: SettlerConfig, runtime: WorkerRuntimeState, dt: number): void {
         if (!runtime.job) {
             throw new Error(
-                `handleWorking: settler ${settler.id} (${UnitType[settler.subType]}) ` +
+                `handleWorking: settler ${settler.id} (${settler.subType as UnitType}) ` +
                     `is in WORKING state but has no job. ` +
                     `homeAssignment=${runtime.homeAssignment?.buildingId ?? null}`
             );

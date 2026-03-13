@@ -140,6 +140,7 @@ export function executePlantTree(deps: PlantTreeDeps, cmd: PlantTreeCommand): Co
     }
 
     const entity = state.addEntity(EntityType.MapObject, cmd.treeType, cmd.x, cmd.y, 0);
+    entity.operational = false; // Planted trees start growing, not yet harvestable
 
     deps.treeSystem.register(entity.id, cmd.treeType, true);
     deps.eventBus.emit('tree:planted', { entityId: entity.id, treeType: cmd.treeType, x: cmd.x, y: cmd.y });

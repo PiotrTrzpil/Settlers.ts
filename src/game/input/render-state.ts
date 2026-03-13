@@ -29,8 +29,8 @@ export interface PlacementPreview {
     type: 'placement';
     /** Entity category being placed */
     entityType: PlacementEntityType;
-    /** Specific subtype (BuildingType, EMaterialType, etc as number) */
-    subType: number;
+    /** Specific subtype (BuildingType, EMaterialType, etc) */
+    subType: number | string;
     /** Race for the entity being placed. Only for buildings/units. */
     race?: Race;
     /** Anchor X position */

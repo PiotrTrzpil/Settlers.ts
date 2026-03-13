@@ -269,14 +269,14 @@ export async function loadUnitIcons(
 export async function loadResourceIcons(
     fileManager: FileManager,
     resources: { type: EMaterialType }[]
-): Promise<Record<number, string>> {
+): Promise<Record<string, string>> {
     const loader = new SpriteLoader(fileManager);
     const fileSet = await loader.loadFileSet(String(GFX_FILE_NUMBERS.RESOURCES));
     if (!fileSet?.jilReader || !fileSet.dilReader) {
         return {};
     }
 
-    const icons: Record<number, string> = {};
+    const icons: Record<string, string> = {};
     for (const r of resources) {
         const jobIndex = RESOURCE_JOB_INDICES[r.type];
         if (jobIndex === undefined) {

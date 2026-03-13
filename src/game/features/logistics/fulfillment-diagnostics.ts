@@ -39,6 +39,8 @@ export const enum UnfulfilledReason {
     CarriersBusy = 5,
     /** Carriers exist and idle, but reserved by another feature (barracks, garrison, etc.) */
     CarriersReserved = 6,
+    /** Supply + idle carriers exist but dispatcher didn't create a job (pathfinding/territory/timing) */
+    DispatcherStall = 7,
 }
 
 /** Display labels for each reason */
@@ -48,6 +50,7 @@ export const UNFULFILLED_REASON_LABELS: Record<UnfulfilledReason, string> = {
     [UnfulfilledReason.NoCarrier]: 'No carrier',
     [UnfulfilledReason.CarriersBusy]: 'Carriers busy',
     [UnfulfilledReason.CarriersReserved]: 'Carriers reserved',
+    [UnfulfilledReason.DispatcherStall]: 'Dispatcher stall',
 };
 
 export interface DiagnosticConfig {
@@ -70,7 +73,7 @@ export interface DiagnosticConfig {
  * 3. Is a carrier available? → NoCarrier / CarriersBusy
  */
 export function diagnoseUnfulfilledRequest(request: DiagnosticRequest, config: DiagnosticConfig): UnfulfilledReason {
-    const { gameState, inventoryManager, carrierRegistry, jobStore, getActiveJobId, isReserved } = config;
+    const { gameState, inventoryManager, jobStore } = config;
 
     const destBuilding = gameState.getEntity(request.buildingId);
     if (!destBuilding) {
@@ -104,30 +107,40 @@ export function diagnoseUnfulfilledRequest(request: DiagnosticRequest, config: D
         return UnfulfilledReason.AllReserved;
     }
 
-    // Step 3: Check carrier availability (mirrors IdleCarrierPool.isAvailable checks)
+    // Step 3: Check carrier availability
+    return diagnoseCarrierAvailability(config, playerId);
+}
+
+/** Mirrors IdleCarrierPool.isAvailable checks to classify carrier state. */
+function diagnoseCarrierAvailability(config: DiagnosticConfig, playerId: number): UnfulfilledReason {
+    const { gameState, carrierRegistry, getActiveJobId, isReserved } = config;
     let hasCarrier = false;
+    let hasIdleAndFree = false;
     let hasIdleButReserved = false;
 
     for (const [id, , entity] of query(carrierRegistry.store, gameState.store)) {
         if (entity.player !== playerId) {
             continue;
         }
-
         hasCarrier = true;
-
-        const hasJob = getActiveJobId(id) !== null;
-        if (!hasJob && isReserved(id)) {
+        if (getActiveJobId(id) !== null) {
+            continue;
+        }
+        if (isReserved(id)) {
             hasIdleButReserved = true;
+        } else {
+            hasIdleAndFree = true;
         }
     }
 
     if (!hasCarrier) {
         return UnfulfilledReason.NoCarrier;
     }
-
+    if (hasIdleAndFree) {
+        return UnfulfilledReason.DispatcherStall;
+    }
     if (hasIdleButReserved) {
         return UnfulfilledReason.CarriersReserved;
     }
-
     return UnfulfilledReason.CarriersBusy;
 }

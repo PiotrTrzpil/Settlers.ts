@@ -30,6 +30,7 @@ export class MockEntityProvider implements EntityProvider {
                 y: 0,
                 player: 0,
                 race: 10,
+                operational: true,
             };
             this.entityMap.set(id, entity);
             this._entities.push(entity);

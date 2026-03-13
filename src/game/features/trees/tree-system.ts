@@ -180,6 +180,7 @@ export class TreeSystem extends GrowableSystem<TreeState> {
         if (state.stage === TreeStage.Growing) {
             if (this.advanceGrowth(state, dt)) {
                 state.stage = TreeStage.Normal;
+                this.gameState.getEntityOrThrow(entityId, 'tree:matured').operational = true;
                 this.eventBus.emit('tree:matured', { entityId });
             }
             this.updateVisual(entityId, state);

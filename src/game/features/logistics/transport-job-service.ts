@@ -82,7 +82,7 @@ function resolveDestinationSlot(destBuilding: number, material: EMaterialType, d
         return first !== undefined ? first.id : 0;
     }
 
-    if ((entity.subType as BuildingType) === BuildingType.StorageArea) {
+    if ((entity.subType as BuildingType) === BuildingType.StorageArea && entity.operational) {
         return resolveStorageAreaSlot(destBuilding, material, deps.inventoryManager);
     }
 

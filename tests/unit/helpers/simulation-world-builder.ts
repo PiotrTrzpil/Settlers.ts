@@ -11,7 +11,6 @@ import { getBuildingFootprint } from '@/game/buildings/types';
 import { SlotKind } from '@/game/core/pile-kind';
 import { Race } from '@/game/core/race';
 import { query } from '@/game/ecs';
-import { EMaterialType } from '@/game/economy/material-type';
 import { EntityType, UnitType, tileKey } from '@/game/entity';
 import type { GameServices } from '@/game/game-services';
 import type { GameState } from '@/game/game-state';
@@ -184,7 +183,7 @@ export function snapshotCarriers(state: GameState, services: GameServices): Carr
     const carriers: CarrierSnapshot[] = [];
     for (const [id, , entity] of query(services.carrierRegistry.store, state.store)) {
         const pos = `(${entity.x},${entity.y})`;
-        const carrying = entity.carrying ? `${EMaterialType[entity.carrying.material]}×${entity.carrying.amount}` : '';
+        const carrying = entity.carrying ? `${entity.carrying.material}×${entity.carrying.amount}` : '';
         carriers.push({ id, status: 'registered', pos, carrying });
     }
     return carriers;
@@ -202,8 +201,8 @@ export function checkEntityBounds(
     for (const e of state.entities) {
         if (e.x < 0 || e.y < 0 || e.x >= mapWidth || e.y >= mapHeight) {
             let typeName: string = EntityType[e.type] ?? 'Unknown';
-            if (e.type === EntityType.Unit) typeName = UnitType[e.subType] ?? 'Unknown';
-            else if (e.type === EntityType.Building) typeName = BuildingType[e.subType] ?? 'Unknown';
+            if (e.type === EntityType.Unit) typeName = e.subType as UnitType;
+            else if (e.type === EntityType.Building) typeName = BuildingType[e.subType as number] ?? 'Unknown';
             errors.push({
                 tick: tickCount,
                 system: 'invariant',
@@ -230,7 +229,7 @@ export function checkInventoryIntegrity(
                     system: 'invariant',
                     error: new Error(
                         `Building #${buildingId} (${BuildingType[buildingType as BuildingType]}) ` +
-                            `has negative ${EMaterialType[slot.materialType]}: ${slot.currentAmount}`
+                            `has negative ${slot.materialType}: ${slot.currentAmount}`
                     ),
                 });
             }

@@ -36,8 +36,8 @@ export interface PlacementPreviewState {
     valid: boolean;
     /** Entity type being placed */
     entityType: PlacementEntityType;
-    /** Specific subtype (BuildingType or EMaterialType as number) */
-    subType: number;
+    /** Specific subtype (BuildingType or EMaterialType) */
+    subType: number | string;
     /** Race for the entity being placed. Optional — only for buildings/units. */
     race?: Race;
     /** Variation/direction for sprite rendering (0-7 for resources) */

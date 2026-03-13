@@ -13,8 +13,7 @@ import {
     SETTLER_FILE_NUMBERS,
     GFX_FILE_NUMBERS,
 } from '@/game/renderer/sprite-metadata';
-import { BuildingType, UnitType } from '@/game/entity';
-import { EMaterialType } from '@/game/economy';
+import { BuildingType } from '@/game/entity';
 
 /** Settler files (20-24.jil) contain carrier sprites with materials */
 export const SETTLER_FILE_IDS = new Set(Object.values(SETTLER_FILE_NUMBERS));
@@ -32,15 +31,13 @@ for (const [typeStr, jobIndex] of Object.entries(BUILDING_JOB_INDICES)) {
 // Build reverse lookup from job index to resource/material name
 export const jobToResourceName = new Map<number, string>();
 for (const [typeStr, jobIndex] of Object.entries(RESOURCE_JOB_INDICES)) {
-    const materialType = Number(typeStr) as EMaterialType;
-    jobToResourceName.set(jobIndex, EMaterialType[materialType]);
+    jobToResourceName.set(jobIndex, typeStr);
 }
 
 // Build reverse lookup from job index to carrier material name (mapped materials)
 export const jobToCarrierMaterial = new Map<number, string>();
 for (const [typeStr, jobIndex] of Object.entries(CARRIER_MATERIAL_JOB_INDICES)) {
-    const materialType = Number(typeStr) as EMaterialType;
-    jobToCarrierMaterial.set(jobIndex, EMaterialType[materialType]);
+    jobToCarrierMaterial.set(jobIndex, typeStr);
 }
 
 // Build reverse lookup from job index to worker state descriptions (settler files)
@@ -50,8 +47,7 @@ function formatWorkerName(key: string): string {
     const unitType = SETTLER_KEY_TO_UNIT_TYPE[key];
     if (unitType !== undefined) {
         const levelMatch = /^.+_(\d+)$/.exec(key);
-        const name = UnitType[unitType];
-        return levelMatch ? `${name} L${levelMatch[1]}` : name;
+        return levelMatch ? `${unitType} L${levelMatch[1]}` : unitType;
     }
     return key.charAt(0).toUpperCase() + key.slice(1);
 }

@@ -422,7 +422,7 @@ describe('Construction site & multi-unit pathfinding (real game data)', { timeou
 
         sim.state.clearBuildingFootprintBlock(siteId);
 
-        const footprint = getBuildingFootprint(building.x, building.y, building.subType, building.race);
+        const footprint = getBuildingFootprint(building.x, building.y, building.subType as BuildingType, building.race);
         const leaked: string[] = [];
         for (const tile of footprint) {
             if (sim.state.buildingOccupancy.has(tileKey(tile.x, tile.y))) {

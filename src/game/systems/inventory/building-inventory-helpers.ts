@@ -36,7 +36,7 @@ export interface SerializedPileSlot {
 }
 
 /** Serialized form of a single building's throughput: materialType → { totalIn, totalOut } */
-export type SerializedBuildingThroughput = Array<[number, MaterialThroughput]>;
+export type SerializedBuildingThroughput = Array<[string, MaterialThroughput]>;
 
 export interface SerializedBuildingInventory {
     nextSlotId: number;
@@ -124,7 +124,10 @@ export const throughputSerializer = {
         for (const [buildingId, entries] of raw as SerializedThroughputMap) {
             const byMaterial = new Map<EMaterialType, MaterialThroughput>();
             for (const [materialType, throughput] of entries) {
-                byMaterial.set(materialType, { totalIn: throughput.totalIn, totalOut: throughput.totalOut });
+                byMaterial.set(materialType as EMaterialType, {
+                    totalIn: throughput.totalIn,
+                    totalOut: throughput.totalOut,
+                });
             }
             map.set(buildingId, byMaterial);
         }
@@ -184,7 +187,7 @@ export function requireInputSlot(
 ): PileSlot {
     const slot = findInputSlot(inventorySlots, slotStore, buildingId, material);
     if (!slot) {
-        throw new Error(`Building ${buildingId} has no input slot for ${EMaterialType[material]} [${ctx}]`);
+        throw new Error(`Building ${buildingId} has no input slot for ${material} [${ctx}]`);
     }
     return slot;
 }
@@ -198,7 +201,7 @@ export function requireOutputSlot(
 ): PileSlot {
     const slot = findOutputSlot(inventorySlots, slotStore, buildingId, material);
     if (!slot) {
-        throw new Error(`Building ${buildingId} has no output slot for ${EMaterialType[material]} [${ctx}]`);
+        throw new Error(`Building ${buildingId} has no output slot for ${material} [${ctx}]`);
     }
     return slot;
 }

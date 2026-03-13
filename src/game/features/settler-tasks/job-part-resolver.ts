@@ -6,7 +6,6 @@
  */
 
 import { stripXmlPrefix } from '../../renderer/sprite-metadata';
-import { EMaterialType } from '../../economy';
 import { xmlKey } from '../../animation/animation';
 import type { Entity } from '../../entity';
 import type { JobPartResolution, JobPartResolver } from './choreo-types';
@@ -36,11 +35,7 @@ export class JobPartResolverImpl implements JobPartResolver {
         // For C_WALK: if the carrier is holding something, use the material-specific carry walk.
         // The XML always emits C_WALK for both empty and loaded segments — the engine resolves it dynamically.
         if (jobPart === 'C_WALK' && settler.carrying) {
-            const materialName = EMaterialType[settler.carrying.material];
-            if (!materialName) {
-                throw new Error(`Unknown EMaterialType: ${settler.carrying.material}`);
-            }
-            jobPart = xmlKey('C', `WALK_${materialName}`);
+            jobPart = xmlKey('C', `WALK_${settler.carrying.material}`);
         }
 
         const action = stripXmlPrefix(jobPart);

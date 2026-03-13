@@ -404,11 +404,11 @@ export class BuildingInventoryManager {
         if (slot.currentAmount > 0 && slot.materialType !== material) {
             throw new Error(
                 `Cannot reassign non-empty slot ${slotId}: has ${slot.currentAmount} of ` +
-                    `${EMaterialType[slot.materialType]}, attempted ${EMaterialType[material]}`
+                    `${slot.materialType}, attempted ${material}`
             );
         }
         slot.materialType = material;
-        log.debug(`setSlotMaterial: slotId=${slotId} → ${EMaterialType[material]}`);
+        log.debug(`setSlotMaterial: slotId=${slotId} → ${material}`);
     }
     depositInput(buildingId: number, material: EMaterialType, amount: number): number {
         return this.deposit(this.requireInputSlot(buildingId, material, 'depositInput').id, amount);
@@ -544,9 +544,7 @@ export class BuildingInventoryManager {
         };
         this.slotStore.set(slotId, slot);
         this.getInventorySlotSet(buildingId).add(slotId);
-        log.debug(
-            `createSlot: building=${buildingId}, slotId=${slotId}, kind=${kind}, material=${EMaterialType[cfg.materialType]}`
-        );
+        log.debug(`createSlot: building=${buildingId}, slotId=${slotId}, kind=${kind}, material=${cfg.materialType}`);
     }
 
     private getInventorySlotSet(buildingId: number): Set<number> {

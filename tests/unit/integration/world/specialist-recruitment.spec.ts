@@ -26,8 +26,7 @@ function recruitSpecialist(sim: Simulation, unitType: UnitType, count: number, p
 }
 
 function countPilesOf(sim: Simulation, material: EMaterialType): number {
-    return sim.state.entities.filter(e => e.type === EntityType.StackedPile && e.subType === (material as number))
-        .length;
+    return sim.state.entities.filter(e => e.type === EntityType.StackedPile && e.subType === material).length;
 }
 
 // ─── Thief & Geologist recruitment ────────────────────────────────────────

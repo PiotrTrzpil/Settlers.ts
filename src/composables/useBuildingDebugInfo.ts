@@ -7,7 +7,6 @@
 import { computed, type Ref } from 'vue';
 import type { Entity } from '@/game/entity';
 import { EntityType } from '@/game/entity';
-import { EMaterialType } from '@/game/economy';
 import { BuildingConstructionPhase } from '@/game/features/building-construction';
 import { SlotKind } from '@/game/core/pile-kind';
 import type { Game } from '@/game/game';
@@ -98,7 +97,7 @@ export function useBuildingDebugInfo(
 
         // Material demand info — derive from demand queue and active jobs
         const hasProduction = demands.length > 0 || activeJobs.length > 0 || hasSlots;
-        const pendingInputs = demands.map(d => EMaterialType[d.materialType]);
+        const pendingInputs = demands.map(d => d.materialType);
 
         // Inventory info
         const hasInventory = hasSlots;
@@ -111,7 +110,7 @@ export function useBuildingDebugInfo(
                     const reserved = jobStore.getReservedAmount(entity.id, slot.materialType);
                     inventorySlots.push({
                         type: 'In',
-                        material: EMaterialType[slot.materialType],
+                        material: slot.materialType,
                         amount: slot.currentAmount,
                         reserved,
                     });
@@ -119,7 +118,7 @@ export function useBuildingDebugInfo(
                     const reserved = jobStore.getReservedAmount(entity.id, slot.materialType);
                     inventorySlots.push({
                         type: 'Out',
-                        material: EMaterialType[slot.materialType],
+                        material: slot.materialType,
                         amount: slot.currentAmount,
                         reserved,
                     });
@@ -130,7 +129,7 @@ export function useBuildingDebugInfo(
         // Request info — show active transport jobs targeting this building
         const requestInfos: RequestInfo[] = activeJobs.slice(0, 5).map(job => ({
             id: job.id,
-            material: EMaterialType[job.material],
+            material: job.material,
             status: job.phase,
             statusLabel: job.phase === 'picked-up' ? '⚙' : '⏳',
         }));

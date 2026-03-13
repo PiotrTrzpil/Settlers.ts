@@ -9,72 +9,72 @@
 
 export enum UnitType {
     // ── Common workers (all non-Dark-Tribe races) ──
-    Carrier = 0,
-    Builder = 1,
-    Digger = 2,
-    Woodcutter = 3,
-    Stonecutter = 4,
-    Forester = 5,
-    Farmer = 6,
-    Fisher = 7,
-    Hunter = 8,
-    Miner = 9,
-    Smelter = 10,
-    Smith = 11,
-    SawmillWorker = 12,
-    Miller = 13,
-    Baker = 14,
-    Butcher = 15,
-    AnimalFarmer = 16,
-    Waterworker = 17,
-    Healer = 18,
-    Donkey = 19,
+    Carrier = 'Carrier',
+    Builder = 'Builder',
+    Digger = 'Digger',
+    Woodcutter = 'Woodcutter',
+    Stonecutter = 'Stonecutter',
+    Forester = 'Forester',
+    Farmer = 'Farmer',
+    Fisher = 'Fisher',
+    Hunter = 'Hunter',
+    Miner = 'Miner',
+    Smelter = 'Smelter',
+    Smith = 'Smith',
+    SawmillWorker = 'SawmillWorker',
+    Miller = 'Miller',
+    Baker = 'Baker',
+    Butcher = 'Butcher',
+    AnimalFarmer = 'AnimalFarmer',
+    Waterworker = 'Waterworker',
+    Healer = 'Healer',
+    Donkey = 'Donkey',
     // ── Race-specific economy workers ──
-    Winemaker = 20, // Roman
-    Beekeeper = 21, // Viking
-    Meadmaker = 22, // Viking
-    AgaveFarmer = 23, // Mayan
-    Tequilamaker = 24, // Mayan
-    SunflowerFarmer = 25, // Trojan
-    SunflowerOilMaker = 26, // Trojan
+    Winemaker = 'Winemaker', // Roman
+    Beekeeper = 'Beekeeper', // Viking
+    Meadmaker = 'Meadmaker', // Viking
+    AgaveFarmer = 'AgaveFarmer', // Mayan
+    Tequilamaker = 'Tequilamaker', // Mayan
+    SunflowerFarmer = 'SunflowerFarmer', // Trojan
+    SunflowerOilMaker = 'SunflowerOilMaker', // Trojan
     // ── Military (L1 base + L2/L3 variants) ──
-    Swordsman1 = 27,
-    Swordsman2 = 28,
-    Swordsman3 = 29,
-    Bowman1 = 30,
-    Bowman2 = 31,
-    Bowman3 = 32,
-    SquadLeader = 33,
+    Swordsman1 = 'Swordsman1',
+    Swordsman2 = 'Swordsman2',
+    Swordsman3 = 'Swordsman3',
+    Bowman1 = 'Bowman1',
+    Bowman2 = 'Bowman2',
+    Bowman3 = 'Bowman3',
+    SquadLeader = 'SquadLeader',
     // ── Race-specific specialists (L1 + L2/L3) ──
-    Medic1 = 34, // Roman
-    Medic2 = 35,
-    Medic3 = 36,
-    AxeWarrior1 = 37, // Viking (same JIL as Medic, different race file)
-    AxeWarrior2 = 38,
-    AxeWarrior3 = 39,
-    BlowgunWarrior1 = 40, // Mayan
-    BlowgunWarrior2 = 41,
-    BlowgunWarrior3 = 42,
-    BackpackCatapultist1 = 43, // Trojan
-    BackpackCatapultist2 = 44,
-    BackpackCatapultist3 = 45,
+    Medic1 = 'Medic1', // Roman
+    Medic2 = 'Medic2',
+    Medic3 = 'Medic3',
+    AxeWarrior1 = 'AxeWarrior1', // Viking (same JIL as Medic, different race file)
+    AxeWarrior2 = 'AxeWarrior2',
+    AxeWarrior3 = 'AxeWarrior3',
+    BlowgunWarrior1 = 'BlowgunWarrior1', // Mayan
+    BlowgunWarrior2 = 'BlowgunWarrior2',
+    BlowgunWarrior3 = 'BlowgunWarrior3',
+    BackpackCatapultist1 = 'BackpackCatapultist1', // Trojan
+    BackpackCatapultist2 = 'BackpackCatapultist2',
+    BackpackCatapultist3 = 'BackpackCatapultist3',
     // ── Non-military specialists ──
-    Priest = 46,
-    Pioneer = 47,
-    Thief = 48,
-    Geologist = 49,
-    Saboteur = 50,
-    Gardener = 51, // All non-Dark-Tribe races (JIL 308-310)
+    Priest = 'Priest',
+    Pioneer = 'Pioneer',
+    Thief = 'Thief',
+    Geologist = 'Geologist',
+    Saboteur = 'Saboteur',
+    Gardener = 'Gardener', // All non-Dark-Tribe races (JIL 308-310)
     // ── Dark Tribe exclusive ──
-    DarkGardener = 52,
-    Shaman = 53,
-    MushroomFarmer = 54,
-    SlavedSettler = 55,
-    TempleServant = 56,
-    ManacopterMaster = 57,
-    Angel = 58,
-    Angel2 = 59,
-    Angel3 = 60,
+    DarkGardener = 'DarkGardener',
+    Shaman = 'Shaman',
+    MushroomFarmer = 'MushroomFarmer',
+    SlavedSettler = 'SlavedSettler',
+    TempleServant = 'TempleServant',
+    ManacopterMaster = 'ManacopterMaster',
+    Angel = 'Angel',
+    Angel2 = 'Angel2',
+    Angel3 = 'Angel3',
 }
 
 /**
@@ -276,5 +276,5 @@ export function isAngelUnitType(type: UnitType): boolean {
 export function getUnitTypesInCategory(category: UnitCategory): UnitType[] {
     return Object.entries(UNIT_TYPE_CONFIG)
         .filter(([, config]) => config.category === category)
-        .map(([type]) => Number(type) as UnitType);
+        .map(([type]) => type as UnitType);
 }

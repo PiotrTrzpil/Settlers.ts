@@ -194,7 +194,7 @@ export class RecruitSystem implements TickSystem {
                 near,
             });
         }
-        log.debug(`Enqueued ${count}× ${UnitType[unitType]}` + ` (total: ${this.queue.get(unitType)!.count})`);
+        log.debug(`Enqueued ${count}× ${unitType}` + ` (total: ${this.queue.get(unitType)!.count})`);
     }
 
     dequeue(unitType: UnitType, count: number): void {
@@ -206,7 +206,7 @@ export class RecruitSystem implements TickSystem {
         if (existing.count === 0) {
             this.queue.delete(unitType);
         }
-        log.debug(`Dequeued ${count}× ${UnitType[unitType]}`);
+        log.debug(`Dequeued ${count}× ${unitType}`);
     }
 
     getQueuedCount(unitType: UnitType): number {

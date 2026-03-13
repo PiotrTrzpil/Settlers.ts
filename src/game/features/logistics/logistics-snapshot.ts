@@ -57,7 +57,7 @@ export interface DemandSummary {
     buildingId: number;
     buildingType: string;
     material: string;
-    materialType: number;
+    materialType: number | string;
     priority: 'High' | 'Normal' | 'Low';
     age: number;
     reason: string | null;
@@ -149,17 +149,17 @@ const PRIORITY_NAMES: Record<DemandPriority, 'High' | 'Normal' | 'Low'> = {
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-export function formatMaterial(materialType: number): string {
-    return EMaterialType[materialType] || `#${materialType}`;
+export function formatMaterial(materialType: EMaterialType): string {
+    return materialType;
 }
 
 function buildingTypeNameSafe(subType: number): string {
     return BuildingType[subType as BuildingType] || `#${subType}`;
 }
 
-function unitTypeNameSafe(subType: number): string {
-    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- subType is arbitrary number, not necessarily a valid UnitType
-    return UNIT_TYPE_CONFIG[subType as UnitType]?.name ?? `#${subType}`;
+function unitTypeNameSafe(subType: UnitType): string {
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- subType is arbitrary value, not necessarily a valid UnitType
+    return UNIT_TYPE_CONFIG[subType]?.name ?? `#${subType}`;
 }
 
 export function createEmptyStats(): LogisticsStats {
@@ -197,8 +197,8 @@ function buildDiagConfig(config: SnapshotConfig): DiagnosticConfig {
     };
 }
 
-function isNonCarrierWorker(subType: number): boolean {
-    return subType !== UnitType.Carrier && !isUnitTypeMilitary(subType as UnitType);
+function isNonCarrierWorker(subType: UnitType): boolean {
+    return subType !== UnitType.Carrier && !isUnitTypeMilitary(subType);
 }
 
 const PRIORITY_ORDER = { High: 0, Normal: 1, Low: 2 } as const;
@@ -230,7 +230,7 @@ export function gatherDemands(
         summaries.push({
             id: demand.id,
             buildingId: demand.buildingId,
-            buildingType: buildingTypeNameSafe(building.subType),
+            buildingType: buildingTypeNameSafe(building.subType as number),
             material: formatMaterial(demand.materialType),
             materialType: demand.materialType,
             priority: PRIORITY_NAMES[demand.priority],
@@ -381,7 +381,7 @@ export function gatherProductionBuildings(
 
         result.push({
             entityId: entity.id,
-            type: buildingTypeNameSafe(entity.subType),
+            type: buildingTypeNameSafe(entity.subType as number),
             inputs,
             outputs,
             outputFull: outputs.length > 0 && outputs.every(s => s.current >= s.max),
@@ -437,7 +437,7 @@ export function gatherPiles(
 
         result.push({
             entityId: entity.id,
-            material: formatMaterial(entity.subType),
+            material: formatMaterial(entity.subType as EMaterialType),
             quantity: slot.currentAmount,
             kind,
             buildingId: pileKind.kind !== SlotKind.Free ? pileKind.buildingId : null,
@@ -463,10 +463,16 @@ export function gatherWorkers(
     const result: WorkerSummary[] = [];
 
     for (const entity of gameState.entityIndex.ofTypeAndPlayer(EntityType.Unit, player)) {
-        if (!isNonCarrierWorker(entity.subType)) {
+        if (!isNonCarrierWorker(entity.subType as UnitType)) {
             continue;
         }
-        const workerSummary = buildWorkerSummary(entity.id, entity, settlerTaskSystem, gameState, stateFilter);
+        const workerSummary = buildWorkerSummary(
+            entity.id,
+            entity as { subType: UnitType; x: number; y: number },
+            settlerTaskSystem,
+            gameState,
+            stateFilter
+        );
         if (workerSummary) {
             result.push(workerSummary);
         }
@@ -478,7 +484,7 @@ export function gatherWorkers(
 
 function buildWorkerSummary(
     entityId: number,
-    entity: { subType: number; x: number; y: number },
+    entity: { subType: UnitType; x: number; y: number },
     settlerTaskSystem: SettlerTaskSystem,
     gameState: GameState,
     stateFilter: string | undefined
@@ -496,7 +502,7 @@ function buildWorkerSummary(
     if (assignedBuilding !== null) {
         const bldg = gameState.getEntity(assignedBuilding);
         if (bldg) {
-            assignedBuildingType = buildingTypeNameSafe(bldg.subType);
+            assignedBuildingType = buildingTypeNameSafe(bldg.subType as number);
         }
     }
 

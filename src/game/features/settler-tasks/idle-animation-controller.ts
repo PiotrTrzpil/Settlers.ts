@@ -8,7 +8,6 @@
 
 import type { Entity } from '../../entity';
 import { UnitType } from '../../entity';
-import { EMaterialType } from '../../economy';
 import { xmlKey } from '../../animation/animation';
 import { UNIT_XML_PREFIX } from '../../renderer/sprite-metadata';
 import type { EntityVisualService } from '../../animation/entity-visual-service';
@@ -32,7 +31,7 @@ export interface RngSource {
 function getPrefix(unit: Entity): string {
     const prefix = UNIT_XML_PREFIX[unit.subType as UnitType];
     if (!prefix) {
-        throw new Error(`No XML prefix for UnitType ${UnitType[unit.subType] ?? unit.subType}`);
+        throw new Error(`No XML prefix for UnitType ${unit.subType as UnitType}`);
     }
     return prefix;
 }
@@ -68,9 +67,7 @@ export class IdleAnimationController {
         if (movementState === 'moving') {
             const vs = this.visualService.getState(unit.id);
             const prefix = getPrefix(unit);
-            const walkKey = unit.carrying
-                ? xmlKey(prefix, `WALK_${EMaterialType[unit.carrying.material]}`)
-                : xmlKey(prefix, 'WALK');
+            const walkKey = unit.carrying ? xmlKey(prefix, `WALK_${unit.carrying.material}`) : xmlKey(prefix, 'WALK');
             if (!vs?.animation?.playing || vs.animation.sequenceKey !== walkKey) {
                 this.startWalkAnimation(unit, movementDirection);
             }
@@ -125,11 +122,7 @@ export class IdleAnimationController {
         const prefix = getPrefix(unit);
         let sequence: string;
         if (unit.carrying) {
-            const materialName = EMaterialType[unit.carrying.material];
-            if (!materialName) {
-                throw new Error(`Unknown EMaterialType: ${unit.carrying.material}`);
-            }
-            sequence = xmlKey(prefix, `WALK_${materialName}`);
+            sequence = xmlKey(prefix, `WALK_${unit.carrying.material}`);
         } else {
             sequence = xmlKey(prefix, 'WALK');
         }
