@@ -147,9 +147,19 @@ export interface ChoreoJob {
 // TransportData — carrier transport metadata
 // ─────────────────────────────────────────────────────────────
 
+/** Per-job lifecycle operations for carrier transport — attached as closures by the job creator. */
+export interface TransportOps {
+    /** Check if the transport job still exists (not cancelled externally). */
+    isValid(): boolean;
+    /** Transition job to picked-up phase. Returns false if job was cancelled. */
+    pickUp(): boolean;
+    /** Transition job to delivered phase. Returns false if job was cancelled. */
+    deliver(): boolean;
+}
+
 /** Transport metadata stored on ChoreoJobState for carrier transport jobs. */
 export interface TransportData {
-    /** Transport job record ID — used to call TransportJobOps lifecycle methods. */
+    /** Transport job record ID — used for logging and event payloads. */
     jobId: number;
     /** Source building entity ID (pickup location). */
     sourceBuildingId: number;
@@ -165,6 +175,8 @@ export interface TransportData {
     destPos: { x: number; y: number };
     /** Target PileSlot ID at the destination (stable across inventory lifecycle). */
     slotId: number;
+    /** Lifecycle operations — closures over the specific TransportJobRecord, set by the job builder. */
+    ops: TransportOps;
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -204,6 +216,8 @@ export interface ChoreoJobState {
     waypoints?: Array<{ x: number; y: number; entityId?: number }>;
     /** Typed metadata bag — replaces carryingGood hacks for stashing domain data. */
     metadata?: Record<string, number | string>;
+    /** Called when the job is interrupted/cancelled. Feature-provided cleanup hook. */
+    onCancel?: () => void;
 }
 
 /** Create a fresh ChoreoJobState for starting a job. */

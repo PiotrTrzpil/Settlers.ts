@@ -105,7 +105,10 @@ export class AiPlayerSystemImpl implements AiPlayerSystem {
         // Deterministic iteration: sorted by player index
         const sortedPlayers = [...this.controllers.keys()].sort((a, b) => a - b);
         for (const player of sortedPlayers) {
-            const controller = this.controllers.get(player)!;
+            const controller = this.controllers.get(player);
+            if (!controller) {
+                throw new Error(`No AI controller for player ${player} in AiPlayerSystem.tick`);
+            }
             try {
                 controller.evaluate(dt);
             } catch (err) {

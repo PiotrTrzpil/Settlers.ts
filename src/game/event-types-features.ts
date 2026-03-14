@@ -11,6 +11,7 @@ import type { Race } from './core/race';
 import type { UnitType } from './core/unit-types';
 import type { EMaterialType } from './economy';
 import type { MapObjectType } from './types/map-object-types';
+import type { EntityType } from './entity';
 import type { GameEventBase, TrainingRecipe } from './event-types';
 
 /** Feature-specific events — merged into GameEvents via intersection. */
@@ -82,7 +83,7 @@ export interface GameEventsFeatures {
      */
     'entity:created': GameEventBase & {
         entityId: number;
-        entityType: import('./entity').EntityType;
+        entityType: EntityType;
         subType: number | string;
         x: number;
         y: number;

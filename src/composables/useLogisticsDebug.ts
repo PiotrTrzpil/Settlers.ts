@@ -29,7 +29,7 @@ function buildSnapshotConfig(game: Game): SnapshotConfig {
         demandQueue: svc.demandQueue,
         carrierRegistry: svc.carrierRegistry,
         logisticsDispatcher: svc.logisticsDispatcher,
-        settlerTaskSystem: svc.settlerTaskSystem,
+        workerStateQuery: svc.settlerTaskSystem,
         inventoryManager: svc.inventoryManager,
         unitReservation: svc.unitReservation,
         constructionSiteManager: svc.constructionSiteManager,

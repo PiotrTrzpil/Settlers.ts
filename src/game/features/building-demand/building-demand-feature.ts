@@ -11,7 +11,7 @@ import type { BuildingConstructionExports } from '../building-construction/build
 import { BuildingDemandSystem } from './building-demand-system';
 import type { SettlerLocationExports } from '../settler-location/types';
 import { ChoreoTaskType } from '@/game/systems/choreo';
-import { createEnterBuildingExecutor } from '../settler-tasks/internal/dispatch-executors';
+import { createEnterBuildingExecutor } from '../settler-tasks';
 import { EntityType, BuildingType } from '../../entity';
 import { BUILDING_SPAWN_ON_COMPLETE } from '../building-construction/spawn-units';
 

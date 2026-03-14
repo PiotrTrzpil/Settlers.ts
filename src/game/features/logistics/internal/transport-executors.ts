@@ -2,20 +2,22 @@
  * Transport-specific choreography executors for carrier delivery jobs.
  *
  * Dedicated executors for TRANSPORT_* task types — no branching on transportData.
- * These are registered alongside the core executors and only run for carrier
- * transport choreographies built by TransportJobBuilder.
+ * These are registered on ChoreoSystem by registerTransportExecutors() and only
+ * run for carrier transport choreographies built by TransportJobBuilder.
  *
  * Movement executors (TRANSPORT_GO_TO_SOURCE/DEST) read positions from
- * job.transportData. Inventory executors (TRANSPORT_PICKUP/DELIVER) handle
- * the TransportJob lifecycle, material transfer, and carrier events.
+ * job.transportData and delegate to moveToPosition from settler-tasks.
+ * Inventory executors (TRANSPORT_PICKUP/DELIVER) handle the TransportJob
+ * lifecycle via td.ops closures, material transfer, and carrier events.
  */
 
 import { type Entity, clearCarrying } from '../../../entity';
 import { createLogger } from '@/utilities/logger';
 import { TaskResult, framesToSeconds, tickDuration } from '../../../systems/choreo/types';
 import type { ChoreoJobState, ChoreoNode, TransportData } from '../../../systems/choreo/types';
-import type { InventoryExecutorContext, MovementContext } from '../choreo-types';
-import { moveToPosition } from './movement-executors';
+import type { MovementContext } from '../../settler-tasks/choreo-types';
+import type { TransportExecutorContext } from './transport-executor-context';
+import { moveToPosition } from '../../settler-tasks/internal/movement-executors';
 
 const log = createLogger('TransportExecutors');
 
@@ -83,7 +85,7 @@ export function executeTransportGoToDest(
 /**
  * TRANSPORT_PICKUP — withdraw material from source building.
  *
- * First tick: validates job, withdraws via materialTransfer, consumes reservation.
+ * First tick: validates job via td.ops.isValid(), withdraws via materialTransfer, consumes reservation.
  * Subsequent ticks: plays pickup animation.
  */
 export function executeTransportPickup(
@@ -91,24 +93,24 @@ export function executeTransportPickup(
     job: ChoreoJobState,
     node: ChoreoNode,
     dt: number,
-    ctx: InventoryExecutorContext
+    ctx: TransportExecutorContext
 ): TaskResult {
     if (!job.workStarted) {
         job.workStarted = true;
 
         const td = requireTransportData(job, 'TRANSPORT_PICKUP');
-        const { jobId, material, sourceBuildingId, amount: requestedAmount } = td;
+        const { material, sourceBuildingId, amount: requestedAmount } = td;
 
-        if (!ctx.transportJobOps.getJob(jobId)) {
-            log.debug(`Carrier ${settler.id}: transport job ${jobId} no longer exists, aborting pickup`);
+        if (!td.ops.isValid()) {
+            log.debug(`Carrier ${settler.id}: transport job ${td.jobId} no longer exists, aborting pickup`);
             return TaskResult.FAILED;
         }
 
         // Advance phase to PickedUp BEFORE withdrawal so that if the source entity
         // is destroyed (e.g. free pile emptied to 0), the cleanup sees PickedUp and
         // lets the carrier continue to deliver instead of cancelling the job.
-        if (!ctx.transportJobOps.pickUp(jobId)) {
-            log.debug(`Carrier ${settler.id}: transport job ${jobId} cancelled before pickup`);
+        if (!td.ops.pickUp()) {
+            log.debug(`Carrier ${settler.id}: transport job ${td.jobId} cancelled before pickup`);
             return TaskResult.FAILED;
         }
 
@@ -150,7 +152,7 @@ export function executeTransportPickup(
  *
  * Returns the amount successfully deposited.
  */
-function depositIntoSlot(settler: Entity, slotId: number, ctx: InventoryExecutorContext): number {
+function depositIntoSlot(settler: Entity, slotId: number, ctx: TransportExecutorContext): number {
     if (!settler.carrying) {
         throw new Error(`TransportExecutors.depositIntoSlot: settler ${settler.id} is not carrying anything`);
     }
@@ -174,7 +176,7 @@ function depositIntoSlot(settler: Entity, slotId: number, ctx: InventoryExecutor
 /**
  * TRANSPORT_DELIVER — deposit material at destination building.
  *
- * First tick: validates job, deposits via inventoryManager.deposit(slotId) into the
+ * First tick: validates job via td.ops.isValid(), deposits via inventoryManager.deposit(slotId) into the
  * targeted slot from transportData, fulfills the transport job. Emits
  * construction:materialDelivered when delivering to a construction site.
  * Subsequent ticks: plays dropoff animation.
@@ -184,16 +186,16 @@ export function executeTransportDeliver(
     job: ChoreoJobState,
     node: ChoreoNode,
     dt: number,
-    ctx: InventoryExecutorContext
+    ctx: TransportExecutorContext
 ): TaskResult {
     if (!job.workStarted) {
         job.workStarted = true;
 
         const td = requireTransportData(job, 'TRANSPORT_DELIVER');
-        const { jobId, destBuildingId, material, slotId } = td;
+        const { destBuildingId, material, slotId } = td;
 
-        if (!ctx.transportJobOps.getJob(jobId)) {
-            log.debug(`Carrier ${settler.id}: transport job ${jobId} no longer exists, dropping material`);
+        if (!td.ops.isValid()) {
+            log.debug(`Carrier ${settler.id}: transport job ${td.jobId} no longer exists, dropping material`);
             ctx.materialTransfer.drop(settler.id);
             return TaskResult.FAILED;
         }
@@ -207,7 +209,7 @@ export function executeTransportDeliver(
 
         const amount = settler.carrying.amount;
         const deposited = depositIntoSlot(settler, slotId, ctx);
-        ctx.transportJobOps.deliver(jobId);
+        td.ops.deliver();
 
         const overflow = amount - deposited;
         if (overflow > 0) {

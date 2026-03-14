@@ -12,10 +12,12 @@
 import { EntityType } from '../../entity';
 import { BuildingType } from '../../buildings/building-type';
 import { getBuildingDoorPos } from '../../data/game-data-access';
-import { ChoreoTaskType } from '../../systems/choreo/types';
+import { ChoreoTaskType, type ChoreoJobState, type TransportOps } from '../../systems/choreo/types';
 import { choreo } from '../../systems/choreo/choreo-builder';
-import type { JobState } from '../settler-tasks/types';
-import type { TransportJobRecord } from './transport-job-record';
+import { type TransportJobRecord } from './transport-job-record';
+import * as TransportJobService from './transport-job-service';
+import type { TransportJobDeps } from './transport-job-service';
+import type { TransportJobStore } from './transport-job-store';
 import type { GameState } from '../../game-state';
 import type { BuildingInventoryManager } from '../../systems/inventory/building-inventory';
 
@@ -31,6 +33,8 @@ export interface TransportJobBuilderConfig {
     gameState: GameState;
     positionResolver: TransportPositionResolver;
     inventoryManager: BuildingInventoryManager;
+    jobStore: TransportJobStore;
+    transportJobDeps: TransportJobDeps;
 }
 
 /**
@@ -45,18 +49,23 @@ export class TransportJobBuilder {
     private readonly gameState: GameState;
     private readonly positionResolver: TransportPositionResolver;
     private readonly inventoryManager: BuildingInventoryManager;
+    private readonly jobStore: TransportJobStore;
+    private readonly transportJobDeps: TransportJobDeps;
 
     constructor(config: TransportJobBuilderConfig) {
         this.gameState = config.gameState;
         this.positionResolver = config.positionResolver;
         this.inventoryManager = config.inventoryManager;
+        this.jobStore = config.jobStore;
+        this.transportJobDeps = config.transportJobDeps;
     }
 
     /**
      * Build a ChoreoJobState for a carrier transport delivery.
      * Resolves pile positions and sets up transport data for the choreography executors.
+     * Attaches per-job lifecycle closures (TransportOps) and onCancel hook.
      */
-    build(record: TransportJobRecord): JobState {
+    build(record: TransportJobRecord): ChoreoJobState {
         // Source building's output pile = where the carrier picks up
         const sourcePos = this.resolvePilePos(
             record.sourceBuilding,
@@ -81,6 +90,26 @@ export class TransportJobBuilder {
 
         // targetPos = first movement destination (source pile), used by assignJob for initial pathfinding
         job.targetPos = sourcePos;
+        const ops: TransportOps = {
+            isValid: () => this.findRecord(record.id) !== undefined,
+            pickUp: () => {
+                const r = this.findRecord(record.id);
+                if (!r) {
+                    return false;
+                }
+                TransportJobService.pickUp(r, this.transportJobDeps);
+                return true;
+            },
+            deliver: () => {
+                const r = this.findRecord(record.id);
+                if (!r) {
+                    return false;
+                }
+                TransportJobService.deliver(r, this.transportJobDeps);
+                return true;
+            },
+        };
+
         job.transportData = {
             jobId: record.id,
             sourceBuildingId: record.sourceBuilding,
@@ -90,9 +119,30 @@ export class TransportJobBuilder {
             sourcePos,
             destPos,
             slotId: record.slotId,
+            ops,
+        };
+
+        job.onCancel = () => {
+            const r = this.findRecord(record.id);
+            if (r) {
+                TransportJobService.cancel(r, 'interrupted', this.transportJobDeps);
+            }
         };
 
         return job;
+    }
+
+    /**
+     * Find a TransportJobRecord by its job ID, searching both active jobs and pending reservations.
+     * Returns undefined if the record no longer exists (cancelled externally).
+     */
+    private findRecord(jobId: number): TransportJobRecord | undefined {
+        for (const record of this.jobStore.jobs.values()) {
+            if (record.id === jobId) {
+                return record;
+            }
+        }
+        return undefined;
     }
 
     /** Resolve a source pile position, falling back to building door or entity position. */

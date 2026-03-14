@@ -5,7 +5,7 @@ import type { OutputFormatter } from './types';
  * Columns are space-padded (no box-drawing), numbers are never zero-padded.
  */
 export function createFormatter(): OutputFormatter {
-    return { table, kv };
+    return { table, kv, section, banner };
 }
 
 const COL_SEP = '  ';
@@ -28,8 +28,13 @@ function table(rows: string[][], headers?: string[]): string {
     const lines: string[] = [];
 
     if (headers) {
-        lines.push(formatRow(headers, widths));
-        lines.push(widths.map(w => '-'.repeat(w)).join(COL_SEP));
+        lines.push(
+            formatRow(
+                headers.map(h => h.toUpperCase()),
+                widths
+            )
+        );
+        lines.push(widths.map(w => '\u2500'.repeat(w)).join(COL_SEP));
     }
 
     for (const row of rows) {
@@ -51,5 +56,16 @@ function kv(entries: [string, string | number][]): string {
 
     const maxKeyLen = entries.reduce((max, [key]) => Math.max(max, key.length), 0);
 
-    return entries.map(([key, value]) => `${key.padStart(maxKeyLen)}: ${value}`).join('\n');
+    return entries.map(([key, value]) => `${key.padEnd(maxKeyLen)}  ${value}`).join('\n');
+}
+
+/** Format a section header: ── Title ── */
+function section(title: string, detail?: string): string {
+    const suffix = detail ? `  ${detail}` : '';
+    return `\u2500\u2500 ${title}${suffix} \u2500\u2500`;
+}
+
+/** Format a top-level banner with a rule underneath. */
+function banner(title: string): string {
+    return `${title}\n${'='.repeat(title.length)}`;
 }

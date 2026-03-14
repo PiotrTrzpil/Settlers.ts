@@ -97,7 +97,9 @@ export class OptimizedDepthSorter {
             // Visible entities MUST have cached world positions
             const worldPos = ctx.getWorldPos(entity);
             if (!worldPos) {
-                throw new Error(`OptimizedDepthSorter: no cached world pos for visible entity ${entity.id}`);
+                throw new Error(
+                    `OptimizedDepthSorter: no cached world pos for visible entity ${entity.id} — should have been set during FrameContext.create()`
+                );
             }
             const spriteEntry = this.getSpriteEntry(entity, ctx.spriteManager);
             this.floatDepthKeys[i] = this.computeFloatDepthKey(entity, worldPos, spriteEntry, ctx);

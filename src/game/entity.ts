@@ -124,7 +124,7 @@ export interface EntityProvider {
  */
 export function getCarryingState(entity: Entity): NonNullable<Entity['carrying']> {
     if (!entity.carrying) {
-        throw new Error(`Entity ${entity.id} is not carrying anything`);
+        throw new Error(`getCarryingState: entity ${entity.id} is not carrying anything`);
     }
     return entity.carrying;
 }

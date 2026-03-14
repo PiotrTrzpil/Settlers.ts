@@ -4,6 +4,7 @@
 
 import type { ChoreoJobState } from './choreo-types';
 import type { BuildingType } from '../../buildings/building-type';
+import type { UnitType } from '../../entity';
 
 /** Search types - what a settler looks for */
 export enum SearchType {
@@ -139,3 +140,20 @@ export interface PositionWorkHandler {
 
 /** Discriminated union of work handler types */
 export type WorkHandler = EntityWorkHandler | PositionWorkHandler;
+
+/** Narrow interface for assigning tasks to units. Used by logistics, building-demand, siege, etc. */
+export interface TaskDispatcher {
+    assignJob(entityId: number, job: ChoreoJobState, moveTo?: { x: number; y: number }): boolean;
+    assignMoveTask(entityId: number, targetX: number, targetY: number): boolean;
+    assignWorkerToBuilding(settlerId: number, buildingId: number): void;
+    releaseWorkerAssignment(settlerId: number): void;
+    findIdleSpecialist(unitType: UnitType, player: number, nearX: number, nearY: number): number | null;
+}
+
+/** Narrow read-only interface for querying worker state. Used by logistics diagnostics. */
+export interface WorkerStateQuery {
+    getActiveJobId(entityId: number): string | null;
+    getSettlerState(entityId: number): SettlerState | null;
+    getAssignedBuilding(settlerId: number): number | null;
+    getWorkersForBuilding(buildingId: number): ReadonlySet<number>;
+}

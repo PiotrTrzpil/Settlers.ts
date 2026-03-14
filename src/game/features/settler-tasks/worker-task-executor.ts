@@ -27,7 +27,6 @@ import type {
     BuildingPositionResolver,
     TriggerSystem,
     JobPartResolver,
-    TransportJobOps,
 } from './choreo-types';
 import { ChoreoTaskType } from './choreo-types';
 import { registerCoreExecutors } from './choreo-executors';
@@ -69,7 +68,6 @@ export interface WorkerTaskExecutorConfig extends CoreDeps {
     getWorkerHomeBuilding: (settlerId: number) => number | null;
     jobPartResolver: JobPartResolver;
     materialTransfer: MaterialTransfer;
-    transportJobOps: TransportJobOps;
     locationManager: ISettlerBuildingLocationManager;
     constructionSiteManager: ConstructionSiteManager;
     getBarracksTrainingManager?: () => BarracksTrainingManager | undefined;
@@ -144,7 +142,6 @@ export class WorkerTaskExecutor {
             getWorkerHomeBuilding: cfg.getWorkerHomeBuilding,
             materialTransfer: cfg.materialTransfer,
             eventBus: cfg.eventBus,
-            transportJobOps: cfg.transportJobOps,
             constructionSiteManager: cfg.constructionSiteManager,
         };
 
@@ -169,7 +166,6 @@ export class WorkerTaskExecutor {
             gameState: cfg.gameState,
             triggerSystem: cfg.triggerSystem,
             materialTransfer: cfg.materialTransfer,
-            transportJobOps: cfg.transportJobOps,
             handlerErrorLogger: cfg.handlerErrorLogger,
             eventBus: cfg.eventBus,
             getWorkerHomeBuilding: cfg.getWorkerHomeBuilding,

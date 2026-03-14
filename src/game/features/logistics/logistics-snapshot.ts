@@ -9,7 +9,7 @@ import type { GameState } from '../../game-state';
 import type { DemandQueue, DemandEntry } from './demand-queue';
 import type { CarrierRegistry } from '../../systems/carrier-registry';
 import type { LogisticsDispatcher } from './logistics-dispatcher';
-import type { SettlerTaskSystem } from '../settler-tasks/settler-task-system';
+import type { WorkerStateQuery } from '../settler-tasks';
 import type { BuildingInventoryManager } from '../../systems/inventory/building-inventory';
 import type { UnitReservationRegistry } from '../../systems/unit-reservation';
 import type { ConstructionSiteManager } from '../building-construction/construction-site-manager';
@@ -33,7 +33,7 @@ export interface SnapshotConfig {
     demandQueue: DemandQueue;
     carrierRegistry: CarrierRegistry;
     logisticsDispatcher: LogisticsDispatcher;
-    settlerTaskSystem: SettlerTaskSystem;
+    workerStateQuery: WorkerStateQuery;
     inventoryManager: BuildingInventoryManager;
     unitReservation: UnitReservationRegistry;
     constructionSiteManager: ConstructionSiteManager;
@@ -191,7 +191,7 @@ function buildDiagConfig(config: SnapshotConfig): DiagnosticConfig {
         inventoryManager: config.inventoryManager,
         carrierRegistry: config.carrierRegistry,
         jobStore: config.logisticsDispatcher.jobStore,
-        getActiveJobId: config.settlerTaskSystem.getActiveJobId.bind(config.settlerTaskSystem),
+        getActiveJobId: config.workerStateQuery.getActiveJobId.bind(config.workerStateQuery),
         isReserved: config.unitReservation.isReserved.bind(config.unitReservation),
     };
 }
@@ -269,11 +269,11 @@ export function gatherDemands(
 function buildCarrierSummary(
     id: number,
     entity: { x: number; y: number; carrying?: { material: EMaterialType; amount: number } },
-    settlerTaskSystem: SettlerTaskSystem,
+    workerStateQuery: WorkerStateQuery,
     logisticsDispatcher: LogisticsDispatcher
 ): CarrierSummary {
     const carrying = entity.carrying;
-    const activeJobId = settlerTaskSystem.getActiveJobId(id);
+    const activeJobId = workerStateQuery.getActiveJobId(id);
     const job = logisticsDispatcher.jobStore.jobs.raw.get(id);
 
     return {
@@ -301,14 +301,14 @@ export function gatherCarriers(
     stats: LogisticsStats,
     options?: { limit?: number }
 ): CarrierSummary[] {
-    const { gameState, carrierRegistry, logisticsDispatcher, settlerTaskSystem } = config;
+    const { gameState, carrierRegistry, logisticsDispatcher, workerStateQuery } = config;
     const carriers: CarrierSummary[] = [];
 
     for (const [id, , entity] of query(carrierRegistry.store, gameState.store)) {
         if (entity.player !== player) {
             continue;
         }
-        const summary = buildCarrierSummary(id, entity, settlerTaskSystem, logisticsDispatcher);
+        const summary = buildCarrierSummary(id, entity, workerStateQuery, logisticsDispatcher);
         carriers.push(summary);
         stats.carrierCount++;
         if (summary.hasJob) {
@@ -366,7 +366,7 @@ export function gatherProductionBuildings(
     player: number,
     options?: { limit?: number }
 ): ProductionBuildingSummary[] {
-    const { gameState, inventoryManager, settlerTaskSystem, constructionSiteManager } = config;
+    const { gameState, inventoryManager, workerStateQuery, constructionSiteManager } = config;
     const result: ProductionBuildingSummary[] = [];
 
     for (const entity of gameState.entityIndex.ofTypeAndPlayer(EntityType.Building, player)) {
@@ -387,7 +387,7 @@ export function gatherProductionBuildings(
             inputs,
             outputs,
             outputFull: outputs.length > 0 && outputs.every(s => s.current >= s.max),
-            workerCount: settlerTaskSystem.getWorkersForBuilding(entity.id).size,
+            workerCount: workerStateQuery.getWorkersForBuilding(entity.id).size,
             isConstructing: constructionSiteManager.hasSite(entity.id),
         });
     }
@@ -460,7 +460,7 @@ export function gatherWorkers(
     player: number,
     options?: { limit?: number; stateFilter?: string }
 ): WorkerSummary[] {
-    const { gameState, settlerTaskSystem } = config;
+    const { gameState, workerStateQuery } = config;
     const stateFilter = options?.stateFilter?.toUpperCase();
     const result: WorkerSummary[] = [];
 
@@ -471,7 +471,7 @@ export function gatherWorkers(
         const workerSummary = buildWorkerSummary(
             entity.id,
             entity as { subType: UnitType; x: number; y: number },
-            settlerTaskSystem,
+            workerStateQuery,
             gameState,
             stateFilter
         );
@@ -487,11 +487,11 @@ export function gatherWorkers(
 function buildWorkerSummary(
     entityId: number,
     entity: { subType: UnitType; x: number; y: number },
-    settlerTaskSystem: SettlerTaskSystem,
+    workerStateQuery: WorkerStateQuery,
     gameState: GameState,
     stateFilter: string | undefined
 ): WorkerSummary | null {
-    const state = settlerTaskSystem.getSettlerState(entityId);
+    const state = workerStateQuery.getSettlerState(entityId);
     if (!state) {
         return null;
     }
@@ -499,7 +499,7 @@ function buildWorkerSummary(
         return null;
     }
 
-    const assignedBuilding = settlerTaskSystem.getAssignedBuilding(entityId);
+    const assignedBuilding = workerStateQuery.getAssignedBuilding(entityId);
     let assignedBuildingType: string | null = null;
     if (assignedBuilding !== null) {
         const bldg = gameState.getEntityOrThrow(assignedBuilding, 'worker assigned building in logistics snapshot');
@@ -512,7 +512,7 @@ function buildWorkerSummary(
         state,
         assignedBuilding,
         assignedBuildingType,
-        jobId: settlerTaskSystem.getActiveJobId(entityId),
+        jobId: workerStateQuery.getActiveJobId(entityId),
         x: entity.x,
         y: entity.y,
     };

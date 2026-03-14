@@ -144,7 +144,10 @@ export class TransportJobStore {
         let total = 0;
         // Active jobs
         for (const carrierId of this.byBuilding.get(sourceBuilding)) {
-            const job = this.jobs.get(carrierId)!;
+            const job = this.jobs.get(carrierId);
+            if (!job) {
+                throw new Error(`No job for carrier ${carrierId} in TransportJobStore.getReservedAmount`);
+            }
             if (
                 job.sourceBuilding === sourceBuilding &&
                 job.material === material &&
@@ -181,7 +184,10 @@ export class TransportJobStore {
     getInFlightAmount(destBuilding: number, material: EMaterialType): number {
         let total = 0;
         for (const carrierId of this.byBuilding.get(destBuilding)) {
-            const job = this.jobs.get(carrierId)!;
+            const job = this.jobs.get(carrierId);
+            if (!job) {
+                throw new Error(`No job for carrier ${carrierId} in TransportJobStore.getInFlightAmount`);
+            }
             if (
                 job.destBuilding === destBuilding &&
                 job.material === material &&
@@ -203,7 +209,10 @@ export class TransportJobStore {
         let count = 0;
         // Active jobs
         for (const carrierId of this.byBuilding.get(destBuilding)) {
-            const job = this.jobs.get(carrierId)!;
+            const job = this.jobs.get(carrierId);
+            if (!job) {
+                throw new Error(`No job for carrier ${carrierId} in TransportJobStore.getActiveJobCountForDest`);
+            }
             if (
                 job.destBuilding === destBuilding &&
                 job.material === material &&
@@ -243,7 +252,11 @@ export class TransportJobStore {
     getJobsForBuilding(buildingId: number): TransportJobRecord[] {
         const result: TransportJobRecord[] = [];
         for (const carrierId of this.byBuilding.get(buildingId)) {
-            result.push(this.jobs.get(carrierId)!);
+            const job = this.jobs.get(carrierId);
+            if (!job) {
+                throw new Error(`No job for carrier ${carrierId} in TransportJobStore.getJobsForBuilding`);
+            }
+            result.push(job);
         }
         return result;
     }

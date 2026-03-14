@@ -28,6 +28,7 @@ import type { ConstructionSiteManager } from './construction-site-manager';
 import type { Command, CommandResult } from '../../commands';
 import { BUILDING_SPAWN_ON_COMPLETE } from './spawn-units';
 import type { ResidenceSpawnerSystem } from './residence-spawner';
+import type { MapSize } from '@/utilities/map-size';
 import { ringTiles } from '../../systems/spatial-search';
 
 /**
@@ -114,7 +115,7 @@ export class BuildingConstructionSystem implements TickSystem {
         site: ConstructionSite,
         groundType: Uint8Array,
         groundHeight: Uint8Array,
-        mapSize: import('@/utilities/map-size').MapSize
+        mapSize: MapSize
     ): void {
         // Rebuild terrain for mid-leveling sites
         if (site.phase === BuildingConstructionPhase.TerrainLeveling && !site.terrain.originalTerrain) {
@@ -438,7 +439,10 @@ export class BuildingConstructionSystem implements TickSystem {
      * before evacuation starts, so no new arrivals are possible.
      */
     private tickEvacuation(buildingId: number, site: ConstructionSite): void {
-        const tracked = this.pendingEvacuations.get(buildingId)!;
+        const tracked = this.pendingEvacuations.get(buildingId);
+        if (!tracked) {
+            throw new Error(`No pending evacuation for building ${buildingId} in ConstructionSystem.tickEvacuation`);
+        }
 
         // Building may be cancelled mid-evacuation — clean up and bail
         const building = this.state.getEntity(buildingId);

@@ -12,8 +12,15 @@ import { isAngelUnitType } from '../../core/unit-types';
 import { createLogger } from '@/utilities/logger';
 import { ThrottledLogger } from '@/utilities/throttled-logger';
 import { sortedEntries } from '@/utilities/collections';
-import { SearchType, SettlerState, type JobState, type WorkHandler, type SettlerConfig } from './types';
-import type { TransportJobOps } from './choreo-types';
+import {
+    SearchType,
+    SettlerState,
+    type JobState,
+    type WorkHandler,
+    type SettlerConfig,
+    type TaskDispatcher,
+    type WorkerStateQuery,
+} from './types';
 import { buildAllSettlerConfigs } from '../../data/settler-data-access';
 import type { BuildingInventoryManager } from '../inventory';
 import { createWorkplaceHandler, createCarrierHandler } from './work-handlers';
@@ -40,7 +47,7 @@ const ORPHAN_CHECK_INTERVAL = 60;
 const IDLE_SEARCH_COOLDOWN = 10;
 type SettlerConfigs = Map<UnitType, SettlerConfig>;
 
-export class SettlerTaskSystem implements TickSystem {
+export class SettlerTaskSystem implements TickSystem, TaskDispatcher, WorkerStateQuery {
     private readonly gameState: GameState;
     private readonly eventBus: EventBus;
     private readonly inventoryManager: BuildingInventoryManager;
@@ -58,7 +65,6 @@ export class SettlerTaskSystem implements TickSystem {
     private readonly idleCooldownHandles = new Map<number, ScheduleHandle>();
     private oreVeinData: OreVeinData | undefined;
     private lastSubTimings: Record<string, number> = {};
-    private _transportJobOps: TransportJobOps | null = null;
     private readonly locationManager: ISettlerBuildingLocationManager;
 
     constructor(config: SettlerTaskSystemConfig) {
@@ -104,13 +110,6 @@ export class SettlerTaskSystem implements TickSystem {
 
         this.animController = new IdleAnimationController(config.visualService, this.gameState.rng);
 
-        const transportJobOps: TransportJobOps = {
-            getJob: jobId => this._transportJobOps!.getJob(jobId),
-            pickUp: jobId => this._transportJobOps!.pickUp(jobId),
-            deliver: jobId => this._transportJobOps!.deliver(jobId),
-            cancel: jobId => this._transportJobOps!.cancel(jobId),
-        };
-
         this.workerExecutor = new WorkerTaskExecutor({
             choreoSystem: config.choreoSystem,
             gameState: this.gameState,
@@ -126,7 +125,6 @@ export class SettlerTaskSystem implements TickSystem {
             getWorkerHomeBuilding: this.getAssignedBuilding.bind(this),
             jobPartResolver,
             materialTransfer: config.materialTransfer,
-            transportJobOps,
             constructionSiteManager: config.constructionSiteManager,
             getBarracksTrainingManager: config.getBarracksTrainingManager,
             executeCommand: config.executeCommand,
@@ -182,6 +180,7 @@ export class SettlerTaskSystem implements TickSystem {
             if (!this.runtimes.has(settlerId)) {
                 return;
             }
+            // OK: has() check above guarantees entry exists
             const runtime = this.runtimes.get(settlerId)!;
             if (runtime.homeAssignment?.buildingId !== buildingId) {
                 return;
@@ -235,10 +234,6 @@ export class SettlerTaskSystem implements TickSystem {
         log.debug(
             `Loaded ${this.settlerConfigs.size} settler configs, ${this.choreographyStore.cacheSize} cached jobs`
         );
-    }
-
-    setTransportJobOps(ops: TransportJobOps): void {
-        this._transportJobOps = ops;
     }
 
     getPositionResolver(): BuildingPositionResolverImpl {

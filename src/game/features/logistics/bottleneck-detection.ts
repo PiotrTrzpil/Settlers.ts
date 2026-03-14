@@ -6,7 +6,7 @@
 
 import type { GameState } from '../../game-state';
 import type { BuildingInventoryManager } from '../../systems/inventory/building-inventory';
-import type { SettlerTaskSystem } from '../settler-tasks/settler-task-system';
+import type { WorkerStateQuery } from '../settler-tasks';
 import type { SnapshotConfig } from './logistics-snapshot';
 import { EntityType } from '../../entity';
 import { UnitType, UNIT_TYPE_CONFIG, isUnitTypeMilitary } from '../../core/unit-types';
@@ -68,20 +68,20 @@ function countCarrierStatus(config: SnapshotConfig, player: number) {
             continue;
         }
         total++;
-        if (config.settlerTaskSystem.getActiveJobId(id) === null) {
+        if (config.workerStateQuery.getActiveJobId(id) === null) {
             idle++;
         }
     }
     return { total, idle };
 }
 
-function findIdleWorkers(gameState: GameState, settlerTaskSystem: SettlerTaskSystem, player: number): number[] {
+function findIdleWorkers(gameState: GameState, workerStateQuery: WorkerStateQuery, player: number): number[] {
     const idleWorkers: number[] = [];
     for (const entity of gameState.entityIndex.ofTypeAndPlayer(EntityType.Unit, player)) {
         if (!isNonCarrierWorker(entity.subType as UnitType)) {
             continue;
         }
-        if (settlerTaskSystem.getSettlerState(entity.id) === SettlerState.IDLE) {
+        if (workerStateQuery.getSettlerState(entity.id) === SettlerState.IDLE) {
             idleWorkers.push(entity.id);
         }
     }
@@ -107,13 +107,13 @@ function countDemandsForPlayer(config: SnapshotConfig, player: number): number {
  * Detect economy bottlenecks and return actionable diagnostics.
  */
 export function detectBottlenecks(config: SnapshotConfig, player: number): BottleneckDiag[] {
-    const { gameState, inventoryManager, settlerTaskSystem } = config;
+    const { gameState, inventoryManager, workerStateQuery } = config;
     const diags: BottleneckDiag[] = [];
 
     const { fullOutputBuildings } = scanBuildings(gameState, inventoryManager, player);
     const carriers = countCarrierStatus(config, player);
     const demandCount = countDemandsForPlayer(config, player);
-    const idleWorkers = findIdleWorkers(gameState, settlerTaskSystem, player);
+    const idleWorkers = findIdleWorkers(gameState, workerStateQuery, player);
 
     emitBottleneckDiags(diags, gameState, fullOutputBuildings, carriers, demandCount, idleWorkers);
     return diags;

@@ -131,7 +131,10 @@ export class MaterialRequestSystem implements TickSystem {
         }
 
         for (const buildingId of this.dirtyStorageAreas) {
-            const entity = this.gameState.getEntityOrThrow(buildingId, 'dirty storage area in material request system');
+            const entity = this.gameState.getEntity(buildingId);
+            if (!entity) {
+                continue; // Removed during this tick (e.g., free pile consumed by carrier)
+            }
             if ((entity.subType as BuildingType) !== BuildingType.StorageArea) {
                 continue;
             }

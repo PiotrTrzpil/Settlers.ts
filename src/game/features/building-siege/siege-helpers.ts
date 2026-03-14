@@ -8,7 +8,7 @@ import type { GameState } from '../../game-state';
 import { EntityType, UnitType, BuildingType, type Entity } from '../../entity';
 import type { Race } from '../../core/race';
 import { getBaseUnitType } from '../../core/unit-types';
-import { isGarrisonBuildingType } from '../tower-garrison/internal/garrison-capacity';
+import { isGarrisonBuildingType } from '../tower-garrison';
 import { getBuildingDoorPos } from '../../data/game-data-access';
 import type { SiegeState } from './siege-types';
 import { DOOR_ARRIVAL_DISTANCE } from './siege-types';

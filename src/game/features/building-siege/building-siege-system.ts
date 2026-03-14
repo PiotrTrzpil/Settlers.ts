@@ -18,7 +18,7 @@ import type { GameState } from '../../game-state';
 import type { EventBus } from '../../event-bus';
 import { EntityType, UnitType, BuildingType, type Entity } from '../../entity';
 import { CombatStatus } from '../combat/combat-state';
-import { isGarrisonBuildingType } from '../tower-garrison/internal/garrison-capacity';
+import { isGarrisonBuildingType } from '../tower-garrison';
 import { choreo } from '@/game/systems/choreo/choreo-builder';
 import { getBuildingDoorPos } from '../../data/game-data-access';
 import { sortedEntries } from '@/utilities/collections';

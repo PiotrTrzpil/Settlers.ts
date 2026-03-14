@@ -18,7 +18,7 @@ import type { DemandEntry } from './demand-queue';
 import type { DemandQueue } from './demand-queue';
 import type { RequestMatchResult } from './request-matcher';
 import type { TransportJobBuilder } from './transport-job-builder';
-import type { JobState } from '../settler-tasks/types';
+import type { ChoreoJobState } from '../../systems/choreo';
 import type { CarrierFilter } from './logistics-filter';
 import type { IdleCarrierPool } from '../carriers';
 import type { TransportJobStore } from './transport-job-store';
@@ -29,7 +29,7 @@ import type { BuildingInventoryManager } from '../inventory';
 
 /** Assigns a job to a settler and optionally starts movement. */
 export interface JobAssigner {
-    assignJob(entityId: number, job: JobState, moveTo?: { x: number; y: number }): boolean;
+    assignJob(entityId: number, job: ChoreoJobState, moveTo?: { x: number; y: number }): boolean;
 }
 
 /** A busy carrier in PickedUp phase that could be pre-assigned to a new job. */
@@ -292,7 +292,10 @@ export class CarrierAssigner {
                 continue;
             }
 
-            const record = this.activeJobs.get(carrierId)!;
+            const record = this.activeJobs.get(carrierId);
+            if (!record) {
+                throw new Error(`No active job for carrier ${carrierId} in CarrierAssigner.findBestBusyCarrier`);
+            }
             const dest = this.gameState.getEntityOrThrow(
                 record.destBuilding,
                 'destination building of busy carrier job'

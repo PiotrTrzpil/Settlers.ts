@@ -194,7 +194,11 @@ export class RecruitSystem implements TickSystem {
                 near,
             });
         }
-        log.debug(`Enqueued ${count}× ${unitType}` + ` (total: ${this.queue.get(unitType)!.count})`);
+        const enqueued = this.queue.get(unitType);
+        if (!enqueued) {
+            throw new Error(`No queue entry for ${unitType} in RecruitSystem.enqueue`);
+        }
+        log.debug(`Enqueued ${count}× ${unitType}` + ` (total: ${enqueued.count})`);
     }
 
     dequeue(unitType: UnitType, count: number): void {

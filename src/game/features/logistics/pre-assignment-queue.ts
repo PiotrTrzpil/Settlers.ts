@@ -14,7 +14,7 @@
 import type { TransportJobRecord } from './transport-job-record';
 import type { TransportJobDeps } from './transport-job-service';
 import { cancel as cancelJob } from './transport-job-service';
-import type { JobState } from '../settler-tasks/types';
+import type { ChoreoJobState } from '../../systems/choreo';
 import { sortedEntries } from '@/utilities/collections';
 
 /** A queued assignment waiting for a busy carrier to finish its current job. */
@@ -24,7 +24,7 @@ export interface QueuedAssignment {
     /** The transport job record (already activated — pending reservation in TransportJobStore). */
     record: TransportJobRecord;
     /** The choreo job state to assign when the carrier becomes available. */
-    job: JobState;
+    job: ChoreoJobState;
     /** First movement target for assignJob. */
     moveTo: { x: number; y: number };
 }

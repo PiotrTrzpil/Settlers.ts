@@ -60,7 +60,10 @@ export class PileStatesView extends Map<number, StackedPileState> {
         if (slotId === undefined) {
             return undefined;
         }
-        const slot = this.source.getSlot(slotId)!;
+        const slot = this.source.getSlot(slotId);
+        if (!slot) {
+            throw new Error(`Slot ${slotId} not found in slotStore [PileStatesView.get(${entityId})]`);
+        }
         const cached = this._cache.get(entityId);
         if (cached && cached.slotId === slotId && cached.amount === slot.currentAmount) {
             return cached.state;
@@ -88,7 +91,11 @@ export class PileStatesView extends Map<number, StackedPileState> {
 
     override *entries(): MapIterator<[number, StackedPileState]> {
         for (const entityId of this.source.entityIndex.keys()) {
-            yield [entityId, this.get(entityId)!];
+            const state = this.get(entityId);
+            if (!state) {
+                throw new Error(`PileStatesView.entries: entity ${entityId} in index but get() returned undefined`);
+            }
+            yield [entityId, state];
         }
     }
 
@@ -100,7 +107,11 @@ export class PileStatesView extends Map<number, StackedPileState> {
 
     override *values(): MapIterator<StackedPileState> {
         for (const entityId of this.source.entityIndex.keys()) {
-            yield this.get(entityId)!;
+            const state = this.get(entityId);
+            if (!state) {
+                throw new Error(`PileStatesView.values: entity ${entityId} in index but get() returned undefined`);
+            }
+            yield state;
         }
     }
 

@@ -65,7 +65,9 @@ export const SELECTION_INDICATOR_MANIFEST = new GilSpriteManifest(HUD_GFX_FILE, 
 function resolveFromManifest(gilIndex: number, spriteManager: SpriteRenderManager): SpriteEntry {
     const sprite = SELECTION_INDICATOR_MANIFEST.resolve(gilIndex, spriteManager.spriteRegistry!);
     if (!sprite) {
-        throw new Error(`Selection indicator sprite GIL ${gilIndex} not loaded — bump CACHE_SCHEMA_VERSION`);
+        throw new Error(
+            `Selection indicator sprite GIL ${gilIndex} not loaded — check if the cache was loaded or if CACHE_SCHEMA_VERSION needs bumping`
+        );
     }
     return sprite;
 }

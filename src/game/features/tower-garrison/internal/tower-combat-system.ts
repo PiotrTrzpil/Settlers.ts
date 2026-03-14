@@ -161,6 +161,7 @@ export class TowerCombatSystem implements TickSystem {
             this.attackTimers.set(bowmanId, 0);
         }
 
+        // OK: has() check above guarantees entry exists
         const elapsed = this.attackTimers.get(bowmanId)!;
         if (elapsed >= stats.attackCooldown) {
             this.attackTimers.set(bowmanId, elapsed - stats.attackCooldown);

@@ -47,6 +47,7 @@ export class SettlerBuildingLocationManager implements ISettlerBuildingLocationM
      */
     markApproaching(settlerId: number, buildingId: number): void {
         if (this.locationMap.has(settlerId)) {
+            // OK: has() check above guarantees entry exists
             const existing = this.locationMap.get(settlerId)!;
             throw new Error(
                 `SettlerBuildingLocationManager.markApproaching: settler ${settlerId} is already tracked ` +

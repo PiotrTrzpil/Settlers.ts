@@ -22,6 +22,7 @@ import { EntityType } from '@/game/entity';
 import { BuildingType } from '@/game/buildings/building-type';
 import { EMaterialType } from '@/game/economy/material-type';
 import { SlotKind } from '@/game/core/pile-kind';
+import type { GameState } from '@/game/game-state';
 import { ok } from './helpers';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -33,7 +34,7 @@ function buildSnapshotConfig(ctx: CliContext): SnapshotConfig {
         demandQueue: svc.demandQueue,
         carrierRegistry: svc.carrierRegistry,
         logisticsDispatcher: svc.logisticsDispatcher,
-        settlerTaskSystem: svc.settlerTaskSystem,
+        workerStateQuery: svc.settlerTaskSystem,
         inventoryManager: svc.inventoryManager,
         unitReservation: svc.unitReservation,
         constructionSiteManager: svc.constructionSiteManager,
@@ -59,7 +60,7 @@ function carriersCommand(): CliCommand {
             const carriers = gatherCarriers(config, ctx.player, stats, { limit });
 
             const lines: string[] = [];
-            lines.push(`=== Carriers (${stats.carrierCount} total) ===`);
+            lines.push(ctx.fmt.section('Carriers', `${stats.carrierCount} total`));
             lines.push(`idle: ${stats.idleCarriers}  busy: ${stats.busyCarriers}`);
             if (stats.unregisteredCarriers > 0) {
                 lines.push(`unregistered: ${stats.unregisteredCarriers} (no hub or hubs full)`);
@@ -105,7 +106,7 @@ function reqsCommand(): CliCommand {
             });
 
             const lines: string[] = [];
-            lines.push(`=== Demands (${stats.demandCount} pending, ${stats.activeJobCount} active jobs) ===`);
+            lines.push(ctx.fmt.section('Demands', `${stats.demandCount} pending, ${stats.activeJobCount} active jobs`));
             if (stats.stalledCount > 0) {
                 lines.push(`stalled: ${stats.stalledCount}`);
             }
@@ -157,7 +158,7 @@ function pilesCommand(): CliCommand {
             }
 
             const lines: string[] = [];
-            lines.push(`=== Piles (${piles.length} stacks, ${totalQty} items) ===`);
+            lines.push(ctx.fmt.section('Piles', `${piles.length} stacks, ${totalQty} items`));
 
             const rows = piles.map(p => [
                 String(p.entityId),
@@ -203,7 +204,7 @@ function workersCommand(): CliCommand {
 
             const lines: string[] = [];
             const stateParts = [...byState.entries()].map(([s, n]) => `${s.toLowerCase()}: ${n}`);
-            lines.push(`=== Workers (${workers.length} total — ${stateParts.join(', ')}) ===`);
+            lines.push(ctx.fmt.section('Workers', `${workers.length} total — ${stateParts.join(', ')}`));
             lines.push('');
 
             const rows = workers.map(w => {
@@ -235,7 +236,7 @@ function jobsCommand(): CliCommand {
             }
 
             const lines: string[] = [];
-            lines.push(`=== Transport Jobs (${jobs.length} active) ===`);
+            lines.push(ctx.fmt.section('Transport Jobs', `${jobs.length} active`));
             lines.push('');
 
             const rows = jobs.map(j => [
@@ -272,7 +273,7 @@ function diagCommand(): CliCommand {
             const diags = detectBottlenecks(config, ctx.player);
 
             const lines: string[] = [];
-            lines.push('=== Economy Diagnostics ===');
+            lines.push(ctx.fmt.section('Economy Diagnostics'));
             lines.push('');
 
             for (const d of diags) {
@@ -310,18 +311,13 @@ function econDetailCommand(): CliCommand {
     };
 }
 
-function formatBuildingCounts(
-    state: import('@/game/game-state').GameState,
-    player: number,
-    ctx: CliContext,
-    lines: string[]
-): void {
+function formatBuildingCounts(state: GameState, player: number, ctx: CliContext, lines: string[]): void {
     const counts = new Map<BuildingType, number>();
     for (const e of state.entityIndex.ofTypeAndPlayer(EntityType.Building, player)) {
         counts.set(e.subType as BuildingType, (counts.get(e.subType as BuildingType) ?? 0) + 1);
     }
     if (counts.size > 0) {
-        lines.push('=== Buildings ===');
+        lines.push(ctx.fmt.section('Buildings'));
         const rows = [...counts.entries()].map(([bt, n]) => [String(bt) || `#${bt}`, String(n)]);
         lines.push(ctx.fmt.table(rows, ['type', 'count']));
     } else {
@@ -340,12 +336,7 @@ function isOutputSlotWithMaterial(slot: {
     return slot.materialType !== EMaterialType.NO_MATERIAL && slot.currentAmount > 0;
 }
 
-function formatStorageMaterials(
-    state: import('@/game/game-state').GameState,
-    player: number,
-    ctx: CliContext,
-    lines: string[]
-): void {
+function formatStorageMaterials(state: GameState, player: number, ctx: CliContext, lines: string[]): void {
     const totals = new Map<EMaterialType, number>();
     const invManager = ctx.game.services.inventoryManager;
     for (const e of state.entityIndex.ofTypeAndPlayer(EntityType.Building, player)) {
@@ -363,7 +354,7 @@ function formatStorageMaterials(
         }
     }
     if (totals.size > 0) {
-        lines.push('=== Materials (storage) ===');
+        lines.push(ctx.fmt.section('Materials (storage)'));
         const rows = [...totals.entries()].map(([mt, n]) => [mt, String(n)]);
         lines.push(ctx.fmt.table(rows, ['material', 'total']));
     } else {
@@ -378,7 +369,7 @@ function formatProductionStatus(config: SnapshotConfig, player: number, ctx: Cli
     }
 
     lines.push('');
-    lines.push('=== Production ===');
+    lines.push(ctx.fmt.section('Production'));
     const rows = buildings.map(b => {
         const inputStr =
             b.inputs.length > 0 ? b.inputs.map(s => `${s.material} ${s.current}/${s.max}`).join(', ') : '-';

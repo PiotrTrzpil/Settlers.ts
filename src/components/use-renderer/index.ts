@@ -1,9 +1,4 @@
-/**
- * use-renderer — Renderer composable with integrated InputManager.
- *
- * Orchestrates renderer setup, input handling, and game state synchronization.
- * Implementation details are split across sibling modules.
- */
+/** Renderer composable with integrated InputManager — orchestrates setup, input, and game sync. */
 
 import { watch, onMounted, onUnmounted, ref, type Ref } from 'vue';
 import { Game } from '@/game/game';

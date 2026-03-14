@@ -21,11 +21,10 @@ import type { EntityCleanupRegistry } from '../../systems/entity-cleanup-registr
 import type { CarrierRegistry, IdleCarrierPool } from '../carriers';
 import type { DemandEntry } from './demand-queue';
 import type { DemandQueue } from './demand-queue';
-import { TransportPhase, type TransportJobRecord } from './transport-job-record';
+import { TransportPhase } from './transport-job-record';
 import * as TransportJobService from './transport-job-service';
 import type { TransportJobDeps } from './transport-job-service';
 import type { TransportJobStore } from './transport-job-store';
-import type { TransportJobOps } from '../settler-tasks/choreo-types';
 import type { BuildingInventoryManager } from '../inventory';
 import { RequestMatcher } from './request-matcher';
 import type { LogisticsMatchFilter, CarrierFilter } from './logistics-filter';
@@ -117,6 +116,8 @@ export class LogisticsDispatcher implements TickSystem {
             gameState: config.gameState,
             positionResolver: config.positionResolver,
             inventoryManager: config.inventoryManager,
+            jobStore: config.jobStore,
+            transportJobDeps: this.transportJobDeps,
         });
 
         this.carrierAssigner = new CarrierAssigner({
@@ -222,7 +223,10 @@ export class LogisticsDispatcher implements TickSystem {
     cancelReservedJobs(): void {
         const reservedCarriers = [...this.jobStore.byPhase.get(TransportPhase.Reserved)];
         for (const carrierId of reservedCarriers) {
-            const record = this.jobStore.jobs.get(carrierId)!;
+            const record = this.jobStore.jobs.get(carrierId);
+            if (!record) {
+                throw new Error(`No job for carrier ${carrierId} in LogisticsDispatcher.cancelReservedJobs`);
+            }
             TransportJobService.cancel(record, 'restore_cleanup', this.transportJobDeps);
             this.jobStore.jobs.delete(carrierId);
         }
@@ -310,47 +314,6 @@ export class LogisticsDispatcher implements TickSystem {
     }
 
     /**
-     * Create a TransportJobOps implementation for the settler task system.
-     * Resolves job IDs against jobStore and delegates lifecycle to TransportJobService.
-     */
-    createTransportJobOps(): TransportJobOps {
-        const jobs = this.jobStore.jobs;
-        const deps = this.transportJobDeps;
-        return {
-            getJob: jobId => {
-                for (const record of jobs.values()) {
-                    if (record.id === jobId) {
-                        return record;
-                    }
-                }
-                return undefined;
-            },
-            pickUp: jobId => {
-                const record = findJobById(jobs, jobId);
-                if (!record) {
-                    return false;
-                }
-                TransportJobService.pickUp(record, deps);
-                return true;
-            },
-            deliver: jobId => {
-                const record = findJobById(jobs, jobId);
-                if (!record) {
-                    return false;
-                }
-                TransportJobService.deliver(record, deps);
-                return true;
-            },
-            cancel: jobId => {
-                const record = findJobById(jobs, jobId);
-                if (record) {
-                    TransportJobService.cancel(record, 'cancelled', deps);
-                }
-            },
-        };
-    }
-
-    /**
      * Flush a queued assignment for a carrier that just finished its delivery.
      * If the carrier has a pre-assigned job, assign it immediately.
      */
@@ -383,7 +346,10 @@ export class LogisticsDispatcher implements TickSystem {
         let jobsCancelled = 0;
         const affectedCarriers = this.jobStore.byBuilding.get(buildingId);
         for (const carrierId of Array.from(affectedCarriers)) {
-            const job = this.jobStore.jobs.get(carrierId)!;
+            const job = this.jobStore.jobs.get(carrierId);
+            if (!job) {
+                throw new Error(`No job for carrier ${carrierId} in LogisticsDispatcher.handleConstructionCompleted`);
+            }
             if (job.destBuilding === buildingId) {
                 TransportJobService.cancel(job, 'construction_completed', this.transportJobDeps);
                 this.jobStore.jobs.delete(carrierId);
@@ -420,7 +386,10 @@ export class LogisticsDispatcher implements TickSystem {
         // Handle active TransportJobs referencing this building (via byBuilding index)
         const affectedCarriers = this.jobStore.byBuilding.get(buildingId);
         for (const carrierId of Array.from(affectedCarriers)) {
-            const job = this.jobStore.jobs.get(carrierId)!;
+            const job = this.jobStore.jobs.get(carrierId);
+            if (!job) {
+                throw new Error(`No job for carrier ${carrierId} in LogisticsDispatcher.handleBuildingDestroyed`);
+            }
             if (job.destBuilding === buildingId || job.sourceBuilding === buildingId) {
                 // Already picked up from source — let carrier deliver
                 if (job.sourceBuilding === buildingId && job.phase === TransportPhase.PickedUp) {
@@ -458,14 +427,4 @@ export interface BuildingCleanupResult {
     buildingId: number;
     requestsCancelled: number;
     jobsCancelled: number;
-}
-
-/** Find a job record by ID across all active jobs, or return undefined. */
-function findJobById(jobs: { values(): Iterable<TransportJobRecord> }, jobId: number): TransportJobRecord | undefined {
-    for (const record of jobs.values()) {
-        if (record.id === jobId) {
-            return record;
-        }
-    }
-    return undefined;
 }

@@ -125,7 +125,7 @@ describe('IndexedMap', () => {
             const map = new IndexedMap<number, string>();
             map.addIndex<string>((_k, v) => v);
 
-            expect(() => map.reindex(999)).toThrow('key not found');
+            expect(() => map.reindex(999)).toThrow('key 999 not found');
         });
     });
 

@@ -148,7 +148,10 @@ export function findInputSlot(
         return undefined;
     }
     for (const id of ids) {
-        const slot = slotStore.get(id)!;
+        const slot = slotStore.get(id);
+        if (!slot) {
+            throw new Error(`Slot ${id} not found in slotStore [findInputSlot]`);
+        }
         if (slot.materialType === material && slot.kind === SlotKind.Input) {
             return slot;
         }
@@ -167,7 +170,10 @@ export function findOutputSlot(
         return undefined;
     }
     for (const id of ids) {
-        const slot = slotStore.get(id)!;
+        const slot = slotStore.get(id);
+        if (!slot) {
+            throw new Error(`Slot ${id} not found in slotStore [findOutputSlot]`);
+        }
         if (
             slot.materialType === material &&
             (slot.kind === SlotKind.Output || slot.kind === SlotKind.Storage || slot.kind === SlotKind.Free)
@@ -219,7 +225,10 @@ export function getSourcesWithOutput(
     const result: number[] = [];
     for (const [buildingId, slotIds] of inventorySlots) {
         for (const id of slotIds) {
-            const slot = slotStore.get(id)!;
+            const slot = slotStore.get(id);
+            if (!slot) {
+                throw new Error(`Slot ${id} not found in slotStore [getSourcesWithOutput]`);
+            }
             if (
                 (slot.kind === SlotKind.Output || slot.kind === SlotKind.Storage || slot.kind === SlotKind.Free) &&
                 slot.materialType === material &&
@@ -242,7 +251,10 @@ export function getSinksNeedingInput(
     const result: number[] = [];
     for (const [buildingId, slotIds] of inventorySlots) {
         for (const id of slotIds) {
-            const slot = slotStore.get(id)!;
+            const slot = slotStore.get(id);
+            if (!slot) {
+                throw new Error(`Slot ${id} not found in slotStore [getSinksNeedingInput]`);
+            }
             if (
                 slot.kind === SlotKind.Input &&
                 slot.materialType === material &&
@@ -268,7 +280,10 @@ export function getInputSpace(
     }
     let total = 0;
     for (const id of ids) {
-        const slot = slotStore.get(id)!;
+        const slot = slotStore.get(id);
+        if (!slot) {
+            throw new Error(`Slot ${id} not found in slotStore [getInputSpace]`);
+        }
         if (slot.materialType === material && slot.kind === SlotKind.Input) {
             total += slot.maxCapacity - slot.currentAmount;
         }
@@ -296,7 +311,10 @@ export function findSlotByKind(
         resolvedKind = kind;
     }
     for (const id of ids) {
-        const slot = slotStore.get(id)!;
+        const slot = slotStore.get(id);
+        if (!slot) {
+            throw new Error(`Slot ${id} not found in slotStore [findSlotByKind]`);
+        }
         if (slot.materialType === material && slot.kind === resolvedKind && slot.currentAmount < slot.maxCapacity) {
             return slot;
         }
@@ -316,7 +334,10 @@ export function getOutputSlotsForMaterial(
     }
     const result: { slot: PileSlot; slotId: number }[] = [];
     for (const id of ids) {
-        const slot = slotStore.get(id)!;
+        const slot = slotStore.get(id);
+        if (!slot) {
+            throw new Error(`Slot ${id} not found in slotStore [getOutputSlotsForMaterial]`);
+        }
         if (slot.materialType === material && (slot.kind === SlotKind.Output || slot.kind === SlotKind.Storage)) {
             result.push({ slot, slotId: id });
         }

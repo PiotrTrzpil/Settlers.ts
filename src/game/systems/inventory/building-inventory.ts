@@ -246,16 +246,21 @@ export class BuildingInventoryManager {
         const { executeCommand, gameState } = this.getDeps();
 
         for (const slotId of slotIds) {
-            const slot = this.slotStore.get(slotId)!;
+            const slot = this.slotStore.get(slotId);
+            if (!slot) {
+                throw new Error(`Slot ${slotId} not found in slotStore [destroySlots]`);
+            }
             if (slot.entityId !== null && slot.currentAmount > 0 && slot.kind !== SlotKind.Free) {
                 // Building destroyed with materials remaining — convert pile to free pile
                 gameState.getEntityOrThrow(slot.entityId, 'pile entity during building slot destruction');
                 this.registerFreePile(slot.entityId, slot.materialType, slot.currentAmount, slot.position);
             } else if (slot.entityId !== null) {
-                // Empty slot or free pile cleanup — remove the pile entity
-                gameState.getEntityOrThrow(slot.entityId, 'pile entity during empty slot cleanup');
+                // Empty slot or free pile cleanup — remove the pile entity.
                 this._entityIndex.delete(slot.entityId);
-                removePileEntity(slot, executeCommand);
+                // Entity may already be gone (removed earlier in the same destruction cascade).
+                if (gameState.getEntity(slot.entityId)) {
+                    removePileEntity(slot, executeCommand);
+                }
             }
             this.slotStore.delete(slotId);
         }
@@ -339,7 +344,7 @@ export class BuildingInventoryManager {
         if (!ids) {
             return [];
         }
-        return Array.from(ids, id => this.slotStore.get(id)!);
+        return Array.from(ids, id => this.getSlotOrThrow(id, 'getSlots'));
     }
 
     /** All slot IDs for a building. */

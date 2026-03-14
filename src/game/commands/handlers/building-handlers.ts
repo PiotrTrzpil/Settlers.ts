@@ -144,7 +144,11 @@ export function executePlaceBuilding(deps: PlaceBuildingDeps, cmd: PlaceBuilding
             cmd.x,
             cmd.y,
             cmd.buildingType,
-            cmd.race ?? state.playerRaces.get(cmd.player)!,
+            cmd.race ??
+                state.playerRaces.get(cmd.player) ??
+                (() => {
+                    throw new Error(`No race for player ${cmd.player} in PlaceBuildingHandler`);
+                })(),
             state.buildingFootprint,
             deps.placementFilter,
             cmd.player

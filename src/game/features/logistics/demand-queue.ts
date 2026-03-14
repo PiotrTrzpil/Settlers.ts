@@ -177,7 +177,10 @@ export class DemandQueue {
 
         let count = 0;
         for (const id of demandIds) {
-            const entry = this.demands.get(id)!;
+            const entry = this.demands.get(id);
+            if (!entry) {
+                throw new Error(`No demand for id ${id} in DemandQueue.countDemands`);
+            }
             if (entry.materialType === material) {
                 count++;
             }

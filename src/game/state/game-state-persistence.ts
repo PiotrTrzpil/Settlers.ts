@@ -323,8 +323,8 @@ function restoreEntities(game: GameCore, snapshot: GameStateSnapshot): void {
     // Extract construction site IDs so we can distinguish completed buildings from sites.
     // Completed buildings need buildingOccupancy set at creation time (via completed flag).
     const constructionSiteIds = new Set<number>();
-    const sites = snapshot['constructionSites'] as Map<number, unknown> | undefined;
-    if (sites) {
+    const sites = snapshot['constructionSites'];
+    if (sites instanceof Map) {
         for (const buildingId of sites.keys()) {
             constructionSiteIds.add(buildingId);
         }

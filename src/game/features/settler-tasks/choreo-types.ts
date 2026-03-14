@@ -14,7 +14,6 @@ import type { EntityWorkHandler, PositionWorkHandler } from './types';
 import type { BarracksTrainingManager } from '../barracks';
 import type { MaterialTransfer } from '../material-transfer';
 import type { Command, CommandResult } from '../../commands';
-import type { TransportJobRecord } from '../logistics/transport-job-record';
 import type { TaskResult, ChoreoJobState, ChoreoNode } from '../../systems/choreo';
 import type { ConstructionSiteManager } from '../building-construction/construction-site-manager';
 
@@ -34,20 +33,6 @@ export {
     node,
     ChoreoBuilder,
 } from '../../systems/choreo';
-
-// ─────────────────────────────────────────────────────────────
-// TransportJobOps — stays here (references TransportJobRecord from logistics)
-// ─────────────────────────────────────────────────────────────
-
-/** Transport job lifecycle operations — injected into executor context. */
-export interface TransportJobOps {
-    getJob(jobId: number): TransportJobRecord | undefined;
-    /** Consume reservation after carrier picks up material. Returns false if job no longer exists. */
-    pickUp(jobId: number): boolean;
-    /** Fulfill request after carrier delivers material. Returns false if job no longer exists. */
-    deliver(jobId: number): boolean;
-    cancel(jobId: number): void;
-}
 
 // ─────────────────────────────────────────────────────────────
 // JobPart resolution
@@ -125,7 +110,6 @@ export interface InventoryContext {
 export interface InventoryExecutorContext extends InventoryContext {
     materialTransfer: MaterialTransfer;
     eventBus: EventBus;
-    transportJobOps: TransportJobOps;
     /** Used by TRANSPORT_DELIVER to emit construction:materialDelivered on construction sites. */
     constructionSiteManager: ConstructionSiteManager;
 }

@@ -20,7 +20,6 @@ import {
     type WorkContext,
     type TriggerSystem,
     type JobPartResolver,
-    type TransportJobOps,
 } from '../choreo-types';
 import type { ChoreoSystem } from '../../../systems/choreo';
 import type { WorkHandlerRegistry } from '../work-handler-registry';
@@ -46,7 +45,6 @@ export interface WorkerJobLifecycleCfg {
     gameState: GameState;
     triggerSystem: TriggerSystem;
     materialTransfer: MaterialTransfer;
-    transportJobOps: TransportJobOps;
     handlerErrorLogger: ThrottledLogger;
     eventBus: EventBus;
     getWorkerHomeBuilding: (id: number) => number | null;
@@ -66,7 +64,6 @@ export class WorkerJobLifecycle {
     private readonly gameState: GameState;
     private readonly triggerSystem: TriggerSystem;
     private readonly materialTransfer: MaterialTransfer;
-    private readonly transportJobOps: TransportJobOps;
     private readonly handlerErrorLogger: ThrottledLogger;
     private readonly eventBus: EventBus;
     private readonly getWorkerHomeBuilding: (id: number) => number | null;
@@ -83,7 +80,6 @@ export class WorkerJobLifecycle {
         this.gameState = cfg.gameState;
         this.triggerSystem = cfg.triggerSystem;
         this.materialTransfer = cfg.materialTransfer;
-        this.transportJobOps = cfg.transportJobOps;
         this.handlerErrorLogger = cfg.handlerErrorLogger;
         this.eventBus = cfg.eventBus;
         this.getWorkerHomeBuilding = cfg.getWorkerHomeBuilding;
@@ -197,9 +193,7 @@ export class WorkerJobLifecycle {
         const entityHandler = this.handlerRegistry.getEntityHandler(config.search);
         const job = runtime.job;
 
-        if (job.transportData) {
-            this.transportJobOps.cancel(job.transportData.jobId);
-        }
+        job.onCancel?.();
 
         if (entityHandler && job.targetId && job.workStarted) {
             safeCall(

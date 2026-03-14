@@ -134,7 +134,7 @@ export class IndexedMap<K, V> {
     reindex(key: K): void {
         const value = this.data.get(key);
         if (value === undefined && !this.data.has(key)) {
-            throw new Error(`IndexedMap.reindex: key not found`);
+            throw new Error(`IndexedMap.reindex: key ${String(key)} not found`);
         }
         this.removeFromIndexes(key);
         this.addToIndexes(key, value as V);

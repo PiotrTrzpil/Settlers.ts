@@ -54,8 +54,12 @@ export interface CliContext {
 export interface OutputFormatter {
     /** Format rows as aligned columns. Headers are optional. */
     table(rows: string[][], headers?: string[]): string;
-    /** Format a key-value summary (one per line). */
+    /** Format a key-value summary (one per line, left-aligned keys). */
     kv(entries: [string, string | number][]): string;
+    /** Format a section header: ── Title  detail ── */
+    section(title: string, detail?: string): string;
+    /** Format a top-level banner with a rule underneath. */
+    banner(title: string): string;
 }
 
 // ─── WebSocket protocol ───────────────────────────────────────

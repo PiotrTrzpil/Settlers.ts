@@ -20,6 +20,7 @@ import { renderMapText } from '../map-renderer';
 import { createCliPlacementGrid } from '../placement-grid';
 import { findCommand, atCommand } from './spatial-queries';
 import { ok, fail, entityTypeName, posText, tableWithLimit } from './helpers';
+import { safeYaml } from '../yaml-serialize';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -314,45 +315,6 @@ function logCommand(logs: LogAccessor): CliCommand {
 
 // ─── js eval command ──────────────────────────────────────────────────────────
 
-/** JSON.stringify replacer that handles circular refs and caps depth. */
-function safeStringify(value: unknown, maxDepth = 10): string {
-    const seen = new WeakSet();
-    let depth = 0;
-    return JSON.stringify(
-        value,
-        function (_key, val: unknown) {
-            if (typeof val === 'function') {
-                return '[Function]';
-            }
-            if (val instanceof Map) {
-                if (depth >= maxDepth) {
-                    return `[Map(${val.size})]`;
-                }
-                return Object.fromEntries(val);
-            }
-            if (val instanceof Set) {
-                return `[Set(${val.size})]`;
-            }
-            if (val instanceof WeakMap || val instanceof WeakRef) {
-                return '[WeakRef]';
-            }
-            if (typeof val === 'object' && val !== null) {
-                if (seen.has(val)) {
-                    return '[Circular]';
-                }
-                seen.add(val);
-                if (depth >= maxDepth) {
-                    return Array.isArray(val) ? `[Array(${val.length})]` : '[Object]';
-                }
-                depth++;
-                return val;
-            }
-            return val;
-        },
-        2
-    );
-}
-
 /** Build the scope object for js eval — short names for common systems. */
 function buildJsScope(ctx: CliContext): Record<string, unknown> {
     const { game } = ctx;
@@ -404,7 +366,7 @@ function jsCommand(): CliCommand {
                 if (typeof result === 'string') {
                     return ok(result);
                 }
-                return ok(safeStringify(result));
+                return ok(safeYaml(result));
             } catch (err: unknown) {
                 return fail(err instanceof Error ? err.message : String(err));
             }
@@ -432,7 +394,11 @@ function playerCommand(cli: PlayerAccessor): CliCommand {
             // player reset — clear override
             if (arg === 'reset') {
                 cli.setPlayer(null);
-                const race = Race[ctx.game.playerRaces.get(ctx.game.currentPlayer)!];
+                const playerRace = ctx.game.playerRaces.get(ctx.game.currentPlayer);
+                if (playerRace === undefined) {
+                    throw new Error(`No race for player ${ctx.game.currentPlayer} in player command`);
+                }
+                const race = Race[playerRace];
                 return ok(`player=${ctx.game.currentPlayer} (${race}) [default]`);
             }
 
@@ -447,13 +413,21 @@ function playerCommand(cli: PlayerAccessor): CliCommand {
                 } catch (err: unknown) {
                     return fail(err instanceof Error ? err.message : String(err));
                 }
-                const race = Race[ctx.game.playerRaces.get(n)!];
+                const nRace = ctx.game.playerRaces.get(n);
+                if (nRace === undefined) {
+                    throw new Error(`No race for player ${n} in player command`);
+                }
+                const race = Race[nRace];
                 return ok(`player=${n} (${race}) [override]`);
             }
 
             // player — show current
             const p = cli.currentPlayer;
-            const race = Race[ctx.game.playerRaces.get(p)!];
+            const pRace = ctx.game.playerRaces.get(p);
+            if (pRace === undefined) {
+                throw new Error(`No race for player ${p} in player command`);
+            }
+            const race = Race[pRace];
             const tag = cli.isPlayerOverride ? 'override' : 'default';
             return ok(`player=${p} (${race}) [${tag}]`);
         },
