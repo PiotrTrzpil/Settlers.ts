@@ -17,12 +17,13 @@ The graph contains ~13k nodes and ~32k edges:
 | Tool | Best for | Key insight |
 |---|---|---|
 | `search_graph` | Finding symbols by name, degree filtering, dead code | No row cap, case-insensitive regex |
-| `query_graph` | Relationship patterns, edge properties, joins | 200-row cap, Cypher-like syntax |
-| `trace_call_path` | Who calls X / what does X call (BFS traversal) | Use `search_graph` first to get exact name |
+| `query_graph` | Relationship patterns, edge properties, joins | 200-row cap, Cypher-like syntax; JSON array-aware matching on edge props |
+| `trace_call_path` | Who calls X / what does X call (BFS traversal) | `summary_only=true` for quick overview; edges include `confidence_band` |
 | `get_code_snippet` | Read source + metadata (complexity, callers/callees) | `include_neighbors=true` for caller/callee names |
-| `detect_changes` | Map git diff to affected symbols + blast radius | Risk labels: CRITICAL/HIGH/MEDIUM/LOW by hop |
-| `get_architecture` | Orientation: hotspots, boundaries, clusters, layers | Call with specific aspects to save tokens |
-| `search_code` | Text search (string literals, TODOs, config values) | Like grep — for content not in the graph |
+| `detect_changes` | Map git diff to affected symbols + blast radius | `summary_only=true` for quick triage; `max_impact` caps results |
+| `get_architecture` | Orientation: hotspots, boundaries, clusters, layers | `boundary_path_prefix` + `boundary_depth` for sub-directory analysis |
+| `search_code` | Text search (string literals, TODOs, config values) | `context_lines` (0-5) controls surrounding context |
+| `set_output_format` | Switch output between YAML and JSON | Default is YAML (~40% more compact) |
 
 ---
 
@@ -175,6 +176,12 @@ get_architecture(aspects=['boundaries'])
 ```
 Shows call volumes between top-level packages (e.g., `tests→src: 373 calls`). Unexpected boundaries signal architectural violations.
 
+For sub-directory analysis, use `boundary_path_prefix` and `boundary_depth`:
+```
+get_architecture(aspects=['boundaries'], boundary_path_prefix='src/game/features', boundary_depth=1)
+```
+This scopes boundaries to a specific subtree — useful for analyzing feature-to-feature coupling.
+
 ### Community detection (hidden modules)
 ```
 get_architecture(aspects=['clusters'])
@@ -191,7 +198,7 @@ search_graph(
     exclude_entry_points=true
 )
 ```
-Functions with zero inbound CALLS that aren't entry points = dead code candidates.
+Functions with zero inbound CALLS that aren't entry points = dead code candidates. The detection also excludes nodes with inbound USAGE edges (callback references, event registrations) and treats `is_exported` nodes as entry points to reduce false positives.
 
 ### High fan-out (God functions)
 ```
@@ -253,11 +260,11 @@ Combine IMPLEMENTS + USES_TYPE + USAGE for complete interface impact.
 
 | Edge | Meaning | Example query |
 |---|---|---|
-| `CALLS` | Direct function/method invocation | `trace_call_path` or `MATCH (a)-[:CALLS]->(b)` |
+| `CALLS` | Direct function/method invocation; `first_arg` property holds string literal args as JSON array | `trace_call_path` or `MATCH (a)-[:CALLS]->(b)` |
 | `USAGE` | Read reference (callback, variable, parameter) | `MATCH (a)-[:USAGE]->(b) WHERE b.name = 'X'` |
 | `IMPLEMENTS` | Class implements interface | `MATCH (c:Class)-[:IMPLEMENTS]->(i:Interface)` |
 | `OVERRIDE` | Method overrides interface method | `MATCH (m)-[:OVERRIDE]->(i) WHERE m.file CONTAINS 'X'` |
-| `USES_TYPE` | Function uses type in signature/body | `MATCH (f)-[:USES_TYPE]->(t) WHERE f.name = 'X'` |
+| `USES_TYPE` | Function uses type in signature/body (includes param_types and return_type annotations) | `MATCH (f)-[:USES_TYPE]->(t) WHERE f.name = 'X'` |
 | `IMPORTS` | Module imports module | `MATCH (a:Module)-[:IMPORTS]->(b:Module)` |
 | `DEFINES` | Module defines symbol | `MATCH (m:Module)-[:DEFINES]->(f:Function)` |
 | `DEFINES_METHOD` | Class defines method | `MATCH (c:Class)-[:DEFINES_METHOD]->(m:Method)` |
@@ -302,3 +309,57 @@ Use `qn_pattern` in `search_graph` to scope searches to directories:
 ```
 search_graph(qn_pattern='.*features\\.logistics\\..*')
 ```
+
+### Use `first_arg` on CALLS edges to find specific call sites
+CALLS edges store the first string literal argument as a JSON array (`first_arg`). Cypher operators (`=`, `CONTAINS`, `STARTS WITH`, `ENDS WITH`) are JSON array-aware on edge properties:
+```cypher
+# Find all calls that pass 'buildingDestroyed' as the first argument (e.g., event emissions)
+MATCH (a)-[r:CALLS]->(b) WHERE r.first_arg CONTAINS 'buildingDestroyed' RETURN a.name, b.name LIMIT 20
+```
+
+### Searching publish/subscribe patterns (EventBus)
+
+This project uses `EventBus` with `.emit()`, `.on()`, and `.subscribe()` for pub/sub. The graph indexes these as CALLS edges to Method nodes (`emit`, `on`, `subscribe`) with the event name(s) stored in the `first_arg` edge property as a JSON array (e.g. `["building:placed","building:completed"]`). One edge per calling function — if a function emits/subscribes to multiple events, they're all in the same array.
+
+**Find all emitters of an event:**
+```cypher
+MATCH (f)-[r:CALLS]->(g:Method)
+WHERE g.name = 'emit' AND g.file_path ENDS WITH 'event-bus.ts'
+  AND r.first_arg CONTAINS 'building:placed'
+RETURN f.name, f.file_path LIMIT 20
+```
+
+**Find all subscribers to an event:**
+```cypher
+MATCH (f)-[r:CALLS]->(g:Method)
+WHERE g.name = 'subscribe' AND r.first_arg CONTAINS 'entity:removed'
+RETURN f.name, f.file_path LIMIT 20
+```
+
+**Find all `.on()` listeners for an event:**
+```cypher
+MATCH (f)-[r:CALLS]->(g:Method)
+WHERE g.name = 'on' AND g.file_path ENDS WITH 'event-bus.ts'
+  AND r.first_arg CONTAINS 'entity:created'
+RETURN f.name, f.file_path LIMIT 20
+```
+
+**List all distinct events emitted across the codebase:**
+```cypher
+MATCH (f)-[r:CALLS]->(g:Method)
+WHERE g.name = 'emit' AND g.file_path ENDS WITH 'event-bus.ts'
+RETURN DISTINCT r.first_arg ORDER BY r.first_arg LIMIT 80
+```
+Each row is a JSON array — flatten and deduplicate to get the full event list.
+
+**Caveats:**
+- **CONTAINS is substring-based.** `r.first_arg CONTAINS 'movement:bump'` also matches `movement:bumpAttempt` and `movement:bumpFailed`. For precision, include the JSON quotes: `r.first_arg CONTAINS '"movement:bump"'`.
+- **Exact match (`=`) always fails** on `first_arg` because the value is a JSON array string, not a bare string. Always use CONTAINS.
+- **`search_graph` cannot find event names** — it searches node names/properties only, not edge properties. `query_graph` + CONTAINS is the only path.
+- **One edge per function.** If `registerEvents` calls `.subscribe()` five times with different events, all five appear in one `first_arg` array on one edge. This is not a bug — it reflects the function-level granularity of the graph.
+
+### Use `summary_only` for quick triage
+Both `detect_changes` and `trace_call_path` support `summary_only=true` — returns counts and risk levels without full symbol details. Use this for a quick "how big is this change?" check before diving deeper.
+
+### Output format
+Default output is YAML (~40% more compact than JSON). Use `set_output_format(format='json')` to switch back if needed. Responses use compact field names (`qn`, `file`, `lines`, `in`, `out`) with project prefix stripped from qualified names.

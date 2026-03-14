@@ -1,6 +1,6 @@
 ---
 name: design-doc
-description: Write a high-level design doc for a feature, refactoring, or architectural change — subsystem boundaries, APIs between components, and implementation approach. Outputs a markdown doc ready for /parallel.
+description: Write a high-level design doc for a game feature, refactoring, or architectural change — subsystem boundaries, APIs between components, and implementation approach. Outputs a markdown doc ready for /parallel.
 user-invokable: true
 argument-hint: "[feature description or requirements]"
 ---

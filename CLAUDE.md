@@ -39,32 +39,11 @@ pnpm timeline:live    # Query live timeline DBs (shorthand for --dir live)
 - **Feature modules**: Follow patterns in `docs/architecture/feature-modules.md`
 - **Architecture rules**: Read `docs/design-rules.md` for invariants and naming conventions
 
-## Codebase Memory (MCP)
+## Codebase Memory (MCP) — Project-Specific Notes
 
-This project is indexed by `codebase-memory-mcp`. Use it for structural queries instead of grep when possible.
+IMPORTS edges have `via_barrel` property (true when import goes through a barrel/index file).
 
-**Orientation:**
-- `get_architecture(aspects=['hotspots','boundaries','clusters'])` for dependency analysis
-- `manage_adr(mode='get')` before refactors/new features to check alignment
-
-**Prefer `search_graph` over `query_graph`** — it handles degree filtering, dead code detection, and regex name matching without Cypher syntax issues:
-- Dead code: `search_graph(label='Function', relationship='CALLS', direction='inbound', max_degree=0, exclude_entry_points=true)`
-- High fan-out: `search_graph(label='Function', relationship='CALLS', direction='outbound', min_degree=15, sort_by='degree')`
-- Find by name: `search_graph(name_pattern='.*Handler.*', label='Function')`
-
-**Use `query_graph` for relationship patterns** (who calls whom, edge properties, paths):
-- `MATCH (a)-[:CALLS]->(b) WHERE a.name = 'foo' RETURN b.name LIMIT 20`
-- `MATCH (m:Method) WHERE m.end_line - m.start_line > 80 RETURN m.name, m.file LIMIT 20`
-- `MATCH (f:Function) WHERE f.name IN ['main', 'init', 'setup'] RETURN f.name LIMIT 20`
-- Supports: arithmetic (`a - b > N`), `IN [...]`, `ENDS WITH`, `NOT`, nested `AND`/`OR`, property-to-property comparisons
-- IMPORTS edges have `via_barrel` property (true when import goes through a barrel/index file)
-- 200-row cap; no `WITH`, `COLLECT`, `OPTIONAL MATCH`
-
-**Other tools:**
-- `trace_call_path` — call chains from/to a function (use `search_graph` first to find exact name)
-- `search_code` — text search (like grep, not semantic), good for string literals and patterns not in the graph
-- `detect_changes` — map git diff to affected symbols + blast radius
-- After major changes: auto-sync keeps graph fresh; force with `index_repository` if needed
+See global CLAUDE.md for full tool reference and mandatory triggers.
 
 
 
@@ -145,6 +124,8 @@ Read `docs/optimistic.md` for full details. Read `docs/coding-style.md` for Type
 
 ## Validation — MANDATORY RULES
 
+CRITICAL: If the user mentioned to 'fix all' (tests, list issues, etc), then that ALWAYS means fix ALL, COMPLETELY. All warnings, all errors (unless the conversation context suggests otherwise). Not caring if they are pre-existing or new, or yours or not. Just fix all.
+
 **ALWAYS use `pnpm lint` (NOT `pnpm build`) to validate changes.** `pnpm build` only type-checks; it misses all ESLint errors.
 
 **NEVER run `pnpm lint` more than once per validation cycle.** Capture output to a file and grep from it:
@@ -162,7 +143,6 @@ grep "FAIL\|error" /tmp/test.txt           # then filter from the file
 Re-running tests just to see different output is forbidden. Read `/tmp/test.txt` instead.
 
 More testing rules (integration tests, TDD, timeline DB, e2e) are in `.claude/rules/testing.md` — loaded automatically when working with test files.
-
 
 
 NEVER GIT STASH.
