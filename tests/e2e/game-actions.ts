@@ -57,10 +57,11 @@ export async function placeBuilding(
     buildingType: BuildingType,
     x: number,
     y: number,
-    player = 0
+    player = 0,
+    options?: { completed?: boolean }
 ): Promise<BuildingResult | null> {
     return page.evaluate(
-        ({ bt, posX, posY, p }) => {
+        ({ bt, posX, posY, p, completed }) => {
             const game = window.__settlers__?.game;
             if (!game) return null;
             const cmdResult = game.execute({
@@ -70,6 +71,7 @@ export async function placeBuilding(
                 y: posY,
                 player: p,
                 race: 10,
+                ...(completed && { completed: true }),
             });
             if (!cmdResult?.success) return null;
             const entityId = (cmdResult.effects?.[0] as { entityId?: number })?.entityId;
@@ -86,7 +88,7 @@ export async function placeBuilding(
                 player: entity.player,
             };
         },
-        { bt: buildingType, posX: x, posY: y, p: player }
+        { bt: buildingType, posX: x, posY: y, p: player, completed: options?.completed ?? false }
     );
 }
 

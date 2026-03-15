@@ -73,6 +73,7 @@ function createTestHarness() {
         recruitSystem: { enqueue: () => {}, dequeue: () => {}, getQueuedCount: () => 0, tick: () => {} } as any,
         unitTransformer: { dismissSpecialist: () => false } as any,
         getPlacementFilter: () => null,
+        getOwner: () => 0,
     });
 
     return { state, terrain, registry };

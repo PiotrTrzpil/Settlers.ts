@@ -41,14 +41,18 @@ If anything is ambiguous, ask the user ONE round of clarifying questions (use As
 
 ### Step 2: Graph-Assisted Scouting
 
-**Use codebase-memory-mcp graph tools first** (see `docs/CODEBASE_MEMORY.md` for full reference). The graph gives you structural answers in seconds — use it before spawning scout agents. **Run all graph queries in parallel using multiple agents** — every query below is independent, so batch them into 2-3 parallel agents alongside the scout agents. The entire scouting phase (graph + agents) should complete in one parallel wave.
+**MUST use codebase-memory-mcp graph tools first** (see `docs/CODEBASE_MEMORY.md` for full reference). The graph gives you structural answers in seconds — use it before spawning scout agents. **Run all graph queries in parallel using multiple agents** — every query below is independent, so batch them into 2-3 parallel agents alongside the scout agents. The entire scouting phase (graph + agents) should complete in one parallel wave.
 
 #### Graph queries to run first:
-- `get_architecture(aspects=['hotspots', 'boundaries', 'clusters'])` — understand current structure, cross-module call volumes, and natural functional groupings
+- `get_architecture(aspects=['hotspots', 'boundaries', 'clusters'])` — understand current structure, cross-module call volumes, and natural functional groupings. Use `boundary_path_prefix` + `boundary_depth` for scoped analysis when the feature area is known (e.g., `boundary_path_prefix='src/game/features', boundary_depth=1`)
 - `search_graph(name_pattern='.*{keyword}.*', label='Class')` — find existing code related to the feature
 - `query_graph('MATCH (c:Class)-[:IMPLEMENTS]->(i:Interface) WHERE i.name = "{relevant interface}" RETURN c.name, c.file LIMIT 20')` — find all implementors to use as templates
 - `trace_call_path(function_name='{registration_point}', direction='outbound', depth=1)` — find where features get wired in (high fan-out functions are registration points)
-- `query_graph('MATCH (a)-[r:FILE_CHANGES_WITH]->(b) WHERE a.name CONTAINS "{keyword}" RETURN a.name, b.name, r.coupling_score LIMIT 15')` — files that change together reveal hidden coupling
+- `query_graph('MATCH (a)-[r:FILE_CHANGES_WITH]->(b) WHERE a.name CONTAINS "{keyword}" RETURN a.name, b.name, r.coupling_score, r.co_change_count LIMIT 15')` — files that change together reveal hidden coupling
+
+For **event-driven features**, also query the existing event landscape:
+- `query_graph('MATCH (f)-[r:CALLS]->(g:Method) WHERE g.name = "emit" AND g.file_path ENDS WITH "event-bus.ts" RETURN DISTINCT r.first_arg LIMIT 80')` — list all events currently emitted (avoid collisions, understand existing patterns)
+- `query_graph('MATCH (f)-[r:CALLS]->(g:Method) WHERE g.name = "subscribe" AND r.first_arg CONTAINS "{related_event}" RETURN f.name, f.file_path LIMIT 20')` — find subscribers to related events
 
 For **refactorings**, also run:
 - `detect_changes(scope='branch', base_branch='master', depth=3)` — if there's existing WIP, see its blast radius

@@ -129,3 +129,36 @@ describe('Real map loading', () => {
         });
     }
 });
+
+describe('Real map: free pile player assignment', () => {
+    it('free ground piles belong to the territory owner, not player 0', () => {
+        const mapLoader = loadMapFile(MAPS_TO_TEST[0]!);
+        if (!mapLoader) {
+            console.log(`Skipping: map not found`);
+            return;
+        }
+
+        const game = new GameCore(mapLoader);
+        const piles = game.state.entities.filter(e => e.type === EntityType.StackedPile);
+
+        expect(piles.length).toBeGreaterThan(0);
+
+        // Every free pile in a player's territory should belong to that player
+        const misassigned: string[] = [];
+        for (const pile of piles) {
+            const owner = game.services.territoryManager.getOwner(pile.x, pile.y);
+            if (owner > 0 && pile.player !== owner) {
+                misassigned.push(
+                    `pile #${pile.id} (${pile.subType}) at (${pile.x},${pile.y}): player=${pile.player}, territory=${owner}`
+                );
+            }
+        }
+
+        expect(
+            misassigned,
+            `${misassigned.length} piles have wrong player:\n${misassigned.slice(0, 5).join('\n')}`
+        ).toHaveLength(0);
+
+        game.destroy();
+    });
+});

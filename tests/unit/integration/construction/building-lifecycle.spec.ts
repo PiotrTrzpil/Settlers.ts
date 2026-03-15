@@ -141,6 +141,39 @@ describe('Building construction: full flow', { timeout: 30_000 }, () => {
         expect(sim.countEntities(EntityType.Unit, UnitType.Woodcutter)).toBe(1);
         expect(sim.errors).toHaveLength(0);
     });
+
+    it('free ground piles are usable by non-zero player for construction recruitment', () => {
+        sim = createSimulation({ skipTerritory: true });
+        const player = 1;
+
+        // Realistic territory via guard tower for player 1
+        sim.placeBuilding(BuildingType.GuardTowerSmall, player);
+
+        sim.placeBuilding(BuildingType.ResidenceSmall, player);
+
+        const storageId = sim.placeBuilding(BuildingType.StorageArea, player);
+        sim.injectOutput(storageId, EMaterialType.BOARD, 8);
+        sim.injectOutput(storageId, EMaterialType.STONE, 8);
+
+        sim.placeGoods(EMaterialType.SHOVEL, 4);
+        sim.placeGoods(EMaterialType.HAMMER, 4);
+
+        // Free piles must belong to the territory owner, not player 0
+        const shovels = sim.state.entities.filter(
+            e => e.type === EntityType.StackedPile && e.subType === EMaterialType.SHOVEL
+        );
+        expect(shovels.length).toBeGreaterThan(0);
+        for (const pile of shovels) {
+            expect(pile.player, `SHOVEL pile ${pile.id} should belong to player ${player}`).toBe(player);
+        }
+
+        const siteId = sim.placeBuilding(BuildingType.WoodcutterHut, player, false);
+
+        sim.waitForConstructionComplete(siteId, 80_000);
+
+        expect(sim.countEntities(EntityType.Unit, UnitType.Woodcutter)).toBe(1);
+        expect(sim.errors).toHaveLength(0);
+    });
 });
 
 // ─── Edge cases ──────────────────────────────────────────────────

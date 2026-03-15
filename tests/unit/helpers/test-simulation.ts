@@ -135,14 +135,17 @@ export class Simulation {
             recruitSystem: this.services.recruitSystem,
             unitTransformer: this.services.unitTransformer,
             getPlacementFilter: () => null,
+            getOwner: (x, y) => this.services.territoryManager.getOwner(x, y),
         });
 
         this.services.residenceSpawner.immediateMode = true;
 
-        // Establish territory for player 0 covering the entire test map.
+        // Establish territory for player 0 covering the entire test map (unless skipped).
         // Workers use the spatial grid's territory-aware queries, so they need
         // their tiles to be inside territory to find resources.
-        this.establishTerritory(0);
+        if (!opts.skipTerritory) {
+            this.establishTerritory(0);
+        }
 
         this.eventBus.on('entity:removed', ({ entityId }) => {
             this.services.settlerTaskSystem.onEntityRemoved(entityId);

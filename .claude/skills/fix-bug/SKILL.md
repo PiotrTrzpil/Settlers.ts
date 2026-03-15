@@ -26,7 +26,7 @@ $ARGUMENTS
 - Form a rough hypothesis — it's OK to be wrong, the test will tell you
 - **Do NOT read entire files. Do NOT deep-dive. Stop as soon as you can write a test.**
 
-### 2. Write a Failing Test IMMEDIATELY
+### 2. Write a Failing Test IMMEDIATELY - TDD style
 
 **Write a failing test before doing any more investigation.** This is non-negotiable.
 

@@ -31,6 +31,7 @@ test-results/
 tests/e2e/.results/
 tests/e2e/__screenshots__/
 tests/unit/.timeline/
+tests/e2e/.timeline/
 playwright-report/
 
 # Playwright MCP/CLI browser logs

@@ -411,6 +411,29 @@ describe('Replay persistence – invariants', { timeout: 30_000 }, () => {
         }
     });
 
+    it('no duplicate workers assigned to building after restore', () => {
+        sim = createSimulation();
+        sim.placeBuilding(BuildingType.ResidenceSmall);
+        const woodcutterId = sim.placeBuilding(BuildingType.WoodcutterHut);
+        sim.plantTreesNear(woodcutterId, 3);
+
+        // Run until woodcutter has a worker and has produced output (worker is active)
+        sim.runUntil(() => sim.getOutput(woodcutterId, EMaterialType.LOG) >= 1, {
+            maxTicks: 15_000,
+            label: 'woodcutter produces first LOG',
+        });
+
+        // Before restore: exactly 1 worker assigned
+        const workersBefore = sim.services.settlerTaskSystem.getOccupantCount(woodcutterId);
+        expect(workersBefore, 'pre-restore occupant count').toBe(1);
+
+        restored = keyframeAndRestore(sim);
+
+        // After restore + replay: still exactly 1 worker
+        const workersAfter = restored.services.settlerTaskSystem.getOccupantCount(woodcutterId);
+        expect(workersAfter, 'post-restore occupant count must not exceed 1').toBe(1);
+    });
+
     it('continue after restore — remaining trees are cut', () => {
         sim = createSimulation();
         sim.placeBuilding(BuildingType.ResidenceSmall);

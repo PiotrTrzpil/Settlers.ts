@@ -185,6 +185,19 @@ export class GamePage {
         await this.wait.waitForFrames(Frames.STATE_PROPAGATE, Timeout.DEFAULT);
     }
 
+    /**
+     * Zoom camera in or out by dispatching wheel events on the canvas.
+     * @param steps Positive = zoom in, negative = zoom out. Each step ≈ one scroll notch.
+     */
+    async zoomCamera(steps: number): Promise<void> {
+        const deltaY = steps > 0 ? -300 : 300;
+        const count = Math.abs(steps);
+        for (let i = 0; i < count; i++) {
+            await this.canvas.dispatchEvent('wheel', { deltaY });
+        }
+        await this.wait.waitForFrames(Frames.STATE_PROPAGATE, Timeout.DEFAULT);
+    }
+
     /** Toggle music on or off via SoundManager. */
     async toggleMusic(enabled: boolean): Promise<void> {
         await this.audio.setMusicEnabled(enabled);

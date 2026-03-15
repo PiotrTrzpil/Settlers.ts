@@ -69,6 +69,8 @@ export interface SimulationOptions {
     mapHeight?: number;
     /** Race for player 0 (defaults to Roman). */
     race?: Race;
+    /** Skip automatic territory establishment for player 0. Use placeGuardTower() to set up territory manually. */
+    skipTerritory?: boolean;
 }
 
 // ─── Constants ──────────────────────────────────────────────────
