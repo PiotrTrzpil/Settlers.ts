@@ -122,6 +122,7 @@ export class BuildingSiegeSystem implements TickSystem {
             for (const [buildingId, siege] of this.sieges) {
                 if (siege.activeDefenderId === entityId) {
                     siege.activeDefenderId = null;
+                    this.unitReservation.release(entityId);
                     this.advanceSiege(buildingId, siege);
                     return;
                 }
@@ -143,6 +144,11 @@ export class BuildingSiegeSystem implements TickSystem {
         const siege = this.sieges.get(buildingId);
         if (!siege) {
             return;
+        }
+
+        // Release defender reservation
+        if (siege.activeDefenderId !== null) {
+            this.unitReservation.release(siege.activeDefenderId);
         }
 
         // Release attackers from combat and reservations so they return to idle
@@ -254,8 +260,11 @@ export class BuildingSiegeSystem implements TickSystem {
             return;
         }
 
-        // At door — advance the siege (eject defender or capture)
-        this.advanceSiege(target.id, siege);
+        // At door — only advance if no defender is currently fighting.
+        // Defenders are ejected one at a time; the next is ejected when the current one dies.
+        if (siege.activeDefenderId === null) {
+            this.advanceSiege(target.id, siege);
+        }
     }
 
     /** Assign a move task directly (bypasses command handler reservation check). */
@@ -319,6 +328,19 @@ export class BuildingSiegeSystem implements TickSystem {
         });
     }
 
+    /** Reserve the ejected defender so it stays at the door and doesn't wander. */
+    private reserveDefender(unitId: number): void {
+        if (this.unitReservation.isReserved(unitId)) {
+            return;
+        }
+        this.unitReservation.reserve(unitId, {
+            purpose: 'siege-defender',
+            onForcedRelease: id => {
+                log.debug(`Siege defender ${id} removed externally, reservation auto-released`);
+            },
+        });
+    }
+
     // ── Siege advancement ──────────────────────────
 
     /**
@@ -342,9 +364,10 @@ export class BuildingSiegeSystem implements TickSystem {
             return;
         }
 
-        // Eject the next defender
+        // Eject the next defender — they stand at the door and fight.
         const nextDefenderId = garrisonedIds[0]!;
         this.garrisonManager.ejectUnit(nextDefenderId, buildingId);
+        this.reserveDefender(nextDefenderId);
 
         siege.activeDefenderId = nextDefenderId;
         siege.phase = SiegePhase.Fighting;
@@ -384,15 +407,8 @@ export class BuildingSiegeSystem implements TickSystem {
             return;
         }
 
-        // Set defender to fight the first attacker
-        const firstAttackerId = siege.attackerIds[0];
-        if (firstAttackerId === undefined) {
-            return;
-        }
-
-        defenderState.status = CombatStatus.Fighting;
-        defenderState.targetId = firstAttackerId;
-        defenderState.attackTimer = 0;
+        // Defender is left Idle — the combat system's idle scan will naturally engage
+        // adjacent attackers. The defender is reserved (siege-defender) so it won't pursue.
 
         // Assign up to MAX_ACTIVE_ATTACKERS
         const activeCount = Math.min(siege.attackerIds.length, MAX_ACTIVE_ATTACKERS);

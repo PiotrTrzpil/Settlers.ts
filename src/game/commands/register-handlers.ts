@@ -57,6 +57,8 @@ export interface CommandRegistrationDeps {
     getPlacementFilter: () => PlacementFilter | null;
     recruitSystem: RecruitSystem;
     unitTransformer: UnitTransformer;
+    /** Territory owner lookup for assigning player to free piles */
+    getOwner: (x: number, y: number) => number;
 }
 
 /**
@@ -79,6 +81,7 @@ export function registerAllHandlers(registry: CommandHandlerRegistry, deps: Comm
         getPlacementFilter,
         recruitSystem,
         unitTransformer,
+        getOwner,
     } = deps;
 
     // Selection — only state
@@ -112,7 +115,7 @@ export function registerAllHandlers(registry: CommandHandlerRegistry, deps: Comm
     registry.register('spawn_building_units', cmd => executeSpawnBuildingUnits({ state, terrain, eventBus }, cmd));
 
     // System
-    registry.register('place_pile', cmd => executePlacePile({ state, terrain, eventBus }, cmd));
+    registry.register('place_pile', cmd => executePlacePile({ state, terrain, eventBus, getOwner }, cmd));
     registry.register('spawn_pile', cmd => executeSpawnPile({ state, terrain, eventBus }, cmd));
     registry.register('spawn_map_object', cmd => executeSpawnMapObject({ state }, cmd));
     registry.register('set_storage_filter', cmd =>

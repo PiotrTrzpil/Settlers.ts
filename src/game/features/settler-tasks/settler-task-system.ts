@@ -6,12 +6,11 @@
 
 import type { GameState } from '../../game-state';
 import type { TickSystem } from '../../core/tick-system';
-import { EntityType, UnitType, type Entity } from '../../entity';
+import { EntityType, UnitType, BuildingType, tileKey, type Entity } from '../../entity';
 import type { EventBus } from '../../event-bus';
 import { isAngelUnitType } from '../../core/unit-types';
 import { createLogger } from '@/utilities/logger';
 import { ThrottledLogger } from '@/utilities/throttled-logger';
-import { sortedEntries } from '@/utilities/collections';
 import {
     SearchType,
     SettlerState,
@@ -22,6 +21,7 @@ import {
     type WorkerStateQuery,
 } from './types';
 import { buildAllSettlerConfigs } from '../../data/settler-data-access';
+import { getBuildingDoorPos } from '../../data/game-data-access';
 import type { BuildingInventoryManager } from '../inventory';
 import { createWorkplaceHandler, createCarrierHandler } from './work-handlers';
 import { WorkHandlerRegistry } from './work-handler-registry';
@@ -37,17 +37,17 @@ import type { OreVeinData } from '../ore-veins/ore-vein-data';
 import type { ISettlerBuildingLocationManager } from '../settler-location/types';
 import { BuildingWorkerTracker } from './building-worker-tracker';
 import { IndexedMap } from '@/game/utils/indexed-map';
-import type { TickScheduler, ScheduleHandle } from '../../systems/tick-scheduler';
-import { NO_HANDLE } from '../../systems/tick-scheduler';
-import { type SettlerTaskSystemConfig, type SettlerDebugEntry, buildDebugEntry } from './settler-task-config';
+import type { TickScheduler } from '../../systems/tick-scheduler';
+import { type SettlerTaskSystemConfig, type SettlerDebugEntry } from './settler-task-config';
+import { SettlerLifecycleCoordinator } from './settler-lifecycle';
+import { dumpSettlerDebug, dumpWorkerAssignments, type SettlerDebugSource } from './internal/settler-debug';
 export type { SettlerTaskSystemConfig } from './settler-task-config';
 
 const log = createLogger('SettlerTaskSystem');
-const ORPHAN_CHECK_INTERVAL = 60;
 const IDLE_SEARCH_COOLDOWN = 10;
 type SettlerConfigs = Map<UnitType, SettlerConfig>;
 
-export class SettlerTaskSystem implements TickSystem, TaskDispatcher, WorkerStateQuery {
+export class SettlerTaskSystem implements TickSystem, TaskDispatcher, WorkerStateQuery, SettlerDebugSource {
     private readonly gameState: GameState;
     private readonly eventBus: EventBus;
     private readonly inventoryManager: BuildingInventoryManager;
@@ -58,14 +58,13 @@ export class SettlerTaskSystem implements TickSystem, TaskDispatcher, WorkerStat
     private readonly buildingPositionResolver: BuildingPositionResolverImpl;
     private readonly workerExecutor: WorkerTaskExecutor;
     private readonly stateMachine: UnitStateMachine;
-    private readonly runtimes = new IndexedMap<number, UnitRuntime>();
-    private readonly workerTracker: BuildingWorkerTracker;
+    readonly runtimes = new IndexedMap<number, UnitRuntime>();
+    readonly workerTracker: BuildingWorkerTracker;
     private readonly tickScheduler: TickScheduler;
-    private orphanHandle: ScheduleHandle = NO_HANDLE;
-    private readonly idleCooldownHandles = new Map<number, ScheduleHandle>();
     private oreVeinData: OreVeinData | undefined;
     private lastSubTimings: Record<string, number> = {};
     private readonly locationManager: ISettlerBuildingLocationManager;
+    private readonly lifecycleCoordinator: SettlerLifecycleCoordinator;
 
     constructor(config: SettlerTaskSystemConfig) {
         this.gameState = config.gameState;
@@ -141,7 +140,29 @@ export class SettlerTaskSystem implements TickSystem, TaskDispatcher, WorkerStat
             tickScheduler: this.tickScheduler,
         });
 
-        this.orphanHandle = this.tickScheduler.schedule(ORPHAN_CHECK_INTERVAL, () => this.orphanCheckAndReschedule());
+        this.lifecycleCoordinator = new SettlerLifecycleCoordinator({
+            gameState: this.gameState,
+            eventBus: this.eventBus,
+            tickScheduler: this.tickScheduler,
+            workerTracker: this.workerTracker,
+            stateMachine: this.stateMachine,
+            runtimes: this.runtimes,
+            locationManager: this.locationManager,
+            inventoryManager: this.inventoryManager,
+            handlerRegistry: this.handlerRegistry,
+            interruptJob: (entity, cfg, runtime) => this.interruptJobForCleanup(entity, cfg, runtime),
+            createRuntime: () => ({
+                state: SettlerState.IDLE,
+                job: null,
+                moveTask: null,
+                lastDirection: 0,
+                idleState: this.animController.createIdleState(),
+                homeAssignment: null,
+                idleSearchReady: false,
+            }),
+        });
+
+        this.lifecycleCoordinator.registerEvents();
 
         this.handlerRegistry.register(
             SearchType.WORKPLACE,
@@ -156,84 +177,14 @@ export class SettlerTaskSystem implements TickSystem, TaskDispatcher, WorkerStat
 
         this.handlerRegistry.register(SearchType.GOOD, createCarrierHandler());
 
-        config.eventBus.on('carrier:transportCancelled', ({ unitId: carrierId }) => {
-            const runtime = this.runtimes.get(carrierId);
-            if (!runtime?.job) {
-                return;
-            }
-
-            const entity = this.gameState.getEntity(carrierId);
-            if (!entity) {
-                return;
-            }
-
-            const unitConfig = this.settlerConfigs.get(entity.subType as UnitType);
-            if (!unitConfig) {
-                return;
-            }
-
-            this.interruptJobForCleanup(entity, unitConfig, runtime);
-            runtime.job = null;
-        });
-
-        config.eventBus.on('settler-location:approachInterrupted', ({ unitId: settlerId, buildingId }) => {
-            if (!this.runtimes.has(settlerId)) {
-                return;
-            }
-            // OK: has() check above guarantees entry exists
-            const runtime = this.runtimes.get(settlerId)!;
-            if (runtime.homeAssignment?.buildingId !== buildingId) {
-                return;
-            }
-
-            runtime.homeAssignment = null;
-            this.runtimes.reindex(settlerId);
-
-            if (runtime.job) {
-                const entity = this.gameState.getEntityOrThrow(settlerId, 'settler whose approach was interrupted');
-                const unitConfig = this.settlerConfigs.get(entity.subType as UnitType);
-                if (unitConfig) {
-                    this.interruptJobForCleanup(entity, unitConfig, runtime);
-                }
-                runtime.job = null;
-            }
-
-            runtime.moveTask = null;
-            this.gameState.movement.getController(settlerId)?.clearPath();
-        });
-
-        config.eventBus.on('building:workerSpawned', ({ buildingId, unitId: settlerId }) => {
-            this.workerTracker.assignWorkerInside(settlerId, buildingId);
-        });
-
-        // When a specialist is dismissed back to carrier, clear the stale choreo job.
-        // The old job's animation nodes (e.g. SW_WALK) don't exist for the Carrier type.
-        // Carrier→specialist transforms are fine — the choreo continues with new-type nodes.
-        config.eventBus.on('unit:transformed', ({ unitId, toType }) => {
-            if (toType !== UnitType.Carrier) {
-                return;
-            }
-            const runtime = this.runtimes.get(unitId);
-            if (!runtime) {
-                return;
-            }
-
-            const entity = this.gameState.getEntityOrThrow(unitId, 'unit being transformed to Carrier');
-            if (runtime.job) {
-                const unitConfig = this.settlerConfigs.get(toType);
-                if (unitConfig) {
-                    this.interruptJobForCleanup(entity, unitConfig, runtime);
-                }
-                runtime.job = null;
-            }
-            this.workerTracker.release(unitId, runtime);
-            runtime.state = SettlerState.IDLE;
-            runtime.moveTask = null;
-        });
-
         log.debug(
             `Loaded ${this.settlerConfigs.size} settler configs, ${this.choreographyStore.cacheSize} cached jobs`
         );
+    }
+
+    /** Delegate entity removal to the lifecycle coordinator (used by cleanup registry). */
+    onEntityRemoved(entityId: number): void {
+        this.lifecycleCoordinator.onEntityRemoved(entityId);
     }
 
     getPositionResolver(): BuildingPositionResolverImpl {
@@ -282,11 +233,11 @@ export class SettlerTaskSystem implements TickSystem, TaskDispatcher, WorkerStat
     }
 
     getDebugInfo(): SettlerDebugEntry[] {
-        const result = [];
-        for (const [entityId, runtime] of this.runtimes) {
-            result.push(buildDebugEntry(entityId, runtime));
-        }
-        return result;
+        return dumpSettlerDebug(this);
+    }
+
+    dumpWorkerAssignments(): string {
+        return dumpWorkerAssignments(this);
     }
 
     registerWorkHandler(searchType: SearchType, handler: WorkHandler): void {
@@ -325,6 +276,10 @@ export class SettlerTaskSystem implements TickSystem, TaskDispatcher, WorkerStat
         this.workerTracker.assignWorker(settlerId, buildingId);
     }
 
+    getOccupantCount(buildingId: number): number {
+        return this.workerTracker.occupants.get(buildingId) ?? 0;
+    }
+
     assignWorkerInsideBuilding(settlerId: number, buildingId: number): void {
         this.workerTracker.assignWorkerInside(settlerId, buildingId);
     }
@@ -339,7 +294,24 @@ export class SettlerTaskSystem implements TickSystem, TaskDispatcher, WorkerStat
             return false;
         }
 
-        const moveSuccess = this.gameState.movement.moveUnit(entityId, targetX, targetY);
+        // When target is inside a building footprint, reroute to the building's door tile.
+        let moveX = targetX;
+        let moveY = targetY;
+        if (this.gameState.buildingOccupancy.has(tileKey(targetX, targetY))) {
+            const building = this.gameState.getGroundEntityAt(targetX, targetY);
+            if (building && building.type === EntityType.Building) {
+                const door = getBuildingDoorPos(
+                    building.x,
+                    building.y,
+                    building.race,
+                    building.subType as BuildingType
+                );
+                moveX = door.x;
+                moveY = door.y;
+            }
+        }
+
+        const moveSuccess = this.gameState.movement.moveUnit(entityId, moveX, moveY);
         if (!moveSuccess) {
             return false;
         }
@@ -356,7 +328,7 @@ export class SettlerTaskSystem implements TickSystem, TaskDispatcher, WorkerStat
 
         if (unitConfig) {
             const posHandler = this.handlerRegistry.getPositionHandler(unitConfig.plantSearch ?? unitConfig.search);
-            posHandler?.onSettlerRemoved?.(entityId);
+            posHandler?.onSettlerRemoved?.(entityId, targetX, targetY);
         }
 
         this.workerTracker.release(entityId, runtime);
@@ -416,79 +388,6 @@ export class SettlerTaskSystem implements TickSystem, TaskDispatcher, WorkerStat
         return true;
     }
 
-    onEntityRemoved(entityId: number): void {
-        if (this.workerTracker.occupants.has(entityId)) {
-            this.onBuildingRemoved(entityId);
-        }
-
-        const runtime = this.runtimes.get(entityId);
-        if (!runtime) {
-            return;
-        }
-
-        const entity = this.gameState.getEntity(entityId);
-        if (entity) {
-            this.cleanupSettlerHandlers(entity, entityId, runtime);
-        } else if (runtime.job?.targetId && runtime.job.workStarted) {
-            const entityHandler = this.handlerRegistry.findEntityHandlerForJob(runtime.job.jobId, this.settlerConfigs);
-            if (entityHandler) {
-                try {
-                    entityHandler.onWorkInterrupt?.(runtime.job.targetId, entityId);
-                } catch (e) {
-                    const err = e instanceof Error ? e : new Error(String(e));
-                    log.error(`onWorkInterrupt failed for entity ${entityId}`, err);
-                }
-            }
-        }
-
-        const idleHandle = this.idleCooldownHandles.get(entityId);
-        if (idleHandle !== undefined) {
-            this.tickScheduler.cancel(idleHandle);
-            this.idleCooldownHandles.delete(entityId);
-        }
-
-        this.workerTracker.release(entityId, runtime);
-        this.runtimes.delete(entityId);
-    }
-
-    private cleanupSettlerHandlers(entity: Entity, entityId: number, runtime: UnitRuntime): void {
-        const config = this.settlerConfigs.get(entity.subType as UnitType);
-        if (!config) {
-            return;
-        }
-        if (runtime.job) {
-            this.interruptJobForCleanup(entity, config, runtime);
-        }
-        const posHandler = this.handlerRegistry.getPositionHandler(config.plantSearch ?? config.search);
-        posHandler?.onSettlerRemoved?.(entityId);
-    }
-
-    private onBuildingRemoved(buildingId: number): void {
-        this.workerTracker.clearBuilding(buildingId);
-        for (const [settlerId, runtime] of sortedEntries(this.runtimes.raw as Map<number, UnitRuntime>)) {
-            if (runtime.homeAssignment?.buildingId !== buildingId) {
-                continue;
-            }
-
-            runtime.homeAssignment = null;
-            this.runtimes.reindex(settlerId);
-
-            if (runtime.job) {
-                const entity = this.gameState.getEntity(settlerId);
-                if (entity) {
-                    const config = this.settlerConfigs.get(entity.subType as UnitType);
-                    if (config) {
-                        this.interruptJobForCleanup(entity, config, runtime);
-                    }
-                }
-                runtime.job = null;
-            }
-
-            runtime.moveTask = null;
-            this.gameState.movement.getController(settlerId)?.clearPath();
-        }
-    }
-
     tick(dt: number): void {
         const cats: [number, number, number, number, number, number] = [0, 0, 0, 0, 0, 0];
         const it = this.workerExecutor.idleTimings;
@@ -538,32 +437,6 @@ export class SettlerTaskSystem implements TickSystem, TaskDispatcher, WorkerStat
         return this.lastSubTimings;
     }
 
-    private orphanCheckAndReschedule(): void {
-        for (const id of this.runtimes.keys()) {
-            if (!this.gameState.getEntity(id)) {
-                this.onEntityRemoved(id);
-            }
-        }
-        this.orphanHandle = this.tickScheduler.schedule(ORPHAN_CHECK_INTERVAL, () => this.orphanCheckAndReschedule());
-    }
-
-    markReadyForSearch(entityId: number): void {
-        const runtime = this.runtimes.get(entityId);
-        if (runtime) {
-            runtime.idleSearchReady = true;
-        }
-        this.idleCooldownHandles.delete(entityId);
-    }
-
-    scheduleIdleCooldown(entityId: number, delay: number): void {
-        const existingHandle = this.idleCooldownHandles.get(entityId);
-        if (existingHandle !== undefined) {
-            this.tickScheduler.cancel(existingHandle);
-        }
-        const handle = this.tickScheduler.schedule(delay, () => this.markReadyForSearch(entityId));
-        this.idleCooldownHandles.set(entityId, handle);
-    }
-
     private getRuntime(entityId: number): UnitRuntime {
         let runtime = this.runtimes.get(entityId);
         if (!runtime) {
@@ -578,7 +451,7 @@ export class SettlerTaskSystem implements TickSystem, TaskDispatcher, WorkerStat
             };
             this.runtimes.set(entityId, runtime);
             const stagger = Math.max(1, entityId % IDLE_SEARCH_COOLDOWN);
-            this.scheduleIdleCooldown(entityId, stagger);
+            this.lifecycleCoordinator.scheduleIdleCooldown(entityId, stagger);
         }
         return runtime;
     }

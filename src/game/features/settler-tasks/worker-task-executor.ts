@@ -47,6 +47,7 @@ import type { ISettlerBuildingLocationManager } from '../settler-location';
 import { JobSelector } from './job-selector';
 import { safeCall } from './safe-call';
 import { WorkerJobLifecycle } from './internal/worker-job-lifecycle';
+import { buildExecutorContexts } from './internal/executor-context-factory';
 
 /** Per-unit state needed by the worker executor (subset of UnitRuntime). */
 export interface WorkerRuntimeState {
@@ -118,44 +119,26 @@ export class WorkerTaskExecutor {
         this.buildingPositionResolver = cfg.buildingPositionResolver;
         this.locationManager = cfg.locationManager;
 
-        // Pre-built context objects — handler fields mutated in-place each tick (zero allocation)
-        this.movementCtx = {
+        const contexts = buildExecutorContexts({
             gameState: cfg.gameState,
-            buildingPositionResolver: cfg.buildingPositionResolver,
-            getWorkerHomeBuilding: cfg.getWorkerHomeBuilding,
-            handlerErrorLogger: cfg.handlerErrorLogger,
-            entityHandler: undefined,
-            positionHandler: undefined,
-        };
-
-        this.workCtx = {
-            gameState: cfg.gameState,
-            triggerSystem: cfg.triggerSystem,
-            getWorkerHomeBuilding: cfg.getWorkerHomeBuilding,
-            handlerErrorLogger: cfg.handlerErrorLogger,
-            entityHandler: undefined,
-            positionHandler: undefined,
-        };
-
-        this.inventoryCtx = {
+            eventBus: cfg.eventBus,
             inventoryManager: cfg.inventoryManager,
-            getWorkerHomeBuilding: cfg.getWorkerHomeBuilding,
             materialTransfer: cfg.materialTransfer,
-            eventBus: cfg.eventBus,
             constructionSiteManager: cfg.constructionSiteManager,
-        };
-
-        const getBarracksTrainingManager = cfg.getBarracksTrainingManager;
-        this.controlCtx = {
-            gameState: cfg.gameState,
-            eventBus: cfg.eventBus,
+            barracksTrainingManager: cfg.getBarracksTrainingManager,
+            buildingPositionResolver: cfg.buildingPositionResolver,
+            jobPartResolver: cfg.jobPartResolver,
+            triggerSystem: cfg.triggerSystem,
+            locationManager: cfg.locationManager,
             handlerErrorLogger: cfg.handlerErrorLogger,
-            get barracksTrainingManager() {
-                return getBarracksTrainingManager?.();
-            },
             executeCommand: cfg.executeCommand,
-            inventoryManager: cfg.inventoryManager,
-        };
+            getWorkerHomeBuilding: cfg.getWorkerHomeBuilding,
+        });
+
+        this.movementCtx = contexts.movement;
+        this.workCtx = contexts.work;
+        this.inventoryCtx = contexts.inventory;
+        this.controlCtx = contexts.control;
 
         this.lifecycle = new WorkerJobLifecycle({
             choreoSystem: cfg.choreoSystem,

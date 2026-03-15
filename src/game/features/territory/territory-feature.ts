@@ -51,10 +51,30 @@ export const TerritoryFeature: FeatureDefinition = {
                     spatialIndex.rebuildAllCells();
                 };
 
-                // Register territory buildings when created
+                // Register territory when buildings complete construction
+                ctx.on('building:completed', ({ buildingId, buildingType }) => {
+                    if (TERRITORY_BUILDINGS.has(buildingType)) {
+                        const entity = ctx.gameState.getEntityOrThrow(buildingId, 'territory:building:completed');
+                        territoryManager.addBuilding(buildingId, entity.x, entity.y, entity.player, buildingType);
+                    }
+                });
+
+                // On game load, buildings are created already operational — register those immediately
                 ctx.on('entity:created', ({ entityId, entityType: type, subType, x, y, player }) => {
                     if (type === EntityType.Building && TERRITORY_BUILDINGS.has(subType as BuildingType)) {
-                        territoryManager.addBuilding(entityId, x, y, player, subType as BuildingType);
+                        const entity = ctx.gameState.getEntityOrThrow(entityId, 'territory:entity:created');
+                        if (entity.operational) {
+                            territoryManager.addBuilding(entityId, x, y, player, subType as BuildingType);
+                        }
+                    }
+                });
+
+                // Update territory when a building changes ownership (e.g. siege capture)
+                ctx.on('building:ownerChanged', ({ buildingId, buildingType, newPlayer }) => {
+                    if (TERRITORY_BUILDINGS.has(buildingType)) {
+                        const entity = ctx.gameState.getEntityOrThrow(buildingId, 'territory:building:ownerChanged');
+                        territoryManager.removeBuilding(buildingId);
+                        territoryManager.addBuilding(buildingId, entity.x, entity.y, newPlayer, buildingType);
                     }
                 });
 

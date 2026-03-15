@@ -17,6 +17,7 @@ import type { FeatureDefinition, FeatureContext } from '../feature';
 import type { TerrainData } from '../../terrain';
 import { ResourceSignSystem } from './resource-sign-system';
 import { OreVeinData } from './ore-vein-data';
+import { OreVeinPersistence } from './ore-vein-persistence';
 import { populateOreVeins, loadOreVeinsFromResourceData } from './populate-ore-veins';
 import type { SettlerTaskExports } from '../settler-tasks/settler-tasks-feature';
 import { SearchType } from '../settler-tasks';
@@ -36,16 +37,20 @@ export const OreSignFeature: FeatureDefinition = {
     dependencies: ['settler-tasks'],
 
     create(ctx: FeatureContext) {
-        const signSystem = new ResourceSignSystem({ executeCommand: ctx.executeCommand });
+        const signSystem = new ResourceSignSystem({
+            executeCommand: ctx.executeCommand,
+            getGroundEntityAt: (x, y) => ctx.gameState.getGroundEntityAt(x, y),
+        });
 
         ctx.cleanupRegistry.onEntityRemoved(signSystem.onEntityRemoved.bind(signSystem));
 
+        const oreVeinPersistence = new OreVeinPersistence();
         const exports: OreSignExports = { signSystem, oreVeinData: null };
 
         return {
             systems: [signSystem],
             exports,
-            persistence: [],
+            persistence: [oreVeinPersistence],
             onTerrainReady(terrain: TerrainData, resourceData?: Uint8Array) {
                 const oreVeinData = new OreVeinData(terrain.width, terrain.height);
                 if (resourceData) {
@@ -55,6 +60,7 @@ export const OreSignFeature: FeatureDefinition = {
                 }
                 exports.oreVeinData = oreVeinData;
                 signSystem.setOreVeinData(oreVeinData);
+                oreVeinPersistence.setOreVeinData(oreVeinData);
 
                 // Register geologist handler + inject ore vein data into settler-tasks
                 const { settlerTaskSystem } = ctx.getFeature<SettlerTaskExports>('settler-tasks');

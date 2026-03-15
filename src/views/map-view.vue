@@ -220,6 +220,31 @@
                     </div>
                 </div>
 
+                <!-- Game end (victory / defeat) overlay -->
+                <div v-if="gameEndResult" class="game-end-backdrop">
+                    <div class="game-end-dialog">
+                        <h2
+                            class="game-end-title"
+                            :class="gameEndResult.won ? 'game-end-title--won' : 'game-end-title--lost'"
+                        >
+                            {{ gameEndResult.won ? 'Victory!' : 'Defeat' }}
+                        </h2>
+                        <p class="game-end-message">
+                            {{
+                                gameEndResult.won
+                                    ? 'All enemies have been eliminated. The land is yours.'
+                                    : 'Your settlements have fallen. The enemy has prevailed.'
+                            }}
+                        </p>
+                        <div class="game-end-actions">
+                            <button class="game-end-btn game-end-btn--continue" @click="dismissGameEnd">
+                                Continue
+                            </button>
+                            <button class="game-end-btn game-end-btn--quit" @click="$router.push('/')">Quit</button>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Left panel container (selection info) -->
                 <div class="left-panels">
                     <selection-panel :game="game" />
@@ -325,6 +350,8 @@ const {
     specialistIcons,
     staleSnapshotWarning,
     dismissStaleSnapshot,
+    gameEndResult,
+    dismissGameEnd,
 } = useMapView(
     () => props.fileManager,
     () => rendererRef.value?.getInputManager?.() ?? null,

@@ -129,6 +129,12 @@ export class AutoGarrisonSystem implements TickSystem {
         if (this.unitReservation.isReserved(entityId)) {
             return false;
         }
+        // After state restore, reservations aren't persisted but the location
+        // manager already tracks approaching settlers. Checking isEnRoute
+        // prevents re-dispatching a unit that's already walking to a tower.
+        if (this.manager.isEnRoute(entityId)) {
+            return false;
+        }
         if (this.manager.hasDispatchFailed(entityId, buildingId)) {
             return false;
         }

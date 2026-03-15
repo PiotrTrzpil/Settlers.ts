@@ -29,6 +29,7 @@ export const CombatFeature: FeatureDefinition = {
             eventBus: ctx.eventBus,
             visualService: ctx.visualService,
             executeCommand: ctx.executeCommand,
+            isUnitReserved: id => ctx.unitReservation.isReserved(id),
         });
 
         // Auto-register military units when they spawn

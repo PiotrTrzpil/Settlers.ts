@@ -13,7 +13,7 @@
  * ConstructionSite record via getSiteOrThrow() — no dedicated accessor methods needed.
  */
 
-import { getBuildingFootprint, type BuildingType } from '../../buildings/types';
+import { getBuildingFootprint, isMineBuilding, type BuildingType } from '../../buildings/types';
 import type { Race } from '../../core/race';
 import type { EMaterialType } from '../../economy/material-type';
 import type { ConstructionCost } from '../../economy/building-production';
@@ -100,6 +100,8 @@ export class ConstructionSiteManager {
         const workerCount = getWorkerCount(buildingType, race);
         const pilePositions = assignConstructionPilePositions(buildingType, race, tileX, tileY);
 
+        const isMine = isMineBuilding(buildingType);
+
         const site: ConstructionSite = {
             buildingId,
             buildingType,
@@ -107,13 +109,13 @@ export class ConstructionSiteManager {
             player,
             tileX,
             tileY,
-            phase: BuildingConstructionPhase.WaitingForDiggers,
+            phase: isMine ? BuildingConstructionPhase.WaitingForBuilders : BuildingConstructionPhase.WaitingForDiggers,
             terrain: {
                 slots: { required: workerCount, assigned: new Set(), started: false },
-                progress: 0,
-                complete: false,
+                progress: isMine ? 1 : 0,
+                complete: isMine,
                 originalTerrain: null,
-                modified: false,
+                modified: isMine,
                 unleveledTiles: null,
                 reservedTiles: new Set(),
                 totalLevelingTiles: 0,
@@ -130,7 +132,21 @@ export class ConstructionSiteManager {
         };
 
         this.persistentStore.set(buildingId, site);
-        this.eventBus.emit('construction:workerNeeded', { role: 'digger', buildingId, x: tileX, y: tileY, player });
+
+        if (isMine) {
+            // Mines skip terrain leveling entirely — apply footprint blocking immediately via the
+            // existing levelingComplete handler, then request a builder instead of a digger.
+            this.eventBus.emit('construction:levelingComplete', { buildingId });
+            this.eventBus.emit('construction:workerNeeded', {
+                role: 'builder',
+                buildingId,
+                x: tileX,
+                y: tileY,
+                player,
+            });
+        } else {
+            this.eventBus.emit('construction:workerNeeded', { role: 'digger', buildingId, x: tileX, y: tileY, player });
+        }
     }
 
     private emitBuilderNeededIfRequired(site: ConstructionSite): void {

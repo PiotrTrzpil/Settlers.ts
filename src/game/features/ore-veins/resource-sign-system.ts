@@ -13,14 +13,15 @@ import type { TickSystem } from '../../core/tick-system';
 import type { OreVeinData } from './ore-vein-data';
 import { OreType } from './ore-type';
 import { MapObjectType } from '@/game/types/map-object-types';
+import { EntityType, type Entity } from '../../entity';
 import { createLogger } from '@/utilities/logger';
 import type { Command, CommandResult } from '../../commands';
 import { sortedEntries } from '@/utilities/collections';
 
 const log = createLogger('ResourceSignSystem');
 
-/** Signs remain visible for 5 minutes of game time. */
-const SIGN_LIFETIME = 300;
+/** Signs remain visible for 15 minutes of game time. */
+const SIGN_LIFETIME = 900;
 
 /** Quantize internal ore level (1-16) to visual richness tier (0=LOW, 1=MED, 2=RICH). */
 function levelToVariation(level: number): number {
@@ -44,6 +45,7 @@ const ORE_TYPE_TO_MAP_OBJECT: Partial<Record<OreType, MapObjectType>> = {
 
 export interface ResourceSignSystemConfig {
     executeCommand: (cmd: Command) => CommandResult;
+    getGroundEntityAt: (x: number, y: number) => Entity | undefined;
 }
 
 export class ResourceSignSystem implements TickSystem {
@@ -52,9 +54,11 @@ export class ResourceSignSystem implements TickSystem {
     private elapsed = 0;
     private oreVeinData!: OreVeinData; // OK: genuinely deferred — set via setOreVeinData() after terrain loads
     private readonly executeCommand: (cmd: Command) => CommandResult;
+    private readonly getGroundEntityAt: (x: number, y: number) => Entity | undefined;
 
     constructor(cfg: ResourceSignSystemConfig) {
         this.executeCommand = cfg.executeCommand;
+        this.getGroundEntityAt = cfg.getGroundEntityAt;
     }
 
     /**
@@ -90,6 +94,15 @@ export class ResourceSignSystem implements TickSystem {
             variation = levelToVariation(oreLevel);
         }
 
+        // Clear any existing map object at this position (trees, stones, expired signs)
+        const existing = this.getGroundEntityAt(x, y);
+        if (existing) {
+            if (existing.type === EntityType.Building) {
+                return; // never remove buildings
+            }
+            this.executeCommand({ type: 'remove_entity', entityId: existing.id });
+        }
+
         const result = this.executeCommand({ type: 'spawn_map_object', objectType: signType, x, y, variation });
         const effect = result.effects?.[0];
         if (!effect || effect.type !== 'entity_created') {
@@ -108,7 +121,6 @@ export class ResourceSignSystem implements TickSystem {
         for (const [id, sign] of sortedEntries(this.signs)) {
             try {
                 if (this.elapsed >= sign.expiresAt) {
-                    this.oreVeinData.clearProspected(sign.x, sign.y);
                     this.executeCommand({ type: 'remove_entity', entityId: id });
                     this.signs.delete(id);
                 }
@@ -124,10 +136,6 @@ export class ResourceSignSystem implements TickSystem {
      * Called automatically by `EntityCleanupRegistry` via `OreSignFeature`.
      */
     onEntityRemoved(entityId: number): void {
-        const sign = this.signs.get(entityId);
-        if (sign) {
-            this.oreVeinData.clearProspected(sign.x, sign.y);
-            this.signs.delete(entityId);
-        }
+        this.signs.delete(entityId);
     }
 }

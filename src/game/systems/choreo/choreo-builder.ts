@@ -167,7 +167,7 @@ export class ChoreoBuilder {
 
     /** Build the final ChoreoJobState. */
     build(): ChoreoJobState {
-        const job = createChoreoJobState(this.jobId, this.nodes);
+        const job = createChoreoJobState(this.jobId, this.nodes, true);
         if (this._targetId !== null) {
             job.targetId = this._targetId;
         }

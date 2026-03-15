@@ -15,6 +15,7 @@ import { TerrainData } from './terrain';
 import { populateMapObjectsFromEntityData } from './systems/map-objects';
 import { expandTrees } from './features/trees/tree-expansion';
 import { populateMapBuildings, type MapBuildingEntry } from './features/building-construction';
+import { EntityType } from './entity';
 import { populateMapSettlers } from './systems/map-settlers';
 import { populateMapStacks } from './systems/map-stacks';
 import { Race, s4TribeToRace } from './core/race';
@@ -97,6 +98,7 @@ export class GameCore {
         const mapBuildings = this.populate(mapLoader);
         this.reconcile();
         this.activate(mapBuildings);
+        this.assignPileOwners();
     }
 
     // ─── Setup phases ─────────────────────────────────────────
@@ -122,6 +124,7 @@ export class GameCore {
             getPlacementFilter: () => this._placementFilter,
             recruitSystem: this.services.recruitSystem,
             unitTransformer: this.services.unitTransformer,
+            getOwner: (x, y) => this.services.territoryManager.getOwner(x, y),
         });
     }
 
@@ -175,6 +178,20 @@ export class GameCore {
             this.eventBus.emit('building:completed', { buildingId, buildingType, race });
         }
         this.services.victorySystem.setLocalPlayer(this.currentPlayer);
+    }
+
+    /** Assign territory owner to free ground piles — must run after activate so territory is computed. */
+    private assignPileOwners(): void {
+        const tm = this.services.territoryManager;
+        for (const entity of this.state.entities) {
+            if (entity.type !== EntityType.StackedPile) {
+                continue;
+            }
+            const owner = tm.getOwner(entity.x, entity.y);
+            if (owner >= 0) {
+                entity.player = owner;
+            }
+        }
     }
 
     /** Load trees/decorations from map objects and optionally expand forests. */

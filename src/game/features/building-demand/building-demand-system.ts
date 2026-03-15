@@ -18,6 +18,7 @@ import type { EventBus } from '../../event-bus';
 import { EventSubscriptionManager } from '../../event-bus';
 import type { BuildingDemand } from './types';
 import type { BuildingType } from '../../buildings/building-type';
+import { getBuildingMaxOccupants } from '../../buildings/types';
 import type { UnitType } from '../../core/unit-types';
 import type { Race } from '../../core/race';
 import type { ChoreoJobState } from '../../systems/choreo';
@@ -40,6 +41,8 @@ export interface BuildingDemandSystemConfig {
     assignWorkerToBuilding: (settlerId: number, buildingId: number) => void;
     /** Full recruitment dispatch — find candidate, build choreo, assign job, register transform. */
     dispatchRecruitment: (unitType: UnitType, player: number, opts?: DispatchRecruitmentOpts) => number | null;
+    /** Current assigned worker count for a building (from BuildingWorkerTracker.occupants). */
+    getOccupantCount: (buildingId: number) => number;
 }
 
 // ─── System ──────────────────────────────────────────────────
@@ -51,6 +54,7 @@ export class BuildingDemandSystem implements TickSystem {
     private readonly assignJob: BuildingDemandSystemConfig['assignJob'];
     private readonly assignWorkerToBuilding: BuildingDemandSystemConfig['assignWorkerToBuilding'];
     private readonly dispatchRecruitment: BuildingDemandSystemConfig['dispatchRecruitment'];
+    private readonly getOccupantCount: BuildingDemandSystemConfig['getOccupantCount'];
     private readonly subscriptions = new EventSubscriptionManager();
 
     private readonly demands = new Map<number, BuildingDemand>();
@@ -63,6 +67,7 @@ export class BuildingDemandSystem implements TickSystem {
         this.assignJob = config.assignJob;
         this.assignWorkerToBuilding = config.assignWorkerToBuilding;
         this.dispatchRecruitment = config.dispatchRecruitment;
+        this.getOccupantCount = config.getOccupantCount;
     }
 
     // ================================================================
@@ -151,6 +156,12 @@ export class BuildingDemandSystem implements TickSystem {
 
         const workerInfo = getBuildingWorkerInfo(race, buildingType);
         if (!workerInfo) {
+            return;
+        }
+
+        // Skip if building already has its maximum number of workers assigned
+        const currentOccupants = this.getOccupantCount(buildingId);
+        if (currentOccupants >= getBuildingMaxOccupants(buildingType)) {
             return;
         }
 

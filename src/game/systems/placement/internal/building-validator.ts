@@ -97,6 +97,11 @@ export function validateBuildingPlacement(
         }
     }
 
+    // Mines ignore slope — they embed into the mountain as-is
+    if (isMine) {
+        return { canPlace: true, status: PlacementStatus.Easy };
+    }
+
     // Check slope across footprint
     const slopeStatus = computeSlopeDifficulty(footprint, ctx.groundHeight, ctx.mapSize);
     if (slopeStatus === PlacementStatus.TooSteep) {

@@ -21,6 +21,7 @@ import type { BarracksTrainingManager } from '../barracks';
 import { SettlerTaskSystem, SearchType } from './index';
 import { ChoreoSystem } from '../../systems/choreo';
 import { createWaterHandler } from './work-handlers';
+import { createSettlerTaskPersistence } from './settler-task-persistence';
 
 export interface SettlerTaskExports {
     settlerTaskSystem: SettlerTaskSystem;
@@ -97,11 +98,18 @@ export const SettlerTaskFeature: FeatureDefinition = {
             },
         };
 
+        const settlerTaskPersistence = createSettlerTaskPersistence({
+            gameState: ctx.gameState,
+            runtimes: settlerTaskSystem.runtimes,
+            workerTracker: settlerTaskSystem.workerTracker,
+            choreographyStore: settlerTaskSystem.getChoreographyStore(),
+        });
+
         return {
             systems: [settlerTaskSystem],
             systemGroup: 'Units',
             exports,
-            persistence: [],
+            persistence: [{ persistable: settlerTaskPersistence, after: ['constructionSites'] }],
             onTerrainReady(terrain: TerrainData) {
                 // Water handler -- needs terrain to find river tiles
                 settlerTaskSystem.registerWorkHandler(SearchType.WATER, createWaterHandler(terrain));

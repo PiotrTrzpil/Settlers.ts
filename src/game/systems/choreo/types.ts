@@ -218,14 +218,17 @@ export interface ChoreoJobState {
     metadata?: Record<string, number | string>;
     /** Called when the job is interrupted/cancelled. Feature-provided cleanup hook. */
     onCancel?: () => void;
+    /** True for builder-created jobs (WORKER_DISPATCH, AUTO_RECRUIT, etc.) — not persisted. */
+    readonly synthetic: boolean;
 }
 
 /** Create a fresh ChoreoJobState for starting a job. */
-export function createChoreoJobState(jobId: string, nodes: ChoreoNode[] = []): ChoreoJobState {
+export function createChoreoJobState(jobId: string, nodes: ChoreoNode[], synthetic: boolean): ChoreoJobState {
     return {
         type: 'choreo',
         jobId,
         nodes,
+        synthetic,
         nodeIndex: 0,
         progress: -1,
         visible: true,

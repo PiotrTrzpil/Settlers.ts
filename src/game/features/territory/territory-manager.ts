@@ -200,7 +200,11 @@ export class TerritoryManager {
             const rowOffset = y * this.mapWidth;
             for (let x = minX; x <= maxX; x++) {
                 if (isInsideIsoEllipse(x - cx, dy, rSq)) {
-                    this.territoryGrid[rowOffset + x] = ownerValue;
+                    const existing = this.territoryGrid[rowOffset + x]!;
+                    // Only claim unclaimed tiles — existing territory takes priority
+                    if (existing === 0) {
+                        this.territoryGrid[rowOffset + x] = ownerValue;
+                    }
                 }
             }
         }

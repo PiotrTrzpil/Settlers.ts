@@ -2,7 +2,8 @@
  * VictoryConditionsSystem — event-driven win/loss condition checking.
  *
  * Default condition (matching Settlers 4 engine behavior):
- *   A player loses when they have no Castle buildings remaining.
+ *   A player loses when they have no military buildings remaining
+ *   (Castle, GuardTowerSmall, GuardTowerBig).
  *   The human player wins when all enemy players have lost.
  *
  * Castle counts are tracked via events (building:completed, building:removed,
@@ -40,6 +41,13 @@ export interface VictoryConditionsConfig {
     localPlayer: number;
 }
 
+/** Buildings that count toward a player's survival — losing all of these means elimination. */
+const MILITARY_BUILDINGS: ReadonlySet<BuildingType> = new Set([
+    BuildingType.Castle,
+    BuildingType.GuardTowerSmall,
+    BuildingType.GuardTowerBig,
+]);
+
 export class VictoryConditionsSystem implements TickSystem {
     private readonly gameState: GameState;
     private readonly eventBus: EventBus;
@@ -47,7 +55,7 @@ export class VictoryConditionsSystem implements TickSystem {
 
     /** Per-player status. Populated on first tick from gameState.playerRaces keys. */
     private readonly playerStatus = new Map<number, PlayerStatus>();
-    /** Per-player castle count, maintained via events. */
+    /** Per-player count of military buildings (castles + towers), maintained via events. */
     private readonly castleCounts = new Map<number, number>();
     private initialized = false;
     /** Set when castle counts change — triggers condition recheck on next tick. */
@@ -70,7 +78,7 @@ export class VictoryConditionsSystem implements TickSystem {
     // ── Event handlers (called by feature wiring) ───────────────────────
 
     onBuildingCompleted(buildingType: BuildingType, player: number): void {
-        if (buildingType !== BuildingType.Castle) {
+        if (!MILITARY_BUILDINGS.has(buildingType)) {
             return;
         }
         this.castleCounts.set(player, (this.castleCounts.get(player) ?? 0) + 1);
@@ -78,7 +86,7 @@ export class VictoryConditionsSystem implements TickSystem {
     }
 
     onBuildingRemoved(buildingType: BuildingType, player: number): void {
-        if (buildingType !== BuildingType.Castle) {
+        if (!MILITARY_BUILDINGS.has(buildingType)) {
             return;
         }
         const count = this.castleCounts.get(player) ?? 0;
@@ -87,7 +95,7 @@ export class VictoryConditionsSystem implements TickSystem {
     }
 
     onBuildingOwnerChanged(buildingType: BuildingType, oldPlayer: number, newPlayer: number): void {
-        if (buildingType !== BuildingType.Castle) {
+        if (!MILITARY_BUILDINGS.has(buildingType)) {
             return;
         }
         const oldCount = this.castleCounts.get(oldPlayer) ?? 0;
@@ -151,13 +159,13 @@ export class VictoryConditionsSystem implements TickSystem {
             this.playerStatus.set(playerIndex, PlayerStatus.Playing);
         }
 
-        // Seed castle counts from current state
+        // Seed military building counts from current state
         for (const [playerIndex] of this.playerStatus) {
             let count = 0;
             const buildingIds = this.gameState.entityIndex.idsOfTypeAndPlayer(EntityType.Building, playerIndex);
             for (const id of buildingIds) {
                 const entity = this.gameState.getEntity(id);
-                if (entity && entity.subType === BuildingType.Castle) {
+                if (entity && MILITARY_BUILDINGS.has(entity.subType as BuildingType)) {
                     count++;
                 }
             }

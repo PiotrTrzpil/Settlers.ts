@@ -76,14 +76,16 @@ function createFlagDef(buildingInfo: BuildingInfo): BuildingOverlayDef {
     return {
         key: 'flag',
         layer: OverlayLayer.Flag,
-        pixelOffsetX: buildingInfo.flag.xOffset,
-        pixelOffsetY: buildingInfo.flag.yOffset,
+        pixelOffsetX: 0,
+        pixelOffsetY: 0,
         spriteRef: FLAG_SPRITE_REF,
         frameDurationMs: FLAG_FRAME_DURATION_MS,
         loop: true,
         condition: OverlayCondition.Always,
         teamColored: true,
         isFlag: true,
+        tileOffsetX: buildingInfo.flag.xOffset,
+        tileOffsetY: buildingInfo.flag.yOffset,
     };
 }
 

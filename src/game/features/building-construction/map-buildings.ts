@@ -3,7 +3,7 @@
  * Maps S4BuildingType to our internal BuildingType and creates completed buildings.
  */
 
-import { BuildingType } from '../../buildings/types';
+import { BuildingType, isMineBuilding } from '../../buildings/types';
 import { captureOriginalTerrain, setConstructionSiteGroundType, applyTerrainLeveling } from './terrain';
 import type { TerrainBuildingParams } from './terrain';
 import { GameState } from '../../game-state';
@@ -149,19 +149,19 @@ export function populateMapBuildings(
         // Create the building entity — race is derived from playerRaces[player] in GameState
         const entity = state.addBuilding(buildingType, buildingData.x, buildingData.y, buildingData.player);
 
-        // Apply instant terrain modification using a temporary params object.
-        // No ConstructionSite is created — the building is immediately operational.
-        // originalTerrain is discarded — terrain permanence for completed buildings.
-        const { groundType, groundHeight, mapSize } = options.terrain;
-        const terrainParams: TerrainBuildingParams = {
-            buildingType,
-            race: entity.race,
-            tileX: entity.x,
-            tileY: entity.y,
-        };
-        const originalTerrain = captureOriginalTerrain(terrainParams, groundType, groundHeight, mapSize);
-        setConstructionSiteGroundType(terrainParams, groundType, mapSize, originalTerrain);
-        applyTerrainLeveling(terrainParams, groundType, groundHeight, mapSize, 1.0, originalTerrain);
+        // Apply instant terrain modification — mines skip this (mountain stays as rock).
+        if (!isMineBuilding(buildingType)) {
+            const { groundType, groundHeight, mapSize } = options.terrain;
+            const terrainParams: TerrainBuildingParams = {
+                buildingType,
+                race: entity.race,
+                tileX: entity.x,
+                tileY: entity.y,
+            };
+            const originalTerrain = captureOriginalTerrain(terrainParams, groundType, groundHeight, mapSize);
+            setConstructionSiteGroundType(terrainParams, groundType, mapSize, originalTerrain);
+            applyTerrainLeveling(terrainParams, groundType, groundHeight, mapSize, 1.0, originalTerrain);
+        }
 
         // Mark the building's footprint as movement-blocking (completed buildings block tiles).
         state.restoreBuildingFootprintBlock(entity.id);

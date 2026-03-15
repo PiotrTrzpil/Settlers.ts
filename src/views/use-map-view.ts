@@ -1,4 +1,4 @@
-import { ref, shallowRef, computed, watch, reactive, type Ref, type ShallowRef } from 'vue';
+import { ref, shallowRef, computed, watch, reactive, onBeforeUnmount, type Ref, type ShallowRef } from 'vue';
 import { useRoute } from 'vue-router';
 import { MapLoader } from '@/resources/map/map-loader';
 import { Game } from '@/game/game';
@@ -12,6 +12,7 @@ import { LogHandler } from '@/utilities/log-handler';
 import { saveLayerVisibility } from '@/game/renderer/layer-visibility';
 import type { InputManager } from '@/game/input';
 import { debugStats } from '@/game/debug/debug-stats';
+import { GameEndReason } from '@/game/features/victory-conditions/victory-conditions-system';
 import {
     gameStatePersistence,
     restoreFromSnapshot,
@@ -405,6 +406,37 @@ export function useMapView(
 
     const dismissStaleSnapshot = () => dismissStaleSnapshotWarning(staleSnapshotWarning, game);
 
+    // =========================================================================
+    // Game End (victory / defeat) overlay
+    // =========================================================================
+
+    const gameEndResult = ref<{ won: boolean; reason: GameEndReason } | null>(null);
+
+    function onGameEnded({ winner, reason }: { winner: number | null; reason: string }): void {
+        gameEndResult.value = {
+            won: winner !== null,
+            reason: reason as GameEndReason,
+        };
+    }
+
+    watch(game, (g, oldG) => {
+        if (oldG) {
+            oldG.eventBus.off('game:ended', onGameEnded);
+        }
+        gameEndResult.value = null;
+        if (g) {
+            g.eventBus.on('game:ended', onGameEnded);
+        }
+    });
+
+    onBeforeUnmount(() => {
+        game.value?.eventBus.off('game:ended', onGameEnded);
+    });
+
+    const dismissGameEnd = () => {
+        gameEndResult.value = null;
+    };
+
     // Load icons from GFX files when game becomes available / race changes
     setupIconLoading(game, getFileManager, currentPlayerRace, resourceIcons, buildingIcons, unitIcons, specialistIcons);
 
@@ -444,5 +476,7 @@ export function useMapView(
         updateLayerVisibility,
         staleSnapshotWarning,
         dismissStaleSnapshot,
+        gameEndResult,
+        dismissGameEnd,
     };
 }

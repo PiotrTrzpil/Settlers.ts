@@ -16,8 +16,8 @@ const STORAGE_KEY = 'settlers_game_state';
 const INITIAL_STATE_KEY = 'settlers_initial_state';
 const LAST_MAP_KEY = 'settlers_last_map';
 const AUTO_SAVE_INTERVAL_MS = 5000; // Save every 5 seconds
-// Bumped: UnitType converted from numeric to string enum (saves with numeric values are incompatible)
-const SNAPSHOT_VERSION = 14;
+// Bumped: added unit runtime persistence (settler tasks, prospected tiles)
+const SNAPSHOT_VERSION = 15;
 
 /**
  * Snapshot format: metadata + entity table + terrain + dynamic feature data.
@@ -344,6 +344,8 @@ function restoreEntities(game: GameCore, snapshot: GameStateSnapshot): void {
             entity.hidden = e.hidden;
         }
     }
+    // Ensure nextId is correct — the loop mutates it per-entity, so reset to the snapshot value.
+    state.nextId = snapshot.nextId;
 }
 
 /** Apply terrain arrays/diffs from a snapshot to the live terrain. Auto-saves use diffs; initial state uses full arrays. */
@@ -397,6 +399,13 @@ export function restoreFromSnapshot(game: GameCore, snapshot: GameStateSnapshot)
     while (game.state.entities.length > 0) {
         game.execute({ type: 'remove_entity', entityId: game.state.entities[0]!.id });
     }
+    // Safety: clear occupancy maps in case removal side-effects left stale entries.
+    // Snapshot data is external input (localStorage) — defensive cleanup at this boundary
+    // prevents a single corrupted entity from crashing the entire restore.
+    game.state.groundOccupancy.clear();
+    game.state.unitOccupancy.clear();
+    game.state.buildingOccupancy.clear();
+    game.state.buildingFootprint.clear();
 
     // 2. Restore RNG state and nextId
     game.state.rng.setState(snapshot.rngSeed);

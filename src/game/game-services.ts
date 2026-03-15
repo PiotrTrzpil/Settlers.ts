@@ -68,7 +68,8 @@ import type { SettlerLocationExports } from './features/settler-location/types';
 import { FreePilesFeature } from './features/inventory/free-piles-feature';
 import { TerritoryFeature, type TerritoryExports } from './features/territory/territory-feature';
 import { VictoryConditionsFeature, type VictoryConditionsExports } from './features/victory-conditions';
-import { BuildingSiegeFeature } from './features/building-siege';
+import { BuildingSiegeFeature, type BuildingSiegeExports } from './features/building-siege';
+import type { BuildingSiegeSystem } from './features/building-siege/building-siege-system';
 import { AiPlayerFeature, type AiPlayerExports } from './features/ai-player';
 
 // Re-export types that external code imports transitively via GameServices
@@ -122,6 +123,7 @@ export class GameServices {
     public readonly treeSystem: TreeSystem;
     public readonly stoneSystem: StoneSystem;
     public readonly combatSystem: CombatSystem;
+    public readonly siegeSystem: BuildingSiegeSystem;
     public readonly signSystem: ResourceSignSystem;
     public readonly locationManager: ISettlerBuildingLocationManager;
 
@@ -294,6 +296,7 @@ export class GameServices {
         this.treeSystem = this.feat<TreeFeatureExports>('trees').treeSystem;
         this.stoneSystem = this.feat<StoneFeatureExports>('stones').stoneSystem;
         this.combatSystem = this.feat<CombatExports>('combat').combatSystem;
+        this.siegeSystem = this.feat<BuildingSiegeExports>('building-siege').siegeSystem;
         this.signSystem = this.feat<OreSignExports>('ore-signs').signSystem;
         this.locationManager = this.feat<SettlerLocationExports>('settler-location').locationManager;
         this.victorySystem = this.feat<VictoryConditionsExports>('victory-conditions').victorySystem;

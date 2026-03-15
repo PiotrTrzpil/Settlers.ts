@@ -52,10 +52,6 @@ export class OreVeinData {
         this.prospected[this.toIndex(x, y)] = 1;
     }
 
-    clearProspected(x: number, y: number): void {
-        this.prospected[this.toIndex(x, y)] = 0;
-    }
-
     /**
      * Check if any tile within a Chebyshev radius of (cx, cy) has
      * the required ore type with level > 0.

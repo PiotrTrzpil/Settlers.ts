@@ -21,7 +21,12 @@ const log = new LogHandler('Map:Stacks');
  *
  * @returns Number of stacks successfully created
  */
-export function populateMapStacks(state: GameState, stacks: MapStackData[], eventBus?: EventBus): number {
+export function populateMapStacks(
+    state: GameState,
+    stacks: MapStackData[],
+    eventBus?: EventBus,
+    getOwner?: (x: number, y: number) => number
+): number {
     let created = 0;
     let skipped = 0;
 
@@ -46,7 +51,8 @@ export function populateMapStacks(state: GameState, stacks: MapStackData[], even
             continue;
         }
 
-        const entity = state.addEntity(EntityType.StackedPile, materialType, stackData.x, stackData.y, 0);
+        const owner = getOwner ? Math.max(0, getOwner(stackData.x, stackData.y)) : 0;
+        const entity = state.addEntity(EntityType.StackedPile, materialType, stackData.x, stackData.y, owner);
 
         // Register free pile — FreePileHandler creates the inventory slot
         eventBus?.emit('pile:freePilePlaced', {

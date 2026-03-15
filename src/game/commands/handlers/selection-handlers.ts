@@ -55,7 +55,10 @@ export function executeSelectAtTile(deps: SelectionDeps, cmd: SelectAtTileComman
 export function executeToggleSelection(deps: SelectionDeps, cmd: ToggleSelectionCommand): CommandResult {
     const { state } = deps;
     const sel = state.selection;
-    const entity = state.getEntityOrThrow(cmd.entityId, 'entity to toggle selection');
+    const entity = state.getEntity(cmd.entityId);
+    if (!entity) {
+        return commandFailed(`Entity ${cmd.entityId} not found`);
+    }
     if (!sel.canSelect(entity, debugStats.state.selectAllUnits)) {
         return commandFailed(`Entity ${cmd.entityId} is not selectable`);
     }

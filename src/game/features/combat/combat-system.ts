@@ -47,6 +47,7 @@ const PURSUIT_REPATH_INTERVAL = 1.0;
 export interface CombatSystemConfig extends CoreDeps {
     visualService: EntityVisualService;
     executeCommand: (cmd: Command) => CommandResult;
+    isUnitReserved: (entityId: number) => boolean;
 }
 
 export class CombatSystem implements TickSystem {
@@ -55,6 +56,7 @@ export class CombatSystem implements TickSystem {
     private readonly eventBus: EventBus;
     private readonly visualService: EntityVisualService;
     private readonly executeCommand: (cmd: Command) => CommandResult;
+    private readonly isUnitReserved: (entityId: number) => boolean;
 
     /** Accumulated time for periodic enemy scanning */
     private scanTimer = 0;
@@ -67,6 +69,7 @@ export class CombatSystem implements TickSystem {
         this.eventBus = cfg.eventBus;
         this.visualService = cfg.visualService;
         this.executeCommand = cfg.executeCommand;
+        this.isUnitReserved = cfg.isUnitReserved;
     }
 
     // ── Registration ──────────────────────────────────────────────────────
@@ -167,6 +170,20 @@ export class CombatSystem implements TickSystem {
             return;
         }
 
+        const dist = hexDistance(entity.x, entity.y, target.x, target.y);
+
+        // Reserved units (e.g. siege defenders) fight adjacent enemies but don't pursue
+        if (this.isUnitReserved(state.entityId)) {
+            if (dist <= FIGHT_RANGE) {
+                state.targetId = target.id;
+                state.status = CombatStatus.Fighting;
+                state.attackTimer = 0;
+                this.applyFightAnimation(entity, target);
+                log.debug(`Reserved unit ${state.entityId} engaging adjacent enemy ${target.id}`);
+            }
+            return;
+        }
+
         state.targetId = target.id;
         state.status = CombatStatus.Pursuing;
         this.pursuitTimers.set(state.entityId, PURSUIT_REPATH_INTERVAL); // path immediately
@@ -227,9 +244,14 @@ export class CombatSystem implements TickSystem {
         // Check if target moved out of range
         const dist = hexDistance(entity.x, entity.y, target.x, target.y);
         if (dist > FIGHT_RANGE) {
-            // Target moved away — re-pursue
-            state.status = CombatStatus.Pursuing;
-            this.pursuitTimers.set(state.entityId, PURSUIT_REPATH_INTERVAL);
+            if (this.isUnitReserved(state.entityId)) {
+                // Reserved units (siege defenders) don't chase — go idle and wait
+                this.transitionToIdle(state, entity);
+            } else {
+                // Target moved away — re-pursue
+                state.status = CombatStatus.Pursuing;
+                this.pursuitTimers.set(state.entityId, PURSUIT_REPATH_INTERVAL);
+            }
             return;
         }
 

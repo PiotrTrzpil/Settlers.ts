@@ -134,8 +134,8 @@ export interface PositionWorkHandler {
     useWorkAreaCenter?: boolean;
     /** Called when WORK task completes at searched position */
     onWorkAtPositionComplete(x: number, y: number, settlerId: number): void;
-    /** Called when a settler using this handler is removed (e.g. on game reset). */
-    onSettlerRemoved?(settlerId: number): void;
+    /** Called when a settler is reassigned via move command, or removed on game reset. */
+    onSettlerRemoved?(settlerId: number, targetX?: number, targetY?: number): void;
 }
 
 /** Discriminated union of work handler types */

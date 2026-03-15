@@ -105,7 +105,7 @@ export class WorkerJobLifecycle {
         }
         runtime.state = SettlerState.WORKING;
 
-        const jobState = createChoreoJobState(selected.id, selected.nodes);
+        const jobState = createChoreoJobState(selected.id, selected.nodes, false);
         if (entityTarget) {
             jobState.targetId = entityTarget.entityId;
             jobState.targetPos = { x: entityTarget.x, y: entityTarget.y };

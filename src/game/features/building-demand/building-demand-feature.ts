@@ -38,6 +38,7 @@ export const BuildingDemandFeature: FeatureDefinition = {
             assignWorkerToBuilding: (settlerId, buildingId) =>
                 settlerTaskSystem.assignWorkerToBuilding(settlerId, buildingId),
             dispatchRecruitment: (unitType, player, opts) => recruitSystem.dispatchRecruitment(unitType, player, opts),
+            getOccupantCount: buildingId => settlerTaskSystem.getOccupantCount(buildingId),
         });
 
         // Register ENTER_BUILDING executor on shared ChoreoSystem

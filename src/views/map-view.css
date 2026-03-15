@@ -383,6 +383,84 @@
     background: #e04848;
 }
 
+/* Game end (victory / defeat) modal */
+.game-end-backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.7);
+    z-index: 300;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.game-end-dialog {
+    background: #1a1209;
+    border: 2px solid #c8a24e;
+    border-radius: 8px;
+    padding: 32px 40px;
+    max-width: 460px;
+    text-align: center;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
+}
+
+.game-end-title {
+    font-size: 28px;
+    font-weight: 700;
+    margin: 0 0 12px;
+}
+
+.game-end-title--won {
+    color: #f0c040;
+}
+
+.game-end-title--lost {
+    color: #c84040;
+}
+
+.game-end-message {
+    color: #d4c4a0;
+    font-size: 15px;
+    line-height: 1.5;
+    margin: 0 0 24px;
+}
+
+.game-end-actions {
+    display: flex;
+    justify-content: center;
+    gap: 16px;
+}
+
+.game-end-btn {
+    padding: 10px 28px;
+    border-radius: 4px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    border: 1px solid transparent;
+    transition: background 0.15s;
+}
+
+.game-end-btn--continue {
+    background: #3a7a3a;
+    color: #fff;
+    border-color: #4a9a4a;
+}
+
+.game-end-btn--continue:hover {
+    background: #48944a;
+}
+
+.game-end-btn--quit {
+    background: #c84040;
+    color: #fff;
+    border-color: #e05050;
+}
+
+.game-end-btn--quit:hover {
+    background: #e04848;
+}
+
 /* Ticks-paused warning overlay */
 .ticks-paused-overlay {
     position: absolute;

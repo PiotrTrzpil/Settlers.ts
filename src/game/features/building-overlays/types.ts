@@ -101,9 +101,14 @@ export interface BuildingOverlayDef {
     /**
      * When true, this overlay renders the player's team flag instead of a JIL sprite.
      * Sprite is resolved at render time via spriteManager.getFlag(player, frame).
-     * The spriteRef field is unused for flag overlays.
+     * The spriteRef and pixelOffset fields are unused for flag overlays —
+     * position comes from tileOffsetX/Y instead (tile-space, from XML flag element).
      */
     readonly isFlag?: boolean;
+    /** Tile-space offset from building anchor (XML flag position). Only used when isFlag=true. */
+    readonly tileOffsetX?: number;
+    /** Tile-space offset from building anchor (XML flag position). Only used when isFlag=true. */
+    readonly tileOffsetY?: number;
 }
 
 // ============================================================================

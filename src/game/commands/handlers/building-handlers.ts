@@ -11,7 +11,7 @@ import {
 } from '../../features/building-construction';
 import { canPlaceBuildingFootprint } from '../../systems/placement';
 import type { PlacementFilter } from '../../systems/placement';
-import { BuildingType } from '../../buildings/types';
+import { BuildingType, isMineBuilding } from '../../buildings/types';
 import { BUILDING_SPAWN_ON_COMPLETE } from '../../features/building-construction/spawn-units';
 import { getBuildingWorkerInfo, getBuildingDoorPos } from '../../data/game-data-access';
 import { ringTiles } from '../../systems/spatial-search';
@@ -158,34 +158,51 @@ export function executePlaceBuilding(deps: PlaceBuildingDeps, cmd: PlaceBuilding
     }
 
     const entity = state.addBuilding(cmd.buildingType, cmd.x, cmd.y, cmd.player, { race: cmd.race });
+    const isMine = isMineBuilding(cmd.buildingType);
 
-    const terrainParams = { buildingType: cmd.buildingType, race: entity.race, tileX: cmd.x, tileY: cmd.y };
-    const { groundType, groundHeight, mapSize } = terrain;
-    const originalTerrain = captureOriginalTerrain(terrainParams, groundType, groundHeight, mapSize);
-    setConstructionSiteGroundType(terrainParams, groundType, mapSize, originalTerrain);
+    // Mines skip terrain modification — mountain stays as rock
+    if (!isMine) {
+        const terrainParams = { buildingType: cmd.buildingType, race: entity.race, tileX: cmd.x, tileY: cmd.y };
+        const { groundType, groundHeight, mapSize } = terrain;
+        const originalTerrain = captureOriginalTerrain(terrainParams, groundType, groundHeight, mapSize);
+        setConstructionSiteGroundType(terrainParams, groundType, mapSize, originalTerrain);
 
-    if (cmd.completed) {
-        applyTerrainLeveling(terrainParams, groundType, groundHeight, mapSize, 1.0, originalTerrain);
-        state.restoreBuildingFootprintBlock(entity.id);
-    }
+        if (cmd.completed) {
+            applyTerrainLeveling(terrainParams, groundType, groundHeight, mapSize, 1.0, originalTerrain);
+            state.restoreBuildingFootprintBlock(entity.id);
+        }
 
-    deps.eventBus.emit('terrain:modified', { reason: 'placement', x: cmd.x, y: cmd.y });
+        deps.eventBus.emit('terrain:modified', { reason: 'placement', x: cmd.x, y: cmd.y });
 
-    deps.eventBus.emit('building:placed', {
-        buildingId: entity.id,
-        buildingType: cmd.buildingType,
-        x: cmd.x,
-        y: cmd.y,
-        player: cmd.player,
-        level: 'info',
-    });
+        deps.eventBus.emit('building:placed', {
+            buildingId: entity.id,
+            buildingType: cmd.buildingType,
+            x: cmd.x,
+            y: cmd.y,
+            player: cmd.player,
+            level: 'info',
+        });
 
-    // Assign captured terrain after building:placed (which creates the site via registerSite),
-    // then populate unleveled tiles so digger findTarget can reserve tiles immediately.
-    const site = deps.constructionSiteManager.getSite(entity.id);
-    if (site) {
-        site.terrain.originalTerrain = originalTerrain;
-        deps.constructionSiteManager.populateUnleveledTiles(entity.id);
+        // Assign captured terrain after building:placed (which creates the site via registerSite),
+        // then populate unleveled tiles so digger findTarget can reserve tiles immediately.
+        const site = deps.constructionSiteManager.getSite(entity.id);
+        if (site) {
+            site.terrain.originalTerrain = originalTerrain;
+            deps.constructionSiteManager.populateUnleveledTiles(entity.id);
+        }
+    } else {
+        if (cmd.completed) {
+            state.restoreBuildingFootprintBlock(entity.id);
+        }
+
+        deps.eventBus.emit('building:placed', {
+            buildingId: entity.id,
+            buildingType: cmd.buildingType,
+            x: cmd.x,
+            y: cmd.y,
+            player: cmd.player,
+            level: 'info',
+        });
     }
 
     if (cmd.completed) {

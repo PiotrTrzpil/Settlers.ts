@@ -25,6 +25,7 @@ export interface PlacePileDeps {
     state: GameState;
     terrain: TerrainData;
     eventBus: EventBus;
+    getOwner: (x: number, y: number) => number;
 }
 
 export interface SpawnPileDeps {
@@ -75,7 +76,8 @@ export function executePlacePile(deps: PlacePileDeps, cmd: PlacePileCommand): Co
         return commandFailed(`Position (${cmd.x}, ${cmd.y}) is already occupied`);
     }
 
-    const entity = state.addEntity(EntityType.StackedPile, cmd.materialType, cmd.x, cmd.y, 0);
+    const owner = Math.max(0, deps.getOwner(cmd.x, cmd.y));
+    const entity = state.addEntity(EntityType.StackedPile, cmd.materialType, cmd.x, cmd.y, owner);
 
     deps.eventBus.emit('pile:freePilePlaced', {
         entityId: entity.id,

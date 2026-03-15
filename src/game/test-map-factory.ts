@@ -87,7 +87,7 @@ export function createTestMapLoader(): IMapLoader {
     const general = new GeneralMapInformation();
 
     const entityData: MapEntityData = {
-        players: [],
+        players: [{ playerIndex: 0, tribe: S4Tribe.ROMAN, startX: MAP_SIZE / 2, startY: MAP_SIZE / 2 }],
         buildings: [],
         settlers: [],
         stacks: [],

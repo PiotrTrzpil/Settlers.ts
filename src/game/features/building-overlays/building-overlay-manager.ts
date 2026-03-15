@@ -172,6 +172,21 @@ export class BuildingOverlayManager implements TickSystem {
         }
     }
 
+    /**
+     * Set frame count for all flag overlay instances.
+     * Flag sprites are player-colored (loaded separately from JIL-based overlays),
+     * so they can't be matched by spriteRef like other overlays.
+     */
+    setFlagFrameCount(frameCount: number): void {
+        for (const instances of this.overlaysByEntity.values()) {
+            for (const inst of instances) {
+                if (inst.def.isFlag) {
+                    inst.frameCount = frameCount;
+                }
+            }
+        }
+    }
+
     // ========================================================================
     // TickSystem
     // ========================================================================
