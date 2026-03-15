@@ -7,18 +7,23 @@
  * @module renderer/sprite-metadata/categories
  */
 
-import type { SpriteEntry } from '../types';
+import type { SpriteEntry, SerializableSpriteCategory } from '../types';
+import { mapToArray, arrayToMap } from '../sprite-metadata-helpers';
 
 /** Composite key for overlay sprite lookup */
 function overlayKey(gfxFile: number, jobIndex: number, directionIndex: number): string {
     return `${gfxFile}:${jobIndex}:${directionIndex}`;
 }
 
-export class OverlaySpriteCategory {
+export class OverlaySpriteCategory implements SerializableSpriteCategory {
     /**
      * Overlay sprites keyed by "gfxFile:jobIndex:directionIndex" → frame array.
      */
-    private readonly frames: Map<string, SpriteEntry[]> = new Map();
+    private readonly frames: Map<string, SpriteEntry[]>;
+
+    constructor(frames: Map<string, SpriteEntry[]> = new Map()) {
+        this.frames = frames;
+    }
 
     /**
      * Register sprite frames for a building overlay.
@@ -44,9 +49,19 @@ export class OverlaySpriteCategory {
     }
 
     /**
-     * Expose the internal map for serialization.
+     * Serialize the frames map to a JSON-safe array of composite-key/frames pairs.
+     * Format: Array<[compositeKey, SpriteEntry[]]>
      */
-    getFramesMap(): Map<string, SpriteEntry[]> {
-        return this.frames;
+    serialize(): unknown {
+        return mapToArray(this.frames);
+    }
+
+    /**
+     * Reconstruct an OverlaySpriteCategory from its serialized form.
+     * The composite keys ("gfxFile:jobIndex:directionIndex") are stored and restored as-is.
+     */
+    static deserialize(data: unknown): OverlaySpriteCategory {
+        const entries = data as Array<[string, SpriteEntry[]]>;
+        return new OverlaySpriteCategory(arrayToMap(entries));
     }
 }

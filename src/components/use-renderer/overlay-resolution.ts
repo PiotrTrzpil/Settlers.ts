@@ -13,7 +13,6 @@ import { getOverlayFrame } from '@/game/features/building-overlays';
 import { ENTITY_SCALE, scaleSprite } from '@/game/renderer/entity-renderer-constants';
 
 const EMPTY_OVERLAY_DATA: readonly BuildingOverlayRenderData[] = [];
-const FLAG_SCALE = 0.35;
 
 /**
  * Resolve all overlay render data for a building entity.
@@ -85,8 +84,8 @@ function resolveCustomOverlays(entityId: number, g: Game, er: EntityRenderer, ou
         if (inst.def.isFlag) {
             resolveFlagInstance(
                 entityId,
-                inst.def.pixelOffsetX,
-                inst.def.pixelOffsetY,
+                inst.def.tileOffsetX!,
+                inst.def.tileOffsetY!,
                 getOverlayFrame(inst),
                 g,
                 er,
@@ -122,12 +121,13 @@ function resolveCustomOverlays(entityId: number, g: Game, er: EntityRenderer, ou
 /**
  * Render one flag overlay instance.
  * Uses the per-instance elapsedMs for animation timing.
- * Position comes from the building's XML flag offset (stored in the def).
+ * Position comes from the building's XML flag offset in tile coordinates,
+ * converted to world-space using the isometric projection.
  */
 function resolveFlagInstance(
     entityId: number,
-    defOffsetX: number,
-    defOffsetY: number,
+    tileOffsetX: number,
+    tileOffsetY: number,
     frameIndex: number,
     g: Game,
     er: EntityRenderer,
@@ -151,15 +151,16 @@ function resolveFlagInstance(
         return;
     }
 
-    const offsetX = defOffsetX * PIXELS_TO_WORLD * FLAG_SCALE;
-    const offsetY = defOffsetY * PIXELS_TO_WORLD * FLAG_SCALE;
+    // Isometric tile-to-world delta: same projection as tileToWorld but for offsets only
+    const worldOffsetX = tileOffsetX - tileOffsetY * 0.5;
+    const worldOffsetY = tileOffsetY * 0.5;
 
     out.push({
-        sprite: scaleSprite(rawSprite, FLAG_SCALE),
+        sprite: scaleSprite(rawSprite, ENTITY_SCALE),
         teamColored: true,
         verticalProgress: 1.0,
-        worldOffsetX: offsetX,
-        worldOffsetY: offsetY,
+        worldOffsetX,
+        worldOffsetY,
         layer: OverlayRenderLayer.Flag,
     });
 }

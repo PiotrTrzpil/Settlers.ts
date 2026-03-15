@@ -563,22 +563,31 @@ export const MAP_OBJECT_SPRITES = {
     SIGN_POST_C: 1874,
 
     // ── Small animated flags (1875-2066): 8 colors × 24 frames ─
-    /** Small waving flag — red / player 1, 24 anim frames (43x29) */
-    FLAG_SMALL_RED: { start: 1875, end: 1898, count: 24 },
-    /** Small waving flag — blue / player 2, 24 anim frames (43x29) */
-    FLAG_SMALL_BLUE: { start: 1899, end: 1922, count: 24 },
-    /** Small waving flag — green / player 3, 24 anim frames (43x29) */
-    FLAG_SMALL_GREEN: { start: 1923, end: 1946, count: 24 },
-    /** Small waving flag — yellow / player 4, 24 anim frames (43x29) */
-    FLAG_SMALL_YELLOW: { start: 1947, end: 1970, count: 24 },
-    /** Small waving flag — purple / player 5, 24 anim frames (43x29) */
-    FLAG_SMALL_PURPLE: { start: 1971, end: 1994, count: 24 },
-    /** Small waving flag — orange / player 6, 24 anim frames (43x29) */
-    FLAG_SMALL_ORANGE: { start: 1995, end: 2018, count: 24 },
-    /** Small waving flag — teal / player 7, 24 anim frames (43x29) */
-    FLAG_SMALL_TEAL: { start: 2019, end: 2042, count: 24 },
-    /** Small waving flag — white / player 8, 24 anim frames (43x29) */
-    FLAG_SMALL_WHITE: { start: 2043, end: 2066, count: 24 },
+    // Each color has 24 sprites: first 12 = normal (upright), second 12 = lowered (paused).
+    /** Small flag — red / player 1: normal 12 + lowered 12 (43x29) */
+    FLAG_SMALL_RED: { start: 1875, count: 12 },
+    FLAG_SMALL_RED_DOWN: { start: 1887, count: 12 },
+    /** Small flag — blue / player 2: normal 12 + lowered 12 (43x29) */
+    FLAG_SMALL_BLUE: { start: 1899, count: 12 },
+    FLAG_SMALL_BLUE_DOWN: { start: 1911, count: 12 },
+    /** Small flag — green / player 3: normal 12 + lowered 12 (43x29) */
+    FLAG_SMALL_GREEN: { start: 1923, count: 12 },
+    FLAG_SMALL_GREEN_DOWN: { start: 1935, count: 12 },
+    /** Small flag — yellow / player 4: normal 12 + lowered 12 (43x29) */
+    FLAG_SMALL_YELLOW: { start: 1947, count: 12 },
+    FLAG_SMALL_YELLOW_DOWN: { start: 1959, count: 12 },
+    /** Small flag — purple / player 5: normal 12 + lowered 12 (43x29) */
+    FLAG_SMALL_PURPLE: { start: 1971, count: 12 },
+    FLAG_SMALL_PURPLE_DOWN: { start: 1983, count: 12 },
+    /** Small flag — orange / player 6: normal 12 + lowered 12 (43x29) */
+    FLAG_SMALL_ORANGE: { start: 1995, count: 12 },
+    FLAG_SMALL_ORANGE_DOWN: { start: 2007, count: 12 },
+    /** Small flag — teal / player 7: normal 12 + lowered 12 (43x29) */
+    FLAG_SMALL_TEAL: { start: 2019, count: 12 },
+    FLAG_SMALL_TEAL_DOWN: { start: 2031, count: 12 },
+    /** Small flag — white / player 8: normal 12 + lowered 12 (43x29) */
+    FLAG_SMALL_WHITE: { start: 2043, count: 12 },
+    FLAG_SMALL_WHITE_DOWN: { start: 2055, count: 12 },
 } as const;
 
 // ============================================================

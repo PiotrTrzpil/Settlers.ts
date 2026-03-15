@@ -8,7 +8,8 @@
  */
 
 import { BuildingType } from '@/game/entity';
-import type { SpriteEntry } from '../types';
+import type { SpriteEntry, SerializableSpriteCategory } from '../types';
+import { mapToArray, arrayToMap } from '../sprite-metadata-helpers';
 
 /**
  * Building sprite entries with both construction and completed states.
@@ -20,7 +21,7 @@ export interface BuildingSpriteEntries {
     completed: SpriteEntry | null;
 }
 
-export class BuildingSpriteCategory {
+export class BuildingSpriteCategory implements SerializableSpriteCategory {
     /** Building sprites keyed by race → buildingType */
     private readonly byRace: Map<number, Map<BuildingType, BuildingSpriteEntries>> = new Map();
     private readonly _loadedRaces: Set<number> = new Set();
@@ -93,17 +94,32 @@ export class BuildingSpriteCategory {
     }
 
     /**
-     * Expose the internal map for serialization.
+     * Expose the internal map for use by SpriteMetadataRegistry.getLayersForBuildings().
      */
     getRaceMap(): Map<number, Map<BuildingType, BuildingSpriteEntries>> {
         return this.byRace;
     }
 
     /**
-     * Set race map directly (used during deserialization).
+     * Produce a JSON-safe representation of the category's data.
+     * Format: Array<[race, Array<[BuildingType, BuildingSpriteEntries]>]>
      */
-    setRaceEntry(race: number, typeMap: Map<BuildingType, BuildingSpriteEntries>): void {
-        this.byRace.set(race, typeMap);
-        this._loadedRaces.add(race);
+    serialize(): unknown {
+        return mapToArray(this.byRace).map(([race, typeMap]) => [race, mapToArray(typeMap)]);
+    }
+
+    /**
+     * Reconstruct a BuildingSpriteCategory from serialized data.
+     * Expects the format produced by serialize().
+     */
+    static deserialize(data: unknown): BuildingSpriteCategory {
+        const category = new BuildingSpriteCategory();
+        const rows = data as Array<[number, Array<[BuildingType, BuildingSpriteEntries]>]>;
+        for (const [race, typeEntries] of rows) {
+            const typeMap = arrayToMap(typeEntries);
+            category.byRace.set(race, typeMap);
+            category._loadedRaces.add(race);
+        }
+        return category;
     }
 }

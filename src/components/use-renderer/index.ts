@@ -8,7 +8,7 @@ import { BuildingIndicatorRenderer } from '@/game/renderer/building-indicator-re
 import { Renderer } from '@/game/renderer/renderer';
 import { TilePicker } from '@/game/input/tile-picker';
 import { type TileCoord, BuildingType } from '@/game/entity';
-import { Race, AVAILABLE_RACES, saveSavedRace } from '@/game/renderer/sprite-metadata';
+import { Race, saveSavedRace } from '@/game/renderer/sprite-metadata';
 import { canPlaceResource, canPlaceUnit, canPlaceBuildingFootprint } from '@/game/systems/placement';
 import { ValidPositionGrid, type GridComputeRequest } from '@/game/systems/placement/valid-position-grid';
 import type { Command, CommandResult } from '@/game/commands';
@@ -26,7 +26,7 @@ import type { DebugEntityLabel } from '@/game/renderer/render-passes/types';
 import { LayerVisibility } from '@/game/renderer/layer-visibility';
 import { loadCameraState } from '@/game/renderer/camera-persistence';
 import { getCurrentMapId } from '@/game/state/game-state-persistence';
-import { initRenderersAsync, exposeForE2E } from './renderer-init';
+import { initRenderersAsync, exposeForE2E, loadOverlaySpritesAndUpdateFrameCounts } from './renderer-init';
 import { createUpdateCallback, createRenderCallback } from './frame-callbacks';
 import { updateTileDebugStats, createBuildingAdjustMode, handleModeChange, createHintState } from './input-setup';
 import { createEntityPicker, createEntityRectPicker, type EntityPickerContext } from '@/game/input/entity-picker';
@@ -50,64 +50,11 @@ function buildPickerContext(
         mapSize: game.terrain.mapSize,
         groundHeight: game.terrain.groundHeight,
         viewPoint: renderer.viewPoint,
-        unitStates: entityRenderer?.unitStates ?? { get: () => undefined },
+        unitStates: game.state.unitStates,
         canvasWidth: el.clientWidth,
         canvasHeight: el.clientHeight,
         zoom: renderer.viewPoint.zoom,
     };
-}
-
-/**
- * After building sprites finish loading, load overlay sprites for all races
- * and update the BuildingOverlayManager with the resolved frame counts.
- */
-async function loadOverlaySpritesAndUpdateFrameCounts(er: EntityRenderer, game: Game): Promise<void> {
-    const spriteManager = er.spriteManager;
-    if (!spriteManager) {
-        return;
-    }
-
-    // Collect sprite refs for all races (overlays live in each race's GFX file)
-    const manifest: { gfxFile: number; jobIndex: number; directionIndex?: number }[] = [];
-    for (const race of AVAILABLE_RACES) {
-        for (const def of game.services.overlayRegistry.getSpriteManifest(race)) {
-            manifest.push(def.spriteRef);
-        }
-    }
-    if (manifest.length === 0) {
-        return;
-    }
-
-    // Check if overlays are already in the registry (cache hit with full overlay data).
-    // Use .some() across the whole manifest — the first entry may fail to load (missing GFX job),
-    // so checking only manifest[0] would trigger a reload every time.
-    const alreadyLoaded = manifest.some(
-        e => spriteManager.getOverlayFrames(e.gfxFile, e.jobIndex, e.directionIndex ?? 0) !== null
-    );
-
-    if (!alreadyLoaded) {
-        const tOverlay = performance.now();
-        await spriteManager.loadOverlaySprites(manifest);
-        debugStats.state.loadTimings.overlaySprites = Math.round(performance.now() - tOverlay);
-        // Save cache now that overlays are included — subsequent hits skip overlay loading entirely.
-        spriteManager.saveCache();
-    }
-
-    // Always update frame counts (cheap read from registry, no loading).
-    for (const race of AVAILABLE_RACES) {
-        for (const def of game.services.overlayRegistry.getSpriteManifest(race)) {
-            const { gfxFile, jobIndex, directionIndex = 0 } = def.spriteRef;
-            const frames = spriteManager.getOverlayFrames(gfxFile, jobIndex, directionIndex);
-            if (frames && frames.length > 0) {
-                game.services.buildingOverlayManager.setFrameCountForDef(
-                    gfxFile,
-                    jobIndex,
-                    directionIndex,
-                    frames.length
-                );
-            }
-        }
-    }
 }
 
 /** Check whether a building can be placed at (x, y), including the 1-tile footprint gap rule. */
@@ -439,14 +386,14 @@ export function useRenderer({
         executeGameCommand(command, getGame, onTileClick);
 
     const entityPicker = createEntityPicker(
-        () => state.entityRenderer?.entities ?? [],
+        () => getGame()?.state.entities ?? [],
         () => state.entityRenderer?.spriteResolver ?? null,
         () => getGame()!.state.selection,
         () => buildPickerContext(getGame, state.renderer, state.entityRenderer, canvas)
     );
 
     const entityRectPicker = createEntityRectPicker(
-        () => state.entityRenderer?.entities ?? [],
+        () => getGame()?.state.entities ?? [],
         () => state.entityRenderer?.spriteResolver ?? null,
         () => getGame()!.state.selection,
         () => buildPickerContext(getGame, state.renderer, state.entityRenderer, canvas)

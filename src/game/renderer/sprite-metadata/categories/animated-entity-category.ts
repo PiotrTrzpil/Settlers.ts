@@ -10,7 +10,59 @@
 
 import { EntityType } from '@/game/entity';
 import { AnimationData, AnimationSequence, ANIMATION_DEFAULTS } from '@/game/animation/animation';
-import type { SpriteEntry, AnimatedSpriteEntry } from '../types';
+import type { SpriteEntry, AnimatedSpriteEntry, SerializableSpriteCategory } from '../types';
+import { mapToArray, arrayToMap } from '../sprite-metadata-helpers';
+
+// ============================================================
+// Serialization types and helpers (module-private)
+// ============================================================
+
+/** Serialized form for a single AnimatedSpriteEntry (Maps converted to arrays) */
+type SerializedAnimEntry = {
+    staticSprite: SpriteEntry;
+    isAnimated: boolean;
+    animationData: {
+        defaultSequence: string;
+        sequences: Array<[string, Array<[number, AnimationSequence]>]>;
+    };
+};
+
+function serializeAnimEntry(entry: AnimatedSpriteEntry): SerializedAnimEntry {
+    const sequences = mapToArray(entry.animationData.sequences).map(([seqKey, dirMap]) => {
+        return [seqKey, mapToArray(dirMap)] as [string, Array<[number, AnimationSequence]>];
+    });
+    return {
+        ...entry,
+        animationData: {
+            ...entry.animationData,
+            sequences,
+        },
+    };
+}
+
+function deserializeAnimEntry(entryData: SerializedAnimEntry): AnimatedSpriteEntry {
+    const sequences = new Map<string, Map<number, AnimationSequence>>();
+    for (const [seqKey, dirArr] of entryData.animationData.sequences) {
+        sequences.set(seqKey, arrayToMap(dirArr));
+    }
+    return {
+        ...entryData,
+        animationData: { ...entryData.animationData, sequences },
+    };
+}
+
+// ============================================================
+// Serialized shape aliases (module-private)
+// ============================================================
+
+type SerializedSubTypeMap = Array<[number | string, SerializedAnimEntry]>;
+type SerializedEntityTypeMap = Array<[EntityType, SerializedSubTypeMap]>;
+
+type SerializedByRace = Array<[number, SerializedEntityTypeMap]>;
+
+// ============================================================
+// AnimatedEntityCategory
+// ============================================================
 
 /**
  * Pin all frames' offsets to frame 0's offset so the sprite anchor stays stable
@@ -28,7 +80,7 @@ function stabilizeFrameAnchors(frames: SpriteEntry[]): SpriteEntry[] {
     );
 }
 
-export class AnimatedEntityCategory {
+export class AnimatedEntityCategory implements SerializableSpriteCategory {
     /**
      * Shared animated entities (map objects, resources — race-independent).
      * Maps EntityType -> subType -> AnimatedSpriteEntry
@@ -201,33 +253,70 @@ export class AnimatedEntityCategory {
         this.byRace.clear();
     }
 
-    /**
-     * Expose internal maps for serialization.
-     */
-    getSharedEntities(): Map<EntityType, Map<number | string, AnimatedSpriteEntry>> {
-        return this.sharedEntities;
-    }
-
-    getByRace(): Map<number, Map<EntityType, Map<number | string, AnimatedSpriteEntry>>> {
-        return this.byRace;
-    }
+    // ============================================================
+    // Serialization
+    // ============================================================
 
     /**
-     * Directly insert into shared entities (used during deserialization).
+     * Serialize sharedEntities to a JSON-safe array structure.
      */
-    setSharedEntry(entityType: EntityType, subTypeMap: Map<number | string, AnimatedSpriteEntry>): void {
-        this.sharedEntities.set(entityType, subTypeMap);
+    serializeShared(): SerializedEntityTypeMap {
+        return mapToArray(this.sharedEntities).map(([entityType, subTypeMap]) => [
+            entityType,
+            mapToArray(subTypeMap).map(([subType, entry]) => [subType, serializeAnimEntry(entry)]),
+        ]);
     }
 
     /**
-     * Directly insert into race-specific map (used during deserialization).
+     * Serialize byRace to a JSON-safe array structure.
      */
-    setByRaceEntry(race: number, entityType: EntityType, subTypeMap: Map<number | string, AnimatedSpriteEntry>): void {
-        let raceMap = this.byRace.get(race);
-        if (!raceMap) {
-            raceMap = new Map();
-            this.byRace.set(race, raceMap);
+    serializeByRace(): SerializedByRace {
+        return mapToArray(this.byRace).map(([race, entityTypeMap]) => [
+            race,
+            mapToArray(entityTypeMap).map(([entityType, subTypeMap]) => [
+                entityType,
+                mapToArray(subTypeMap).map(([subType, entry]) => [subType, serializeAnimEntry(entry)]),
+            ]),
+        ]);
+    }
+
+    /**
+     * Serialize both shared and byRace data as an opaque blob.
+     * Satisfies the SerializableSpriteCategory interface.
+     */
+    serialize(): unknown {
+        return {
+            shared: this.serializeShared(),
+            byRace: this.serializeByRace(),
+        };
+    }
+
+    /**
+     * Reconstruct an AnimatedEntityCategory from serialized shared and byRace data.
+     */
+    static deserialize(sharedData: unknown, byRaceData: unknown): AnimatedEntityCategory {
+        const category = new AnimatedEntityCategory();
+
+        for (const [entityType, subTypeArr] of sharedData as SerializedEntityTypeMap) {
+            const subTypeMap = new Map<number | string, AnimatedSpriteEntry>();
+            for (const [subType, entryData] of subTypeArr) {
+                subTypeMap.set(subType, deserializeAnimEntry(entryData));
+            }
+            category.sharedEntities.set(entityType, subTypeMap);
         }
-        raceMap.set(entityType, subTypeMap);
+
+        for (const [race, entityTypeArr] of byRaceData as SerializedByRace) {
+            const entityTypeMap = new Map<EntityType, Map<number | string, AnimatedSpriteEntry>>();
+            for (const [entityType, subTypeArr] of entityTypeArr) {
+                const subTypeMap = new Map<number | string, AnimatedSpriteEntry>();
+                for (const [subType, entryData] of subTypeArr) {
+                    subTypeMap.set(subType, deserializeAnimEntry(entryData));
+                }
+                entityTypeMap.set(entityType, subTypeMap);
+            }
+            category.byRace.set(race, entityTypeMap);
+        }
+
+        return category;
     }
 }

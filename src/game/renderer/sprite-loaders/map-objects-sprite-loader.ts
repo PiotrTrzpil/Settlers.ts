@@ -216,12 +216,45 @@ async function loadDecorationSprites(ctx: FileCtx): Promise<number> {
 // Flag sprites
 // =============================================================================
 
+type FlagRange = { start: number; count: number };
+
+/** Collect GIL indices for an array of flag ranges (8 players). */
+function collectFlagIndices(ranges: readonly FlagRange[]): number[] {
+    const indices: number[] = [];
+    for (const range of ranges) {
+        for (let f = 0; f < range.count; f++) {
+            indices.push(range.start + f);
+        }
+    }
+    return indices;
+}
+
+/** Register loaded flag sprites into the registry for each player. */
+function registerFlagSet(
+    ranges: readonly FlagRange[],
+    sprites: Map<number, SpriteEntry>,
+    register: (playerIndex: number, frame: number, entry: SpriteEntry) => void
+): number {
+    let loaded = 0;
+    for (let playerIndex = 0; playerIndex < ranges.length; playerIndex++) {
+        const range = ranges[playerIndex]!;
+        for (let frame = 0; frame < range.count; frame++) {
+            const entry = sprites.get(range.start + frame);
+            if (entry) {
+                register(playerIndex, frame, entry);
+                loaded++;
+            }
+        }
+    }
+    return loaded;
+}
+
 /**
- * Load small animated flag sprites (8 player colors × 24 frames).
+ * Load small animated flag sprites (8 player colors × 12 normal + 12 lowered frames).
  * Flags are loaded from MAP_OBJECT_SPRITES in the landscape GFX file (5.gfx).
  */
 async function loadFlagSprites(ctx: FileCtx): Promise<number> {
-    const FLAG_RANGES = [
+    const FLAG_NORMAL: FlagRange[] = [
         MAP_OBJECT_SPRITES.FLAG_SMALL_RED,
         MAP_OBJECT_SPRITES.FLAG_SMALL_BLUE,
         MAP_OBJECT_SPRITES.FLAG_SMALL_GREEN,
@@ -231,15 +264,18 @@ async function loadFlagSprites(ctx: FileCtx): Promise<number> {
         MAP_OBJECT_SPRITES.FLAG_SMALL_TEAL,
         MAP_OBJECT_SPRITES.FLAG_SMALL_WHITE,
     ];
+    const FLAG_DOWN: FlagRange[] = [
+        MAP_OBJECT_SPRITES.FLAG_SMALL_RED_DOWN,
+        MAP_OBJECT_SPRITES.FLAG_SMALL_BLUE_DOWN,
+        MAP_OBJECT_SPRITES.FLAG_SMALL_GREEN_DOWN,
+        MAP_OBJECT_SPRITES.FLAG_SMALL_YELLOW_DOWN,
+        MAP_OBJECT_SPRITES.FLAG_SMALL_PURPLE_DOWN,
+        MAP_OBJECT_SPRITES.FLAG_SMALL_ORANGE_DOWN,
+        MAP_OBJECT_SPRITES.FLAG_SMALL_TEAL_DOWN,
+        MAP_OBJECT_SPRITES.FLAG_SMALL_WHITE_DOWN,
+    ];
 
-    // Collect all GIL indices across all player colors
-    const allIndices: number[] = [];
-    for (const range of FLAG_RANGES) {
-        for (let f = 0; f < range.count; f++) {
-            allIndices.push(range.start + f);
-        }
-    }
-
+    const allIndices = [...collectFlagIndices(FLAG_NORMAL), ...collectFlagIndices(FLAG_DOWN)];
     const sprites = await loadGilSpriteBatch(
         allIndices,
         ctx.fileSet,
@@ -249,19 +285,9 @@ async function loadFlagSprites(ctx: FileCtx): Promise<number> {
         ctx.paletteBase
     );
 
-    let loaded = 0;
-    for (let playerIndex = 0; playerIndex < FLAG_RANGES.length; playerIndex++) {
-        const range = FLAG_RANGES[playerIndex]!;
-        for (let frame = 0; frame < range.count; frame++) {
-            const entry = sprites.get(range.start + frame);
-            if (entry) {
-                ctx.registry.registerFlag(playerIndex, frame, entry);
-                loaded++;
-            }
-        }
-    }
-
-    return loaded;
+    const normalLoaded = registerFlagSet(FLAG_NORMAL, sprites, ctx.registry.registerFlag.bind(ctx.registry));
+    const downLoaded = registerFlagSet(FLAG_DOWN, sprites, ctx.registry.registerFlagDown.bind(ctx.registry));
+    return normalLoaded + downLoaded;
 }
 
 // =============================================================================

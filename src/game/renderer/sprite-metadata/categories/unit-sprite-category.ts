@@ -8,9 +8,10 @@
 
 import { UnitType } from '@/game/entity';
 import { Race } from '@/game/core/race';
-import type { SpriteEntry } from '../types';
+import type { SpriteEntry, SerializableSpriteCategory } from '../types';
+import { mapToArray, arrayToMap } from '../sprite-metadata-helpers';
 
-export class UnitSpriteCategory {
+export class UnitSpriteCategory implements SerializableSpriteCategory {
     /** Unit sprites keyed by race → unitType → direction */
     private readonly byRace: Map<number, Map<UnitType, Map<number, SpriteEntry>>> = new Map();
     private readonly _loadedRaces: Set<number> = new Set();
@@ -97,17 +98,40 @@ export class UnitSpriteCategory {
     }
 
     /**
-     * Expose the internal map for serialization.
+     * Expose the internal map for SpriteMetadataRegistry.getLayersForUnits().
      */
     getRaceMap(): Map<number, Map<UnitType, Map<number, SpriteEntry>>> {
         return this.byRace;
     }
 
-    /**
-     * Set race map directly (used during deserialization).
-     */
-    setRaceEntry(race: number, typeMap: Map<UnitType, Map<number, SpriteEntry>>): void {
-        this.byRace.set(race, typeMap);
-        this._loadedRaces.add(race);
+    serialize(): unknown {
+        return mapToArray(
+            new Map(
+                Array.from(this.byRace.entries()).map(([race, typeMap]) => [
+                    race,
+                    mapToArray(
+                        new Map(
+                            Array.from(typeMap.entries()).map(([unitType, dirMap]) => [unitType, mapToArray(dirMap)])
+                        )
+                    ),
+                ])
+            )
+        );
+    }
+
+    static deserialize(data: unknown): UnitSpriteCategory {
+        const category = new UnitSpriteCategory();
+        const raceEntries = data as Array<[number, Array<[UnitType, Array<[number, SpriteEntry]>]>]>;
+        for (const [race, typeEntries] of raceEntries) {
+            const typeMap = arrayToMap(
+                typeEntries.map(
+                    ([unitType, dirEntries]) =>
+                        [unitType, arrayToMap(dirEntries)] as [UnitType, Map<number, SpriteEntry>]
+                )
+            );
+            category.byRace.set(race, typeMap);
+            category._loadedRaces.add(race);
+        }
+        return category;
     }
 }

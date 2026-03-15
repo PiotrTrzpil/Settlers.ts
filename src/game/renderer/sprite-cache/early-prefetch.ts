@@ -18,7 +18,7 @@ import { Race, RACE_NAMES, loadSavedRace } from '@/game/core/race';
 
 declare const __BUILD_TIME__: string;
 
-const CACHE_SCHEMA_VERSION = 20;
+const CACHE_SCHEMA_VERSION = 21;
 const BUILD_VERSION =
     typeof __BUILD_TIME__ !== 'undefined'
         ? `${__BUILD_TIME__}-v${CACHE_SCHEMA_VERSION}`

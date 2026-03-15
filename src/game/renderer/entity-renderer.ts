@@ -1,7 +1,7 @@
 import { IRenderer } from './i-renderer';
 import { IViewPoint } from './i-view-point';
 import { RendererBase } from './renderer-base';
-import { Entity, EntityType, StackedPileState } from '../entity';
+import { Entity, EntityType } from '../entity';
 import { MapObjectType } from '@/game/types/map-object-types';
 import { MapSize } from '@/utilities/map-size';
 import { LogHandler } from '@/utilities/log-handler';
@@ -10,24 +10,13 @@ import { Race } from './sprite-metadata';
 import { SpriteRenderManager } from './sprite-render-manager';
 import { SpriteBatchRenderer } from './sprite-batch-renderer';
 import { SelectionOverlayRenderer } from './selection-overlay-renderer';
-import type { EntityVisualState, DirectionTransition } from '../animation/entity-visual-service';
 import { EntitySpriteResolver } from './entity-sprite-resolver';
 import { FrameContext, type IFrameContext } from './frame-context';
 import { OptimizedDepthSorter, type OptimizedSortContext } from './optimized-depth-sorter';
 import { profiler } from './debug/render-profiler';
-import { LayerVisibility, DEFAULT_LAYER_VISIBILITY, isMapObjectVisible } from './layer-visibility';
+import { isMapObjectVisible } from './layer-visibility';
 import type { TileHighlight } from '../input/render-state';
-import type {
-    IRenderContext,
-    CircleRenderData,
-    TerritoryDotRenderData,
-    StackGhostRenderData,
-    PlacementPreviewState,
-    UnitStateLookup,
-    BuildingRenderState,
-    BuildingOverlayRenderData,
-    RenderSettings,
-} from './render-context';
+import type { IRenderContext, PlacementPreviewState } from './render-context';
 
 import vertCode from './shaders/entity-vert.glsl';
 import fragCode from './shaders/entity-frag.glsl';
@@ -44,65 +33,10 @@ import { RenderPassRegistry } from './render-pass-registry';
 import { PathIndicatorPass } from './render-passes/path-indicator-pass';
 import { GroundOverlayPass } from './render-passes/ground-overlay-pass';
 import { TerritoryDotPass } from './render-passes/territory-dot-pass';
-import { EntitySpritePass } from './render-passes/entity-sprite-pass';
-import { TransitionBlendPass } from './render-passes/transition-blend-pass';
-import { ColorEntityPass } from './render-passes/color-entity-pass';
 import { SelectionPass } from './render-passes/selection-pass';
 import { StackGhostPass } from './render-passes/stack-ghost-pass';
 import { PlacementPreviewPass } from './render-passes/placement-preview-pass';
-
-const EMPTY_OVERLAYS: readonly BuildingOverlayRenderData[] = [];
-
-/**
- * Core pass definitions — the 6 pluggable passes migrated from hardcoded
- * fields. Entity passes (EntitySpritePass, TransitionBlendPass,
- * ColorEntityPass) are NOT included — they have special coordination and
- * stay as hardcoded fields.
- */
-const CORE_PASS_DEFINITIONS: RenderPassDefinition[] = [
-    {
-        id: 'path-indicator',
-        layer: RenderLayer.BeforeDepthSort,
-        priority: 100,
-        needs: { colorShader: true },
-        create: deps => new PathIndicatorPass(deps.selectionOverlayRenderer!),
-    },
-    {
-        id: 'ground-overlay',
-        layer: RenderLayer.BehindEntities,
-        priority: 100,
-        needs: { colorShader: true, entities: true },
-        create: deps => new GroundOverlayPass(deps.selectionOverlayRenderer!),
-    },
-    {
-        id: 'territory-dot',
-        layer: RenderLayer.BehindEntities,
-        priority: 200,
-        needs: { sprites: true },
-        create: () => new TerritoryDotPass(),
-    },
-    {
-        id: 'selection',
-        layer: RenderLayer.AboveEntities,
-        priority: 100,
-        needs: { colorShader: true, entities: true },
-        create: deps => new SelectionPass(deps.selectionOverlayRenderer!),
-    },
-    {
-        id: 'stack-ghost',
-        layer: RenderLayer.AboveEntities,
-        priority: 200,
-        needs: { sprites: true },
-        create: () => new StackGhostPass(),
-    },
-    {
-        id: 'placement-preview',
-        layer: RenderLayer.Overlay,
-        priority: 100,
-        needs: { sprites: true, colorShader: true },
-        create: () => new PlacementPreviewPass(),
-    },
-];
+import { EntityLayerOrchestrator } from './render-passes/entity-layer-orchestrator';
 
 /**
  * Renders entities (units and buildings) as colored quads or textured sprites.
@@ -110,6 +44,10 @@ const CORE_PASS_DEFINITIONS: RenderPassDefinition[] = [
  * Acts as a pass coordinator: each rendering concern is handled by a dedicated
  * pass class. EntityRenderer manages initialization, context propagation,
  * depth sorting, and the draw call sequence.
+ *
+ * The draw loop is registry-driven: all passes are registered in the constructor
+ * and executed in layer+priority order. Adding a new pass requires only a new
+ * RenderPassDefinition — no changes to draw().
  */
 export class EntityRenderer extends RendererBase implements IRenderer {
     private static log = new LogHandler('EntityRenderer');
@@ -141,41 +79,10 @@ export class EntityRenderer extends RendererBase implements IRenderer {
         return this._spriteResolver;
     }
 
-    // Entity data to render (set externally each frame)
-    public entities: Entity[] = [];
-    public selectedEntityId: number | null = null;
-    public selectedEntityIds: Set<number> = new Set();
+    // Render context — set externally each frame via setContext()
+    private renderContext: IRenderContext | null = null;
 
-    // Unit states for smooth interpolation and path visualization
-    public unitStates: UnitStateLookup = { get: () => undefined };
-
-    // Building render state provider (pre-computed in glue layer)
-    private getBuildingRenderState: (entityId: number) => BuildingRenderState = () => ({
-        useConstructionSprite: false,
-        verticalProgress: 1.0,
-    });
-
-    // Visual state providers (from context)
-    private getVisualState: (entityId: number) => EntityVisualState | null = () => null;
-    private getDirectionTransition: (entityId: number) => DirectionTransition | null = () => null;
-
-    // Building overlay provider (from context, pre-computed in glue layer)
-    private getBuildingOverlays: (entityId: number) => readonly BuildingOverlayRenderData[] = () => EMPTY_OVERLAYS;
-
-    // Health ratio provider (from context, backed by CombatSystem)
-    private getHealthRatio: (entityId: number) => number | null = () => null;
-
-    // Resource states for stacked piles (quantity tracking)
-    public pileStates: Map<number, StackedPileState> = new Map();
-
-    // Rendering-relevant settings (from context)
-    private renderSettings: RenderSettings = {
-        showBuildingFootprint: false,
-        disablePlayerTinting: false,
-        antialias: false,
-    };
-
-    // Consolidated placement preview state
+    // Consolidated placement preview state — set directly by glue layer (not via IRenderContext)
     public placementPreview: PlacementPreviewState | null = null;
 
     /** Debug: entity labels collected during ColorEntityPass (screen-space) */
@@ -183,24 +90,6 @@ export class EntityRenderer extends RendererBase implements IRenderer {
 
     /** Tile highlight rings from input modes (e.g., stack-adjust tool). */
     public tileHighlights: TileHighlight[] = [];
-
-    // Render interpolation alpha for smooth sub-tick movement (0-1)
-    public renderAlpha = 0;
-
-    // Layer visibility settings
-    public layerVisibility: LayerVisibility = { ...DEFAULT_LAYER_VISIBILITY };
-
-    // Territory boundary dots to render
-    private territoryDots: readonly TerritoryDotRenderData[] = [];
-
-    // Work area circles to render during work-area editing (debug mode: line circles)
-    private workAreaCircles: readonly CircleRenderData[] = [];
-
-    // Work area boundary dots to render as sprites (gameplay mode: dot sprites)
-    private workAreaDots: readonly TerritoryDotRenderData[] = [];
-
-    // Ghost resource stacks to render during stack-adjust mode
-    private stackGhosts: readonly StackGhostRenderData[] = [];
 
     // Cached attribute/uniform locations for color shader
     private aPosition = -1;
@@ -212,13 +101,8 @@ export class EntityRenderer extends RendererBase implements IRenderer {
 
     // Per-frame timing (for debugStats reporting)
     private frameCullSortTime = 0;
-    private frameDrawTime = 0;
     private frameDrawCalls = 0;
     private frameSpriteCount = 0;
-
-    // Detailed timing breakdown
-    private frameTexturedTime = 0;
-    private frameColorTime = 0;
     private frameSelectionTime = 0;
 
     /** Last frame's entity draw time (ms) - for debug stats collection */
@@ -227,21 +111,7 @@ export class EntityRenderer extends RendererBase implements IRenderer {
     /** Skip sprite loading (for testMap or procedural textures mode) */
     public skipSpriteLoading = false;
 
-    // =========================================================================
-    // Render passes
-    // =========================================================================
-
-    private passTransitionBlend: TransitionBlendPass;
-    private passPathIndicator: PathIndicatorPass;
-    private passGroundOverlay: GroundOverlayPass;
-    private passTerritoryDot: TerritoryDotPass;
-    private passEntitySprite: EntitySpritePass;
-    private passColorEntity: ColorEntityPass;
-    private passSelection: SelectionPass;
-    private passStackGhost: StackGhostPass;
-    private passPlacementPreview: PlacementPreviewPass;
-
-    /** Dynamic pass registry — core definitions registered in constructor, initialized in init(). */
+    /** Dynamic pass registry — all definitions registered in constructor, initialized in init(). */
     private readonly passRegistry = new RenderPassRegistry();
 
     constructor(mapSize: MapSize, groundHeight: Uint8Array, fileManager?: FileManager) {
@@ -256,19 +126,62 @@ export class EntityRenderer extends RendererBase implements IRenderer {
             this.spriteManager = new SpriteRenderManager(fileManager, TEXTURE_UNIT_SPRITE_ATLAS);
         }
 
-        // Build pass instances (blend pass first — sprite pass holds a reference to it)
-        this.passTransitionBlend = new TransitionBlendPass();
-        this.passPathIndicator = new PathIndicatorPass(this.selectionOverlayRenderer);
-        this.passGroundOverlay = new GroundOverlayPass(this.selectionOverlayRenderer);
-        this.passTerritoryDot = new TerritoryDotPass();
-        this.passEntitySprite = new EntitySpritePass(this.passTransitionBlend);
-        this.passColorEntity = new ColorEntityPass();
-        this.passSelection = new SelectionPass(this.selectionOverlayRenderer);
-        this.passStackGhost = new StackGhostPass();
-        this.passPlacementPreview = new PlacementPreviewPass();
-
-        // Register core pass definitions with the dynamic registry
-        this.passRegistry.registerAll(CORE_PASS_DEFINITIONS);
+        // Register all pass definitions — entity-layer orchestrator wraps the 3 entity-specific passes
+        const passDefinitions: RenderPassDefinition[] = [
+            {
+                id: 'path-indicator',
+                layer: RenderLayer.BeforeDepthSort,
+                priority: 100,
+                needs: { colorShader: true },
+                create: deps => new PathIndicatorPass(deps.selectionOverlayRenderer!),
+            },
+            {
+                id: 'ground-overlay',
+                layer: RenderLayer.BehindEntities,
+                priority: 100,
+                needs: { colorShader: true, entities: true },
+                create: deps => new GroundOverlayPass(deps.selectionOverlayRenderer!),
+            },
+            {
+                id: 'territory-dot',
+                layer: RenderLayer.BehindEntities,
+                priority: 200,
+                needs: { sprites: true },
+                create: () => new TerritoryDotPass(),
+            },
+            {
+                id: 'entity-layer',
+                layer: RenderLayer.Entities,
+                priority: 100,
+                needs: { colorShader: true, sprites: true, entities: true, frameContext: true },
+                create: deps =>
+                    new EntityLayerOrchestrator(deps, {
+                        setupColorShader: (gl, proj) => this.setupColorShader(gl, proj),
+                    }),
+            },
+            {
+                id: 'selection',
+                layer: RenderLayer.AboveEntities,
+                priority: 100,
+                needs: { colorShader: true, entities: true },
+                create: deps => new SelectionPass(deps.selectionOverlayRenderer!),
+            },
+            {
+                id: 'stack-ghost',
+                layer: RenderLayer.AboveEntities,
+                priority: 200,
+                needs: { sprites: true },
+                create: () => new StackGhostPass(),
+            },
+            {
+                id: 'placement-preview',
+                layer: RenderLayer.Overlay,
+                priority: 100,
+                needs: { sprites: true, colorShader: true },
+                create: () => new PlacementPreviewPass(),
+            },
+        ];
+        this.passRegistry.registerAll(passDefinitions);
     }
 
     // eslint-disable-next-line @typescript-eslint/require-await -- sprite loading is fire-and-forget
@@ -379,30 +292,12 @@ export class EntityRenderer extends RendererBase implements IRenderer {
 
     /**
      * Set render context from an IRenderContext interface.
-     * This is the preferred way to update renderer state, providing a clean
-     * separation between game state and rendering.
+     * Stores the context and rebuilds the sprite resolver for the current frame.
      *
      * @param ctx The render context containing all data needed for rendering
      */
     public setContext(ctx: IRenderContext): void {
-        this.entities = ctx.entities as Entity[];
-        this.selectedEntityId = ctx.selection.primaryId;
-        this.selectedEntityIds = ctx.selection.ids as Set<number>;
-        this.unitStates = ctx.unitStates;
-        this.getBuildingRenderState = ctx.getBuildingRenderState;
-        this.getBuildingOverlays = ctx.getBuildingOverlays;
-        this.getVisualState = ctx.getVisualState;
-        this.getDirectionTransition = ctx.getDirectionTransition;
-        this.getHealthRatio = ctx.getHealthRatio;
-        this.pileStates = ctx.pileStates as Map<number, StackedPileState>;
-        this.renderAlpha = ctx.alpha;
-        this.layerVisibility = ctx.layerVisibility;
-        this.renderSettings = ctx.settings;
-        this.placementPreview = ctx.placementPreview;
-        this.territoryDots = ctx.territoryDots;
-        this.workAreaCircles = ctx.workAreaCircles;
-        this.workAreaDots = ctx.workAreaDots;
-        this.stackGhosts = ctx.stackGhosts;
+        this.renderContext = ctx;
 
         // Rebuild sprite resolver with current frame's state providers
         this._spriteResolver = new EntitySpriteResolver(
@@ -449,7 +344,8 @@ export class EntityRenderer extends RendererBase implements IRenderer {
         if (!this._spriteResolver) {
             throw new Error('EntityRenderer.draw() called before setContext() — spriteResolver not initialized');
         }
-        if (this.entities.length === 0 && !this.placementPreview) {
+        const ctx = this.renderContext!;
+        if (ctx.entities.length === 0 && !this.placementPreview) {
             return;
         }
 
@@ -463,89 +359,75 @@ export class EntityRenderer extends RendererBase implements IRenderer {
         gl.enable(gl.BLEND);
         gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
 
-        // Build the shared pass context for this frame
+        // Build the shared pass context for this frame (frameContext=null until depth sort)
         const passCtx = this.buildPassContext();
 
-        // --- Execute passes in order ---
-
-        // Pass 1: Path indicators (color shader) — uses unitStates only, no frameContext needed
-        this.passPathIndicator.prepare(passCtx);
-        this.setupColorShader(gl, projection);
-        this.passPathIndicator.draw(gl, projection, viewPoint);
+        // Phase 1: BeforeDepthSort passes
+        this.executePassLayer(gl, projection, viewPoint, passCtx, RenderLayer.BeforeDepthSort);
 
         // Depth sort — populates this.frameContext and this.sortedEntities
         this.frameCullSortTime = this.timedPass(() => this.sortEntitiesByDepth(viewPoint));
-
-        // Re-build passCtx now that frameContext is populated (sortedEntities is same array, already updated)
         passCtx.frameContext = this.frameContext;
 
-        // --- Prepare remaining passes (after depth sort so frameContext is valid) ---
-        this.passGroundOverlay.prepare(passCtx);
-        this.passTerritoryDot.prepare(passCtx);
-        this.passEntitySprite.prepare(passCtx);
-        this.passTransitionBlend.prepare(passCtx);
-        this.passColorEntity.prepare(passCtx);
-        this.passSelection.prepare(passCtx);
-        this.passStackGhost.prepare(passCtx);
-        this.passPlacementPreview.prepare(passCtx);
+        // Phase 2: Remaining layers (BehindEntities → Entities → AboveEntities → Overlay)
+        this.executePostSortPasses(gl, projection, viewPoint, passCtx);
 
-        // Pass 2: Ground overlays (work area circles only; footprints render after entities)
-        this.setupColorShader(gl, projection);
-        this.passGroundOverlay.draw(gl, projection, viewPoint);
-
-        // Pass 3: Territory/work area dot sprites
-        this.passTerritoryDot.draw(gl, projection, viewPoint);
-        this.frameDrawCalls += this.passTerritoryDot.lastDrawCalls;
-
-        // Pass 4: Entity rendering (textured sprites + blend + color fallback)
-        this.frameDrawTime = this.timedPass(() => {
-            const hasSprites = this.spriteManager?.hasSprites && this.spriteBatchRenderer.isInitialized;
-            profiler.beginPhase('draw');
-            if (hasSprites) {
-                this.frameTexturedTime = this.timedPass(() => this.passEntitySprite.draw(gl, projection, viewPoint));
-                // Re-setup color shader before color pass
-                this.setupColorShader(gl, projection);
-                this.frameColorTime = this.timedPass(() => {
-                    this.passColorEntity.texturedBuildingsHandled = true;
-                    this.passColorEntity.draw(gl, projection, viewPoint);
-                });
-            } else {
-                this.frameTexturedTime = 0;
-                this.setupColorShader(gl, projection);
-                this.frameColorTime = this.timedPass(() => {
-                    this.passColorEntity.texturedBuildingsHandled = false;
-                    this.passColorEntity.draw(gl, projection, viewPoint);
-                });
-            }
-            profiler.endPhase('draw');
-        });
-
-        // Accumulate debug deco labels from color pass
-        this.debugDecoLabels = passCtx.debugDecoLabels;
-
-        // Pass 4b: Building footprint overlays (on top of entity sprites, semi-transparent)
-        this.setupColorShader(gl, projection);
-        this.passGroundOverlay.drawFootprints(gl, projection, viewPoint);
-
-        // Pass 5: Selection overlays (frames, dots, tile highlights)
-        this.setupColorShader(gl, projection);
-        this.frameSelectionTime = this.timedPass(() => this.passSelection.draw(gl, projection, viewPoint));
-
-        // Pass 6: Stack ghost sprites
-        this.passStackGhost.draw(gl, projection, viewPoint);
-        this.frameDrawCalls += this.passStackGhost.lastDrawCalls;
-
-        // Pass 7: Placement preview ghost (setupColorShader needed for color fallback path)
-        this.setupColorShader(gl, projection);
-        this.passPlacementPreview.draw(gl, projection, viewPoint);
-
-        // Accumulate draw-call and sprite counts from sprite pass
-        this.frameDrawCalls += this.passEntitySprite.lastDrawCalls;
-        this.frameSpriteCount += this.passEntitySprite.lastSpriteCount;
+        // Collect debug labels from entity-layer orchestrator
+        const entityLayerPass = this.passRegistry.getPass('entity-layer') as EntityLayerOrchestrator | undefined;
+        if (entityLayerPass) {
+            this.debugDecoLabels = entityLayerPass.debugDecoLabels;
+        }
 
         gl.disable(gl.BLEND);
         profiler.endFrame();
         this.lastEntityDrawTime = performance.now() - frameStart;
+    }
+
+    /** Prepare + draw all passes in a single layer. */
+    private executePassLayer(
+        gl: WebGL2RenderingContext,
+        projection: Float32Array,
+        viewPoint: IViewPoint,
+        passCtx: PassContext,
+        layer: RenderLayer
+    ): void {
+        for (const slot of this.passRegistry.getPassesForLayer(layer)) {
+            slot.pass.prepare(passCtx);
+            if (slot.needs.colorShader) {
+                this.setupColorShader(gl, projection);
+            }
+            slot.pass.draw(gl, projection, viewPoint);
+            this.frameDrawCalls += slot.pass.lastDrawCalls ?? 0;
+            this.frameSpriteCount += slot.pass.lastSpriteCount ?? 0;
+        }
+    }
+
+    /** Prepare and draw all post-depth-sort passes (BehindEntities through Overlay). */
+    private executePostSortPasses(
+        gl: WebGL2RenderingContext,
+        projection: Float32Array,
+        viewPoint: IViewPoint,
+        passCtx: PassContext
+    ): void {
+        const layers = [
+            RenderLayer.BehindEntities,
+            RenderLayer.Entities,
+            RenderLayer.AboveEntities,
+            RenderLayer.Overlay,
+        ];
+
+        const groundOverlayPass = this.passRegistry.getPass('ground-overlay') as GroundOverlayPass | undefined;
+
+        profiler.beginPhase('draw');
+        for (const layer of layers) {
+            this.executePassLayer(gl, projection, viewPoint, passCtx, layer);
+            // Building footprints render on top of entity sprites (between Entities and AboveEntities)
+            if (layer === RenderLayer.Entities && groundOverlayPass) {
+                this.setupColorShader(gl, projection);
+                groundOverlayPass.drawFootprints(gl, projection, viewPoint);
+            }
+        }
+        profiler.endPhase('draw');
     }
 
     /** Get timing data from the last frame for debug stats */
@@ -560,15 +442,29 @@ export class EntityRenderer extends RendererBase implements IRenderer {
         color: number;
         selection: number;
     } {
+        // Before init(), passRegistry isn't initialized — return zeros
+        if (!this.dynamicBuffer) {
+            return {
+                cullSort: 0,
+                entities: 0,
+                visibleCount: 0,
+                drawCalls: 0,
+                spriteCount: 0,
+                textured: 0,
+                color: 0,
+                selection: 0,
+            };
+        }
+        const entityLayerPass = this.passRegistry.getPass('entity-layer') as EntityLayerOrchestrator | undefined;
         return {
             cullSort: this.frameCullSortTime,
             entities: this.lastEntityDrawTime,
             visibleCount: this.sortedEntities.length,
             drawCalls: this.frameDrawCalls,
             spriteCount: this.frameSpriteCount,
-            // Detailed breakdown
-            textured: this.frameTexturedTime,
-            color: this.frameColorTime,
+            // Detailed breakdown from entity-layer orchestrator
+            textured: entityLayerPass?.timings.textured ?? 0,
+            color: entityLayerPass?.timings.color ?? 0,
             selection: this.frameSelectionTime,
         };
     }
@@ -579,6 +475,7 @@ export class EntityRenderer extends RendererBase implements IRenderer {
 
     /** Build the PassContext for the current frame. */
     private buildPassContext(): PassContext {
+        const rc = this.renderContext!;
         return {
             // Spatial
             mapSize: this.mapSize,
@@ -595,21 +492,21 @@ export class EntityRenderer extends RendererBase implements IRenderer {
             // Entity frame
             sortedEntities: this.sortedEntities,
             frameContext: this.frameContext,
-            selectedEntityIds: this.selectedEntityIds,
-            unitStates: this.unitStates,
+            selectedEntityIds: rc.selection.ids as Set<number>,
+            unitStates: rc.unitStates,
             // Entity state providers
-            getBuildingOverlays: this.getBuildingOverlays,
-            getVisualState: this.getVisualState,
-            getDirectionTransition: this.getDirectionTransition,
-            getHealthRatio: this.getHealthRatio,
+            getBuildingOverlays: rc.getBuildingOverlays,
+            getVisualState: rc.getVisualState,
+            getDirectionTransition: rc.getDirectionTransition,
+            getHealthRatio: rc.getHealthRatio,
             // Render parameters
-            renderSettings: this.renderSettings,
-            layerVisibility: this.layerVisibility,
+            renderSettings: rc.settings,
+            layerVisibility: rc.layerVisibility,
             // Overlay / special pass data
-            territoryDots: this.territoryDots,
-            workAreaCircles: this.workAreaCircles,
-            workAreaDots: this.workAreaDots,
-            stackGhosts: this.stackGhosts,
+            territoryDots: rc.territoryDots,
+            workAreaCircles: rc.workAreaCircles,
+            workAreaDots: rc.workAreaDots,
+            stackGhosts: rc.stackGhosts,
             placementPreview: this.placementPreview,
             tileHighlights: this.tileHighlights,
             // Debug
@@ -636,15 +533,16 @@ export class EntityRenderer extends RendererBase implements IRenderer {
 
     /** Sort entities by depth for correct painter's algorithm rendering. */
     private sortEntitiesByDepth(viewPoint: IViewPoint): void {
+        const rc = this.renderContext!;
         // Create frame context - computes bounds once, caches all world positions
         profiler.beginPhase('cull');
         this.frameContext = FrameContext.create({
             viewPoint,
-            entities: this.entities,
-            unitStates: this.unitStates,
+            entities: rc.entities as Entity[],
+            unitStates: rc.unitStates,
             groundHeight: this.groundHeight,
             mapSize: this.mapSize,
-            alpha: this.renderAlpha,
+            alpha: rc.alpha,
             isEntityVisible: this.isEntityVisible.bind(this),
         });
         profiler.endPhase('cull');
@@ -657,7 +555,7 @@ export class EntityRenderer extends RendererBase implements IRenderer {
 
         // Record culling metrics
         profiler.recordEntities(
-            this.entities.length,
+            rc.entities.length,
             this.frameContext.visibleEntities.length,
             this.frameContext.culledCount
         );
@@ -668,7 +566,7 @@ export class EntityRenderer extends RendererBase implements IRenderer {
         const sortCtx: OptimizedSortContext = {
             spriteManager: this.spriteManager,
             getWorldPos: frameCtx.getWorldPos.bind(frameCtx),
-            getVariation: entityId => this.getVisualState(entityId)?.variation ?? 0,
+            getVariation: entityId => rc.getVisualState(entityId)?.variation ?? 0,
         };
         this.depthSorter.sortByDepth(this.sortedEntities, sortCtx);
         profiler.endPhase('sort');
@@ -678,13 +576,14 @@ export class EntityRenderer extends RendererBase implements IRenderer {
      * Check if an entity should be rendered based on layer visibility settings.
      */
     private isEntityVisible(entity: Entity): boolean {
+        const layerVisibility = this.renderContext!.layerVisibility;
         switch (entity.type) {
             case EntityType.Building:
-                return this.layerVisibility.buildings;
+                return layerVisibility.buildings;
             case EntityType.Unit:
-                return this.layerVisibility.units;
+                return layerVisibility.units;
             case EntityType.MapObject:
-                return isMapObjectVisible(this.layerVisibility, entity.subType as MapObjectType);
+                return isMapObjectVisible(layerVisibility, entity.subType as MapObjectType);
             case EntityType.Decoration:
             case EntityType.StackedPile:
             case EntityType.None:

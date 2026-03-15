@@ -47,7 +47,7 @@ import {
     OverlaySpriteCategory,
     AnimatedEntityCategory,
 } from './categories';
-import { SpriteMetadataSerializer } from './sprite-metadata-serializer';
+import type { SerializedRegistryData } from './types';
 
 /** Conversion factor from sprite pixels to world-space units */
 export const PIXELS_TO_WORLD = 1.0 / 32.0;
@@ -294,13 +294,13 @@ export function getMapObjectSpriteMap(): Partial<Record<MapObjectType, MapObject
  * Acts as a facade delegating to per-domain category instances.
  */
 export class SpriteMetadataRegistry {
-    private readonly buildings = new BuildingSpriteCategory();
-    private readonly units = new UnitSpriteCategory();
-    private readonly mapObjectsCategory = new MapObjectSpriteCategory();
-    private readonly goodsCategory = new GoodSpriteCategory();
-    private readonly decoration = new DecorationSpriteCategory();
-    private readonly overlays = new OverlaySpriteCategory();
-    private readonly animated = new AnimatedEntityCategory();
+    private buildings = new BuildingSpriteCategory();
+    private units = new UnitSpriteCategory();
+    private mapObjectsCategory = new MapObjectSpriteCategory();
+    private goodsCategory = new GoodSpriteCategory();
+    private decoration = new DecorationSpriteCategory();
+    private overlays = new OverlaySpriteCategory();
+    private animated = new AnimatedEntityCategory();
 
     private readonly _loadedRaces: Set<number> = new Set();
 
@@ -380,14 +380,21 @@ export class SpriteMetadataRegistry {
         this.decoration.registerFlag(playerIndex, frame, entry);
     }
 
-    /**
-     * Get a flag sprite frame for a player index and animation frame.
-     */
+    public registerFlagDown(playerIndex: number, frame: number, entry: SpriteEntry): void {
+        this.decoration.registerFlagDown(playerIndex, frame, entry);
+    }
+
+    /** Get a normal (upright) flag sprite frame. */
     public getFlag(playerIndex: number, frame: number): SpriteEntry | null {
         return this.decoration.getFlag(playerIndex, frame);
     }
 
-    /** Number of flag animation frames per player color. */
+    /** Get a lowered (paused) flag sprite frame. */
+    public getFlagDown(playerIndex: number, frame: number): SpriteEntry | null {
+        return this.decoration.getFlagDown(playerIndex, frame);
+    }
+
+    /** Number of normal flag animation frames per player color. */
     public getFlagFrameCount(playerIndex: number): number {
         return this.decoration.getFlagFrameCount(playerIndex);
     }
@@ -668,53 +675,39 @@ export class SpriteMetadataRegistry {
 
     /**
      * Serialize registry data for caching.
-     * Converts Maps to arrays for JSON compatibility.
+     * Delegates to each category — the registry never knows category-internal formats.
      */
-    public serialize(): Record<string, unknown> {
-        return SpriteMetadataSerializer.serialize(
-            this.buildings,
-            this.units,
-            this.mapObjectsCategory,
-            this.goodsCategory,
-            this.decoration,
-            this.overlays,
-            this.animated,
-            this._loadedRaces
-        );
+    public serialize(): SerializedRegistryData {
+        return {
+            version: 1,
+            buildings: this.buildings.serialize(),
+            units: this.units.serialize(),
+            mapObjects: this.mapObjectsCategory.serialize(),
+            goods: this.goodsCategory.serialize(),
+            decoration: this.decoration.serialize(),
+            overlays: this.overlays.serialize(),
+            animatedShared: this.animated.serializeShared(),
+            animatedByRace: this.animated.serializeByRace(),
+            loadedRaces: [...this._loadedRaces],
+        };
     }
 
     /**
      * Deserialize registry data from cache.
+     * Each category's static deserialize() handles its own reconstruction.
      */
-    public static deserialize(data: any): SpriteMetadataRegistry {
+    public static deserialize(data: SerializedRegistryData): SpriteMetadataRegistry {
         const registry = new SpriteMetadataRegistry();
-        const result = SpriteMetadataSerializer.deserialize(data);
-
-        for (const [race, typeMap] of result.buildings.getRaceMap()) {
-            registry.buildings.setRaceEntry(race, typeMap);
-        }
-        for (const [race, typeMap] of result.units.getRaceMap()) {
-            registry.units.setRaceEntry(race, typeMap);
-        }
-        registry.mapObjectsCategory.setEntries(result.mapObjects.getEntries());
-        registry.goodsCategory.setEntries(result.goods.getEntries());
-        registry.decoration.setFlagsMap(result.decoration.getFlagsMap());
-        registry.decoration.setTerritoryDotsMap(result.decoration.getTerritoryDotsMap());
-        for (const [key, frames] of result.overlays.getFramesMap()) {
-            registry.overlays.getFramesMap().set(key, frames);
-        }
-        for (const [entityType, subTypeMap] of result.animated.getSharedEntities()) {
-            registry.animated.setSharedEntry(entityType, subTypeMap);
-        }
-        for (const [race, entityTypeMap] of result.animated.getByRace()) {
-            for (const [entityType, subTypeMap] of entityTypeMap) {
-                registry.animated.setByRaceEntry(race, entityType, subTypeMap);
-            }
-        }
-        for (const race of result.loadedRaces) {
+        registry.buildings = BuildingSpriteCategory.deserialize(data.buildings);
+        registry.units = UnitSpriteCategory.deserialize(data.units);
+        registry.mapObjectsCategory = MapObjectSpriteCategory.deserialize(data.mapObjects);
+        registry.goodsCategory = GoodSpriteCategory.deserialize(data.goods);
+        registry.decoration = DecorationSpriteCategory.deserialize(data.decoration);
+        registry.overlays = OverlaySpriteCategory.deserialize(data.overlays);
+        registry.animated = AnimatedEntityCategory.deserialize(data.animatedShared, data.animatedByRace);
+        for (const race of data.loadedRaces) {
             registry._loadedRaces.add(race);
         }
-
         return registry;
     }
 }

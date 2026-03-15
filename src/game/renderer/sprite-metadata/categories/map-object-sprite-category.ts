@@ -8,9 +8,10 @@
  */
 
 import { MapObjectType } from '@/game/types/map-object-types';
-import type { SpriteEntry } from '../types';
+import type { SpriteEntry, SerializableSpriteCategory } from '../types';
+import { mapToArray, arrayToMap } from '../sprite-metadata-helpers';
 
-export class MapObjectSpriteCategory {
+export class MapObjectSpriteCategory implements SerializableSpriteCategory {
     /** Map object sprites keyed by type → variation[] */
     private readonly entries: Map<MapObjectType, SpriteEntry[]> = new Map();
 
@@ -47,19 +48,22 @@ export class MapObjectSpriteCategory {
     }
 
     /**
-     * Expose the internal map for serialization.
+     * Expose the internal entries map (used by registry for lookups).
      */
     getEntries(): Map<MapObjectType, SpriteEntry[]> {
         return this.entries;
     }
 
-    /**
-     * Replace the entire entries map (used during deserialization).
-     */
-    setEntries(entries: Map<MapObjectType, SpriteEntry[]>): void {
-        this.entries.clear();
-        for (const [k, v] of entries) {
-            this.entries.set(k, v);
+    serialize(): unknown {
+        return mapToArray(this.entries);
+    }
+
+    static deserialize(data: unknown): MapObjectSpriteCategory {
+        const category = new MapObjectSpriteCategory();
+        const map = arrayToMap(data as Array<[MapObjectType, SpriteEntry[]]>);
+        for (const [k, v] of map) {
+            category.entries.set(k, v);
         }
+        return category;
     }
 }

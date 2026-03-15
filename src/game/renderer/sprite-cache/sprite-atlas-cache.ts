@@ -13,7 +13,8 @@
  */
 
 import { LogHandler } from '@/utilities/log-handler';
-import { Race, SpriteMetadataRegistry } from '../sprite-metadata';
+import { Race } from '../sprite-metadata';
+import type { SerializedRegistryData } from '../sprite-metadata/types';
 import type { CacheStreamRequest, CacheSetPriorityRequest, WorkerOutboundMessage } from './cache-read-worker';
 import CacheReadWorker from './cache-read-worker?worker';
 
@@ -26,7 +27,7 @@ declare const __BUILD_TIME__: string;
  * Schema version for cache invalidation.
  * Bump this when animation sequence names or sprite data format changes.
  */
-const CACHE_SCHEMA_VERSION = 20; // v20: split meta/palette protocol — meta arrives first for faster priority computation
+const CACHE_SCHEMA_VERSION = 21; // v21: per-category serialize/deserialize — SpriteMetadataSerializer removed
 
 /** Current build version for cache invalidation */
 const BUILD_VERSION =
@@ -54,7 +55,7 @@ export interface CachedAtlasBase {
     maxLayers: number;
     /** Per-layer slot packing state */
     slots: CachedSlot[][];
-    registryData: ReturnType<SpriteMetadataRegistry['serialize']>;
+    registryData: SerializedRegistryData;
     race: Race;
     textureUnit: number;
     timestamp: number;

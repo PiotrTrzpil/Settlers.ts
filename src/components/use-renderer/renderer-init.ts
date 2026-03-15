@@ -7,6 +7,7 @@ import type { EntityRenderer } from '@/game/renderer/entity-renderer';
 import type { BuildingIndicatorRenderer } from '@/game/renderer/building-indicator-renderer';
 import type { ViewPoint } from '@/game/renderer/view-point';
 import type { InputManager } from '@/game/input';
+import { AVAILABLE_RACES } from '@/game/renderer/sprite-metadata';
 import { debugStats } from '@/game/debug/debug-stats';
 import type { Race } from '@/game/core/race';
 import type { Game } from '@/game/game';
@@ -60,6 +61,59 @@ export async function initRenderersAsync(
     await entityRenderer.init(gl);
     // Note: entityRenderer.init() returns immediately — sprites load in background.
     // markRendererReady() is called from the onSpritesLoaded callback instead.
+}
+
+/**
+ * After building sprites finish loading, load overlay sprites for all races
+ * and update the BuildingOverlayManager with the resolved frame counts.
+ */
+export async function loadOverlaySpritesAndUpdateFrameCounts(er: EntityRenderer, game: Game): Promise<void> {
+    const spriteManager = er.spriteManager!;
+
+    // Collect sprite refs for all races (overlays live in each race's GFX file)
+    const manifest: { gfxFile: number; jobIndex: number; directionIndex?: number }[] = [];
+    for (const race of AVAILABLE_RACES) {
+        for (const def of game.services.overlayRegistry.getSpriteManifest(race)) {
+            manifest.push(def.spriteRef);
+        }
+    }
+    if (manifest.length === 0) {
+        return;
+    }
+
+    // Check if overlays are already in the registry (cache hit with full overlay data).
+    // Use .some() across the whole manifest — the first entry may fail to load (missing GFX job),
+    // so checking only manifest[0] would trigger a reload every time.
+    const alreadyLoaded = manifest.some(
+        e => spriteManager.getOverlayFrames(e.gfxFile, e.jobIndex, e.directionIndex ?? 0) !== null
+    );
+
+    if (!alreadyLoaded) {
+        const tOverlay = performance.now();
+        await spriteManager.loadOverlaySprites(manifest);
+        debugStats.state.loadTimings.overlaySprites = Math.round(performance.now() - tOverlay);
+        // Save cache now that overlays are included — subsequent hits skip overlay loading entirely.
+        spriteManager.saveCache();
+    }
+
+    // Always update frame counts (cheap read from registry, no loading).
+    for (const race of AVAILABLE_RACES) {
+        for (const def of game.services.overlayRegistry.getSpriteManifest(race)) {
+            const { gfxFile, jobIndex, directionIndex = 0 } = def.spriteRef;
+            const frames = spriteManager.getOverlayFrames(gfxFile, jobIndex, directionIndex);
+            if (frames && frames.length > 0) {
+                game.services.buildingOverlayManager.setFrameCountForDef(
+                    gfxFile,
+                    jobIndex,
+                    directionIndex,
+                    frames.length
+                );
+            }
+        }
+    }
+
+    // Flag sprites are player-colored (not JIL-based) — update their frame count separately.
+    game.services.buildingOverlayManager.setFlagFrameCount(spriteManager.getFlagFrameCount(0));
 }
 
 /** Expose objects for e2e tests */

@@ -42,11 +42,30 @@ export interface AnimatedSpriteEntry {
 }
 
 /**
- * Generic sprite category interface.
- * Each category manages a specific domain of sprites with its own key type.
+ * Contract for sprite categories that support cache serialization.
+ * Each category produces/consumes its own opaque JSON-safe blob.
+ * The registry delegates without knowing the internal format.
  */
-export interface ISpriteCategory<K> {
-    get(key: K): SpriteEntry | null;
-    set(key: K, entry: SpriteEntry): void;
+export interface SerializableSpriteCategory {
+    /** Produce a JSON-safe representation of this category's data */
+    serialize(): unknown;
+    /** Clear all registered sprites */
     clear(): void;
+}
+
+/**
+ * Serialized shape of the full registry data.
+ * Each category field is opaque — only the owning category knows the format.
+ */
+export interface SerializedRegistryData {
+    version: number;
+    buildings: unknown;
+    units: unknown;
+    mapObjects: unknown;
+    goods: unknown;
+    decoration: unknown;
+    overlays: unknown;
+    animatedShared: unknown;
+    animatedByRace: unknown;
+    loadedRaces: number[];
 }

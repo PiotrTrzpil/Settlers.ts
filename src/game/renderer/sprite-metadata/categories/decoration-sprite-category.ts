@@ -8,20 +8,29 @@
  * @module renderer/sprite-metadata/categories
  */
 
-import type { SpriteEntry } from '../types';
+import type { SpriteEntry, SerializableSpriteCategory } from '../types';
+import { mapToArray, arrayToMap } from '../sprite-metadata-helpers';
 
-export class DecorationSpriteCategory {
-    /** Flag sprites keyed by playerIndex → frame[] */
+interface SerializedDecorationData {
+    flags: Array<[number, SpriteEntry[]]>;
+    flagsDown: Array<[number, SpriteEntry[]]>;
+    territoryDots: Array<[number, SpriteEntry]>;
+}
+
+export class DecorationSpriteCategory implements SerializableSpriteCategory {
+    /** Normal (upright) flag sprites: playerIndex → frame[] */
     private readonly flags: Map<number, SpriteEntry[]> = new Map();
+    /** Lowered (paused) flag sprites: playerIndex → frame[] */
+    private readonly flagsDown: Map<number, SpriteEntry[]> = new Map();
     /** Territory dot sprites keyed by playerIndex (0-7) */
     private readonly territoryDots: Map<number, SpriteEntry> = new Map();
 
     // ---- Flags ----
 
     /**
-     * Register a flag sprite frame for a player index.
+     * Register a normal (upright) flag sprite frame for a player index.
      * @param playerIndex 0-7 (8 team colors)
-     * @param frame Animation frame index (0-23)
+     * @param frame Animation frame index (0-11)
      */
     registerFlag(playerIndex: number, frame: number, entry: SpriteEntry): void {
         let frames = this.flags.get(playerIndex);
@@ -33,15 +42,37 @@ export class DecorationSpriteCategory {
     }
 
     /**
-     * Get a flag sprite frame for a player index and animation frame.
+     * Register a lowered (paused) flag sprite frame for a player index.
+     * @param playerIndex 0-7 (8 team colors)
+     * @param frame Animation frame index (0-11)
      */
+    registerFlagDown(playerIndex: number, frame: number, entry: SpriteEntry): void {
+        let frames = this.flagsDown.get(playerIndex);
+        if (!frames) {
+            frames = [];
+            this.flagsDown.set(playerIndex, frames);
+        }
+        frames[frame] = entry;
+    }
+
+    /** Get a normal flag sprite frame for a player index and animation frame. */
     getFlag(playerIndex: number, frame: number): SpriteEntry | null {
         return this.flags.get(playerIndex)?.[frame] ?? null;
     }
 
-    /** Number of flag animation frames per player color. */
+    /** Get a lowered flag sprite frame for a player index and animation frame. */
+    getFlagDown(playerIndex: number, frame: number): SpriteEntry | null {
+        return this.flagsDown.get(playerIndex)?.[frame] ?? null;
+    }
+
+    /** Number of normal flag animation frames per player color. */
     getFlagFrameCount(playerIndex: number): number {
         return this.flags.get(playerIndex)?.length ?? 0;
+    }
+
+    /** Number of lowered flag animation frames per player color. */
+    getFlagDownFrameCount(playerIndex: number): number {
+        return this.flagsDown.get(playerIndex)?.length ?? 0;
     }
 
     hasFlagSprites(): boolean {
@@ -66,40 +97,34 @@ export class DecorationSpriteCategory {
 
     clear(): void {
         this.flags.clear();
+        this.flagsDown.clear();
         this.territoryDots.clear();
     }
 
-    /**
-     * Expose the internal flags map for serialization.
-     */
-    getFlagsMap(): Map<number, SpriteEntry[]> {
-        return this.flags;
+    serialize(): unknown {
+        const data: SerializedDecorationData = {
+            flags: mapToArray(this.flags),
+            flagsDown: mapToArray(this.flagsDown),
+            territoryDots: mapToArray(this.territoryDots),
+        };
+        return data;
     }
 
-    /**
-     * Replace the entire flags map (used during deserialization).
-     */
-    setFlagsMap(flags: Map<number, SpriteEntry[]>): void {
-        this.flags.clear();
-        for (const [k, v] of flags) {
-            this.flags.set(k, v);
+    static deserialize(data: unknown): DecorationSpriteCategory {
+        const typed = data as SerializedDecorationData;
+        const category = new DecorationSpriteCategory();
+        const flagsMap = arrayToMap(typed.flags);
+        const flagsDownMap = arrayToMap(typed.flagsDown);
+        const territoryDotsMap = arrayToMap(typed.territoryDots);
+        for (const [k, v] of flagsMap) {
+            category.flags.set(k, v);
         }
-    }
-
-    /**
-     * Expose the internal territory dots map for serialization.
-     */
-    getTerritoryDotsMap(): Map<number, SpriteEntry> {
-        return this.territoryDots;
-    }
-
-    /**
-     * Replace the entire territory dots map (used during deserialization).
-     */
-    setTerritoryDotsMap(dots: Map<number, SpriteEntry>): void {
-        this.territoryDots.clear();
-        for (const [k, v] of dots) {
-            this.territoryDots.set(k, v);
+        for (const [k, v] of flagsDownMap) {
+            category.flagsDown.set(k, v);
         }
+        for (const [k, v] of territoryDotsMap) {
+            category.territoryDots.set(k, v);
+        }
+        return category;
     }
 }

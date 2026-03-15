@@ -8,9 +8,10 @@
  */
 
 import { EMaterialType } from '@/game/economy';
-import type { SpriteEntry } from '../types';
+import type { SpriteEntry, SerializableSpriteCategory } from '../types';
+import { mapToArray, arrayToMap } from '../sprite-metadata-helpers';
 
-export class GoodSpriteCategory {
+export class GoodSpriteCategory implements SerializableSpriteCategory {
     /** Resource sprites keyed by material type → direction */
     private readonly entries: Map<EMaterialType, Map<number, SpriteEntry>> = new Map();
 
@@ -58,13 +59,16 @@ export class GoodSpriteCategory {
         return this.entries;
     }
 
-    /**
-     * Replace the entire entries map (used during deserialization).
-     */
-    setEntries(entries: Map<EMaterialType, Map<number, SpriteEntry>>): void {
-        this.entries.clear();
-        for (const [k, v] of entries) {
-            this.entries.set(k, v);
+    serialize(): unknown {
+        return mapToArray(this.entries).map(([type, dirMap]) => [type, mapToArray(dirMap)]);
+    }
+
+    static deserialize(data: unknown): GoodSpriteCategory {
+        const category = new GoodSpriteCategory();
+        const outer = data as Array<[EMaterialType, Array<[number, SpriteEntry]>]>;
+        for (const [type, dirEntries] of outer) {
+            category.entries.set(type, arrayToMap(dirEntries));
         }
+        return category;
     }
 }

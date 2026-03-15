@@ -145,7 +145,7 @@ import type { SelectionOverlayRenderer } from '../selection-overlay-renderer';
 export enum RenderLayer {
     BeforeDepthSort = 0,
     BehindEntities = 1,
-    // Entities = 2 is reserved for core sprite/color passes
+    Entities = 2,
     AboveEntities = 3,
     Overlay = 4,
 }
@@ -158,6 +158,8 @@ export interface RenderPassNeeds {
     colorShader?: boolean;
     sprites?: boolean;
     entities?: boolean;
+    /** Pass needs the depth-sorted frameContext (only valid after depth sort) */
+    frameContext?: boolean;
 }
 
 /**

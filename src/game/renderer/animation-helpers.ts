@@ -80,7 +80,7 @@ export function resolveAnimationFrame(
     }
 
     const dir = spriteDirection ?? playback.direction;
-    const sequence = directionMap.get(dir);
+    const sequence = directionMap.get(dir) ?? directionMap.get(0);
     if (!sequence || sequence.frames.length === 0) {
         warnOnce(
             `dir:${label}:${playback.sequenceKey}:${dir}`,
@@ -125,7 +125,7 @@ export function getAnimatedSprite(
         );
     }
 
-    const sequence = directionMap.get(playback.direction);
+    const sequence = directionMap.get(playback.direction) ?? directionMap.get(0);
     if (!sequence || sequence.frames.length === 0) {
         warnOnce(
             `dir:${label}:${playback.sequenceKey}:${playback.direction}`,
@@ -172,7 +172,7 @@ export function getAnimatedSpriteForDirection(
         );
     }
 
-    const sequence = directionMap.get(direction);
+    const sequence = directionMap.get(direction) ?? directionMap.get(0);
     if (!sequence || sequence.frames.length === 0) {
         warnOnce(
             `dir:${label}:${playback.sequenceKey}:${direction}`,
