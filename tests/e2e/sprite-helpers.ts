@@ -157,10 +157,10 @@ export async function getEntitiesWithoutSprites(page: Page): Promise<MissingSpri
         }> = [];
 
         const spriteCheckers: Record<number, (e: any) => boolean> = {
-            [ET_UNIT]: (e: any) => sm.getUnit(e.subType, 0, e.race) !== null,
-            [ET_BUILDING]: (e: any) => sm.getBuilding(e.subType, e.race) !== null,
-            [ET_MAP_OBJECT]: (e: any) => sm.getMapObject(e.subType) !== null,
-            [ET_STACKED_PILE]: (e: any) => sm.getGoodSprite(e.subType) !== null,
+            [ET_UNIT]: (e: any) => sm.registry.getUnit(e.subType, 0, e.race) !== null,
+            [ET_BUILDING]: (e: any) => sm.registry.getBuilding(e.subType, e.race) !== null,
+            [ET_MAP_OBJECT]: (e: any) => sm.registry.getMapObject(e.subType) !== null,
+            [ET_STACKED_PILE]: (e: any) => sm.registry.getGoodSprite(e.subType) !== null,
         };
 
         for (const entity of game.state.entities) {

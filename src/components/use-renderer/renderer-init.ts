@@ -85,7 +85,7 @@ export async function loadOverlaySpritesAndUpdateFrameCounts(er: EntityRenderer,
     // Use .some() across the whole manifest — the first entry may fail to load (missing GFX job),
     // so checking only manifest[0] would trigger a reload every time.
     const alreadyLoaded = manifest.some(
-        e => spriteManager.getOverlayFrames(e.gfxFile, e.jobIndex, e.directionIndex ?? 0) !== null
+        e => spriteManager.spriteRegistry?.getOverlayFrames(e.gfxFile, e.jobIndex, e.directionIndex ?? 0) !== null
     );
 
     if (!alreadyLoaded) {
@@ -100,7 +100,7 @@ export async function loadOverlaySpritesAndUpdateFrameCounts(er: EntityRenderer,
     for (const race of AVAILABLE_RACES) {
         for (const def of game.services.overlayRegistry.getSpriteManifest(race)) {
             const { gfxFile, jobIndex, directionIndex = 0 } = def.spriteRef;
-            const frames = spriteManager.getOverlayFrames(gfxFile, jobIndex, directionIndex);
+            const frames = spriteManager.spriteRegistry?.getOverlayFrames(gfxFile, jobIndex, directionIndex);
             if (frames && frames.length > 0) {
                 game.services.buildingOverlayManager.setFrameCountForDef(
                     gfxFile,
@@ -113,7 +113,7 @@ export async function loadOverlaySpritesAndUpdateFrameCounts(er: EntityRenderer,
     }
 
     // Flag sprites are player-colored (not JIL-based) — update their frame count separately.
-    game.services.buildingOverlayManager.setFlagFrameCount(spriteManager.getFlagFrameCount(0));
+    game.services.buildingOverlayManager.setFlagFrameCount(spriteManager.spriteRegistry?.getFlagFrameCount(0) ?? 0);
 }
 
 /** Expose objects for e2e tests */

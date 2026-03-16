@@ -12,10 +12,8 @@ import { TEXTURE_UNIT_PALETTE } from './entity-renderer-constants';
 import { debugStats } from '@/game/debug/debug-stats';
 import {
     SpriteMetadataRegistry,
-    SpriteEntry,
     Race,
     GFX_FILE_NUMBERS,
-    AnimatedSpriteEntry,
     SETTLER_FILE_NUMBERS,
     AVAILABLE_RACES,
     getBuildingSpriteMap,
@@ -23,11 +21,8 @@ import {
 import { SpriteLoader } from './sprite-loader';
 import { destroyDecoderPool, getDecoderPool, warmUpDecoderPool } from './sprite-decoder-pool';
 import { yieldToEventLoop } from './batch-loader';
-import { BuildingType, UnitType, EntityType, type Entity } from '../entity';
-import { MapObjectType } from '@/game/types/map-object-types';
-import { AnimationData } from '../animation/animation';
+import { EntityType, type Entity } from '../entity';
 import { AnimationDataProvider } from './animation-helpers';
-import { EMaterialType } from '../economy';
 import type { AtlasRegion } from './entity-texture-atlas';
 import { TEAM_COLOR_PALETTES } from '@/resources/gfx/team-colors';
 import { loadUnitSpritesForRace } from './sprite-unit-loader';
@@ -125,6 +120,18 @@ export class SpriteRenderManager {
         return this._spriteRegistry;
     }
 
+    /**
+     * Get the sprite registry. Throws if sprites aren't loaded yet.
+     * Callers in the render loop are always guarded by `hasSprites` checks.
+     * For code that may run before sprites load, use `spriteRegistry?.` instead.
+     */
+    get registry(): SpriteMetadataRegistry {
+        if (!this._spriteRegistry) {
+            throw new Error('SpriteRenderManager: registry not available — sprites not loaded');
+        }
+        return this._spriteRegistry;
+    }
+
     /** Get the current race (null if not yet set via setInitialRace / setRace). */
     get currentRace(): Race | null {
         return this._currentRace;
@@ -218,120 +225,18 @@ export class SpriteRenderManager {
     }
 
     /**
-     * Get a building sprite entry by type and race (completed state).
-     */
-    public getBuilding(type: BuildingType, race?: number): SpriteEntry | null {
-        const resolvedRace = race ?? this._currentRace;
-        if (resolvedRace === null) {
-            return null;
-        }
-        return this._spriteRegistry?.getBuilding(type, resolvedRace) ?? null;
-    }
-
-    /**
-     * Get a building construction sprite entry by type and race.
-     */
-    public getBuildingConstruction(type: BuildingType, race?: number): SpriteEntry | null {
-        const resolvedRace = race ?? this._currentRace;
-        if (resolvedRace === null) {
-            return null;
-        }
-        return this._spriteRegistry?.getBuildingConstruction(type, resolvedRace) ?? null;
-    }
-
-    /**
-     * Get a map object sprite entry by type (and optional variation).
-     */
-    public getMapObject(type: MapObjectType, variation?: number): SpriteEntry | null {
-        return this._spriteRegistry?.getMapObject(type, variation) ?? null;
-    }
-
-    // ========== Unified Animation API ==========
-
-    /**
-     * Get animated entity data for any entity type. O(1) lookup.
-     */
-    public getAnimatedEntity(
-        entityType: EntityType,
-        subType: number | string,
-        race?: number
-    ): AnimatedSpriteEntry | null {
-        return this._spriteRegistry?.getAnimatedEntity(entityType, subType, race) ?? null;
-    }
-
-    /**
-     * Check if any entity type has animation frames. O(1) lookup.
-     */
-    public hasAnimation(entityType: EntityType, subType: number | string, race?: number): boolean {
-        return this._spriteRegistry?.hasAnimation(entityType, subType, race) ?? false;
-    }
-
-    /**
-     * Get animation data for any entity type. O(1) lookup.
-     */
-    public getAnimationData(entityType: EntityType, subType: number | string, race?: number): AnimationData | null {
-        const entry = this._spriteRegistry?.getAnimatedEntity(entityType, subType, race);
-        return entry?.animationData ?? null;
-    }
-
-    /**
      * Returns this manager as an AnimationDataProvider.
      * Implements the unified interface for the animation system.
      */
     public asAnimationProvider(): AnimationDataProvider {
         return {
-            getAnimationData: (entityType: EntityType, subType: number | string, race?: number) =>
-                this.getAnimationData(entityType, subType, race),
+            getAnimationData: (entityType: EntityType, subType: number | string, race?: number) => {
+                const entry = this.registry.getAnimatedEntity(entityType, subType, race);
+                return entry?.animationData ?? null;
+            },
             hasAnimation: (entityType: EntityType, subType: number | string, race?: number) =>
-                this.hasAnimation(entityType, subType, race),
+                this.registry.hasAnimation(entityType, subType, race),
         };
-    }
-
-    /**
-     * Get a resource/material sprite entry by type.
-     */
-    public getGoodSprite(type: EMaterialType, direction: number = 0): SpriteEntry | null {
-        return this._spriteRegistry?.getGoodSprite(type, direction) ?? null;
-    }
-
-    /**
-     * Get a unit sprite entry by type and direction.
-     * @param direction 0=RIGHT, 1=RIGHT_BOTTOM, 2=LEFT_BOTTOM, 3=LEFT (defaults to 0)
-     */
-    public getUnit(type: UnitType, direction: number = 0, race?: number): SpriteEntry | null {
-        return this._spriteRegistry?.getUnit(type, direction, race) ?? null;
-    }
-
-    /**
-     * Get a flag sprite frame for a player index and animation frame.
-     * @param playerIndex 0-7 (8 team colors)
-     * @param frame Animation frame index (0-23)
-     */
-    public getFlag(playerIndex: number, frame: number): SpriteEntry | null {
-        return this._spriteRegistry?.getFlag(playerIndex, frame) ?? null;
-    }
-
-    /** Number of flag animation frames for a player color. */
-    public getFlagFrameCount(playerIndex: number): number {
-        return this._spriteRegistry?.getFlagFrameCount(playerIndex) ?? 0;
-    }
-
-    /** Check if territory dot sprites have been loaded. */
-    public hasTerritoryDotSprites(): boolean {
-        return this._spriteRegistry?.hasTerritoryDotSprites() ?? false;
-    }
-
-    /** Get the territory dot sprite for a player index (0-7). */
-    public getTerritoryDot(playerIndex: number): SpriteEntry | null {
-        return this._spriteRegistry?.getTerritoryDot(playerIndex) ?? null;
-    }
-
-    /**
-     * Get loaded overlay sprite frames by GFX file reference.
-     * Returns null if the overlay sprites haven't been loaded yet.
-     */
-    public getOverlayFrames(gfxFile: number, jobIndex: number, directionIndex = 0): readonly SpriteEntry[] | null {
-        return this._spriteRegistry?.getOverlayFrames(gfxFile, jobIndex, directionIndex) ?? null;
     }
 
     /**

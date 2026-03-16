@@ -22,35 +22,18 @@ export class SelectionPass implements IRenderPass {
 
     public draw(gl: WebGL2RenderingContext, _projection: Float32Array, viewPoint: IViewPoint): void {
         const { ctx } = this;
-        const buf = ctx.dynamicBuffer;
-        const selCtx = {
+        const s = this.overlay.begin(gl, ctx.dynamicBuffer, ctx.aEntityPos, ctx.aColor, {
             mapSize: ctx.mapSize,
             groundHeight: ctx.groundHeight,
             viewPoint,
             unitStates: ctx.unitStates,
-        };
+        });
 
-        this.overlay.drawSelectionFrames(
-            gl,
-            buf,
-            ctx.sortedEntities,
-            ctx.selectedEntityIds,
-            ctx.aEntityPos,
-            ctx.aColor,
-            selCtx
-        );
-        this.overlay.drawSelectionDots(
-            gl,
-            buf,
-            ctx.sortedEntities,
-            ctx.selectedEntityIds,
-            ctx.aEntityPos,
-            ctx.aColor,
-            selCtx
-        );
+        s.drawSelectionFrames(ctx.sortedEntities, ctx.selectedEntityIds);
+        s.drawSelectionDots(ctx.sortedEntities, ctx.selectedEntityIds);
 
         if (ctx.tileHighlights.length > 0) {
-            this.overlay.drawTileHighlights(gl, buf, ctx.tileHighlights, ctx.aEntityPos, ctx.aColor, selCtx);
+            s.drawTileHighlights(ctx.tileHighlights);
         }
     }
 }

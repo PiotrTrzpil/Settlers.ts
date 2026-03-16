@@ -14,10 +14,8 @@ import type { Entity } from '@/game/entity';
 import type { IViewPoint } from '../i-view-point';
 import type { IRenderPass, EntitySpriteContext } from './types';
 import type { TransitionBlendPass } from './transition-blend-pass';
-import { TilePicker } from '@/game/input/tile-picker';
-import { TILE_CENTER_X, TILE_CENTER_Y } from '@/game/systems/coordinate-system';
-import { PALETTE_TEXTURE_WIDTH } from '../palette-texture';
 import { scaleSprite, getSpriteScale } from '../entity-renderer-constants';
+import { getRenderEntityWorldPos } from '../world-position';
 import { TINT_NEUTRAL, TINT_SELECTED } from '../tint-utils';
 import { OverlayRenderLayer } from '../render-context';
 import type { BuildingOverlayRenderData } from '../render-context';
@@ -61,18 +59,7 @@ export class EntitySpritePass implements IRenderPass {
             gl.enable(gl.SAMPLE_ALPHA_TO_COVERAGE);
         }
 
-        ctx.spriteManager.spriteAtlas!.bindForRendering(gl);
-        ctx.spriteManager.paletteManager.bind(gl);
-
-        const paletteWidth = PALETTE_TEXTURE_WIDTH;
-        const rowsPerPlayer = ctx.spriteManager.paletteManager.textureRowsPerPlayer;
-        ctx.spriteBatchRenderer.beginSpriteBatch(
-            gl,
-            projection,
-            paletteWidth,
-            rowsPerPlayer,
-            ctx.renderSettings.antialias
-        );
+        ctx.spriteBatchRenderer.beginWithAtlas(gl, projection, ctx.spriteManager, ctx.renderSettings.antialias);
 
         this.lastSpriteCount = 0;
 
@@ -89,7 +76,7 @@ export class EntitySpritePass implements IRenderPass {
                 continue;
             }
 
-            const worldPos = this.getEntityWorldPos(entity, viewPoint);
+            const worldPos = getRenderEntityWorldPos(entity, ctx, viewPoint);
             this.emitEntitySprite(gl, entity, resolved, worldPos);
         }
 
@@ -138,24 +125,11 @@ export class EntitySpritePass implements IRenderPass {
                 worldPos.worldY,
                 sprite,
                 playerRow,
-                tint[0]!,
-                tint[1]!,
-                tint[2]!,
-                tint[3]!,
+                tint,
                 resolved.progress
             );
         } else {
-            ctx.spriteBatchRenderer.addSprite(
-                gl,
-                worldPos.worldX,
-                worldPos.worldY,
-                sprite,
-                playerRow,
-                tint[0]!,
-                tint[1]!,
-                tint[2]!,
-                tint[3]!
-            );
+            ctx.spriteBatchRenderer.addSprite(gl, worldPos.worldX, worldPos.worldY, sprite, playerRow, tint);
         }
         this.lastSpriteCount++;
 
@@ -188,14 +162,11 @@ export class EntitySpritePass implements IRenderPass {
                     y,
                     overlay.sprite,
                     row,
-                    1,
-                    1,
-                    1,
-                    1,
+                    TINT_NEUTRAL,
                     overlay.verticalProgress
                 );
             } else {
-                ctx.spriteBatchRenderer.addSprite(gl, x, y, overlay.sprite, row, 1, 1, 1, 1);
+                ctx.spriteBatchRenderer.addSprite(gl, x, y, overlay.sprite, row, TINT_NEUTRAL);
             }
             this.lastSpriteCount++;
         }
@@ -238,11 +209,11 @@ export class EntitySpritePass implements IRenderPass {
         }
         const unitSprite = scaleSprite(resolved.sprite, getSpriteScale(entity));
 
-        const worldPos = this.getEntityWorldPos(entity, viewPoint);
+        const worldPos = getRenderEntityWorldPos(entity, ctx, viewPoint);
 
         // Place indicator at the top of the unit sprite (offsetY is negative → moves up)
         const spriteTopY = worldPos.worldY + unitSprite.offsetY;
-        ctx.spriteBatchRenderer.addSprite(gl, worldPos.worldX, spriteTopY, indicator, 0, 1, 1, 1, 1);
+        ctx.spriteBatchRenderer.addSprite(gl, worldPos.worldX, spriteTopY, indicator, 0, TINT_NEUTRAL);
         this.lastSpriteCount++;
 
         // Health dot — centered in the bracket (for military units with health tracking)
@@ -251,7 +222,7 @@ export class EntitySpritePass implements IRenderPass {
             const dot = resolveHealthDot(healthRatio, ctx.spriteManager!, zoom);
             // Center of bracket = spriteTopY + indicator.offsetY + indicator.heightWorld/2
             const bracketCenterY = spriteTopY + indicator.offsetY + indicator.heightWorld / 2;
-            ctx.spriteBatchRenderer.addSprite(gl, worldPos.worldX, bracketCenterY, dot, 0, 1, 1, 1, 1);
+            ctx.spriteBatchRenderer.addSprite(gl, worldPos.worldX, bracketCenterY, dot, 0, TINT_NEUTRAL);
             this.lastSpriteCount++;
         }
     }
@@ -270,75 +241,7 @@ export class EntitySpritePass implements IRenderPass {
         // Center horizontally; align to top of footprint vertically so the frame
         // appears over the building rather than sunken into the ground tiles.
         const centerX = (bounds.minX + bounds.maxX) / 2;
-        ctx.spriteBatchRenderer.addSprite(gl, centerX, bounds.minY, indicator, 0, 1, 1, 1, 1);
+        ctx.spriteBatchRenderer.addSprite(gl, centerX, bounds.minY, indicator, 0, TINT_NEUTRAL);
         this.lastSpriteCount++;
-    }
-
-    private getEntityWorldPos(entity: Entity, viewPoint: IViewPoint): { worldX: number; worldY: number } {
-        const { ctx } = this;
-        const cachedPos = ctx.frameContext?.getWorldPos(entity);
-        let worldPos: { worldX: number; worldY: number };
-
-        if (cachedPos) {
-            worldPos = { worldX: cachedPos.worldX, worldY: cachedPos.worldY };
-        } else if (entity.type === EntityType.Unit) {
-            worldPos = this.getInterpolatedWorldPos(entity, viewPoint);
-        } else {
-            worldPos = TilePicker.tileToWorld(
-                entity.x,
-                entity.y,
-                ctx.groundHeight,
-                ctx.mapSize,
-                viewPoint.x,
-                viewPoint.y
-            );
-        }
-
-        if (entity.type === EntityType.Building) {
-            worldPos.worldX -= TILE_CENTER_X;
-            worldPos.worldY -= TILE_CENTER_Y * 0.5;
-        }
-
-        if (entity.type === EntityType.MapObject) {
-            const seed = entity.x * 12.9898 + entity.y * 78.233;
-            const offsetX = ((Math.sin(seed) * 43758.5453) % 1) * 0.3 - 0.15;
-            const offsetY = ((Math.cos(seed) * 43758.5453) % 1) * 0.3 - 0.15;
-            worldPos.worldX += offsetX;
-            worldPos.worldY += offsetY;
-        }
-
-        return worldPos;
-    }
-
-    private getInterpolatedWorldPos(entity: Entity, viewPoint: IViewPoint): { worldX: number; worldY: number } {
-        const { ctx } = this;
-        const unitState = ctx.unitStates.get(entity.id);
-        const isStationary = !unitState || (unitState.prevX === entity.x && unitState.prevY === entity.y);
-
-        if (isStationary) {
-            return TilePicker.tileToWorld(entity.x, entity.y, ctx.groundHeight, ctx.mapSize, viewPoint.x, viewPoint.y);
-        }
-
-        const prevPos = TilePicker.tileToWorld(
-            unitState.prevX,
-            unitState.prevY,
-            ctx.groundHeight,
-            ctx.mapSize,
-            viewPoint.x,
-            viewPoint.y
-        );
-        const currPos = TilePicker.tileToWorld(
-            entity.x,
-            entity.y,
-            ctx.groundHeight,
-            ctx.mapSize,
-            viewPoint.x,
-            viewPoint.y
-        );
-        const t = Math.max(0, Math.min(unitState.moveProgress, 1));
-        return {
-            worldX: prevPos.worldX + (currPos.worldX - prevPos.worldX) * t,
-            worldY: prevPos.worldY + (currPos.worldY - prevPos.worldY) * t,
-        };
     }
 }

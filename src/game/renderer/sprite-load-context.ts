@@ -10,7 +10,7 @@
  * that were passed separately to every loader.
  */
 
-import type { SpriteLoader } from './sprite-loader';
+import type { SpriteLoader, LoadedGfxFileSet } from './sprite-loader';
 import type { EntityTextureAtlas } from './entity-texture-atlas';
 import type { SpriteMetadataRegistry } from './sprite-metadata';
 import type { PaletteTextureManager } from './palette-texture';
@@ -21,6 +21,12 @@ export interface SpriteLoadContext {
     readonly registry: SpriteMetadataRegistry;
     readonly gl: WebGL2RenderingContext;
     readonly paletteManager: PaletteTextureManager;
+}
+
+/** Pre-resolved context for loaders operating on a single GFX file. */
+export interface FileLoadContext extends SpriteLoadContext {
+    readonly fileSet: LoadedGfxFileSet;
+    readonly paletteBase: number;
 }
 
 /**

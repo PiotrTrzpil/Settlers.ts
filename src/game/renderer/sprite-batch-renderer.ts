@@ -1,5 +1,8 @@
 import { ShaderProgram } from './shader-program';
-import { SpriteEntry } from './sprite-metadata';
+import type { SpriteEntry } from './sprite-metadata';
+import type { Tint } from './tint-utils';
+import { PALETTE_TEXTURE_WIDTH } from './palette-texture';
+import type { SpriteRenderManager } from './sprite-render-manager';
 import {
     TEXTURE_UNIT_SPRITE_ATLAS,
     TEXTURE_UNIT_PALETTE,
@@ -129,6 +132,27 @@ export class SpriteBatchRenderer {
     }
 
     /**
+     * Bind atlas + palette textures and begin a sprite batch.
+     * Convenience method combining texture binding and batch setup.
+     */
+    public beginWithAtlas(
+        gl: WebGL2RenderingContext,
+        projection: Float32Array,
+        spriteManager: SpriteRenderManager,
+        edgeAA: boolean
+    ): void {
+        spriteManager.spriteAtlas!.bindForRendering(gl);
+        spriteManager.paletteManager.bind(gl);
+        this.beginSpriteBatch(
+            gl,
+            projection,
+            PALETTE_TEXTURE_WIDTH,
+            spriteManager.paletteManager.textureRowsPerPlayer,
+            edgeAA
+        );
+    }
+
+    /**
      * Begin a new sprite batch. Call before adding sprites.
      * @param paletteWidth Width of the 2D palette texture (e.g., 2048)
      * @param paletteRowsPerPlayer Number of texture rows per player section
@@ -189,10 +213,7 @@ export class SpriteBatchRenderer {
         worldY: number,
         entry: SpriteEntry,
         playerRow: number,
-        tintR: number,
-        tintG: number,
-        tintB: number,
-        tintA: number
+        tint: Tint
     ): void {
         if (!this.spriteBatchData) {
             return;
@@ -202,17 +223,7 @@ export class SpriteBatchRenderer {
             this.flushSpriteBatch(gl);
         }
 
-        this.batchOffset = this.fillSpriteQuad(
-            this.batchOffset,
-            worldX,
-            worldY,
-            entry,
-            playerRow,
-            tintR,
-            tintG,
-            tintB,
-            tintA
-        );
+        this.batchOffset = this.fillSpriteQuad(this.batchOffset, worldX, worldY, entry, playerRow, tint);
     }
 
     /**
@@ -225,10 +236,7 @@ export class SpriteBatchRenderer {
         worldY: number,
         entry: SpriteEntry,
         playerRow: number,
-        tintR: number,
-        tintG: number,
-        tintB: number,
-        tintA: number,
+        tint: Tint,
         verticalProgress: number
     ): void {
         if (!this.spriteBatchData) {
@@ -245,10 +253,7 @@ export class SpriteBatchRenderer {
             worldY,
             entry,
             playerRow,
-            tintR,
-            tintG,
-            tintB,
-            tintA,
+            tint,
             verticalProgress
         );
     }
@@ -265,10 +270,7 @@ export class SpriteBatchRenderer {
         newSprite: SpriteEntry,
         blendFactor: number,
         playerRow: number,
-        tintR: number,
-        tintG: number,
-        tintB: number,
-        tintA: number
+        tint: Tint
     ): void {
         if (!this.spriteBlendBatchData) {
             return;
@@ -286,10 +288,7 @@ export class SpriteBatchRenderer {
             newSprite,
             blendFactor,
             playerRow,
-            tintR,
-            tintG,
-            tintB,
-            tintA
+            tint
         );
     }
 
@@ -324,10 +323,7 @@ export class SpriteBatchRenderer {
         worldY: number,
         entry: SpriteEntry,
         playerRow: number,
-        tintR: number,
-        tintG: number,
-        tintB: number,
-        tintA: number
+        tint: Tint
     ): number {
         if (!this.spriteBatchData) {
             return offset;
@@ -353,10 +349,10 @@ export class SpriteBatchRenderer {
         data[offset++] = layer;
         data[offset++] = playerRow;
         data[offset++] = paletteBaseOffset;
-        data[offset++] = tintR;
-        data[offset++] = tintG;
-        data[offset++] = tintB;
-        data[offset++] = tintA;
+        data[offset++] = tint[0]!;
+        data[offset++] = tint[1]!;
+        data[offset++] = tint[2]!;
+        data[offset++] = tint[3]!;
 
         // Vertex 1: bottom-left
         data[offset++] = x0;
@@ -366,10 +362,10 @@ export class SpriteBatchRenderer {
         data[offset++] = layer;
         data[offset++] = playerRow;
         data[offset++] = paletteBaseOffset;
-        data[offset++] = tintR;
-        data[offset++] = tintG;
-        data[offset++] = tintB;
-        data[offset++] = tintA;
+        data[offset++] = tint[0]!;
+        data[offset++] = tint[1]!;
+        data[offset++] = tint[2]!;
+        data[offset++] = tint[3]!;
 
         // Vertex 2: bottom-right
         data[offset++] = x1;
@@ -379,10 +375,10 @@ export class SpriteBatchRenderer {
         data[offset++] = layer;
         data[offset++] = playerRow;
         data[offset++] = paletteBaseOffset;
-        data[offset++] = tintR;
-        data[offset++] = tintG;
-        data[offset++] = tintB;
-        data[offset++] = tintA;
+        data[offset++] = tint[0]!;
+        data[offset++] = tint[1]!;
+        data[offset++] = tint[2]!;
+        data[offset++] = tint[3]!;
 
         // Vertex 3: top-left (again)
         data[offset++] = x0;
@@ -392,10 +388,10 @@ export class SpriteBatchRenderer {
         data[offset++] = layer;
         data[offset++] = playerRow;
         data[offset++] = paletteBaseOffset;
-        data[offset++] = tintR;
-        data[offset++] = tintG;
-        data[offset++] = tintB;
-        data[offset++] = tintA;
+        data[offset++] = tint[0]!;
+        data[offset++] = tint[1]!;
+        data[offset++] = tint[2]!;
+        data[offset++] = tint[3]!;
 
         // Vertex 4: bottom-right (again)
         data[offset++] = x1;
@@ -405,10 +401,10 @@ export class SpriteBatchRenderer {
         data[offset++] = layer;
         data[offset++] = playerRow;
         data[offset++] = paletteBaseOffset;
-        data[offset++] = tintR;
-        data[offset++] = tintG;
-        data[offset++] = tintB;
-        data[offset++] = tintA;
+        data[offset++] = tint[0]!;
+        data[offset++] = tint[1]!;
+        data[offset++] = tint[2]!;
+        data[offset++] = tint[3]!;
 
         // Vertex 5: top-right
         data[offset++] = x1;
@@ -418,10 +414,10 @@ export class SpriteBatchRenderer {
         data[offset++] = layer;
         data[offset++] = playerRow;
         data[offset++] = paletteBaseOffset;
-        data[offset++] = tintR;
-        data[offset++] = tintG;
-        data[offset++] = tintB;
-        data[offset++] = tintA;
+        data[offset++] = tint[0]!;
+        data[offset++] = tint[1]!;
+        data[offset++] = tint[2]!;
+        data[offset++] = tint[3]!;
 
         return offset;
     }
@@ -436,10 +432,7 @@ export class SpriteBatchRenderer {
         worldY: number,
         entry: SpriteEntry,
         playerRow: number,
-        tintR: number,
-        tintG: number,
-        tintB: number,
-        tintA: number,
+        tint: Tint,
         verticalProgress: number
     ): number {
         if (!this.spriteBatchData) {
@@ -473,10 +466,10 @@ export class SpriteBatchRenderer {
         data[offset++] = layer;
         data[offset++] = playerRow;
         data[offset++] = paletteBaseOffset;
-        data[offset++] = tintR;
-        data[offset++] = tintG;
-        data[offset++] = tintB;
-        data[offset++] = tintA;
+        data[offset++] = tint[0]!;
+        data[offset++] = tint[1]!;
+        data[offset++] = tint[2]!;
+        data[offset++] = tint[3]!;
 
         // Vertex 1: visible-top-left (rises upward)
         data[offset++] = x0;
@@ -486,10 +479,10 @@ export class SpriteBatchRenderer {
         data[offset++] = layer;
         data[offset++] = playerRow;
         data[offset++] = paletteBaseOffset;
-        data[offset++] = tintR;
-        data[offset++] = tintG;
-        data[offset++] = tintB;
-        data[offset++] = tintA;
+        data[offset++] = tint[0]!;
+        data[offset++] = tint[1]!;
+        data[offset++] = tint[2]!;
+        data[offset++] = tint[3]!;
 
         // Vertex 2: visible-top-right (rises upward)
         data[offset++] = x1;
@@ -499,10 +492,10 @@ export class SpriteBatchRenderer {
         data[offset++] = layer;
         data[offset++] = playerRow;
         data[offset++] = paletteBaseOffset;
-        data[offset++] = tintR;
-        data[offset++] = tintG;
-        data[offset++] = tintB;
-        data[offset++] = tintA;
+        data[offset++] = tint[0]!;
+        data[offset++] = tint[1]!;
+        data[offset++] = tint[2]!;
+        data[offset++] = tint[3]!;
 
         // Vertex 3: base-left (again)
         data[offset++] = x0;
@@ -512,10 +505,10 @@ export class SpriteBatchRenderer {
         data[offset++] = layer;
         data[offset++] = playerRow;
         data[offset++] = paletteBaseOffset;
-        data[offset++] = tintR;
-        data[offset++] = tintG;
-        data[offset++] = tintB;
-        data[offset++] = tintA;
+        data[offset++] = tint[0]!;
+        data[offset++] = tint[1]!;
+        data[offset++] = tint[2]!;
+        data[offset++] = tint[3]!;
 
         // Vertex 4: visible-top-right (again)
         data[offset++] = x1;
@@ -525,10 +518,10 @@ export class SpriteBatchRenderer {
         data[offset++] = layer;
         data[offset++] = playerRow;
         data[offset++] = paletteBaseOffset;
-        data[offset++] = tintR;
-        data[offset++] = tintG;
-        data[offset++] = tintB;
-        data[offset++] = tintA;
+        data[offset++] = tint[0]!;
+        data[offset++] = tint[1]!;
+        data[offset++] = tint[2]!;
+        data[offset++] = tint[3]!;
 
         // Vertex 5: base-right (ground level)
         data[offset++] = x1;
@@ -538,10 +531,10 @@ export class SpriteBatchRenderer {
         data[offset++] = layer;
         data[offset++] = playerRow;
         data[offset++] = paletteBaseOffset;
-        data[offset++] = tintR;
-        data[offset++] = tintG;
-        data[offset++] = tintB;
-        data[offset++] = tintA;
+        data[offset++] = tint[0]!;
+        data[offset++] = tint[1]!;
+        data[offset++] = tint[2]!;
+        data[offset++] = tint[3]!;
 
         return offset;
     }
@@ -558,10 +551,7 @@ export class SpriteBatchRenderer {
         newSprite: SpriteEntry,
         blendFactor: number,
         playerRow: number,
-        tintR: number,
-        tintG: number,
-        tintB: number,
-        tintA: number
+        tint: Tint
     ): number {
         if (!this.spriteBlendBatchData) {
             return offset;
@@ -597,10 +587,10 @@ export class SpriteBatchRenderer {
         data[offset++] = blendFactor;
         data[offset++] = playerRow;
         data[offset++] = paletteBaseOffset;
-        data[offset++] = tintR;
-        data[offset++] = tintG;
-        data[offset++] = tintB;
-        data[offset++] = tintA;
+        data[offset++] = tint[0]!;
+        data[offset++] = tint[1]!;
+        data[offset++] = tint[2]!;
+        data[offset++] = tint[3]!;
 
         // Vertex 1: bottom-left
         data[offset++] = x0;
@@ -614,10 +604,10 @@ export class SpriteBatchRenderer {
         data[offset++] = blendFactor;
         data[offset++] = playerRow;
         data[offset++] = paletteBaseOffset;
-        data[offset++] = tintR;
-        data[offset++] = tintG;
-        data[offset++] = tintB;
-        data[offset++] = tintA;
+        data[offset++] = tint[0]!;
+        data[offset++] = tint[1]!;
+        data[offset++] = tint[2]!;
+        data[offset++] = tint[3]!;
 
         // Vertex 2: bottom-right
         data[offset++] = x1;
@@ -631,10 +621,10 @@ export class SpriteBatchRenderer {
         data[offset++] = blendFactor;
         data[offset++] = playerRow;
         data[offset++] = paletteBaseOffset;
-        data[offset++] = tintR;
-        data[offset++] = tintG;
-        data[offset++] = tintB;
-        data[offset++] = tintA;
+        data[offset++] = tint[0]!;
+        data[offset++] = tint[1]!;
+        data[offset++] = tint[2]!;
+        data[offset++] = tint[3]!;
 
         // Vertex 3: top-left (again)
         data[offset++] = x0;
@@ -648,10 +638,10 @@ export class SpriteBatchRenderer {
         data[offset++] = blendFactor;
         data[offset++] = playerRow;
         data[offset++] = paletteBaseOffset;
-        data[offset++] = tintR;
-        data[offset++] = tintG;
-        data[offset++] = tintB;
-        data[offset++] = tintA;
+        data[offset++] = tint[0]!;
+        data[offset++] = tint[1]!;
+        data[offset++] = tint[2]!;
+        data[offset++] = tint[3]!;
 
         // Vertex 4: bottom-right (again)
         data[offset++] = x1;
@@ -665,10 +655,10 @@ export class SpriteBatchRenderer {
         data[offset++] = blendFactor;
         data[offset++] = playerRow;
         data[offset++] = paletteBaseOffset;
-        data[offset++] = tintR;
-        data[offset++] = tintG;
-        data[offset++] = tintB;
-        data[offset++] = tintA;
+        data[offset++] = tint[0]!;
+        data[offset++] = tint[1]!;
+        data[offset++] = tint[2]!;
+        data[offset++] = tint[3]!;
 
         // Vertex 5: top-right
         data[offset++] = x1;
@@ -682,10 +672,10 @@ export class SpriteBatchRenderer {
         data[offset++] = blendFactor;
         data[offset++] = playerRow;
         data[offset++] = paletteBaseOffset;
-        data[offset++] = tintR;
-        data[offset++] = tintG;
-        data[offset++] = tintB;
-        data[offset++] = tintA;
+        data[offset++] = tint[0]!;
+        data[offset++] = tint[1]!;
+        data[offset++] = tint[2]!;
+        data[offset++] = tint[3]!;
 
         return offset;
     }

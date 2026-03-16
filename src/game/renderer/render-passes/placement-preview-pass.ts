@@ -8,7 +8,6 @@ import type { IViewPoint } from '../i-view-point';
 import type { IRenderPass, PlacementPreviewContext } from './types';
 import { TilePicker } from '@/game/input/tile-picker';
 import { TILE_CENTER_X, TILE_CENTER_Y } from '@/game/systems/coordinate-system';
-import { PALETTE_TEXTURE_WIDTH } from '../palette-texture';
 import {
     scaleSprite,
     BASE_QUAD,
@@ -56,26 +55,8 @@ export class PlacementPreviewPass implements IRenderPass {
             const rawSprite = ctx.spriteResolver.getPreviewSprite(entityType, subType, variation, race, level);
             if (rawSprite) {
                 const spriteEntry = scaleSprite(rawSprite);
-                const paletteWidth = PALETTE_TEXTURE_WIDTH;
-                const rowsPerPlayer = ctx.spriteManager.paletteManager.textureRowsPerPlayer;
-                ctx.spriteBatchRenderer.beginSpriteBatch(
-                    gl,
-                    projection,
-                    paletteWidth,
-                    rowsPerPlayer,
-                    ctx.renderSettings.antialias
-                );
-                ctx.spriteBatchRenderer.addSprite(
-                    gl,
-                    worldPos.worldX,
-                    worldPos.worldY,
-                    spriteEntry,
-                    0,
-                    tint[0]!,
-                    tint[1]!,
-                    tint[2]!,
-                    tint[3]!
-                );
+                ctx.spriteBatchRenderer.beginWithAtlas(gl, projection, ctx.spriteManager, ctx.renderSettings.antialias);
+                ctx.spriteBatchRenderer.addSprite(gl, worldPos.worldX, worldPos.worldY, spriteEntry, 0, tint);
                 ctx.spriteBatchRenderer.endSpriteBatch(gl);
                 return;
             }

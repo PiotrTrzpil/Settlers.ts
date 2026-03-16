@@ -110,6 +110,9 @@ export class EntityTextureAtlas extends ShaderTexture {
     /** Per-layer dirty region tracking */
     private dirtyRegions: (DirtyRect | null)[] = [];
 
+    /** Fast flag — true when any layer has pending GPU uploads (avoids linear scan) */
+    private _hasPendingUploads = false;
+
     /** Track all reserved regions (for cache serialization) */
     private reservedRegions: AtlasRegion[] = [];
 
@@ -263,6 +266,7 @@ export class EntityTextureAtlas extends ShaderTexture {
 
     /** Expand the dirty region for a specific layer */
     private markDirty(layerIndex: number, x: number, y: number, w: number, h: number): void {
+        this._hasPendingUploads = true;
         const existing = this.dirtyRegions[layerIndex];
         if (!existing) {
             this.dirtyRegions[layerIndex] = {
@@ -403,6 +407,7 @@ export class EntityTextureAtlas extends ShaderTexture {
         for (let i = 0; i < this.dirtyRegions.length; i++) {
             this.uploadDirtyLayer(gl, i);
         }
+        this._hasPendingUploads = false;
     }
 
     /**
@@ -430,6 +435,7 @@ export class EntityTextureAtlas extends ShaderTexture {
         for (let i = 0; i < this.dirtyRegions.length; i++) {
             this.dirtyRegions[i] = null;
         }
+        this._hasPendingUploads = false;
     }
 
     /**
@@ -482,44 +488,46 @@ export class EntityTextureAtlas extends ShaderTexture {
         const wasReallocated = this.gpuCapacity > capacityBefore;
 
         let uploaded = 0;
+        let remaining = false;
         for (let i = 0; i < this.dirtyRegions.length; i++) {
             if (!this.dirtyRegions[i]) {
                 continue;
             }
             if (!wasReallocated && uploaded >= maxLayers) {
-                return true;
+                remaining = true;
+                break;
             }
             this.uploadDirtyLayer(gl, i);
             uploaded++;
         }
-        return false;
+        this._hasPendingUploads = remaining;
+        return remaining;
     }
 
     /** Whether any layers have pending GPU uploads. */
     public get hasPendingUploads(): boolean {
-        for (let i = 0; i < this.dirtyRegions.length; i++) {
-            if (this.dirtyRegions[i]) {
-                return true;
-            }
-        }
-        return false;
+        return this._hasPendingUploads;
     }
 
     /**
-     * Bind as TEXTURE_2D_ARRAY with full parameter setup (for upload).
+     * Bind as TEXTURE_2D_ARRAY for upload operations.
+     * Sets texture parameters only on first creation.
      */
     private bindAsArray(gl: WebGL2RenderingContext): void {
-        if (!this.texture) {
+        const isNew = !this.texture;
+        if (isNew) {
             this.texture = gl.createTexture();
         }
         gl.activeTexture(gl.TEXTURE0 + this.textureIndex);
         gl.bindTexture(gl.TEXTURE_2D_ARRAY, this.texture);
 
-        // R16UI requires NEAREST filtering (integer textures)
-        gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
-        gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
-        gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-        gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+        if (isNew) {
+            // R16UI requires NEAREST filtering (integer textures) — set once on creation
+            gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+            gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+            gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+            gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+        }
     }
 
     /**

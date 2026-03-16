@@ -7,8 +7,10 @@
 import type { IViewPoint } from '../i-view-point';
 import type { IRenderPass, StackGhostContext } from './types';
 import { TilePicker } from '@/game/input/tile-picker';
-import { PALETTE_TEXTURE_WIDTH } from '../palette-texture';
 import { scaleSprite } from '../entity-renderer-constants';
+import type { Tint } from '../tint-utils';
+
+const TINT_GHOST: Tint = [1, 1, 1, 0.5];
 
 export class StackGhostPass implements IRenderPass {
     private ctx!: StackGhostContext;
@@ -29,18 +31,7 @@ export class StackGhostPass implements IRenderPass {
             return;
         }
 
-        ctx.spriteManager.spriteAtlas!.bindForRendering(gl);
-        ctx.spriteManager.paletteManager.bind(gl);
-
-        const paletteWidth = PALETTE_TEXTURE_WIDTH;
-        const rowsPerPlayer = ctx.spriteManager.paletteManager.textureRowsPerPlayer;
-        ctx.spriteBatchRenderer.beginSpriteBatch(
-            gl,
-            projection,
-            paletteWidth,
-            rowsPerPlayer,
-            ctx.renderSettings.antialias
-        );
+        ctx.spriteBatchRenderer.beginWithAtlas(gl, projection, ctx.spriteManager, ctx.renderSettings.antialias);
 
         for (const ghost of ctx.stackGhosts) {
             const worldPos = TilePicker.tileToWorld(
@@ -59,7 +50,7 @@ export class StackGhostPass implements IRenderPass {
                 }
 
                 const sprite = scaleSprite(rawSprite);
-                ctx.spriteBatchRenderer.addSprite(gl, worldPos.worldX, worldPos.worldY, sprite, 0, 1, 1, 1, 0.5);
+                ctx.spriteBatchRenderer.addSprite(gl, worldPos.worldX, worldPos.worldY, sprite, 0, TINT_GHOST);
             }
         }
 

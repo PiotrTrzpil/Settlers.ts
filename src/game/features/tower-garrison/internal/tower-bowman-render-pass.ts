@@ -146,10 +146,7 @@ export class TowerBowmanRenderPass implements PluggableRenderPass {
                 y,
                 sprite,
                 ctx.renderSettings.disablePlayerTinting ? 0 : bowman.player + 1,
-                TINT_NEUTRAL[0]!,
-                TINT_NEUTRAL[1]!,
-                TINT_NEUTRAL[2]!,
-                TINT_NEUTRAL[3]!
+                TINT_NEUTRAL
             );
             this.lastSpriteCount++;
         }

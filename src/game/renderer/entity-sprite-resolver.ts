@@ -119,13 +119,17 @@ export class EntitySpriteResolver {
         let sprite: SpriteEntry | null;
         if (renderState.useConstructionSprite) {
             sprite =
-                this.sprites.getBuildingConstruction(buildingType, entity.race) ??
-                this.sprites.getBuilding(buildingType, entity.race);
+                this.sprites.registry.getBuildingConstruction(buildingType, entity.race) ??
+                this.sprites.registry.getBuilding(buildingType, entity.race);
         } else {
-            const fallback = this.sprites.getBuilding(buildingType, entity.race);
+            const fallback = this.sprites.registry.getBuilding(buildingType, entity.race);
             const vs = this.getVisualState(entity.id);
             if (vs?.animation) {
-                const animEntry = this.sprites.getAnimatedEntity(entity.type, entity.subType as number, entity.race);
+                const animEntry = this.sprites.registry.getAnimatedEntity(
+                    entity.type,
+                    entity.subType as number,
+                    entity.race
+                );
                 if (animEntry) {
                     const frame = resolveAnimationFrame(
                         vs.animation,
@@ -162,10 +166,10 @@ export class EntitySpriteResolver {
 
         const vs = this.getVisualState(entity.id);
         const variation = vs?.variation ?? 0;
-        const staticSprite = this.sprites.getMapObject(entity.subType as MapObjectType, variation);
+        const staticSprite = this.sprites.registry.getMapObject(entity.subType as MapObjectType, variation);
 
         if (vs?.animation) {
-            const entry = this.sprites.getAnimatedEntity(entity.type, entity.subType as number, entity.race);
+            const entry = this.sprites.registry.getAnimatedEntity(entity.type, entity.subType as number, entity.race);
             if (entry) {
                 const frame = resolveAnimationFrame(
                     vs.animation,
@@ -193,7 +197,7 @@ export class EntitySpriteResolver {
         }
         const quantity = state.quantity;
         const direction = Math.max(0, Math.min(quantity - 1, 7));
-        return this.sprites.getGoodSprite(entity.subType as EMaterialType, direction) ?? null;
+        return this.sprites.registry.getGoodSprite(entity.subType as EMaterialType, direction) ?? null;
     }
 
     /** Unit sprite resolution — pre-resolves transition sprites if mid-direction-change. */
@@ -242,11 +246,11 @@ export class EntitySpriteResolver {
         }
 
         const spriteDir = toSpriteDirection(vs.animation?.direction ?? 0);
-        const staticSprite = this.sprites.getUnit(entity.subType as UnitType, spriteDir, entity.race);
+        const staticSprite = this.sprites.registry.getUnit(entity.subType as UnitType, spriteDir, entity.race);
 
         if (vs.animation) {
             const unitType = entity.subType as UnitType;
-            const entry = this.sprites.getAnimatedEntity(entity.type, unitType, entity.race);
+            const entry = this.sprites.registry.getAnimatedEntity(entity.type, unitType, entity.race);
             if (entry) {
                 const frame = resolveAnimationFrame(
                     vs.animation,
@@ -275,8 +279,8 @@ export class EntitySpriteResolver {
             return null;
         }
 
-        const fallback = this.sprites.getUnit(unitType, spriteDir, race);
-        const animatedEntry = this.sprites.getAnimatedEntity(EntityType.Unit, unitType, race);
+        const fallback = this.sprites.registry.getUnit(unitType, spriteDir, race);
+        const animatedEntry = this.sprites.registry.getAnimatedEntity(EntityType.Unit, unitType, race);
         if (!animatedEntry) {
             return fallback;
         }
@@ -297,15 +301,16 @@ export class EntitySpriteResolver {
      * Strategy map from EntityType to hasTexturedSprite check function.
      */
     private readonly hasTexturedSpriteMap: Record<EntityType, (entity: Entity) => boolean> = {
-        [EntityType.Building]: entity => !!this.sprites?.getBuilding(entity.subType as BuildingType, entity.race),
+        [EntityType.Building]: entity =>
+            !!this.sprites?.registry.getBuilding(entity.subType as BuildingType, entity.race),
         [EntityType.MapObject]: entity => {
             if (!this.layerVisibility.decorationTextures) {
                 return false;
             }
-            return !!this.sprites?.getMapObject(entity.subType as MapObjectType);
+            return !!this.sprites?.registry.getMapObject(entity.subType as MapObjectType);
         },
-        [EntityType.StackedPile]: entity => !!this.sprites?.getGoodSprite(entity.subType as EMaterialType),
-        [EntityType.Unit]: entity => !!this.sprites?.getUnit(entity.subType as UnitType, 0, entity.race),
+        [EntityType.StackedPile]: entity => !!this.sprites?.registry.getGoodSprite(entity.subType as EMaterialType),
+        [EntityType.Unit]: entity => !!this.sprites?.registry.getUnit(entity.subType as UnitType, 0, entity.race),
         [EntityType.Decoration]: () => false,
         [EntityType.None]: () => false,
     };
@@ -332,9 +337,9 @@ export class EntitySpriteResolver {
 
         switch (entityType) {
             case 'building':
-                return this.sprites.getBuilding(subType as BuildingType, race);
+                return race !== undefined ? this.sprites.registry.getBuilding(subType as BuildingType, race) : null;
             case 'pile':
-                return this.sprites.getGoodSprite(subType as unknown as EMaterialType, variation ?? 0);
+                return this.sprites.registry.getGoodSprite(subType as unknown as EMaterialType, variation ?? 0);
             case 'unit':
                 return this.getUnitPreviewSprite(subType as UnitType, race, level ?? 1);
             default: {
@@ -349,6 +354,6 @@ export class EntitySpriteResolver {
         if (!this.sprites) {
             return null;
         }
-        return this.sprites.getUnit(unitType, 0, race);
+        return this.sprites.registry.getUnit(unitType, 0, race);
     }
 }

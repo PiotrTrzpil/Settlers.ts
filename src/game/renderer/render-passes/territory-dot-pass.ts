@@ -8,8 +8,8 @@ import type { IViewPoint } from '../i-view-point';
 import type { IRenderPass, TerritoryDotContext } from './types';
 import type { TerritoryDotRenderData } from '../render-context';
 import { TilePicker } from '@/game/input/tile-picker';
-import { PALETTE_TEXTURE_WIDTH } from '../palette-texture';
 import { scaleSprite } from '../entity-renderer-constants';
+import { TINT_NEUTRAL } from '../tint-utils';
 
 export class TerritoryDotPass implements IRenderPass {
     private ctx!: TerritoryDotContext;
@@ -32,22 +32,11 @@ export class TerritoryDotPass implements IRenderPass {
         if (!ctx.spriteManager?.hasSprites || !ctx.spriteBatchRenderer.isInitialized) {
             return;
         }
-        if (!ctx.spriteManager.hasTerritoryDotSprites()) {
+        if (!ctx.spriteManager.registry.hasTerritoryDotSprites()) {
             return;
         }
 
-        ctx.spriteManager.spriteAtlas!.bindForRendering(gl);
-        ctx.spriteManager.paletteManager.bind(gl);
-
-        const paletteWidth = PALETTE_TEXTURE_WIDTH;
-        const rowsPerPlayer = ctx.spriteManager.paletteManager.textureRowsPerPlayer;
-        ctx.spriteBatchRenderer.beginSpriteBatch(
-            gl,
-            projection,
-            paletteWidth,
-            rowsPerPlayer,
-            ctx.renderSettings.antialias
-        );
+        ctx.spriteBatchRenderer.beginWithAtlas(gl, projection, ctx.spriteManager, ctx.renderSettings.antialias);
 
         this.renderDots(gl, ctx.territoryDots, 2.25, viewPoint);
         this.renderDots(gl, ctx.workAreaDots, 1.5, viewPoint);
@@ -63,7 +52,7 @@ export class TerritoryDotPass implements IRenderPass {
     ): void {
         const { ctx } = this;
         for (const dot of dots) {
-            const sprite = ctx.spriteManager!.getTerritoryDot(dot.player);
+            const sprite = ctx.spriteManager!.registry.getTerritoryDot(dot.player);
             if (!sprite) {
                 if (!this.warnedMissingSprite) {
                     console.warn(
@@ -82,7 +71,7 @@ export class TerritoryDotPass implements IRenderPass {
                 viewPoint.y
             );
             const scaled = scaleSprite(sprite, scale);
-            ctx.spriteBatchRenderer.addSprite(gl, worldPos.worldX, worldPos.worldY, scaled, 0, 1, 1, 1, 1);
+            ctx.spriteBatchRenderer.addSprite(gl, worldPos.worldX, worldPos.worldY, scaled, 0, TINT_NEUTRAL);
         }
     }
 }

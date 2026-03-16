@@ -10,11 +10,10 @@ import { EntityType } from '@/game/entity';
 import { UnitType } from '@/game/core/unit-types';
 import type { IViewPoint } from '../i-view-point';
 import type { IRenderPass, ColorEntityContext } from './types';
-import { TilePicker } from '@/game/input/tile-picker';
-import { TILE_CENTER_X, TILE_CENTER_Y } from '@/game/systems/coordinate-system';
+import { getRenderEntityWorldPos } from '../world-position';
 import { subTypeToRawByte } from '@/resources/map/raw-object-registry';
 import {
-    BASE_QUAD,
+    fillQuadVertices,
     BUILDING_SCALE,
     UNIT_SCALE,
     PILE_SCALE,
@@ -53,10 +52,10 @@ export class ColorEntityPass implements IRenderPass {
             }
 
             const appearance = this.getAppearance(entity);
-            const worldPos = this.getEntityWorldPos(entity, viewPoint);
+            const worldPos = getRenderEntityWorldPos(entity, ctx, viewPoint);
 
             gl.vertexAttrib2f(ctx.aEntityPos, worldPos.worldX, worldPos.worldY);
-            this.fillQuadVertices(0, 0, appearance.scale);
+            fillQuadVertices(this.vertexData, 0, 0, appearance.scale);
             gl.bufferData(gl.ARRAY_BUFFER, this.vertexData, gl.DYNAMIC_DRAW);
             gl.vertexAttrib4f(
                 ctx.aColor,
@@ -155,81 +154,5 @@ export class ColorEntityPass implements IRenderPass {
             return String(entity.subType);
         }
         return `${entity.type}#${entity.subType}`;
-    }
-
-    private getEntityWorldPos(entity: Entity, viewPoint: IViewPoint): { worldX: number; worldY: number } {
-        const { ctx } = this;
-        const cachedPos = ctx.frameContext?.getWorldPos(entity);
-        let worldPos: { worldX: number; worldY: number };
-
-        if (cachedPos) {
-            worldPos = { worldX: cachedPos.worldX, worldY: cachedPos.worldY };
-        } else if (entity.type === EntityType.Unit) {
-            worldPos = this.getInterpolatedWorldPos(entity, viewPoint);
-        } else {
-            worldPos = TilePicker.tileToWorld(
-                entity.x,
-                entity.y,
-                ctx.groundHeight,
-                ctx.mapSize,
-                viewPoint.x,
-                viewPoint.y
-            );
-        }
-
-        if (entity.type === EntityType.Building) {
-            worldPos.worldX -= TILE_CENTER_X;
-            worldPos.worldY -= TILE_CENTER_Y * 0.5;
-        }
-
-        if (entity.type === EntityType.MapObject) {
-            const seed = entity.x * 12.9898 + entity.y * 78.233;
-            const offsetX = ((Math.sin(seed) * 43758.5453) % 1) * 0.3 - 0.15;
-            const offsetY = ((Math.cos(seed) * 43758.5453) % 1) * 0.3 - 0.15;
-            worldPos.worldX += offsetX;
-            worldPos.worldY += offsetY;
-        }
-
-        return worldPos;
-    }
-
-    private getInterpolatedWorldPos(entity: Entity, viewPoint: IViewPoint): { worldX: number; worldY: number } {
-        const { ctx } = this;
-        const unitState = ctx.unitStates.get(entity.id);
-        const isStationary = !unitState || (unitState.prevX === entity.x && unitState.prevY === entity.y);
-
-        if (isStationary) {
-            return TilePicker.tileToWorld(entity.x, entity.y, ctx.groundHeight, ctx.mapSize, viewPoint.x, viewPoint.y);
-        }
-
-        const prevPos = TilePicker.tileToWorld(
-            unitState.prevX,
-            unitState.prevY,
-            ctx.groundHeight,
-            ctx.mapSize,
-            viewPoint.x,
-            viewPoint.y
-        );
-        const currPos = TilePicker.tileToWorld(
-            entity.x,
-            entity.y,
-            ctx.groundHeight,
-            ctx.mapSize,
-            viewPoint.x,
-            viewPoint.y
-        );
-        const t = Math.max(0, Math.min(unitState.moveProgress, 1));
-        return {
-            worldX: prevPos.worldX + (currPos.worldX - prevPos.worldX) * t,
-            worldY: prevPos.worldY + (currPos.worldY - prevPos.worldY) * t,
-        };
-    }
-
-    private fillQuadVertices(worldX: number, worldY: number, scale: number): void {
-        const verts = this.vertexData;
-        for (let i = 0; i < 6; i++) {
-            verts[i * 2] = BASE_QUAD[i * 2]! * scale + worldX;
-            verts[i * 2 + 1] = BASE_QUAD[i * 2 + 1]! * scale + worldY;
-        }
     }
 }

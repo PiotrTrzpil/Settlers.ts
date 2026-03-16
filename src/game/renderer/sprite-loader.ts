@@ -78,6 +78,26 @@ export interface LoadedAnimation {
  */
 const globalFileSetCache = new Map<string, LoadedGfxFileSet>();
 
+/** Build a SpriteEntry from atlas region and image metrics. */
+function createSpriteEntry(
+    region: AtlasRegion,
+    left: number,
+    top: number,
+    width: number,
+    height: number,
+    paletteBaseOffset: number,
+    trimTop: number
+): SpriteEntry {
+    return {
+        atlasRegion: region,
+        offsetX: -left * PIXELS_TO_WORLD,
+        offsetY: -(top - trimTop) * PIXELS_TO_WORLD,
+        widthWorld: width * PIXELS_TO_WORLD,
+        heightWorld: height * PIXELS_TO_WORLD,
+        paletteBaseOffset,
+    };
+}
+
 export class SpriteLoader {
     private static log = new LogHandler('SpriteLoader');
 
@@ -356,17 +376,15 @@ export class SpriteLoader {
 
         atlas.blitIndices(region, trimmedIndices);
 
-        // Include per-sprite paletteOffset in the base so the shader
-        // can reconstruct the full palette index without Uint16 overflow
-        const entry: SpriteEntry = {
-            atlasRegion: region,
-            offsetX: -gfxImage.left * PIXELS_TO_WORLD,
-            offsetY: -(gfxImage.top - trim.top) * PIXELS_TO_WORLD,
-            widthWorld: gfxImage.width * PIXELS_TO_WORLD,
-            heightWorld: trimmedHeight * PIXELS_TO_WORLD,
-            paletteBaseOffset: paletteBaseOffset + gfxImage.paletteOffset,
-        };
-
+        const entry = createSpriteEntry(
+            region,
+            gfxImage.left,
+            gfxImage.top,
+            gfxImage.width,
+            trimmedHeight,
+            paletteBaseOffset + gfxImage.paletteOffset,
+            trim.top
+        );
         return { image: gfxImage, region, entry };
     }
 
@@ -416,17 +434,15 @@ export class SpriteLoader {
 
             atlas.blitIndices(region, indices);
 
-            // Include per-sprite paletteOffset in the base so the shader
-            // can reconstruct the full palette index without Uint16 overflow
-            const entry: SpriteEntry = {
-                atlasRegion: region,
-                offsetX: -gfxImage.left * PIXELS_TO_WORLD,
-                offsetY: -(gfxImage.top - trim.top) * PIXELS_TO_WORLD,
-                widthWorld: trimmedWidth * PIXELS_TO_WORLD,
-                heightWorld: trimmedHeight * PIXELS_TO_WORLD,
-                paletteBaseOffset: paletteBaseOffset + params.paletteOffset,
-            };
-
+            const entry = createSpriteEntry(
+                region,
+                gfxImage.left,
+                gfxImage.top,
+                trimmedWidth,
+                trimmedHeight,
+                paletteBaseOffset + params.paletteOffset,
+                trim.top
+            );
             return { image: gfxImage, region, entry };
         } catch (e) {
             SpriteLoader.log.debug(`Worker decode failed, falling back to sync: ${String(e)}`);
@@ -602,15 +618,15 @@ export class SpriteLoader {
         const indices = allIndices.subarray(sr.indicesOffset, sr.indicesOffset + sr.indicesLength);
         atlas.blitIndices(region, indices);
 
-        const entry: SpriteEntry = {
-            atlasRegion: region,
-            offsetX: -sr.left * PIXELS_TO_WORLD,
-            offsetY: -(sr.top - trimTop) * PIXELS_TO_WORLD,
-            widthWorld: sr.width * PIXELS_TO_WORLD,
-            heightWorld: sr.height * PIXELS_TO_WORLD,
-            paletteBaseOffset: paletteBaseOffset + sr.paletteOffset,
-        };
-
+        const entry = createSpriteEntry(
+            region,
+            sr.left,
+            sr.top,
+            sr.width,
+            sr.height,
+            paletteBaseOffset + sr.paletteOffset,
+            trimTop
+        );
         return { image: null, region, entry };
     }
 

@@ -25,22 +25,13 @@ export class GroundOverlayPass implements IRenderPass {
     /** Draw ground-level overlays (work area circles). */
     public draw(gl: WebGL2RenderingContext, _projection: Float32Array, viewPoint: IViewPoint): void {
         const { ctx } = this;
-        const hasWorkAreas = ctx.workAreaCircles.length > 0;
-        if (!hasWorkAreas) {
+        if (ctx.workAreaCircles.length === 0) {
             return;
         }
 
-        this.setupAttributes(gl, viewPoint);
-
-        this.overlay.drawCircleOverlays(
-            gl,
-            ctx.dynamicBuffer,
-            ctx.workAreaCircles,
-            ctx.aEntityPos,
-            ctx.aColor,
-            this.selCtx!,
-            WORK_AREA_CIRCLE_COLOR
-        );
+        this.setupAttributes(gl);
+        const s = this.beginSession(gl, viewPoint);
+        s.drawCircleOverlays(ctx.workAreaCircles, WORK_AREA_CIRCLE_COLOR);
     }
 
     /** Draw building footprint overlays (called after entity sprites for on-top rendering). */
@@ -50,39 +41,27 @@ export class GroundOverlayPass implements IRenderPass {
             return;
         }
 
-        this.setupAttributes(gl, viewPoint);
-
-        this.overlay.drawBuildingFootprints(
-            gl,
-            ctx.dynamicBuffer,
-            ctx.sortedEntities,
-            ctx.aPosition,
-            ctx.aEntityPos,
-            ctx.aColor,
-            this.selCtx!
-        );
+        this.setupAttributes(gl);
+        const s = this.beginSession(gl, viewPoint);
+        s.drawBuildingFootprints(ctx.sortedEntities);
     }
 
-    private selCtx: {
-        mapSize: GroundOverlayContext['mapSize'];
-        groundHeight: Uint8Array;
-        viewPoint: IViewPoint;
-        unitStates: GroundOverlayContext['unitStates'];
-    } | null = null;
+    private beginSession(gl: WebGL2RenderingContext, viewPoint: IViewPoint): SelectionOverlayRenderer {
+        const { ctx } = this;
+        return this.overlay.begin(gl, ctx.dynamicBuffer, ctx.aEntityPos, ctx.aColor, {
+            mapSize: ctx.mapSize,
+            groundHeight: ctx.groundHeight,
+            viewPoint,
+            unitStates: ctx.unitStates,
+        });
+    }
 
-    private setupAttributes(gl: WebGL2RenderingContext, viewPoint: IViewPoint): void {
+    private setupAttributes(gl: WebGL2RenderingContext): void {
         const { ctx } = this;
         gl.bindBuffer(gl.ARRAY_BUFFER, ctx.dynamicBuffer);
         gl.enableVertexAttribArray(ctx.aPosition);
         gl.vertexAttribPointer(ctx.aPosition, 2, gl.FLOAT, false, 0, 0);
         gl.disableVertexAttribArray(ctx.aEntityPos);
         gl.disableVertexAttribArray(ctx.aColor);
-
-        this.selCtx = {
-            mapSize: ctx.mapSize,
-            groundHeight: ctx.groundHeight,
-            viewPoint,
-            unitStates: ctx.unitStates,
-        };
     }
 }

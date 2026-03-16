@@ -105,11 +105,14 @@ export function getLastMapId(): string | null {
 // === Base64 encoding for typed arrays ===
 
 function uint8ArrayToBase64(arr: Uint8Array): string {
-    let binary = '';
-    for (let i = 0; i < arr.length; i++) {
-        binary += String.fromCharCode(arr[i]!);
+    // Process in chunks to avoid call-stack limits with String.fromCharCode.apply
+    // while avoiding O(n²) string concatenation from char-by-char building.
+    const CHUNK = 8192;
+    const parts: string[] = [];
+    for (let i = 0; i < arr.length; i += CHUNK) {
+        parts.push(String.fromCharCode(...arr.subarray(i, i + CHUNK)));
     }
-    return btoa(binary);
+    return btoa(parts.join(''));
 }
 
 function base64ToUint8Array(base64: string): Uint8Array {

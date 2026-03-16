@@ -54,7 +54,10 @@ function resolveConstructionOverlay(
         return;
     }
 
-    const constructionSprite = er.spriteManager.getBuildingConstruction(entity.subType as BuildingType, entity.race);
+    const constructionSprite = er.spriteManager.registry.getBuildingConstruction(
+        entity.subType as BuildingType,
+        entity.race
+    );
     if (!constructionSprite) {
         return;
     }
@@ -95,7 +98,7 @@ function resolveCustomOverlays(entityId: number, g: Game, er: EntityRenderer, ou
         }
 
         const spriteRef = inst.def.spriteRef;
-        const frames = er.spriteManager?.getOverlayFrames(
+        const frames = er.spriteManager?.registry.getOverlayFrames(
             spriteRef.gfxFile,
             spriteRef.jobIndex,
             spriteRef.directionIndex ?? 0
@@ -141,12 +144,12 @@ function resolveFlagInstance(
         return;
     }
 
-    const flagFrameCount = er.spriteManager.getFlagFrameCount(entity.player);
+    const flagFrameCount = er.spriteManager.registry.getFlagFrameCount(entity.player);
     if (flagFrameCount === 0) {
         return;
     }
 
-    const rawSprite = er.spriteManager.getFlag(entity.player, frameIndex % flagFrameCount);
+    const rawSprite = er.spriteManager.registry.getFlag(entity.player, frameIndex % flagFrameCount);
     if (!rawSprite) {
         return;
     }

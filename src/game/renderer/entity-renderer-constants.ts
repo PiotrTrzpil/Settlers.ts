@@ -28,6 +28,17 @@ export const MAX_PATH_DOTS = 30;
 // Base quad vertices for instanced rendering
 export const BASE_QUAD = new Float32Array([-0.5, -0.5, 0.5, -0.5, -0.5, 0.5, -0.5, 0.5, 0.5, -0.5, 0.5, 0.5]);
 
+/**
+ * Fill a Float32Array(12) with BASE_QUAD vertices scaled and offset.
+ * Shared by ColorEntityPass, PlacementPreviewPass, and SelectionOverlayRenderer.
+ */
+export function fillQuadVertices(verts: Float32Array, worldX: number, worldY: number, scale: number): void {
+    for (let i = 0; i < 6; i++) {
+        verts[i * 2] = BASE_QUAD[i * 2]! * scale + worldX;
+        verts[i * 2 + 1] = BASE_QUAD[i * 2 + 1]! * scale + worldY;
+    }
+}
+
 // Global scale applied to all entity sprites (buildings, units, trees, resources)
 export const ENTITY_SCALE = 1.5;
 

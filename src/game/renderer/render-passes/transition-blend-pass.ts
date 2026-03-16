@@ -10,9 +10,9 @@ import type { Entity } from '@/game/entity';
 import type { IViewPoint } from '../i-view-point';
 import type { IRenderPass, TransitionBlendContext } from './types';
 import type { TransitionSpriteData } from '../entity-sprite-resolver';
-import { TilePicker } from '@/game/input/tile-picker';
 import { PALETTE_TEXTURE_WIDTH } from '../palette-texture';
 import { scaleSprite } from '../entity-renderer-constants';
+import { getRenderEntityWorldPos } from '../world-position';
 import { TINT_NEUTRAL, TINT_SELECTED } from '../tint-utils';
 
 interface QueuedTransition {
@@ -51,8 +51,7 @@ export class TransitionBlendPass implements IRenderPass {
             const scaledOld = scaleSprite(data.oldSprite);
             const scaledNew = scaleSprite(data.newSprite);
 
-            const cachedPos = ctx.frameContext?.getWorldPos(entity);
-            const worldPos = cachedPos ?? this.getInterpolatedWorldPos(entity, viewPoint);
+            const worldPos = getRenderEntityWorldPos(entity, ctx, viewPoint);
             const playerRow = ctx.renderSettings.disablePlayerTinting ? 0 : entity.player + 1;
             const isSelected = ctx.selectedEntityIds.has(entity.id);
             const tint = isSelected ? TINT_SELECTED : TINT_NEUTRAL;
@@ -65,42 +64,10 @@ export class TransitionBlendPass implements IRenderPass {
                 scaledNew,
                 data.blendFactor,
                 playerRow,
-                tint[0]!,
-                tint[1]!,
-                tint[2]!,
-                tint[3]!
+                tint
             );
         }
 
         ctx.spriteBatchRenderer.endBlendBatch(gl);
-    }
-
-    private getInterpolatedWorldPos(entity: Entity, viewPoint: IViewPoint): { worldX: number; worldY: number } {
-        const { ctx } = this;
-        const unitState = ctx.unitStates.get(entity.id);
-        if (!unitState || (unitState.prevX === entity.x && unitState.prevY === entity.y)) {
-            return TilePicker.tileToWorld(entity.x, entity.y, ctx.groundHeight, ctx.mapSize, viewPoint.x, viewPoint.y);
-        }
-        const prevPos = TilePicker.tileToWorld(
-            unitState.prevX,
-            unitState.prevY,
-            ctx.groundHeight,
-            ctx.mapSize,
-            viewPoint.x,
-            viewPoint.y
-        );
-        const currPos = TilePicker.tileToWorld(
-            entity.x,
-            entity.y,
-            ctx.groundHeight,
-            ctx.mapSize,
-            viewPoint.x,
-            viewPoint.y
-        );
-        const t = Math.max(0, Math.min(unitState.moveProgress, 1));
-        return {
-            worldX: prevPos.worldX + (currPos.worldX - prevPos.worldX) * t,
-            worldY: prevPos.worldY + (currPos.worldY - prevPos.worldY) * t,
-        };
     }
 }

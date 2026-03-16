@@ -76,19 +76,19 @@ export class EntityDepthSorter {
      * Get sprite entry for an entity (if available).
      */
     private getSpriteEntry(entity: Entity, spriteManager: SpriteRenderManager | null): SpriteEntry | null {
-        if (!spriteManager) {
+        if (!spriteManager?.hasSprites) {
             return null;
         }
 
         switch (entity.type) {
             case EntityType.Building:
-                return spriteManager.getBuilding(entity.subType as BuildingType, entity.race);
+                return spriteManager.registry.getBuilding(entity.subType as BuildingType, entity.race);
             case EntityType.MapObject:
-                return spriteManager.getMapObject(entity.subType as MapObjectType);
+                return spriteManager.registry.getMapObject(entity.subType as MapObjectType);
             case EntityType.Unit:
-                return spriteManager.getUnit(entity.subType as UnitType, 0, entity.race);
+                return spriteManager.registry.getUnit(entity.subType as UnitType, 0, entity.race);
             case EntityType.StackedPile:
-                return spriteManager.getGoodSprite(entity.subType as EMaterialType);
+                return spriteManager.registry.getGoodSprite(entity.subType as EMaterialType);
             case EntityType.Decoration:
             case EntityType.None:
                 return null;

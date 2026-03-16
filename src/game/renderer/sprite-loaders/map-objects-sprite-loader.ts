@@ -14,7 +14,6 @@ import {
     TREE_JOBS_PER_TYPE,
 } from '../sprite-metadata';
 import { ANIMATION_DEFAULTS } from '@/game/animation/animation';
-import type { LoadedGfxFileSet } from '../sprite-loader';
 import { SafeLoadBatch } from '../batch-loader';
 import { EntityType } from '@/game/entity';
 import { MapObjectType } from '@/game/types/map-object-types';
@@ -22,22 +21,20 @@ import { STONE_DEPLETION_STAGES } from '@/game/features/stones/stone-system';
 import { buildDecorationSpriteMap } from '../decoration-sprite-map';
 import { loadCropSprites } from '../sprite-crop-loader';
 import { loadGilSpriteBatch } from './gil-manifest-loader';
-import { type SpriteLoadContext, getPaletteBase } from '../sprite-load-context';
+import { type SpriteLoadContext, type FileLoadContext, getPaletteBase } from '../sprite-load-context';
 
 const log = new LogHandler('MapObjectsSpriteLoader');
-
-/** Pre-resolved context for sub-loaders operating on a single GFX file. */
-interface FileCtx extends SpriteLoadContext {
-    fileSet: LoadedGfxFileSet;
-    paletteBase: number;
-}
 
 // =============================================================================
 // Tree sprites
 // =============================================================================
 
 /** Load all variant sprites for a single tree type. */
-async function loadTreeTypeSprites(ctx: FileCtx, treeType: MapObjectType, variantBases: number[]): Promise<number> {
+async function loadTreeTypeSprites(
+    ctx: FileLoadContext,
+    treeType: MapObjectType,
+    variantBases: number[]
+): Promise<number> {
     type TreeStageData = {
         treeType: MapObjectType;
         variation: number;
@@ -101,7 +98,7 @@ async function loadTreeTypeSprites(ctx: FileCtx, treeType: MapObjectType, varian
  * Load tree sprites using JIL/DIL structure.
  * Trees have: D0-D2 = growth stages, D3 = normal (with sway animation), D4 = falling, D5 = canopy disappearing.
  */
-async function loadTreeSprites(ctx: FileCtx): Promise<number> {
+async function loadTreeSprites(ctx: FileLoadContext): Promise<number> {
     if (!ctx.fileSet.jilReader || !ctx.fileSet.dilReader) {
         log.debug('Tree JIL/DIL not available, skipping tree loading');
         return 0;
@@ -130,7 +127,7 @@ async function loadTreeSprites(ctx: FileCtx): Promise<number> {
  * 2 variants (A, B) × 13 stages = 26 sprites for ResourceStone.
  * Variation layout: variant * 13 + stage (A: 0-12, B: 13-25).
  */
-async function loadStoneSprites(ctx: FileCtx): Promise<number> {
+async function loadStoneSprites(ctx: FileLoadContext): Promise<number> {
     const variants = [MAP_OBJECT_SPRITES.STONE_STAGES_A, MAP_OBJECT_SPRITES.STONE_STAGES_B];
 
     // Collect all GIL indices across both variants
@@ -141,14 +138,7 @@ async function loadStoneSprites(ctx: FileCtx): Promise<number> {
         }
     }
 
-    const sprites = await loadGilSpriteBatch(
-        allIndices,
-        ctx.fileSet,
-        ctx.spriteLoader,
-        ctx.atlas,
-        ctx.gl,
-        ctx.paletteBase
-    );
+    const sprites = await loadGilSpriteBatch(allIndices, ctx);
 
     let loaded = 0;
     for (let v = 0; v < variants.length; v++) {
@@ -174,7 +164,7 @@ async function loadStoneSprites(ctx: FileCtx): Promise<number> {
  * Deduplicates by GIL index so each unique sprite is loaded once,
  * then registered for all entity keys that share it.
  */
-async function loadDecorationSprites(ctx: FileCtx): Promise<number> {
+async function loadDecorationSprites(ctx: FileLoadContext): Promise<number> {
     const decoMap = buildDecorationSpriteMap();
 
     // Group entity keys by gilIndex — avoids loading the same sprite twice
@@ -188,14 +178,7 @@ async function loadDecorationSprites(ctx: FileCtx): Promise<number> {
         }
     }
 
-    const sprites = await loadGilSpriteBatch(
-        [...byGilIndex.keys()],
-        ctx.fileSet,
-        ctx.spriteLoader,
-        ctx.atlas,
-        ctx.gl,
-        ctx.paletteBase
-    );
+    const sprites = await loadGilSpriteBatch([...byGilIndex.keys()], ctx);
 
     let totalRegistered = 0;
     for (const [gilIndex, entityKeys] of byGilIndex) {
@@ -253,7 +236,7 @@ function registerFlagSet(
  * Load small animated flag sprites (8 player colors × 12 normal + 12 lowered frames).
  * Flags are loaded from MAP_OBJECT_SPRITES in the landscape GFX file (5.gfx).
  */
-async function loadFlagSprites(ctx: FileCtx): Promise<number> {
+async function loadFlagSprites(ctx: FileLoadContext): Promise<number> {
     const FLAG_NORMAL: FlagRange[] = [
         MAP_OBJECT_SPRITES.FLAG_SMALL_RED,
         MAP_OBJECT_SPRITES.FLAG_SMALL_BLUE,
@@ -276,14 +259,7 @@ async function loadFlagSprites(ctx: FileCtx): Promise<number> {
     ];
 
     const allIndices = [...collectFlagIndices(FLAG_NORMAL), ...collectFlagIndices(FLAG_DOWN)];
-    const sprites = await loadGilSpriteBatch(
-        allIndices,
-        ctx.fileSet,
-        ctx.spriteLoader,
-        ctx.atlas,
-        ctx.gl,
-        ctx.paletteBase
-    );
+    const sprites = await loadGilSpriteBatch(allIndices, ctx);
 
     const normalLoaded = registerFlagSet(FLAG_NORMAL, sprites, ctx.registry.registerFlag.bind(ctx.registry));
     const downLoaded = registerFlagSet(FLAG_DOWN, sprites, ctx.registry.registerFlagDown.bind(ctx.registry));
@@ -297,7 +273,7 @@ async function loadFlagSprites(ctx: FileCtx): Promise<number> {
 /**
  * Load territory dot sprites (8 player colors) from direct GIL indices.
  */
-async function loadTerritoryDotSprites(ctx: FileCtx): Promise<number> {
+async function loadTerritoryDotSprites(ctx: FileLoadContext): Promise<number> {
     const DOT_GIL_INDICES = [
         MAP_OBJECT_SPRITES.TERRITORY_DOT_RED,
         MAP_OBJECT_SPRITES.TERRITORY_DOT_BLUE,
@@ -309,14 +285,7 @@ async function loadTerritoryDotSprites(ctx: FileCtx): Promise<number> {
         MAP_OBJECT_SPRITES.TERRITORY_DOT_GRAY,
     ];
 
-    const sprites = await loadGilSpriteBatch(
-        DOT_GIL_INDICES,
-        ctx.fileSet,
-        ctx.spriteLoader,
-        ctx.atlas,
-        ctx.gl,
-        ctx.paletteBase
-    );
+    const sprites = await loadGilSpriteBatch(DOT_GIL_INDICES, ctx);
 
     let loaded = 0;
     for (let playerIndex = 0; playerIndex < DOT_GIL_INDICES.length; playerIndex++) {
@@ -345,7 +314,7 @@ async function loadTerritoryDotSprites(ctx: FileCtx): Promise<number> {
 /**
  * Load resource map objects (coal, iron, gold, stone, sulfur deposits).
  */
-async function loadResourceMapObjects(ctx: FileCtx): Promise<number> {
+async function loadResourceMapObjects(ctx: FileLoadContext): Promise<number> {
     const mapObjectSpriteMap = getMapObjectSpriteMap();
     let loadedCount = 0;
 
@@ -383,7 +352,7 @@ async function loadResourceMapObjects(ctx: FileCtx): Promise<number> {
  * Load resource sign sprites from direct GIL indices in file 5.
  * Signs show ore type and richness: empty (1 sprite), then 3 variations per ore type.
  */
-async function loadResourceSignSprites(ctx: FileCtx): Promise<number> {
+async function loadResourceSignSprites(ctx: FileLoadContext): Promise<number> {
     const S = MAP_OBJECT_SPRITES.RESOURCE_SIGNS;
 
     // (MapObjectType, variation, gilIndex) triples
@@ -408,11 +377,7 @@ async function loadResourceSignSprites(ctx: FileCtx): Promise<number> {
 
     const sprites = await loadGilSpriteBatch(
         entries.map(e => e.gilIndex),
-        ctx.fileSet,
-        ctx.spriteLoader,
-        ctx.atlas,
-        ctx.gl,
-        ctx.paletteBase
+        ctx
     );
 
     let loaded = 0;
@@ -445,7 +410,7 @@ export async function loadMapObjectSprites(ctx: SpriteLoadContext): Promise<bool
         return false;
     }
 
-    const fc5: FileCtx = {
+    const fc5: FileLoadContext = {
         ...ctx,
         fileSet: fileSet5,
         paletteBase: getPaletteBase(ctx, `${GFX_FILE_NUMBERS.MAP_OBJECTS}`),
@@ -468,7 +433,7 @@ export async function loadMapObjectSprites(ctx: SpriteLoadContext): Promise<bool
 
     let resourceCount = 0;
     if (fileSet3) {
-        const fc3: FileCtx = {
+        const fc3: FileLoadContext = {
             ...ctx,
             fileSet: fileSet3,
             paletteBase: getPaletteBase(ctx, `${GFX_FILE_NUMBERS.RESOURCES}`),

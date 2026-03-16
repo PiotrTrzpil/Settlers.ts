@@ -11,9 +11,8 @@
 
 import type { SpriteEntry } from '../sprite-metadata/types';
 import type { GilSpriteManifest } from '../sprite-metadata/gil-sprite-manifest';
-import type { SpriteLoadContext } from '../sprite-load-context';
-import type { SpriteLoader, LoadedGfxFileSet, SpriteTrim } from '../sprite-loader';
-import type { EntityTextureAtlas } from '../entity-texture-atlas';
+import type { SpriteLoadContext, FileLoadContext } from '../sprite-load-context';
+import type { SpriteTrim } from '../sprite-loader';
 
 /**
  * Load and register all sprites declared in a GilSpriteManifest.
@@ -36,15 +35,8 @@ export async function loadGilManifest(manifest: GilSpriteManifest, ctx: SpriteLo
         paletteBase = ctx.paletteManager.registerPalette(gfxFileId, paletteData);
     }
 
-    const sprites = await loadGilSpriteBatch(
-        manifest.gilIndices,
-        fileSet,
-        ctx.spriteLoader,
-        ctx.atlas,
-        ctx.gl,
-        paletteBase,
-        manifest.trim
-    );
+    const fileCtx: FileLoadContext = { ...ctx, fileSet, paletteBase };
+    const sprites = await loadGilSpriteBatch(manifest.gilIndices, fileCtx, manifest.trim);
 
     for (const [gilIndex, entry] of sprites) {
         ctx.registry.registerOverlayFrames(manifest.gfxFile, gilIndex, 0, [entry]);
@@ -60,13 +52,10 @@ export async function loadGilManifest(manifest: GilSpriteManifest, ctx: SpriteLo
  */
 export async function loadGilSpriteBatch(
     gilIndices: readonly number[],
-    fileSet: LoadedGfxFileSet,
-    spriteLoader: SpriteLoader,
-    atlas: EntityTextureAtlas,
-    gl: WebGL2RenderingContext,
-    paletteBase: number,
+    ctx: FileLoadContext,
     trim?: SpriteTrim
 ): Promise<Map<number, SpriteEntry>> {
+    const { fileSet, spriteLoader, atlas, gl, paletteBase } = ctx;
     const loaded = await spriteLoader.loadDirectSpriteBatch(fileSet, gilIndices, null, atlas, paletteBase, trim);
 
     const result = new Map<number, SpriteEntry>();

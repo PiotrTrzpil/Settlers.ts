@@ -25,18 +25,13 @@ export class PathIndicatorPass implements IRenderPass {
             return;
         }
 
-        this.overlay.drawSelectedUnitPath(
-            gl,
-            this.ctx.dynamicBuffer,
-            this.ctx.selectedEntityIds,
-            this.ctx.aEntityPos,
-            this.ctx.aColor,
-            {
+        this.overlay
+            .begin(gl, this.ctx.dynamicBuffer, this.ctx.aEntityPos, this.ctx.aColor, {
                 mapSize: this.ctx.mapSize,
                 groundHeight: this.ctx.groundHeight,
                 viewPoint,
                 unitStates: this.ctx.unitStates,
-            }
-        );
+            })
+            .drawSelectedUnitPath(this.ctx.selectedEntityIds);
     }
 }

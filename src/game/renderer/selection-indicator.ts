@@ -63,7 +63,7 @@ export const SELECTION_INDICATOR_MANIFEST = new GilSpriteManifest(HUD_GFX_FILE, 
 
 /** Resolve a sprite from the selection indicator manifest. Throws if not loaded (programming error). */
 function resolveFromManifest(gilIndex: number, spriteManager: SpriteRenderManager): SpriteEntry {
-    const sprite = SELECTION_INDICATOR_MANIFEST.resolve(gilIndex, spriteManager.spriteRegistry!);
+    const sprite = SELECTION_INDICATOR_MANIFEST.resolve(gilIndex, spriteManager.registry);
     if (!sprite) {
         throw new Error(
             `Selection indicator sprite GIL ${gilIndex} not loaded — check if the cache was loaded or if CACHE_SCHEMA_VERSION needs bumping`

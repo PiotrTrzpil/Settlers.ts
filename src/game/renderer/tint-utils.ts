@@ -3,6 +3,9 @@
  * Centralizes tint computation for consistency across entity types.
  */
 
+/** RGBA tint array (multiplicative, 0-1 range). */
+export type Tint = readonly number[];
+
 // Player colors (RGBA, 0-1 range)
 export const PLAYER_COLORS: readonly number[][] = [
     [0.2, 0.6, 1.0, 0.9], // Player 0: Blue
