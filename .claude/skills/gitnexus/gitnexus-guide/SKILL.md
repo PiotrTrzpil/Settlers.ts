@@ -55,10 +55,165 @@ Lightweight reads (~100-500 tokens) for navigation:
 
 ## Graph Schema
 
-**Nodes:** File, Function, Class, Interface, Method, Community, Process
-**Edges (via CodeRelation.type):** CALLS, IMPORTS, EXTENDS, IMPLEMENTS, DEFINES, MEMBER_OF, STEP_IN_PROCESS
+**Nodes:** File, Function, Class, Interface, Method, Constructor, Property, Community, Process, BasicBlock
+**Edges (via CodeRelation.type):** CALLS, IMPORTS, EXTENDS, IMPLEMENTS, DEFINES, HAS_METHOD, MEMBER_OF, STEP_IN_PROCESS, CFG_CONTAINS, CFG_EDGE
+
+Method, Constructor, and Property nodes have a `className` property for easy class-scoped queries.
 
 ```cypher
 MATCH (caller)-[:CodeRelation {type: 'CALLS'}]->(f:Function {name: "myFunc"})
 RETURN caller.name, caller.filePath
+```
+
+## KuzuDB Cypher Differences
+
+GitNexus uses KuzuDB, not Neo4j. Key differences that affect query writing:
+
+### Single relationship table
+
+All edges go through `CodeRelation` with a `type` property. You **cannot** use the type as a relationship label:
+
+```cypher
+-- WRONG: "Table CALLS does not exist"
+MATCH (a)-[:CALLS]->(b) RETURN a
+
+-- CORRECT:
+MATCH (a)-[:CodeRelation {type: 'CALLS'}]->(b) RETURN a
+```
+
+### Finding symbols across label types
+
+Functions, methods, and constructors are separate node labels. To find a symbol by name without knowing its type:
+
+```cypher
+-- Search across all callable types:
+MATCH (f) WHERE f.name = 'handleIdle'
+  AND f.filePath STARTS WITH 'src/'
+RETURN label(f) AS type, f.name, f.className, f.filePath
+```
+
+Use `f.className` on Method/Constructor/Property nodes to scope by class:
+
+```cypher
+MATCH (m:Method) WHERE m.className = 'GameState'
+RETURN m.name, m.id
+```
+
+### Reserved words
+
+`end`, `start`, `type`, `key` are reserved. Use backticks or different aliases:
+
+```cypher
+-- WRONG: RETURN f.endLine AS end
+-- CORRECT:
+RETURN f.endLine AS endLine
+```
+
+### No `toFloat()` — use `CAST`
+
+```cypher
+-- WRONG: toFloat(x) / toFloat(y)
+-- CORRECT:
+CAST(x AS DOUBLE) / CAST(y AS DOUBLE)
+-- Or multiply first for integer ratios:
+x * 100 / y AS percentage
+```
+
+### `labels()` returns a string, not a list
+
+```cypher
+-- Neo4j: WHERE 'Method' IN labels(n)
+-- KuzuDB:
+WHERE label(n) = 'Method'
+```
+
+### `WITH` scoping
+
+Variables from before `WITH` are only available if explicitly carried through:
+
+```cypher
+MATCH (f)-[:CodeRelation]->(b:BasicBlock)
+WITH f, count(b) AS blocks       -- only f and blocks survive
+WHERE blocks > 50                -- OK: blocks is in scope
+RETURN f.name, blocks
+```
+
+Multi-step queries that need data from different `MATCH` clauses should carry everything through `WITH`:
+
+```cypher
+MATCH (f)-[c:CodeRelation {type: 'CFG_CONTAINS'}]->(b:BasicBlock)
+WITH f, count(b) AS blocks
+MATCH (f)-[:CodeRelation {type: 'CFG_CONTAINS'}]->(b1:BasicBlock)
+      -[e:CodeRelation {type: 'CFG_EDGE', cfgEdgeType: 'Backedge'}]->(b2:BasicBlock)
+WITH f, blocks, count(e) AS loops
+RETURN f.name, blocks, loops ORDER BY blocks DESC LIMIT 10
+```
+
+## Control Flow Graph (CFG)
+
+BasicBlock nodes represent basic blocks within functions/methods. Two CFG-specific relation types connect them:
+
+- **CFG_CONTAINS** — Function/Method/Constructor → BasicBlock (ownership)
+- **CFG_EDGE** — BasicBlock → BasicBlock (control flow)
+
+### BasicBlock Properties
+
+| Property           | Type   | Description                                  |
+| ------------------ | ------ | -------------------------------------------- |
+| `blockIndex`       | INT64  | Block number within the function (0 = entry) |
+| `instructionCount` | INT64  | Number of instructions in the block          |
+| `isUnreachable`    | BOOL   | True if dead code (never executed)           |
+| `cfgInstructions`  | STRING | Serialized instruction list                  |
+
+### CFG_EDGE Properties
+
+| Property        | Type   | Description                                                                            |
+| --------------- | ------ | -------------------------------------------------------------------------------------- |
+| `cfgEdgeType`   | STRING | Edge type: Normal, Jump, Backedge, ErrorExplicit, Unreachable, Finalize |
+| `conditionText` | STRING | Branch condition text (if conditional)                                                 |
+
+### CFG Query Examples
+
+Get basic blocks for a function:
+
+```cypher
+MATCH (f:Function {name: "myFunc"})-[:CodeRelation {type: 'CFG_CONTAINS'}]->(b:BasicBlock)
+RETURN b.blockIndex, b.instructionCount, b.isUnreachable
+ORDER BY b.blockIndex
+```
+
+Trace control flow edges within a function:
+
+```cypher
+MATCH (f:Function {name: "myFunc"})-[:CodeRelation {type: 'CFG_CONTAINS'}]->(b1:BasicBlock)
+      -[e:CodeRelation {type: 'CFG_EDGE'}]->(b2:BasicBlock)
+RETURN b1.blockIndex AS from, e.cfgEdgeType AS type, e.conditionText AS condition, b2.blockIndex AS to
+ORDER BY b1.blockIndex
+```
+
+Find functions with unreachable (dead) code:
+
+```cypher
+MATCH (f:Function)-[:CodeRelation {type: 'CFG_CONTAINS'}]->(b:BasicBlock)
+WHERE b.isUnreachable = true
+RETURN f.name, f.filePath, count(b) AS unreachableBlocks
+ORDER BY unreachableBlocks DESC LIMIT 10
+```
+
+Find functions with high branching complexity (many CFG edges):
+
+```cypher
+MATCH (f:Function)-[:CodeRelation {type: 'CFG_CONTAINS'}]->(b:BasicBlock)
+WITH f, count(b) AS blockCount
+WHERE blockCount > 50
+RETURN f.name, f.filePath, blockCount
+ORDER BY blockCount DESC
+```
+
+Find loop back-edges:
+
+```cypher
+MATCH (f:Function)-[:CodeRelation {type: 'CFG_CONTAINS'}]->(b1:BasicBlock)
+      -[e:CodeRelation {type: 'CFG_EDGE', cfgEdgeType: 'Backedge'}]->(b2:BasicBlock)
+RETURN f.name, b1.blockIndex AS loopEnd, b2.blockIndex AS loopHead
 ```

@@ -50,3 +50,4 @@ data/.timeline/
 # Benchmark/perf screenshots
 /*.png
 .gitnexus
+.claude/worktrees/

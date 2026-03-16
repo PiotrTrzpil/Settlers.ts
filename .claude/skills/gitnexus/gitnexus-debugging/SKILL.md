@@ -45,6 +45,9 @@ description: "Use when the user is debugging a bug, tracing an error, or asking 
 | Intermittent failure | `context` → look for external calls, async deps            |
 | Performance issue    | `context` → find symbols with many callers (hot paths)     |
 | Recent regression    | `detect_changes` to see what your changes affect           |
+| Dead code / unreachable | CFG query for unreachable blocks in suspect function    |
+| Loop issues          | CFG query for Backedge edges to find loop structure        |
+| Error flow           | CFG query for ErrorExplicit/ErrorImplicit edges            |
 
 ## Tools
 
@@ -70,6 +73,35 @@ gitnexus_context({name: "validatePayment"})
 ```cypher
 MATCH path = (a)-[:CodeRelation {type: 'CALLS'}*1..2]->(b:Function {name: "validatePayment"})
 RETURN [n IN nodes(path) | n.name] AS chain
+```
+
+## CFG-Based Debugging
+
+Use the control flow graph to trace execution paths within a function, find dead code, and understand error propagation.
+
+**Check for unreachable blocks in a suspect function:**
+
+```cypher
+MATCH (f:Function {name: "myFunc"})-[:CodeRelation {type: 'CFG_CONTAINS'}]->(b:BasicBlock)
+WHERE b.isUnreachable = true
+RETURN b.blockIndex, b.instructionCount
+```
+
+**Trace error flow edges (implicit throws, explicit throws):**
+
+```cypher
+MATCH (f:Function {name: "myFunc"})-[:CodeRelation {type: 'CFG_CONTAINS'}]->(b1:BasicBlock)
+      -[e:CodeRelation {type: 'CFG_EDGE'}]->(b2:BasicBlock)
+WHERE e.cfgEdgeType IN ['ErrorExplicit', 'ErrorImplicit']
+RETURN b1.blockIndex AS from, e.cfgEdgeType AS type, b2.blockIndex AS to
+```
+
+**Find loops (backedge = loop iteration):**
+
+```cypher
+MATCH (f:Function {name: "myFunc"})-[:CodeRelation {type: 'CFG_CONTAINS'}]->(b1:BasicBlock)
+      -[e:CodeRelation {type: 'CFG_EDGE', cfgEdgeType: 'Backedge'}]->(b2:BasicBlock)
+RETURN b1.blockIndex AS loopEnd, b2.blockIndex AS loopHead
 ```
 
 ## Example: "Payment endpoint returns 500 intermittently"

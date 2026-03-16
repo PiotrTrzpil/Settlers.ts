@@ -64,6 +64,29 @@ gitnexus_context({name: "validateUser"})
 → Processes: LoginFlow (step 2/5), TokenRefresh (step 1/3)
 ```
 
+## Control Flow Graph (CFG) Exploration
+
+Use CFG data to understand the internal structure of complex functions — branching, loops, dead code.
+
+**Get a function's control flow:**
+
+```cypher
+MATCH (f:Function {name: "myFunc"})-[:CodeRelation {type: 'CFG_CONTAINS'}]->(b:BasicBlock)
+RETURN b.blockIndex, b.instructionCount, b.isUnreachable
+ORDER BY b.blockIndex
+```
+
+**Find the most complex functions (by basic block count):**
+
+```cypher
+MATCH (f:Function)-[:CodeRelation {type: 'CFG_CONTAINS'}]->(b:BasicBlock)
+WITH f, count(b) AS blocks
+WHERE blocks > 50
+RETURN f.name, f.filePath, blocks ORDER BY blocks DESC LIMIT 10
+```
+
+**CFG edge types:** Normal (sequential), Jump (goto/break/continue), Backedge (loops), ErrorImplicit (implicit throw), ErrorExplicit (explicit throw), Unreachable (dead code), Finalize (finally blocks)
+
 ## Example: "How does payment processing work?"
 
 ```
