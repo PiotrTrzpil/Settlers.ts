@@ -1,0 +1,189 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1400 985">
+  <defs><marker id="cmd" viewBox="0 0 10 7" refX="10" refY="3.5" markerWidth="8" markerHeight="6" orient="auto-start-reverse"><path d="M0,0 L10,3.5 L0,7 Z" fill="#94a3b8"/></marker>
+    <marker id="evt" viewBox="0 0 10 7" refX="10" refY="3.5" markerWidth="8" markerHeight="6" orient="auto-start-reverse"><path d="M0,0 L10,3.5 L0,7 Z" fill="#fbbf24"/></marker>
+    <marker id="qry" viewBox="0 0 10 7" refX="10" refY="3.5" markerWidth="8" markerHeight="6" orient="auto-start-reverse"><path d="M0,0 L10,3.5 L0,7 Z" fill="#60a5fa"/></marker>
+    <marker id="lp" viewBox="0 0 10 7" refX="10" refY="3.5" markerWidth="8" markerHeight="6" orient="auto-start-reverse"><path d="M0,0 L10,3.5 L0,7 Z" fill="#a78bfa"/></marker>
+    <marker id="ai" viewBox="0 0 10 7" refX="10" refY="3.5" markerWidth="8" markerHeight="6" orient="auto-start-reverse"><path d="M0,0 L10,3.5 L0,7 Z" fill="#c4b5fd"/></marker></defs>
+  <rect width="1400" height="985" fill="#0f172a"/>
+  <text x="700" y="38" text-anchor="middle" font-family="sans-serif" font-size="26" font-weight="bold" fill="#e2e8f0">Settlers.ts — System Architecture</text>
+  <text x="700" y="60" text-anchor="middle" font-family="sans-serif" font-size="13" fill="#94a3b8">Layered architecture with event-driven domain features</text>
+  <g id="layer-7"><rect x="80" y="80" width="1240" height="65" rx="10" fill="#2d1f54" stroke="#7c3aed" stroke-width="1.5"/>
+    <text x="100" y="97" text-anchor="start" font-family="sans-serif" font-size="10" font-weight="bold" fill="#c4b5fd">LAYER 7 — PRESENTATION</text>
+    <rect x="160" y="107" width="155" height="30" rx="5" fill="#3b2670" stroke="#8b5cf6" stroke-width="1"/>
+    <text x="237.5" y="127" text-anchor="middle" font-family="sans-serif" font-size="10" fill="#ddd6fe">Vue Components</text>
+    <rect x="330" y="107" width="145" height="30" rx="5" fill="#3b2670" stroke="#8b5cf6" stroke-width="1"/>
+    <text x="402.5" y="127" text-anchor="middle" font-family="sans-serif" font-size="10" fill="#ddd6fe">Composables</text>
+    <rect x="490" y="107" width="170" height="30" rx="5" fill="#3b2670" stroke="#8b5cf6" stroke-width="1"/>
+    <text x="575" y="127" text-anchor="middle" font-family="sans-serif" font-size="10" fill="#ddd6fe">GameViewState</text>
+    <rect x="675" y="107" width="145" height="30" rx="5" fill="#3b2670" stroke="#8b5cf6" stroke-width="1"/>
+    <text x="747.5" y="127" text-anchor="middle" font-family="sans-serif" font-size="10" fill="#ddd6fe">Debug Panel</text></g>
+  <g id="layer-6"><rect x="80" y="160" width="1240" height="90" rx="10" fill="#172554" stroke="#3b82f6" stroke-width="1.5"/>
+    <text x="100" y="177" text-anchor="start" font-family="sans-serif" font-size="10" font-weight="bold" fill="#60a5fa">LAYER 6 — I/O</text>
+    <rect x="110" y="190" width="360" height="50" rx="8" fill="#1e3a5f" stroke="#60a5fa" stroke-width="1.5"/>
+    <text x="290" y="209" text-anchor="middle" font-family="sans-serif" font-size="13" font-weight="bold" fill="#bfdbfe">InputManager</text>
+    <text x="290" y="226" text-anchor="middle" font-family="sans-serif" font-size="9" fill="#93c5fd">Select · PlaceBuilding · Camera · Adjust</text>
+    <rect x="500" y="190" width="420" height="50" rx="8" fill="#1e3a5f" stroke="#60a5fa" stroke-width="1.5"/>
+    <text x="710" y="209" text-anchor="middle" font-family="sans-serif" font-size="13" font-weight="bold" fill="#bfdbfe">Renderer (WebGL2)</text>
+    <text x="710" y="226" text-anchor="middle" font-family="sans-serif" font-size="9" fill="#93c5fd">Landscape · Entities · Overlays · SpriteCache</text>
+    <rect x="950" y="190" width="160" height="50" rx="8" fill="#1e3a5f" stroke="#60a5fa" stroke-width="1.5"/>
+    <text x="1030" y="216" text-anchor="middle" font-family="sans-serif" font-size="13" font-weight="bold" fill="#bfdbfe">Audio</text>
+    <rect x="1140" y="190" width="150" height="50" rx="8" fill="#1e3a5f" stroke="#60a5fa" stroke-width="1.5" stroke-dasharray="4 3"/>
+    <text x="1215" y="216" text-anchor="middle" font-family="sans-serif" font-size="13" font-weight="bold" fill="#94a3b8">Lua Scripting</text></g>
+  <g id="layer-5"><rect x="80" y="265" width="1240" height="90" rx="10" fill="#1e1b4b" stroke="#6366f1" stroke-width="1.5"/>
+    <text x="100" y="282" text-anchor="start" font-family="sans-serif" font-size="10" font-weight="bold" fill="#818cf8">LAYER 5 — ORCHESTRATION</text>
+    <rect x="110" y="295" width="300" height="50" rx="8" fill="#272463" stroke="#818cf8" stroke-width="1.5"/>
+    <text x="260" y="314" text-anchor="middle" font-family="sans-serif" font-size="13" font-weight="bold" fill="#c7d2fe">GameLoop (30 Hz)</text>
+    <text x="260" y="331" text-anchor="middle" font-family="sans-serif" font-size="9" fill="#a5b4fc">Logic → Anim → Update → Render</text>
+    <rect x="440" y="295" width="320" height="50" rx="8" fill="#272463" stroke="#818cf8" stroke-width="1.5"/>
+    <text x="600" y="314" text-anchor="middle" font-family="sans-serif" font-size="13" font-weight="bold" fill="#c7d2fe">Command Pipeline</text>
+    <text x="600" y="331" text-anchor="middle" font-family="sans-serif" font-size="9" fill="#a5b4fc">Registry · Handlers · DI</text>
+    <rect x="790" y="295" width="240" height="50" rx="8" fill="#272463" stroke="#818cf8" stroke-width="1.5"/>
+    <text x="910" y="314" text-anchor="middle" font-family="sans-serif" font-size="13" font-weight="bold" fill="#c7d2fe">GameServices</text>
+    <text x="910" y="331" text-anchor="middle" font-family="sans-serif" font-size="9" fill="#a5b4fc">Composition Root</text>
+    <rect x="1060" y="295" width="230" height="50" rx="8" fill="#272463" stroke="#818cf8" stroke-width="1.5"/>
+    <text x="1175" y="314" text-anchor="middle" font-family="sans-serif" font-size="13" font-weight="bold" fill="#c7d2fe">Persistence</text>
+    <text x="1175" y="331" text-anchor="middle" font-family="sans-serif" font-size="9" fill="#a5b4fc">Snapshots · Command Journal</text></g>
+  <g id="layer-4"><rect x="80" y="370" width="1240" height="270" rx="10" fill="#1e293b" stroke="#475569" stroke-width="1.5"/>
+    <text x="100" y="387" text-anchor="start" font-family="sans-serif" font-size="10" font-weight="bold" fill="#94a3b8">LAYER 4 — DOMAIN FEATURES (23 modules)</text>
+    <rect x="100" y="398" width="295" height="225" rx="8" fill="#052e16" stroke="#22c55e" stroke-width="1.5"/>
+    <text x="247.5" y="414" text-anchor="middle" font-family="sans-serif" font-size="11" font-weight="bold" fill="#86efac">ECONOMY</text>
+    <rect x="115" y="424" width="125" height="26" rx="5" fill="#14532d" stroke="#4ade80" stroke-width="1"/>
+    <text x="177.5" y="441" text-anchor="middle" font-family="sans-serif" font-size="10" fill="#bbf7d0">Logistics</text>
+    <rect x="250" y="424" width="125" height="26" rx="5" fill="#14532d" stroke="#4ade80" stroke-width="1"/>
+    <text x="312.5" y="441" text-anchor="middle" font-family="sans-serif" font-size="10" fill="#bbf7d0">Carriers</text>
+    <rect x="115" y="456" width="125" height="26" rx="5" fill="#14532d" stroke="#4ade80" stroke-width="1"/>
+    <text x="177.5" y="473" text-anchor="middle" font-family="sans-serif" font-size="10" fill="#bbf7d0">Inventory</text>
+    <rect x="250" y="456" width="125" height="26" rx="5" fill="#14532d" stroke="#4ade80" stroke-width="1"/>
+    <text x="312.5" y="473" text-anchor="middle" font-family="sans-serif" font-size="10" fill="#bbf7d0">Production</text>
+    <rect x="115" y="488" width="125" height="26" rx="5" fill="#14532d" stroke="#4ade80" stroke-width="1"/>
+    <text x="177.5" y="505" text-anchor="middle" font-family="sans-serif" font-size="10" fill="#bbf7d0">Material Req</text>
+    <rect x="250" y="488" width="125" height="26" rx="5" fill="#14532d" stroke="#4ade80" stroke-width="1"/>
+    <text x="312.5" y="505" text-anchor="middle" font-family="sans-serif" font-size="10" fill="#bbf7d0">Mat Transfer</text>
+    <text x="120" y="536" text-anchor="start" font-family="sans-serif" font-size="9" font-style="italic" fill="#4ade80">Demand → Match → Dispatch → Deliver</text>
+    <rect x="115" y="548" width="265" height="24" rx="5" fill="#14532d" stroke="#4ade80" stroke-width="1"/>
+    <text x="247.5" y="564" text-anchor="middle" font-family="sans-serif" font-size="10" fill="#bbf7d0">Work Areas</text>
+    <rect x="115" y="578" width="265" height="24" rx="5" fill="#14532d" stroke="#4ade80" stroke-width="1"/>
+    <text x="247.5" y="594" text-anchor="middle" font-family="sans-serif" font-size="10" fill="#bbf7d0">Building Demand · Overlays</text>
+    <rect x="410" y="398" width="250" height="225" rx="8" fill="#172554" stroke="#3b82f6" stroke-width="1.5"/>
+    <text x="535" y="414" text-anchor="middle" font-family="sans-serif" font-size="11" font-weight="bold" fill="#93c5fd">SETTLERS</text>
+    <rect x="425" y="424" width="220" height="26" rx="5" fill="#1e3a5f" stroke="#60a5fa" stroke-width="1"/>
+    <text x="535" y="441" text-anchor="middle" font-family="sans-serif" font-size="10" fill="#bfdbfe">Settler Tasks</text>
+    <rect x="425" y="456" width="220" height="26" rx="5" fill="#1e3a5f" stroke="#60a5fa" stroke-width="1"/>
+    <text x="535" y="473" text-anchor="middle" font-family="sans-serif" font-size="10" fill="#bfdbfe">Building Construction</text>
+    <rect x="425" y="488" width="220" height="26" rx="5" fill="#1e3a5f" stroke="#60a5fa" stroke-width="1"/>
+    <text x="535" y="505" text-anchor="middle" font-family="sans-serif" font-size="10" fill="#bfdbfe">Recruit / Transform</text>
+    <rect x="425" y="520" width="220" height="26" rx="5" fill="#1e3a5f" stroke="#60a5fa" stroke-width="1"/>
+    <text x="535" y="537" text-anchor="middle" font-family="sans-serif" font-size="10" fill="#bfdbfe">Settler Location</text>
+    <text x="430" y="566" text-anchor="start" font-family="sans-serif" font-size="9" font-style="italic" fill="#60a5fa">Recruit → Task → Navigate → Work</text>
+    <rect x="425" y="578" width="220" height="24" rx="5" fill="#1e3a5f" stroke="#60a5fa" stroke-width="1"/>
+    <text x="535" y="594" text-anchor="middle" font-family="sans-serif" font-size="10" fill="#bfdbfe">Settler Lifecycle</text>
+    <rect x="675" y="398" width="250" height="225" rx="8" fill="#422006" stroke="#f59e0b" stroke-width="1.5"/>
+    <text x="800" y="414" text-anchor="middle" font-family="sans-serif" font-size="11" font-weight="bold" fill="#fcd34d">WORLD</text>
+    <rect x="690" y="424" width="105" height="26" rx="5" fill="#78350f" stroke="#fbbf24" stroke-width="1"/>
+    <text x="742.5" y="441" text-anchor="middle" font-family="sans-serif" font-size="10" fill="#fef3c7">Trees</text>
+    <rect x="805" y="424" width="105" height="26" rx="5" fill="#78350f" stroke="#fbbf24" stroke-width="1"/>
+    <text x="857.5" y="441" text-anchor="middle" font-family="sans-serif" font-size="10" fill="#fef3c7">Stones</text>
+    <rect x="690" y="456" width="105" height="26" rx="5" fill="#78350f" stroke="#fbbf24" stroke-width="1"/>
+    <text x="742.5" y="473" text-anchor="middle" font-family="sans-serif" font-size="10" fill="#fef3c7">Crops</text>
+    <rect x="805" y="456" width="105" height="26" rx="5" fill="#78350f" stroke="#fbbf24" stroke-width="1"/>
+    <text x="857.5" y="473" text-anchor="middle" font-family="sans-serif" font-size="10" fill="#fef3c7">Ore Veins</text>
+    <rect x="690" y="494" width="220" height="26" rx="5" fill="#78350f" stroke="#fbbf24" stroke-width="1"/>
+    <text x="800" y="511" text-anchor="middle" font-family="sans-serif" font-size="10" fill="#fef3c7">Territory</text>
+    <text x="695" y="538" text-anchor="start" font-family="sans-serif" font-size="9" font-style="italic" fill="#f59e0b">Growth · Depletion · Influence</text>
+    <rect x="940" y="398" width="250" height="155" rx="8" fill="#450a0a" stroke="#ef4444" stroke-width="1.5"/>
+    <text x="1065" y="414" text-anchor="middle" font-family="sans-serif" font-size="11" font-weight="bold" fill="#fca5a5">MILITARY</text>
+    <rect x="955" y="424" width="105" height="26" rx="5" fill="#7f1d1d" stroke="#f87171" stroke-width="1"/>
+    <text x="1007.5" y="441" text-anchor="middle" font-family="sans-serif" font-size="10" fill="#fecaca">Combat</text>
+    <rect x="1070" y="424" width="105" height="26" rx="5" fill="#7f1d1d" stroke="#f87171" stroke-width="1"/>
+    <text x="1122.5" y="441" text-anchor="middle" font-family="sans-serif" font-size="10" fill="#fecaca">Garrison</text>
+    <rect x="955" y="456" width="105" height="26" rx="5" fill="#7f1d1d" stroke="#f87171" stroke-width="1"/>
+    <text x="1007.5" y="473" text-anchor="middle" font-family="sans-serif" font-size="10" fill="#fecaca">Siege</text>
+    <rect x="1070" y="456" width="105" height="26" rx="5" fill="#7f1d1d" stroke="#f87171" stroke-width="1"/>
+    <text x="1122.5" y="473" text-anchor="middle" font-family="sans-serif" font-size="10" fill="#fecaca">Barracks</text>
+    <rect x="955" y="494" width="220" height="26" rx="5" fill="#7f1d1d" stroke="#f87171" stroke-width="1"/>
+    <text x="1065" y="511" text-anchor="middle" font-family="sans-serif" font-size="10" fill="#fecaca">Victory Conditions</text>
+    <rect x="940" y="563" width="250" height="55" rx="8" fill="#2d1f54" stroke="#a78bfa" stroke-width="1.5"/>
+    <text x="1065" y="580" text-anchor="middle" font-family="sans-serif" font-size="11" font-weight="bold" fill="#ddd6fe">AI PLAYER</text>
+    <text x="1065" y="597" text-anchor="middle" font-family="sans-serif" font-size="9" fill="#c4b5fd">Behavior Tree · Economy · Military</text>
+    <text x="1065" y="610" text-anchor="middle" font-family="sans-serif" font-size="9" font-style="italic" fill="#a78bfa">Issues commands like a human player</text></g>
+  <g id="layer-3"><rect x="80" y="655" width="1240" height="80" rx="10" fill="#292524" stroke="#f59e0b" stroke-width="1.5"/>
+    <text x="100" y="672" text-anchor="start" font-family="sans-serif" font-size="10" font-weight="bold" fill="#fbbf24">LAYER 3 — CORE STATE</text>
+    <rect x="110" y="680" width="520" height="45" rx="8" fill="#3f3a36" stroke="#fbbf24" stroke-width="1.5"/>
+    <text x="370" y="697" text-anchor="middle" font-family="sans-serif" font-size="13" font-weight="bold" fill="#fef3c7">GameState</text>
+    <text x="370" y="712" text-anchor="middle" font-family="sans-serif" font-size="9" fill="#fcd34d">Entity Store · Occupancy Maps · Spatial Index</text>
+    <rect x="660" y="680" width="420" height="45" rx="8" fill="#3f3a36" stroke="#fbbf24" stroke-width="1.5"/>
+    <text x="870" y="697" text-anchor="middle" font-family="sans-serif" font-size="13" font-weight="bold" fill="#fef3c7">EventBus</text>
+    <text x="870" y="712" text-anchor="middle" font-family="sans-serif" font-size="9" fill="#fcd34d">entity:created · building:placed · unit:died · ...</text>
+    <rect x="1110" y="680" width="180" height="45" rx="8" fill="#3f3a36" stroke="#fbbf24" stroke-width="1.5"/>
+    <text x="1200" y="703" text-anchor="middle" font-family="sans-serif" font-size="13" font-weight="bold" fill="#fef3c7">Settings</text></g>
+  <g id="layer-2"><rect x="80" y="750" width="1240" height="70" rx="10" fill="#1e293b" stroke="#475569" stroke-width="1.5"/>
+    <text x="100" y="767" text-anchor="start" font-family="sans-serif" font-size="10" font-weight="bold" fill="#94a3b8">LAYER 2 — INFRASTRUCTURE (never imports features)</text>
+    <rect x="110" y="777" width="170" height="32" rx="5" fill="#334155" stroke="#64748b" stroke-width="1"/>
+    <text x="195" y="798" text-anchor="middle" font-family="sans-serif" font-size="10" fill="#e2e8f0">Movement</text>
+    <rect x="300" y="777" width="170" height="32" rx="5" fill="#334155" stroke="#64748b" stroke-width="1"/>
+    <text x="385" y="798" text-anchor="middle" font-family="sans-serif" font-size="10" fill="#e2e8f0">Pathfinding</text>
+    <rect x="490" y="777" width="170" height="32" rx="5" fill="#334155" stroke="#64748b" stroke-width="1"/>
+    <text x="575" y="798" text-anchor="middle" font-family="sans-serif" font-size="10" fill="#e2e8f0">Placement</text>
+    <rect x="680" y="777" width="170" height="32" rx="5" fill="#334155" stroke="#64748b" stroke-width="1"/>
+    <text x="765" y="798" text-anchor="middle" font-family="sans-serif" font-size="10" fill="#e2e8f0">Spatial Search</text>
+    <rect x="870" y="777" width="170" height="32" rx="5" fill="#334155" stroke="#64748b" stroke-width="1"/>
+    <text x="955" y="798" text-anchor="middle" font-family="sans-serif" font-size="10" fill="#e2e8f0">Choreography</text>
+    <rect x="1060" y="777" width="170" height="32" rx="5" fill="#334155" stroke="#64748b" stroke-width="1"/>
+    <text x="1145" y="798" text-anchor="middle" font-family="sans-serif" font-size="10" fill="#e2e8f0">Coord System</text></g>
+  <g id="layer-01"><rect x="80" y="835" width="1240" height="60" rx="10" fill="#1e293b" stroke="#334155" stroke-width="1.5"/>
+    <text x="100" y="852" text-anchor="start" font-family="sans-serif" font-size="10" font-weight="bold" fill="#94a3b8">LAYERS 0–1 — PURE DATA &amp; ALGORITHMS</text>
+    <rect x="110" y="862" width="130" height="22" rx="5" fill="#1e293b" stroke="#475569" stroke-width="1"/>
+    <text x="175" y="876" text-anchor="middle" font-family="sans-serif" font-size="10" fill="#cbd5e1">A* Algorithm</text>
+    <rect x="253" y="862" width="130" height="22" rx="5" fill="#1e293b" stroke="#475569" stroke-width="1"/>
+    <text x="318" y="876" text-anchor="middle" font-family="sans-serif" font-size="10" fill="#cbd5e1">Seeded RNG</text>
+    <rect x="396" y="862" width="130" height="22" rx="5" fill="#1e293b" stroke="#475569" stroke-width="1"/>
+    <text x="461" y="876" text-anchor="middle" font-family="sans-serif" font-size="10" fill="#cbd5e1">Building Types</text>
+    <rect x="539" y="862" width="130" height="22" rx="5" fill="#1e293b" stroke="#475569" stroke-width="1"/>
+    <text x="604" y="876" text-anchor="middle" font-family="sans-serif" font-size="10" fill="#cbd5e1">Unit Types</text>
+    <rect x="682" y="862" width="130" height="22" rx="5" fill="#1e293b" stroke="#475569" stroke-width="1"/>
+    <text x="747" y="876" text-anchor="middle" font-family="sans-serif" font-size="10" fill="#cbd5e1">Materials</text>
+    <rect x="825" y="862" width="130" height="22" rx="5" fill="#1e293b" stroke="#475569" stroke-width="1"/>
+    <text x="890" y="876" text-anchor="middle" font-family="sans-serif" font-size="10" fill="#cbd5e1">Recipes</text>
+    <rect x="968" y="862" width="130" height="22" rx="5" fill="#1e293b" stroke="#475569" stroke-width="1"/>
+    <text x="1033" y="876" text-anchor="middle" font-family="sans-serif" font-size="10" fill="#cbd5e1">Footprints</text>
+    <rect x="1111" y="862" width="130" height="22" rx="5" fill="#1e293b" stroke="#475569" stroke-width="1"/>
+    <text x="1176" y="876" text-anchor="middle" font-family="sans-serif" font-size="10" fill="#cbd5e1">Behavior Tree</text></g>
+  <g id="arrows"><line x1="400" y1="137" x2="290" y2="188" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#cmd)"/>
+    <line x1="290" y1="240" x2="530" y2="293" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#cmd)"/>
+    <text x="310" y="254" text-anchor="start" font-family="sans-serif" font-size="9" fill="#94a3b8">execute(cmd)</text>
+    <path d="M440,345 L93,406 L93,702 L110,702" fill="none" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#cmd)"/>
+    <text x="90" y="515" text-anchor="end" font-family="sans-serif" font-size="9" fill="#94a3b8">mutate state</text>
+    <line x1="770" y1="680" x2="247.5" y2="625" stroke="#fbbf24" stroke-width="1.5" stroke-dasharray="6 3" marker-end="url(#evt)"/>
+    <line x1="800" y1="680" x2="535" y2="625" stroke="#fbbf24" stroke-width="1.5" stroke-dasharray="6 3" marker-end="url(#evt)"/>
+    <line x1="840" y1="680" x2="800" y2="625" stroke="#fbbf24" stroke-width="1.5" stroke-dasharray="6 3" marker-end="url(#evt)"/>
+    <line x1="870" y1="680" x2="1065" y2="625" stroke="#fbbf24" stroke-width="1.5" stroke-dasharray="6 3" marker-end="url(#evt)"/>
+    <text x="1310" y="648" text-anchor="end" font-family="sans-serif" font-size="9" font-weight="bold" fill="#fbbf24">Events (pub/sub)</text>
+    <line x1="668" y1="240" x2="668" y2="680" stroke="#60a5fa" stroke-width="1.5" stroke-dasharray="4 4" marker-start="url(#qry)"/>
+    <text x="676" y="254" text-anchor="start" font-family="sans-serif" font-size="9" fill="#60a5fa">queries via RenderContext</text>
+    <path d="M940,590 Q800,590 600,345" fill="none" stroke="#c4b5fd" stroke-width="1.5" stroke-dasharray="5 3" marker-end="url(#ai)"/>
+    <text x="1198" y="593" text-anchor="start" font-family="sans-serif" font-size="9" fill="#c4b5fd">execute(cmd)</text>
+    <path d="M1325,295 L1340,295 L1340,820 L1325,820" fill="none" stroke="#a78bfa" stroke-width="1.5"/>
+    <line x1="1325" y1="505" x2="1200" y2="505" stroke="#a78bfa" stroke-width="1" stroke-dasharray="6 3" marker-end="url(#lp)"/>
+    <line x1="1325" y1="702" x2="1295" y2="702" stroke="#a78bfa" stroke-width="1" stroke-dasharray="6 3" marker-end="url(#lp)"/>
+    <line x1="1325" y1="793" x2="1240" y2="793" stroke="#a78bfa" stroke-width="1" stroke-dasharray="6 3" marker-end="url(#lp)"/>
+    <text x="1348" y="557.5" text-anchor="middle" font-family="sans-serif" font-size="10" font-weight="bold" fill="#a78bfa" transform="rotate(90, 1348, 557.5)">GameLoop ticks all systems (30 Hz)</text></g>
+  <g id="legend"><rect x="80" y="915" width="1240" height="55" rx="8" fill="#1e293b" stroke="#334155" stroke-width="1"/>
+    <text x="100" y="931" text-anchor="start" font-family="sans-serif" font-size="11" font-weight="bold" fill="#e2e8f0">Legend</text>
+    <line x1="100" y1="948" x2="140" y2="948" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#cmd)"/>
+    <text x="150" y="952" text-anchor="start" font-family="sans-serif" font-size="10" fill="#cbd5e1">Direct call</text>
+    <line x1="290" y1="948" x2="330" y2="948" stroke="#fbbf24" stroke-width="1.5" stroke-dasharray="6 3" marker-end="url(#evt)"/>
+    <text x="340" y="952" text-anchor="start" font-family="sans-serif" font-size="10" fill="#cbd5e1">Event reaction</text>
+    <line x1="500" y1="948" x2="540" y2="948" stroke="#60a5fa" stroke-width="1.5" stroke-dasharray="6 3" marker-end="url(#qry)"/>
+    <text x="550" y="952" text-anchor="start" font-family="sans-serif" font-size="10" fill="#cbd5e1">Read-only query</text>
+    <rect x="720" y="941" width="12" height="12" rx="2" fill="#14532d" stroke="#4ade80" stroke-width="1"/>
+    <text x="738" y="952" text-anchor="start" font-family="sans-serif" font-size="9" fill="#cbd5e1">Economy</text>
+    <rect x="800" y="941" width="12" height="12" rx="2" fill="#1e3a5f" stroke="#60a5fa" stroke-width="1"/>
+    <text x="818" y="952" text-anchor="start" font-family="sans-serif" font-size="9" fill="#cbd5e1">Settlers</text>
+    <rect x="880" y="941" width="12" height="12" rx="2" fill="#78350f" stroke="#fbbf24" stroke-width="1"/>
+    <text x="898" y="952" text-anchor="start" font-family="sans-serif" font-size="9" fill="#cbd5e1">World</text>
+    <rect x="950" y="941" width="12" height="12" rx="2" fill="#7f1d1d" stroke="#f87171" stroke-width="1"/>
+    <text x="968" y="952" text-anchor="start" font-family="sans-serif" font-size="9" fill="#cbd5e1">Military</text>
+    <rect x="1030" y="941" width="12" height="12" rx="2" fill="#3b2670" stroke="#a78bfa" stroke-width="1"/>
+    <text x="1048" y="952" text-anchor="start" font-family="sans-serif" font-size="9" fill="#cbd5e1">AI</text>
+    <text x="100" y="965" text-anchor="start" font-family="sans-serif" font-size="9" fill="#64748b">Infra never imports features. Features communicate via EventBus. Deterministic: seeded RNG, fixed-point math.</text></g>
+</svg>
