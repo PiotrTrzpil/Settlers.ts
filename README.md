@@ -14,8 +14,8 @@ A browser-based remake of **The Settlers 4** (Die Siedler 4) built with TypeScri
 - All five races render with their own building and unit sprite sets: Roman, Viking, Mayan, Dark Tribe, Trojan
 
 ### Economy and Logistics
-- Part of **production chain**: woodcutting, sawmills, farms
-- **Worker Tasks** driven by YAML job definitions — woodcutters, stonecutters, foresters, farmers, miners, carriers, builders, diggers, smiths, millers, butchers
+- **Full production chains**: wood/boards, stone, grain→flour→bread, hunting, fishing, animal ranching, mining (coal/iron/gold/sulfur), smelting, tool and weapon smithing, plus race-specific drink chains (Roman wine, Viking mead, Mayan tequila, Trojan sunflower oil)
+- **Worker Tasks** driven by YAML job definitions — woodcutters, stonecutters, foresters, farmers, miners, carriers, builders, diggers, smiths, millers, butchers, smelters, bakers, hunters, fishers, waterworkers, healers, animal farmers, and race-specific workers
 - **Logistics dispatcher** matches resource requests to available supplies, assigns idle carriers, and tracks delivery status with stall detection
 - **Building inventory** system with input/output slots and reservations
 - **Territory** computed from castles and guard towers via BFS flood-fill; logistics respects territory boundaries
@@ -33,6 +33,15 @@ A browser-based remake of **The Settlers 4** (Die Siedler 4) built with TypeScri
 ### Combat
 - **Swordsmen and bowmen** with 3 experience levels, per-type stats (health, damage, cooldown), and level multipliers
 - Units scan for enemies, pursue, and engage in combat
+- **Tower garrison** — soldiers man guard towers and castles with role-based slots; garrisoned bowmen auto-fire at enemies in range
+- **Victory conditions** — players eliminated when all military buildings lost; last player standing wins
+
+### Geology
+- **Geologist prospecting** — geologists search mountains in ring-sweep patterns, placing ore signs with richness tiers
+- **Ore vein discovery and depletion** — mines gradually consume per-tile ore levels; full persistence across save/load
+
+### AI
+- **AI opponents** with autonomous economy and military — race-specific build orders, spiral-search placement, soldier training, and attack waves targeting nearest enemy
 
 ### File Format Readers
 - GFX, GH, JIL, DIL, GIL, PIL, SIL, SND, LIB archives, MAP files (including savegames), ARA decryption, and GameData XML parsing
@@ -97,22 +106,19 @@ npx playwright test   # E2E tests
 
 - **Terrain rendering fixes** — river and desert tiles have visual artifacts and incorrect transitions that need fixing
 - **Map object sprites** — many raw map objects are not yet mapped to the correct sprite; needs visual comparison with the original game
-- **Settler sprite coverage** — not all settler types are linked to their sprite animations yet
+- **Settler sprite coverage** — ~65% of settler types have sprite animations; some specialist and race-specific units still need mapping
 - **Full logistics** — the current system handles basic supply/demand but lacks the full priority-based distribution, overflow handling, and transport optimization of the original
 - **Trade** — no donkey or ship-based goods transport between your own buildings
 - **Ships and waterways** — no harbors, ferries, or naval transport
-- **Garrisoning** — soldiers don't man guard towers or castles yet
 - **Fog of war** — darkness map renders but is static; no dynamic exploration or line-of-sight updates
-- **Victory conditions** — no win/loss detection
 - **Full construction** — settlers don't yet perform the full digging and multi-step building animation sequences from the original
 - **War machines** — catapults, ballistae, and siege equipment are not implemented
-- **Special units** — priests, geologists, thieves, pioneers, gardeners, and other non-combat specialists
-- **Geology and mining** — no geologist resource searching on mountains; mines exist but lack full ore vein depletion and discovery mechanics
+- **Special units** — priests, pioneers, gardeners, saboteurs, and thieves lack gameplay behavior (geologists are fully implemented)
 - **Magic** — no mana system or priest spells
 - **Dark Tribe specifics** — unique Dark Tribe mechanics (e.g. conversion, mushroom-based economy quirks) are not implemented
-- **AI players** — a behavior tree framework exists but no autonomous AI opponent logic is wired up
+- **AI players** — basic autonomous AI exists (build orders, soldier training, attack waves) but lacks advanced strategy, adaptive tactics, and difficulty settings
 - **Multiplayer** — no networking layer
-- **Sound** — infrastructure exists but sound playback is incomplete
+- **Sound** — music playback is complete with race-specific playlists and crossfading; sound effects are not yet integrated into gameplay
 - **Map editor** — no in-browser map creation tool
 
 ## Acknowledgments
