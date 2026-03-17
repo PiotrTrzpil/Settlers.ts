@@ -116,11 +116,12 @@ export default defineConfig({
             name: 'visual',
             testMatch: '**/*.spec.ts',
             grep: /@screenshot/,
-            timeout: 20_000,
+            // Tests tagged @screenshot + @requires-assets need long timeouts for sprite loading
+            timeout: 60_000,
             use: {
                 ...baseSettings,
-                actionTimeout: 3_000,
-                navigationTimeout: 10_000,
+                actionTimeout: 10_000,
+                navigationTimeout: 30_000,
             },
         },
     ],
@@ -132,5 +133,7 @@ export default defineConfig({
         url: `http://localhost:${TEST_SERVER_PORT}`,
         timeout: process.env.CI ? 120_000 : 30_000,
         reuseExistingServer: !process.env.CI,
+        // Send SIGINT first to let Vite clean up before SIGKILL — prevents orphaned processes
+        gracefulShutdown: { signal: 'SIGINT', timeout: 5_000 },
     },
 });

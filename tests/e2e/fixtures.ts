@@ -186,7 +186,9 @@ export const test = base.extend<TestFixtures, WorkerFixtures>({
 
             await use(page);
 
-            await page.unrouteAll({ behavior: 'ignoreErrors' });
+            if (!page.isClosed()) {
+                await page.unrouteAll({ behavior: 'ignoreErrors' });
+            }
             await context.close();
         },
         { scope: 'worker', timeout: 60_000 },
@@ -226,7 +228,10 @@ export const test = base.extend<TestFixtures, WorkerFixtures>({
 
             await use(page);
 
-            await page.unrouteAll({ behavior: 'ignoreErrors' });
+            // Guard teardown against page crash (prevents cascading failures in other tests)
+            if (!page.isClosed()) {
+                await page.unrouteAll({ behavior: 'ignoreErrors' });
+            }
             await context.close();
         },
         { scope: 'worker', timeout: 60_000 },

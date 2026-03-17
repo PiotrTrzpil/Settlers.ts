@@ -137,7 +137,7 @@ export interface Entity {
 - `CARRIER_MATERIAL_JOB_INDICES` construction: `Object.entries(RESOURCE_JOB_INDICES).map(([type, idx]) => [Number(type), idx + 1])` → remove the `Number()` call, keep type as-is
 
 ### 5. Sprite & Renderer
-**Files**: `src/game/renderer/entity-sprite-resolver.ts`, `src/game/renderer/entity-depth-sorter.ts`, `src/game/renderer/optimized-depth-sorter.ts`, `src/game/renderer/render-passes/color-entity-pass.ts`
+**Files**: `src/game/renderer/entity-sprite-resolver.ts`, `src/game/renderer/optimized-depth-sorter.ts`, `src/game/renderer/render-passes/color-entity-pass.ts`
 **Key decisions**:
 - `entity.subType as EMaterialType` casts remain — subType is now `number | string`, and for piles it's a string EMaterialType value
 - `getGoodSprite(entity.subType as EMaterialType, ...)` — no change needed, just a cast narrowing

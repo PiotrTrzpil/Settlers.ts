@@ -29,6 +29,7 @@ import {
     createTerritoryMatchFilter,
     createTerritoryCarrierFilter,
 } from './features/territory';
+import { spiralSearch } from './utils/spiral-search';
 
 /** Headless game core — usable in tests without a browser. */
 export class GameCore {
@@ -262,30 +263,11 @@ export class GameCore {
     }
 
     /** Find the first buildable land tile, spiraling out from map center */
-    // eslint-disable-next-line sonarjs/cognitive-complexity -- spiral search with per-tile boundary checks
     public findLandTile(): { x: number; y: number } | null {
         const { width: w, height: h } = this.terrain;
         const cx = Math.floor(w / 2);
         const cy = Math.floor(h / 2);
-
-        for (let r = 0; r < Math.max(w, h) / 2; r++) {
-            for (let dx = -r; dx <= r; dx++) {
-                for (let dy = -r; dy <= r; dy++) {
-                    if (Math.abs(dx) !== r && Math.abs(dy) !== r) {
-                        continue;
-                    }
-                    const tx = cx + dx;
-                    const ty = cy + dy;
-                    if (tx < 0 || ty < 0 || tx >= w || ty >= h) {
-                        continue;
-                    }
-                    if (this.terrain.isBuildable(tx, ty)) {
-                        return { x: tx, y: ty };
-                    }
-                }
-            }
-        }
-        return null;
+        return spiralSearch(cx, cy, w, h, (x, y) => this.terrain.isBuildable(x, y));
     }
 
     // ─── Lifecycle ──────────────────────────────────────────────
