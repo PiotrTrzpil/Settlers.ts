@@ -6,7 +6,7 @@
  *   pnpm timeline:record
  *   CLI_URL=ws://localhost:5174/__cli__ pnpm timeline:record
  *
- * Press Ctrl-C to stop recording. The DB is written to data/.timeline/.
+ * Press Ctrl-C to stop recording. The DB is written to output/timeline/live/.
  *
  * Usually not needed — the Vite plugin records automatically during dev.
  * Use this for recording from a remote server or custom setups.

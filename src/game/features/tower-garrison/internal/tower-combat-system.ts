@@ -112,15 +112,16 @@ export class TowerCombatSystem implements TickSystem {
     }
 
     private processTower(building: Entity, bowmanIds: readonly number[]): void {
-        const nearby = this.gameState.getEntitiesInRadius(building.x, building.y, TOWER_ATTACK_RANGE);
-
-        // Find valid enemy targets
+        // Find valid enemy targets within hex distance
         const enemies: Entity[] = [];
-        for (const candidate of nearby) {
+        for (const candidate of this.gameState.entities) {
             if (candidate.type !== EntityType.Unit) {
                 continue;
             }
             if (candidate.player === building.player) {
+                continue;
+            }
+            if (hexDistance(building.x, building.y, candidate.x, candidate.y) > TOWER_ATTACK_RANGE) {
                 continue;
             }
 
@@ -143,16 +144,15 @@ export class TowerCombatSystem implements TickSystem {
     }
 
     private processBowman(bowmanId: number, building: Entity, enemies: Entity[]): void {
-        const target = this.findNearestEnemy(building, enemies);
-
-        towerBowmanTargets.set(bowmanId, target.id);
-
-        // Get bowman's unit type for stats
+        // Get bowman's unit type for stats — must exist if in garrison slot
         const bowmanEntity = this.gameState.getEntity(bowmanId);
         if (!bowmanEntity) {
             this.attackTimers.delete(bowmanId);
             return;
         }
+
+        const target = this.findNearestEnemy(building, enemies);
+        towerBowmanTargets.set(bowmanId, target.id);
 
         const stats = getCombatStats(bowmanEntity.subType as UnitType);
 

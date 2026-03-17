@@ -12,7 +12,7 @@ import type { SerializedTimelineEntry } from '../../src/game/cli/types';
 
 // ─── Constants ───────────────────────────────────────────────
 
-const TIMELINE_DIR = resolve('data/.timeline');
+const TIMELINE_DIR = resolve('output/timeline/live');
 const MAX_DB_FILES = 10;
 const FLUSH_THRESHOLD = 500;
 const FLUSH_INTERVAL_MS = 1_000;

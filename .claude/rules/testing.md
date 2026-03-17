@@ -28,7 +28,7 @@ Never fix a bug without a reproducing test first. The test is proof the bug exis
 
 ## Use Timeline DB to Investigate
 
-**Always query the timeline SQLite DB to understand what happened in a test.** Do not guess or add `console.log` — the timeline already captures all events, entity state changes, and console output. All timelines are saved to `tests/unit/.timeline/*.db` (SQLite), one DB per run.
+**Always query the timeline SQLite DB to understand what happened in a test.** Do not guess or add `console.log` — the timeline already captures all events, entity state changes, and console output. All timelines are saved to `output/timeline/unit/*.db` (SQLite), one DB per run.
 
 **IMPORTANT:** Multiple sessions may run tests concurrently. Always use `--db <path>` with the specific DB from your run, not the default (which picks the latest and may belong to another session). The DB path is printed at the start of each test run.
 

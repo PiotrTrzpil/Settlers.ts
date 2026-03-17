@@ -5,6 +5,7 @@ import { resolve } from 'path';
 import { computeSourceHash } from './tests/e2e/source-hash';
 import { devWriteFilePlugin } from './vite-plugins/dev-write-file';
 import { cliWsPlugin } from './vite-plugins/cli-ws-plugin';
+import { symlinkPublicDirsPlugin } from './vite-plugins/symlink-public-dirs';
 
 // Only include polyfills in browser builds, not in test environment
 const isTest = process.env['VITEST'] === 'true';
@@ -14,7 +15,7 @@ const isFastBuild = process.env['FAST_BUILD'] === '1';
 // Deterministic run ID shared by all Vitest workers → single timeline DB per run
 const timelineRunId = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
 if (isTest) {
-    const dbPath = `tests/unit/.timeline/run_${timelineRunId}.db`;
+    const dbPath = `output/timeline/unit/run_${timelineRunId}.db`;
 
     console.log(`Timeline DB: ${dbPath}`);
 }
@@ -26,6 +27,7 @@ const plugins: any[] = [
     glsl(),
     devWriteFilePlugin(resolve(__dirname)),
     cliWsPlugin(),
+    symlinkPublicDirsPlugin(['Siedler4']),
 ];
 if (!isTest && !isFastBuild) {
     const { nodePolyfills } = await import('vite-plugin-node-polyfills');

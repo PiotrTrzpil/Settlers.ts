@@ -15,7 +15,7 @@ import type { TimelineCategory, TimelineEntry } from './timeline-recorder';
 
 // ─── Constants ───────────────────────────────────────────────────
 
-const TIMELINE_DIR = 'tests/unit/.timeline';
+const TIMELINE_DIR = 'output/timeline/unit';
 const MAX_DB_FILES = 10;
 const FLUSH_THRESHOLD = 500;
 const BUSY_TIMEOUT_MS = 30_000;

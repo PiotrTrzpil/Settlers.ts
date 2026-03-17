@@ -58,4 +58,4 @@ Once all tests complete, summarize:
 - Run tests in BACKGROUND and poll — never block waiting for completion
 - Poll every 10 seconds with `tail -20 /tmp/e2e-*.log`
 - Investigate failures IMMEDIATELY when spotted — don't wait for the full suite to finish
-- Save any MCP screenshots to `.playwright-mcp/` (gitignored)
+- Save any MCP screenshots to `.playwright/` (gitignored)

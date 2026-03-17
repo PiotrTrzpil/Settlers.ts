@@ -105,19 +105,19 @@ Run `pnpm cli "js"` (no expression) to list all available scope variables.
 
 ## Live Timeline Recording
 
-**Timeline events are recorded automatically** whenever the dev server runs (`pnpm dev`). No extra setup needed. DBs are saved to `data/.timeline/`.
+**Timeline events are recorded automatically** whenever the dev server runs (`pnpm dev`). No extra setup needed. DBs are saved to `output/timeline/live/`.
 
 ```sh
 pnpm timeline:live                                          # list live sessions
 pnpm timeline:live -- --sql "SELECT category, COUNT(*) AS n FROM timeline GROUP BY category ORDER BY n DESC"
-pnpm timeline -- --db data/.timeline/<file>.db --entity 42  # query specific DB
+pnpm timeline -- --db output/timeline/live/<file>.db --entity 42  # query specific DB
 pnpm timeline:record                                        # connects to ws://localhost:5173
 CLI_URL=ws://localhost:5174/__cli__ pnpm timeline:record     # custom port
 ```
 
 
 ### Timeline
-Events are auto-recorded to `data/.timeline/` during dev. Query with:
+Events are auto-recorded to `output/timeline/live/` during dev. Query with:
 ```sh
 pnpm timeline:live                                    # list sessions
 pnpm timeline:live -- --entity 42                     # entity history

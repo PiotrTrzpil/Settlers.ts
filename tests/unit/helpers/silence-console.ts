@@ -36,7 +36,7 @@ beforeEach(ctx => {
         if (hintPrinted) return;
         hintPrinted = true;
         const runId = process.env['TIMELINE_RUN_ID'];
-        const dbPath = runId ? `tests/unit/.timeline/run_${runId}.db` : '(unknown)';
+        const dbPath = runId ? `output/timeline/unit/run_${runId}.db` : '(unknown)';
         origStderrWrite(`\n  Console output & timeline: ${dbPath}\n`);
         origStderrWrite(`  Query: pnpm timeline -- --db ${dbPath} --console\n\n`);
     });

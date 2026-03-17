@@ -2,8 +2,8 @@
 
 The timeline is an event recording and diagnostics system that captures every `EventBus.emit()` into SQLite for post-mortem analysis. It has two paths:
 
-1. **Test timeline** — records during `pnpm test:unit`, one DB per test run at `tests/unit/.timeline/`
-2. **Live timeline** — records during `pnpm dev`, one DB per session at `data/.timeline/`
+1. **Test timeline** — records during `pnpm test:unit`, one DB per test run at `output/timeline/unit/`
+2. **Live timeline** — records during `pnpm dev`, one DB per session at `output/timeline/live/`
 
 Both share the same schema and query CLI.
 
@@ -66,7 +66,7 @@ Timeline recording is automatic. Every `createSimulation()` wires the EventBus t
 1. `wireSimulationTimeline()` patches `EventBus.emit()` to intercept all events
 2. Each event is passed through `recordTimelineEvent()` and written to SQLite
 3. On test completion, `finalize()` records pass/fail status and tick count
-4. All tests in a `pnpm test:unit` run share one DB: `tests/unit/.timeline/run_<timestamp>.db`
+4. All tests in a `pnpm test:unit` run share one DB: `output/timeline/unit/run_<timestamp>.db`
 
 ### Querying after tests
 
@@ -130,7 +130,7 @@ sim.timeline.formatSummary();
 
 ### Recording
 
-Timeline events are recorded automatically when the dev server runs. The Vite plugin (`vite-plugins/cli-ws-plugin.ts`) writes all events to `data/.timeline/live_<timestamp>.db`.
+Timeline events are recorded automatically when the dev server runs. The Vite plugin (`vite-plugins/cli-ws-plugin.ts`) writes all events to `output/timeline/live/live_<timestamp>.db`.
 
 For external recording (e.g. remote servers):
 
@@ -158,7 +158,7 @@ pnpm timeline:live -- --cat logistics
 pnpm timeline:live -- --sql "SELECT ..."
 
 # Query a specific DB
-pnpm timeline -- --db data/.timeline/live_2025-03-10T14-30-00.db --entity 42
+pnpm timeline -- --db output/timeline/live/live_2025-03-10T14-30-00.db --entity 42
 ```
 
 ### Limits
@@ -282,13 +282,13 @@ WHERE player IS NOT NULL GROUP BY player, category ORDER BY player, n DESC
 Browser (EventBus.emit)
   │
   ├── Test path: wireSimulationTimeline() patches emit
-  │     └── recordTimelineEvent() → TimelineRecorder → SQLite (tests/unit/.timeline/)
+  │     └── recordTimelineEvent() → TimelineRecorder → SQLite (output/timeline/unit/)
   │
   └── Live path: TimelineCapture patches emit (lazy, only when subscribers > 0)
         └── batch buffer (200 entries / 500ms)
               └── WebSocket timeline:batch
                     └── Vite plugin relay
-                          ├── auto-writes to SQLite (data/.timeline/)
+                          ├── auto-writes to SQLite (output/timeline/live/)
                           └── forwards to external subscribers (pnpm timeline:record)
 ```
 

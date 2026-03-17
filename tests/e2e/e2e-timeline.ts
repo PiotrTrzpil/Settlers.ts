@@ -8,14 +8,14 @@
  *   await tl.stop('passed');
  *
  * Query after failure:
- *   pnpm timeline -- --db tests/e2e/.timeline/<file>.db --test <name>
+ *   pnpm timeline -- --db output/timeline/e2e/<file>.db --test <name>
  */
 
 import type { Page } from '@playwright/test';
 import { existsSync, mkdirSync } from 'node:fs';
 import Database, { type Database as DatabaseType, type Statement } from 'better-sqlite3';
 
-const TIMELINE_DIR = 'tests/e2e/.timeline';
+const TIMELINE_DIR = 'output/timeline/e2e';
 interface RawEntry {
     tick: number;
     category: string;

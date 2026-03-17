@@ -51,7 +51,9 @@ export default defineConfig({
     outputDir: './tests/e2e/.results',
     globalSetup: './tests/e2e/global-setup.ts',
     fullyParallel: true,
-    reporter: process.env.CI ? [['list'], ['github-actions']] : [['list'], ['html', { open: 'never' }]],
+    reporter: process.env.CI
+        ? [['list'], ['github-actions']]
+        : [['list'], ['html', { open: 'never', outputFolder: '.playwright/report' }]],
     // Limit workers to avoid overwhelming shared worker fixtures (testMapPage)
     // Tests use worker-scoped pages that can't handle too many parallel tests
     workers: 2,

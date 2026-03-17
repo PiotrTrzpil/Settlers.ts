@@ -6,7 +6,7 @@ import { E2eTimeline } from './e2e-timeline';
  * E2E test for building flag overlays.
  * Places a completed building with real game assets and verifies flag overlay data.
  * Timeline is recorded to SQLite for post-failure investigation:
- *   pnpm timeline -- --db tests/e2e/.timeline/<file>.db --test building-flags
+ *   pnpm timeline -- --db output/timeline/e2e/<file>.db --test building-flags
  *
  * Requires game assets (skips in CI if assets unavailable).
  */

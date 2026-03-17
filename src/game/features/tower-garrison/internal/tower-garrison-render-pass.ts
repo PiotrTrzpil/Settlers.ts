@@ -21,6 +21,7 @@ import type { TowerGarrisonManager } from '../tower-garrison-manager';
 import type { GameState } from '@/game/game-state';
 import type { GarrisonSlotPosition } from './garrison-slot-positions';
 import type { GarrisonSlotSet } from '../types';
+import type { SpriteEntry } from '@/game/renderer/sprite-metadata';
 import { BuildingType, EntityType } from '@/game/entity';
 import { UnitType } from '@/game/core/unit-types';
 import { getRenderEntityWorldPos } from '@/game/renderer/world-position';
@@ -29,7 +30,8 @@ import { getApproxDirection } from '@/game/systems/hex-directions';
 import { TINT_NEUTRAL } from '@/game/renderer/tint-utils';
 import { PALETTE_TEXTURE_WIDTH } from '@/game/renderer/palette-texture';
 import { scaleSprite, ENTITY_SCALE } from '@/game/renderer/entity-renderer-constants';
-import { PIXELS_TO_WORLD } from '@/game/renderer/sprite-metadata';
+import { PIXELS_TO_WORLD, UNIT_XML_PREFIX } from '@/game/renderer/sprite-metadata';
+import { ANIMATION_DEFAULTS, xmlKey } from '@/game/animation/animation';
 import { getGarrisonSlotPositions } from './garrison-slot-positions';
 
 export interface GarrisonRenderConfig {
@@ -128,6 +130,42 @@ export class TowerGarrisonRenderPass implements PluggableRenderPass {
         return toSpriteDirection(getApproxDirection(tower.x, tower.y, target.x, target.y));
     }
 
+    /**
+     * Resolve the sprite for a garrisoned unit.
+     * Bowmen with a target use the SHOOT animation; all others use the static standing pose.
+     */
+    private resolveSprite(unitType: UnitType, spriteDir: number, race: number, hasTarget: boolean): SpriteEntry | null {
+        if (hasTarget) {
+            const frame = this.resolveShootFrame(unitType, spriteDir, race);
+            if (frame) {
+                return frame;
+            }
+        }
+        return this.ctx.spriteResolver.getStaticUnitSprite(unitType, spriteDir, race);
+    }
+
+    /** Look up the current SHOOT animation frame for the given unit type and direction. */
+    private resolveShootFrame(unitType: UnitType, spriteDir: number, race: number): SpriteEntry | null {
+        const animEntry = this.ctx.spriteManager?.registry.getAnimatedEntity(EntityType.Unit, unitType, race);
+        if (!animEntry) {
+            return null;
+        }
+        const prefix = UNIT_XML_PREFIX[unitType];
+        if (!prefix) {
+            return null;
+        }
+        const dirMap = animEntry.animationData.sequences.get(xmlKey(prefix, 'SHOOT'));
+        if (!dirMap) {
+            return null;
+        }
+        const seq = dirMap.get(spriteDir) ?? dirMap.get(0);
+        if (!seq || seq.frames.length === 0) {
+            return null;
+        }
+        const frameIndex = Math.floor(performance.now() / ANIMATION_DEFAULTS.FRAME_DURATION_MS) % seq.frames.length;
+        return seq.frames[frameIndex]!;
+    }
+
     private emitSprites(
         gl: WebGL2RenderingContext,
         buildingId: number,
@@ -137,6 +175,7 @@ export class TowerGarrisonRenderPass implements PluggableRenderPass {
         buildingY: number
     ): void {
         const { ctx } = this;
+        const { targets } = this.config;
 
         for (let i = 0; i < unitIds.length; i++) {
             const unitId = unitIds[i]!;
@@ -146,10 +185,10 @@ export class TowerGarrisonRenderPass implements PluggableRenderPass {
             }
 
             const unit = this.gameState.getEntityOrThrow(unitId, 'TowerGarrisonRenderPass');
-            // XML direction values are sprite direction indices (0-5), not EDirection values
             const spriteDir = this.resolveDirection(unitId, buildingId, slot.direction);
+            const hasTarget = targets !== undefined && targets.has(unitId);
 
-            const rawSprite = ctx.spriteResolver.getStaticUnitSprite(unit.subType as UnitType, spriteDir, unit.race);
+            const rawSprite = this.resolveSprite(unit.subType as UnitType, spriteDir, unit.race, hasTarget);
             if (!rawSprite) {
                 continue;
             }

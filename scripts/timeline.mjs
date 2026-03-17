@@ -13,7 +13,7 @@
  *   pnpm timeline --tick 1000-2000              # filter by tick range
  *   pnpm timeline --sql "SELECT ..."            # raw SQL
  *   pnpm timeline --db <path>                   # use specific DB file
- *   pnpm timeline --dir live                    # read from live recording dir (data/.timeline/)
+ *   pnpm timeline --dir live                    # read from live recording dir (output/timeline/live/)
  *   pnpm timeline --clean                       # delete all timeline DBs
  *   pnpm timeline --console                     # console output from failed/auto-picked test
  *   pnpm timeline --console --test <id>         # console output from specific test
@@ -27,7 +27,7 @@ import Database from 'better-sqlite3';
 
 // ─── Constants & CLI ─────────────────────────────────────────────
 
-const TIMELINE_DIRS = { test: 'tests/unit/.timeline', live: 'data/.timeline' };
+const TIMELINE_DIRS = { test: 'output/timeline/unit', live: 'output/timeline/live' };
 const ENTRY_COLS = 'tick, category, entity_id AS entityId, event, detail';
 
 // Strip bare '--' inserted by pnpm when forwarding args
@@ -304,7 +304,7 @@ Options:
   --tick <from-to>      Filter by tick range (e.g. 1000-2000)
   --sql <query>         Run raw SQL query against the DB
   --db <path>           Use a specific DB file (recommended when multiple sessions run tests)
-  --dir <test|live>     Timeline directory: 'test' (default) or 'live' (data/.timeline/)
+  --dir <test|live>     Timeline directory: 'test' (default) or 'live' (output/timeline/)
   --console             Show captured console output for a test
   --console --list      List all tests that have console output
   --console --level <l> Filter console output by level (log, warn, error)

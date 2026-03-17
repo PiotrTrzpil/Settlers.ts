@@ -30,19 +30,11 @@ css
 test-results/
 tests/e2e/.results/
 tests/e2e/__screenshots__/
-tests/unit/.timeline/
-tests/e2e/.timeline/
-playwright-report/
+# Playwright output (CLI, MCP, reports)
+.playwright/
 
-# Playwright MCP/CLI browser logs
-.playwright-mcp/
-.playwright-cli/
-
-# Script output
+# Script output & transient data (asset exports, timeline DBs)
 output/
-
-# Live timeline recordings
-data/.timeline/
 
 # Backup files
 *.bak
