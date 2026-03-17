@@ -71,3 +71,8 @@ export enum BuildingType {
     Port = 'Port',
     Marketplace = 'Marketplace',
 }
+
+/** Check if a building type is a storage area (flat ground storage with dynamic slots). */
+export function isStorageBuilding(buildingType: BuildingType): boolean {
+    return buildingType === BuildingType.StorageArea;
+}

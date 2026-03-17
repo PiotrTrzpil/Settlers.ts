@@ -34,7 +34,7 @@ export enum EntityType {
 // === Re-exports from specialized modules ===
 
 // Building types
-export { BuildingType, getBuildingFootprint, getBuildingHotspot, isMineBuilding } from './buildings';
+export { BuildingType, getBuildingFootprint, getBuildingHotspot, isMineBuilding, isStorageBuilding } from './buildings';
 
 // Unit types and configuration
 export type { UnitTypeConfig } from './core/unit-types';

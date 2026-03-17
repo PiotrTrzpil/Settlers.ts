@@ -7,8 +7,8 @@
 
 import { hexDistance } from '../../systems/hex-directions';
 import type { GameState } from '../../game-state';
-import { BuildingType, EntityType } from '../../entity';
 import type { EMaterialType } from '../../economy/material-type';
+import { SlotKind } from '../../core/pile-kind';
 import { getAvailableSupplies } from './resource-supply';
 import type { TransportJobStore } from './transport-job-store';
 import type { BuildingInventoryManager } from '../inventory';
@@ -73,15 +73,15 @@ interface MatchCandidate {
     distance: number;
 }
 
-/** Check if a StorageArea source is allowed to supply material. */
+/** Check if a storage source is allowed to supply material. */
 function isStorageSourceAllowed(
     sourceId: number,
-    destIsStorage: boolean,
+    destHasStorageSlots: boolean,
     materialType: EMaterialType,
     storageFilterManager: StorageFilterManager | undefined
 ): boolean {
-    // No StorageArea↔StorageArea transfers
-    if (destIsStorage) {
+    // No storage↔storage transfers
+    if (destHasStorageSlots) {
         return false;
     }
     // Must have export enabled
@@ -110,9 +110,7 @@ function* iterateMatchCandidates(
         'demand destination building in fulfillment matching'
     );
 
-    const destIsStorageBuilding =
-        destBuilding.type === EntityType.Building &&
-        (destBuilding.subType as BuildingType) === BuildingType.StorageArea;
+    const destHasStorageSlots = inventoryManager.hasStorageSlots(request.buildingId);
 
     const supplies = getAvailableSupplies(gameState, inventoryManager, request.materialType, {
         playerId,
@@ -124,25 +122,18 @@ function* iterateMatchCandidates(
             continue;
         }
 
-        const sourceBuilding = gameState.getEntityOrThrow(
-            supply.buildingId,
-            'supply source building in fulfillment matching'
-        );
-
-        // Only apply storage direction filtering to actual StorageArea buildings (not free piles)
-        const sourceIsStorage =
-            sourceBuilding.type === EntityType.Building &&
-            (sourceBuilding.subType as BuildingType) === BuildingType.StorageArea;
-        const sourceAllowed =
-            !sourceIsStorage ||
-            isStorageSourceAllowed(
-                supply.buildingId,
-                destIsStorageBuilding,
-                request.materialType,
-                storageFilterManager
-            );
-        if (!sourceAllowed) {
-            continue;
+        // Storage direction filtering based on slot kind (not building type)
+        if (supply.slotKind === SlotKind.Storage) {
+            if (
+                !isStorageSourceAllowed(
+                    supply.buildingId,
+                    destHasStorageSlots,
+                    request.materialType,
+                    storageFilterManager
+                )
+            ) {
+                continue;
+            }
         }
 
         let effectiveAmount = supply.availableAmount;
@@ -155,6 +146,10 @@ function* iterateMatchCandidates(
             continue;
         }
 
+        const sourceBuilding = gameState.getEntityOrThrow(
+            supply.buildingId,
+            'supply source building in fulfillment matching'
+        );
         const distance = hexDistance(sourceBuilding.x, sourceBuilding.y, destBuilding.x, destBuilding.y);
 
         yield { buildingId: supply.buildingId, effectiveAmount, distance };

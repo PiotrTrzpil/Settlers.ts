@@ -1,6 +1,6 @@
 /** Building inventory management — PileSlot-based model. */
 
-import { BuildingType, type Entity, type StackedPileState } from '../../entity';
+import { BuildingType, isStorageBuilding, type Entity, type StackedPileState } from '../../entity';
 import { EMaterialType } from '../../economy/material-type';
 import { Race } from '../../core/race';
 import { SlotKind, type PileKind } from '../../core/pile-kind';
@@ -202,7 +202,7 @@ export class BuildingInventoryManager {
             allConfigs.push({ materialType: cfg.materialType, kind: SlotKind.Input });
         }
         for (const cfg of config.outputSlots) {
-            const kind = buildingType === BuildingType.StorageArea ? SlotKind.Storage : SlotKind.Output;
+            const kind = isStorageBuilding(buildingType) ? SlotKind.Storage : SlotKind.Output;
             allConfigs.push({ materialType: cfg.materialType, kind });
         }
 
@@ -473,6 +473,21 @@ export class BuildingInventoryManager {
 
     hasSlots(buildingId: number): boolean {
         return this.inventorySlots.has(buildingId);
+    }
+
+    /** Check if a building has any storage-kind slots. */
+    hasStorageSlots(buildingId: number): boolean {
+        const slotIds = this.inventorySlots.get(buildingId);
+        if (!slotIds) {
+            return false;
+        }
+        for (const id of slotIds) {
+            const slot = this.slotStore.get(id);
+            if (slot && slot.kind === SlotKind.Storage) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**

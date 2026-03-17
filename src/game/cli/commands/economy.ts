@@ -19,7 +19,7 @@ import {
     createEmptyStats,
 } from '@/game/features/logistics/logistics-snapshot';
 import { EntityType } from '@/game/entity';
-import { BuildingType } from '@/game/buildings/building-type';
+import { BuildingType, isStorageBuilding } from '@/game/buildings/building-type';
 import { EMaterialType } from '@/game/economy/material-type';
 import { SlotKind } from '@/game/core/pile-kind';
 import type { GameState } from '@/game/game-state';
@@ -340,7 +340,7 @@ function formatStorageMaterials(state: GameState, player: number, ctx: CliContex
     const totals = new Map<EMaterialType, number>();
     const invManager = ctx.game.services.inventoryManager;
     for (const e of state.entityIndex.ofTypeAndPlayer(EntityType.Building, player)) {
-        if ((e.subType as BuildingType) !== BuildingType.StorageArea) {
+        if (!isStorageBuilding(e.subType as BuildingType)) {
             continue;
         }
         if (!invManager.hasSlots(e.id)) {

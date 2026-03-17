@@ -8,6 +8,7 @@
 import { EMaterialType } from '../../economy/material-type';
 import type { GameState } from '../../game-state';
 import type { BuildingInventoryManager } from '../inventory';
+import { SlotKind } from '../../core/pile-kind';
 
 /**
  * Information about a material supply at a building.
@@ -19,6 +20,8 @@ export interface ResourceSupply {
     materialType: EMaterialType;
     /** Amount currently available in output slot */
     availableAmount: number;
+    /** Slot kind of the source (Output, Storage, or Free). */
+    slotKind: SlotKind;
 }
 
 /**
@@ -61,12 +64,13 @@ export function getAvailableSupplies(
             }
         }
 
-        const amount = inventoryManager.getOutputAmount(buildingId, materialType);
-        if (amount >= minAmount) {
+        const slot = inventoryManager.findOutputSlot(buildingId, materialType);
+        if (slot && slot.currentAmount >= minAmount) {
             supplies.push({
                 buildingId,
                 materialType,
-                availableAmount: amount,
+                availableAmount: slot.currentAmount,
+                slotKind: slot.kind,
             });
         }
     }

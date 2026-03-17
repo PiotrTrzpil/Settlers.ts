@@ -5,7 +5,7 @@
 import { computed, type ComputedRef, type Ref } from 'vue';
 import type { Game } from '@/game/game';
 import type { Entity } from '@/game/entity';
-import { BuildingType, EntityType } from '@/game/entity';
+import { BuildingType, EntityType, isStorageBuilding } from '@/game/entity';
 import { EMaterialType, DROPPABLE_MATERIALS } from '@/game/economy/material-type';
 import { StorageDirection } from '@/game/systems/inventory/storage-filter-manager';
 
@@ -51,7 +51,7 @@ export function useStorageFilter(
         if (e.type !== EntityType.Building) {
             return false;
         }
-        if (e.subType !== BuildingType.StorageArea) {
+        if (!isStorageBuilding(e.subType as BuildingType)) {
             return false;
         }
         const isUnderConstruction = game.value?.services.constructionSiteManager.hasSite(e.id) ?? false;

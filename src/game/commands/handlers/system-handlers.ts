@@ -2,7 +2,7 @@ import { EntityType } from '../../entity';
 import type { GameState } from '../../game-state';
 import type { TerrainData } from '../../terrain';
 import type { EventBus } from '../../event-bus';
-import { BuildingType } from '../../buildings/types';
+import { BuildingType, isStorageBuilding } from '../../buildings/types';
 import { EMaterialType } from '../../economy';
 import type { TreeSystem } from '../../features/trees';
 import type { CropSystem } from '../../features/crops';
@@ -115,7 +115,7 @@ export function executeSpawnPile(deps: SpawnPileDeps, cmd: SpawnPileCommand): Co
 
 export function executeSetStorageFilter(deps: SetStorageFilterDeps, cmd: SetStorageFilterCommand): CommandResult {
     const building = deps.state.getEntityOrThrow(cmd.buildingId, 'set_storage_filter');
-    if ((building.subType as BuildingType) !== BuildingType.StorageArea) {
+    if (!isStorageBuilding(building.subType as BuildingType)) {
         return commandFailed(`set_storage_filter: building ${cmd.buildingId} is not a StorageArea`);
     }
     if (cmd.direction !== null) {

@@ -6,7 +6,7 @@
  * in-flight tracker, or request manager.
  */
 
-import { BuildingType, EntityType } from '../../entity';
+import { EntityType } from '../../entity';
 import { EMaterialType } from '../../economy/material-type';
 import type { EventBus } from '../../event-bus';
 import { TransportPhase, type TransportJobRecord } from './transport-job-record';
@@ -25,51 +25,12 @@ export interface TransportJobDeps {
 }
 
 /**
- * Resolve a destination slot for a regular (non-storage) building.
- * Finds an input slot with space for this material.
- * Returns slot ID or -1 if none available.
- */
-function resolveRegularBuildingSlot(
-    destBuilding: number,
-    material: EMaterialType,
-    inventoryManager: BuildingInventoryManager
-): number {
-    const slot = inventoryManager.findSlot(destBuilding, material, SlotKind.Input);
-    return slot !== undefined ? slot.id : -1;
-}
-
-/**
- * Resolve a destination slot for a StorageArea.
- * First finds an already-claimed slot with space, then claims a free (NO_MATERIAL) slot.
- * Returns slot ID or -1 if no slot is available.
- */
-function resolveStorageAreaSlot(
-    destBuilding: number,
-    material: EMaterialType,
-    inventoryManager: BuildingInventoryManager
-): number {
-    // First: find already-claimed slot with space
-    const claimed = inventoryManager.findSlot(destBuilding, material, SlotKind.Storage);
-    if (claimed !== undefined) {
-        return claimed.id;
-    }
-
-    // Then: claim a free (unclaimed) slot
-    const free = inventoryManager.findSlot(destBuilding, EMaterialType.NO_MATERIAL, SlotKind.Storage);
-    if (free !== undefined) {
-        inventoryManager.setSlotMaterial(free.id, material);
-        return free.id;
-    }
-
-    return -1;
-}
-
-/**
  * Resolve a destination slot for a transport job.
  *
- * - Regular buildings: find a typed input slot with space.
- * - StorageArea: find a claimed storage slot with space, or claim a free (NO_MATERIAL) slot.
- * - Free piles / non-building entities: return first slot ID (or 0 as fallback).
+ * Tries slot kinds in order: Storage (with claim-on-demand), Input.
+ * Regular buildings have only Input slots, StorageAreas have only Storage slots,
+ * so the first matching kind wins without needing a building type check.
+ * Free piles / non-building entities use their first (and only) pile slot.
  *
  * Returns the slot ID, or -1 if no slot is available.
  */
@@ -82,11 +43,26 @@ function resolveDestinationSlot(destBuilding: number, material: EMaterialType, d
         return first !== undefined ? first.id : 0;
     }
 
-    if ((entity.subType as BuildingType) === BuildingType.StorageArea && entity.operational) {
-        return resolveStorageAreaSlot(destBuilding, material, deps.inventoryManager);
+    const im = deps.inventoryManager;
+
+    // Storage slots: find already-claimed slot with space, or claim a free one
+    const claimed = im.findSlot(destBuilding, material, SlotKind.Storage);
+    if (claimed !== undefined) {
+        return claimed.id;
+    }
+    const free = im.findSlot(destBuilding, EMaterialType.NO_MATERIAL, SlotKind.Storage);
+    if (free !== undefined) {
+        im.setSlotMaterial(free.id, material);
+        return free.id;
     }
 
-    return resolveRegularBuildingSlot(destBuilding, material, deps.inventoryManager);
+    // Input slots: find a typed slot with space
+    const input = im.findSlot(destBuilding, material, SlotKind.Input);
+    if (input !== undefined) {
+        return input.id;
+    }
+
+    return -1;
 }
 
 /**

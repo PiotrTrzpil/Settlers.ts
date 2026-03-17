@@ -39,7 +39,7 @@ import { EventBus, type GameEvents } from '@/game/event-bus';
 import { GameState } from '@/game/game-state';
 import { GameServices } from '@/game/game-services';
 import { CommandHandlerRegistry, registerAllHandlers } from '@/game/commands';
-import { BuildingType } from '@/game/buildings/building-type';
+import { BuildingType, isStorageBuilding } from '@/game/buildings/building-type';
 import { EntityType, UnitType, type TileCoord } from '@/game/entity';
 import { EMaterialType } from '@/game/economy/material-type';
 import { StorageDirection } from '@/game/systems/inventory/storage-filter-manager';
@@ -500,7 +500,7 @@ export class Simulation {
         const im = this.services.inventoryManager;
 
         // StorageArea slots start as NO_MATERIAL with kind=Storage — claim one before depositing
-        if ((entity.subType as BuildingType) === BuildingType.StorageArea) {
+        if (isStorageBuilding(entity.subType as BuildingType)) {
             const existing = im.findSlotWithSpace(buildingId, material, SlotKind.Storage);
             if (!existing) {
                 const free = im.findSlotWithSpace(buildingId, EMaterialType.NO_MATERIAL, SlotKind.Storage);

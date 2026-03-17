@@ -135,9 +135,6 @@ export class MaterialRequestSystem implements TickSystem {
             if (!entity) {
                 continue; // Removed during this tick (e.g., free pile consumed by carrier)
             }
-            if ((entity.subType as BuildingType) !== BuildingType.StorageArea) {
-                continue;
-            }
             if (this.constructionSiteManager.hasSite(entity.id)) {
                 continue;
             }
@@ -161,11 +158,11 @@ export class MaterialRequestSystem implements TickSystem {
             if (this.constructionSiteManager.hasSite(entity.id)) {
                 continue;
             }
-            const buildingType = entity.subType as BuildingType;
-            if (buildingType === BuildingType.StorageArea) {
+            if (this.inventoryManager.hasStorageSlots(entity.id)) {
                 this.dirtyStorageAreas.add(entity.id);
                 continue;
             }
+            const buildingType = entity.subType as BuildingType;
             const config = getInventoryConfig(buildingType, entity.race);
             if (config.inputSlots.length === 0) {
                 continue;

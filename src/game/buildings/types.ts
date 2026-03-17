@@ -9,7 +9,7 @@ import { getBuildingFootprintAt, getBuildingBlockAreaAt } from '@/resources/game
 import { getBuildingInfo } from '../data/game-data-access';
 import { BuildingType } from './building-type';
 
-export { BuildingType } from './building-type';
+export { BuildingType, isStorageBuilding } from './building-type';
 
 // ── Building occupancy limits ──
 
