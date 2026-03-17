@@ -1,7 +1,6 @@
 /**
  * OptimizedDepthSorter - High-performance entity depth sorting.
  *
- * Key optimizations over EntityDepthSorter:
  * 1. Accepts pre-computed world positions (no redundant tileToWorld calls)
  * 2. Pre-allocated buffers to avoid per-frame allocations
  * 3. Uses float depth keys for precision (avoids quantization issues)
