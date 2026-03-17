@@ -274,6 +274,7 @@ function setupRenderers(state: RendererMutableState, game: Game, getDebugGrid: (
     state.renderer.add(state.indicatorRenderer);
 
     state.entityRenderer = new EntityRenderer(game.terrain.mapSize, game.terrain.groundHeight, game.fileManager);
+    state.entityRenderer.registerPassDefinitions(game.services.getFeatureRenderPassDefinitions());
     state.entityRenderer.skipSpriteLoading = game.useProceduralTextures;
     state.entityRenderer.onSpritesLoaded = () => {
         debugStats.state.mapLoadTimings.rendererInit = Math.round(performance.now() - state.rendererInitStart);

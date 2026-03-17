@@ -12,7 +12,7 @@ import { getGarrisonCapacity } from '@/game/features/tower-garrison/internal/gar
 
 export interface GarrisonSlotInfo {
     max: number;
-    units: Array<{ unitId: number; level: number }>;
+    units: Array<{ unitId: number; level: number; unitType: UnitType }>;
 }
 
 export interface GarrisonInfo {
@@ -64,12 +64,12 @@ export function useGarrison(
 
         const swordsmanUnits = garrison.swordsmanSlots.unitIds.map(unitId => {
             const unitType = g.state.getEntityOrThrow(unitId, 'useGarrison:swordsman').subType as UnitType;
-            return { unitId, level: getUnitLevel(unitType) };
+            return { unitId, level: getUnitLevel(unitType), unitType };
         });
 
         const bowmanUnits = garrison.bowmanSlots.unitIds.map(unitId => {
             const unitType = g.state.getEntityOrThrow(unitId, 'useGarrison:bowman').subType as UnitType;
-            return { unitId, level: getUnitLevel(unitType) };
+            return { unitId, level: getUnitLevel(unitType), unitType };
         });
 
         const totalGarrisoned = swordsmanUnits.length + bowmanUnits.length;

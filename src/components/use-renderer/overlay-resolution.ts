@@ -8,9 +8,11 @@ import type { EntityRenderer } from '@/game/renderer/entity-renderer';
 import { OverlayRenderLayer, type BuildingOverlayRenderData } from '@/game/renderer/render-context';
 import { getBuildingVisualState, BuildingConstructionPhase } from '@/game/features/building-construction';
 import { PIXELS_TO_WORLD } from '@/game/renderer/sprite-metadata';
-import type { BuildingType } from '@/game/entity';
+import { BuildingType, EntityType } from '@/game/entity';
+import { UnitType } from '@/game/core/unit-types';
 import { getOverlayFrame } from '@/game/features/building-overlays';
 import { ENTITY_SCALE, scaleSprite } from '@/game/renderer/entity-renderer-constants';
+import { getGarrisonSlotPositions } from '@/game/features/tower-garrison/internal/garrison-slot-positions';
 
 const EMPTY_OVERLAY_DATA: readonly BuildingOverlayRenderData[] = [];
 
@@ -26,6 +28,7 @@ export function resolveBuildingOverlays(
 ): readonly BuildingOverlayRenderData[] {
     const result: BuildingOverlayRenderData[] = [];
     resolveConstructionOverlay(entityId, g, er, result);
+    resolveGarrisonOverlays(entityId, g, er, result);
     resolveCustomOverlays(entityId, g, er, result);
     return result.length > 0 ? result : EMPTY_OVERLAY_DATA;
 }
@@ -72,6 +75,59 @@ function resolveConstructionOverlay(
     });
 }
 
+/**
+ * Resolve garrisoned swordsman sprites as BehindBuilding overlays.
+ * Uses `top === false` settler positions from buildingInfo.xml — swordsmen visible through windows.
+ * Static standing pose (frame 0 of walk) at the XML pixel offset, scaled like other overlays.
+ */
+function resolveGarrisonOverlays(
+    entityId: number,
+    g: Game,
+    er: EntityRenderer,
+    out: BuildingOverlayRenderData[]
+): void {
+    const garrison = g.services.garrisonManager.getGarrison(entityId);
+    if (!garrison || garrison.swordsmanSlots.unitIds.length === 0) {
+        return;
+    }
+
+    const entity = g.state.getEntity(entityId);
+    if (!entity || entity.type !== EntityType.Building || !er.spriteManager) {
+        return;
+    }
+
+    const slotPositions = getGarrisonSlotPositions(entity.subType as BuildingType, entity.race, false);
+    if (!slotPositions) {
+        return;
+    }
+
+    for (let i = 0; i < garrison.swordsmanSlots.unitIds.length; i++) {
+        const slot = slotPositions[i];
+        if (!slot) {
+            continue;
+        }
+
+        const unit = g.state.getEntity(garrison.swordsmanSlots.unitIds[i]!);
+        if (!unit) {
+            continue;
+        }
+
+        const rawSprite = er.spriteManager.registry.getUnit(unit.subType as UnitType, slot.direction, unit.race);
+        if (!rawSprite) {
+            continue;
+        }
+
+        out.push({
+            sprite: scaleSprite(rawSprite, ENTITY_SCALE),
+            worldOffsetX: slot.offsetX * PIXELS_TO_WORLD,
+            worldOffsetY: slot.offsetY * PIXELS_TO_WORLD,
+            layer: OverlayRenderLayer.AboveBuilding,
+            teamColored: true,
+            verticalProgress: 1.0,
+        });
+    }
+}
+
 /** Resolve custom overlays (smoke, wheels, flags) from the BuildingOverlayManager. */
 function resolveCustomOverlays(entityId: number, g: Game, er: EntityRenderer, out: BuildingOverlayRenderData[]): void {
     const instances = g.services.buildingOverlayManager.getOverlays(entityId);
@@ -111,7 +167,7 @@ function resolveCustomOverlays(entityId: number, g: Game, er: EntityRenderer, ou
         const sprite = frames[Math.min(frameIndex, frames.length - 1)]!;
 
         out.push({
-            sprite,
+            sprite: scaleSprite(sprite, ENTITY_SCALE),
             worldOffsetX: inst.def.pixelOffsetX * PIXELS_TO_WORLD,
             worldOffsetY: inst.def.pixelOffsetY * PIXELS_TO_WORLD,
             layer: inst.def.layer as number as OverlayRenderLayer,
@@ -164,6 +220,6 @@ function resolveFlagInstance(
         verticalProgress: 1.0,
         worldOffsetX,
         worldOffsetY,
-        layer: OverlayRenderLayer.Flag,
+        layer: OverlayRenderLayer.AboveBuilding,
     });
 }

@@ -135,8 +135,6 @@ export class EntitySpritePass implements IRenderPass {
 
         if (overlays.length > 0) {
             this.emitOverlaysForLayer(gl, overlays, worldPos, playerRow, OverlayRenderLayer.AboveBuilding);
-            this.emitOverlaysForLayer(gl, overlays, worldPos, playerRow, OverlayRenderLayer.Flag);
-            this.emitOverlaysForLayer(gl, overlays, worldPos, playerRow, OverlayRenderLayer.AboveFlag);
         }
     }
 

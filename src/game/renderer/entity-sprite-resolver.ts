@@ -349,11 +349,16 @@ export class EntitySpriteResolver {
         }
     }
 
-    /** Get unit preview sprite — each leveled UnitType has its own registered sprites. */
-    private getUnitPreviewSprite(unitType: UnitType, race?: number, _level?: number): SpriteEntry | null {
+    /** Get static unit sprite for a specific direction (frame 0 of walk — the standing pose). */
+    getStaticUnitSprite(unitType: UnitType, spriteDir: number, race?: number): SpriteEntry | null {
         if (!this.sprites) {
             return null;
         }
-        return this.sprites.registry.getUnit(unitType, 0, race);
+        return this.sprites.registry.getUnit(unitType, spriteDir, race);
+    }
+
+    /** Get unit preview sprite — each leveled UnitType has its own registered sprites. */
+    private getUnitPreviewSprite(unitType: UnitType, race?: number, _level?: number): SpriteEntry | null {
+        return this.getStaticUnitSprite(unitType, 0, race);
     }
 }

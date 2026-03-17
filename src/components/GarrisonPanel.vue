@@ -21,8 +21,16 @@
                         @click="unit.unitId !== null ? ungarrison(unit.unitId) : undefined"
                     >
                         <template v-if="unit.unitId !== null">
-                            <span class="garrison-unit-icon">⚔️</span>
-                            <span class="garrison-unit-level">{{ unit.level }}</span>
+                            <img
+                                v-if="unit.iconKey && unitIcons[unit.iconKey]"
+                                :src="unitIcons[unit.iconKey]!.url"
+                                class="garrison-unit-sprite"
+                                :style="{
+                                    width: unitIcons[unit.iconKey]!.size + 'px',
+                                    height: unitIcons[unit.iconKey]!.size + 'px',
+                                }"
+                            />
+                            <span v-else class="garrison-unit-icon">⚔️</span>
                         </template>
                     </button>
                 </div>
@@ -49,8 +57,16 @@
                         @click="unit.unitId !== null ? ungarrison(unit.unitId) : undefined"
                     >
                         <template v-if="unit.unitId !== null">
-                            <span class="garrison-unit-icon">🏹</span>
-                            <span class="garrison-unit-level">{{ unit.level }}</span>
+                            <img
+                                v-if="unit.iconKey && unitIcons[unit.iconKey]"
+                                :src="unitIcons[unit.iconKey]!.url"
+                                class="garrison-unit-sprite"
+                                :style="{
+                                    width: unitIcons[unit.iconKey]!.size + 'px',
+                                    height: unitIcons[unit.iconKey]!.size + 'px',
+                                }"
+                            />
+                            <span v-else class="garrison-unit-icon">🏹</span>
                         </template>
                     </button>
                 </div>
@@ -66,10 +82,14 @@
 import { computed } from 'vue';
 import type { Game } from '@/game/game';
 import { useGarrison } from '@/composables/use-garrison';
+import { UnitType } from '@/game/core/unit-types';
+import { ALL_UNITS } from '@/views/palette-data';
+import type { IconEntry } from '@/views/sprite-icon-loader';
 
 const props = defineProps<{
     buildingId: number;
     game: Game | null;
+    unitIcons: Record<string, IconEntry>;
 }>();
 
 const gameRef = computed(() => props.game);
@@ -78,10 +98,14 @@ const tick = computed(() => props.game?.viewState.state.tick ?? 0);
 
 const garrison = useGarrison(gameRef, buildingIdRef, tick);
 
+/** Map UnitType → palette id for icon lookup */
+const unitTypeToIconKey = new Map<UnitType, string>(ALL_UNITS.map(u => [u.type, u.id]));
+
 interface GarrisonSlotDisplay {
     slotIndex: number;
     unitId: number | null;
     level: number;
+    iconKey: string | null;
 }
 
 const swordsmanSlots = computed<GarrisonSlotDisplay[]>(() => {
@@ -93,6 +117,7 @@ const swordsmanSlots = computed<GarrisonSlotDisplay[]>(() => {
         slotIndex: i,
         unitId: g.swordsmanSlots.units[i]?.unitId ?? null,
         level: g.swordsmanSlots.units[i]?.level ?? 0,
+        iconKey: g.swordsmanSlots.units[i] ? (unitTypeToIconKey.get(g.swordsmanSlots.units[i].unitType) ?? null) : null,
     }));
 });
 
@@ -105,6 +130,7 @@ const bowmanSlots = computed<GarrisonSlotDisplay[]>(() => {
         slotIndex: i,
         unitId: g.bowmanSlots.units[i]?.unitId ?? null,
         level: g.bowmanSlots.units[i]?.level ?? 0,
+        iconKey: g.bowmanSlots.units[i] ? (unitTypeToIconKey.get(g.bowmanSlots.units[i].unitType) ?? null) : null,
     }));
 });
 
@@ -153,8 +179,8 @@ function ungarrison(unitId: number): void {
 }
 
 .garrison-slot {
-    width: 22px;
-    height: 22px;
+    width: 29px;
+    height: 29px;
     border-radius: 3px;
     border: 1px solid rgba(180, 140, 80, 0.3);
     background: rgba(30, 25, 15, 0.4);
@@ -177,23 +203,31 @@ function ungarrison(unitId: number): void {
 }
 
 .garrison-slot-filled {
-    border-color: rgba(200, 160, 80, 0.5);
+    border-color: rgba(200, 160, 80, 0.7);
     background: rgba(60, 45, 20, 0.45);
 }
 
 .garrison-slot-filled:hover {
     background: rgba(100, 70, 25, 0.6);
-    border-color: rgba(220, 170, 80, 0.7);
+    border-color: rgba(220, 170, 80, 0.85);
 }
 
 .garrison-slot-disabled {
-    opacity: 0.45;
+    border-color: transparent;
     cursor: not-allowed;
 }
 
 .garrison-slot-disabled:hover {
     background: rgba(60, 45, 20, 0.45);
-    border-color: rgba(200, 160, 80, 0.5);
+    border-color: transparent;
+}
+
+.garrison-unit-sprite {
+    max-width: 27px;
+    max-height: 27px;
+    object-fit: contain;
+    image-rendering: pixelated;
+    pointer-events: none;
 }
 
 .garrison-unit-icon {

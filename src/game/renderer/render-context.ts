@@ -100,6 +100,9 @@ export interface TerritoryDotRenderData {
     readonly x: number;
     readonly y: number;
     readonly player: number;
+    /** Fractional tile offset toward own territory at player borders. */
+    readonly offsetX?: number;
+    readonly offsetY?: number;
 }
 
 /**
@@ -146,12 +149,8 @@ export interface SelectionState {
 export enum OverlayRenderLayer {
     /** Behind the building sprite (ground effects, shadows) */
     BehindBuilding = 0,
-    /** On top of the building but below the flag */
+    /** On top of the building — rendered in array order after the building sprite */
     AboveBuilding = 1,
-    /** Player flag layer — between AboveBuilding and AboveFlag */
-    Flag = 2,
-    /** On top of everything including the flag (status icons) */
-    AboveFlag = 3,
 }
 
 /**

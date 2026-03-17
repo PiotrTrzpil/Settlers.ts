@@ -24,7 +24,7 @@ import { TowerGarrisonManager } from './tower-garrison-manager';
 import { AutoGarrisonSystem } from './tower-garrison-auto-system';
 import { TowerCombatSystem } from './internal/tower-combat-system';
 import { towerBowmanTargets } from './internal/tower-combat-system';
-import { TowerBowmanRenderPass } from './internal/tower-bowman-render-pass';
+import { TowerGarrisonRenderPass } from './internal/tower-garrison-render-pass';
 import { isGarrisonBuildingType } from './internal/garrison-capacity';
 import { choreo } from '@/game/systems/choreo/choreo-builder';
 import {
@@ -110,7 +110,12 @@ export const TowerGarrisonFeature: FeatureDefinition = {
                     id: 'tower-bowman',
                     layer: RenderLayer.AboveEntities,
                     needs: { sprites: true },
-                    create: () => new TowerBowmanRenderPass(manager, ctx.gameState, towerBowmanTargets),
+                    create: () =>
+                        new TowerGarrisonRenderPass(manager, ctx.gameState, {
+                            getSlots: g => g.bowmanSlots,
+                            top: true,
+                            targets: towerBowmanTargets,
+                        }),
                 },
             ],
             persistence: [],

@@ -142,6 +142,7 @@
                         v-if="selectedBuildingId !== null"
                         :building-id="selectedBuildingId"
                         :game="props.game"
+                        :unit-icons="props.unitIcons"
                     />
 
                     <!-- Storage filter (shown only for StorageArea buildings, not under construction) -->
@@ -296,9 +297,11 @@ import { useConstructionInfo } from '@/composables/useConstructionInfo';
 import StorageFilterPanel from './StorageFilterPanel.vue';
 import { ProductionMode } from '@/game/features/production-control';
 import GarrisonPanel from './GarrisonPanel.vue';
+import type { IconEntry } from '@/views/sprite-icon-loader';
 
 const props = defineProps<{
     game: Game | null;
+    unitIcons: Record<string, IconEntry>;
 }>();
 
 const gameRef = computed(() => props.game);

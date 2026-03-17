@@ -75,7 +75,7 @@ function patchTypeToCondition(type: string): OverlayCondition {
 function createFlagDef(buildingInfo: BuildingInfo): BuildingOverlayDef {
     return {
         key: 'flag',
-        layer: OverlayLayer.Flag,
+        layer: OverlayLayer.AboveBuilding,
         pixelOffsetX: 0,
         pixelOffsetY: 0,
         spriteRef: FLAG_SPRITE_REF,
