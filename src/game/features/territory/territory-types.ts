@@ -12,6 +12,9 @@ export interface TerritoryDot {
     readonly x: number;
     readonly y: number;
     readonly player: number;
+    /** Fractional tile offset toward own territory (0 when facing unclaimed, ~0.35 at player borders). */
+    readonly offsetX: number;
+    readonly offsetY: number;
 }
 
 /**

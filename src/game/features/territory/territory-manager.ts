@@ -5,12 +5,14 @@
  * Provides O(1) territory ownership queries and boundary dot positions for rendering.
  *
  * Territory is recomputed lazily — only when queried after a building change.
+ * Overlapping zones use distance-based priority: each tile belongs to the
+ * closest tower/castle, creating equidistant borders between players.
  */
 
 import { GRID_DELTA_X, GRID_DELTA_Y, NUMBER_OF_DIRECTIONS } from '../../systems/hex-directions';
 import { TERRITORY_RADIUS, type TerritoryDot } from './territory-types';
 import type { BuildingType } from '../../buildings/types';
-import { thinDotsInScreenSpace, isInsideIsoEllipse } from '../../systems/boundary-ring';
+import { thinDotsInScreenSpace, isoDistSq } from '../../systems/boundary-ring';
 import { type ComponentStore, mapStore } from '../../ecs';
 
 // ── Types ────────────────────────────────────────────────────────────
@@ -23,6 +25,14 @@ interface TerritoryBuilding {
     readonly radius: number;
 }
 
+/** A tile whose ownership changed during recomputation */
+export interface TerritoryChange {
+    readonly x: number;
+    readonly y: number;
+    readonly oldOwner: number;
+    readonly newOwner: number;
+}
+
 /**
  * Manages territory zones created by towers and castles.
  *
@@ -33,6 +43,8 @@ interface TerritoryBuilding {
 export class TerritoryManager {
     /** Per-tile ownership: 0 = unclaimed, value = playerId + 1 */
     private readonly territoryGrid: Uint8Array;
+    /** Per-tile squared isometric distance to the owning building */
+    private readonly distanceGrid: Float32Array;
     private readonly mapWidth: number;
     private readonly mapHeight: number;
 
@@ -51,6 +63,12 @@ export class TerritoryManager {
     /** Callback after full recomputation (tower build/destroy) */
     onRecomputed?: () => void;
 
+    /**
+     * Callback with tiles that changed ownership during recomputation.
+     * Used by territory-feature to destroy buildings / displace units on lost territory.
+     */
+    onTerritoryChanged?: (changes: TerritoryChange[]) => void;
+
     /** Territory-generating buildings indexed by entity ID */
     private readonly buildings = new Map<number, TerritoryBuilding>();
 
@@ -61,6 +79,7 @@ export class TerritoryManager {
         this.mapWidth = mapWidth;
         this.mapHeight = mapHeight;
         this.territoryGrid = new Uint8Array(mapWidth * mapHeight);
+        this.distanceGrid = new Float32Array(mapWidth * mapHeight);
     }
 
     // ─────────────────────────────────────────────────────────────
@@ -163,12 +182,25 @@ export class TerritoryManager {
     }
 
     private recompute(): void {
-        // Clear grid
-        this.territoryGrid.fill(0);
+        // Snapshot old grid to detect changes
+        const hasChangeListener = this.onTerritoryChanged !== undefined;
+        const oldGrid = hasChangeListener ? new Uint8Array(this.territoryGrid) : null;
 
-        // Fill territory circles for each building
+        // Clear grids
+        this.territoryGrid.fill(0);
+        this.distanceGrid.fill(Infinity);
+
+        // Fill territory circles for each building — closest tower wins
         for (const building of this.buildings.values()) {
             this.fillCircle(building.x, building.y, building.radius, building.player + 1);
+        }
+
+        // Notify about changed tiles
+        if (hasChangeListener && oldGrid) {
+            const changes = this.collectChanges(oldGrid);
+            if (changes.length > 0) {
+                this.onTerritoryChanged!(changes);
+            }
         }
 
         // Compute boundary dots
@@ -177,13 +209,9 @@ export class TerritoryManager {
 
     /**
      * Fill a territory zone that appears as a wide ellipse on screen.
-     *
-     * The isometric tile-to-screen transform is:
-     *   screenX = dx - dy * 0.5
-     *   screenY = dy * 0.5
-     *
-     * We squash the vertical axis by 0.7 to produce a flatter ellipse
-     * that better matches the isometric perspective.
+     * Uses distance-based priority: if a tile is already claimed by a different
+     * player's closer tower, the existing claim is kept. This creates equidistant
+     * borders between overlapping territories.
      */
     private fillCircle(cx: number, cy: number, radius: number, ownerValue: number): void {
         const screenR = radius * 0.5;
@@ -199,15 +227,40 @@ export class TerritoryManager {
             const dy = y - cy;
             const rowOffset = y * this.mapWidth;
             for (let x = minX; x <= maxX; x++) {
-                if (isInsideIsoEllipse(x - cx, dy, rSq)) {
-                    const existing = this.territoryGrid[rowOffset + x]!;
-                    // Only claim unclaimed tiles — existing territory takes priority
-                    if (existing === 0) {
-                        this.territoryGrid[rowOffset + x] = ownerValue;
-                    }
+                const dx = x - cx;
+                const distSq = isoDistSq(dx, dy);
+                if (distSq > rSq) {
+                    continue;
+                }
+                const idx = rowOffset + x;
+                // Claim if unclaimed, or if this tower is closer than the current claimant
+                if (distSq < this.distanceGrid[idx]!) {
+                    this.territoryGrid[idx] = ownerValue;
+                    this.distanceGrid[idx] = distSq;
                 }
             }
         }
+    }
+
+    /** Compare old and new grids, returning tiles that changed ownership. */
+    private collectChanges(oldGrid: Uint8Array): TerritoryChange[] {
+        const changes: TerritoryChange[] = [];
+        const len = this.territoryGrid.length;
+        for (let i = 0; i < len; i++) {
+            const oldVal = oldGrid[i]!;
+            const newVal = this.territoryGrid[i]!;
+            if (oldVal !== newVal) {
+                const x = i % this.mapWidth;
+                const y = (i / this.mapWidth) | 0;
+                changes.push({
+                    x,
+                    y,
+                    oldOwner: oldVal === 0 ? -1 : oldVal - 1,
+                    newOwner: newVal === 0 ? -1 : newVal - 1,
+                });
+            }
+        }
+        return changes;
     }
 
     /**
@@ -237,29 +290,59 @@ export class TerritoryManager {
                 if (owner === 0) {
                     continue;
                 }
-                if (this.isBoundaryTile(x, y, owner)) {
-                    dots.push({ x, y, player: owner - 1 });
+                const offset = this.getBoundaryOffset(x, y, owner);
+                if (offset) {
+                    dots.push({ x, y, player: owner - 1, offsetX: offset.ox, offsetY: offset.oy });
                 }
             }
         }
         return dots;
     }
 
-    /** Check if a territory tile has at least one non-owned hex neighbor */
-    private isBoundaryTile(x: number, y: number, owner: number): boolean {
+    /**
+     * If the tile is a boundary tile, compute an inward offset.
+     * At player-vs-player borders, dots are pulled inward (~0.35 tiles) so both
+     * players' dots are visible side by side. At territory-vs-unclaimed borders,
+     * no offset is applied.
+     * Returns null if the tile is not a boundary tile.
+     */
+    private getBoundaryOffset(x: number, y: number, owner: number): { ox: number; oy: number } | null {
+        let isBoundary = false;
+        let enemyDx = 0;
+        let enemyDy = 0;
+        let enemyCount = 0;
+
         for (let d = 0; d < NUMBER_OF_DIRECTIONS; d++) {
             const nx = x + GRID_DELTA_X[d]!;
             const ny = y + GRID_DELTA_Y[d]!;
 
-            // Map edge counts as boundary
             if (nx < 0 || ny < 0 || nx >= this.mapWidth || ny >= this.mapHeight) {
-                return true;
+                isBoundary = true;
+                continue;
             }
 
-            if (this.territoryGrid[ny * this.mapWidth + nx] !== owner) {
-                return true;
+            const neighbor = this.territoryGrid[ny * this.mapWidth + nx]!;
+            if (neighbor === owner) {
+                continue;
+            }
+            isBoundary = true;
+            // Track direction toward enemy territory (not unclaimed)
+            if (neighbor !== 0) {
+                enemyDx += GRID_DELTA_X[d]!;
+                enemyDy += GRID_DELTA_Y[d]!;
+                enemyCount++;
             }
         }
-        return false;
+
+        if (!isBoundary) {
+            return null;
+        }
+        if (enemyCount === 0) {
+            return { ox: 0, oy: 0 };
+        }
+        // Normalize and pull inward (away from enemy neighbors)
+        const len = Math.sqrt(enemyDx * enemyDx + enemyDy * enemyDy);
+        const INWARD_OFFSET = 0.35;
+        return { ox: (-enemyDx / len) * INWARD_OFFSET, oy: (-enemyDy / len) * INWARD_OFFSET };
     }
 }

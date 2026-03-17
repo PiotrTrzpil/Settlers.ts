@@ -7,7 +7,7 @@
 import type { IViewPoint } from '../i-view-point';
 import type { IRenderPass, TerritoryDotContext } from './types';
 import type { TerritoryDotRenderData } from '../render-context';
-import { TilePicker } from '@/game/input/tile-picker';
+import { tileToWorld, heightToWorld } from '@/game/systems/coordinate-system';
 import { scaleSprite } from '../entity-renderer-constants';
 import { TINT_NEUTRAL } from '../tint-utils';
 
@@ -51,6 +51,7 @@ export class TerritoryDotPass implements IRenderPass {
         viewPoint: IViewPoint
     ): void {
         const { ctx } = this;
+        const { groundHeight, mapSize } = ctx;
         for (const dot of dots) {
             const sprite = ctx.spriteManager!.registry.getTerritoryDot(dot.player);
             if (!sprite) {
@@ -62,14 +63,12 @@ export class TerritoryDotPass implements IRenderPass {
                 }
                 continue;
             }
-            const worldPos = TilePicker.tileToWorld(
-                dot.x,
-                dot.y,
-                ctx.groundHeight,
-                ctx.mapSize,
-                viewPoint.x,
-                viewPoint.y
-            );
+            // Use integer coords for height lookup, apply fractional offset to world position
+            const idx = mapSize.toIndex(dot.x, dot.y);
+            const hWorld = heightToWorld(groundHeight[idx]!);
+            const tileX = dot.x + (dot.offsetX ?? 0);
+            const tileY = dot.y + (dot.offsetY ?? 0);
+            const worldPos = tileToWorld(tileX, tileY, hWorld, viewPoint.x, viewPoint.y);
             const scaled = scaleSprite(sprite, scale);
             ctx.spriteBatchRenderer.addSprite(gl, worldPos.worldX, worldPos.worldY, scaled, 0, TINT_NEUTRAL);
         }

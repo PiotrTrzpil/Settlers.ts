@@ -19,11 +19,16 @@
 /** Vertical squash to match isometric perspective (tiles appear 30% shorter vertically). */
 const Y_SCALE = 1.0 / 0.7;
 
-/** Check if a tile offset (dx, dy) from center is inside the isometric ellipse. */
-export function isInsideIsoEllipse(dx: number, dy: number, rSq: number): boolean {
+/** Squared isometric distance from center for a tile offset (dx, dy). */
+export function isoDistSq(dx: number, dy: number): number {
     const sx = dx - dy * 0.5;
     const sy = dy * 0.5 * Y_SCALE;
-    return sx * sx + sy * sy <= rSq;
+    return sx * sx + sy * sy;
+}
+
+/** Check if a tile offset (dx, dy) from center is inside the isometric ellipse. */
+export function isInsideIsoEllipse(dx: number, dy: number, rSq: number): boolean {
+    return isoDistSq(dx, dy) <= rSq;
 }
 
 // ── Types ─────────────────────────────────────────────────────────────
@@ -98,30 +103,48 @@ function hashKey(cx: number, cy: number): number {
     return cx * 100003 + cy;
 }
 
-/** Check if a screen-space point is too close to any already-accepted dot. */
-function hasNearby<T>(sd: ScreenDot<T>, hash: Map<number, ScreenDot<T>[]>, minDistSq: number): boolean {
+/** Check if a bucket has a same-player dot within minDistSq of the candidate. */
+function bucketHasNearby<T extends BoundaryDot>(sd: ScreenDot<T>, bucket: ScreenDot<T>[], minDistSq: number): boolean {
+    for (const p of bucket) {
+        if (p.dot.player !== sd.dot.player) {
+            continue;
+        }
+        const dsx = sd.sx - p.sx;
+        const dsy = sd.sy - p.sy;
+        if (dsx * dsx + dsy * dsy < minDistSq) {
+            return true;
+        }
+    }
+    return false;
+}
+
+/**
+ * Check if a screen-space point is too close to a same-player already-accepted dot.
+ * Cross-player dots are allowed to coexist so both boundaries remain visible.
+ */
+function hasNearby<T extends BoundaryDot>(
+    sd: ScreenDot<T>,
+    hash: Map<number, ScreenDot<T>[]>,
+    minDistSq: number
+): boolean {
     const hx = Math.floor(sd.sx);
     const hy = Math.floor(sd.sy);
     for (let dy = -1; dy <= 1; dy++) {
         for (let dx = -1; dx <= 1; dx++) {
             const bucket = hash.get(hashKey(hx + dx, hy + dy));
-            if (!bucket) {
-                continue;
-            }
-            for (const p of bucket) {
-                const dsx = sd.sx - p.sx;
-                const dsy = sd.sy - p.sy;
-                if (dsx * dsx + dsy * dsy < minDistSq) {
-                    return true;
-                }
+            if (bucket && bucketHasNearby(sd, bucket, minDistSq)) {
+                return true;
             }
         }
     }
     return false;
 }
 
-/** Remove dots that are too close to an already-accepted neighbor. */
-function distancePrune<T>(candidates: ScreenDot<T>[], minDistSq: number): T[] {
+/**
+ * Remove dots that are too close to an already-accepted same-player neighbor.
+ * Cross-player dots coexist; visual separation is handled by inward offsets.
+ */
+function distancePrune<T extends BoundaryDot>(candidates: ScreenDot<T>[], minDistSq: number): T[] {
     const accepted: T[] = [];
     const hash = new Map<number, ScreenDot<T>[]>();
 
