@@ -23,6 +23,7 @@ import {
     DEPTH_FACTOR_PILE,
     FLAT_SPRITE_DEPTH_BIAS,
 } from './entity-renderer-constants';
+import { isFlatSprite } from './depth-trait-defaults';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // CONFIGURATION
@@ -147,10 +148,7 @@ export class OptimizedDepthSorter {
             depth = depth + offsetY + heightWorld * depthFactor;
         }
 
-        // Flat sprites: render on terrain but behind standing trees, units, and other buildings
-        const isFlatTree = entity.type === EntityType.MapObject && ctx.getVariation(entity.id) >= 4;
-        const isFlatBuilding = entity.type === EntityType.Building && entity.subType === BuildingType.StorageArea;
-        if (isFlatTree || isFlatBuilding) {
+        if (isFlatSprite(entity.type, entity.subType, ctx.getVariation(entity.id))) {
             depth -= FLAT_SPRITE_DEPTH_BIAS;
         }
 
