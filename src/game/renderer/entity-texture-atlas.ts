@@ -468,6 +468,9 @@ export class EntityTextureAtlas extends ShaderTexture {
         for (let i = 0; i < this.layers.length; i++) {
             this.dirtyRegions[i] = { minX: 0, minY: 0, maxX: LAYER_SIZE, maxY: LAYER_SIZE };
         }
+        if (this.layers.length > 0) {
+            this._hasPendingUploads = true;
+        }
     }
 
     /**
@@ -746,7 +749,7 @@ export class EntityTextureAtlas extends ShaderTexture {
      */
     public setLayerData(layerIndex: number, buffer: ArrayBuffer): void {
         this.layers[layerIndex] = new Uint16Array(buffer);
-        this.dirtyRegions[layerIndex] = { minX: 0, minY: 0, maxX: LAYER_SIZE, maxY: LAYER_SIZE };
+        this.markDirty(layerIndex, 0, 0, LAYER_SIZE, LAYER_SIZE);
     }
 
     /**

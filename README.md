@@ -40,9 +40,6 @@ A browser-based remake of **The Settlers 4** (Die Siedler 4) built with TypeScri
 - **Geologist prospecting** — geologists search mountains in ring-sweep patterns, placing ore signs with richness tiers
 - **Ore vein discovery and depletion** — mines gradually consume per-tile ore levels; full persistence across save/load
 
-### AI
-- **AI opponents** with autonomous economy and military — race-specific build orders, spiral-search placement, soldier training, and attack waves targeting nearest enemy
-
 ### File Format Readers
 - GFX, GH, JIL, DIL, GIL, PIL, SIL, SND, LIB archives, MAP files (including savegames), ARA decryption, and GameData XML parsing
 - Built-in viewers for all major file formats (GFX, GH, JIL, LIB, MAP)
@@ -106,7 +103,6 @@ npx playwright test   # E2E tests
 
 - **Terrain rendering fixes** — river and desert tiles have visual artifacts and incorrect transitions that need fixing
 - **Map object sprites** — many raw map objects are not yet mapped to the correct sprite; needs visual comparison with the original game
-- **Settler sprite coverage** — ~65% of settler types have sprite animations; some specialist and race-specific units still need mapping
 - **Full logistics** — the current system handles basic supply/demand but lacks the full priority-based distribution, overflow handling, and transport optimization of the original
 - **Trade** — no donkey or ship-based goods transport between your own buildings
 - **Ships and waterways** — no harbors, ferries, or naval transport
@@ -116,7 +112,7 @@ npx playwright test   # E2E tests
 - **Special units** — priests, pioneers, gardeners, saboteurs, and thieves lack gameplay behavior (geologists are fully implemented)
 - **Magic** — no mana system or priest spells
 - **Dark Tribe specifics** — unique Dark Tribe mechanics (e.g. conversion, mushroom-based economy quirks) are not implemented
-- **AI players** — basic autonomous AI exists (build orders, soldier training, attack waves) but lacks advanced strategy, adaptive tactics, and difficulty settings
+- **AI players** — a behavior tree framework and basic decision logic exist but are untested and not yet playable
 - **Multiplayer** — no networking layer
 - **Sound** — music playback is complete with race-specific playlists and crossfading; sound effects are not yet integrated into gameplay
 - **Map editor** — no in-browser map creation tool
