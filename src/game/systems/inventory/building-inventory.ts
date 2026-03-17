@@ -21,21 +21,14 @@ import { PersistentMap, PersistentValue } from '@/game/persistence/persistent-st
 import { createLogger } from '@/utilities/logger';
 import type { MaterialThroughput } from './building-inventory-helpers';
 import {
-    type ThroughputMap,
-    throughputSerializer,
     spawnPileEntity,
     buildPileKind,
     removePileEntity,
-    findInputSlot,
     findOutputSlot,
-    requireInputSlot,
-    requireOutputSlot,
     getSourcesWithOutput as getSourcesWithOutputFn,
     getSinksNeedingInput as getSinksNeedingInputFn,
     findSlotByKind,
     getOutputSlotsForMaterial,
-    getInputSpace as getInputSpaceFn,
-    getOrCreateThroughput,
 } from './building-inventory-helpers';
 import { PileStatesView } from './pile-states-view';
 import {
@@ -44,6 +37,16 @@ import {
     produceOutput as produceOutputFn,
     canStoreOutput as canStoreOutputFn,
 } from './building-inventory-production';
+import { InventoryThroughputTracker } from './building-inventory-throughput';
+import {
+    depositInput as depositInputFn,
+    depositOutput as depositOutputFn,
+    withdrawInput as withdrawInputFn,
+    withdrawOutput as withdrawOutputFn,
+    getInputAmount as getInputAmountFn,
+    getOutputAmount as getOutputAmountFn,
+    getInputSpace as getInputSpaceFlowFn,
+} from './building-inventory-flow';
 
 const log = createLogger('BuildingInventory');
 
@@ -73,12 +76,12 @@ export class BuildingInventoryManager {
     readonly slotStore = new PersistentMap<PileSlot>('buildingInventories');
     /** Slot ID counter — auto-persisted. */
     readonly nextSlotIdStore = new PersistentValue<number>('buildingInventoryNextSlotId', 1);
-    /** Cumulative throughput per (buildingId, materialType) — auto-persisted. */
-    readonly throughputStore = new PersistentValue<ThroughputMap>(
-        'buildingInventoryThroughput',
-        new Map(),
-        throughputSerializer
-    );
+    /** Throughput tracker — owns the persistent ThroughputMap store. */
+    readonly throughput = new InventoryThroughputTracker();
+    /** Convenience accessor for persistence registration (game-services.ts uses this directly). */
+    get throughputStore() {
+        return this.throughput.throughputStore;
+    }
     /** buildingId → set of slotIds (derived index, rebuilt after restore). */
     private inventorySlots = new Map<number, Set<number>>();
     /** entityId → slotId reverse index (derived, rebuilt after restore). */
@@ -291,7 +294,7 @@ export class BuildingInventoryManager {
         }
 
         if (slot.buildingId !== null) {
-            this.recordThroughputIn(slot.buildingId, slot.materialType, toDeposit);
+            this.throughput.recordIn(slot.buildingId, slot.materialType, toDeposit);
         }
 
         this.emitChanged(slot, prev);
@@ -320,7 +323,7 @@ export class BuildingInventoryManager {
         }
 
         if (slot.buildingId !== null) {
-            this.recordThroughputOut(slot.buildingId, slot.materialType, toWithdraw);
+            this.throughput.recordOut(slot.buildingId, slot.materialType, toWithdraw);
         }
 
         this.emitChanged(slot, prev);
@@ -357,7 +360,7 @@ export class BuildingInventoryManager {
      * Returns { totalIn: 0, totalOut: 0 } if no throughput has been recorded yet.
      */
     getThroughput(buildingId: number, materialType: EMaterialType): MaterialThroughput {
-        return this.throughputStore.get().get(buildingId)?.get(materialType) ?? { totalIn: 0, totalOut: 0 };
+        return this.throughput.getThroughput(buildingId, materialType);
     }
 
     /**
@@ -365,7 +368,7 @@ export class BuildingInventoryManager {
      * Returns an empty map if no throughput has been recorded for this building.
      */
     getBuildingThroughput(buildingId: number): ReadonlyMap<EMaterialType, MaterialThroughput> {
-        return this.throughputStore.get().get(buildingId) ?? new Map();
+        return this.throughput.getBuildingThroughput(buildingId);
     }
 
     /**
@@ -412,32 +415,32 @@ export class BuildingInventoryManager {
         log.debug(`setSlotMaterial: slotId=${slotId} → ${material}`);
     }
     depositInput(buildingId: number, material: EMaterialType, amount: number): number {
-        return this.deposit(this.requireInputSlot(buildingId, material, 'depositInput').id, amount);
+        return depositInputFn(this, buildingId, material, amount);
     }
 
     depositOutput(buildingId: number, material: EMaterialType, amount: number): number {
-        return this.deposit(this.requireOutputSlot(buildingId, material, 'depositOutput').id, amount);
+        return depositOutputFn(this, buildingId, material, amount);
     }
 
     withdrawInput(buildingId: number, material: EMaterialType, amount: number): number {
-        return this.withdraw(this.requireInputSlot(buildingId, material, 'withdrawInput').id, amount);
+        return withdrawInputFn(this, buildingId, material, amount);
     }
 
     withdrawOutput(buildingId: number, material: EMaterialType, amount: number): number {
-        return this.withdraw(this.requireOutputSlot(buildingId, material, 'withdrawOutput').id, amount);
+        return withdrawOutputFn(this, buildingId, material, amount);
     }
 
     getInputAmount(buildingId: number, material: EMaterialType): number {
-        return this.findInputSlot(buildingId, material)?.currentAmount ?? 0;
+        return getInputAmountFn(this, buildingId, material);
     }
 
     getOutputAmount(buildingId: number, material: EMaterialType): number {
-        return this.findOutputSlot(buildingId, material)?.currentAmount ?? 0;
+        return getOutputAmountFn(this, buildingId, material);
     }
 
     /** Total available input space across all matching slots. */
     getInputSpace(buildingId: number, material: EMaterialType): number {
-        return getInputSpaceFn(this.inventorySlots, this.slotStore, buildingId, material);
+        return getInputSpaceFlowFn(this, buildingId, material);
     }
 
     canStartProduction(buildingId: number, recipe?: Recipe): boolean {
@@ -503,7 +506,7 @@ export class BuildingInventoryManager {
     clear(): void {
         this.slotStore.clear();
         this.nextSlotIdStore.set(1);
-        this.throughputStore.get().clear();
+        this.throughput.clear();
         this.inventorySlots.clear();
         this._entityIndex.clear();
     }
@@ -557,28 +560,8 @@ export class BuildingInventoryManager {
         return set;
     }
 
-    private findInputSlot(buildingId: number, material: EMaterialType): PileSlot | undefined {
-        return findInputSlot(this.inventorySlots, this.slotStore, buildingId, material);
-    }
-
     findOutputSlot(buildingId: number, material: EMaterialType): PileSlot | undefined {
         return findOutputSlot(this.inventorySlots, this.slotStore, buildingId, material);
-    }
-
-    private requireInputSlot(buildingId: number, material: EMaterialType, ctx: string): PileSlot {
-        return requireInputSlot(this.inventorySlots, this.slotStore, buildingId, material, ctx);
-    }
-
-    private requireOutputSlot(buildingId: number, material: EMaterialType, ctx: string): PileSlot {
-        return requireOutputSlot(this.inventorySlots, this.slotStore, buildingId, material, ctx);
-    }
-
-    private recordThroughputIn(buildingId: number, materialType: EMaterialType, amount: number): void {
-        getOrCreateThroughput(this.throughputStore.get(), buildingId, materialType).totalIn += amount;
-    }
-
-    private recordThroughputOut(buildingId: number, materialType: EMaterialType, amount: number): void {
-        getOrCreateThroughput(this.throughputStore.get(), buildingId, materialType).totalOut += amount;
     }
 
     private emitChanged(slot: PileSlot, previousAmount: number): void {
