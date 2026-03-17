@@ -57,6 +57,7 @@ export const VictoryConditionsFeature: FeatureDefinition = {
             exports,
             persistence: 'none',
             onRestoreComplete() {
+                victorySystem.reset();
                 for (const e of ctx.gameState.entities) {
                     if (e.type !== EntityType.Building) {
                         continue;
@@ -64,9 +65,7 @@ export const VictoryConditionsFeature: FeatureDefinition = {
                     if (constructionSiteManager.hasSite(e.id)) {
                         continue;
                     }
-                    if ((e.subType as BuildingType) === BuildingType.Castle) {
-                        victorySystem.onBuildingCompleted(BuildingType.Castle, e.player);
-                    }
+                    victorySystem.onBuildingCompleted(e.subType as BuildingType, e.player);
                 }
             },
             diagnostics: (): FeatureDiagnostics => {

@@ -397,4 +397,7 @@ export interface GameEventsFeatures {
         winner: number | null;
         reason: string;
     };
+
+    /** Emitted after game state is restored from a snapshot (reset). */
+    'game:stateRestored': Record<string, never>;
 }

@@ -12,6 +12,16 @@ import type { TileCoord } from '../../core/coordinates';
 import type { EMaterialType } from '../../economy/material-type';
 import type { SlotKind } from '../../core/pile-kind';
 
+/** A pending delivery reservation against a slot — tracks who reserved how much capacity. */
+export interface SlotReservation {
+    /** Transport job ID that owns this reservation. */
+    readonly jobId: number;
+    /** Carrier entity ID (for debugging). */
+    readonly carrierId: number;
+    /** Amount reserved. */
+    readonly amount: number;
+}
+
 /**
  * A single inventory-pile slot. Holds material data, pile entity reference,
  * and world position. Slot IDs are stable across the lifetime of a game session.
@@ -33,4 +43,10 @@ export interface PileSlot {
     kind: SlotKind;
     /** Owning building entity ID. null for free piles. */
     buildingId: number | null;
+    /**
+     * Active delivery reservations — transport jobs that have been assigned to
+     * deposit into this slot but haven't delivered yet. Used by findSlot to
+     * avoid over-assigning capacity when multiple slots exist for one material.
+     */
+    reservations: SlotReservation[];
 }

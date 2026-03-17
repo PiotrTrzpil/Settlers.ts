@@ -170,10 +170,7 @@ export class BuildingInventoryManager {
         this._entityIndex.delete(entityId);
     }
 
-    /**
-     * Create all slots for a building using the operational inventory config.
-     * Does NOT create pile entities (amount starts at 0).
-     */
+    /** Create all slots for a building using the operational inventory config. */
     createSlots(
         buildingId: number,
         buildingType: BuildingType,
@@ -183,10 +180,7 @@ export class BuildingInventoryManager {
         this.createSlotsFromConfig(buildingId, buildingType, getInventoryConfig(buildingType, race), positionResolver);
     }
 
-    /**
-     * Create slots from explicit config. Positions are resolved by the caller-supplied
-     * SlotPositionResolver — the manager never knows about XML pile data or construction sites.
-     */
+    /** Create slots from explicit config. Positions resolved by the caller-supplied resolver. */
     createSlotsFromConfig(
         buildingId: number,
         buildingType: BuildingType,
@@ -224,9 +218,7 @@ export class BuildingInventoryManager {
         }
     }
 
-    /**
-     * Create construction slots for a building under construction.
-     */
+    /** Create construction slots for a building under construction. */
     createConstructionSlots(
         buildingId: number,
         buildingType: BuildingType,
@@ -237,10 +229,7 @@ export class BuildingInventoryManager {
         this.createSlotsFromConfig(buildingId, buildingType, config, positionResolver);
     }
 
-    /**
-     * Destroy all slots for a building. Non-empty pile entities are converted to
-     * free piles (they survive the building removal). Empty slots are just cleaned up.
-     */
+    /** Destroy all slots. Non-empty pile entities are converted to free piles. */
     destroySlots(buildingId: number): void {
         const slotIds = this.inventorySlots.get(buildingId);
         if (!slotIds) {
@@ -270,11 +259,7 @@ export class BuildingInventoryManager {
         this.inventorySlots.delete(buildingId);
     }
 
-    /**
-     * Deposit amount into a slot by slotId.
-     * Spawns or updates the pile entity inline.
-     * Returns actual amount deposited (may be less than requested if slot is full).
-     */
+    /** Deposit into a slot. Spawns pile entity if needed. Returns actual amount deposited. */
     deposit(slotId: number, amount: number): number {
         const slot = this.getSlotOrThrow(slotId, 'deposit');
         const { executeCommand, gameState } = this.getDeps();
@@ -301,11 +286,7 @@ export class BuildingInventoryManager {
         return toDeposit;
     }
 
-    /**
-     * Withdraw amount from a slot by slotId.
-     * Removes the pile entity when amount reaches 0.
-     * Returns actual amount withdrawn.
-     */
+    /** Withdraw from a slot. Removes pile entity when empty. Returns actual amount withdrawn. */
     withdraw(slotId: number, amount: number): number {
         const slot = this.getSlotOrThrow(slotId, 'withdraw');
         const { executeCommand } = this.getDeps();
@@ -371,18 +352,12 @@ export class BuildingInventoryManager {
         return this.throughput.getBuildingThroughput(buildingId);
     }
 
-    /**
-     * Find first slot with space for the given material and kind.
-     * Kind can be a SlotKind or 'input'/'output' convenience aliases.
-     */
+    /** Find first slot with space for the given material and kind. */
     findSlot(buildingId: number, material: EMaterialType, kind: SlotKind | 'input' | 'output'): PileSlot | undefined {
         return findSlotByKind(this.inventorySlots, this.slotStore, buildingId, material, kind);
     }
 
-    /**
-     * Find first slot with space for given material and kind.
-     * Returns slot + its ID. For logistics resolveDestinationSlot.
-     */
+    /** Find first slot with space. Returns slot + its ID. */
     findSlotWithSpace(
         buildingId: number,
         material: EMaterialType,
@@ -392,17 +367,12 @@ export class BuildingInventoryManager {
         return s ? { slot: s, slotId: s.id } : undefined;
     }
 
-    /**
-     * All output slots for a building matching a material (for set_storage_filter command).
-     */
+    /** All output slots for a building matching a material. */
     getOutputSlots(buildingId: number, material: EMaterialType): ReadonlyArray<{ slot: PileSlot; slotId: number }> {
         return getOutputSlotsForMaterial(this.inventorySlots, this.slotStore, buildingId, material);
     }
 
-    /**
-     * Set a slot's materialType. Used by logistics to claim/release StorageArea slots.
-     * Throws if the slot has amount > 0 and material would change.
-     */
+    /** Set a slot's materialType. Throws if non-empty and material would change. */
     setSlotMaterial(slotId: number, material: EMaterialType): void {
         const slot = this.getSlotOrThrow(slotId, `setSlotMaterial`);
         if (slot.currentAmount > 0 && slot.materialType !== material) {
@@ -414,51 +384,43 @@ export class BuildingInventoryManager {
         slot.materialType = material;
         log.debug(`setSlotMaterial: slotId=${slotId} → ${material}`);
     }
+    // ─── Material flow delegations (see building-inventory-flow.ts) ──
     depositInput(buildingId: number, material: EMaterialType, amount: number): number {
         return depositInputFn(this, buildingId, material, amount);
     }
-
     depositOutput(buildingId: number, material: EMaterialType, amount: number): number {
         return depositOutputFn(this, buildingId, material, amount);
     }
-
     withdrawInput(buildingId: number, material: EMaterialType, amount: number): number {
         return withdrawInputFn(this, buildingId, material, amount);
     }
-
     withdrawOutput(buildingId: number, material: EMaterialType, amount: number): number {
         return withdrawOutputFn(this, buildingId, material, amount);
     }
-
     getInputAmount(buildingId: number, material: EMaterialType): number {
         return getInputAmountFn(this, buildingId, material);
     }
-
     getOutputAmount(buildingId: number, material: EMaterialType): number {
         return getOutputAmountFn(this, buildingId, material);
     }
-
-    /** Total available input space across all matching slots. */
     getInputSpace(buildingId: number, material: EMaterialType): number {
         return getInputSpaceFlowFn(this, buildingId, material);
     }
 
+    // ─── Production delegations (see building-inventory-production.ts) ──
     canStartProduction(buildingId: number, recipe?: Recipe): boolean {
         return canStartProductionFn(this, this.getDeps().gameState, buildingId, recipe);
     }
-
     consumeProductionInputs(buildingId: number, recipe?: Recipe): boolean {
         return consumeProductionInputsFn(this, this.getDeps().gameState, buildingId, recipe);
     }
-
     produceOutput(buildingId: number, recipe?: Recipe): boolean {
         return produceOutputFn(this, this.getDeps().gameState, buildingId, recipe);
     }
-
     canStoreOutput(buildingId: number, recipe?: Recipe): boolean {
         return canStoreOutputFn(this, this.getDeps().gameState, buildingId, recipe);
     }
-    /** Returns an iterable of building IDs that have slots. */
+
     getAllInventories(): IterableIterator<number> {
         return this.inventorySlots.keys();
     }
@@ -469,6 +431,31 @@ export class BuildingInventoryManager {
 
     getSinksNeedingInput(material: EMaterialType, minSpace = 1): number[] {
         return getSinksNeedingInputFn(this.inventorySlots, this.slotStore, material, minSpace);
+    }
+
+    /**
+     * Reserve capacity in a slot for an in-flight transport job.
+     * Called when a transport job is activated (carrier assigned to deliver here).
+     */
+    reserveSlot(slotId: number, jobId: number, carrierId: number, amount: number): void {
+        const slot = this.getSlotOrThrow(slotId, 'reserveSlot');
+        slot.reservations.push({ jobId, carrierId, amount });
+    }
+
+    /**
+     * Release a reservation from a slot (delivery complete or job cancelled).
+     * No-op if the jobId is not found (idempotent for cancel-after-deliver).
+     */
+    unreserveSlot(slotId: number, jobId: number): void {
+        const slot = this.slotStore.get(slotId);
+        if (!slot) {
+            // Slot may have been destroyed (building removed) — safe to ignore.
+            return;
+        }
+        const idx = slot.reservations.findIndex(r => r.jobId === jobId);
+        if (idx !== -1) {
+            slot.reservations.splice(idx, 1);
+        }
     }
 
     hasSlots(buildingId: number): boolean {
@@ -490,11 +477,7 @@ export class BuildingInventoryManager {
         return false;
     }
 
-    /**
-     * Register an existing free pile entity as a PileSlot.
-     * Used by FreePileHandler when a pile entity already exists (building destroyed,
-     * place_pile command). Creates a slot with kind=Free, pre-linked entityId.
-     */
+    /** Register an existing free pile entity as a PileSlot (building destroyed / place_pile). */
     registerFreePile(
         entityId: number,
         material: EMaterialType,
@@ -512,6 +495,7 @@ export class BuildingInventoryManager {
             entityId,
             kind: SlotKind.Free,
             buildingId: entityId, // use pile entity ID as "building" for output queries
+            reservations: [],
         };
         this.slotStore.set(slotId, slot);
         this.getInventorySlotSet(entityId).add(slotId);
@@ -526,14 +510,13 @@ export class BuildingInventoryManager {
         this._entityIndex.clear();
     }
 
-    /**
-     * Rebuild the buildingId → slotIds reverse index from the slotStore.
-     * Must be called after the PersistentMap is restored from a snapshot.
-     */
+    /** Rebuild indexes from slotStore. Must be called after PersistentMap restore. */
     rebuildInventoryIndex(): void {
         this.inventorySlots.clear();
         this._entityIndex.clear();
         for (const slot of this.slotStore.values()) {
+            // Ensure reservations array exists (missing on slots from older snapshots)
+            (slot as { reservations?: unknown }).reservations ??= [];
             if (slot.buildingId !== null) {
                 this.getInventorySlotSet(slot.buildingId).add(slot.id);
             }
@@ -560,6 +543,7 @@ export class BuildingInventoryManager {
             entityId: null,
             kind,
             buildingId,
+            reservations: [],
         };
         this.slotStore.set(slotId, slot);
         this.getInventorySlotSet(buildingId).add(slotId);

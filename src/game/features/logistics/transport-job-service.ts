@@ -56,7 +56,7 @@ function resolveDestinationSlot(destBuilding: number, material: EMaterialType, d
         return free.id;
     }
 
-    // Input slots: find a typed slot with space
+    // Input slots: find a typed slot with space (accounts for reservations via findSlot)
     const input = im.findSlot(destBuilding, material, SlotKind.Input);
     if (input !== undefined) {
         return input.id;
@@ -109,6 +109,8 @@ export function activate(
         createdAt: deps.demandQueue.getGameTime(),
     };
 
+    deps.inventoryManager.reserveSlot(slotId, record.id, carrierId, amount);
+
     if (!options?.skipStore) {
         deps.jobStore.jobs.set(carrierId, record);
     }
@@ -141,6 +143,7 @@ export function deliver(record: TransportJobRecord, deps: TransportJobDeps): voi
     if (record.phase !== TransportPhase.PickedUp) {
         throw new Error(`TransportJobService.deliver: expected phase 'picked-up', got '${record.phase}'`);
     }
+    deps.inventoryManager.unreserveSlot(record.slotId, record.id);
     record.phase = TransportPhase.Delivered;
     deps.jobStore.jobs.reindex(record.carrierId);
     deps.eventBus.emit('logistics:demandFulfilled', {
@@ -158,6 +161,7 @@ export function cancel(record: TransportJobRecord, reason: string, deps: Transpo
     if (record.phase === TransportPhase.Cancelled || record.phase === TransportPhase.Delivered) {
         return;
     }
+    deps.inventoryManager.unreserveSlot(record.slotId, record.id);
     record.phase = TransportPhase.Cancelled;
     // Only reindex if the record is in the active jobs map (not pending reservations)
     if (deps.jobStore.jobs.has(record.carrierId)) {

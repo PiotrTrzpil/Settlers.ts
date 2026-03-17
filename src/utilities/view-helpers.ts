@@ -14,17 +14,28 @@ export function pad(value: string | number, size: number): string {
     return str + '\u00a0'.repeat(padSize);
 }
 
-/** Render an IGfxImage to a canvas element */
-export function renderImageToCanvas(img: IGfxImage, canvas: HTMLCanvasElement): void {
+/** Render an IGfxImage to a canvas element. Optional bgColor fills behind transparent pixels. */
+export function renderImageToCanvas(img: IGfxImage, canvas: HTMLCanvasElement, bgColor?: string): void {
     canvas.width = img.width;
     canvas.height = img.height;
     const context = canvas.getContext('2d');
-
     if (!context) {
         return;
     }
 
-    context.putImageData(img.getImageData(), 0, 0);
+    const imageData = img.getImageData();
+    if (bgColor) {
+        // putImageData ignores compositing — use a temp canvas so transparent pixels reveal bgColor
+        context.fillStyle = bgColor;
+        context.fillRect(0, 0, img.width, img.height);
+        const tmp = document.createElement('canvas');
+        tmp.width = img.width;
+        tmp.height = img.height;
+        tmp.getContext('2d')!.putImageData(imageData, 0, 0);
+        context.drawImage(tmp, 0, 0);
+    } else {
+        context.putImageData(imageData, 0, 0);
+    }
 }
 
 /** Collect all non-null images from a reader into a list */

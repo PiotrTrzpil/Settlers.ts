@@ -419,18 +419,25 @@ export function useMapView(
         };
     }
 
+    function onStateRestored(): void {
+        gameEndResult.value = null;
+    }
+
     watch(game, (g, oldG) => {
         if (oldG) {
             oldG.eventBus.off('game:ended', onGameEnded);
+            oldG.eventBus.off('game:stateRestored', onStateRestored);
         }
         gameEndResult.value = null;
         if (g) {
             g.eventBus.on('game:ended', onGameEnded);
+            g.eventBus.on('game:stateRestored', onStateRestored);
         }
     });
 
     onBeforeUnmount(() => {
         game.value?.eventBus.off('game:ended', onGameEnded);
+        game.value?.eventBus.off('game:stateRestored', onStateRestored);
     });
 
     const dismissGameEnd = () => {

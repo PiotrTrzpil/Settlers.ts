@@ -4,7 +4,8 @@
  */
 
 import type { CliArgs, CliCommand, CliContext, CliResult } from '../types';
-import type { Command } from '@/game/commands/command-types';
+import type { Command, CommandResult } from '@/game/commands/command-types';
+import type { Game } from '@/game/game';
 import { ProductionMode } from '@/game/features/production-control';
 import { StorageDirection } from '@/game/systems/inventory/storage-filter-manager';
 import { ok, fail } from './helpers';
@@ -12,9 +13,22 @@ import { ok, fail } from './helpers';
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
 /** Execute a command and return ok/fail CliResult. */
-function exec(ctx: CliContext, cmd: Command): CliResult {
+function exec(ctx: CliContext, cmd: Command, msgFn?: (result: CommandResult) => string): CliResult {
     const result = ctx.game.execute(cmd);
-    return result.success ? ok('ok') : fail(result.error!);
+    if (!result.success) {
+        return fail(result.error!);
+    }
+    return ok(msgFn ? msgFn(result) : 'ok');
+}
+
+function createdId(result: CommandResult): number | undefined {
+    const effect = result.effects?.[0];
+    return effect && 'entityId' in effect ? effect.entityId : undefined;
+}
+
+function idSuffix(result: CommandResult): string {
+    const id = createdId(result);
+    return id != null ? ' (id=' + id + ')' : '';
 }
 
 /** Parse a positional as a required integer, throw with context on failure. */
@@ -96,15 +110,23 @@ function buildCommand(): CliCommand {
             const x = reqInt(args, 1, 'x');
             const y = reqInt(args, 2, 'y');
             const buildingType = ctx.resolveBuilding(typeName);
-            return exec(ctx, {
-                type: 'place_building',
-                buildingType,
-                x,
-                y,
-                player: ctx.player,
-                completed: !!args['done'],
-                spawnWorker: true,
-            });
+            const done = !!args['done'];
+            return exec(
+                ctx,
+                {
+                    type: 'place_building',
+                    buildingType,
+                    x,
+                    y,
+                    player: ctx.player,
+                    completed: done,
+                    spawnWorker: true,
+                },
+                r => {
+                    const status = done ? 'completed' : 'construction';
+                    return `placed ${typeName} at ${x},${y} for player ${ctx.player} (${status})` + idSuffix(r);
+                }
+            );
         },
     };
 }
@@ -259,7 +281,9 @@ function spawnCommand(): CliCommand {
             const x = reqInt(args, 1, 'x');
             const y = reqInt(args, 2, 'y');
             const unitType = ctx.resolveUnit(typeName);
-            return exec(ctx, { type: 'spawn_unit', unitType, x, y, player: ctx.player });
+            return exec(ctx, { type: 'spawn_unit', unitType, x, y, player: ctx.player }, r => {
+                return `spawned ${typeName} at ${x},${y} for player ${ctx.player}` + idSuffix(r);
+            });
         },
     };
 }
@@ -276,7 +300,9 @@ function pileCommand(): CliCommand {
             const x = reqInt(args, 2, 'x');
             const y = reqInt(args, 3, 'y');
             const materialType = ctx.resolveMaterial(materialName);
-            return exec(ctx, { type: 'place_pile', materialType, amount, x, y });
+            return exec(ctx, { type: 'place_pile', materialType, amount, x, y }, r => {
+                return `placed ${amount}x ${materialName} at ${x},${y}` + idSuffix(r);
+            });
         },
     };
 }
@@ -290,6 +316,31 @@ function selectCommand(): CliCommand {
         execute(args: CliArgs, ctx: CliContext): CliResult {
             const entityId = reqInt(args, 0, 'entityId');
             return exec(ctx, { type: 'select', entityId });
+        },
+    };
+}
+
+function resetCommand(): CliCommand {
+    return {
+        name: 'reset',
+        aliases: [],
+        usage: 'reset [--clear | --reload]',
+        desc: 'Reset game state. --clear wipes entities, --reload reloads page from scratch',
+        execute(args: CliArgs, ctx: CliContext): CliResult {
+            const game = ctx.game as Game;
+            if (args['reload']) {
+                // Clear saved game state so the page loads the map completely fresh
+                localStorage.removeItem('settlers_game_state');
+                localStorage.removeItem('settlers_initial_state');
+                setTimeout(() => window.location.reload(), 50);
+                return ok('reloading page...');
+            }
+            if (args['clear']) {
+                game.clearAllEntities({ resetTerrain: true });
+                return ok('cleared all entities and reset terrain');
+            }
+            game.restoreToInitialState();
+            return ok('restored to initial map state');
         },
     };
 }
@@ -311,5 +362,6 @@ export function createActionCommands(): CliCommand[] {
         spawnCommand(),
         pileCommand(),
         selectCommand(),
+        resetCommand(),
     ];
 }

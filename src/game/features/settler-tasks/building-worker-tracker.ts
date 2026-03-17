@@ -14,7 +14,7 @@ import { createLogger } from '@/utilities/logger';
 import { SettlerState } from './types';
 import type { UnitRuntime } from './unit-state-machine';
 import { relocateUnitsFromFootprints } from './initial-worker-assignment';
-import type { ISettlerBuildingLocationManager } from '../settler-location/types';
+import { SettlerBuildingStatus, type ISettlerBuildingLocationManager } from '../settler-location/types';
 import type { IndexedMap, Index } from '@/game/utils/indexed-map';
 
 const log = createLogger('BuildingWorkerTracker');
@@ -182,6 +182,12 @@ export class BuildingWorkerTracker {
             return;
         }
         const buildingId = runtime.homeAssignment.buildingId;
+        // Cancel approach tracking if the settler was still approaching (not yet inside).
+        // Settlers that are already Inside are managed by exitBuilding(), not here.
+        const location = this.locationManager.getLocation(settlerId);
+        if (location?.status === SettlerBuildingStatus.Approaching) {
+            this.locationManager.cancelApproach(settlerId);
+        }
         const count = this.occupants.get(buildingId);
         if (count !== undefined) {
             if (count <= 1) {

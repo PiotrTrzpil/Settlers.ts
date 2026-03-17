@@ -36,7 +36,7 @@ export type { MaterialThroughput, SerializedBuildingInventory, SerializedPileSlo
 export { BuildingInventoryManager } from './building-inventory';
 
 // PileSlot type (unified inventory+pile slot)
-export type { PileSlot } from './pile-slot';
+export type { PileSlot, SlotReservation } from './pile-slot';
 
 // Inventory configurations
 export type { SlotConfig, InventoryConfig } from './inventory-configs';

@@ -184,6 +184,7 @@ export class Game extends GameCore {
             );
         }
         restoreFromSnapshot(this, snapshot);
+        this.eventBus.emit('game:stateRestored', {});
     }
 
     /**

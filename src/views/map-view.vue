@@ -247,7 +247,7 @@
 
                 <!-- Left panel container (selection info) -->
                 <div class="left-panels">
-                    <selection-panel :game="game" />
+                    <selection-panel :game="game" :unit-icons="unitIcons" />
                 </div>
 
                 <!-- Right panel container (tabbed: layers, settings, logistics, debug) -->

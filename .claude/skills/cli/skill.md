@@ -29,7 +29,7 @@ $ARGUMENTS
 `carriers [--p N]`, `reqs [--p N]`, `piles [--kind free|output|input|storage|construction]`, `workers [--state idle|working|interrupted]`, `jobs [--p N]`, `diag [--p N]`
 
 ### Actions
-`b <Type> <x> <y> [--done]`, `r <UnitType> [count]`, `mv <id> <x> <y>`, `rm <id>`, `spawn <UnitType> <x> <y>`, `pile <material> <amount> <x> <y>`, `sel <id>`, `gar/ugar`, `prod <id> <mode>`, `recipe <id> <idx> <weight>`, `sf <id> <material> <import|export|null>`, `player [N|reset]`
+`b <Type> <x> <y> [--done]`, `r <UnitType> [count]`, `mv <id> <x> <y>`, `rm <id>`, `spawn <UnitType> <x> <y>`, `pile <material> <amount> <x> <y>`, `sel <id>`, `gar/ugar`, `prod <id> <mode>`, `recipe <id> <idx> <weight>`, `sf <id> <material> <import|export|null>`, `reset [--clear | --reload]`, `player [N|reset]`
 
 ### Flags
 `--p N` (player), `--n N` (row limit), `--done` (skip construction), `--tail` (recent logs), `--level warn|error`, `--kind` (pile type filter), `--state` (worker state filter)

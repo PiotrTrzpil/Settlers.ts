@@ -13,6 +13,7 @@
             <button :class="{ active: viewMode === 'single' }" @click="viewMode = 'single'">Single</button>
             <button :class="{ active: viewMode === 'grid' }" @click="switchToGrid(() => {})">Grid</button>
             <Checkbox v-model="doAnimation" label="Animate" />
+            <Checkbox v-model="magentaBg" label="Magenta BG" />
             <template v-if="viewMode === 'grid'">
                 <span class="label">Direction:</span>
                 <select v-model="gridDirection" class="dir-select" @change="onGridDirectionChange">
@@ -151,7 +152,13 @@ import { DilFileReader } from '@/resources/gfx/dil-file-reader';
 import { LogHandler } from '@/utilities/log-handler';
 import { FileManager, IFileSource } from '@/utilities/file-manager';
 import { IndexFileItem } from '@/resources/gfx/index-file-item';
-import { pad, loadGfxFileSet, parseGfxReaders, renderImageToCanvas } from '@/utilities/view-helpers';
+import {
+    pad,
+    loadGfxFileSet,
+    parseGfxReaders,
+    renderImageToCanvas as renderImageToCanvasBase,
+} from '@/utilities/view-helpers';
+import type { IGfxImage } from '@/resources/gfx/igfx-image';
 import { useCompositeGridView } from '@/composables/useGridView';
 import {
     isSettlerFile as isSettlerFileCheck,
@@ -180,6 +187,11 @@ const virtualGridRef = ref<{ getScrollOffset(): number; setScrollOffset(offset: 
 const { viewMode, setCanvasRef, clearRefs, canvasRefs, switchToGrid } = useCompositeGridView('grid');
 
 const doAnimation = ref(true);
+const magentaBg = ref(false);
+
+function renderImageToCanvas(img: IGfxImage, canvas: HTMLCanvasElement): void {
+    renderImageToCanvasBase(img, canvas, magentaBg.value ? '#ff00ff' : undefined);
+}
 const gridDirection = ref<'all' | number>(0);
 let animationTimer = 0;
 let scrollSaveTimer = 0;
@@ -191,6 +203,7 @@ const STORAGE_KEY = 'jil_view_state';
 interface SavedJilState {
     viewMode?: string;
     doAnimation?: boolean;
+    magentaBg?: boolean;
     gridDirection?: 'all' | number;
     scrollOffset?: number;
     jobIndex?: number;
@@ -219,6 +232,9 @@ function loadSavedState(): void {
         if (typeof saved.doAnimation === 'boolean') {
             doAnimation.value = saved.doAnimation;
         }
+        if (typeof saved.magentaBg === 'boolean') {
+            magentaBg.value = saved.magentaBg;
+        }
         if (saved.gridDirection === 'all' || typeof saved.gridDirection === 'number') {
             gridDirection.value = saved.gridDirection;
         }
@@ -241,6 +257,7 @@ function saveState(): void {
     const state: SavedJilState = {
         viewMode: viewMode.value,
         doAnimation: doAnimation.value,
+        magentaBg: magentaBg.value,
         gridDirection: gridDirection.value,
         scrollOffset,
         jobIndex: selectedJil.value?.index,
@@ -269,7 +286,7 @@ const selectedDil = ref<IndexFileItem | null>(null);
 const selectedGil = ref<IndexFileItem | null>(null);
 
 // Save state whenever UI controls or selections change
-watch([viewMode, doAnimation, gridDirection, selectedJil, selectedDil, selectedGil], () => saveState());
+watch([viewMode, doAnimation, magentaBg, gridDirection, selectedJil, selectedDil, selectedGil], () => saveState());
 
 const gfxFileReader = ref<GfxFileReader | null>(null);
 const dilFileReader = ref<DilFileReader | null>(null);
@@ -465,20 +482,12 @@ function renderFrame(gilItem: IndexFileItem): void {
         top: gfx.top,
     };
 
-    const img = gfx.getImageData();
     const cavEl = ghCav.value;
     if (!cavEl) {
         return;
     }
 
-    cavEl.width = img.width;
-    cavEl.height = img.height;
-    const context = cavEl.getContext('2d');
-    if (!context) {
-        return;
-    }
-
-    context.putImageData(img, 0, 0);
+    renderImageToCanvas(gfx, cavEl);
 }
 
 function onSelectGil() {
@@ -672,6 +681,16 @@ function selectJobFromGrid(item: IndexFileItem) {
     onSelectJil();
     viewMode.value = 'single';
 }
+
+watch(magentaBg, () => {
+    if (viewMode.value === 'single') {
+        if (selectedGil.value) {
+            renderFrame(selectedGil.value);
+        }
+    } else {
+        onGridVisible(gridVisibleStart, gridVisibleEnd);
+    }
+});
 
 watch(doAnimation, animating => {
     if (viewMode.value === 'single') {

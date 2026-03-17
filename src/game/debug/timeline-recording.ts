@@ -42,6 +42,8 @@ export const CATEGORY_MAP: Record<string, string> = {
     movement: 'movement',
     choreo: 'unit',
     combat: 'combat',
+    siege: 'combat',
+    game: 'game',
     'settler-location': 'unit',
     recruitment: 'unit',
     construction: 'building',

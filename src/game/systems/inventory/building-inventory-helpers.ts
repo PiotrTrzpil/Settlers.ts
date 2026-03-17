@@ -214,6 +214,15 @@ export function requireOutputSlot(
 
 type SlotLookup = { get(id: number): PileSlot | undefined };
 
+/** Current amount + reserved (in-flight) amount. Used for capacity checks. */
+export function effectiveAmount(slot: PileSlot): number {
+    let reserved = 0;
+    for (const r of slot.reservations) {
+        reserved += r.amount;
+    }
+    return slot.currentAmount + reserved;
+}
+
 // ── Bulk query helpers ──────────────────────────────────────────────────────
 
 export function getSourcesWithOutput(
@@ -315,7 +324,7 @@ export function findSlotByKind(
         if (!slot) {
             throw new Error(`Slot ${id} not found in slotStore [findSlotByKind]`);
         }
-        if (slot.materialType === material && slot.kind === resolvedKind && slot.currentAmount < slot.maxCapacity) {
+        if (slot.materialType === material && slot.kind === resolvedKind && effectiveAmount(slot) < slot.maxCapacity) {
             return slot;
         }
     }

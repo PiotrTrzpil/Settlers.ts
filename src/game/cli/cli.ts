@@ -129,6 +129,10 @@ export class GameCli {
         }
 
         const player = typeof args['p'] === 'number' ? args['p'] : this.currentPlayer;
+        if (typeof args['p'] === 'number' && !this.game.playerRaces.has(player)) {
+            const available = [...this.game.playerRaces.keys()].sort((a, b) => a - b);
+            return { ok: false, output: `player ${player} not found. available: ${available.join(', ')}` };
+        }
 
         const ctx: CliContext = {
             game: this.game,

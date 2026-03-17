@@ -104,6 +104,15 @@ export class VictoryConditionsSystem implements TickSystem {
         this.dirty = true;
     }
 
+    /** Reset all internal state so the system can re-initialize from restored entities. */
+    reset(): void {
+        this.playerStatus.clear();
+        this.castleCounts.clear();
+        this.initialized = false;
+        this.dirty = false;
+        this.result = { ended: false, winner: null, reason: null };
+    }
+
     // ── Public query API ────────────────────────────────────────────────
 
     getPlayerStatus(player: number): PlayerStatus {

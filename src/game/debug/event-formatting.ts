@@ -248,4 +248,5 @@ export const EventFmt = {
         `building=${e.buildingId} settler=${e.unitId} player=${e.player}`,
     'game:playerEliminated': (e: GameEvents['game:playerEliminated']) => `player ${e.player} eliminated`,
     'game:ended': (e: GameEvents['game:ended']) => `winner=${e.winner ?? 'none'} reason=${e.reason}`,
+    'game:stateRestored': () => 'state restored from snapshot',
 } satisfies { [K in keyof GameEvents]: (e: GameEvents[K]) => string };

@@ -41,10 +41,8 @@ log.setDefaultLevel('warn');
  */
 export function createLogger(name: string): log.Logger {
     const logger = log.getLogger(name);
-    const originalFactory = logger.methodFactory;
 
-    logger.methodFactory = (methodName, logLevel, loggerName) => {
-        const rawMethod = originalFactory(methodName, logLevel, loggerName);
+    logger.methodFactory = (methodName, _logLevel, loggerName) => {
         return (...args: unknown[]) => {
             // Feed into LogManager buffer for the UI log panel
             const msg = args.map(a => (typeof a === 'string' ? a : JSON.stringify(a))).join(' ');
@@ -53,7 +51,11 @@ export function createLogger(name: string): log.Logger {
                 source: String(loggerName),
                 msg,
             });
-            rawMethod(...args);
+            // Late-bind console access so CLI console capture intercepts these messages.
+            // loglevel's default factory early-binds via .bind(), which bypasses any
+            // later console patches (e.g. GameCli.installConsoleCapture).
+            const fn = console[methodName as 'log' | 'warn' | 'error' | 'debug' | 'info'];
+            fn.call(console, ...args);
         };
     };
 
