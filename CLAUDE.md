@@ -39,12 +39,6 @@ pnpm timeline:live    # Query live timeline DBs (shorthand for --dir live)
 - **Feature modules**: Follow patterns in `docs/architecture/feature-modules.md`
 - **Architecture rules**: Read `docs/design-rules.md` for invariants and naming conventions
 
-## Codebase Memory (MCP) — Project-Specific Notes
-
-IMPORTS edges have `via_barrel` property (true when import goes through a barrel/index file).
-
-See global CLAUDE.md for full tool reference and mandatory triggers.
-
 
 
 ## Editing code

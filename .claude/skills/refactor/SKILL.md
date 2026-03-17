@@ -24,12 +24,7 @@ $ARGUMENTS
 - Identify the public API boundary: what do external consumers actually use?
 - Check for tests that cover the code being refactored. Read them to understand expected behavior.
 
-**Use codebase-memory-mcp graph** (see `docs/CODEBASE_MEMORY.md` for full reference). **Run all applicable graph queries in parallel using multiple agents** — this phase should complete in seconds, not minutes. Each query is independent; batch them into 2-3 parallel agents:
-- `search_graph(name_pattern='.*YourSymbol.*', label='Class')` — find the symbol and see fan-in/fan-out
-- `trace_call_path(function_name='X', direction='both', depth=2)` — map all callers and callees before changing anything
-- `query_graph('MATCH (a)-[:USAGE]->(b) WHERE b.name = "X" RETURN a.name, a.file LIMIT 20')` — find read references (callbacks, variable assignments) that `find_references` may miss
-- `query_graph('MATCH (c:Class)-[:IMPLEMENTS]->(i:Interface) WHERE i.name = "X" ...')` — find all implementors of an interface you're changing
-- `get_code_snippet(qualified_name='X', include_neighbors=true)` — read source + caller/callee names without opening the file
+**Use GitNexus** for structural understanding. Run `gitnexus_context` and `gitnexus_impact` on affected symbols to map callers, callees, and blast radius before changing anything.
 
 ### 2. Identify the Target Architecture
 
@@ -69,7 +64,7 @@ Consult `docs/design-rules.md` and `docs/architecture/feature-modules.md` for pr
 
 - Run targeted unit tests: `pnpm vitest run <relevant-test-file>`
 - Run lint: `pnpm lint`
-- `detect_changes(scope='unstaged', depth=2)` — verify blast radius matches expectations. CRITICAL-risk symbols need review; unexpected impacted symbols mean you missed a dependency.
+- `gitnexus_detect_changes({scope='unstaged'})` — verify blast radius matches expectations. CRITICAL-risk symbols need review; unexpected impacted symbols mean you missed a dependency.
 - Verify no imports from `internal/` by external code
 - Check the pre-commit review checklist (CLAUDE.md): no optional chaining on required deps, use `getEntityOrThrow`, no silent fallbacks
 
