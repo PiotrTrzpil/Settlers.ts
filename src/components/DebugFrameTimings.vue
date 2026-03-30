@@ -1,5 +1,5 @@
 <template>
-    <CollapseSection title="Frame Timings" :default-open="false">
+    <CollapseSection title="Frame Timings" :default-open="false" persist-key="debug-frame-timings">
         <StatRow label="Frame" :value="`${rt.frame} ms`" total />
         <StatRow label="Ticks" :value="`${rt.ticks} ms`" />
         <StatRow

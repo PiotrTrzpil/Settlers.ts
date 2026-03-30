@@ -1,11 +1,11 @@
 <template>
-    <OverlayPanel v-model:open="open" label="Debug" title="Debug Panel">
+    <OverlayPanel label="Debug" title="Debug Panel" persist-key="debug" :default-open="false">
         <DebugPerformanceSection />
         <DebugFrameTimings />
         <DebugMapLoadTimings />
 
         <!-- Entities -->
-        <CollapseSection title="Entities">
+        <CollapseSection title="Entities" persist-key="debug-entities">
             <StatRow label="Total" :value="view.entityCount" />
             <StatRow label="Buildings" :value="view.buildingCount" />
             <StatRow label="Units" :value="view.unitCount" />
@@ -14,35 +14,35 @@
         </CollapseSection>
 
         <!-- Camera -->
-        <CollapseSection title="Camera">
+        <CollapseSection title="Camera" persist-key="debug-camera">
             <StatRow label="Position" :value="`${stats.cameraX}, ${stats.cameraY}`" />
             <StatRow label="Zoom" :value="`${stats.zoom}x`" />
             <StatRow label="Canvas" :value="`${stats.canvasWidth} x ${stats.canvasHeight}`" />
             <div class="goto-row">
                 <input
                     v-model="gotoTileCoords"
-                    class="goto-input goto-input-wide"
+                    class="goto-input"
                     type="text"
                     placeholder="x, y"
                     @keydown.enter="goToTile"
                 />
-                <button class="ctrl-btn" @click="goToTile">Go to tile</button>
+                <SettingsButton @click="goToTile">Go to tile</SettingsButton>
             </div>
             <div class="goto-row">
                 <input
                     v-model="gotoEntityId"
-                    class="goto-input goto-input-wide"
+                    class="goto-input"
                     type="number"
                     placeholder="Entity ID"
                     @keydown.enter="goToEntity"
                 />
-                <button class="ctrl-btn" @click="goToEntity">Go to entity</button>
+                <SettingsButton @click="goToEntity">Go to entity</SettingsButton>
             </div>
             <StatRow v-if="gotoEntityError" :label="gotoEntityError" dim />
         </CollapseSection>
 
         <!-- Tile -->
-        <CollapseSection title="Tile">
+        <CollapseSection title="Tile" persist-key="debug-tile">
             <template v-if="stats.hasTile">
                 <StatRow label="Coords" :value="`${stats.tileX}, ${stats.tileY}`" />
                 <StatRow label="Ground type" :value="stats.tileGroundType" />
@@ -52,24 +52,24 @@
         </CollapseSection>
 
         <!-- Controls -->
-        <CollapseSection title="Controls">
-            <div class="control-buttons">
-                <button class="ctrl-btn" @click="$emit('togglePause')">
+        <CollapseSection title="Controls" persist-key="debug-controls">
+            <div class="button-row">
+                <SettingsButton @click="$emit('togglePause')">
                     {{ paused ? 'Resume' : 'Pause' }}
-                </button>
-                <button class="ctrl-btn danger" @click="$emit('resetGameState')">Reset State</button>
+                </SettingsButton>
+                <SettingsButton danger @click="$emit('resetGameState')">Reset State</SettingsButton>
             </div>
             <Checkbox v-model="selectAllUnits" label="All units selectable" />
         </CollapseSection>
 
         <!-- Pathfinding -->
-        <CollapseSection title="Pathfinding" :default-open="false">
+        <CollapseSection title="Pathfinding" :default-open="false" persist-key="debug-pathfinding">
             <SettingsSlider v-model="settings.pathStraightness" label="Straightness" :min="1" :max="20" :step="1" />
             <StatRow label="" dim :value="straightnessHint" />
         </CollapseSection>
 
         <!-- Map Objects -->
-        <CollapseSection title="Map Objects" :default-open="false">
+        <CollapseSection title="Map Objects" :default-open="false" persist-key="debug-map-objects">
             <Checkbox v-model="settings.darkLandDilation" label="Dark land gap filling" />
             <Checkbox
                 v-model="treeExpansionEnabled"
@@ -79,21 +79,21 @@
             <div class="map-obj-row">
                 <span class="stat-label">Trees</span>
                 <span class="stat-value">{{ mapObjectCounts.trees }}</span>
-                <button class="spawn-btn" @click="spawnCategory(MapObjectCategory.Trees)">+</button>
+                <SettingsButton success small @click="spawnCategory(MapObjectCategory.Trees)">+</SettingsButton>
             </div>
             <div class="map-obj-row">
                 <span class="stat-label">Goods</span>
                 <span class="stat-value">{{ mapObjectCounts.goods }}</span>
-                <button class="spawn-btn" @click="spawnCategory(MapObjectCategory.Goods)">+</button>
+                <SettingsButton success small @click="spawnCategory(MapObjectCategory.Goods)">+</SettingsButton>
             </div>
             <div class="map-obj-row">
                 <span class="stat-label">Crops</span>
                 <span class="stat-value">{{ mapObjectCounts.crops }}</span>
-                <button class="spawn-btn" @click="spawnCategory(MapObjectCategory.Crops)">+</button>
+                <SettingsButton success small @click="spawnCategory(MapObjectCategory.Crops)">+</SettingsButton>
             </div>
-            <div class="map-obj-actions">
-                <button class="ctrl-btn" @click="spawnAllFromMap()">From Map</button>
-                <button class="ctrl-btn" @click="clearAllMapObjects()">Clear</button>
+            <div class="button-row">
+                <SettingsButton @click="spawnAllFromMap()">From Map</SettingsButton>
+                <SettingsButton @click="clearAllMapObjects()">Clear</SettingsButton>
             </div>
             <StatRow v-if="!hasObjectTypeData" label="No map object data (test map)" dim />
         </CollapseSection>
@@ -114,6 +114,7 @@ import Checkbox from './Checkbox.vue';
 import CollapseSection from './CollapseSection.vue';
 import StatRow from './StatRow.vue';
 import OverlayPanel from './OverlayPanel.vue';
+import SettingsButton from './settings/SettingsButton.vue';
 import DebugPerformanceSection from './DebugPerformanceSection.vue';
 import DebugFrameTimings from './DebugFrameTimings.vue';
 import DebugMapLoadTimings from './DebugMapLoadTimings.vue';
@@ -165,13 +166,6 @@ defineEmits<{
 const stats = debugStats.state;
 const settings = props.game.settings.state;
 const view = props.game.viewState.state;
-// Use the persisted open state from debug stats
-const open = computed({
-    get: () => stats.debugPanelOpen,
-    set: (value: boolean) => {
-        stats.debugPanelOpen = value;
-    },
-});
 
 // Tree expansion toggle (persisted in localStorage, requires reload)
 const treeExpansionEnabled = ref(localStorage.getItem('settlers_treeExpansion') !== 'false');
@@ -230,7 +224,6 @@ const { mapObjectCounts, hasObjectTypeData, spawnCategory, spawnAllFromMap, clea
 </script>
 
 <style scoped>
-/* Stat label/value used directly in map-obj and river sections */
 .stat-label {
     color: var(--text-muted);
 }
@@ -240,7 +233,6 @@ const { mapObjectCounts, hasObjectTypeData, spawnCategory, spawnAllFromMap, clea
     text-align: right;
 }
 
-/* Camera go-to row */
 .goto-row {
     display: flex;
     gap: 4px;
@@ -249,7 +241,7 @@ const { mapObjectCounts, hasObjectTypeData, spawnCategory, spawnAllFromMap, clea
 }
 
 .goto-input {
-    width: 48px;
+    flex: 1;
     padding: 3px 4px;
     background: var(--bg-mid);
     color: var(--text);
@@ -258,7 +250,6 @@ const { mapObjectCounts, hasObjectTypeData, spawnCategory, spawnAllFromMap, clea
     font-size: 10px;
     font-family: monospace;
     text-align: center;
-    /* hide number input spinners */
     -moz-appearance: textfield;
 }
 
@@ -272,56 +263,16 @@ const { mapObjectCounts, hasObjectTypeData, spawnCategory, spawnAllFromMap, clea
     border-color: var(--border-hover);
 }
 
-.goto-input-wide {
-    width: 80px;
-    flex: 1;
-}
-
-/* Controls section */
-.control-buttons {
+.button-row {
     display: flex;
     gap: 4px;
     margin-top: 4px;
 }
 
-.ctrl-btn {
+.button-row :deep(.settings-btn) {
     flex: 1;
-    padding: 4px 8px;
-    background: var(--bg-mid);
-    color: var(--text);
-    border: 1px solid var(--border-mid);
-    border-radius: 3px;
-    cursor: pointer;
-    font-size: 10px;
-    font-family: monospace;
-    font-weight: bold;
-    text-transform: uppercase;
 }
 
-.ctrl-btn:hover {
-    background: var(--bg-raised);
-    border-color: var(--border-hover);
-}
-
-.ctrl-btn.active {
-    background: #1a3a1a;
-    border-color: #2a6a2a;
-    color: var(--status-good);
-}
-
-.ctrl-btn.danger {
-    background: #3a1a1a;
-    border-color: #6a2020;
-    color: #d08080;
-}
-
-.ctrl-btn.danger:hover {
-    background: #4a2020;
-    border-color: #8a3030;
-}
-
-/* River debug */
-/* Map Objects section */
 .map-obj-row {
     display: flex;
     align-items: center;
@@ -336,29 +287,5 @@ const { mapObjectCounts, hasObjectTypeData, spawnCategory, spawnAllFromMap, clea
 .map-obj-row .stat-value {
     min-width: 30px;
     text-align: right;
-}
-
-.spawn-btn {
-    padding: 1px 6px;
-    background: #1a3a1a;
-    color: var(--status-good);
-    border: 1px solid #2a5a2a;
-    border-radius: 2px;
-    cursor: pointer;
-    font-size: 10px;
-    font-family: monospace;
-    font-weight: bold;
-    line-height: 1;
-}
-
-.spawn-btn:hover {
-    background: #2a4a2a;
-    border-color: #3a6a3a;
-}
-
-.map-obj-actions {
-    display: flex;
-    gap: 4px;
-    margin-top: 6px;
 }
 </style>

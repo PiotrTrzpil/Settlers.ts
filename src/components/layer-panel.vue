@@ -1,9 +1,9 @@
 <template>
-    <OverlayPanel v-model:open="open" label="Layers" title="Layer Panel" min-width="160px">
+    <OverlayPanel label="Layers" title="Layer Panel" min-width="160px" persist-key="layers">
         <template #toggle-extra>
             <Badge v-if="!open" color="success">{{ visibleCount }}/{{ totalCount }}</Badge>
         </template>
-        <CollapseSection title="Landscape" :default-open="false">
+        <CollapseSection title="Landscape" :default-open="false" persist-key="layer-landscape">
             <div class="river-debug">
                 <span class="river-heading stat-label">River textures</span>
                 <StatRow label="Slots (I/O/M)">
@@ -32,7 +32,7 @@
             </div>
         </CollapseSection>
 
-        <CollapseSection title="Main Layers">
+        <CollapseSection title="Main Layers" persist-key="layer-main">
             <LayerCheckbox
                 v-model="visibility.buildings"
                 label="Buildings"
@@ -82,7 +82,7 @@
             />
         </CollapseSection>
 
-        <CollapseSection>
+        <CollapseSection persist-key="layer-environment">
             <template #title>🌳 Environment</template>
             <template #title-extra>
                 <Badge :color="envBadgeColor">{{ environmentStatusText }}</Badge>
@@ -93,6 +93,13 @@
                 v-model="visibility.decorationTextures"
                 label="Textures"
                 emoji="🖼️"
+                @update:modelValue="saveAndEmit()"
+            />
+
+            <LayerCheckbox
+                v-model="visibility.showDecoLabels"
+                label="Object Labels"
+                emoji="🏷️"
                 @update:modelValue="saveAndEmit()"
             />
 
@@ -186,10 +193,9 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue';
 import type { LayerVisibility } from '@/game/renderer/layer-visibility';
-import { debugStats } from '@/game/debug/debug-stats';
 import type { LayerCounts } from '@/views/use-map-view';
+import { usePersistedRef } from '@/composables/use-persisted-ref';
 import LayerCheckbox from './LayerCheckbox.vue';
 import Checkbox from './Checkbox.vue';
 import StatRow from './StatRow.vue';
@@ -207,13 +213,8 @@ const emit = defineEmits<{
     (e: 'update:visibility', value: LayerVisibility): void;
 }>();
 
-// Use the persisted open state from debug stats
-const open = computed({
-    get: () => debugStats.state.layerPanelOpen,
-    set: (value: boolean) => {
-        debugStats.state.layerPanelOpen = value;
-    },
-});
+// Read the same persisted ref that OverlayPanel uses for its open state
+const open = usePersistedRef('panel:layers', true);
 
 const {
     visibility,

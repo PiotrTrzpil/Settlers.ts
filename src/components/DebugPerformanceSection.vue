@@ -1,5 +1,5 @@
 <template>
-    <CollapseSection title="Performance">
+    <CollapseSection title="Performance" persist-key="debug-performance">
         <StatRow label="FPS"
             ><span :class="fpsClass">{{ stats.fps }}</span></StatRow
         >

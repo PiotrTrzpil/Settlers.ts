@@ -1,5 +1,5 @@
 <template>
-    <CollapseSection title="Map Load" :default-open="false">
+    <CollapseSection title="Map Load" :default-open="false" persist-key="debug-map-load">
         <template v-if="totalMs > 0">
             <StatRow label="File Read" :value="`${mlt.fileRead} ms`" />
             <StatRow label="Map Parse" :value="`${mlt.mapParse} ms`" />

@@ -284,7 +284,7 @@
 import { computed, ref, watch } from 'vue';
 import Badge from './Badge.vue';
 import StatRow from './StatRow.vue';
-import { debugStats } from '@/game/debug/debug-stats';
+import { usePersistedRef } from '@/composables/use-persisted-ref';
 import type { Game } from '@/game/game';
 import { EntityType } from '@/game/entity';
 import { useSelectionPanel } from '@/composables/useSelectionPanel';
@@ -356,8 +356,9 @@ function destroyBuilding(): void {
     confirmingDestroy.value = false;
 }
 
-// Show debug info only when debug panel is open
-const showDebugInfo = computed(() => debugStats.state.debugPanelOpen);
+// Show debug info when debug panel is open (reads the same persisted key)
+const debugPanelOpen = usePersistedRef('panel:debug', false);
+const showDebugInfo = computed(() => debugPanelOpen.value);
 </script>
 
 <style scoped>

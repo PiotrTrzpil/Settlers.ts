@@ -1,7 +1,7 @@
 <template>
     <button
         class="settings-btn"
-        :class="{ active, small }"
+        :class="{ active, small, danger, success, block }"
         :disabled="disabled"
         :title="title"
         tabindex="-1"
@@ -17,6 +17,9 @@ defineProps<{
     disabled?: boolean;
     title?: string;
     small?: boolean;
+    danger?: boolean;
+    success?: boolean;
+    block?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -57,13 +60,39 @@ function onClick(e: MouseEvent) {
 }
 
 .settings-btn.active {
-    background: var(--border-mid);
-    border-color: var(--border-hover);
-    color: var(--text-emphasis);
+    background: #1a3a1a;
+    border-color: #2a6a2a;
+    color: var(--status-good);
 }
 
 .settings-btn.small {
     padding: 2px 6px;
     font-size: 9px;
+}
+
+.settings-btn.block {
+    width: 100%;
+}
+
+.settings-btn.danger {
+    background: #3a1a1a;
+    color: #d08080;
+    border-color: #5a2a2a;
+}
+
+.settings-btn.danger:hover:not(:disabled) {
+    background: #4a2020;
+    border-color: #7a3a3a;
+}
+
+.settings-btn.success {
+    background: #1a3a1a;
+    color: #80d080;
+    border-color: #2a5a2a;
+}
+
+.settings-btn.success:hover:not(:disabled) {
+    background: #204a20;
+    border-color: #3a7a3a;
 }
 </style>

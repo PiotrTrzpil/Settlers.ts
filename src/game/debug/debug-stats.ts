@@ -20,7 +20,11 @@ export type { LoadTimings, MapLoadTimings, RenderTimings, DebugStatsState } from
 const WINDOW_SIZE = 60;
 const SETTINGS_STORAGE_KEY = 'settlers_debug_settings';
 
-/** Settings that should be persisted to localStorage */
+/** Settings that should be persisted to localStorage.
+ *  NOTE: UI panel state (open/collapsed/active tab) is handled by
+ *  usePersistedRef in individual components. Only game behavior
+ *  settings that game code reads belong here.
+ */
 interface PersistedDebugSettings {
     zoomSpeed: number;
     panSpeed: number;
@@ -28,12 +32,7 @@ interface PersistedDebugSettings {
     riverFlipInner: boolean;
     riverFlipOuter: boolean;
     riverFlipMiddle: boolean;
-    debugPanelOpen: boolean;
     debugGridEnabled: boolean;
-    layerPanelOpen: boolean;
-    logisticsPanelOpen: boolean;
-    activeRightTab: string;
-    rightPanelOpen: boolean;
     selectAllUnits: boolean;
 }
 
@@ -44,12 +43,7 @@ const PERSISTED_KEYS: readonly (keyof PersistedDebugSettings)[] = [
     'riverFlipInner',
     'riverFlipOuter',
     'riverFlipMiddle',
-    'debugPanelOpen',
     'debugGridEnabled',
-    'layerPanelOpen',
-    'logisticsPanelOpen',
-    'activeRightTab',
-    'rightPanelOpen',
     'selectAllUnits',
 ];
 
@@ -60,12 +54,7 @@ const DEFAULT_SETTINGS: PersistedDebugSettings = {
     riverFlipInner: false,
     riverFlipOuter: false,
     riverFlipMiddle: false,
-    debugPanelOpen: false,
     debugGridEnabled: false,
-    layerPanelOpen: false,
-    logisticsPanelOpen: false,
-    activeRightTab: 'layers',
-    rightPanelOpen: true,
     selectAllUnits: false,
 };
 
@@ -240,12 +229,7 @@ class DebugStats {
             riverFlipInner: savedSettings.riverFlipInner,
             riverFlipOuter: savedSettings.riverFlipOuter,
             riverFlipMiddle: savedSettings.riverFlipMiddle,
-            debugPanelOpen: savedSettings.debugPanelOpen,
             debugGridEnabled: savedSettings.debugGridEnabled,
-            layerPanelOpen: savedSettings.layerPanelOpen,
-            logisticsPanelOpen: savedSettings.logisticsPanelOpen,
-            activeRightTab: savedSettings.activeRightTab,
-            rightPanelOpen: savedSettings.rightPanelOpen,
             selectAllUnits: savedSettings.selectAllUnits,
             renderTimings: {
                 frame: 0,

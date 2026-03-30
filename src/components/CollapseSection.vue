@@ -13,18 +13,23 @@
 
 <script setup lang="ts">
 import { ref } from 'vue';
+import { usePersistedRef } from '@/composables/use-persisted-ref';
 
 const props = withDefaults(
     defineProps<{
         title?: string;
         defaultOpen?: boolean;
+        /** When set, expanded state is persisted to localStorage. */
+        persistKey?: string;
     }>(),
     {
         defaultOpen: true,
     }
 );
 
-const expanded = ref(props.defaultOpen);
+const expanded = props.persistKey
+    ? usePersistedRef(`section:${props.persistKey}`, props.defaultOpen)
+    : ref(props.defaultOpen);
 </script>
 
 <style scoped>

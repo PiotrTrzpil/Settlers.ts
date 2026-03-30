@@ -329,7 +329,11 @@ export class InputManager {
     // ─── Private Methods ─────────────────────────────────────────────────
 
     private createContext(): InputContext {
-        const currentTile = this.resolveTile(this.state.mouseX.value, this.state.mouseY.value);
+        // Offset mouse position by target element rect, matching createPointerData
+        const rect = this.target.value?.getBoundingClientRect();
+        const screenX = rect ? this.state.mouseX.value - rect.left : this.state.mouseX.value;
+        const screenY = rect ? this.state.mouseY.value - rect.top : this.state.mouseY.value;
+        const currentTile = this.resolveTile(screenX, screenY);
 
         return {
             state: this.state,

@@ -1,6 +1,6 @@
 <template>
-    <OverlayPanel v-model:open="open" label="Settings" title="Settings Panel" min-width="180px">
-        <CollapseSection title="Game">
+    <OverlayPanel label="Settings" title="Settings Panel" min-width="180px" persist-key="settings">
+        <CollapseSection title="Game" persist-key="settings-game">
             <Checkbox label="Paused" v-model="settings.paused" />
             <SettingsSlider
                 label="Game speed"
@@ -12,12 +12,12 @@
             />
         </CollapseSection>
 
-        <CollapseSection title="Camera">
+        <CollapseSection title="Camera" persist-key="settings-camera">
             <SettingsSlider label="Zoom speed" v-model="settings.zoomSpeed" :min="0.01" :max="0.1" :step="0.01" />
             <SettingsSlider label="Pan speed" v-model="settings.panSpeed" :min="5" :max="100" :step="5" />
         </CollapseSection>
 
-        <CollapseSection title="Audio">
+        <CollapseSection title="Audio" persist-key="settings-audio">
             <Checkbox label="Enable Music" v-model="settings.musicEnabled" @update:modelValue="onMusicToggle" />
             <SettingsSlider
                 label="Music volume"
@@ -39,26 +39,26 @@
             />
         </CollapseSection>
 
-        <CollapseSection title="Display">
+        <CollapseSection title="Display" persist-key="settings-display">
             <Checkbox label="Debug grid" v-model="settings.showDebugGrid" />
             <Checkbox label="Disable player tinting" v-model="settings.disablePlayerTinting" />
         </CollapseSection>
 
-        <CollapseSection title="Graphics">
+        <CollapseSection title="Graphics" persist-key="settings-graphics">
             <Checkbox label="Anti-aliasing (MSAA)" v-model="settings.antialias" />
         </CollapseSection>
 
-        <!-- Reset button -->
         <section class="reset-section">
-            <button class="reset-btn" @click="resetSettings">Reset to Defaults</button>
+            <SettingsButton danger block @click="resetSettings">Reset to Defaults</SettingsButton>
         </section>
     </OverlayPanel>
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted } from 'vue';
+import { onMounted } from 'vue';
 import type { Game } from '@/game/game';
 import SettingsSlider from './settings/SettingsSlider.vue';
+import SettingsButton from './settings/SettingsButton.vue';
 import Checkbox from './Checkbox.vue';
 import CollapseSection from './CollapseSection.vue';
 import OverlayPanel from './OverlayPanel.vue';
@@ -68,13 +68,6 @@ const props = defineProps<{
 }>();
 
 const settings = props.game.settings.state;
-
-const open = computed({
-    get: () => settings.settingsPanelOpen,
-    set: (value: boolean) => {
-        settings.settingsPanelOpen = value;
-    },
-});
 
 // Apply audio settings to game systems
 function onMusicToggle(enabled: boolean) {
@@ -104,24 +97,5 @@ onMounted(() => {
 .reset-section {
     padding: 6px 10px;
     border-top: 1px solid var(--border-faint);
-}
-
-.reset-btn {
-    width: 100%;
-    padding: 5px 8px;
-    background: #3a1a1a;
-    color: #d08080;
-    border: 1px solid #5a2a2a;
-    border-radius: 3px;
-    cursor: pointer;
-    font-size: 10px;
-    font-family: monospace;
-    font-weight: bold;
-    text-transform: uppercase;
-}
-
-.reset-btn:hover {
-    background: #4a2020;
-    border-color: #7a3a3a;
 }
 </style>

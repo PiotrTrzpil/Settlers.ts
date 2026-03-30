@@ -43,8 +43,8 @@
 </template>
 
 <script setup lang="ts">
-import { computed, provide } from 'vue';
-import { debugStats } from '@/game/debug/debug-stats';
+import { provide } from 'vue';
+import { usePersistedRef } from '@/composables/use-persisted-ref';
 import type { Game } from '@/game/game';
 import type { LayerVisibility } from '@/game/renderer/layer-visibility';
 import type { LayerCounts } from '@/views/use-map-view';
@@ -78,19 +78,8 @@ const tabs = [
     { id: 'debug', label: 'Debug', title: 'Debug Panel' },
 ] as const;
 
-const activeTab = computed({
-    get: () => debugStats.state.activeRightTab,
-    set: (value: string) => {
-        debugStats.state.activeRightTab = value;
-    },
-});
-
-const open = computed({
-    get: () => debugStats.state.rightPanelOpen,
-    set: (value: boolean) => {
-        debugStats.state.rightPanelOpen = value;
-    },
-});
+const activeTab = usePersistedRef('tabbed-panel:active-tab', 'layers');
+const open = usePersistedRef('tabbed-panel:open', true);
 
 function onTabClick(tabId: string): void {
     if (open.value && activeTab.value === tabId) {

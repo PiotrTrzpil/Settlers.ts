@@ -154,23 +154,8 @@ export interface DebugStatsState {
     riverFlipOuter: boolean;
     riverFlipMiddle: boolean;
 
-    // Debug panel UI state (persisted)
-    debugPanelOpen: boolean;
+    // Game behavior flags (persisted — read by game code, not just UI)
     debugGridEnabled: boolean;
-
-    // Layer panel UI state (persisted)
-    layerPanelOpen: boolean;
-
-    // Logistics panel UI state (persisted)
-    logisticsPanelOpen: boolean;
-
-    // Tabbed panel: which tab is active (persisted)
-    activeRightTab: string;
-
-    // Tabbed panel: collapsed state (persisted)
-    rightPanelOpen: boolean;
-
-    // Debug selection mode - allows selecting normally non-selectable units
     selectAllUnits: boolean;
 
     // Render timings (updated every ~1 sec)

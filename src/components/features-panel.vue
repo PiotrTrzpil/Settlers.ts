@@ -1,5 +1,5 @@
 <template>
-    <OverlayPanel v-model:open="open" label="Features" title="Feature Toggles" min-width="240px">
+    <OverlayPanel label="Features" title="Feature Toggles" min-width="240px" persist-key="features">
         <section class="feature-list">
             <template v-for="group in groups" :key="group.name">
                 <div class="group-header">{{ group.name }}</div>
@@ -20,13 +20,13 @@
         </section>
 
         <section class="actions">
-            <button class="action-btn" @click="setAll(true)">Enable All</button>
-            <button class="action-btn action-btn--danger" @click="setAll(false)">Disable All</button>
+            <SettingsButton @click="setAll(true)">Enable All</SettingsButton>
+            <SettingsButton danger @click="setAll(false)">Disable All</SettingsButton>
         </section>
 
         <section v-if="dirty" class="actions commit-actions">
-            <button class="action-btn action-btn--save" @click="apply">Apply</button>
-            <button class="action-btn" @click="cancel">Cancel</button>
+            <SettingsButton success @click="apply">Apply</SettingsButton>
+            <SettingsButton @click="cancel">Cancel</SettingsButton>
         </section>
     </OverlayPanel>
 </template>
@@ -34,13 +34,13 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue';
 import type { Game } from '@/game/game';
+import { usePersistedRef } from '@/composables/use-persisted-ref';
 import OverlayPanel from './OverlayPanel.vue';
+import SettingsButton from './settings/SettingsButton.vue';
 
 const props = defineProps<{
     game: Game;
 }>();
-
-const open = ref(true);
 
 interface SystemState {
     name: string;
@@ -133,28 +133,17 @@ function disableWithDependents(sys: SystemState): void {
     }
 }
 
-const STORAGE_KEY = 'settlers-feature-toggles';
-
-function saveToStorage(): void {
-    const map: Record<string, boolean> = {};
-    for (const sys of committed.value) {
-        map[sys.name] = sys.enabled;
-    }
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(map));
-}
+// Persisted map of system name → enabled state
+const savedToggles = usePersistedRef<Record<string, boolean>>('feature-toggles', {});
 
 function loadFromGame(): void {
     const states = props.game.getSystemStates();
+    const saved = savedToggles.value;
 
-    // Restore saved toggles from localStorage
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) {
-        const saved = JSON.parse(raw) as Record<string, boolean>;
-        for (const sys of states) {
-            if (sys.name in saved) {
-                sys.enabled = saved[sys.name]!;
-                props.game.setSystemEnabled(sys.name, sys.enabled);
-            }
+    for (const sys of states) {
+        if (sys.name in saved) {
+            sys.enabled = saved[sys.name] ?? sys.enabled;
+            props.game.setSystemEnabled(sys.name, sys.enabled);
         }
     }
 
@@ -173,7 +162,13 @@ function apply(): void {
         props.game.setSystemEnabled(sys.name, sys.enabled);
     }
     committed.value = draft.value.map(s => ({ ...s }));
-    saveToStorage();
+
+    // Update persisted map
+    const map: Record<string, boolean> = {};
+    for (const sys of committed.value) {
+        map[sys.name] = sys.enabled;
+    }
+    savedToggles.value = map;
 }
 
 function cancel(): void {
@@ -253,48 +248,11 @@ onMounted(loadFromGame);
     border-top: 1px solid var(--border-faint);
 }
 
+.actions :deep(.settings-btn) {
+    flex: 1;
+}
+
 .commit-actions {
     border-top: 1px solid var(--border-soft);
-}
-
-.action-btn {
-    flex: 1;
-    padding: 4px 8px;
-    background: var(--bg-mid);
-    color: var(--text-secondary);
-    border: 1px solid var(--border-soft);
-    border-radius: 3px;
-    cursor: pointer;
-    font-size: 10px;
-    font-family: monospace;
-    font-weight: bold;
-    text-transform: uppercase;
-}
-
-.action-btn:hover {
-    background: var(--bg-raised);
-    color: var(--text-bright);
-}
-
-.action-btn--save {
-    background: #1a3a1a;
-    color: #80d080;
-    border-color: #2a5a2a;
-}
-
-.action-btn--save:hover {
-    background: #204a20;
-    border-color: #3a7a3a;
-}
-
-.action-btn--danger {
-    background: #3a1a1a;
-    color: #d08080;
-    border-color: #5a2a2a;
-}
-
-.action-btn--danger:hover {
-    background: #4a2020;
-    border-color: #7a3a3a;
 }
 </style>

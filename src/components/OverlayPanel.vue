@@ -2,14 +2,14 @@
     <div
         v-if="!embedded"
         class="overlay-panel"
-        :class="{ collapsed: !open }"
+        :class="{ collapsed: !isOpen }"
         :style="minWidth !== '200px' ? { '--panel-min-width': minWidth } : {}"
     >
-        <PanelToggleButton v-model:open="open" :label="label" :title="title">
+        <PanelToggleButton v-model:open="isOpen" :label="label" :title="title">
             <slot name="toggle-extra" />
         </PanelToggleButton>
 
-        <div v-if="open" class="panel-sections">
+        <div v-if="isOpen" class="panel-sections">
             <slot />
         </div>
     </div>
@@ -20,20 +20,41 @@
 </template>
 
 <script setup lang="ts">
-import { inject } from 'vue';
+import { inject, ref, computed } from 'vue';
+import { usePersistedRef } from '@/composables/use-persisted-ref';
 import PanelToggleButton from './PanelToggleButton.vue';
 
-withDefaults(
+const props = withDefaults(
     defineProps<{
         label: string;
         title?: string;
         minWidth?: string;
+        /** When set, open state is persisted to localStorage (no v-model needed). */
+        persistKey?: string;
+        /** Default open state when using persistKey. */
+        defaultOpen?: boolean;
     }>(),
-    { minWidth: '200px' }
+    { minWidth: '200px', defaultOpen: true }
 );
 
-const open = defineModel<boolean>('open', { required: true });
+const open = defineModel<boolean>('open');
 const embedded = inject<boolean>('overlay-panel-embedded', false);
+
+// Internal persisted state (used when persistKey is provided)
+const persisted = props.persistKey
+    ? usePersistedRef(`panel:${props.persistKey}`, props.defaultOpen)
+    : ref(props.defaultOpen);
+
+// Use v-model when provided, otherwise use internal (optionally persisted) state
+const isOpen = computed({
+    get: () => open.value ?? persisted.value,
+    set: (value: boolean) => {
+        if (open.value !== undefined) {
+            open.value = value;
+        }
+        persisted.value = value;
+    },
+});
 </script>
 
 <style scoped>

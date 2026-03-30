@@ -7,9 +7,10 @@ import { EntityRenderer } from '@/game/renderer/entity-renderer';
 import { BuildingIndicatorRenderer } from '@/game/renderer/building-indicator-renderer';
 import { Renderer } from '@/game/renderer/renderer';
 import { TilePicker } from '@/game/input/tile-picker';
-import { type TileCoord, BuildingType } from '@/game/entity';
+import { type TileCoord, BuildingType, EntityType } from '@/game/entity';
 import { Race, saveSavedRace } from '@/game/renderer/sprite-metadata';
 import { canPlaceResource, canPlaceUnit, canPlaceBuildingFootprint } from '@/game/systems/placement';
+import { isNonBlockingMapObject } from '@/game/data/game-data-access';
 import { ValidPositionGrid, type GridComputeRequest } from '@/game/systems/placement/valid-position-grid';
 import type { Command, CommandResult } from '@/game/commands';
 import { debugStats } from '@/game/debug/debug-stats';
@@ -57,6 +58,13 @@ function buildPickerContext(
     };
 }
 
+function createReplaceableCheck(game: Game): (entityId: number) => boolean {
+    return (id: number) => {
+        const e = game.state.getEntity(id);
+        return e?.type === EntityType.MapObject && isNonBlockingMapObject(e.subType as number);
+    };
+}
+
 /** Check whether a building can be placed at (x, y), including the 1-tile footprint gap rule. */
 function canPlaceBuilding(getGame: () => Game | null, x: number, y: number, buildingType: BuildingType): boolean {
     const game = getGame();
@@ -74,7 +82,10 @@ function canPlaceBuilding(getGame: () => Game | null, x: number, y: number, buil
         y,
         buildingType,
         race,
-        game.state.buildingFootprint
+        game.state.buildingFootprint,
+        undefined,
+        undefined,
+        createReplaceableCheck(game)
     );
 }
 
@@ -103,7 +114,8 @@ function createPlacementGrid(
         game.terrain.groundType,
         game.terrain.groundHeight,
         game.state.groundOccupancy,
-        game.state.buildingFootprint
+        game.state.buildingFootprint,
+        createReplaceableCheck(game)
     );
 }
 
@@ -473,11 +485,8 @@ export function useRenderer({
     });
 
     onUnmounted(() => {
-        const game = getGame();
-        if (game) {
-            game.destroy();
-        }
-
+        // Do NOT destroy the game here — use-renderer does not own it.
+        // The game is created and destroyed by use-map-view (setupLifecycle).
         state.inputManager?.destroy();
         state.inputManager = null;
 

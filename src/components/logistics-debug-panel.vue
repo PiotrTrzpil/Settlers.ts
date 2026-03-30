@@ -1,5 +1,5 @@
 <template>
-    <OverlayPanel v-model:open="open" label="Logistics" title="Logistics Debug Panel">
+    <OverlayPanel label="Logistics" title="Logistics Debug Panel" persist-key="logistics">
         <!-- Player sub-tabs -->
         <div v-if="playerIds.length > 1" class="player-tabs">
             <button
@@ -14,7 +14,7 @@
         </div>
 
         <!-- Overview (always open) -->
-        <CollapseSection title="Overview">
+        <CollapseSection title="Overview" persist-key="logistics-overview">
             <StatRow label="Demands (pending)" :value="stats.demandCount" />
             <StatRow label="Active Jobs" :value="stats.activeJobCount" />
             <StatRow v-if="stats.stalledCount > 0" label="Jobs (stalled)">
@@ -27,7 +27,7 @@
         </CollapseSection>
 
         <!-- Demands -->
-        <CollapseSection :title="`Demands (${stats.demandCount})`">
+        <CollapseSection :title="`Demands (${stats.demandCount})`" persist-key="logistics-demands">
             <div v-if="state.demands.length === 0" class="empty-state">No active demands</div>
             <div v-for="req in displayedDemands" :key="req.id" class="request-row">
                 <span class="req-material">{{ req.material }}</span>
@@ -43,7 +43,11 @@
         </CollapseSection>
 
         <!-- Carriers -->
-        <CollapseSection :title="`Carriers (${stats.carrierCount})`" :default-open="false">
+        <CollapseSection
+            :title="`Carriers (${stats.carrierCount})`"
+            :default-open="false"
+            persist-key="logistics-carriers"
+        >
             <div class="carrier-breakdown">
                 <span class="breakdown-item">
                     <span class="breakdown-label">Idle:</span>
@@ -67,7 +71,7 @@
         </CollapseSection>
 
         <!-- Active Jobs -->
-        <CollapseSection :title="`Active Jobs (${activeJobCount})`" :default-open="false">
+        <CollapseSection :title="`Active Jobs (${activeJobCount})`" :default-open="false" persist-key="logistics-jobs">
             <div v-if="carriersWithJobs.length === 0" class="empty-state">No active jobs</div>
             <div v-for="carrier in carriersWithJobs" :key="carrier.entityId" class="job-row">
                 <span class="job-carrier">#{{ carrier.entityId }}</span>
@@ -82,7 +86,6 @@
 
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue';
-import { debugStats } from '@/game/debug/debug-stats';
 import { useLogisticsDebug } from '@/composables/useLogisticsDebug';
 import type { Game } from '@/game/game';
 import CollapseSection from './CollapseSection.vue';
@@ -121,13 +124,7 @@ const { state } = useLogisticsDebug(
 
 const stats = computed(() => state.value.stats);
 
-// Use persisted open state from debug stats
-const open = computed({
-    get: () => debugStats.state.logisticsPanelOpen,
-    set: (value: boolean) => {
-        debugStats.state.logisticsPanelOpen = value;
-    },
-});
+// Open state is now handled by OverlayPanel's persistKey prop
 
 // Display up to 15 demands sorted by priority then age
 const displayedDemands = computed(() => {
