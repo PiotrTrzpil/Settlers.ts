@@ -41,10 +41,11 @@ export const StoneFeature: FeatureDefinition = {
         });
 
         // Register for map object creation events to auto-register stones.
-        // The variation from map data encodes the initial depletion level (1-12).
+        // Depletion level is encoded in the subType (ResourceStone1-12 = raw 124-135).
+        // Variation encodes the visual variant (0=A, 1=B) — passed through on depletion replacement.
         ctx.on('entity:created', ({ entityId, entityType: type, subType, variation }) => {
             if (type === EntityType.MapObject) {
-                stoneSystem.register(entityId, subType as MapObjectType, variation || undefined);
+                stoneSystem.register(entityId, subType as MapObjectType, variation);
             }
         });
 

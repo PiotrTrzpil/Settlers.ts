@@ -2,16 +2,17 @@
  * Core analysis engine: builds rich ObjectProfile[] from raw map data.
  * Computes per-object-type terrain distribution, height stats, dark/pond flags.
  */
+import * as path from 'path';
 import { lookupRawObject } from '../../src/resources/map/raw-object-registry';
-import type { MapRawData } from './map-data-loader';
-import {
-    getGroundTypeName,
-    getTerrainGroup,
-    DARK_GROUND_TYPES,
-    TERRAIN_GROUPS,
-    type TerrainGroup,
-} from './ground-type-names';
-import type { ObjectProfile, HeightStats, CategorySummary, TerrainGroupSummary } from './object-profile';
+import { loadMapData, type MapRawData } from './map-data-loader';
+import { getGroundTypeName, getTerrainGroup, TERRAIN_GROUPS, type TerrainGroup } from './ground-type-names';
+import type {
+    ObjectProfile,
+    HeightStats,
+    CategorySummary,
+    TerrainGroupSummary,
+    MapProfileResult,
+} from './object-profile';
 
 /** Intermediate accumulator for building a profile. */
 interface ProfileAccumulator {
@@ -20,6 +21,54 @@ interface ProfileAccumulator {
     heights: number[];
     darkCount: number;
     pondCount: number;
+    neighborHist: Map<number, number>;
+}
+
+/** Precompute neighbor offset table for a 5×5 area (excluding center). */
+const NEIGHBOR_OFFSETS: ReadonlyArray<[number, number]> = (() => {
+    const offsets: [number, number][] = [];
+    for (let dy = -2; dy <= 2; dy++) {
+        for (let dx = -2; dx <= 2; dx++) {
+            if (dx !== 0 || dy !== 0) offsets.push([dx, dy]);
+        }
+    }
+    return offsets;
+})();
+
+/** Collect neighboring object raw values within 2 tiles of position i. */
+function collectNeighbors(data: MapRawData, i: number, rawVal: number, hist: Map<number, number>): void {
+    const w = data.mapWidth;
+    const x = i % w;
+    const y = Math.floor(i / w);
+    for (const [dx, dy] of NEIGHBOR_OFFSETS) {
+        const nx = x + dx;
+        const ny = y + dy;
+        if (nx < 0 || nx >= w || ny < 0 || ny >= data.mapHeight) continue;
+        const nRaw = data.objectBytes[ny * w + nx]!;
+        if (nRaw !== 0 && nRaw !== rawVal) {
+            hist.set(nRaw, (hist.get(nRaw) ?? 0) + 1);
+        }
+    }
+}
+
+function getOrCreateAccumulator(map: Map<number, ProfileAccumulator>, raw: number): ProfileAccumulator {
+    let acc = map.get(raw);
+    if (!acc) {
+        acc = { count: 0, terrainHist: new Map(), heights: [], darkCount: 0, pondCount: 0, neighborHist: new Map() };
+        map.set(raw, acc);
+    }
+    return acc;
+}
+
+function accumulateTile(acc: ProfileAccumulator, data: MapRawData, i: number, rawVal: number): void {
+    acc.count++;
+    const gt = data.groundTypes[i]!;
+    acc.terrainHist.set(gt, (acc.terrainHist.get(gt) ?? 0) + 1);
+    acc.heights.push(data.groundHeights[i]!);
+    // Dark-land bit (bit 6) — the authoritative dark zone marker, not DarkGrass ground type
+    if (data.terrainAttrs[i]! & 0x40) acc.darkCount++;
+    if (data.terrainAttrs[i]! & 0x20) acc.pondCount++;
+    collectNeighbors(data, i, rawVal, acc.neighborHist);
 }
 
 /** Build ObjectProfile[] from raw map data. Covers ALL non-zero raw values. */
@@ -29,72 +78,12 @@ export function buildObjectProfiles(data: MapRawData): ObjectProfile[] {
     for (let i = 0; i < data.tileCount; i++) {
         const rawVal = data.objectBytes[i]!;
         if (rawVal === 0) continue;
-
-        let acc = accumulators.get(rawVal);
-        if (!acc) {
-            acc = { count: 0, terrainHist: new Map(), heights: [], darkCount: 0, pondCount: 0 };
-            accumulators.set(rawVal, acc);
-        }
-
-        acc.count++;
-
-        const gt = data.groundTypes[i]!;
-        acc.terrainHist.set(gt, (acc.terrainHist.get(gt) ?? 0) + 1);
-
-        acc.heights.push(data.groundHeights[i]!);
-
-        if (DARK_GROUND_TYPES.has(gt)) acc.darkCount++;
-
-        // Pond flag is bit 5 of terrain attributes
-        if (data.terrainAttrs[i]! & 0x20) acc.pondCount++;
+        accumulateTile(getOrCreateAccumulator(accumulators, rawVal), data, i, rawVal);
     }
 
-    const profiles: ObjectProfile[] = [];
-
-    for (const [raw, acc] of accumulators) {
-        const entry = lookupRawObject(raw);
-
-        const terrain = [...acc.terrainHist.entries()]
-            .map(([gt, count]) => ({
-                groundType: gt,
-                name: getGroundTypeName(gt),
-                count,
-                pct: Math.round((count / acc.count) * 100),
-            }))
-            .sort((a, b) => b.count - a.count);
-
-        const groupCounts = new Map<TerrainGroup, number>();
-        for (const [gt, count] of acc.terrainHist) {
-            const group = getTerrainGroup(gt);
-            groupCounts.set(group, (groupCounts.get(group) ?? 0) + count);
-        }
-        const terrainGroups = TERRAIN_GROUPS.filter(g => groupCounts.has(g))
-            .map(group => ({
-                group,
-                count: groupCounts.get(group)!,
-                pct: Math.round((groupCounts.get(group)! / acc.count) * 100),
-            }))
-            .sort((a, b) => b.count - a.count);
-
-        const height = computeHeightStats(acc.heights);
-        const primaryGroup = terrainGroups[0]?.group ?? 'Grass';
-
-        profiles.push({
-            raw,
-            count: acc.count,
-            label: entry?.label ?? '???',
-            category: entry?.category ?? '???',
-            mapped: !!entry,
-            terrain,
-            terrainGroups,
-            height,
-            darkLandPct: Math.round((acc.darkCount / acc.count) * 100),
-            pondPct: Math.round((acc.pondCount / acc.count) * 100),
-            primaryGroup,
-        });
-    }
-
-    return profiles.sort((a, b) => b.count - a.count);
+    return [...accumulators.entries()]
+        .map(([raw, acc]) => accumulatorToProfile(raw, acc))
+        .sort((a, b) => b.count - a.count);
 }
 
 /** Find the terrain group with the most occurrences across profiles. */
@@ -167,6 +156,74 @@ export function buildTerrainGroupSummaries(profiles: ObjectProfile[]): TerrainGr
             uniqueTypes: entry.types.size,
         };
     });
+}
+
+/** Convert a raw accumulator into a finalized ObjectProfile. */
+function accumulatorToProfile(raw: number, acc: ProfileAccumulator): ObjectProfile {
+    const entry = lookupRawObject(raw);
+
+    const terrain = [...acc.terrainHist.entries()]
+        .map(([gt, count]) => ({
+            groundType: gt,
+            name: getGroundTypeName(gt),
+            count,
+            pct: Math.round((count / acc.count) * 100),
+        }))
+        .sort((a, b) => b.count - a.count);
+
+    const groupCounts = new Map<TerrainGroup, number>();
+    for (const [gt, count] of acc.terrainHist) {
+        const group = getTerrainGroup(gt);
+        groupCounts.set(group, (groupCounts.get(group) ?? 0) + count);
+    }
+    const terrainGroups = TERRAIN_GROUPS.filter(g => groupCounts.has(g))
+        .map(group => ({
+            group,
+            count: groupCounts.get(group)!,
+            pct: Math.round((groupCounts.get(group)! / acc.count) * 100),
+        }))
+        .sort((a, b) => b.count - a.count);
+
+    const topNeighbors = [...acc.neighborHist.entries()]
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 5)
+        .map(([nRaw, count]) => {
+            const nEntry = lookupRawObject(nRaw);
+            return { raw: nRaw, label: nEntry?.label ?? `Unknown${nRaw}`, count };
+        });
+
+    return {
+        raw,
+        count: acc.count,
+        label: entry?.label ?? '???',
+        category: entry?.category ?? '???',
+        registered: !!entry,
+        type: entry?.type,
+        terrain,
+        terrainGroups,
+        height: computeHeightStats(acc.heights),
+        darkLandPct: Math.round((acc.darkCount / acc.count) * 100),
+        pondPct: Math.round((acc.pondCount / acc.count) * 100),
+        primaryGroup: terrainGroups[0]?.group ?? 'Grass',
+        topNeighbors,
+    };
+}
+
+/** Profile multiple maps sequentially. Skips unparseable maps. */
+export function profileMapsSequential(mapPaths: string[]): { results: MapProfileResult[]; scanned: number } {
+    const results: MapProfileResult[] = [];
+    let scanned = 0;
+    for (const mapPath of mapPaths) {
+        try {
+            const data = loadMapData(mapPath);
+            const profiles = buildObjectProfiles(data);
+            results.push({ mapName: path.basename(mapPath, '.map'), profiles });
+            scanned++;
+        } catch (err) {
+            console.error(`Failed to parse ${path.basename(mapPath)}: ${err instanceof Error ? err.message : err}`);
+        }
+    }
+    return { results, scanned };
 }
 
 function computeHeightStats(heights: number[]): HeightStats {

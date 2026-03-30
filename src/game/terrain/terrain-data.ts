@@ -14,8 +14,17 @@ export class TerrainData {
     constructor(
         public readonly groundType: Uint8Array,
         public readonly groundHeight: Uint8Array,
-        public readonly mapSize: MapSize
+        public readonly mapSize: MapSize,
+        public readonly terrainAttributes: Uint8Array | null = null
     ) {}
+
+    /** Check if tile is dark land (bit 6 of terrain attributes). */
+    isDarkLand(x: number, y: number): boolean {
+        if (!this.terrainAttributes) {
+            return false;
+        }
+        return (this.terrainAttributes[this.mapSize.toIndex(x, y)]! & 0x40) !== 0;
+    }
 
     /** Map width in tiles */
     get width(): number {

@@ -242,6 +242,16 @@ export const MAP_OBJECT_SPRITES = {
     /** Dark tribe mushroom tree C, purple (134x120) */
     DARK_TRIBE_TREE_C: 1003,
 
+    // ── Dark tree sprites (686-781): 6 visual types × 16 sway frames ──
+    // No growth stages or cut variants — just sway animation.
+    // 8 MapObjectType entries share 6 visual types (A/B variants share sprites).
+    DARK_TREE_1: { start: 686, count: 16 },
+    DARK_TREE_2: { start: 702, count: 16 },
+    DARK_TREE_3: { start: 718, count: 16 },
+    DARK_TREE_4: { start: 734, count: 16 },
+    DARK_TREE_5: { start: 750, count: 16 },
+    DARK_TREE_6: { start: 766, count: 16 },
+
     // ── Animated sea rocks (1004-1043): 4 groups of 10 frames ─
     /** Sea rock island with waves A (75x79) */
     SEA_ROCK_A: { start: 1004, end: 1013, count: 10 },

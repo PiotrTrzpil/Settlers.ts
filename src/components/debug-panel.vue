@@ -71,6 +71,7 @@
         <!-- Map Objects -->
         <CollapseSection title="Map Objects" :default-open="false" persist-key="debug-map-objects">
             <Checkbox v-model="settings.darkLandDilation" label="Dark land gap filling" />
+            <Checkbox v-model="settings.darkGroundFixup" label="Dark ground object fixup (reload)" />
             <Checkbox
                 v-model="treeExpansionEnabled"
                 label="Tree expansion (reload)"

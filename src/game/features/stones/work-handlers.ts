@@ -3,7 +3,7 @@
  */
 
 import type { GameState } from '../../game-state';
-import { MapObjectType } from '@/game/types/map-object-types';
+import { isHarvestableStone } from '@/game/types/map-object-types';
 import { findNearestEntity } from '../../systems/spatial-search';
 import { createLogger } from '@/utilities/logger';
 import { WorkHandlerType, type EntityWorkHandler } from '../settler-tasks/types';
@@ -27,7 +27,7 @@ export function createStonecuttingHandler(gameState: GameState, stoneSystem: Sto
                 x,
                 y,
                 STONECUTTER_SEARCH_RADIUS,
-                entity => entity.subType === MapObjectType.ResourceStone && stoneSystem.canMine(entity.id)
+                entity => isHarvestableStone(entity.subType as number) && stoneSystem.canMine(entity.id)
             );
         },
 

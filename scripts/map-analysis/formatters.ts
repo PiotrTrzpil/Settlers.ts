@@ -48,7 +48,7 @@ export function printFullReport(
     terrainGroupSummaries: TerrainGroupSummary[]
 ): void {
     const totalObjects = profiles.reduce((s, p) => s + p.count, 0);
-    const unmappedProfiles = profiles.filter(p => !p.mapped);
+    const unmappedProfiles = profiles.filter(p => !p.registered);
     const unmappedCount = unmappedProfiles.reduce((s, p) => s + p.count, 0);
 
     // Header
@@ -75,7 +75,7 @@ export function printFullReport(
     );
 
     for (const p of profiles) {
-        const status = p.mapped ? '' : 'UNMAPPED';
+        const status = p.registered ? '' : 'UNMAPPED';
         console.log(
             `${pad(String(p.raw), 5)} ${rpad(fmtCount(p.count), 8)}  ${pad(p.label, 20)} ${pad(p.category, 18)} ` +
                 `${pad(fmtTerrain(p, 3), 42)} ${pad(fmtHeight(p), 14)} ${rpad(p.darkLandPct + '%', 5)} ${rpad(p.pondPct + '%', 5)}  ${pad(status, 8)}`

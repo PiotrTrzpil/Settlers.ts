@@ -35,6 +35,7 @@ tests/e2e/__screenshots__/
 
 # Script output & transient data (asset exports, timeline DBs)
 output/
+scripts/map-analysis/results/
 
 # Backup files
 *.bak

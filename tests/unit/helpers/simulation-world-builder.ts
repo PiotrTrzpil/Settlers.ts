@@ -298,8 +298,8 @@ export function placeTreeEntities(state: GameState, services: GameServices, tile
 
 export function placeStoneEntities(state: GameState, services: GameServices, tiles: { x: number; y: number }[]): void {
     for (const pos of tiles) {
-        const stone = state.addEntity(EntityType.MapObject, MapObjectType.ResourceStone, pos.x, pos.y, 0);
-        services.stoneSystem.register(stone.id, MapObjectType.ResourceStone);
+        const stone = state.addEntity(EntityType.MapObject, MapObjectType.ResourceStone12, pos.x, pos.y, 0);
+        services.stoneSystem.register(stone.id, MapObjectType.ResourceStone12);
     }
 }
 

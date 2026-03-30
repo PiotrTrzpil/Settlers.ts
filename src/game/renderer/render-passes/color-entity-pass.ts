@@ -11,7 +11,6 @@ import { UnitType } from '@/game/core/unit-types';
 import type { IViewPoint } from '../i-view-point';
 import type { IRenderPass, ColorEntityContext } from './types';
 import { getRenderEntityWorldPos } from '../world-position';
-import { subTypeToRawByte } from '@/resources/map/raw-object-registry';
 import {
     fillQuadVertices,
     BUILDING_SCALE,
@@ -128,11 +127,10 @@ export class ColorEntityPass implements IRenderPass {
     ): void {
         const clipX = projection[0]! * worldPos.worldX + projection[12]!;
         const clipY = projection[5]! * worldPos.worldY + projection[13]!;
-        const rawByte = subTypeToRawByte(entity.subType as number);
         this.ctx.debugDecoLabels.push({
             screenX: (clipX * 0.5 + 0.5) * canvasW,
             screenY: (-clipY * 0.5 + 0.5) * canvasH,
-            type: rawByte,
+            type: entity.subType as number,
             hue: decoTypeToHue(entity.subType as number),
         });
     }

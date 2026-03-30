@@ -1,12 +1,12 @@
 import { EntityType } from '../entity';
 import { MapObjectCategory, MapObjectType } from '@/game/types/map-object-types';
 import { GameState } from '../game-state';
-import { MapSize } from '@/utilities/map-size';
 import { isBuildable } from '../terrain';
 import type { TerrainData } from '../terrain';
 import { LogHandler } from '@/utilities/log-handler';
 import type { MapObjectData } from '@/resources/map/map-entity-data';
 import { lookupRawObject } from '@/resources/map/raw-object-registry';
+import { toDarkVariant } from './dark-ground-fixup';
 
 const log = new LogHandler('MapObjects');
 
@@ -51,10 +51,21 @@ export const OBJECT_TYPE_CATEGORY: Partial<Record<MapObjectType, MapObjectCatego
     [MapObjectType.ResourceCoal]: MapObjectCategory.Goods,
     [MapObjectType.ResourceGold]: MapObjectCategory.Goods,
     [MapObjectType.ResourceIron]: MapObjectCategory.Goods,
-    [MapObjectType.ResourceStone]: MapObjectCategory.Goods,
     [MapObjectType.ResourceSulfur]: MapObjectCategory.Goods,
     [MapObjectType.ResourceDarkStone]: MapObjectCategory.Goods,
+    // Harvestable stone — all 12 depletion levels
+    [MapObjectType.ResourceStone1]: MapObjectCategory.Goods,
     [MapObjectType.ResourceStone2]: MapObjectCategory.Goods,
+    [MapObjectType.ResourceStone3]: MapObjectCategory.Goods,
+    [MapObjectType.ResourceStone4]: MapObjectCategory.Goods,
+    [MapObjectType.ResourceStone5]: MapObjectCategory.Goods,
+    [MapObjectType.ResourceStone6]: MapObjectCategory.Goods,
+    [MapObjectType.ResourceStone7]: MapObjectCategory.Goods,
+    [MapObjectType.ResourceStone8]: MapObjectCategory.Goods,
+    [MapObjectType.ResourceStone9]: MapObjectCategory.Goods,
+    [MapObjectType.ResourceStone10]: MapObjectCategory.Goods,
+    [MapObjectType.ResourceStone11]: MapObjectCategory.Goods,
+    [MapObjectType.ResourceStone12]: MapObjectCategory.Goods,
     // Crops
     [MapObjectType.Grain]: MapObjectCategory.Crops,
     [MapObjectType.Sunflower]: MapObjectCategory.Crops,
@@ -67,20 +78,16 @@ export const OBJECT_TYPE_CATEGORY: Partial<Record<MapObjectType, MapObjectCatego
     [MapObjectType.Bush2]: MapObjectCategory.Plants,
     [MapObjectType.Bush3]: MapObjectCategory.Plants,
     [MapObjectType.Bush4]: MapObjectCategory.Plants,
-    [MapObjectType.Bush5]: MapObjectCategory.Plants,
-    [MapObjectType.Bush6]: MapObjectCategory.Plants,
-    [MapObjectType.Bush7]: MapObjectCategory.Plants,
-    [MapObjectType.Bush8]: MapObjectCategory.Plants,
-    [MapObjectType.Bush9]: MapObjectCategory.Plants,
-    [MapObjectType.DarkBush1]: MapObjectCategory.Plants,
-    [MapObjectType.DarkBush2]: MapObjectCategory.Plants,
-    [MapObjectType.DarkBush3]: MapObjectCategory.Plants,
-    [MapObjectType.DarkBush4]: MapObjectCategory.Plants,
+    // Bush5-9 (raw 23-27), Flower1-2 (raw 28-29), Foliage1 (raw 31) are dark-land objects,
+    // not regular plants. Their enum values are now unassigned from raw bytes.
+    [MapObjectType.DarkBush1]: MapObjectCategory.DarkGround,
+    [MapObjectType.DarkBush2]: MapObjectCategory.DarkGround,
+    [MapObjectType.DarkBush3]: MapObjectCategory.DarkGround,
+    [MapObjectType.DarkBush4]: MapObjectCategory.DarkGround,
+    [MapObjectType.DarkPond]: MapObjectCategory.DarkGround,
     [MapObjectType.DesertBush1]: MapObjectCategory.Desert,
     [MapObjectType.DesertBush2]: MapObjectCategory.Desert,
     [MapObjectType.DesertBush3]: MapObjectCategory.Desert,
-    [MapObjectType.Flower1]: MapObjectCategory.Plants,
-    [MapObjectType.Flower2]: MapObjectCategory.Plants,
     [MapObjectType.Flower3]: MapObjectCategory.Plants,
     [MapObjectType.Flower4]: MapObjectCategory.Plants,
     [MapObjectType.Flower5]: MapObjectCategory.Plants,
@@ -95,7 +102,6 @@ export const OBJECT_TYPE_CATEGORY: Partial<Record<MapObjectType, MapObjectCatego
     [MapObjectType.Grass8]: MapObjectCategory.Plants,
     [MapObjectType.Grass9]: MapObjectCategory.Plants,
     [MapObjectType.Grass10]: MapObjectCategory.Plants,
-    [MapObjectType.Foliage1]: MapObjectCategory.Plants,
     [MapObjectType.Foliage2]: MapObjectCategory.Plants,
     [MapObjectType.Foliage3]: MapObjectCategory.Plants,
     [MapObjectType.Branch1]: MapObjectCategory.Plants,
@@ -188,7 +194,8 @@ export function getTypesForCategory(category: MapObjectCategory): MapObjectType[
 
 function isTreeType(type: MapObjectType): boolean {
     return (
-        type <= MapObjectType.TreeOliveSmall || (type >= MapObjectType.DarkTree1A && type <= MapObjectType.DarkTree5A)
+        (type >= MapObjectType.TreeOak && type <= MapObjectType.TreeOliveSmall) ||
+        (type >= MapObjectType.DarkTree1A && type <= MapObjectType.DarkTree5A)
     );
 }
 
@@ -197,9 +204,9 @@ function isTreeType(type: MapObjectType): boolean {
  * This is the CORRECT way to load trees - from the MapObjects chunk (type 6),
  * not from landscape byte 2 which contains terrain attributes.
  *
- * For trees (raw type 1-18), converts to MapObjectType (0-17).
- * For harvestable stone (raw 124-135), converts to ResourceStone with initial depletion level.
- * For other values (>18), stores the raw byte value as subType directly (decorations).
+ * For trees (raw type 1-18), the MapObjectType enum value equals the raw byte.
+ * For harvestable stone (raw 124-135), each level has its own MapObjectType (ResourceStone1-12).
+ * For other values, stores the raw byte value as subType directly (decorations).
  *
  * @param state - Game state to add entities to
  * @param objects - Parsed map object data from MapObjects chunk
@@ -212,9 +219,10 @@ function addMapObject(
     x: number,
     y: number,
     rawType: number,
-    groundType: Uint8Array,
-    mapSize: MapSize
+    terrain: TerrainData,
+    darkFixup: boolean
 ): 'tree' | 'deco' | null {
+    const { mapSize, groundType } = terrain;
     if (x < 0 || x >= mapSize.width || y < 0 || y >= mapSize.height) {
         return null;
     }
@@ -227,8 +235,9 @@ function addMapObject(
         if (entry.category === MapObjectCategory.Trees && !isBuildable(groundType[mapSize.toIndex(x, y)]!)) {
             return null;
         }
-        state.addEntity(EntityType.MapObject, entry.type, x, y, 0, { variation: entry.variation });
-        return isTreeType(entry.type) ? 'tree' : 'deco';
+        const type = darkFixup && terrain.isDarkLand(x, y) ? toDarkVariant(entry.type, x, y) : entry.type;
+        state.addEntity(EntityType.MapObject, type, x, y, 0, { variation: entry.variation });
+        return isTreeType(type) ? 'tree' : 'deco';
     }
 
     state.addEntity(EntityType.MapObject, rawType, x, y, 0);
@@ -238,14 +247,14 @@ function addMapObject(
 export function populateMapObjectsFromEntityData(
     state: GameState,
     objects: MapObjectData[],
-    terrain: TerrainData
+    terrain: TerrainData,
+    darkGroundFixup = true
 ): number {
-    const { groundType, mapSize } = terrain;
     let treeCount = 0;
     let decoCount = 0;
 
     for (const obj of objects) {
-        const result = addMapObject(state, obj.x, obj.y, obj.objectType, groundType, mapSize);
+        const result = addMapObject(state, obj.x, obj.y, obj.objectType, terrain, darkGroundFixup);
         if (result === 'tree') {
             treeCount++;
         } else if (result === 'deco') {

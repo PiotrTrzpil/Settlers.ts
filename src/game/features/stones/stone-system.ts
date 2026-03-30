@@ -1,17 +1,18 @@
 /**
  * Stone lifecycle system - manages stone mining depletion and visual state.
  *
- * Stones have 13 depletion stages (12=full, 0=nearly gone) and 2 visual
- * variants (A/B) randomly assigned on creation.
+ * Stones use raw byte values as their subType (ResourceStone1=124 through
+ * ResourceStone12=135). Each depletion level is a separate subType.
+ * When mined, the entity is replaced with the next-lower subType.
+ * When ResourceStone1 is mined, the entity is removed entirely.
  *
- * Each stonecutter work session depletes one level. When depleted past 0,
- * the entity is removed. Visual state is controlled via EntityVisualService.
+ * Each stone has 2 visual variants (A/B) randomly assigned on creation,
+ * stored as entity variation (0=A, 1=B).
  */
 
 import type { GameState } from '../../game-state';
 import type { EntityVisualService } from '../../animation/entity-visual-service';
-import { MapObjectCategory, MapObjectType } from '@/game/types/map-object-types';
-import { OBJECT_TYPE_CATEGORY } from '../../systems/map-objects';
+import { MapObjectType, isHarvestableStone, STONE_FULL_LEVEL, stoneTypeForLevel } from '@/game/types/map-object-types';
 import { createLogger } from '@/utilities/logger';
 import { findEmptySpot } from '../../systems/spatial-search';
 import type { Command, CommandResult } from '../../commands';
@@ -19,14 +20,8 @@ import { PersistentMap } from '@/game/persistence/persistent-store';
 
 const log = createLogger('StoneSystem');
 
-/** Number of visual depletion stages per variant (GIL indices 0-12). */
-export const STONE_DEPLETION_STAGES = 13;
-
 /** Number of visual variants (A, B). */
 export const STONE_VARIANTS = 2;
-
-/** Initial depletion level (full stone). */
-const STONE_FULL_LEVEL = STONE_DEPLETION_STAGES - 1; // 12
 
 /**
  * Stone mining stage.
@@ -40,13 +35,12 @@ export enum StoneStage {
 
 /**
  * State for a single stone entity.
+ * Depletion level is derived from entity.subType, not stored here.
  */
 export interface StoneState {
     stage: StoneStage;
     /** Visual variant: 0 = A, 1 = B */
     variant: number;
-    /** Depletion level: 12 = full, 0 = nearly gone. Next mine at 0 removes. */
-    level: number;
 }
 
 export interface StoneSystemConfig {
@@ -63,7 +57,7 @@ export class StoneSystem {
     private readonly visualService: EntityVisualService;
     private readonly executeCommand: (cmd: Command) => CommandResult;
 
-    /** Persistent state storage: entityId → StoneState */
+    /** Persistent state storage: entityId -> StoneState */
     readonly persistentStore = new PersistentMap<StoneState>('stones');
 
     constructor(cfg: StoneSystemConfig) {
@@ -72,54 +66,40 @@ export class StoneSystem {
         this.executeCommand = cfg.executeCommand;
     }
 
-    /**
-     * Compute the entity.variation value for a stone state.
-     * Layout: variant * STONE_DEPLETION_STAGES + level
-     *   Variant A: variations 0-12
-     *   Variant B: variations 13-25
-     */
-    private getVariation(state: StoneState): number {
-        return state.variant * STONE_DEPLETION_STAGES + state.level;
-    }
-
-    /** Update visual variation to reflect current state. */
+    /** Update visual variation to reflect the A/B variant. */
     private updateVisual(entityId: number, state: StoneState): void {
-        this.visualService.setVariation(entityId, this.getVariation(state));
+        this.visualService.setVariation(entityId, state.variant);
     }
 
     /**
      * Register a stone entity.
-     * Only registers if the object type is a resource stone.
-     * Assigns a random visual variant (A or B).
-     * Uses initialLevel if provided (from map data), otherwise full level.
+     * Only registers if the object type is a harvestable stone (ResourceStone1-12).
+     * Uses initialVariant if provided (e.g. preserved across depletion replacement),
+     * otherwise assigns a random visual variant (A or B).
      */
-    register(entityId: number, objectType: MapObjectType, initialLevel?: number): void {
-        if (
-            OBJECT_TYPE_CATEGORY[objectType] !== MapObjectCategory.Goods ||
-            objectType !== MapObjectType.ResourceStone
-        ) {
+    register(entityId: number, objectType: MapObjectType, initialVariant?: number): void {
+        if (!isHarvestableStone(objectType)) {
             return;
         }
 
         this.gameState.getEntityOrThrow(entityId, 'stone for registration');
 
-        const variant = this.gameState.rng.nextInt(STONE_VARIANTS);
+        const variant = initialVariant ?? this.gameState.rng.nextInt(STONE_VARIANTS);
 
         const state: StoneState = {
             stage: StoneStage.Normal,
             variant,
-            level: initialLevel ?? STONE_FULL_LEVEL,
         };
         this.persistentStore.set(entityId, state);
 
-        this.visualService.setVariation(entityId, this.getVariation(state));
+        this.visualService.setVariation(entityId, state.variant);
     }
 
     /**
      * Restore stone state from serialized data.
      * Overwrites the fresh state created by register().
      */
-    restoreStoneState(entityId: number, data: { stage: StoneStage; variant: number; level: number }): void {
+    restoreStoneState(entityId: number, data: { stage: StoneStage; variant: number; level?: number }): void {
         // Skip stale entries — entity may have been removed between snapshot capture and restore
         if (!this.visualService.getState(entityId)) {
             return;
@@ -128,11 +108,9 @@ export class StoneSystem {
         const state: StoneState = {
             stage: data.stage,
             variant: data.variant,
-            level: data.level,
         };
         this.persistentStore.set(entityId, state);
-        // State may already be initialized from register(); just update the variation
-        this.visualService.setVariation(entityId, this.getVariation(state));
+        this.visualService.setVariation(entityId, state.variant);
     }
 
     /** Remove stone state when entity is removed. */
@@ -162,9 +140,9 @@ export class StoneSystem {
 
     /**
      * Complete one mining session.
-     * Decrements the depletion level by 1. If the stone is fully depleted,
-     * removes the entity and returns true; otherwise updates the visual and
-     * returns false.
+     * Replaces the entity with the next-lower depletion level.
+     * If the stone is at ResourceStone1 (nearly depleted), removes the entity entirely.
+     * Returns true if the stone was fully depleted and removed.
      */
     completeMining(entityId: number): boolean {
         const state = this.persistentStore.get(entityId);
@@ -172,16 +150,31 @@ export class StoneSystem {
             return false;
         }
 
-        state.level--;
+        const entity = this.gameState.getEntityOrThrow(entityId, 'stone for mining');
+        const currentType = entity.subType as MapObjectType;
 
-        if (state.level < 0) {
+        if (currentType === MapObjectType.ResourceStone1) {
             log.debug(`Stone ${entityId} fully depleted, removing`);
             this.executeCommand({ type: 'remove_entity', entityId });
             return true;
         }
 
-        state.stage = StoneStage.Normal;
-        this.updateVisual(entityId, state);
+        // Replace with next-lower depletion level, preserving position and variant.
+        // The variant is passed as `variation` in spawn_map_object, which flows through
+        // entity:created → register(initialVariant) so the new entity keeps the same A/B look.
+        const nextType = (currentType - 1) as MapObjectType;
+        const { x, y } = entity;
+        const { variant } = state;
+
+        this.executeCommand({ type: 'remove_entity', entityId });
+        this.executeCommand({
+            type: 'spawn_map_object',
+            objectType: nextType,
+            x,
+            y,
+            variation: variant,
+        });
+
         return false;
     }
 
@@ -199,9 +192,9 @@ export class StoneSystem {
     }
 
     /**
-     * Spawn multiple ResourceStone entities near a position.
-     * Uses findEmptySpot to place each stone on an unoccupied tile — mirrors
-     * the treeSystem.plantTreesNear pattern for use in tests and scripts.
+     * Spawn multiple harvestable stone entities near a position.
+     * Uses findEmptySpot to place each stone on an unoccupied tile.
+     * Spawns at full depletion level (ResourceStone12).
      * @returns Number of stones successfully spawned.
      */
     spawnStonesNear(cx: number, cy: number, count: number, radius = 15): number {
@@ -218,7 +211,7 @@ export class StoneSystem {
             }
             this.executeCommand({
                 type: 'spawn_map_object',
-                objectType: MapObjectType.ResourceStone,
+                objectType: stoneTypeForLevel(STONE_FULL_LEVEL),
                 x: spot.x,
                 y: spot.y,
             });

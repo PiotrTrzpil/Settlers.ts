@@ -84,12 +84,3 @@ export const TERRAIN_GROUPS: readonly TerrainGroup[] = [
     'Mud',
     'Road',
 ];
-
-/** Ground types considered "dark ground" for affinity analysis. */
-export const DARK_GROUND_TYPES = new Set<number>([
-    S4GroundType.DARKGRASS,
-    S4GroundType.DARKGRASS_GRASS,
-    S4GroundType.SWAMP,
-    S4GroundType.SWAMP_GRASS,
-    S4GroundType.GRASS_SWAMP,
-]);

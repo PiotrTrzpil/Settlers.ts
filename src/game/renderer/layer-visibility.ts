@@ -86,9 +86,8 @@ export const DEFAULT_LAYER_VISIBILITY: LayerVisibility = {
 
 /** Map MapObjectType to its environment sub-layer category */
 export function getEnvironmentSubLayer(objectType: MapObjectType): EnvironmentSubLayer {
-    // Trees
-    if (objectType >= 0 && objectType <= 18) {
-        // S4_TREE_ENUM range
+    // Trees (raw bytes 1-18)
+    if (objectType >= 1 && objectType <= 18) {
         return EnvironmentSubLayer.Trees;
     }
 
@@ -116,15 +115,9 @@ export function isEnvironmentSubLayerVisible(visibility: LayerVisibility, subLay
 /** Check if a specific MapObjectType should be visible */
 export function isMapObjectVisible(visibility: LayerVisibility, objectType: MapObjectType): boolean {
     // Debug filter: when set, only show objects matching this raw type value.
-    // Trees have subType 0-17 (mapped from raw 1-18), non-trees have raw type as subType.
+    // After refactor, subType = raw byte for all types, no conversion needed.
     if (visibility.debugObjectTypeFilter !== null) {
-        const filter = visibility.debugObjectTypeFilter;
-        // For trees (subType 0-17): raw type = subType + 1
-        if (objectType >= 0 && objectType <= 17) {
-            return objectType + 1 === filter;
-        }
-        // For non-trees: subType IS the raw type
-        return objectType === filter;
+        return objectType === visibility.debugObjectTypeFilter;
     }
 
     // Resource deposits are controlled by the Resources layer
@@ -271,7 +264,7 @@ export function getMapObjectFallbackColor(objectType: MapObjectType): [number, n
 /** Size multiplier for different object types (for dot rendering) */
 export function getMapObjectDotScale(objectType: MapObjectType): number {
     // Trees are taller
-    if (objectType >= 0 && objectType <= 18) {
+    if (objectType >= 1 && objectType <= 18) {
         return 0.35;
     }
 

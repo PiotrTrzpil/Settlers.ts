@@ -94,3 +94,17 @@ export function getMapPathFromArgs(scriptName: string): string {
     }
     return mapFile;
 }
+
+/** Recursively find all .map files in a directory. */
+export function findMapFiles(dir: string): string[] {
+    const results: string[] = [];
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+        const full = path.join(dir, entry.name);
+        if (entry.isDirectory()) results.push(...findMapFiles(full));
+        else if (entry.name.endsWith('.map')) results.push(full);
+    }
+    return results;
+}
+
+/** Default map directory. */
+export const DEFAULT_MAP_DIR = path.resolve(process.cwd(), 'public/Siedler4/Map');

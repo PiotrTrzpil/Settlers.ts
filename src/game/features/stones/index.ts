@@ -7,4 +7,4 @@
 export { StoneFeature, type StoneFeatureExports } from './stone-feature';
 
 // Re-export StoneSystem types for convenience
-export { StoneSystem, StoneStage, STONE_DEPLETION_STAGES, STONE_VARIANTS, type StoneState } from './stone-system';
+export { StoneSystem, StoneStage, STONE_VARIANTS, type StoneState } from './stone-system';

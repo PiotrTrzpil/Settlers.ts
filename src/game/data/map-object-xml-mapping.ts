@@ -45,9 +45,8 @@ export const MAP_OBJECT_TYPE_TO_XML_ID: Partial<Record<MapObjectType, string>> =
     [MapObjectType.DarkTree5A]: 'OBJECT_DARKTREE05A',
 
     // ---- Resources ----
-    [MapObjectType.ResourceStone]: 'OBJECT_STONEMINE1_00',
+    [MapObjectType.ResourceStone12]: 'OBJECT_STONEMINE1_00',
     [MapObjectType.ResourceDarkStone]: 'OBJECT_DARKSTONEMINE1_00',
-    [MapObjectType.ResourceStone2]: 'OBJECT_STONEMINE2_00',
 
     // ---- Crops ----
     [MapObjectType.Grain]: 'OBJECT_WHEAT1',
@@ -62,11 +61,6 @@ export const MAP_OBJECT_TYPE_TO_XML_ID: Partial<Record<MapObjectType, string>> =
     [MapObjectType.Bush2]: 'OBJECT_BUSH2',
     [MapObjectType.Bush3]: 'OBJECT_BUSH3',
     [MapObjectType.Bush4]: 'OBJECT_BUSH4',
-    [MapObjectType.Bush5]: 'OBJECT_BUSH5',
-    [MapObjectType.Bush6]: 'OBJECT_BUSH6',
-    [MapObjectType.Bush7]: 'OBJECT_BUSH7',
-    [MapObjectType.Bush8]: 'OBJECT_BUSH8',
-    [MapObjectType.Bush9]: 'OBJECT_BUSH9',
     [MapObjectType.DarkBush1]: 'OBJECT_DARKBUSH1',
     [MapObjectType.DarkBush2]: 'OBJECT_DARKBUSH2',
     [MapObjectType.DarkBush3]: 'OBJECT_DARKBUSH3',
@@ -76,8 +70,6 @@ export const MAP_OBJECT_TYPE_TO_XML_ID: Partial<Record<MapObjectType, string>> =
     [MapObjectType.DesertBush3]: 'OBJECT_DESERTBUSH3',
 
     // ---- Ground cover — Flowers ----
-    [MapObjectType.Flower1]: 'OBJECT_FLOWER1',
-    [MapObjectType.Flower2]: 'OBJECT_FLOWER2',
     [MapObjectType.Flower3]: 'OBJECT_FLOWER3',
     [MapObjectType.Flower4]: 'OBJECT_FLOWER4',
     [MapObjectType.Flower5]: 'OBJECT_FLOWER5',
@@ -96,7 +88,6 @@ export const MAP_OBJECT_TYPE_TO_XML_ID: Partial<Record<MapObjectType, string>> =
     [MapObjectType.Grass10]: 'OBJECT_GRASS10',
 
     // ---- Ground cover — Foliage & Branches ----
-    [MapObjectType.Foliage1]: 'OBJECT_FOLIAGE1',
     [MapObjectType.Foliage2]: 'OBJECT_FOLIAGE2',
     [MapObjectType.Foliage3]: 'OBJECT_FOLIAGE3',
     [MapObjectType.Branch1]: 'OBJECT_BRANCH1',

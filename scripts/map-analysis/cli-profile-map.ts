@@ -5,7 +5,7 @@
  *
  * Always writes a YAML report file alongside console output.
  *
- * Run: npx tsx scripts/map-object-profile.ts <map-file> [options]
+ * Run: npx tsx scripts/map-analysis/cli-profile-map.ts <map-file> [options]
  *
  * Options:
  *   --unmapped-only    Only show unmapped raw values
@@ -24,10 +24,10 @@ import {
     buildTerrainGroupSummaries,
     printFullReport,
     writeYamlReport,
-} from './map-analysis';
+} from './index';
 
 // Parse CLI args
-const mapFilePath = getMapPathFromArgs('map-object-profile.ts');
+const mapFilePath = getMapPathFromArgs('map-analysis/cli-profile-map.ts');
 
 const args = process.argv.slice(3);
 const unmappedOnly = args.includes('--unmapped-only');
@@ -51,7 +51,7 @@ const allProfiles = profiles;
 
 // Apply filters
 if (unmappedOnly) {
-    profiles = profiles.filter(p => !p.mapped);
+    profiles = profiles.filter(p => !p.registered);
 }
 if (categoryFilter) {
     profiles = profiles.filter(p => p.category.toLowerCase().includes(categoryFilter));

@@ -224,7 +224,7 @@ describe('Building Placement Over Replaceable Map Objects', () => {
 
         // Place a flower on every footprint tile
         for (const tile of footprint) {
-            sim.state.addEntity(EntityType.MapObject, MapObjectType.Flower1, tile.x, tile.y, 0);
+            sim.state.addEntity(EntityType.MapObject, MapObjectType.Bush1, tile.x, tile.y, 0);
         }
 
         const mapObjectsBefore = sim.state.entities.filter(e => e.type === EntityType.MapObject).length;
@@ -289,7 +289,7 @@ describe('Building Placement Over Replaceable Map Objects', () => {
         const footprint = getBuildingFootprint(bx, by, BuildingType.WoodcutterHut, Race.Roman);
 
         // Place foliage on the first tile
-        sim.state.addEntity(EntityType.MapObject, MapObjectType.Foliage1, footprint[0]!.x, footprint[0]!.y, 0);
+        sim.state.addEntity(EntityType.MapObject, MapObjectType.Bush1, footprint[0]!.x, footprint[0]!.y, 0);
 
         sim.execute({
             type: 'place_building',

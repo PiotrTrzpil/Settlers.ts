@@ -5,7 +5,7 @@
 
 import type { Entity } from '../entity';
 import { EntityType } from '../entity';
-import { MapObjectType } from '@/game/types/map-object-types';
+import { MapObjectType, isHarvestableStone } from '@/game/types/map-object-types';
 import type { SpriteEntry } from './sprite-metadata';
 
 // Color shader constants (for non-textured rendering)
@@ -177,10 +177,13 @@ export function getSpriteScale(entity: Entity): number {
     if (entity.type !== EntityType.MapObject) {
         return ENTITY_SCALE;
     }
-    if ((entity.subType as number) <= MapObjectType.TreeOliveSmall) {
+    if (
+        (entity.subType as number) >= MapObjectType.TreeOak &&
+        (entity.subType as number) <= MapObjectType.TreeOliveSmall
+    ) {
         return ENTITY_SCALE;
     }
-    if ((entity.subType as number) === MapObjectType.ResourceStone) {
+    if (isHarvestableStone(entity.subType as number)) {
         return ENTITY_SCALE;
     }
     return DECORATION_SCALE;

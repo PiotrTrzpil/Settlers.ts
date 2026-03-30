@@ -16,8 +16,7 @@ import {
 import { ANIMATION_DEFAULTS } from '@/game/animation/animation';
 import { SafeLoadBatch } from '../batch-loader';
 import { EntityType } from '@/game/entity';
-import { MapObjectType } from '@/game/types/map-object-types';
-import { STONE_DEPLETION_STAGES } from '@/game/features/stones/stone-system';
+import { MapObjectType, stoneTypeForLevel } from '@/game/types/map-object-types';
 import { buildDecorationSpriteMap } from '../decoration-sprite-map';
 import { loadCropSprites } from '../sprite-crop-loader';
 import { loadGilSpriteBatch } from './gil-manifest-loader';
@@ -119,13 +118,85 @@ async function loadTreeSprites(ctx: FileLoadContext): Promise<number> {
 }
 
 // =============================================================================
+// Dark tree sprites (GIL-based, no growth stages or cut variants)
+// =============================================================================
+
+/** Dark tree type → GIL range mapping. 6 visual types × 16 sway frames, shared across 8 MapObjectType entries. */
+const DARK_TREE_GIL: ReadonlyArray<{ types: MapObjectType[]; start: number; count: number }> = [
+    { types: [MapObjectType.DarkTree1A], ...MAP_OBJECT_SPRITES.DARK_TREE_1 },
+    { types: [MapObjectType.DarkTree1B], ...MAP_OBJECT_SPRITES.DARK_TREE_2 },
+    { types: [MapObjectType.DarkTree2A], ...MAP_OBJECT_SPRITES.DARK_TREE_3 },
+    { types: [MapObjectType.DarkTree2B], ...MAP_OBJECT_SPRITES.DARK_TREE_4 },
+    { types: [MapObjectType.DarkTree3A, MapObjectType.DarkTree3B], ...MAP_OBJECT_SPRITES.DARK_TREE_5 },
+    { types: [MapObjectType.DarkTree4A, MapObjectType.DarkTree5A], ...MAP_OBJECT_SPRITES.DARK_TREE_6 },
+];
+
+/** Collect sway frames from a GIL range. Returns null if fewer than 2 frames loaded. */
+function collectSwayFrames(sprites: Map<number, SpriteEntry>, start: number, count: number): SpriteEntry[] | null {
+    const frames: SpriteEntry[] = [];
+    for (let i = 0; i < count; i++) {
+        const entry = sprites.get(start + i);
+        if (entry) {
+            frames.push(entry);
+        }
+    }
+    return frames.length > 1 ? frames : null;
+}
+
+/**
+ * Load dark tree sprites from direct GIL indices.
+ * Dark trees have no growth stages or cut variants — just 16 sway animation frames each.
+ */
+async function loadDarkTreeSprites(ctx: FileLoadContext): Promise<number> {
+    const allIndices: number[] = [];
+    for (const { start, count } of DARK_TREE_GIL) {
+        for (let i = 0; i < count; i++) {
+            allIndices.push(start + i);
+        }
+    }
+
+    const sprites = await loadGilSpriteBatch(allIndices, ctx);
+
+    let loaded = 0;
+    for (const { types, start, count } of DARK_TREE_GIL) {
+        const firstEntry = sprites.get(start);
+        if (!firstEntry) {
+            continue;
+        }
+
+        const swayFrames = collectSwayFrames(sprites, start, count);
+        const frameMap = swayFrames ? new Map<number, SpriteEntry[]>([[0, swayFrames]]) : null;
+
+        for (const type of types) {
+            ctx.registry.registerMapObject(type, firstEntry);
+            if (frameMap) {
+                ctx.registry.registerAnimatedEntity(
+                    EntityType.MapObject,
+                    type,
+                    frameMap,
+                    ANIMATION_DEFAULTS.FRAME_DURATION_MS,
+                    true
+                );
+            }
+            loaded++;
+        }
+    }
+
+    return loaded;
+}
+
+// =============================================================================
 // Stone sprites
 // =============================================================================
 
 /**
  * Load harvestable stone depletion sprites from direct GIL indices.
- * 2 variants (A, B) × 13 stages = 26 sprites for ResourceStone.
- * Variation layout: variant * 13 + stage (A: 0-12, B: 13-25).
+ * 2 variants (A, B) × 12 depletion levels = 24 sprites across ResourceStone1-12.
+ * Each subType gets variation 0 (A) and variation 1 (B).
+ *
+ * The GIL sprite ranges have 13 stages each (indices 0-12).
+ * Stage 0 is the most depleted visual; we map levels 1-12 to stage indices 1-12.
+ * Stage 0 is unused (no raw byte for it — stones at level 1 are removed on next mine).
  */
 async function loadStoneSprites(ctx: FileLoadContext): Promise<number> {
     const variants = [MAP_OBJECT_SPRITES.STONE_STAGES_A, MAP_OBJECT_SPRITES.STONE_STAGES_B];
@@ -143,10 +214,11 @@ async function loadStoneSprites(ctx: FileLoadContext): Promise<number> {
     let loaded = 0;
     for (let v = 0; v < variants.length; v++) {
         const range = variants[v]!;
-        for (let stage = 0; stage < range.count; stage++) {
-            const entry = sprites.get(range.start + stage);
+        // Map depletion levels 1-12 to sprite stage indices 1-12
+        for (let level = 1; level <= 12; level++) {
+            const entry = sprites.get(range.start + level);
             if (entry) {
-                ctx.registry.registerMapObject(MapObjectType.ResourceStone, entry, v * STONE_DEPLETION_STAGES + stage);
+                ctx.registry.registerMapObject(stoneTypeForLevel(level), entry, v);
                 loaded++;
             }
         }
@@ -417,6 +489,7 @@ export async function loadMapObjectSprites(ctx: SpriteLoadContext): Promise<bool
     };
 
     const treeCount = await loadTreeSprites(fc5);
+    const darkTreeCount = await loadDarkTreeSprites(fc5);
     const stoneCount = await loadStoneSprites(fc5);
     const decoCount = await loadDecorationSprites(fc5);
     const cropCount = await loadCropSprites(
@@ -441,10 +514,20 @@ export async function loadMapObjectSprites(ctx: SpriteLoadContext): Promise<bool
         resourceCount = await loadResourceMapObjects(fc3);
     }
 
-    const total = treeCount + stoneCount + decoCount + cropCount + flagCount + dotCount + signCount + resourceCount;
+    const total =
+        treeCount +
+        darkTreeCount +
+        stoneCount +
+        decoCount +
+        cropCount +
+        flagCount +
+        dotCount +
+        signCount +
+        resourceCount;
     log.debug(
-        `MapObjects: ${treeCount} trees, ${stoneCount} stones, ${decoCount} decorations, ${cropCount} crops, ` +
-            `${flagCount} flags, ${dotCount} territory dots, ${signCount} signs, ${resourceCount} resources (${total} total)`
+        `MapObjects: ${treeCount} trees, ${darkTreeCount} dark trees, ${stoneCount} stones, ${decoCount} decorations, ` +
+            `${cropCount} crops, ${flagCount} flags, ${dotCount} territory dots, ${signCount} signs, ` +
+            `${resourceCount} resources (${total} total)`
     );
     return total > 0;
 }

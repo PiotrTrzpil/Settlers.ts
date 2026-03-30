@@ -21,6 +21,7 @@ import { Game } from '@/game/game';
 import { useRenderer } from './use-renderer';
 import { Race } from '@/game/renderer/sprite-metadata';
 import { LayerVisibility, DEFAULT_LAYER_VISIBILITY } from '@/game/renderer/layer-visibility';
+import { MapObjectType } from '@/game/types/map-object-types';
 
 const props = defineProps<{
     game: Game | null;
@@ -81,9 +82,7 @@ function drawOverlayLabels(): void {
 
     ctx.save();
     ctx.scale(dpr, dpr);
-    ctx.font = 'bold 13px monospace';
     ctx.textAlign = 'center';
-    ctx.textBaseline = 'bottom';
     // Account for DPR: screen positions from WebGL are in physical pixels
     const invDpr = 1 / dpr;
     ctx.lineWidth = 3;
@@ -93,9 +92,20 @@ function drawOverlayLabels(): void {
         const x = label.screenX * invDpr;
         const y = label.screenY * invDpr;
         const text = label.name ?? String(label.type);
+        // Draw main label (number or name)
+        ctx.font = 'bold 13px monospace';
+        ctx.textBaseline = 'bottom';
         ctx.strokeText(text, x, y - 4);
         ctx.fillStyle = label.name ? '#ff6666' : `hsl(${label.hue}, 90%, 65%)`;
         ctx.fillText(text, x, y - 4);
+        // Draw enum name below the main label
+        const enumName = MapObjectType[label.type];
+        if (enumName) {
+            ctx.font = '9px monospace';
+            ctx.textBaseline = 'top';
+            ctx.strokeText(enumName, x, y - 2);
+            ctx.fillText(enumName, x, y - 2);
+        }
     }
     ctx.restore();
 }

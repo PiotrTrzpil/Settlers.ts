@@ -83,7 +83,8 @@ export class GameCore {
         this.terrain = new TerrainData(
             mapLoader.landscape.getGroundType(),
             mapLoader.landscape.getGroundHeight(),
-            mapLoader.mapSize
+            mapLoader.mapSize,
+            mapLoader.landscape.getTerrainAttributes?.() ?? null
         );
 
         this.eventBus = new EventBus();
@@ -197,7 +198,12 @@ export class GameCore {
 
     /** Load trees/decorations from map objects and optionally expand forests. */
     private populateMapTrees(objects: MapObjectData[]): void {
-        const seedCount = populateMapObjectsFromEntityData(this.state, objects, this.terrain);
+        const seedCount = populateMapObjectsFromEntityData(
+            this.state,
+            objects,
+            this.terrain,
+            this.settings.state.darkGroundFixup
+        );
 
         if (seedCount > 0) {
             expandTrees(this.state, this.terrain, {

@@ -50,7 +50,12 @@ export function useDebugMapObjects(getGame: () => Game | null) {
 
         const entityObjects = game.mapLoader.entityData?.objects;
         if (entityObjects && entityObjects.length > 0) {
-            populateMapObjectsFromEntityData(game.state, entityObjects, game.terrain);
+            populateMapObjectsFromEntityData(
+                game.state,
+                entityObjects,
+                game.terrain,
+                game.settings.state.darkGroundFixup
+            );
         } else {
             for (const cat of TYPED_OBJECT_CATEGORIES) {
                 spawnTestObjects(game.state, game.terrain, cat, 30);

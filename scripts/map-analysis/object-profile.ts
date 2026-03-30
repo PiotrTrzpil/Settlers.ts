@@ -34,12 +34,15 @@ export interface ObjectProfile {
     raw: number;
     /** Total count across the map. */
     count: number;
-    /** Human-readable label from registry, or "???" if unmapped. */
+    // ---- Current registry state (guesses — these are what the analysis helps refine) ----
+    /** Human-readable label from registry, or "???" if not yet registered. */
     label: string;
-    /** Category from registry, or "???" if unmapped. */
+    /** Assigned category from registry, or "???" if not yet registered. */
     category: string;
-    /** Whether this value is in the registry. */
-    mapped: boolean;
+    /** Whether this value has an entry in the registry. */
+    registered: boolean;
+    /** Assigned MapObjectType value (if any). */
+    type: number | undefined;
     /** Ground type distribution, sorted by count desc. */
     terrain: GroundTypeFreq[];
     /** Terrain group distribution, sorted by count desc. */
@@ -52,6 +55,21 @@ export interface ObjectProfile {
     pondPct: number;
     /** Primary terrain group (most common group). */
     primaryGroup: TerrainGroup;
+    /** Top neighboring raw values (within 2 tiles), sorted by frequency. */
+    topNeighbors: NeighborFreq[];
+}
+
+/** Frequency of a neighboring raw value. */
+export interface NeighborFreq {
+    raw: number;
+    label: string;
+    count: number;
+}
+
+/** Per-map profiling result (map name + its profiles). */
+export interface MapProfileResult {
+    mapName: string;
+    profiles: ObjectProfile[];
 }
 
 /** Category-level summary statistics. */

@@ -46,8 +46,18 @@ const TREE_TYPES = new Set<MapObjectType>([
     MapObjectType.DarkTree5A,
 ]);
 const STONE_TYPES = new Set<MapObjectType>([
-    MapObjectType.ResourceStone,
+    MapObjectType.ResourceStone1,
     MapObjectType.ResourceStone2,
+    MapObjectType.ResourceStone3,
+    MapObjectType.ResourceStone4,
+    MapObjectType.ResourceStone5,
+    MapObjectType.ResourceStone6,
+    MapObjectType.ResourceStone7,
+    MapObjectType.ResourceStone8,
+    MapObjectType.ResourceStone9,
+    MapObjectType.ResourceStone10,
+    MapObjectType.ResourceStone11,
+    MapObjectType.ResourceStone12,
     MapObjectType.ResourceDarkStone,
 ]);
 const CROP_TYPES = new Set<MapObjectType>([
