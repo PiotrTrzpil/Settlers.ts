@@ -14,6 +14,8 @@ import type { Command, CommandResult } from '@/game/commands/command-types';
 import type { PlacementFilter } from '@/game/systems/placement/types';
 import type { BuildStep } from '../types';
 import { canPlaceBuildingFootprint } from '@/game/systems/placement';
+import { EntityType } from '@/game/entity';
+import { isNonBlockingMapObject } from '@/game/data/game-data-access';
 import { spiralSearch } from '@/game/utils/spiral-search';
 import { getPlayerBuildings, getPlayerBasePosition } from './ai-world-queries';
 
@@ -158,6 +160,10 @@ export class EconomyPlanner {
     private findPlacementPosition(buildingType: BuildingType): { x: number; y: number } | null {
         const basePos = getPlayerBasePosition(this.state, this.player);
         const filter = this.getPlacementFilter();
+        const replaceCheck = (id: number) => {
+            const e = this.state.getEntity(id);
+            return e?.type === EntityType.MapObject && isNonBlockingMapObject(e.subType as number);
+        };
         return spiralSearch(
             basePos.x,
             basePos.y,
@@ -173,7 +179,8 @@ export class EconomyPlanner {
                     this.race,
                     this.state.buildingFootprint,
                     filter,
-                    this.player
+                    this.player,
+                    replaceCheck
                 ),
             MAX_SEARCH_RADIUS
         );

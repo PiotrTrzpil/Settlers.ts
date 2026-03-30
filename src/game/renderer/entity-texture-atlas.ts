@@ -512,6 +512,11 @@ export class EntityTextureAtlas extends ShaderTexture {
         return this._hasPendingUploads;
     }
 
+    /** Whether a specific layer's data has been uploaded to GPU (no pending dirty region). */
+    public isLayerUploaded(layer: number): boolean {
+        return !this.dirtyRegions[layer];
+    }
+
     /**
      * Bind as TEXTURE_2D_ARRAY for upload operations.
      * Sets texture parameters only on first creation.

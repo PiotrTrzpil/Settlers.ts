@@ -276,10 +276,13 @@ export class ConstructionSiteManager {
     }
 
     /**
-     * Reserve a random unleveled tile for a digger to walk to and dig.
-     * Returns the tile index + position, or null if no unreserved tiles remain.
-     * The tile stays in unleveledTiles but is excluded from future reservations
-     * until released via releaseReservedTile or completed via completeTile.
+     * Reserve an unleveled tile for a digger to walk to and dig.
+     * Prefers tiles with the largest height deviation from the target —
+     * leveling the most extreme tiles first produces visually smooth
+     * progressive flattening instead of random patchwork.
+     *
+     * Among tiles with similar deviation (within 2 units), a random one
+     * is picked so multiple diggers don't all cluster on the same spot.
      */
     reserveUnleveledTile(buildingId: number): { tileIndex: number; x: number; y: number } | null {
         const site = this.getSiteOrThrow(buildingId, 'reserveUnleveledTile');
@@ -287,21 +290,34 @@ export class ConstructionSiteManager {
             return null;
         }
 
-        // Build set of unreserved tiles
-        const unreserved: number[] = [];
+        const terrain = site.terrain.originalTerrain!;
+        const targetH = terrain.targetHeight;
+
+        // Collect unreserved tiles with their height deviation from target
+        let maxDev = 0;
+        const unreserved: Array<{ idx: number; dev: number }> = [];
         for (const idx of site.terrain.unleveledTiles) {
-            if (!site.terrain.reservedTiles.has(idx)) {
-                unreserved.push(idx);
+            if (site.terrain.reservedTiles.has(idx)) {
+                continue;
+            }
+            const dev = Math.abs(terrain.tiles[idx]!.originalGroundHeight - targetH);
+            unreserved.push({ idx, dev });
+            if (dev > maxDev) {
+                maxDev = dev;
             }
         }
         if (unreserved.length === 0) {
             return null;
         }
 
-        const tileIndex = unreserved[this.rng.nextInt(unreserved.length)]!;
-        site.terrain.reservedTiles.add(tileIndex);
-        const tile = site.terrain.originalTerrain!.tiles[tileIndex]!;
-        return { tileIndex, x: tile.x, y: tile.y };
+        // Pick randomly from tiles near the worst deviation (within 2 height units)
+        const threshold = Math.max(maxDev - 2, 0);
+        const candidates = unreserved.filter(t => t.dev >= threshold);
+        const chosen = candidates[this.rng.nextInt(candidates.length)]!;
+
+        site.terrain.reservedTiles.add(chosen.idx);
+        const tile = terrain.tiles[chosen.idx]!;
+        return { tileIndex: chosen.idx, x: tile.x, y: tile.y };
     }
 
     /**

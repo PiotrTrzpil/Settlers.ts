@@ -142,6 +142,11 @@ export class SpriteRenderManager {
         return this._spriteAtlas !== null && this._spriteRegistry !== null;
     }
 
+    /** Whether a specific atlas layer has been uploaded to GPU. */
+    isLayerUploaded(layer: number): boolean {
+        return this._spriteAtlas?.isLayerUploaded(layer) ?? false;
+    }
+
     /**
      * Set the initial race before GL is available. Must be called before prefetchCache() and init().
      * No-op if race is already set (prevents overwriting during HMR).

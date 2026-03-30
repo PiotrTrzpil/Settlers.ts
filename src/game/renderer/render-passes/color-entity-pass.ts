@@ -46,8 +46,15 @@ export class ColorEntityPass implements IRenderPass {
         const canvasH = gl.canvas.height;
         ctx.debugDecoLabels.length = 0;
 
+        const forceLabels = ctx.layerVisibility.showDecoLabels;
+
         for (const entity of ctx.sortedEntities) {
             if (this.shouldSkip(entity)) {
+                // Still collect label for textured decorations when labels are forced
+                if (forceLabels && entity.type === EntityType.MapObject) {
+                    const worldPos = getRenderEntityWorldPos(entity, ctx, viewPoint);
+                    this.collectDecoDebugLabel(entity, worldPos, projection, canvasW, canvasH);
+                }
                 continue;
             }
 
@@ -72,6 +79,12 @@ export class ColorEntityPass implements IRenderPass {
                 // Entity rendered as color dot because sprite is missing — add a name label
                 this.collectMissingSpriteLabel(entity, worldPos, projection, canvasW, canvasH);
             }
+        }
+
+        // Collect labels for map objects hidden by layer visibility (no quad, labels only)
+        for (const entity of ctx.labelOnlyMapObjects) {
+            const worldPos = getRenderEntityWorldPos(entity, ctx, viewPoint);
+            this.collectDecoDebugLabel(entity, worldPos, projection, canvasW, canvasH);
         }
     }
 

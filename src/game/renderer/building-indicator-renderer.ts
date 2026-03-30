@@ -159,10 +159,13 @@ export class BuildingIndicatorRenderer implements IRenderer {
 
     /**
      * Get gradient color based on height range.
-     * Maps height range 0 to maxSlopeDiff onto the 10-color gradient.
+     * Uses a sqrt curve so the gradient spreads evenly across real-world slopes:
+     * linear mapping bunches everything into green because most diffs are low
+     * relative to the theoretical max. Sqrt compresses the green end and gives
+     * yellow/orange/red more room in the mid range.
      */
     private getGradientColor(heightRange: number): number[] {
-        const normalizedSlope = Math.min(heightRange / this.maxSlopeDiff, 1.0);
+        const normalizedSlope = Math.sqrt(Math.min(heightRange / this.maxSlopeDiff, 1.0));
         const index = Math.min(Math.floor(normalizedSlope * 10), 9);
         return SLOPE_GRADIENT[index]!;
     }

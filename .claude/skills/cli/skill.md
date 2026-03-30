@@ -16,6 +16,9 @@ pnpm cli "<command>"          # single command
 pnpm cli                      # interactive REPL
 ```
 
+Critical: YOU MUST read `docs/MECHANICS.md` before doing any actions in the game.
+
+
 ## User Request
 
 $ARGUMENTS

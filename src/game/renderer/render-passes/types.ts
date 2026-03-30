@@ -103,7 +103,10 @@ export interface DebugEntityLabel {
 
 export interface ColorEntityContext extends SpatialPassData, ColorShaderPassData, EntityFramePassData {
     readonly spriteResolver: EntitySpriteResolver;
+    readonly layerVisibility: LayerVisibility;
     debugDecoLabels: DebugEntityLabel[];
+    /** Map objects hidden by layer visibility but needing labels (when showDecoLabels is on). */
+    readonly labelOnlyMapObjects: Entity[];
 }
 
 export interface SelectionContext extends SpatialPassData, ColorShaderPassData, EntityFramePassData {
@@ -221,4 +224,7 @@ export interface PassContext extends SpatialPassData, ColorShaderPassData, Sprit
 
     // Debug output — passes write labels here during drawColorEntities
     debugDecoLabels: DebugEntityLabel[];
+
+    /** Map objects hidden by layer visibility but needing labels (when showDecoLabels is on). */
+    readonly labelOnlyMapObjects: Entity[];
 }

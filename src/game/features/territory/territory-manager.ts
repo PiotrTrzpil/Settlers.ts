@@ -233,8 +233,11 @@ export class TerritoryManager {
                     continue;
                 }
                 const idx = rowOffset + x;
-                // Claim if unclaimed, or if this tower is closer than the current claimant
-                if (distSq < this.distanceGrid[idx]!) {
+                const existing = this.territoryGrid[idx]!;
+                // Only claim unclaimed tiles or same-player tiles where this tower is closer.
+                // Different-player territory is never overwritten — territory is first-come-first-served
+                // between players (matching Settlers 4 mechanics where placement order matters).
+                if ((existing === 0 || existing === ownerValue) && distSq < this.distanceGrid[idx]!) {
                     this.territoryGrid[idx] = ownerValue;
                     this.distanceGrid[idx] = distSq;
                 }

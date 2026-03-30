@@ -76,6 +76,9 @@ function getCropConfig(cropType: MapObjectType): CropTypeConfig {
 // ── GrowableSystem config ─────────────────────────────────────
 
 const PLANTING_SEARCH_RADIUS = 12;
+// TODO: Use the per-object `repellent` field from objectInfo.xml instead of a global constant.
+// Crops with repellent=1 (Grain, Sunflower, Agave, Grape, Wheat2) should enforce spacing
+// based on that value rather than a hardcoded distance.
 const MIN_CROP_DISTANCE_SQ = 1;
 
 const ALL_CROP_TYPES: readonly MapObjectType[] = [

@@ -130,7 +130,9 @@ describe('BuildingInventoryManager', () => {
     it('should throw when depositing wrong material type or accessing non-existent building', () => {
         tm.createSlots(100, BuildingType.Sawmill);
         expect(() => tm.manager.depositInput(100, EMaterialType.STONE, 5)).toThrow(/has no input slot for STONE/);
-        expect(() => tm.manager.withdrawOutput(999, EMaterialType.BOARD, 5)).toThrow(/has no output slot for BOARD/);
+        expect(() => tm.manager.withdrawOutput(999, EMaterialType.BOARD, 5)).toThrow(
+            /has no output slot with stock for BOARD/
+        );
     });
 
     it('should find buildings by material availability and need', () => {

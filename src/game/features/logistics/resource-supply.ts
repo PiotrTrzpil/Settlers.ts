@@ -64,13 +64,14 @@ export function getAvailableSupplies(
             }
         }
 
-        const slot = inventoryManager.findOutputSlot(buildingId, materialType);
-        if (slot && slot.currentAmount >= minAmount) {
+        const totalAmount = inventoryManager.getOutputAmount(buildingId, materialType);
+        if (totalAmount >= minAmount) {
+            const slot = inventoryManager.findOutputSlot(buildingId, materialType);
             supplies.push({
                 buildingId,
                 materialType,
-                availableAmount: slot.currentAmount,
-                slotKind: slot.kind,
+                availableAmount: totalAmount,
+                slotKind: slot?.kind ?? SlotKind.Storage,
             });
         }
     }

@@ -11,6 +11,10 @@ import { SlotKind } from '../../core/pile-kind';
 import type { PileSlot } from './pile-slot';
 import type { BuildingInventoryManager } from './building-inventory';
 
+function isOutputKind(kind: SlotKind): boolean {
+    return kind === SlotKind.Output || kind === SlotKind.Storage || kind === SlotKind.Free;
+}
+
 function findInputSlot(
     mgr: BuildingInventoryManager,
     buildingId: number,
@@ -78,7 +82,9 @@ export function depositOutput(
 }
 
 /**
- * Withdraw from the input slot for (buildingId, material).
+ * Withdraw from an input slot for (buildingId, material) that has stock.
+ * Iterates all matching input slots to handle multi-slot materials (e.g. stone×12
+ * split across two slots [8,4] for castle construction).
  * Returns actual amount withdrawn.
  */
 export function withdrawInput(
@@ -87,11 +93,17 @@ export function withdrawInput(
     material: EMaterialType,
     amount: number
 ): number {
-    return mgr.withdraw(requireInputSlot(mgr, buildingId, material, 'withdrawInput').id, amount);
+    for (const slot of mgr.getSlots(buildingId)) {
+        if (slot.materialType === material && slot.kind === SlotKind.Input && slot.currentAmount > 0) {
+            return mgr.withdraw(slot.id, amount);
+        }
+    }
+    throw new Error(`Building ${buildingId} has no input slot with stock for ${material} [withdrawInput]`);
 }
 
 /**
- * Withdraw from the output slot for (buildingId, material).
+ * Withdraw from an output/storage/free slot for (buildingId, material) that has stock.
+ * Iterates all matching slots to handle multi-slot materials.
  * Returns actual amount withdrawn.
  */
 export function withdrawOutput(
@@ -100,23 +112,40 @@ export function withdrawOutput(
     material: EMaterialType,
     amount: number
 ): number {
-    return mgr.withdraw(requireOutputSlot(mgr, buildingId, material, 'withdrawOutput').id, amount);
+    for (const slot of mgr.getSlots(buildingId)) {
+        if (slot.materialType === material && isOutputKind(slot.kind) && slot.currentAmount > 0) {
+            return mgr.withdraw(slot.id, amount);
+        }
+    }
+    throw new Error(`Building ${buildingId} has no output slot with stock for ${material} [withdrawOutput]`);
 }
 
 /**
- * Get current amount in the input slot for (buildingId, material).
- * Returns 0 if no input slot exists.
+ * Get total current amount across all input slots for (buildingId, material).
+ * Sums across multiple slots to handle multi-slot materials.
  */
 export function getInputAmount(mgr: BuildingInventoryManager, buildingId: number, material: EMaterialType): number {
-    return findInputSlot(mgr, buildingId, material)?.currentAmount ?? 0;
+    let total = 0;
+    for (const slot of mgr.getSlots(buildingId)) {
+        if (slot.materialType === material && slot.kind === SlotKind.Input) {
+            total += slot.currentAmount;
+        }
+    }
+    return total;
 }
 
 /**
- * Get current amount in the output slot for (buildingId, material).
- * Returns 0 if no output slot exists.
+ * Get total current amount across all output/storage/free slots for (buildingId, material).
+ * Sums across multiple slots to handle multi-slot materials (e.g. stone×12 in two storage slots).
  */
 export function getOutputAmount(mgr: BuildingInventoryManager, buildingId: number, material: EMaterialType): number {
-    return mgr.findOutputSlot(buildingId, material)?.currentAmount ?? 0;
+    let total = 0;
+    for (const slot of mgr.getSlots(buildingId)) {
+        if (slot.materialType === material && isOutputKind(slot.kind)) {
+            total += slot.currentAmount;
+        }
+    }
+    return total;
 }
 
 /**

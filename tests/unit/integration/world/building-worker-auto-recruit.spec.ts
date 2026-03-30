@@ -228,23 +228,19 @@ describe('Building worker auto-recruitment (integration)', { timeout: 30_000 }, 
         // Spawn a spare carrier for re-recruitment
         sim.spawnUnit(64, 60, UnitType.Carrier);
 
-        // Simulate worker loss by directly emitting building:workerLost
-        sim.eventBus.emit('building:workerLost', {
-            buildingId,
-            buildingType: BuildingType.Bakery,
-            unitId: bakerId,
-            player: 0,
-            race: sim.state.playerRaces.get(0)!,
-        });
+        // Remove the baker entity — triggers the full release flow:
+        // entity:removed → settlerTaskSystem.onEntityRemoved → release → building:workerLost
+        sim.state.removeEntity(bakerId);
 
         // Demand should recruit the carrier into a new baker
-        sim.runUntil(() => sim.countEntities(EntityType.Unit, UnitType.Baker) === 2, {
+        sim.runUntil(() => sim.countEntities(EntityType.Unit, UnitType.Baker) === 1, {
             maxTicks: 3_000,
             label: 'New baker recruited after workerLost event',
             diagnose: () => diagnoseWorker(sim, UnitType.Baker),
         });
 
-        expect(sim.countEntities(EntityType.Unit, UnitType.Baker)).toBe(2);
+        // Original baker was removed; replacement baker recruited from carrier
+        expect(sim.countEntities(EntityType.Unit, UnitType.Baker)).toBe(1);
         expect(sim.countEntities(EntityType.Unit, UnitType.Carrier)).toBe(0);
         expect(sim.errors).toHaveLength(0);
     });

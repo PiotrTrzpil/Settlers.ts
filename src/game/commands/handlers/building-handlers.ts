@@ -1,4 +1,4 @@
-import { EntityType, UnitType, tileKey, type Entity } from '../../entity';
+import { EntityType, UnitType, tileKey, getBuildingFootprint, type Entity } from '../../entity';
 import type { GameState } from '../../game-state';
 import type { TerrainData } from '../../terrain';
 import type { EventBus } from '../../event-bus';
@@ -12,6 +12,7 @@ import {
 import { canPlaceBuildingFootprint } from '../../systems/placement';
 import type { PlacementFilter } from '../../systems/placement';
 import { BuildingType, isMineBuilding } from '../../buildings/types';
+import { isNonBlockingMapObject } from '../../data/game-data-access';
 import { BUILDING_SPAWN_ON_COMPLETE } from '../../features/building-construction/spawn-units';
 import { getBuildingWorkerInfo, getBuildingDoorPos } from '../../data/game-data-access';
 import { ringTiles } from '../../systems/spatial-search';
@@ -133,8 +134,33 @@ function spawnWorkerInsideBuilding(
     });
 }
 
+function isReplaceableOccupant(state: GameState, entityId: number): boolean {
+    const entity = state.getEntity(entityId);
+    if (!entity || entity.type !== EntityType.MapObject) {
+        return false;
+    }
+    return isNonBlockingMapObject(entity.subType as number);
+}
+
+/** Remove replaceable map objects from footprint tiles before placing a building. */
+function removeReplaceableMapObjects(state: GameState, footprint: ReadonlyArray<{ x: number; y: number }>): void {
+    for (const tile of footprint) {
+        const occupantId = state.groundOccupancy.get(tileKey(tile.x, tile.y));
+        if (occupantId !== undefined && isReplaceableOccupant(state, occupantId)) {
+            state.removeEntity(occupantId);
+        }
+    }
+}
+
 export function executePlaceBuilding(deps: PlaceBuildingDeps, cmd: PlaceBuildingCommand): CommandResult {
     const { state, terrain } = deps;
+    const race =
+        cmd.race ??
+        state.playerRaces.get(cmd.player) ??
+        (() => {
+            throw new Error(`No race for player ${cmd.player} in PlaceBuildingHandler`);
+        })();
+    const replaceCheck = (id: number) => isReplaceableOccupant(state, id);
 
     if (
         !cmd.trusted &&
@@ -144,18 +170,19 @@ export function executePlaceBuilding(deps: PlaceBuildingDeps, cmd: PlaceBuilding
             cmd.x,
             cmd.y,
             cmd.buildingType,
-            cmd.race ??
-                state.playerRaces.get(cmd.player) ??
-                (() => {
-                    throw new Error(`No race for player ${cmd.player} in PlaceBuildingHandler`);
-                })(),
+            race,
             state.buildingFootprint,
             deps.placementFilter,
-            cmd.player
+            cmd.player,
+            replaceCheck
         )
     ) {
         return commandFailed(`Cannot place building at (${cmd.x}, ${cmd.y}): invalid placement`);
     }
+
+    // Remove small decorative map objects from the footprint before placing the building
+    const footprint = getBuildingFootprint(cmd.x, cmd.y, cmd.buildingType, race);
+    removeReplaceableMapObjects(state, footprint);
 
     const entity = state.addBuilding(cmd.buildingType, cmd.x, cmd.y, cmd.player, { race: cmd.race });
     const isMine = isMineBuilding(cmd.buildingType);

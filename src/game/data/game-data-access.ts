@@ -490,3 +490,17 @@ export function getMapObjectInfo(type: MapObjectType): ObjectInfo {
 export function mapObjectTypeToXmlId(type: MapObjectType): string | undefined {
     return MAP_OBJECT_TYPE_TO_XML_ID[type];
 }
+
+/**
+ * Check if a map object type allows building placement (building=0 in objectInfo.xml).
+ * Objects with building=0 (grass, flowers, foliage, etc.) can be replaced by building placement.
+ * `blocking` controls movement blocking radius; `building` controls whether buildings can be placed over it.
+ * Returns false for types without an XML mapping (untyped raw decorations).
+ */
+export function isNonBlockingMapObject(type: MapObjectType): boolean {
+    const xmlId = MAP_OBJECT_TYPE_TO_XML_ID[type];
+    if (!xmlId) {
+        return false;
+    }
+    return getMapObjectInfo(type).building === 0;
+}

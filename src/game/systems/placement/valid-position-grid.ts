@@ -7,7 +7,7 @@
  */
 
 import { MapSize } from '@/utilities/map-size';
-import { BuildingType, getBuildingFootprint } from '../../entity';
+import { BuildingType, getBuildingFootprint, getBuildingBlockArea } from '../../entity';
 import type { Race } from '../../core/race';
 import type { PlacementContext, PlacementFilter } from './types';
 import { validateBuildingPlacement } from './internal/building-validator';
@@ -49,6 +49,14 @@ export class ValidPositionGrid {
     /** Index into positions by tile index, for fast removal during patching */
     private readonly positionIndexByTile = new Map<number, number>();
 
+    /**
+     * Size-based difficulty multiplier for height range.
+     * Larger buildings need more digging to level, so the same raw slope
+     * should look "harder" (more orange/red) than on a small building.
+     * Uses a gentle power curve: (blockTiles / 4) ^ 0.3
+     */
+    private readonly sizeWeight: number;
+
     /** Current spiral ring radius */
     private ring = 0;
     /** Position within the current ring perimeter */
@@ -63,13 +71,20 @@ export class ValidPositionGrid {
         groundType: Uint8Array,
         groundHeight: Uint8Array,
         groundOccupancy: Map<string, number>,
-        buildingFootprint: ReadonlySet<string>
+        buildingFootprint: ReadonlySet<string>,
+        isReplaceableOccupant?: (entityId: number) => boolean
     ) {
         this.request = request;
         this.mapSizeRef = mapSize;
         this.mapWidth = mapSize.width;
         this.mapHeight = mapSize.height;
         this.groundHeightRef = groundHeight;
+
+        // Compute block area size once — same for every position of this building type.
+        // Reference size = 4 (a 2×2 building). Exponent 0.3 gives gentle scaling:
+        //   4 tiles → 1.0×,  20 tiles → 1.6×,  100 tiles → 2.6×
+        const refBlockArea = getBuildingBlockArea(0, 0, request.buildingType, request.race);
+        this.sizeWeight = refBlockArea.length > 0 ? (refBlockArea.length / 4) ** 0.3 : 1;
 
         this.ctx = {
             groundType,
@@ -80,6 +95,7 @@ export class ValidPositionGrid {
             race: request.race,
             placementFilter: request.placementFilter,
             player: request.player,
+            isReplaceableOccupant,
         };
     }
 
@@ -213,8 +229,10 @@ export class ValidPositionGrid {
             return;
         }
 
-        const footprint = getBuildingFootprint(x, y, this.request.buildingType, this.request.race);
-        const heightRange = computeHeightRange(footprint, this.groundHeightRef, this.mapSizeRef);
+        // Use block area (inner building body) for height range — consistent with slope check.
+        // Weight by building size so larger buildings show more orange/red at the same raw slope.
+        const blockArea = getBuildingBlockArea(x, y, this.request.buildingType, this.request.race);
+        const heightRange = computeHeightRange(blockArea, this.groundHeightRef, this.mapSizeRef) * this.sizeWeight;
 
         const idx = this.mapSizeRef.toIndex(x, y);
         this.validSet.add(idx);

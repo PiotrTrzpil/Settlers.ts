@@ -7,10 +7,11 @@
  */
 
 import { describe, it, expect, beforeEach } from 'vitest';
-import { EntityType } from '@/game/entity';
+import { EntityType, tileKey } from '@/game/entity';
 import { BuildingType, getBuildingFootprint } from '@/game/buildings';
 import { Race } from '@/game/core/race';
 import { EMaterialType } from '@/game/economy/material-type';
+import { MapObjectType } from '@/game/types/map-object-types';
 import { CONSTRUCTION_SITE_GROUND_TYPE } from '@/game/features/building-construction';
 import { TERRAIN, setHeightAt } from '../../helpers/test-map';
 import { Simulation } from '../../helpers/test-simulation';
@@ -181,5 +182,128 @@ describe('Building Placement Terrain Modification', () => {
         // Building should be completed (no construction site = operational)
         const building = sim.state.entities.find(e => e.type === EntityType.Building)!;
         expect(sim.services.constructionSiteManager.hasSite(building.id)).toBe(false);
+    });
+});
+
+// ---------------------------------------------------------------------------
+// Replaceable map objects — building placement over small decorations
+// ---------------------------------------------------------------------------
+
+describe('Building Placement Over Replaceable Map Objects', () => {
+    let sim: Simulation;
+
+    beforeEach(() => {
+        sim = new Simulation({ mapWidth: 64, mapHeight: 64 });
+    });
+
+    it('should allow placing a building on tiles occupied by grass', () => {
+        const bx = 32;
+        const by = 32;
+        const footprint = getBuildingFootprint(bx, by, BuildingType.WoodcutterHut, Race.Roman);
+
+        // Place grass on every footprint tile
+        for (const tile of footprint) {
+            sim.state.addEntity(EntityType.MapObject, MapObjectType.Grass1, tile.x, tile.y, 0);
+        }
+
+        const result = sim.execute({
+            type: 'place_building',
+            buildingType: BuildingType.WoodcutterHut,
+            x: bx,
+            y: by,
+            player: 0,
+            race: Race.Roman,
+        });
+        expect(result.success).toBe(true);
+    });
+
+    it('should remove replaceable map objects from footprint when placing a building', () => {
+        const bx = 32;
+        const by = 32;
+        const footprint = getBuildingFootprint(bx, by, BuildingType.WoodcutterHut, Race.Roman);
+
+        // Place a flower on every footprint tile
+        for (const tile of footprint) {
+            sim.state.addEntity(EntityType.MapObject, MapObjectType.Flower1, tile.x, tile.y, 0);
+        }
+
+        const mapObjectsBefore = sim.state.entities.filter(e => e.type === EntityType.MapObject).length;
+        expect(mapObjectsBefore).toBe(footprint.length);
+
+        sim.execute({
+            type: 'place_building',
+            buildingType: BuildingType.WoodcutterHut,
+            x: bx,
+            y: by,
+            player: 0,
+            race: Race.Roman,
+        });
+
+        // All flowers should be removed
+        const mapObjectsAfter = sim.state.entities.filter(e => e.type === EntityType.MapObject).length;
+        expect(mapObjectsAfter).toBe(0);
+    });
+
+    it('should NOT allow placing a building on tiles occupied by trees', () => {
+        const bx = 32;
+        const by = 32;
+        sim.state.addEntity(EntityType.MapObject, MapObjectType.TreeOak, bx, by, 0);
+
+        const result = sim.execute({
+            type: 'place_building',
+            buildingType: BuildingType.WoodcutterHut,
+            x: bx,
+            y: by,
+            player: 0,
+            race: Race.Roman,
+        });
+        expect(result.success).toBe(false);
+    });
+
+    it('should handle mixed tiles — some with replaceable objects, some empty', () => {
+        const bx = 32;
+        const by = 32;
+        const footprint = getBuildingFootprint(bx, by, BuildingType.WoodcutterHut, Race.Roman);
+
+        // Place grass on only the first tile
+        sim.state.addEntity(EntityType.MapObject, MapObjectType.Grass3, footprint[0]!.x, footprint[0]!.y, 0);
+
+        const result = sim.execute({
+            type: 'place_building',
+            buildingType: BuildingType.WoodcutterHut,
+            x: bx,
+            y: by,
+            player: 0,
+            race: Race.Roman,
+        });
+        expect(result.success).toBe(true);
+
+        // The grass should be removed
+        const mapObjects = sim.state.entities.filter(e => e.type === EntityType.MapObject);
+        expect(mapObjects.length).toBe(0);
+    });
+
+    it('should correctly update groundOccupancy after replacing map objects', () => {
+        const bx = 32;
+        const by = 32;
+        const footprint = getBuildingFootprint(bx, by, BuildingType.WoodcutterHut, Race.Roman);
+
+        // Place foliage on the first tile
+        sim.state.addEntity(EntityType.MapObject, MapObjectType.Foliage1, footprint[0]!.x, footprint[0]!.y, 0);
+
+        sim.execute({
+            type: 'place_building',
+            buildingType: BuildingType.WoodcutterHut,
+            x: bx,
+            y: by,
+            player: 0,
+            race: Race.Roman,
+        });
+
+        // Every footprint tile should now be occupied by the building, not the old map object
+        const building = sim.state.entities.find(e => e.type === EntityType.Building)!;
+        for (const tile of footprint) {
+            expect(sim.state.groundOccupancy.get(tileKey(tile.x, tile.y))).toBe(building.id);
+        }
     });
 });

@@ -99,6 +99,9 @@ export class EntityRenderer extends RendererBase implements IRenderer {
     // Reusable array for depth-sorted entities
     private sortedEntities: Entity[] = [];
 
+    /** Map objects hidden by layer visibility but needing labels (showDecoLabels mode). */
+    private labelOnlyMapObjects: Entity[] = [];
+
     // Per-frame timing (for debugStats reporting)
     private frameCullSortTime = 0;
     private frameDrawCalls = 0;
@@ -511,6 +514,7 @@ export class EntityRenderer extends RendererBase implements IRenderer {
             tileHighlights: this.tileHighlights,
             // Debug
             debugDecoLabels: this.debugDecoLabels,
+            labelOnlyMapObjects: this.labelOnlyMapObjects,
         };
     }
 
@@ -535,6 +539,7 @@ export class EntityRenderer extends RendererBase implements IRenderer {
     private sortEntitiesByDepth(viewPoint: IViewPoint): void {
         const rc = this.renderContext!;
         // Create frame context - computes bounds once, caches all world positions
+        this.labelOnlyMapObjects.length = 0;
         profiler.beginPhase('cull');
         this.frameContext = FrameContext.create({
             viewPoint,
@@ -582,8 +587,13 @@ export class EntityRenderer extends RendererBase implements IRenderer {
                 return layerVisibility.buildings;
             case EntityType.Unit:
                 return layerVisibility.units;
-            case EntityType.MapObject:
-                return isMapObjectVisible(layerVisibility, entity.subType as MapObjectType);
+            case EntityType.MapObject: {
+                const visible = isMapObjectVisible(layerVisibility, entity.subType as MapObjectType);
+                if (!visible && layerVisibility.showDecoLabels) {
+                    this.labelOnlyMapObjects.push(entity);
+                }
+                return visible;
+            }
             case EntityType.Decoration:
             case EntityType.StackedPile:
             case EntityType.None:

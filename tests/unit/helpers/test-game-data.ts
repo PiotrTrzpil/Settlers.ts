@@ -57,7 +57,7 @@ function buildingInfo(
         buildingPosLines: Array.from({ length: size }, () => row),
         digPosLines: [],
         repealingPosLines: [],
-        blockPosLines: [],
+        blockPosLines: Array.from({ length: size }, () => row),
         waterPosLines: [],
         boundingRect: { minX: 0, maxX: 0, minY: 0, maxY: 0 },
         builderNumber: 0,

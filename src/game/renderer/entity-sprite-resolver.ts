@@ -298,29 +298,39 @@ export class EntitySpriteResolver {
     // ── Query helpers ───────────────────────────────────────────
 
     /**
-     * Strategy map from EntityType to hasTexturedSprite check function.
+     * Strategy map from EntityType to sprite entry lookup.
+     * Returns the sprite entry if registered, or null.
      */
-    private readonly hasTexturedSpriteMap: Record<EntityType, (entity: Entity) => boolean> = {
+    private readonly getSpriteEntryMap: Record<EntityType, (entity: Entity) => SpriteEntry | null> = {
         [EntityType.Building]: entity =>
-            !!this.sprites?.registry.getBuilding(entity.subType as BuildingType, entity.race),
+            this.sprites?.registry.getBuilding(entity.subType as BuildingType, entity.race) ?? null,
         [EntityType.MapObject]: entity => {
             if (!this.layerVisibility.decorationTextures) {
-                return false;
+                return null;
             }
-            return !!this.sprites?.registry.getMapObject(entity.subType as MapObjectType);
+            return this.sprites?.registry.getMapObject(entity.subType as MapObjectType) ?? null;
         },
-        [EntityType.StackedPile]: entity => !!this.sprites?.registry.getGoodSprite(entity.subType as EMaterialType),
-        [EntityType.Unit]: entity => !!this.sprites?.registry.getUnit(entity.subType as UnitType, 0, entity.race),
-        [EntityType.Decoration]: () => false,
-        [EntityType.None]: () => false,
+        [EntityType.StackedPile]: entity =>
+            this.sprites?.registry.getGoodSprite(entity.subType as EMaterialType) ?? null,
+        [EntityType.Unit]: entity => this.sprites?.registry.getUnit(entity.subType as UnitType, 0, entity.race) ?? null,
+        [EntityType.Decoration]: () => null,
+        [EntityType.None]: () => null,
     };
 
-    /** Check if entity has a sprite available (for color fallback decisions). */
+    /**
+     * Check if entity has a sprite whose atlas layer is uploaded to GPU.
+     * Returns false if the sprite is registered but its layer hasn't been uploaded yet,
+     * so the color fallback (with number label) keeps showing until the texture is actually visible.
+     */
     hasTexturedSprite(entity: Entity): boolean {
         if (!this.sprites) {
             return false;
         }
-        return this.hasTexturedSpriteMap[entity.type](entity);
+        const entry = this.getSpriteEntryMap[entity.type](entity);
+        if (!entry) {
+            return false;
+        }
+        return this.sprites.isLayerUploaded(entry.atlasRegion.layer);
     }
 
     /** Get sprite for placement preview by entity type. Exhaustive switch ensures compile-time safety. */

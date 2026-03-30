@@ -121,7 +121,7 @@ export const RAW_OBJECT_REGISTRY: readonly RawObjectEntry[] = [
     { raw: 74, label: 'MountainEdge74', category: MapObjectCategory.Stone, notes: 'Near mountain edges' },
     { raw: 75, label: 'MountainEdge75', category: MapObjectCategory.Stone, notes: 'Near mountain edges' },
 
-    // ---- Grass / river mix: raw 76-85 ----
+    // ---- Grass / river: raw 76-85 ----
     // 76 is extremely common (201k) — could be Grass7 or a generic ground fill
     { raw: 76, label: 'Grass7', category: MapObjectCategory.Plants, notes: 'On grass (201k); guessed Grass7', type: MapObjectType.Grass7 },
     // 77-78, 83-84 are river-adjacent — guessed Reed2-3, then remaining river decorations

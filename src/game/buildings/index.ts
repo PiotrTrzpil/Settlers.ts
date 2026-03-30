@@ -4,4 +4,11 @@
  * Construction logic lives in features/building-construction/.
  */
 
-export { BuildingType, getBuildingFootprint, getBuildingHotspot, isMineBuilding, isStorageBuilding } from './types';
+export {
+    BuildingType,
+    getBuildingFootprint,
+    getBuildingBlockArea,
+    getBuildingHotspot,
+    isMineBuilding,
+    isStorageBuilding,
+} from './types';

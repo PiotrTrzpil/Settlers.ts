@@ -230,26 +230,24 @@ export abstract class BasePlacementMode<TSubType = number> extends BaseInputMode
         return UNHANDLED;
     }
 
+    /**
+     * Re-evaluate tile under cursor each frame so the ghost tracks camera pan/zoom
+     * even when the mouse hasn't physically moved.
+     */
+    override onUpdate(_deltaTime: number, context: InputContext): void {
+        const modeData = context.getModeData<PlacementModeData<TSubType>>();
+        if (!modeData || !context.currentTile) {
+            return;
+        }
+        this.updatePreview(context.currentTile.x, context.currentTile.y, modeData, context);
+    }
+
     override onPointerMove(data: PointerData, context: InputContext): InputResult {
         const modeData = context.getModeData<PlacementModeData<TSubType>>();
         if (!modeData || data.tileX === undefined || data.tileY === undefined) {
             return UNHANDLED;
         }
-
-        this.onTileHover?.(data.tileX, data.tileY);
-
-        // Calculate anchor position (may differ from cursor tile)
-        const anchor = this.resolveAnchorPosition(data.tileX, data.tileY, modeData.subType);
-        modeData.previewX = anchor.x;
-        modeData.previewY = anchor.y;
-        modeData.previewValid = this.isPositionValid(anchor.x, anchor.y, modeData.subType);
-
-        context.setModeData(modeData);
-
-        // Place on new tile during drag
-        if (this.dragging && (anchor.x !== this.lastPlacedTileX || anchor.y !== this.lastPlacedTileY)) {
-            this.tryPlace(modeData, context);
-        }
+        this.updatePreview(data.tileX, data.tileY, modeData, context);
 
         return HANDLED;
     }
@@ -288,6 +286,32 @@ export abstract class BasePlacementMode<TSubType = number> extends BaseInputMode
     // ─────────────────────────────────────────────────────────────────
     // Private helpers
     // ─────────────────────────────────────────────────────────────────
+
+    /**
+     * Shared preview update: resolve anchor, validate, and optionally drag-place.
+     * Called from both onPointerMove (mouse moved) and onUpdate (camera moved).
+     */
+    private updatePreview(
+        tileX: number,
+        tileY: number,
+        modeData: PlacementModeData<TSubType>,
+        context: InputContext
+    ): void {
+        const anchor = this.resolveAnchorPosition(tileX, tileY, modeData.subType);
+        if (anchor.x === modeData.previewX && anchor.y === modeData.previewY) {
+            return;
+        }
+
+        this.onTileHover?.(tileX, tileY);
+        modeData.previewX = anchor.x;
+        modeData.previewY = anchor.y;
+        modeData.previewValid = this.isPositionValid(anchor.x, anchor.y, modeData.subType);
+        context.setModeData(modeData);
+
+        if (this.dragging && (anchor.x !== this.lastPlacedTileX || anchor.y !== this.lastPlacedTileY)) {
+            this.tryPlace(modeData, context);
+        }
+    }
 
     /**
      * Attempt to place at the current preview position. Tracks last placed tile to avoid duplicates.

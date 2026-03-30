@@ -87,8 +87,58 @@ describe('Multi-pile construction delivery', { timeout: 60_000 }, () => {
         });
 
         sim.waitForConstructionComplete(s.siteId, 200_000);
+        expect(sim.services.constructionSiteManager.hasSite(s.siteId), 'castle construction should complete').toBe(
+            false
+        );
         expect(sim.errors).toHaveLength(0);
         expect(overflows).toHaveLength(0);
+    });
+
+    it('castle construction completes with default carriers (no over-delivery)', () => {
+        // Default carrier count — slower delivery overlaps with builder consumption.
+        // Verifies no extra materials are delivered beyond construction cost.
+        const { sim: s } = createCastleSite(0);
+        sim = s;
+
+        sim.waitForConstructionComplete(s.siteId, 200_000);
+        expect(sim.services.constructionSiteManager.hasSite(s.siteId), 'castle construction should complete').toBe(
+            false
+        );
+        expect(sim.errors).toHaveLength(0);
+    });
+
+    it('no over-delivery when storage has excess materials', () => {
+        // Excess supply + many carriers ensures all demands get fulfilled.
+        // Without the demand cap in processSite, builders consuming materials mid-delivery
+        // opens slot space that processSite mistakes for needing more deliveries.
+        const s = createScenario.constructionSite(BuildingType.Castle, [], {
+            mapWidth: 1024,
+            mapHeight: 1024,
+        });
+        s.spawnUnitNear(s.storageId, UnitType.Carrier, 6);
+        const costs = getConstructionCosts(BuildingType.Castle, Race.Roman);
+        for (const cost of costs) {
+            injectStorageMaterial(s, s.storageId, cost.material, cost.count * 3);
+        }
+        sim = s;
+
+        const deliveries = new Map<EMaterialType, number>();
+        sim.eventBus.on('construction:materialDelivered', e => {
+            if (e.buildingId === s.siteId) {
+                deliveries.set(e.material, (deliveries.get(e.material) ?? 0) + 1);
+            }
+        });
+
+        sim.waitForConstructionComplete(s.siteId, 300_000);
+        expect(sim.services.constructionSiteManager.hasSite(s.siteId), 'castle construction should complete').toBe(
+            false
+        );
+
+        // Verify no material was delivered more than its construction cost
+        for (const cost of costs) {
+            const delivered = deliveries.get(cost.material) ?? 0;
+            expect(delivered, `${EMaterialType[cost.material]} delivered`).toBeLessThanOrEqual(cost.count);
+        }
     });
 
     it('slot reservations are cleaned up after construction completes', () => {
@@ -96,6 +146,9 @@ describe('Multi-pile construction delivery', { timeout: 60_000 }, () => {
         sim = s;
 
         sim.waitForConstructionComplete(s.siteId, 200_000);
+        expect(sim.services.constructionSiteManager.hasSite(s.siteId), 'castle construction should complete').toBe(
+            false
+        );
 
         const slots = sim.services.inventoryManager.getSlots(s.siteId);
         for (const slot of slots) {

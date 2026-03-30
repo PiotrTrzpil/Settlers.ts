@@ -3,7 +3,7 @@
  * Validates building footprints including terrain, occupancy, and slope.
  */
 
-import { tileKey, getBuildingFootprint, BuildingType, isMineBuilding } from '../../../entity';
+import { tileKey, getBuildingFootprint, getBuildingBlockArea, BuildingType, isMineBuilding } from '../../../entity';
 import type { Race } from '../../../core/race';
 import type { TerrainData } from '../../../terrain';
 import type { PlacementContext, PlacementFilter, PlacementResult } from '../types';
@@ -34,8 +34,11 @@ function checkTileBasics(tile: TileCoord, ctx: PlacementContext, isMine: boolean
     if (!terrainOk) {
         return PlacementStatus.InvalidTerrain;
     }
-    if (ctx.groundOccupancy.has(tileKey(tile.x, tile.y))) {
-        return PlacementStatus.Occupied;
+    const occupantId = ctx.groundOccupancy.get(tileKey(tile.x, tile.y));
+    if (occupantId !== undefined) {
+        if (!ctx.isReplaceableOccupant?.(occupantId)) {
+            return PlacementStatus.Occupied;
+        }
     }
     return null;
 }
@@ -102,8 +105,11 @@ export function validateBuildingPlacement(
         return { canPlace: true, status: PlacementStatus.Easy };
     }
 
-    // Check slope across footprint
-    const slopeStatus = computeSlopeDifficulty(footprint, ctx.groundHeight, ctx.mapSize);
+    // Check slope across the block area (actual building body), not the full footprint.
+    // The outer ring of buildingPosLines is just a spacing buffer — terrain leveling
+    // during construction smooths those tiles, so slope there is irrelevant.
+    const blockArea = getBuildingBlockArea(x, y, buildingType, ctx.race);
+    const slopeStatus = computeSlopeDifficulty(blockArea, ctx.groundHeight, ctx.mapSize);
     if (slopeStatus === PlacementStatus.TooSteep) {
         return { canPlace: false, status: PlacementStatus.TooSteep };
     }
@@ -124,7 +130,8 @@ export function canPlaceBuildingFootprint(
     race: Race,
     buildingFootprint?: ReadonlySet<string>,
     placementFilter?: PlacementFilter | null,
-    player?: number
+    player?: number,
+    isReplaceableOccupant?: (entityId: number) => boolean
 ): boolean {
     const ctx: PlacementContext = {
         groundType: terrain.groundType,
@@ -135,14 +142,15 @@ export function canPlaceBuildingFootprint(
         race,
         placementFilter: placementFilter ?? null,
         player,
+        isReplaceableOccupant,
     };
     return validateBuildingPlacement(x, y, buildingType, ctx).canPlace;
 }
 
 /**
  * Check if a building can be placed at a single tile (x, y).
- * Checks terrain and occupancy only - slope is checked by computeSlopeDifficulty
- * for the full footprint, which is more lenient since terrain leveling handles slopes.
+ * Checks terrain and occupancy only — slope is checked by computeSlopeDifficulty
+ * on the block area (inner building body), not this single tile.
  */
 export function canPlaceBuilding(
     terrain: TerrainData,
@@ -156,7 +164,8 @@ export function canPlaceBuilding(
         return false;
     }
 
-    if (groundOccupancy.has(tileKey(x, y))) {
+    const occupantId = groundOccupancy.get(tileKey(x, y));
+    if (occupantId !== undefined) {
         return false;
     }
 

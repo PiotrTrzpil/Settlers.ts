@@ -6,6 +6,8 @@
 
 import type { GameCore } from '@/game/game-core';
 import type { BuildingType } from '@/game/buildings/building-type';
+import { EntityType } from '@/game/entity';
+import { isNonBlockingMapObject } from '@/game/data/game-data-access';
 import type { GridComputeRequest } from '@/game/systems/placement/valid-position-grid';
 import { ValidPositionGrid } from '@/game/systems/placement/valid-position-grid';
 
@@ -35,13 +37,18 @@ export function createCliPlacementGrid(
         placementFilter: game.placementFilter,
     };
 
+    const replaceCheck = (id: number) => {
+        const e = game.state.getEntity(id);
+        return e?.type === EntityType.MapObject && isNonBlockingMapObject(e.subType as number);
+    };
     const grid = new ValidPositionGrid(
         request,
         game.terrain.mapSize,
         game.terrain.groundType,
         game.terrain.groundHeight,
         game.state.groundOccupancy,
-        game.state.buildingFootprint
+        game.state.buildingFootprint,
+        replaceCheck
     );
 
     // Compute just enough tiles to cover the viewport.

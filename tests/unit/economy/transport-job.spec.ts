@@ -48,6 +48,8 @@ function createInventoryStub(outputAmount = 5) {
             slotId: 1,
         }),
         setSlotMaterial: () => {},
+        reserveSlot: () => {},
+        unreserveSlot: () => {},
         _slots: slots,
     };
 }

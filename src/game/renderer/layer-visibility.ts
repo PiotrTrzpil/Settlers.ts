@@ -56,6 +56,8 @@ export interface LayerVisibility {
     showPathfinding: boolean;
     /** Show territory boundary dots from towers/castles */
     showTerritory: boolean;
+    /** Always show debug labels (object type numbers) for all map objects, even hidden ones */
+    showDecoLabels: boolean;
 }
 
 /** Default layer visibility (all visible) */
@@ -75,6 +77,7 @@ export const DEFAULT_LAYER_VISIBILITY: LayerVisibility = {
     showBuildingFootprint: false,
     showPathfinding: true,
     showTerritory: true,
+    showDecoLabels: false,
 };
 
 // ============================================================================

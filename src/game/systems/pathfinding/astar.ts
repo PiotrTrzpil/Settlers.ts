@@ -388,6 +388,9 @@ function buildFinalPath(
  * A* only considers terrain and building footprints for blocking — unit occupancy
  * is ignored. Collisions with other units are resolved at movement time via bump-or-wait.
  *
+ * TODO: Map objects with blocking > 0 in objectInfo.xml (trees, cacti, large stones, etc.)
+ * should also block pathfinding. Currently units can path through blocking map objects.
+ *
  * @param startX Starting tile X coordinate
  * @param startY Starting tile Y coordinate
  * @param goalX Goal tile X coordinate

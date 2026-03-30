@@ -70,9 +70,12 @@ export class ConstructionRequestSystem implements TickSystem {
                 continue;
             }
 
+            // Cap by remaining delivery need: builders may consume materials mid-delivery,
+            // opening slot space beyond what still needs to be delivered.
+            const cappedSpace = Math.min(totalSpace, cost.count);
             const activeDemands = this.demandQueue.countDemands(buildingId, cost.material);
             const activeJobs = this.jobStore.getActiveJobCountForDest(buildingId, cost.material);
-            const needed = totalSpace - activeDemands - activeJobs;
+            const needed = cappedSpace - activeDemands - activeJobs;
             for (let i = 0; i < needed; i++) {
                 this.demandQueue.addDemand(buildingId, cost.material, 1, DemandPriority.Normal);
             }

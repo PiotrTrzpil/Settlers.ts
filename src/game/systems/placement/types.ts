@@ -62,6 +62,11 @@ export interface PlacementContext {
      * Player performing placement. Required when placementFilter is set.
      */
     player?: number;
+    /**
+     * Check if an occupied tile's entity can be replaced by a building (e.g., small decorations).
+     * Receives the occupant entity ID, returns true if the entity can be removed for building placement.
+     */
+    isReplaceableOccupant?: (entityId: number) => boolean;
 }
 
 /**
