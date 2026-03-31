@@ -18,7 +18,7 @@ describe('LuaScriptSystem', () => {
 
     beforeEach(() => {
         const eventBus = new EventBus();
-        gameState = new GameState(eventBus);
+        gameState = new GameState(eventBus, () => 0);
         constructionSiteManager = new ConstructionSiteManager(eventBus, gameState.rng, {} as any);
         scriptSystem = new LuaScriptSystem({
             gameState,

@@ -14,7 +14,15 @@ export class SelectionManager {
     /** All selected entity IDs (for multi-select) */
     public selectedEntityIds: Set<number> = new Set();
 
-    constructor(private entityProvider: EntityProvider) {}
+    /** Returns the active player index for selection filtering. */
+    private readonly currentPlayerFn: () => number;
+
+    constructor(
+        private entityProvider: EntityProvider,
+        currentPlayerFn: () => number
+    ) {
+        this.currentPlayerFn = currentPlayerFn;
+    }
 
     // ─────────────────────────────────────────────────────────────
     // Selection policy
@@ -29,6 +37,9 @@ export class SelectionManager {
             return false;
         }
         if (entity.hidden) {
+            return false;
+        }
+        if (entity.player !== this.currentPlayerFn()) {
             return false;
         }
         if (entity.selectable !== false) {

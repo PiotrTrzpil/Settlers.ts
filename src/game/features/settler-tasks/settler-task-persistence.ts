@@ -150,12 +150,17 @@ function restoreHomeAssignment(
         return;
     }
 
-    // assignWorker calls claim() which sets homeAssignment + reindexes + increments occupant count
-    ctx.workerTracker.assignWorker(entityId, home.buildingId);
-
-    const runtime = ctx.runtimes.get(entityId);
-    if (runtime?.homeAssignment) {
-        runtime.homeAssignment.hasVisited = home.hasVisited;
+    // If the settler was inside the building at save time (hidden + hasVisited),
+    // restore it as Inside so the location manager matches entity.hidden state.
+    const entity = ctx.gameState.getEntity(entityId);
+    if (entity?.hidden && home.hasVisited) {
+        ctx.workerTracker.assignWorkerInside(entityId, home.buildingId);
+    } else {
+        ctx.workerTracker.assignWorker(entityId, home.buildingId);
+        const runtime = ctx.runtimes.get(entityId);
+        if (runtime?.homeAssignment) {
+            runtime.homeAssignment.hasVisited = home.hasVisited;
+        }
     }
 }
 

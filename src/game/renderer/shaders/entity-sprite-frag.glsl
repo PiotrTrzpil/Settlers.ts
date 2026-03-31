@@ -56,9 +56,9 @@ void main() {
         return;
     }
 
-    // Index 1 = shadow (semi-transparent black at 25% opacity)
+    // Index 1 = shadow (semi-transparent black)
     if (index == 1u) {
-        fragColor = vec4(0.0, 0.0, 0.0, 0.25) * v_tint;
+        fragColor = vec4(0.0, 0.0, 0.0, 0.55) * v_tint;
         return;
     }
 

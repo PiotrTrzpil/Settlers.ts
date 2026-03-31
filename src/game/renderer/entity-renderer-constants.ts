@@ -91,6 +91,12 @@ export const FOOTPRINT_DOOR_COLOR = [1.0, 0.3, 0.1, 0.5]; // Semi-transparent or
 // Circle overlay segments (used by work area circles)
 export const CIRCLE_OVERLAY_SEGMENTS = 64;
 
+// Ground shadow (ambient occlusion under units)
+export const GROUND_SHADOW_HALF_WIDTH = 0.6; // World units — wider for isometric perspective
+export const GROUND_SHADOW_HALF_HEIGHT = 0.25; // World units — flattened ellipse
+export const GROUND_SHADOW_OPACITY = 0.35; // Peak opacity at center
+export const GROUND_SHADOW_Y_OFFSET = 0.05; // Slight downward shift to sit under feet
+
 // Work area overlay
 export const WORK_AREA_CIRCLE_COLOR = [0.9, 0.6, 0.2, 0.6]; // Orange circle outline
 

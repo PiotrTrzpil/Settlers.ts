@@ -102,10 +102,10 @@ export class GameState {
     /** Event bus for entity lifecycle events */
     private readonly eventBus: EventBus;
 
-    constructor(eventBus: EventBus, seed?: number) {
+    constructor(eventBus: EventBus, currentPlayerFn: () => number, seed?: number) {
         this.eventBus = eventBus;
         this.rng = createGameRng(seed);
-        this.selection = new SelectionManager(this);
+        this.selection = new SelectionManager(this, currentPlayerFn);
     }
 
     /**

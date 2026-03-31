@@ -25,7 +25,7 @@ import {
 import type { SelectionBox } from '@/game/input/render-state';
 import type { DebugEntityLabel } from '@/game/renderer/render-passes/types';
 import { LayerVisibility } from '@/game/renderer/layer-visibility';
-import { loadCameraState } from '@/game/renderer/camera-persistence';
+import { loadCameraState, saveCameraState } from '@/game/renderer/camera-persistence';
 import { getCurrentMapId } from '@/game/state/game-state-persistence';
 import { initRenderersAsync, exposeForE2E, loadOverlaySpritesAndUpdateFrameCounts } from './renderer-init';
 import { createUpdateCallback, createRenderCallback } from './frame-callbacks';
@@ -333,6 +333,14 @@ function initGLAndBindEvents(state: RendererMutableState, game: Game, deps: Init
 
     exposeForE2E(renderer.viewPoint, landscapeRenderer, entityRenderer, inputManager);
 
+    // After state restore (HMR / autosave), overlay instances are recreated with frameCount=1.
+    // Re-apply frame counts from the sprite registry so animations aren't frozen.
+    game.eventBus.on('game:stateRestored', () => {
+        if (state.entityRenderer) {
+            void loadOverlaySpritesAndUpdateFrameCounts(state.entityRenderer, game);
+        }
+    });
+
     game.eventBus.on('terrain:modified', () => {
         state.landscapeRenderer?.markTerrainDirty();
     });
@@ -469,12 +477,27 @@ export function useRenderer({
         game.start();
     }
 
+    /** Save camera position to localStorage so it survives HMR and page reloads. */
+    function persistCamera(): void {
+        const mapId = getCurrentMapId();
+        if (!mapId || !state.renderer) {
+            return;
+        }
+        saveCameraState(mapId, {
+            x: state.renderer.viewPoint.x,
+            y: state.renderer.viewPoint.y,
+            zoom: state.renderer.viewPoint.zoomValue,
+        });
+    }
+
     onMounted(() => {
         console.log(`[${performance.now().toFixed(0)}ms] [perf] Canvas mounted`);
         const cavEl = canvas.value!;
         const game = getGame();
         state.renderer = new Renderer(cavEl, { externalInput: true, antialias: game?.settings.state.antialias });
         state.tilePicker = new TilePicker(cavEl);
+
+        window.addEventListener('beforeunload', persistCamera);
 
         createInputManager();
         initRenderer();
@@ -485,6 +508,9 @@ export function useRenderer({
     });
 
     onUnmounted(() => {
+        window.removeEventListener('beforeunload', persistCamera);
+        persistCamera();
+
         // Do NOT destroy the game here — use-renderer does not own it.
         // The game is created and destroyed by use-map-view (setupLifecycle).
         state.inputManager?.destroy();

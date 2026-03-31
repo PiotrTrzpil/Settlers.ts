@@ -91,7 +91,15 @@ export function resolveAnimationFrame(
         return null;
     }
 
-    const frameIndex = sequence.loop
+    // Runtime loop flag from playback takes precedence over the sequence's default.
+    const shouldLoop = playback.loop;
+
+    // Hide-on-complete: return null once the non-looping animation has finished
+    if (!shouldLoop && playback.hideOnComplete && playback.currentFrame >= sequence.frames.length) {
+        return null;
+    }
+
+    const frameIndex = shouldLoop
         ? playback.currentFrame % sequence.frames.length
         : Math.min(playback.currentFrame, sequence.frames.length - 1);
     return sequence.frames[frameIndex] ?? null;
@@ -136,7 +144,13 @@ export function getAnimatedSprite(
         return fallbackSprite;
     }
 
-    const frameIndex = sequence.loop
+    const shouldLoop = playback.loop;
+
+    if (!shouldLoop && playback.hideOnComplete && playback.currentFrame >= sequence.frames.length) {
+        return null;
+    }
+
+    const frameIndex = shouldLoop
         ? playback.currentFrame % sequence.frames.length
         : Math.min(playback.currentFrame, sequence.frames.length - 1);
     return sequence.frames[frameIndex] ?? fallbackSprite;
@@ -183,8 +197,14 @@ export function getAnimatedSpriteForDirection(
         return fallbackSprite;
     }
 
+    const shouldLoop = playback.loop;
+
+    if (!shouldLoop && playback.hideOnComplete && playback.currentFrame >= sequence.frames.length) {
+        return null;
+    }
+
     // Use modulo for looping animations (allows unbounded frame counter)
-    const frameIndex = sequence.loop
+    const frameIndex = shouldLoop
         ? playback.currentFrame % sequence.frames.length
         : Math.min(playback.currentFrame, sequence.frames.length - 1);
     return sequence.frames[frameIndex]!;

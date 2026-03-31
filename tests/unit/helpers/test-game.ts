@@ -24,7 +24,7 @@ export function createGameState(): GameState {
     installTestGameData();
     const eventBus = new EventBus();
     eventBus.strict = true;
-    const state = new GameState(eventBus);
+    const state = new GameState(eventBus, () => 0);
     state.playerRaces = new Map([
         [0, Race.Roman],
         [1, Race.Roman],

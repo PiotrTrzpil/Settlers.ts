@@ -111,7 +111,13 @@ async function restoreAndStartPersistence(game: Game, onStaleDetected: () => voi
         debugStats.state.mapLoadTimings.stateRestore = Math.round(performance.now() - t0);
     }
 
+    gameStatePersistence.setEnabled(game.settings.state.autosaveEnabled);
     gameStatePersistence.start(game);
+
+    watch(
+        () => game.settings.state.autosaveEnabled,
+        enabled => gameStatePersistence.setEnabled(enabled)
+    );
 }
 
 /** Dismiss stale snapshot warning — discards saved data and unpauses ticks. */

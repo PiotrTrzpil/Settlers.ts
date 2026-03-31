@@ -51,7 +51,6 @@ export const CombatFeature: FeatureDefinition = {
 
         // ── Death Angel (visual effect on unit death) ──────────────────────
         const deathAngelSystem = new DeathAngelSystem({
-            visualService: ctx.visualService,
             executeCommand: ctx.executeCommand,
         });
 
@@ -68,9 +67,13 @@ export const CombatFeature: FeatureDefinition = {
             if (!prefix) {
                 throw new Error('No XML prefix for UnitType.Angel');
             }
-            ctx.visualService.play(angel.id, xmlKey(prefix, 'WALK'), { loop: false, direction: 0 });
+            ctx.visualService.play(angel.id, xmlKey(prefix, 'WALK'), {
+                loop: false,
+                direction: 0,
+                hideOnComplete: true,
+            });
 
-            deathAngelSystem.register(angel.id, UnitType.Angel);
+            deathAngelSystem.register(angel.id);
             log.debug(`Spawned death angel ${angel.id} at (${entity.x}, ${entity.y}) for unit ${unitId}`);
         });
 

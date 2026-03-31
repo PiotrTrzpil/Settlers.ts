@@ -36,6 +36,7 @@ import { TerritoryDotPass } from './render-passes/territory-dot-pass';
 import { SelectionPass } from './render-passes/selection-pass';
 import { StackGhostPass } from './render-passes/stack-ghost-pass';
 import { PlacementPreviewPass } from './render-passes/placement-preview-pass';
+import { GroundShadowPass } from './render-passes/ground-shadow-pass';
 import { EntityLayerOrchestrator } from './render-passes/entity-layer-orchestrator';
 
 /**
@@ -137,6 +138,13 @@ export class EntityRenderer extends RendererBase implements IRenderer {
                 priority: 100,
                 needs: { colorShader: true },
                 create: deps => new PathIndicatorPass(deps.selectionOverlayRenderer!),
+            },
+            {
+                id: 'ground-shadow',
+                layer: RenderLayer.BehindEntities,
+                priority: 50,
+                needs: { entities: true, frameContext: true },
+                create: () => new GroundShadowPass(),
             },
             {
                 id: 'ground-overlay',

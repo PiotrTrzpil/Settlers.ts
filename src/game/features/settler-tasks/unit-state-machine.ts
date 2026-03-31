@@ -115,7 +115,7 @@ export class UnitStateMachine {
 
         // Handle choreography-based jobs for configured settlers
         if (config) {
-            if (runtime.state !== SettlerState.WORKING) {
+            if (runtime.state !== SettlerState.WORKING && !this.isInCombat(unit.id)) {
                 this.updateDirectionTracking(unit, runtime);
             }
             const wasWorking = runtime.state === SettlerState.WORKING;
@@ -216,8 +216,9 @@ export class UnitStateMachine {
                     }
                 }
                 // Also handle idle turning when not working (handleIdle may change state to WORKING)
+                // Skip idle animation for units in combat — combat system manages their animation.
                 // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- handleIdle mutates runtime.state
-                if (runtime.state === SettlerState.IDLE) {
+                if (runtime.state === SettlerState.IDLE && !this.isInCombat(settler.id)) {
                     const controller = this.gameState.movement.getController(settler.id);
                     this.animController.updateIdleUnit(
                         settler,

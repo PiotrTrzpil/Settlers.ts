@@ -46,6 +46,8 @@ export interface AnimationIntent {
     loop: boolean;
     /** If true, freeze on frame 0 (idle pose) */
     stopped: boolean;
+    /** If true, entity becomes invisible after the animation finishes (non-looping only) */
+    hideOnComplete?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -68,6 +70,8 @@ export interface AnimationPlayback {
     elapsedMs: number;
     loop: boolean;
     playing: boolean;
+    /** When true, the entity becomes invisible after a non-looping animation finishes. */
+    hideOnComplete: boolean;
 }
 
 /** Unit-only: smooth direction change. Stored separately because most entities never use it. */
@@ -82,6 +86,25 @@ export interface PlayOptions {
     loop?: boolean;
     direction?: number;
     startFrame?: number;
+    /** When true, the entity becomes invisible after a non-looping animation finishes. */
+    hideOnComplete?: boolean;
+}
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+/** Create a fresh AnimationPlayback, preserving direction from an existing one if present. */
+function createPlayback(sequenceKey: string, opts: PlayOptions, existing: AnimationPlayback | null): AnimationPlayback {
+    return {
+        sequenceKey,
+        currentFrame: opts.startFrame ?? 0,
+        direction: opts.direction ?? existing?.direction ?? 0,
+        elapsedMs: 0,
+        loop: opts.loop ?? false,
+        playing: true,
+        hideOnComplete: opts.hideOnComplete ?? false,
+    };
 }
 
 // ---------------------------------------------------------------------------
@@ -189,14 +212,7 @@ export class EntityVisualService {
         }
 
         // New sequence — create fresh playback, preserve direction from old state
-        state.animation = {
-            sequenceKey,
-            currentFrame: opts.startFrame ?? 0,
-            direction: opts.direction ?? existing?.direction ?? 0,
-            elapsedMs: 0,
-            loop: opts.loop ?? false,
-            playing: true,
-        };
+        state.animation = createPlayback(sequenceKey, opts, existing);
     }
 
     /**
@@ -252,14 +268,7 @@ export class EntityVisualService {
             }
             existing.playing = true;
         } else {
-            state.animation = {
-                sequenceKey,
-                currentFrame: opts?.startFrame ?? 0,
-                direction: opts?.direction ?? existing?.direction ?? 0,
-                elapsedMs: 0,
-                loop: opts?.loop ?? false,
-                playing: true,
-            };
+            state.animation = createPlayback(sequenceKey, opts ?? {}, existing);
         }
     }
 
@@ -281,7 +290,7 @@ export class EntityVisualService {
                 state.animation.elapsedMs = 0;
             }
         } else {
-            this.play(entityId, intent.sequence, { loop: intent.loop });
+            this.play(entityId, intent.sequence, { loop: intent.loop, hideOnComplete: intent.hideOnComplete });
         }
     }
 

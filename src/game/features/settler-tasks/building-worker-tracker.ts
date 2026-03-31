@@ -48,16 +48,13 @@ export class BuildingWorkerTracker {
 
     /**
      * Assign a building to a worker, incrementing its occupant count.
-     * @param skipApproaching When true (deserialization), skips markApproaching — the location
-     *   manager restores its own state from its own persistence entry.
+     * Pure assignment — does NOT register location tracking.
+     * Callers are responsible for calling markApproaching / enterBuilding separately.
      */
-    claim(settlerId: number, runtime: UnitRuntime, buildingId: number, skipApproaching = false): void {
+    claim(settlerId: number, runtime: UnitRuntime, buildingId: number): void {
         runtime.homeAssignment = { buildingId, hasVisited: false };
         this.runtimes.reindex(settlerId);
         this.occupants.set(buildingId, (this.occupants.get(buildingId) ?? 0) + 1);
-        if (!skipApproaching) {
-            this.locationManager.markApproaching(settlerId, buildingId);
-        }
     }
 
     /** Release a worker's building assignment, decrementing its occupant count. */
@@ -161,12 +158,15 @@ export class BuildingWorkerTracker {
     assignWorker(settlerId: number, buildingId: number): void {
         const runtime = this.getOrCreateRuntime(settlerId);
         this.claim(settlerId, runtime, buildingId);
+        if (!this.locationManager.isCommitted(settlerId)) {
+            this.locationManager.markApproaching(settlerId, buildingId);
+        }
     }
 
     /** Assign a worker that was spawned already inside its building (hidden, no movement needed). */
     assignWorkerInside(settlerId: number, buildingId: number): void {
         const runtime = this.getOrCreateRuntime(settlerId);
-        this.claim(settlerId, runtime, buildingId, true);
+        this.claim(settlerId, runtime, buildingId);
         runtime.homeAssignment!.hasVisited = true;
         this.locationManager.enterBuilding(settlerId, buildingId);
     }

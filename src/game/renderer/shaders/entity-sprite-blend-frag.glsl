@@ -22,7 +22,7 @@ out vec4 fragColor;
 // Resolve a palette index to an RGBA color using the player's palette row
 vec4 resolveIndex(uint index) {
     if (index == 0u) return vec4(0.0);                                                   // transparent
-    if (index == 1u) return vec4(0.0, 0.0, 0.0, 0.25);                                  // shadow
+    if (index == 1u) return vec4(0.0, 0.0, 0.0, 0.55);                                  // shadow
     // Atlas stores raw value + 2 (avoids 0/1 collision). Subtract 2, add palette base.
     int linearIndex = int(index) - 2 + int(v_paletteBase);
     int localX = linearIndex % u_paletteWidth;
