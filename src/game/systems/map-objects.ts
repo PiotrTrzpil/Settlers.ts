@@ -38,7 +38,6 @@ export const OBJECT_TYPE_CATEGORY: Partial<Record<MapObjectType, MapObjectCatego
     [MapObjectType.TreePine2]: MapObjectCategory.Trees,
     [MapObjectType.TreeOliveLarge]: MapObjectCategory.Trees,
     [MapObjectType.TreeOliveSmall]: MapObjectCategory.Trees,
-    [MapObjectType.TreeDead]: MapObjectCategory.Trees,
     [MapObjectType.DarkTree1A]: MapObjectCategory.Trees,
     [MapObjectType.DarkTree1B]: MapObjectCategory.Trees,
     [MapObjectType.DarkTree2A]: MapObjectCategory.Trees,
@@ -46,6 +45,7 @@ export const OBJECT_TYPE_CATEGORY: Partial<Record<MapObjectType, MapObjectCatego
     [MapObjectType.DarkTree3A]: MapObjectCategory.Trees,
     [MapObjectType.DarkTree3B]: MapObjectCategory.Trees,
     [MapObjectType.DarkTree4A]: MapObjectCategory.Trees,
+    [MapObjectType.DarkTree4B]: MapObjectCategory.Trees,
     [MapObjectType.DarkTree5A]: MapObjectCategory.Trees,
     // Goods (harvestable resources)
     [MapObjectType.ResourceCoal]: MapObjectCategory.Goods,

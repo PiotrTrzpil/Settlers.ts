@@ -28,6 +28,9 @@ export interface GameSettings {
     darkLandDilation: boolean;
     darkGroundFixup: boolean;
 
+    // Map loading
+    treeExpansion: boolean;
+
     // Graphics
     antialias: boolean;
 
@@ -71,6 +74,9 @@ const DEFAULT_SETTINGS: GameSettings = {
     showBuildingFootprint: false,
     darkLandDilation: true,
     darkGroundFixup: true,
+
+    // Map loading
+    treeExpansion: true,
 
     // Graphics
     antialias: true,

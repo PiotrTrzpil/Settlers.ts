@@ -205,7 +205,7 @@ export class GameCore {
             this.settings.state.darkGroundFixup
         );
 
-        if (seedCount > 0) {
+        if (seedCount > 0 && this.settings.state.treeExpansion) {
             expandTrees(this.state, this.terrain, {
                 radius: 10,
                 density: 0.04,

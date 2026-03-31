@@ -73,7 +73,7 @@
             <Checkbox v-model="settings.darkLandDilation" label="Dark land gap filling" />
             <Checkbox v-model="settings.darkGroundFixup" label="Dark ground object fixup (reload)" />
             <Checkbox
-                v-model="treeExpansionEnabled"
+                v-model="settings.treeExpansion"
                 label="Tree expansion (reload)"
                 @update:modelValue="onTreeExpansionChange"
             />
@@ -168,12 +168,10 @@ const stats = debugStats.state;
 const settings = props.game.settings.state;
 const view = props.game.viewState.state;
 
-// Tree expansion toggle (persisted in localStorage, requires reload)
-const treeExpansionEnabled = ref(localStorage.getItem('settlers_treeExpansion') !== 'false');
-function onTreeExpansionChange(val: boolean): void {
-    localStorage.setItem('settlers_treeExpansion', val ? 'true' : 'false');
+// Tree expansion toggle — persisted via GameSettings, requires reload to take effect
+function onTreeExpansionChange(): void {
     // Strip tree entities from saved state so next reload re-populates from map data
-    clearSavedTreeState();
+    void clearSavedTreeState();
 }
 
 // Pathfinding straightness hint

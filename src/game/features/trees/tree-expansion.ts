@@ -13,7 +13,7 @@ import { isBuildable } from '../../terrain';
 import type { TerrainData } from '../../terrain';
 import { createLogger } from '@/utilities/logger';
 import { S4GroundType } from '@/resources/map/s4-types';
-import { OBJECT_TYPE_CATEGORY, getTypesForCategory } from '../../systems/map-objects';
+import { OBJECT_TYPE_CATEGORY } from '../../systems/map-objects';
 
 const log = createLogger('TreeExpansion');
 
@@ -103,26 +103,9 @@ function hasNearbyTree(x: number, y: number, occupied: Set<number>, mapSize: Map
     return false;
 }
 
-/** Select tree type for new tree (seed type with 15% variation) */
-function selectTreeTypeForExpansion(
-    seedType: MapObjectType,
-    terrain: number,
-    x: number,
-    y: number,
-    seed: number
-): MapObjectType {
-    const varChance = (Math.abs(hash(x, y, seed + 2000)) % 100) / 100;
-    if (varChance >= 0.15) {
-        return isTreeAllowedOnTerrain(seedType, terrain) ? seedType : MapObjectType.TreeOak;
-    }
-
-    const allTreeTypes = getTypesForCategory(MapObjectCategory.Trees);
-    const allowed = allTreeTypes.filter(t => isTreeAllowedOnTerrain(t, terrain));
-    if (allowed.length === 0) {
-        return seedType;
-    }
-
-    return allowed[Math.abs(hash(x, y, seed + 3000)) % allowed.length]!;
+/** Select tree type for new tree — always the same type as the seed. */
+function selectTreeTypeForExpansion(seedType: MapObjectType, terrain: number): MapObjectType | null {
+    return isTreeAllowedOnTerrain(seedType, terrain) ? seedType : null;
 }
 
 /** Smoothstep: 0 at edge, 1 at center, smooth cubic transition */
@@ -213,8 +196,8 @@ function tryPlaceTreeAt(
         return false;
     }
 
-    const treeType = selectTreeTypeForExpansion(seedType, terrain, nx, ny, seed);
-    if (!isTreeAllowedOnTerrain(treeType, terrain)) {
+    const treeType = selectTreeTypeForExpansion(seedType, terrain);
+    if (!treeType) {
         return false;
     }
 
