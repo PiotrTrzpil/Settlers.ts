@@ -221,7 +221,8 @@ export const EventFmt = {
 
     'recruitment:failed': (e: GameEvents['recruitment:failed']) => `carrier=#${e.unitId} ${e.reason}`,
 
-    'unit:transformed': (e: GameEvents['unit:transformed']) => `#${e.unitId} ${e.fromType} → ${e.toType}`,
+    'unit:recruited': (e: GameEvents['unit:recruited']) => `#${e.unitId} ${e.fromType} → ${e.toType}`,
+    'unit:dismissed': (e: GameEvents['unit:dismissed']) => `#${e.unitId} ${e.fromType} → ${e.toType}`,
 
     'garrison:unitEntered': (e: GameEvents['garrison:unitEntered']) =>
         `${e.unitType} #${e.unitId} entered tower=#${e.buildingId}`,

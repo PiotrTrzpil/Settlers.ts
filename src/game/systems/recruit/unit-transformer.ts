@@ -17,7 +17,7 @@
  *   recruitment:completed (from TRANSFORM_RECRUIT choreo node)
  *     → release carrier reservation + tool pile reservation
  *     → mutate entity subType, remove from carrier registry
- *     → emit unit:transformed
+ *     → emit unit:recruited
  *     → choreo continues with remaining nodes (caller's continuation)
  *
  *   recruitment:failed / settler:taskFailed (any job with pending carrier)
@@ -230,7 +230,7 @@ export class UnitTransformer {
         const { id, x, y } = target;
         target.subType = UnitType.Carrier;
         this.carrierRegistry.register(id);
-        this.eventBus.emit('unit:transformed', { unitId: id, fromType, toType: UnitType.Carrier, level: 'info' });
+        this.eventBus.emit('unit:dismissed', { unitId: id, fromType, toType: UnitType.Carrier, level: 'info' });
         log.debug(`Dismissed ${fromType} (entity ${id}), returned to carrier pool`);
 
         if (toolMaterial !== null) {
@@ -309,7 +309,7 @@ export class UnitTransformer {
         this.carrierRegistry.remove(carrierId);
         entity.carrying = undefined;
 
-        this.eventBus.emit('unit:transformed', { unitId: carrierId, fromType, toType: targetUnitType, level: 'info' });
+        this.eventBus.emit('unit:recruited', { unitId: carrierId, fromType, toType: targetUnitType, level: 'info' });
         log.debug(`Carrier ${carrierId} transformed from ${fromType} to ${targetUnitType}`);
     }
 

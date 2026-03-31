@@ -105,8 +105,8 @@ export class SettlerLifecycleCoordinator {
             this.workerTracker.assignWorkerInside(settlerId, buildingId);
         });
 
-        this.subscriptions.subscribe(this.eventBus, 'unit:transformed', ({ unitId, toType }) => {
-            this.handleUnitTransformed(unitId, toType);
+        this.subscriptions.subscribe(this.eventBus, 'unit:dismissed', ({ unitId }) => {
+            this.handleUnitDismissed(unitId);
         });
 
         this.orphanHandle = this.tickScheduler.schedule(ORPHAN_CHECK_INTERVAL, () => this.orphanCheckAndReschedule());
@@ -252,18 +252,15 @@ export class SettlerLifecycleCoordinator {
         this.gameState.movement.getController(settlerId)?.clearPath();
     }
 
-    private handleUnitTransformed(unitId: number, toType: UnitType): void {
-        if (toType !== UnitType.Carrier) {
-            return;
-        }
+    private handleUnitDismissed(unitId: number): void {
         const runtime = this.runtimes.get(unitId);
         if (!runtime) {
             return;
         }
 
-        const entity = this.gameState.getEntityOrThrow(unitId, 'unit being transformed to Carrier');
+        const entity = this.gameState.getEntityOrThrow(unitId, 'unit being dismissed to Carrier');
         if (runtime.job) {
-            const unitConfig = this.settlerConfigs.get(toType);
+            const unitConfig = this.settlerConfigs.get(UnitType.Carrier);
             if (unitConfig) {
                 this.interruptJob(entity, unitConfig, runtime);
             }

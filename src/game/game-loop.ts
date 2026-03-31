@@ -71,6 +71,8 @@ export class GameLoop {
     private lastTime = 0;
     private running = false;
     private animRequest = 0;
+    /** Counter to periodically reset Chrome's async stack trace via setTimeout */
+    private framesSinceStackReset = 0;
 
     /** Throttled loggers for each frame sub-phase (independent cooldowns) */
     private readonly logicPhaseLogger = new ThrottledLogger(GameLoop.log, 1000);
@@ -373,7 +375,18 @@ export class GameLoop {
             this.recordFrameTiming(frameStart, ticksTime, animationsTime, updateTime, callbackTime, renderTiming);
         }
 
-        this.animRequest = requestAnimationFrame(this.boundFrame);
+        // Every 60 frames, route through setTimeout to reset Chrome's async
+        // stack trace accumulation (prevents 30+ duplicate "frame" entries in console).
+        if (++this.framesSinceStackReset >= 60) {
+            this.framesSinceStackReset = 0;
+            setTimeout(() => {
+                if (this.running) {
+                    this.animRequest = requestAnimationFrame(this.boundFrame);
+                }
+            }, 0);
+        } else {
+            this.animRequest = requestAnimationFrame(this.boundFrame);
+        }
     }
 
     /** Run fixed-timestep logic ticks. Returns elapsed time in ms. */

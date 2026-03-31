@@ -97,8 +97,8 @@ const availableResources = ALL_RESOURCES;
  * Try to restore saved game state, then start auto-saving.
  * If saved data is stale (version mismatch), pauses ticks and fires onStaleDetected.
  */
-function restoreAndStartPersistence(game: Game, onStaleDetected: () => void): void {
-    const check = checkSavedSnapshot();
+async function restoreAndStartPersistence(game: Game, onStaleDetected: () => void): Promise<void> {
+    const check = await checkSavedSnapshot();
 
     if (check.status === 'stale') {
         log.info(`Stale save detected: version ${check.savedVersion} !== ${check.expectedVersion}`);
@@ -116,7 +116,7 @@ function restoreAndStartPersistence(game: Game, onStaleDetected: () => void): vo
 
 /** Dismiss stale snapshot warning — discards saved data and unpauses ticks. */
 function dismissStaleSnapshotWarning(warning: Ref<boolean>, game: ShallowRef<Game | null>): void {
-    clearSavedGameState();
+    void clearSavedGameState();
     warning.value = false;
     if (game.value) {
         game.value.settings.state.paused = false;
@@ -187,7 +187,7 @@ async function loadMap(
             ctx.game.value = createTestGame(fm);
             ctx.wireFeatureToggles(ctx.game.value);
             saveInitialState(ctx.game.value);
-            restoreAndStartPersistence(ctx.game.value, onStale);
+            await restoreAndStartPersistence(ctx.game.value, onStale);
             return true;
         }
 
@@ -223,7 +223,7 @@ async function loadMap(
 
         setCurrentMapId(file.name);
         saveInitialState(result.game);
-        restoreAndStartPersistence(result.game, onStale);
+        await restoreAndStartPersistence(result.game, onStale);
 
         if (isLuaEnabled()) {
             void result.game.loadScript(file.name).then(scriptResult => {

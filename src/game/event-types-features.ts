@@ -288,8 +288,15 @@ export interface GameEventsFeatures {
         reason: string;
     };
 
-    /** Emitted when a carrier is transformed into a different unit type. */
-    'unit:transformed': GameEventBase & {
+    /** Emitted when a carrier transforms into a specialist (recruitment completed). */
+    'unit:recruited': GameEventBase & {
+        unitId: number;
+        fromType: UnitType;
+        toType: UnitType;
+    };
+
+    /** Emitted when a specialist is dismissed back to carrier. */
+    'unit:dismissed': GameEventBase & {
         unitId: number;
         fromType: UnitType;
         toType: UnitType;

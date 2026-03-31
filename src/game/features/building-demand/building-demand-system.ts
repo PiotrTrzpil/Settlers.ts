@@ -113,7 +113,7 @@ export class BuildingDemandSystem implements TickSystem {
         // When a carrier transforms into a specialist, assign the new worker to its building.
         // The carrier recruitment path (dispatchCarrier) doesn't call assignWorkerToBuilding
         // at dispatch time — the assignment happens here after the transformation completes.
-        this.subscriptions.subscribe(this.eventBus, 'unit:transformed', ({ unitId }) => {
+        this.subscriptions.subscribe(this.eventBus, 'unit:recruited', ({ unitId }) => {
             this.handleUnitTransformed(unitId);
         });
 

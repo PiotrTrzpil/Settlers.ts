@@ -11,7 +11,7 @@
  * Check if a terrain type is passable (units can walk on it).
  */
 export function isPassable(groundTypeValue: number): boolean {
-    // Water: 0-8
+    // Water: 0-8 (ocean/sea) - not passable
     if (groundTypeValue <= 8) {
         return false;
     }
@@ -19,7 +19,7 @@ export function isPassable(groundTypeValue: number): boolean {
     if (groundTypeValue === 128 || groundTypeValue === 129) {
         return false;
     }
-    // Everything else (including rock) is passable
+    // Everything else (including rock, river 96-99) is passable
     return true;
 }
 

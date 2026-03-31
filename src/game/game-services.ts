@@ -164,12 +164,11 @@ export class GameServices {
         this.subscriptions.subscribe(eventBus, 'entity:created', ({ entityId, variation }) =>
             this.visualService.init(entityId, variation)
         );
-        // When any unit changes type (carrier↔specialist, soldier→death-angel, etc.),
-        // clear the stale animation so the idle/task controller re-derives the correct
-        // sequence key for the new unit type on the next tick.
-        this.subscriptions.subscribe(eventBus, 'unit:transformed', ({ unitId }) =>
-            this.visualService.clearAnimation(unitId)
-        );
+        // When any unit changes type (carrier↔specialist), clear the stale animation
+        // so the idle/task controller re-derives the correct sequence key on the next tick.
+        const clearAnim = ({ unitId }: { unitId: number }) => this.visualService.clearAnimation(unitId);
+        this.subscriptions.subscribe(eventBus, 'unit:recruited', clearAnim);
+        this.subscriptions.subscribe(eventBus, 'unit:dismissed', clearAnim);
 
         // 1a. Tick scheduler — no dependencies, must tick before movement.
         this.tickScheduler = new TickScheduler();

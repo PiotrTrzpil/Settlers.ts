@@ -1,5 +1,5 @@
 /**
- * Game state persistence - auto-saves to localStorage every few seconds.
+ * Game state persistence - auto-saves to IndexedDB every few seconds.
  *
  * Snapshot format: metadata + entity table + terrain + dynamic feature data.
  * All feature state is stored via PersistenceRegistry under dynamic keys —
@@ -11,6 +11,7 @@ import type { GameCore } from '../game-core';
 import { EntityType } from '../entity';
 import type { CarryingState } from '../entity';
 import type { Race } from '../core/race';
+import { idbGet, idbSet, idbDelete } from './persistence-store';
 
 const STORAGE_KEY = 'settlers_game_state';
 const INITIAL_STATE_KEY = 'settlers_initial_state';
@@ -69,7 +70,7 @@ let currentMapId: string = '';
 let _cachedInitialGroundType: Uint8Array | null = null;
 let _cachedInitialGroundHeight: Uint8Array | null = null;
 
-/** In-memory fallback for initial state when localStorage is unavailable/full */
+/** In-memory cache of initial state for fast synchronous access during reset */
 let _cachedInitialSnapshot: GameStateSnapshot | null = null;
 
 /**
@@ -209,20 +210,13 @@ export function createSnapshot(game: GameCore): GameStateSnapshot {
 }
 
 /**
- * Save game state to localStorage.
+ * Save game state to IndexedDB.
  */
-export function saveGameState(game: GameCore): boolean {
+export async function saveGameState(game: GameCore): Promise<boolean> {
     try {
         const snapshot = createSnapshot(game);
         const json = superjson.stringify(snapshot);
-        try {
-            localStorage.setItem(STORAGE_KEY, json);
-        } catch {
-            // Quota exceeded — free space by removing stale keys and retry
-            localStorage.removeItem(STORAGE_KEY);
-            localStorage.removeItem(INITIAL_STATE_KEY);
-            localStorage.setItem(STORAGE_KEY, json);
-        }
+        await idbSet(STORAGE_KEY, json);
         return true;
     } catch (e) {
         console.warn('Failed to save game state:', e);
@@ -241,9 +235,9 @@ export type SnapshotCheckResult =
  * Check saved snapshot compatibility WITHOUT loading it.
  * Returns status so the UI can show appropriate warnings.
  */
-export function checkSavedSnapshot(): SnapshotCheckResult {
+export async function checkSavedSnapshot(): Promise<SnapshotCheckResult> {
     try {
-        const stored = localStorage.getItem(STORAGE_KEY);
+        const stored = await idbGet<string>(STORAGE_KEY);
         if (!stored) {
             return { status: 'none' };
         }
@@ -262,11 +256,11 @@ export function checkSavedSnapshot(): SnapshotCheckResult {
 }
 
 /**
- * Load saved snapshot from localStorage.
+ * Load saved snapshot from IndexedDB.
  * Only returns snapshot if it matches the current map.
  */
-export function loadSnapshot(): GameStateSnapshot | null {
-    const result = checkSavedSnapshot();
+export async function loadSnapshot(): Promise<GameStateSnapshot | null> {
+    const result = await checkSavedSnapshot();
     if (result.status === 'valid') {
         return result.snapshot;
     }
@@ -282,8 +276,8 @@ export function loadSnapshot(): GameStateSnapshot | null {
 /**
  * Clear saved game state.
  */
-export function clearSavedGameState(): void {
-    localStorage.removeItem(STORAGE_KEY);
+export async function clearSavedGameState(): Promise<void> {
+    await idbDelete(STORAGE_KEY);
 }
 
 /**
@@ -291,9 +285,9 @@ export function clearSavedGameState(): void {
  * Used when the tree expansion setting changes so the next reload
  * re-populates trees from map data with the new setting.
  */
-export function clearSavedTreeState(): void {
+export async function clearSavedTreeState(): Promise<void> {
     try {
-        const stored = localStorage.getItem(STORAGE_KEY);
+        const stored = await idbGet<string>(STORAGE_KEY);
         if (!stored) {
             return;
         }
@@ -304,18 +298,19 @@ export function clearSavedTreeState(): void {
         delete snapshot['trees'];
         delete snapshot['stones'];
         delete snapshot['resourceQuantities'];
-        localStorage.setItem(STORAGE_KEY, superjson.stringify(snapshot));
+        await idbSet(STORAGE_KEY, superjson.stringify(snapshot));
     } catch {
         // If anything fails, just clear the whole thing
-        localStorage.removeItem(STORAGE_KEY);
+        await idbDelete(STORAGE_KEY);
     }
 }
 
 /**
  * Check if there's a saved game state.
  */
-export function hasSavedGameState(): boolean {
-    return localStorage.getItem(STORAGE_KEY) !== null;
+export async function hasSavedGameState(): Promise<boolean> {
+    const stored = await idbGet<string>(STORAGE_KEY);
+    return stored !== undefined;
 }
 
 // === Restore Helpers ===
@@ -403,7 +398,7 @@ export function restoreFromSnapshot(game: GameCore, snapshot: GameStateSnapshot)
         game.execute({ type: 'remove_entity', entityId: game.state.entities[0]!.id });
     }
     // Safety: clear occupancy maps in case removal side-effects left stale entries.
-    // Snapshot data is external input (localStorage) — defensive cleanup at this boundary
+    // Snapshot data is external input (IndexedDB) — defensive cleanup at this boundary
     // prevents a single corrupted entity from crashing the entire restore.
     game.state.groundOccupancy.clear();
     game.state.unitOccupancy.clear();
@@ -443,17 +438,17 @@ export function restoreFromSnapshot(game: GameCore, snapshot: GameStateSnapshot)
 /**
  * Save initial map state (called once after map loads, before auto-save).
  * Used to restore to the original map state when resetting.
+ * The in-memory cache is set synchronously; IndexedDB write is fire-and-forget.
  */
 export function saveInitialState(game: GameCore): boolean {
     try {
         const snapshot = createSnapshot(game);
-        // Always keep in-memory copy so reset works even if localStorage is full
+        // Always keep in-memory copy so reset works immediately
         _cachedInitialSnapshot = snapshot;
-        try {
-            localStorage.setItem(INITIAL_STATE_KEY, superjson.stringify(snapshot));
-        } catch {
-            console.warn('GameState: localStorage full — initial state cached in memory only');
-        }
+        // Persist to IndexedDB in background (not critical — in-memory cache is primary)
+        void idbSet(INITIAL_STATE_KEY, superjson.stringify(snapshot)).catch(e => {
+            console.warn('GameState: IndexedDB write failed for initial state:', e);
+        });
         console.log(
             `[${performance.now().toFixed(0)}ms] GameState: Saved initial state with ${snapshot.entities.length} entities`
         );
@@ -469,31 +464,14 @@ export function saveInitialState(game: GameCore): boolean {
 
 /**
  * Load initial map state (for resetting to original state).
- * Only returns snapshot if it matches the current map.
+ * Uses the in-memory cache set by saveInitialState — always available
+ * during a session since saveInitialState runs at map load time.
  */
 export function loadInitialState(): GameStateSnapshot | null {
-    // Prefer in-memory cache (always available if saveInitialState succeeded)
     if (_cachedInitialSnapshot && _cachedInitialSnapshot.mapId === currentMapId) {
         return _cachedInitialSnapshot;
     }
-
-    try {
-        const stored = localStorage.getItem(INITIAL_STATE_KEY);
-        if (!stored) {
-            return null;
-        }
-
-        const snapshot = superjson.parse<GameStateSnapshot>(stored);
-        if (snapshot.mapId !== currentMapId) {
-            console.log(`Initial state is for different map (${snapshot.mapId}), not available`);
-            return null;
-        }
-
-        return snapshot;
-    } catch (e) {
-        console.warn('Failed to load initial state:', e);
-        return null;
-    }
+    return null;
 }
 
 /**
@@ -514,7 +492,7 @@ export function restoreInitialTerrain(game: GameCore): void {
  * Clear initial state (called when loading a new map).
  */
 export function clearInitialState(): void {
-    localStorage.removeItem(INITIAL_STATE_KEY);
+    void idbDelete(INITIAL_STATE_KEY);
     _cachedInitialGroundType = null;
     _cachedInitialGroundHeight = null;
     _cachedInitialSnapshot = null;
@@ -541,13 +519,13 @@ class GameStatePersistence {
 
         this.saveIntervalId = setInterval(() => {
             if (this.enabled && this.game) {
-                saveGameState(this.game);
+                void saveGameState(this.game);
             }
         }, AUTO_SAVE_INTERVAL_MS);
 
         // Save immediately
         if (this.enabled) {
-            saveGameState(game);
+            void saveGameState(game);
         }
     }
 
@@ -570,7 +548,7 @@ class GameStatePersistence {
     }
 
     /** Force immediate save. */
-    saveNow(): boolean {
+    async saveNow(): Promise<boolean> {
         if (this.game) {
             return saveGameState(this.game);
         }
@@ -579,7 +557,7 @@ class GameStatePersistence {
 
     /** Clear saved state. */
     reset(): void {
-        clearSavedGameState();
+        void clearSavedGameState();
     }
 
     /** Clear initial state (call when loading a new map). */

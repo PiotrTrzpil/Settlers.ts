@@ -106,7 +106,7 @@ export function createGameActions(getGame: () => Game | null, game: ShallowRef<G
             }
 
             try {
-                clearSavedGameState();
+                void clearSavedGameState();
                 g.restoreToInitialState();
                 log.info('Game state reset to initial map state');
             } catch (e) {

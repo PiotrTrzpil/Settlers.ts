@@ -137,6 +137,7 @@ export class LogisticsDispatcher implements TickSystem {
 
         this.stallDetector = new StallDetector({
             jobStore: config.jobStore,
+            gameState: config.gameState,
         });
 
         this.matchDiagnostics = new MatchDiagnostics({
@@ -242,7 +243,7 @@ export class LogisticsDispatcher implements TickSystem {
         this.matchDiagnostics.tick(dt);
         this.assignPendingDemands();
         this.matchDiagnostics.markConsumed();
-        this.stallDetector.tick(dt, this.jobStore.jobs.raw);
+        this.stallDetector.tick(dt);
     }
 
     /**
