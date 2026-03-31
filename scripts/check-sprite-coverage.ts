@@ -43,6 +43,7 @@ const TREE_TYPES = new Set<MapObjectType>([
     MapObjectType.DarkTree3A,
     MapObjectType.DarkTree3B,
     MapObjectType.DarkTree4A,
+    MapObjectType.DarkTree4B,
     MapObjectType.DarkTree5A,
 ]);
 const STONE_TYPES = new Set<MapObjectType>([

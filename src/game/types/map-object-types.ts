@@ -78,9 +78,8 @@ export enum MapObjectType {
     Bush2 = 20,
     Bush3 = 21,
     Bush4 = 22,
-    // ---- Dark Tribe trees (raw 23-29, 31; 96-98% dark, most common dark objects) ----
-    // Guessed: 8 raw bytes ≈ 5 DarkTree types × A/B variants (some types have only A).
-    // Assigned by descending frequency to match DarkTree numbering.
+    // ---- Dark Tribe trees (raw 23-31; 96-98% dark, most common dark objects) ----
+    // 9 raw bytes: 6 animated sway types (23-28) + 2 static types (29-30: pine, palm) + 1 shared (31).
     DarkTree1A = 23,
     DarkTree1B = 24,
     DarkTree2A = 25,
@@ -88,6 +87,7 @@ export enum MapObjectType {
     DarkTree3A = 27,
     DarkTree3B = 28,
     DarkTree4A = 29,
+    DarkTree4B = 30,
     DarkTree5A = 31,
 
     // ---- Reed (raw 43, 77, 78) ----

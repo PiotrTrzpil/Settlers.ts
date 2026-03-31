@@ -61,16 +61,16 @@ export const RAW_OBJECT_REGISTRY: readonly RawObjectEntry[] = [
     { raw: 21, label: 'Bush3', category: MapObjectCategory.Plants, notes: 'Common (12k); guessed Bush3', type: MapObjectType.Bush3 },
     { raw: 22, label: 'Bush4', category: MapObjectCategory.Plants, notes: 'Common (12k); guessed Bush4', type: MapObjectType.Bush4 },
     // ---- Dark Tribe trees: raw 23-29, 31 (96-98% dark, most common dark objects) ----
-    // Guessed: 8 raw bytes → 5 DarkTree types × A/B variants, by descending frequency.
+    // 9 raw bytes: 6 animated sway types (23-28) + 2 static (29 pine, 30 palm) + 1 shared (31).
     { raw: 23, label: 'DarkTree1A', category: MapObjectCategory.Trees, notes: '96% dark, 2652 total; guessed DarkTree1A', type: MapObjectType.DarkTree1A },
     { raw: 24, label: 'DarkTree1B', category: MapObjectCategory.Trees, notes: '96% dark, 2062 total; guessed DarkTree1B', type: MapObjectType.DarkTree1B },
     { raw: 25, label: 'DarkTree2A', category: MapObjectCategory.Trees, notes: '97% dark, 1802 total; guessed DarkTree2A', type: MapObjectType.DarkTree2A },
     { raw: 26, label: 'DarkTree2B', category: MapObjectCategory.Trees, notes: '97% dark, 1674 total; guessed DarkTree2B', type: MapObjectType.DarkTree2B },
     { raw: 27, label: 'DarkTree3A', category: MapObjectCategory.Trees, notes: '98% dark, 1868 total; guessed DarkTree3A', type: MapObjectType.DarkTree3A },
     { raw: 28, label: 'DarkTree3B', category: MapObjectCategory.Trees, notes: '97% dark, 1868 total; guessed DarkTree3B', type: MapObjectType.DarkTree3B },
-    { raw: 29, label: 'DarkTree4A', category: MapObjectCategory.Trees, notes: '97% dark, 3063 total; guessed DarkTree4A', type: MapObjectType.DarkTree4A },
-    // raw 30: not observed on any map
-    { raw: 31, label: 'DarkTree5A', category: MapObjectCategory.Trees, notes: '98% dark, 857 total; guessed DarkTree5A', type: MapObjectType.DarkTree5A },
+    { raw: 29, label: 'DarkTree4A', category: MapObjectCategory.Trees, notes: '97% dark, 3063 total; dark pine (static)', type: MapObjectType.DarkTree4A },
+    { raw: 30, label: 'DarkTree4B', category: MapObjectCategory.Trees, notes: 'dark palm (static)', type: MapObjectType.DarkTree4B },
+    { raw: 31, label: 'DarkTree5A', category: MapObjectCategory.Trees, notes: '98% dark, 857 total; shares dark pine sprite', type: MapObjectType.DarkTree5A },
     // raw 32-42: not observed on any map
 
     // ---- River: raw 43 ----

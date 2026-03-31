@@ -251,6 +251,10 @@ export const MAP_OBJECT_SPRITES = {
     DARK_TREE_4: { start: 734, count: 16 },
     DARK_TREE_5: { start: 750, count: 16 },
     DARK_TREE_6: { start: 766, count: 16 },
+    /** Dark pine tree — static single frame */
+    DARK_PINE: 782,
+    /** Dark palm tree — static single frame */
+    DARK_PALM: 783,
 
     // ── Animated sea rocks (1004-1043): 4 groups of 10 frames ─
     /** Sea rock island with waves A (75x79) */

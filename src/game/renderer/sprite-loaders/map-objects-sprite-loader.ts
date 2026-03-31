@@ -121,14 +121,20 @@ async function loadTreeSprites(ctx: FileLoadContext): Promise<number> {
 // Dark tree sprites (GIL-based, no growth stages or cut variants)
 // =============================================================================
 
-/** Dark tree type → GIL range mapping. 6 visual types × 16 sway frames, shared across 8 MapObjectType entries. */
-const DARK_TREE_GIL: ReadonlyArray<{ types: MapObjectType[]; start: number; count: number }> = [
+/** Dark tree type → GIL range mapping. 6 animated types (16 sway frames each), 1:1 with raw bytes 23-28. */
+const DARK_TREE_ANIMATED_GIL: ReadonlyArray<{ types: MapObjectType[]; start: number; count: number }> = [
     { types: [MapObjectType.DarkTree1A], ...MAP_OBJECT_SPRITES.DARK_TREE_1 },
     { types: [MapObjectType.DarkTree1B], ...MAP_OBJECT_SPRITES.DARK_TREE_2 },
     { types: [MapObjectType.DarkTree2A], ...MAP_OBJECT_SPRITES.DARK_TREE_3 },
     { types: [MapObjectType.DarkTree2B], ...MAP_OBJECT_SPRITES.DARK_TREE_4 },
-    { types: [MapObjectType.DarkTree3A, MapObjectType.DarkTree3B], ...MAP_OBJECT_SPRITES.DARK_TREE_5 },
-    { types: [MapObjectType.DarkTree4A, MapObjectType.DarkTree5A], ...MAP_OBJECT_SPRITES.DARK_TREE_6 },
+    { types: [MapObjectType.DarkTree3A], ...MAP_OBJECT_SPRITES.DARK_TREE_5 },
+    { types: [MapObjectType.DarkTree3B], ...MAP_OBJECT_SPRITES.DARK_TREE_6 },
+];
+
+/** Static dark trees: pine (GIL 782) and palm (GIL 783). */
+const DARK_TREE_STATIC_GIL: ReadonlyArray<{ types: MapObjectType[]; gilIndex: number }> = [
+    { types: [MapObjectType.DarkTree4A, MapObjectType.DarkTree5A], gilIndex: MAP_OBJECT_SPRITES.DARK_PINE },
+    { types: [MapObjectType.DarkTree4B], gilIndex: MAP_OBJECT_SPRITES.DARK_PALM },
 ];
 
 /** Collect sway frames from a GIL range. Returns null if fewer than 2 frames loaded. */
@@ -143,22 +149,10 @@ function collectSwayFrames(sprites: Map<number, SpriteEntry>, start: number, cou
     return frames.length > 1 ? frames : null;
 }
 
-/**
- * Load dark tree sprites from direct GIL indices.
- * Dark trees have no growth stages or cut variants — just 16 sway animation frames each.
- */
-async function loadDarkTreeSprites(ctx: FileLoadContext): Promise<number> {
-    const allIndices: number[] = [];
-    for (const { start, count } of DARK_TREE_GIL) {
-        for (let i = 0; i < count; i++) {
-            allIndices.push(start + i);
-        }
-    }
-
-    const sprites = await loadGilSpriteBatch(allIndices, ctx);
-
+/** Register animated dark tree types from pre-loaded sprites. */
+function registerAnimatedDarkTrees(sprites: Map<number, SpriteEntry>, ctx: FileLoadContext): number {
     let loaded = 0;
-    for (const { types, start, count } of DARK_TREE_GIL) {
+    for (const { types, start, count } of DARK_TREE_ANIMATED_GIL) {
         const firstEntry = sprites.get(start);
         if (!firstEntry) {
             continue;
@@ -181,8 +175,42 @@ async function loadDarkTreeSprites(ctx: FileLoadContext): Promise<number> {
             loaded++;
         }
     }
-
     return loaded;
+}
+
+/** Register static dark tree types (pine, palm) from pre-loaded sprites. */
+function registerStaticDarkTrees(sprites: Map<number, SpriteEntry>, ctx: FileLoadContext): number {
+    let loaded = 0;
+    for (const { types, gilIndex } of DARK_TREE_STATIC_GIL) {
+        const entry = sprites.get(gilIndex);
+        if (!entry) {
+            continue;
+        }
+        for (const type of types) {
+            ctx.registry.registerMapObject(type, entry);
+            loaded++;
+        }
+    }
+    return loaded;
+}
+
+/**
+ * Load dark tree sprites from direct GIL indices.
+ * 6 animated types (16 sway frames each) + 2 static types (dark pine, dark palm).
+ */
+async function loadDarkTreeSprites(ctx: FileLoadContext): Promise<number> {
+    const allIndices: number[] = [];
+    for (const { start, count } of DARK_TREE_ANIMATED_GIL) {
+        for (let i = 0; i < count; i++) {
+            allIndices.push(start + i);
+        }
+    }
+    for (const { gilIndex } of DARK_TREE_STATIC_GIL) {
+        allIndices.push(gilIndex);
+    }
+
+    const sprites = await loadGilSpriteBatch(allIndices, ctx);
+    return registerAnimatedDarkTrees(sprites, ctx) + registerStaticDarkTrees(sprites, ctx);
 }
 
 // =============================================================================

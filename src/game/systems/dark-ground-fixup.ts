@@ -12,10 +12,9 @@ import { MapObjectType } from '@/game/types/map-object-types';
 /**
  * Mapping from normal tree types to dark tree variants.
  *
- * There are 18 normal tree types but only 8 dark tree raw slots
- * (DarkTree1A-5A, plus B variants for 1-3). We cycle through the
- * dark variants deterministically based on tile position so the
- * distribution looks natural.
+ * There are 18 normal tree types but only 9 dark tree raw slots.
+ * We cycle through the dark variants deterministically based on
+ * tile position so the distribution looks natural.
  */
 const DARK_TREE_VARIANTS: readonly MapObjectType[] = [
     MapObjectType.DarkTree1A,
@@ -25,6 +24,7 @@ const DARK_TREE_VARIANTS: readonly MapObjectType[] = [
     MapObjectType.DarkTree3A,
     MapObjectType.DarkTree3B,
     MapObjectType.DarkTree4A,
+    MapObjectType.DarkTree4B,
     MapObjectType.DarkTree5A,
 ];
 
