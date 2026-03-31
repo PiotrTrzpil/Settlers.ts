@@ -89,6 +89,16 @@ export const TowerGarrisonFeature: FeatureDefinition = {
             manager.removeTower(buildingId); // no-op for non-garrison buildings
         });
 
+        // When a tower changes owner (siege capture), cancel en-route units of the old player
+        ctx.on('building:ownerChanged', ({ buildingId, oldPlayer }) => {
+            const cancelled = manager.getCancelledEnRouteUnits(buildingId, oldPlayer);
+            for (const unitId of cancelled) {
+                ctx.unitReservation.release(unitId);
+                locationManager.cancelApproach(unitId);
+                settlerTaskSystem.releaseWorkerAssignment(unitId);
+            }
+        });
+
         // Clean up when a dispatch job fails for a garrison-bound unit
         ctx.on('settler:taskFailed', ({ unitId }) => {
             if (manager.isEnRoute(unitId)) {

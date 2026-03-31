@@ -2,6 +2,7 @@
     <OverlayPanel label="Settings" title="Settings Panel" min-width="180px" persist-key="settings">
         <CollapseSection title="Game" persist-key="settings-game">
             <Checkbox label="Paused" v-model="settings.paused" />
+            <Checkbox label="Autosave" v-model="settings.autosaveEnabled" />
             <SettingsSlider
                 label="Game speed"
                 v-model="settings.gameSpeed"
@@ -37,6 +38,10 @@
                 :step="0.1"
                 :disabled="!settings.sfxEnabled"
             />
+        </CollapseSection>
+
+        <CollapseSection title="Combat" persist-key="settings-combat">
+            <Checkbox label="Units controllable in combat" v-model="settings.combatControllable" />
         </CollapseSection>
 
         <CollapseSection title="Display" persist-key="settings-display">

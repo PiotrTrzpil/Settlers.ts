@@ -235,7 +235,7 @@ export const EventFmt = {
     'settler-location:entered': (e: GameEvents['settler-location:entered']) =>
         `settler=#${e.unitId} entered building=#${e.buildingId}`,
 
-    'siege:started': (e: GameEvents['siege:started']) => `building=#${e.buildingId} attacker=player${e.attackerPlayer}`,
+    'siege:started': (e: GameEvents['siege:started']) => `building=#${e.buildingId}`,
     'siege:defenderEjected': (e: GameEvents['siege:defenderEjected']) =>
         `defender=#${e.unitId} from building=#${e.buildingId}`,
     'siege:buildingCaptured': (e: GameEvents['siege:buildingCaptured']) =>

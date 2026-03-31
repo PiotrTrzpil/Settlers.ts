@@ -253,6 +253,24 @@ export class TowerGarrisonManager {
         return this.locationManager.getApproaching(buildingId).length === 0;
     }
 
+    /**
+     * Cancel all en-route units for a building that belong to a specific player.
+     * Called when a tower changes ownership — the old player's approaching units
+     * should stop walking to an enemy building.
+     * Returns the cancelled unit IDs for external cleanup (reservation, worker assignment).
+     */
+    getCancelledEnRouteUnits(buildingId: number, player: number): number[] {
+        const approaching = this.locationManager.getApproaching(buildingId);
+        const cancelled: number[] = [];
+        for (const unitId of approaching) {
+            const unit = this.gameState.getEntity(unitId);
+            if (unit && unit.player === player) {
+                cancelled.push(unitId);
+            }
+        }
+        return cancelled;
+    }
+
     // =========================================================================
     // Garrison finalization / ejection
     // =========================================================================

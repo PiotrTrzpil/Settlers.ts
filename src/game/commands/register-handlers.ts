@@ -96,11 +96,12 @@ export function registerAllHandlers(registry: CommandHandlerRegistry, deps: Comm
     // Units
     registry.register('spawn_unit', cmd => executeSpawnUnit({ state, terrain, eventBus }, cmd));
     registry.register('recruit_specialist', cmd => executeRecruitSpecialist({ recruitSystem, unitTransformer }, cmd));
+    const isCombatControllable = () => settings.combatControllable;
     registry.register('move_unit', cmd =>
-        executeMoveUnit({ state, settlerTaskSystem, combatSystem, unitReservation }, cmd)
+        executeMoveUnit({ state, settlerTaskSystem, combatSystem, unitReservation, isCombatControllable }, cmd)
     );
     registry.register('move_selected_units', cmd =>
-        executeMoveSelectedUnits({ state, settlerTaskSystem, combatSystem, unitReservation }, cmd)
+        executeMoveSelectedUnits({ state, settlerTaskSystem, combatSystem, unitReservation, isCombatControllable }, cmd)
     );
 
     // Buildings

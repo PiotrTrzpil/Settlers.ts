@@ -70,6 +70,7 @@ export type {
 export class Simulation {
     readonly state: GameState;
     readonly services: GameServices;
+    readonly settings: GameSettingsManager;
     readonly eventBus: EventBus;
     readonly map: TestMap;
     readonly errors: SimulationError[] = [];
@@ -100,7 +101,7 @@ export class Simulation {
         this.map = createTestMap(mapWidth, mapHeight);
         this.eventBus = new EventBus();
         this.eventBus.strict = true;
-        this.state = new GameState(this.eventBus);
+        this.state = new GameState(this.eventBus, () => 0);
         this.state.playerRaces = new Map([
             [0, race],
             [1, Race.Roman],
@@ -110,8 +111,9 @@ export class Simulation {
         // so every event is captured from the very first entity placement.
         wireSimulationTimeline(this.eventBus, this.timeline, () => this.tickCount);
 
-        const settings = new GameSettingsManager();
-        settings.resetToDefaults();
+        this.settings = new GameSettingsManager();
+        this.settings.resetToDefaults();
+        const settings = this.settings;
 
         this.commandRegistry = new CommandHandlerRegistry();
         this.services = new GameServices(this.state, this.eventBus, cmd => this.commandRegistry.execute(cmd));

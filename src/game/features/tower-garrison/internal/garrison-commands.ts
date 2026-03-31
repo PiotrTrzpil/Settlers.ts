@@ -9,10 +9,10 @@ import type { SettlerTaskSystem } from '@/game/features/settler-tasks';
 import { BuildingType } from '@/game/buildings/building-type';
 import { UnitType } from '@/game/core/unit-types';
 import { createLogger } from '@/utilities/logger';
-import { choreo } from '@/game/systems/choreo/choreo-builder';
 import type { UnitReservationRegistry } from '@/game/systems/unit-reservation';
 import type { ISettlerBuildingLocationManager } from '@/game/features/settler-location/types';
 import type { TowerGarrisonManager } from '../tower-garrison-manager';
+import { dispatchUnitToGarrison } from './garrison-dispatch';
 import { getGarrisonCapacity, getGarrisonRole } from './garrison-capacity';
 import type { GarrisonRole } from '../types';
 
@@ -144,39 +144,16 @@ export function executeGarrisonUnitsCommand(cmd: GarrisonUnitsCommand, ctx: Garr
         return false;
     }
 
+    const dispatchDeps = { gameState, unitReservation, settlerTaskSystem };
     let anyDispatched = false;
 
     for (const unitId of acceptedUnitIds) {
-        unitReservation.reserve(unitId, {
-            purpose: 'garrison-en-route',
-            onForcedRelease: () => {
-                log.debug(`En-route unit ${unitId} removed externally`);
-            },
-        });
-        settlerTaskSystem.assignWorkerToBuilding(unitId, cmd.buildingId);
-        const job = choreo('WORKER_DISPATCH').goToDoorAndEnter(cmd.buildingId).build();
-        // Pass targetPos for eager movement — but if pathfinding fails
-        // (same tile or unreachable), handle both cases.
-        const assigned = settlerTaskSystem.assignJob(unitId, job, job.targetPos ?? undefined);
-        if (!assigned) {
-            const unit = gameState.getEntityOrThrow(unitId, 'garrison dispatch');
-            const atDoor = job.targetPos && unit.x === job.targetPos.x && unit.y === job.targetPos.y;
-            if (atDoor) {
-                // Unit already at door — enter directly via choreo
-                // without the GO_TO_TARGET movement step.
-                settlerTaskSystem.assignJob(unitId, job);
-                anyDispatched = true;
-            } else {
-                // Genuinely unreachable. Clean up and blacklist so
-                // auto-garrison doesn't retry the same pair.
-                settlerTaskSystem.releaseWorkerAssignment(unitId);
-                locationManager.cancelApproach(unitId);
-                unitReservation.release(unitId);
-                manager.recordDispatchFailure(unitId, cmd.buildingId);
-                log.warn(`garrison_units: path failed for unit ` + `${unitId} to tower ${cmd.buildingId}`);
-            }
-        } else {
+        if (dispatchUnitToGarrison(unitId, cmd.buildingId, dispatchDeps)) {
             anyDispatched = true;
+        } else {
+            // Blacklist so auto-garrison doesn't retry the same pair.
+            locationManager.cancelApproach(unitId);
+            manager.recordDispatchFailure(unitId, cmd.buildingId);
         }
     }
 
@@ -215,6 +192,12 @@ export function executeGarrisonSelectedUnitsCommand(
     const selectedUnits = ctx.gameState.selection.getSelectedByType(EntityType.Unit);
     if (selectedUnits.length === 0) {
         return 'garrison_building_blocked';
+    }
+
+    // Enemy garrison building — don't garrison, let the caller fall through
+    // to move_selected_units so the siege system can handle it.
+    if (selectedUnits[0]!.player !== building.player) {
+        return 'not_garrison_building';
     }
 
     const unitIds = selectedUnits.map(u => u.id);

@@ -26,7 +26,7 @@ function createTestHarness() {
     const groundHeight = new Uint8Array(64 * 64);
     groundType.fill(16); // all grass (passable & buildable)
     const eventBus = new EventBus();
-    const state = new GameState(eventBus);
+    const state = new GameState(eventBus, () => 0);
     const movement = new MovementSystem({
         eventBus,
         updatePosition: (id, x, y) => {
@@ -66,7 +66,7 @@ function createTestHarness() {
         settlerTaskSystem: {
             assignMoveTask: (id: number, x: number, y: number) => state.movement.moveUnit(id, x, y),
         } as any,
-        combatSystem: { releaseFromCombat: () => {} } as any,
+        combatSystem: { releaseFromCombat: () => {}, isInCombat: () => false, setPassive: () => {} } as any,
         storageFilterManager: undefined as any,
         inventoryManager: undefined as any,
         unitReservation: { isReserved: () => false } as any,

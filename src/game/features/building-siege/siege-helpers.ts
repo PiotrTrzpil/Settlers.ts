@@ -1,5 +1,5 @@
 /**
- * Siege helper functions — pure queries and scan logic for building sieges.
+ * Siege helper functions — pure queries for building sieges.
  *
  * Extracted from building-siege-system.ts to keep it under the line limit.
  */
@@ -10,40 +10,11 @@ import type { Race } from '../../core/race';
 import { getBaseUnitType } from '../../core/unit-types';
 import { isGarrisonBuildingType } from '../tower-garrison';
 import { getBuildingDoorPos } from '../../data/game-data-access';
-import type { SiegeState } from './siege-types';
 import { DOOR_ARRIVAL_DISTANCE } from './siege-types';
 
 /** Returns true if the given UnitType is a swordsman (any level). */
 export function isSwordsman(unitType: UnitType): boolean {
     return getBaseUnitType(unitType) === UnitType.Swordsman1;
-}
-
-/** Returns true if the unit is already part of any active siege. */
-export function isInAnySiege(unitId: number, sieges: ReadonlyMap<number, SiegeState>): boolean {
-    for (const siege of sieges.values()) {
-        if (siege.attackerIds.includes(unitId)) {
-            return true;
-        }
-    }
-    return false;
-}
-
-/** Check if any attacker is within door arrival distance of the building. */
-export function hasAttackerAtDoor(
-    siege: SiegeState,
-    building: { x: number; y: number; race: Race; subType: number | string },
-    gameState: GameState
-): boolean {
-    const door = getBuildingDoorPos(building.x, building.y, building.race, building.subType as BuildingType);
-
-    for (const attackerId of siege.attackerIds) {
-        const attacker = gameState.getEntityOrThrow(attackerId, 'siege attacker at door check');
-        const dist = Math.max(Math.abs(attacker.x - door.x), Math.abs(attacker.y - door.y));
-        if (dist <= DOOR_ARRIVAL_DISTANCE) {
-            return true;
-        }
-    }
-    return false;
 }
 
 /** Find the closest enemy garrison building (by door distance) within the given radius. */
@@ -80,20 +51,53 @@ export function findNearbyEnemyGarrison(
     return best;
 }
 
-/** Check if a unit is an idle enemy swordsman suitable for auto-siege. */
-export function isIdleEnemySwordsman(
-    unit: Entity,
-    buildingPlayer: number,
-    isInCombat: (id: number) => boolean,
-    sieges: ReadonlyMap<number, SiegeState>,
+/**
+ * Find any enemy swordsman near a building's door that is not reserved
+ * and not hidden. Used to find a unit to dispatch for capture.
+ */
+export function findSwordsmanAtDoor(
+    building: { x: number; y: number; race: Race; subType: number | string; player: number },
+    gameState: GameState,
     isReserved: (id: number) => boolean
+): Entity | undefined {
+    const door = getBuildingDoorPos(building.x, building.y, building.race, building.subType as BuildingType);
+    const nearby = gameState.getEntitiesInRadius(door.x, door.y, DOOR_ARRIVAL_DISTANCE);
+    for (const unit of nearby) {
+        if (unit.type !== EntityType.Unit || unit.hidden) {
+            continue;
+        }
+        if (unit.player === building.player) {
+            continue;
+        }
+        if (!isSwordsman(unit.subType as UnitType)) {
+            continue;
+        }
+        if (isReserved(unit.id)) {
+            continue;
+        }
+        return unit;
+    }
+    return undefined;
+}
+
+/** Check if any enemy swordsman is within door arrival distance of the building. */
+export function hasEnemyAtDoor(
+    building: { x: number; y: number; race: Race; subType: number | string; player: number },
+    gameState: GameState
 ): boolean {
-    return (
-        unit.type === EntityType.Unit &&
-        unit.player !== buildingPlayer &&
-        isSwordsman(unit.subType as UnitType) &&
-        !isInCombat(unit.id) &&
-        !isInAnySiege(unit.id, sieges) &&
-        !isReserved(unit.id)
-    );
+    const door = getBuildingDoorPos(building.x, building.y, building.race, building.subType as BuildingType);
+    const nearby = gameState.getEntitiesInRadius(door.x, door.y, DOOR_ARRIVAL_DISTANCE);
+    for (const unit of nearby) {
+        if (unit.type !== EntityType.Unit || unit.hidden) {
+            continue;
+        }
+        if (unit.player === building.player) {
+            continue;
+        }
+        if (!isSwordsman(unit.subType as UnitType)) {
+            continue;
+        }
+        return true;
+    }
+    return false;
 }

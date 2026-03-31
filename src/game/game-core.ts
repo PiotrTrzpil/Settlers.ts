@@ -88,7 +88,7 @@ export class GameCore {
         );
 
         this.eventBus = new EventBus();
-        this.state = new GameState(this.eventBus);
+        this.state = new GameState(this.eventBus, () => this.currentPlayer);
         this.settings = new GameSettingsManager();
 
         setDirectionRunLength(this.settings.state.pathStraightness);

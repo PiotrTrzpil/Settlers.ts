@@ -38,7 +38,6 @@ export const BuildingSiegeFeature: FeatureDefinition = {
             eventBus: ctx.eventBus,
             garrisonManager,
             combatSystem,
-            visualService: ctx.visualService,
             unitReservation: ctx.unitReservation,
             settlerTaskSystem,
             executeCommand: ctx.executeCommand,
@@ -56,6 +55,11 @@ export const BuildingSiegeFeature: FeatureDefinition = {
 
         ctx.on('building:removed', ({ buildingId }) => {
             siegeSystem.cancelSiege(buildingId);
+        });
+
+        // Finalize capture when the conquering unit enters the garrison
+        ctx.on('garrison:unitEntered', ({ buildingId }) => {
+            siegeSystem.onGarrisonUnitEntered(buildingId);
         });
 
         // Clean up dead attackers from siege state

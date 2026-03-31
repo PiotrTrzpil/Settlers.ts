@@ -367,7 +367,6 @@ export interface GameEventsFeatures {
     /** Emitted when a siege begins on a garrison building. */
     'siege:started': {
         buildingId: number;
-        attackerPlayer: number;
     };
 
     /** Emitted when a defender is ejected from a besieged building to fight. */

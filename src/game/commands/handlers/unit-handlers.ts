@@ -1,4 +1,4 @@
-import { EntityType, EXTENDED_OFFSETS, getUnitLevel, tileKey } from '../../entity';
+import { EntityType, UnitType, EXTENDED_OFFSETS, getUnitLevel, tileKey, isUnitTypeMilitary } from '../../entity';
 import type { GameState } from '../../game-state';
 import type { TerrainData } from '../../terrain';
 import type { EventBus } from '../../event-bus';
@@ -24,6 +24,8 @@ export interface MoveUnitDeps {
     settlerTaskSystem: SettlerTaskSystem;
     combatSystem: CombatSystem;
     unitReservation: UnitReservationRegistry;
+    /** Whether units in combat can be redirected by player commands. */
+    isCombatControllable: () => boolean;
 }
 
 export interface MoveSelectedUnitsDeps {
@@ -31,6 +33,8 @@ export interface MoveSelectedUnitsDeps {
     settlerTaskSystem: SettlerTaskSystem;
     combatSystem: CombatSystem;
     unitReservation: UnitReservationRegistry;
+    /** Whether units in combat can be redirected by player commands. */
+    isCombatControllable: () => boolean;
 }
 
 function findValidSpawnTile(
@@ -95,6 +99,40 @@ export function executeSpawnUnit(deps: SpawnUnitDeps, cmd: SpawnUnitCommand): Co
     ]);
 }
 
+/**
+ * If the target tile is inside a building footprint, find the nearest
+ * walkable tile outside. Returns the original target if it's already clear.
+ */
+function resolveTargetOutsideBuilding(state: GameState, x: number, y: number): { x: number; y: number } {
+    if (!state.buildingOccupancy.has(tileKey(x, y))) {
+        return { x, y };
+    }
+    for (const [dx, dy] of EXTENDED_OFFSETS) {
+        const nx = x + dx;
+        const ny = y + dy;
+        if (!state.buildingOccupancy.has(tileKey(nx, ny))) {
+            return { x: nx, y: ny };
+        }
+    }
+    return { x, y }; // fallback — shouldn't happen
+}
+
+/** Check if there's an enemy military unit within 1 tile of a position. */
+function hasEnemyNearTarget(state: GameState, targetX: number, targetY: number, player: number): boolean {
+    const nearby = state.getEntitiesInRadius(targetX, targetY, 1.5);
+    for (const e of nearby) {
+        if (
+            e.type === EntityType.Unit &&
+            e.player !== player &&
+            !e.hidden &&
+            isUnitTypeMilitary(e.subType as UnitType)
+        ) {
+            return true;
+        }
+    }
+    return false;
+}
+
 export function executeMoveUnit(deps: MoveUnitDeps, cmd: MoveUnitCommand): CommandResult {
     const entity = deps.state.getEntity(cmd.entityId);
     if (!entity) {
@@ -105,12 +143,24 @@ export function executeMoveUnit(deps: MoveUnitDeps, cmd: MoveUnitCommand): Comma
         return commandFailed(`Unit ${cmd.entityId} is reserved and cannot be moved`);
     }
 
+    if (!deps.isCombatControllable() && deps.combatSystem.isInCombat(cmd.entityId)) {
+        return commandFailed(`Unit ${cmd.entityId} is in combat and cannot be moved`);
+    }
+
     deps.combatSystem.releaseFromCombat(cmd.entityId);
+
+    // Resolve target outside building footprint
+    const target = resolveTargetOutsideBuilding(deps.state, cmd.targetX, cmd.targetY);
+
+    // March passively if target tile has no enemies — don't engage along the way
+    if (!hasEnemyNearTarget(deps.state, target.x, target.y, entity.player)) {
+        deps.combatSystem.setPassive(cmd.entityId);
+    }
 
     const fromX = entity.x;
     const fromY = entity.y;
 
-    const success = deps.settlerTaskSystem.assignMoveTask(cmd.entityId, cmd.targetX, cmd.targetY);
+    const success = deps.settlerTaskSystem.assignMoveTask(cmd.entityId, target.x, target.y);
 
     if (!success) {
         return commandFailed(`Cannot move unit ${cmd.entityId} to (${cmd.targetX}, ${cmd.targetY})`);
@@ -137,22 +187,34 @@ export function executeMoveSelectedUnits(deps: MoveSelectedUnitsDeps, cmd: MoveS
         toX: number;
         toY: number;
     }[] = [];
+    const combatControllable = deps.isCombatControllable();
+    // Resolve base target outside building footprint
+    const baseTarget = resolveTargetOutsideBuilding(state, cmd.targetX, cmd.targetY);
+    const firstUnit = selectedUnits[0]!;
+    const passiveMarch = !hasEnemyNearTarget(state, baseTarget.x, baseTarget.y, firstUnit.player);
+
     for (let i = 0; i < selectedUnits.length; i++) {
         const unit = selectedUnits[i]!;
         if (deps.unitReservation.isReserved(unit.id)) {
             continue;
         }
+        if (!combatControllable && deps.combatSystem.isInCombat(unit.id)) {
+            continue;
+        }
 
         const offset = FORMATION_OFFSETS[Math.min(i, FORMATION_OFFSETS.length - 1)]!;
-        const targetX = cmd.targetX + offset[0];
-        const targetY = cmd.targetY + offset[1];
+        const rawTarget = { x: baseTarget.x + offset[0], y: baseTarget.y + offset[1] };
+        const target = resolveTargetOutsideBuilding(state, rawTarget.x, rawTarget.y);
 
         deps.combatSystem.releaseFromCombat(unit.id);
+        if (passiveMarch) {
+            deps.combatSystem.setPassive(unit.id);
+        }
 
         const fromX = unit.x;
         const fromY = unit.y;
 
-        const moved = deps.settlerTaskSystem.assignMoveTask(unit.id, targetX, targetY);
+        const moved = deps.settlerTaskSystem.assignMoveTask(unit.id, target.x, target.y);
 
         if (moved) {
             effects.push({
@@ -160,8 +222,8 @@ export function executeMoveSelectedUnits(deps: MoveSelectedUnitsDeps, cmd: MoveS
                 entityId: unit.id,
                 fromX,
                 fromY,
-                toX: targetX,
-                toY: targetY,
+                toX: target.x,
+                toY: target.y,
             });
         }
     }

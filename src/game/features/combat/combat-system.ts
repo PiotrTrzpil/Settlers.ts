@@ -14,7 +14,7 @@ import type { CoreDeps } from '../feature';
 import type { GameState } from '../../game-state';
 import type { EventBus } from '../../event-bus';
 import type { Entity } from '../../entity';
-import { EntityType, isUnitTypeMilitary, UnitType } from '../../entity';
+import { EntityType, isUnitTypeMilitary, UnitType, tileKey, EXTENDED_OFFSETS } from '../../entity';
 import { hexDistance, getApproxDirection } from '../../systems/hex-directions';
 import { CombatState, CombatStatus, createCombatState, getCombatStats } from './combat-state';
 import { xmlKey } from '../../animation/animation';
@@ -27,7 +27,7 @@ import type { Command, CommandResult } from '../../commands';
 const log = createLogger('CombatSystem');
 
 /** Detection range: how far a unit scans for enemies (in hex tiles) */
-const DETECTION_RANGE = 12;
+const DETECTION_RANGE = 17;
 
 /** Fight range: hex distance at which a unit can attack (1 = adjacent) */
 const FIGHT_RANGE = 1;
@@ -64,6 +64,9 @@ export class CombatSystem implements TickSystem {
     /** Per-unit timers for pursuit re-pathing */
     private pursuitTimers = new Map<number, number>();
 
+    /** Units marching to a player-commanded destination — skip combat until they stop. */
+    private readonly passiveUnits = new Set<number>();
+
     constructor(cfg: CombatSystemConfig) {
         this.gameState = cfg.gameState;
         this.eventBus = cfg.eventBus;
@@ -84,6 +87,7 @@ export class CombatSystem implements TickSystem {
     unregister(entityId: number): void {
         this.states.delete(entityId);
         this.pursuitTimers.delete(entityId);
+        this.passiveUnits.delete(entityId);
     }
 
     getState(entityId: number): CombatState | undefined {
@@ -98,6 +102,43 @@ export class CombatSystem implements TickSystem {
     isInCombat(entityId: number): boolean {
         const state = this.states.get(entityId);
         return state !== undefined && state.status !== CombatStatus.Idle;
+    }
+
+    /**
+     * Mark a unit as passive — it will march to its destination without
+     * engaging enemies. Auto-clears when the unit stops moving.
+     */
+    setPassive(entityId: number): void {
+        this.passiveUnits.add(entityId);
+    }
+
+    /**
+     * Returns true if there are visible, non-reserved enemy military units
+     * near the given entity. Used by the siege system to defer siege start
+     * while field enemies are present.
+     */
+    hasNearbyThreats(entityId: number): boolean {
+        const entity = this.gameState.getEntity(entityId);
+        if (!entity) {
+            return false;
+        }
+        const nearby = this.gameState.getEntitiesInRadius(entity.x, entity.y, DETECTION_RANGE);
+        for (const candidate of nearby) {
+            if (candidate.type !== EntityType.Unit || candidate.hidden) {
+                continue;
+            }
+            if (candidate.player === entity.player) {
+                continue;
+            }
+            if (!isUnitTypeMilitary(candidate.subType as UnitType)) {
+                continue;
+            }
+            if (this.isUnitReserved(candidate.id)) {
+                continue;
+            }
+            return true;
+        }
+        return false;
     }
 
     /**
@@ -136,29 +177,44 @@ export class CombatSystem implements TickSystem {
 
         for (const [id, state] of sortedEntries(this.states)) {
             try {
-                const entity = this.gameState.getEntity(state.entityId);
-                if (!entity) {
-                    this.states.delete(id);
-                    continue;
-                }
-
-                switch (state.status) {
-                    case CombatStatus.Idle:
-                        if (shouldScan) {
-                            this.handleIdle(state, entity);
-                        }
-                        break;
-                    case CombatStatus.Pursuing:
-                        this.handlePursuing(state, entity, dt);
-                        break;
-                    case CombatStatus.Fighting:
-                        this.handleFighting(state, entity, dt);
-                        break;
-                }
+                this.tickUnit(id, state, shouldScan, dt);
             } catch (e) {
                 const err = e instanceof Error ? e : new Error(String(e));
                 log.error(`Unhandled error in combat tick for entity ${state.entityId}`, err);
             }
+        }
+    }
+
+    private tickUnit(id: number, state: CombatState, shouldScan: boolean, dt: number): void {
+        const entity = this.gameState.getEntity(state.entityId);
+        if (!entity) {
+            this.states.delete(id);
+            this.passiveUnits.delete(id);
+            return;
+        }
+
+        // Passive units march without engaging — clear when they stop
+        if (this.passiveUnits.has(id)) {
+            const controller = this.gameState.movement.getController(id);
+            if (!controller || controller.state === 'idle') {
+                this.passiveUnits.delete(id);
+            } else {
+                return;
+            }
+        }
+
+        switch (state.status) {
+            case CombatStatus.Idle:
+                if (shouldScan) {
+                    this.handleIdle(state, entity);
+                }
+                break;
+            case CombatStatus.Pursuing:
+                this.handlePursuing(state, entity, dt);
+                break;
+            case CombatStatus.Fighting:
+                this.handleFighting(state, entity, dt);
+                break;
         }
     }
 
@@ -172,15 +228,18 @@ export class CombatSystem implements TickSystem {
 
         const dist = hexDistance(entity.x, entity.y, target.x, target.y);
 
-        // Reserved units (e.g. siege defenders) fight adjacent enemies but don't pursue
+        // Adjacent enemy — engage immediately (all units)
+        if (dist <= FIGHT_RANGE) {
+            state.targetId = target.id;
+            state.status = CombatStatus.Fighting;
+            state.attackTimer = 0;
+            this.applyFightAnimation(entity, target);
+            log.debug(`Unit ${state.entityId} engaging adjacent enemy ${target.id}`);
+            return;
+        }
+
+        // Reserved units (e.g. siege defenders) don't pursue distant enemies
         if (this.isUnitReserved(state.entityId)) {
-            if (dist <= FIGHT_RANGE) {
-                state.targetId = target.id;
-                state.status = CombatStatus.Fighting;
-                state.attackTimer = 0;
-                this.applyFightAnimation(entity, target);
-                log.debug(`Reserved unit ${state.entityId} engaging adjacent enemy ${target.id}`);
-            }
             return;
         }
 
@@ -198,9 +257,11 @@ export class CombatSystem implements TickSystem {
             return;
         }
 
-        // Keep animation direction in sync with movement controller
+        // Keep animation direction in sync with movement controller (only while actively walking —
+        // idle controllers retain a stale direction from before combat that would override the
+        // correct target-facing direction set by applyWalkAnimation / applyFightAnimation)
         const controller = this.gameState.movement.getController(state.entityId);
-        if (controller) {
+        if (controller && controller.state === 'moving') {
             const vs = this.visualService.getState(entity.id);
             if (vs?.animation && vs.animation.direction !== controller.direction) {
                 this.visualService.setDirection(entity.id, controller.direction);
@@ -226,11 +287,13 @@ export class CombatSystem implements TickSystem {
             return;
         }
 
-        // Re-path periodically toward the (possibly moving) target
+        // Re-path periodically toward the (possibly moving) target.
+        // Resolve target outside building footprints so units don't walk into buildings.
         const elapsed = this.pursuitTimers.get(state.entityId) ?? 0;
         if (elapsed >= PURSUIT_REPATH_INTERVAL) {
             this.pursuitTimers.set(state.entityId, 0);
-            this.gameState.movement.moveUnit(state.entityId, target.x, target.y);
+            const dest = this.resolveOutsideBuilding(target.x, target.y);
+            this.gameState.movement.moveUnit(state.entityId, dest.x, dest.y);
             this.applyWalkAnimation(entity, target);
         }
     }
@@ -361,7 +424,7 @@ export class CombatSystem implements TickSystem {
         let bestDist = Infinity;
 
         for (const candidate of nearby) {
-            if (candidate.type !== EntityType.Unit) {
+            if (candidate.type !== EntityType.Unit || candidate.hidden) {
                 continue;
             }
             if (candidate.player === entity.player) {
@@ -423,6 +486,23 @@ export class CombatSystem implements TickSystem {
         if (wasFighting) {
             this.applyIdleAnimation(state.entityId);
         }
+    }
+
+    // ── Position helpers ──────────────────────────────────────────────────
+
+    /** If (x,y) is inside a building footprint, find the nearest tile outside. */
+    private resolveOutsideBuilding(x: number, y: number): { x: number; y: number } {
+        if (!this.gameState.buildingOccupancy.has(tileKey(x, y))) {
+            return { x, y };
+        }
+        for (const [dx, dy] of EXTENDED_OFFSETS) {
+            const nx = x + dx;
+            const ny = y + dy;
+            if (!this.gameState.buildingOccupancy.has(tileKey(nx, ny))) {
+                return { x: nx, y: ny };
+            }
+        }
+        return { x, y };
     }
 
     // ── Animation helpers ─────────────────────────────────────────────────

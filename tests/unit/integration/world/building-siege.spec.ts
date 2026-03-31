@@ -60,7 +60,7 @@ function waitForSiegePhase(sim: Simulation, buildingId: number, phase: SiegePhas
         diagnose: () => {
             const s = getSiege(sim, buildingId);
             if (!s) return 'no siege active';
-            return `phase=${SiegePhase[s.phase]}, attackers=${s.attackerIds.length}, defender=${s.activeDefenderId}`;
+            return `phase=${SiegePhase[s.phase]}, defender=${s.activeDefenderId}`;
         },
     });
 }
@@ -80,7 +80,7 @@ function waitForSiegeEnded(sim: Simulation, buildingId: number, label: string): 
         diagnose: () => {
             const s = getSiege(sim, buildingId);
             if (!s) return 'siege already ended';
-            return `phase=${SiegePhase[s.phase]}, attackers=${s.attackerIds.length}, defender=${s.activeDefenderId}`;
+            return `phase=${SiegePhase[s.phase]}, defender=${s.activeDefenderId}`;
         },
     });
 }
@@ -113,8 +113,7 @@ describe('Building siege – combat', { timeout: 60_000 }, () => {
         waitForSiegeStarted(sim, towerId, 'siege started');
 
         const siege = getSiege(sim, towerId)!;
-        expect(siege.attackerPlayer).toBe(1);
-        expect(siege.attackerIds).toContain(attacker1);
+        expect(siege.activeDefenderId).not.toBeNull();
         expect(sim.errors).toHaveLength(0);
     });
 
@@ -212,7 +211,8 @@ describe('Building siege – combat', { timeout: 60_000 }, () => {
 
         const capturedTower = sim.state.getEntityOrThrow(towerId, 'captured tower');
         expect(capturedTower.player).toBe(1);
-        expect(garrisonedCount(sim, towerId)).toBe(0);
+        // The capturing unit is now garrisoned inside the tower
+        expect(garrisonedCount(sim, towerId)).toBe(1);
 
         const g = getGarrison(sim, towerId);
         expect(g).toBeDefined();
@@ -230,7 +230,7 @@ describe('Building siege – edge cases', { timeout: 60_000 }, () => {
         cleanupSimulation();
     });
 
-    it('multiple attackers join an existing siege', () => {
+    it('multiple attackers help capture a tower', () => {
         sim = createSimulation({ skipTerritory: true });
         sim.establishTerritory(0);
         sim.establishTerritory(1);
@@ -242,31 +242,17 @@ describe('Building siege – edge cases', { timeout: 60_000 }, () => {
         garrisonUnits(sim, towerId, defenders);
         waitForGarrisoned(sim, towerId, 3, 'defenders garrisoned');
 
-        const atk1 = sim.spawnUnit(tower.x + 5, tower.y, UnitType.Swordsman1, 1);
+        // Send two strong attackers — combat system handles the fighting
+        const atk1 = sim.spawnUnit(tower.x + 5, tower.y, UnitType.Swordsman3, 1);
+        const atk2 = sim.spawnUnit(tower.x + 6, tower.y, UnitType.Swordsman3, 1);
         moveUnit(sim, atk1, tower.x, tower.y);
-        waitForSiegeStarted(sim, towerId, 'siege started');
-
-        const atk2 = sim.spawnUnit(tower.x + 12, tower.y, UnitType.Swordsman1, 1);
         moveUnit(sim, atk2, tower.x, tower.y);
 
-        sim.runUntil(
-            () => {
-                const s = getSiege(sim, towerId);
-                return s !== undefined && s.attackerIds.length >= 2;
-            },
-            {
-                maxTicks: 10_000,
-                label: 'second attacker joined siege',
-                diagnose: () => {
-                    const s = getSiege(sim, towerId);
-                    return `siege attackers=${s?.attackerIds.length ?? 0}`;
-                },
-            }
-        );
+        waitForSiegeStarted(sim, towerId, 'siege started');
+        waitForSiegeEnded(sim, towerId, 'siege ended — tower captured');
 
-        const siege = getSiege(sim, towerId)!;
-        expect(siege.attackerIds).toContain(atk1);
-        expect(siege.attackerIds).toContain(atk2);
+        const capturedTower = sim.state.getEntityOrThrow(towerId, 'captured tower');
+        expect(capturedTower.player).toBe(1);
         expect(sim.errors).toHaveLength(0);
     });
 

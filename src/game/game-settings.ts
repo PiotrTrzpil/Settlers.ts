@@ -10,6 +10,7 @@ export interface GameSettings {
     // Game
     paused: boolean;
     gameSpeed: number;
+    autosaveEnabled: boolean;
 
     // Camera
     zoomSpeed: number;
@@ -34,6 +35,10 @@ export interface GameSettings {
     // Graphics
     antialias: boolean;
 
+    // Combat
+    /** Whether units in combat (pursuing/fighting) can be redirected by player commands. */
+    combatControllable: boolean;
+
     // Building placement
     placeBuildingsCompleted: boolean;
     placeBuildingsWithWorker: boolean;
@@ -57,6 +62,7 @@ const DEFAULT_SETTINGS: GameSettings = {
     // Game
     paused: false,
     gameSpeed: 1.0,
+    autosaveEnabled: true,
 
     // Camera
     zoomSpeed: 0.05,
@@ -80,6 +86,9 @@ const DEFAULT_SETTINGS: GameSettings = {
 
     // Graphics
     antialias: true,
+
+    // Combat
+    combatControllable: true,
 
     // Building placement
     placeBuildingsCompleted: false,

@@ -85,6 +85,11 @@ export class UnitReservationRegistry {
         return this.reservations.has(unitId);
     }
 
+    /** Get the purpose string of a reservation, or undefined if not reserved. */
+    getPurpose(unitId: number): string | undefined {
+        return this.reservations.get(unitId)?.purpose;
+    }
+
     /** All active reservations, keyed by unit ID. Read-only — for diagnostics only. */
     getAll(): ReadonlyMap<number, Readonly<ReservationInfo>> {
         return this.reservations;
