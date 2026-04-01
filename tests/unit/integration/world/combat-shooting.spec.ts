@@ -16,8 +16,8 @@ installRealGameData();
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
-function combatStatus(sim: Simulation, entityId: number): CombatStatus {
-    return sim.services.combatSystem.getState(entityId)!.status;
+function combatStatus(sim: Simulation, entityId: number): CombatStatus | undefined {
+    return sim.services.combatSystem.getState(entityId)?.status;
 }
 
 function health(sim: Simulation, entityId: number): number {
@@ -202,7 +202,8 @@ describe('Combat – shooting/melee transitions', { timeout: 60_000 }, () => {
             diagnose: () => {
                 const e = sim.state.getEntity(enemy);
                 const b = sim.state.getEntity(bowman);
-                return `bowman=(${b?.x},${b?.y}) enemy=(${e?.x},${e?.y}) status=${CombatStatus[combatStatus(sim, bowman)]}`;
+                const s = combatStatus(sim, bowman);
+                return `bowman=(${b?.x},${b?.y}) enemy=(${e?.x},${e?.y}) status=${s !== undefined ? CombatStatus[s] : 'removed'}`;
             },
         });
 

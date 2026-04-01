@@ -286,24 +286,37 @@ export class TowerGarrisonManager {
      * before the settler-location:entered event fires.
      */
     finalizeGarrison(unitId: number, towerId: number): void {
-        this.unitReservation.updateReservation(unitId, {
-            purpose: 'garrison',
-            onForcedRelease: id => {
-                const garrison = this.garrisons.get(towerId);
-                if (!garrison) {
-                    return;
-                }
-                removeFromArray(garrison.swordsmanSlots.unitIds, id);
-                removeFromArray(garrison.bowmanSlots.unitIds, id);
-                log.debug(`Garrisoned unit ${id} removed externally, slot cleared`);
-            },
-        });
-
         const unit = this.gameState.getEntityOrThrow(unitId, 'TowerGarrisonManager.finalizeGarrison');
+        const tower = this.gameState.getEntityOrThrow(towerId, 'TowerGarrisonManager.finalizeGarrison');
         const garrison = this.garrisons.get(towerId);
         if (!garrison) {
             throw new Error(`TowerGarrisonManager.finalizeGarrison: tower ${towerId} not registered`);
         }
+
+        // Reject entry if it would mix enemy and friendly units in the same garrison:
+        // - Enemy entering an occupied garrison (friendly got there first)
+        // - Friendly entering a garrison that contains an enemy (capture in progress)
+        if (this.hasHostileOccupant(garrison, unit.player)) {
+            this.unitReservation.release(unitId);
+            this.releaseWorkerAssignment(unitId);
+            this.locationManager.exitBuilding(unitId);
+            this.placeAtApproach(unit, tower);
+            log.debug(`Unit ${unitId} rejected from tower ${towerId} — hostile unit already inside`);
+            return;
+        }
+
+        this.unitReservation.updateReservation(unitId, {
+            purpose: 'garrison',
+            onForcedRelease: id => {
+                const g = this.garrisons.get(towerId);
+                if (!g) {
+                    return;
+                }
+                removeFromArray(g.swordsmanSlots.unitIds, id);
+                removeFromArray(g.bowmanSlots.unitIds, id);
+                log.debug(`Garrisoned unit ${id} removed externally, slot cleared`);
+            },
+        });
 
         const role = getGarrisonRole(unit.subType as UnitType);
         if (!role) {
@@ -319,6 +332,18 @@ export class TowerGarrisonManager {
 
         this.eventBus.emit('garrison:unitEntered', { buildingId: towerId, unitId, unitType: unit.subType as UnitType });
         log.debug(`Unit ${unitId} garrisoned in tower ${towerId} (${role} slot)`);
+    }
+
+    /** Returns true if any unit inside the garrison belongs to a different player. */
+    private hasHostileOccupant(garrison: BuildingGarrisonState, enteringPlayer: number): boolean {
+        const allIds = [...garrison.swordsmanSlots.unitIds, ...garrison.bowmanSlots.unitIds];
+        for (const id of allIds) {
+            const occupant = this.gameState.getEntity(id);
+            if (occupant && occupant.player !== enteringPlayer) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**

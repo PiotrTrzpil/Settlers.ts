@@ -7,6 +7,8 @@ import {
     FOOTPRINT_TILE_COLOR,
     FOOTPRINT_EDGE_COLOR,
     FOOTPRINT_DOOR_COLOR,
+    UNIT_POSITION_TILE_COLOR,
+    UNIT_DIRECTION_ARROW_COLOR,
     SHADER_VERTEX_SCALE,
 } from '../entity-renderer-constants';
 import type { OverlaySession } from './overlay-session';
@@ -21,6 +23,26 @@ function parseHexColor(hex: string): [number, number, number] {
     const n = parseInt(hex.slice(1), 16);
     return [(n >> 16) / 255, ((n >> 8) & 0xff) / 255, (n & 0xff) / 255];
 }
+
+/**
+ * Screen-space direction vectors for each EDirection.
+ * Derived from the isometric tile-to-world transform (worldDx = tileDx - tileDy*0.5, worldDy = tileDy*0.5).
+ * Normalized to unit length for consistent arrow rendering.
+ */
+const DIRECTION_SCREEN_VECTORS: ReadonlyArray<readonly [number, number]> = (() => {
+    const raw: Array<[number, number]> = [
+        [0.5, 0.5], // SOUTH_EAST
+        [1.0, 0.0], // EAST
+        [-0.5, 0.5], // SOUTH_WEST
+        [-0.5, -0.5], // NORTH_WEST
+        [-1.0, 0.0], // WEST
+        [0.5, -0.5], // NORTH_EAST
+    ];
+    return raw.map(([x, y]) => {
+        const len = Math.sqrt(x * x + y * y);
+        return [x / len, y / len] as const;
+    });
+})();
 
 /**
  * Renders diamond-shaped tile overlays: building footprints and tile highlights.
@@ -123,6 +145,103 @@ export class TileDiamondRenderer {
             s.gl.bufferData(s.gl.ARRAY_BUFFER, this.diamondVerts, s.gl.DYNAMIC_DRAW);
             s.gl.drawArrays(s.gl.TRIANGLES, 0, 6);
         }
+    }
+
+    /** Draw tile highlight + direction arrow for all unit entities. */
+    public drawUnitPositions(s: OverlaySession, sortedEntities: Entity[]): void {
+        let hasUnits = false;
+        for (const e of sortedEntities) {
+            if (e.type === EntityType.Unit) {
+                hasUnits = true;
+                break;
+            }
+        }
+        if (!hasUnits) {
+            return;
+        }
+
+        s.gl.bindBuffer(s.gl.ARRAY_BUFFER, s.buffer);
+
+        for (const entity of sortedEntities) {
+            if (entity.type !== EntityType.Unit) {
+                continue;
+            }
+
+            // Skip units without movement controllers (e.g. death angels — visual-only entities)
+            const unitState = s.ctx.unitStates.get(entity.id);
+            if (!unitState) {
+                continue;
+            }
+
+            // Draw tile diamond
+            s.gl.vertexAttrib4f(
+                s.aColor,
+                UNIT_POSITION_TILE_COLOR[0]!,
+                UNIT_POSITION_TILE_COLOR[1]!,
+                UNIT_POSITION_TILE_COLOR[2]!,
+                UNIT_POSITION_TILE_COLOR[3]!
+            );
+
+            const tx = entity.x;
+            const ty = entity.y;
+            const idx = s.ctx.mapSize.toIndex(tx, ty);
+            const hWorld = heightToWorld(s.ctx.groundHeight[idx]!);
+
+            const top = shiftBuildingWorldPos(tileToWorld(tx, ty, hWorld, s.ctx.viewPoint.x, s.ctx.viewPoint.y));
+            const right = shiftBuildingWorldPos(tileToWorld(tx + 1, ty, hWorld, s.ctx.viewPoint.x, s.ctx.viewPoint.y));
+            const bottom = shiftBuildingWorldPos(
+                tileToWorld(tx + 1, ty + 1, hWorld, s.ctx.viewPoint.x, s.ctx.viewPoint.y)
+            );
+            const left = shiftBuildingWorldPos(tileToWorld(tx, ty + 1, hWorld, s.ctx.viewPoint.x, s.ctx.viewPoint.y));
+
+            const center = this.fillDiamondFromWorldPositions(top, right, bottom, left);
+            s.gl.vertexAttrib2f(s.aEntityPos, center.centerX, center.centerY);
+
+            s.gl.bufferData(s.gl.ARRAY_BUFFER, this.diamondVerts, s.gl.DYNAMIC_DRAW);
+            s.gl.drawArrays(s.gl.TRIANGLES, 0, 6);
+
+            // Draw direction arrow from movement controller's canonical direction
+            this.drawDirectionArrow(s, center.centerX, center.centerY, unitState.direction);
+        }
+    }
+
+    /** Draw a small triangle arrow from tile center in the given EDirection. */
+    private drawDirectionArrow(s: OverlaySession, centerX: number, centerY: number, direction: number): void {
+        s.gl.vertexAttrib4f(
+            s.aColor,
+            UNIT_DIRECTION_ARROW_COLOR[0]!,
+            UNIT_DIRECTION_ARROW_COLOR[1]!,
+            UNIT_DIRECTION_ARROW_COLOR[2]!,
+            UNIT_DIRECTION_ARROW_COLOR[3]!
+        );
+        s.gl.vertexAttrib2f(s.aEntityPos, centerX, centerY);
+
+        const [dx, dy] = DIRECTION_SCREEN_VECTORS[direction]!;
+        const arrowLen = 0.35;
+        const arrowWidth = 0.12;
+        const invScale = 1 / SHADER_VERTEX_SCALE;
+
+        // Arrow tip
+        const tipX = dx * arrowLen * invScale;
+        const tipY = dy * arrowLen * invScale;
+        // Perpendicular for arrow base width
+        const perpX = -dy * arrowWidth * invScale;
+        const perpY = dx * arrowWidth * invScale;
+        // Arrow base (slightly back from center)
+        const baseX = dx * 0.05 * invScale;
+        const baseY = dy * 0.05 * invScale;
+
+        const verts = this.diamondVerts;
+        // Triangle: tip, base-left, base-right
+        verts[0] = tipX;
+        verts[1] = tipY;
+        verts[2] = baseX + perpX;
+        verts[3] = baseY + perpY;
+        verts[4] = baseX - perpX;
+        verts[5] = baseY - perpY;
+
+        s.gl.bufferData(s.gl.ARRAY_BUFFER, verts.subarray(0, 6), s.gl.DYNAMIC_DRAW);
+        s.gl.drawArrays(s.gl.TRIANGLES, 0, 3);
     }
 
     /** Fill vertex data for a diamond shape from 4 absolute world positions. */

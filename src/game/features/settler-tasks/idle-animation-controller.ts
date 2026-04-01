@@ -4,6 +4,10 @@
  * Manages idle turning, walk animation, task animation application,
  * and the transition between idle and working animation states.
  * Stateless service — caller provides the per-unit idle state.
+ *
+ * Direction rule: all direction changes go through MovementController.setDirection().
+ * The per-tick sync in UnitStateMachine.updateDirectionTracking() propagates to the
+ * visual service — this class never calls visualService.setDirection() directly.
  */
 
 import type { Entity } from '../../entity';
@@ -11,6 +15,8 @@ import { UnitType } from '../../entity';
 import { xmlKey } from '../../animation/animation';
 import { UNIT_XML_PREFIX } from '../../renderer/sprite-metadata';
 import type { EntityVisualService } from '../../animation/entity-visual-service';
+import type { MovementSystem } from '../../systems/movement';
+import type { EDirection } from '../../systems/hex-directions';
 import type { JobPartResolution } from './choreo-types';
 
 /** Number of sprite directions (matches hex grid) */
@@ -39,7 +45,8 @@ function getPrefix(unit: Entity): string {
 export class IdleAnimationController {
     constructor(
         private readonly visualService: EntityVisualService,
-        private readonly rng: RngSource
+        private readonly rng: RngSource,
+        private readonly movementSystem: MovementSystem
     ) {}
 
     /** Create initial idle animation state with a randomised first turn time. */
@@ -56,20 +63,14 @@ export class IdleAnimationController {
      * @param movementState - current movement controller state ('idle' | 'moving' | undefined)
      * @param movementDirection - current facing direction from the movement controller
      */
-    updateIdleUnit(
-        unit: Entity,
-        idleState: IdleAnimationState,
-        dt: number,
-        movementState: string | undefined,
-        movementDirection: number = 0
-    ): void {
+    updateIdleUnit(unit: Entity, idleState: IdleAnimationState, dt: number, movementState: string | undefined): void {
         // If unit is moving (e.g., pushed), play walk animation
         if (movementState === 'moving') {
             const vs = this.visualService.getState(unit.id);
             const prefix = getPrefix(unit);
             const walkKey = unit.carrying ? xmlKey(prefix, `WALK_${unit.carrying.material}`) : xmlKey(prefix, 'WALK');
             if (!vs?.animation?.playing || vs.animation.sequenceKey !== walkKey) {
-                this.startWalkAnimation(unit, movementDirection);
+                this.startWalkAnimation(unit);
             }
             idleState.idleTime = 0;
             return;
@@ -85,18 +86,18 @@ export class IdleAnimationController {
 
     /**
      * Handle random idle turning for standing units.
+     * Writes to movement controller only — visual sync happens in updateDirectionTracking.
      */
     updateIdleTurning(unit: Entity, idleState: IdleAnimationState, dt: number): void {
         idleState.idleTime += dt;
 
         if (idleState.idleTime >= idleState.nextIdleTurnTime) {
-            // Animation state may be missing during cleanup
-            const vs = this.visualService.getState(unit.id);
-            if (!vs?.animation) {
+            const controller = this.movementSystem.getController(unit.id);
+            if (!controller) {
                 return;
             }
-            const newDirection = this.getAdjacentDirection(vs.animation.direction);
-            this.visualService.setDirection(unit.id, newDirection);
+            const newDirection = this.getAdjacentDirection(controller.direction);
+            controller.setDirection(newDirection as EDirection);
 
             idleState.idleTime = 0;
             idleState.nextIdleTurnTime = 2 + this.rng.next() * 4;
@@ -117,8 +118,10 @@ export class IdleAnimationController {
 
     /**
      * Start walk animation for a unit (used for move tasks and external movement).
+     * Direction is already set on the controller by the caller — visual sync
+     * happens in updateDirectionTracking.
      */
-    startWalkAnimation(unit: Entity, direction: number): void {
+    startWalkAnimation(unit: Entity): void {
         const prefix = getPrefix(unit);
         let sequence: string;
         if (unit.carrying) {
@@ -127,7 +130,7 @@ export class IdleAnimationController {
             sequence = xmlKey(prefix, 'WALK');
         }
         this.visualService.applyIntent(unit.id, { sequence, loop: true, stopped: false });
-        this.visualService.setDirection(unit.id, direction);
+        // Direction is read from the controller by the per-tick sync — no direct visual write.
     }
 
     /**

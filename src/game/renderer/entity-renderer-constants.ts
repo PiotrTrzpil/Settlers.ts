@@ -88,6 +88,10 @@ export const FOOTPRINT_TILE_COLOR = [0.2, 0.8, 1.0, 0.3]; // Semi-transparent cy
 export const FOOTPRINT_EDGE_COLOR = [0.8, 0.2, 1.0, 0.25]; // Semi-transparent purple (edge/partial tiles)
 export const FOOTPRINT_DOOR_COLOR = [1.0, 0.3, 0.1, 0.5]; // Semi-transparent orange-red
 
+// Unit position debug visualization
+export const UNIT_POSITION_TILE_COLOR = [0.2, 1.0, 0.4, 0.3]; // Semi-transparent green
+export const UNIT_DIRECTION_ARROW_COLOR = [1.0, 1.0, 0.2, 0.8]; // Bright yellow arrow
+
 // Circle overlay segments (used by work area circles)
 export const CIRCLE_OVERLAY_SEGMENTS = 64;
 

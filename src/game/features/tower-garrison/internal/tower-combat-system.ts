@@ -16,7 +16,7 @@ import type { EventBus } from '../../../event-bus';
 import type { Entity } from '../../../entity';
 import { EntityType, UnitType } from '../../../entity';
 import { hexDistanceTo, findNearestByHexDistance } from '../../../systems/hex-directions';
-import { getCombatStats } from '../../combat/combat-state';
+import { getCombatStats, CombatStatus } from '../../combat/combat-state';
 
 import { createLogger } from '@/utilities/logger';
 
@@ -41,6 +41,12 @@ export interface TowerCombatSystemConfig {
  */
 export const towerBowmanTargets: Map<number, number> = new Map();
 
+/**
+ * Exported set of bowman IDs currently throwing stones (during siege door combat).
+ * Read by the render pass to switch from SHOOT to THROW_STONE animation.
+ */
+export const towerBowmanThrowingStones: Set<number> = new Set();
+
 export class TowerCombatSystem implements TickSystem {
     private readonly garrisonManager: TowerGarrisonManager;
     private readonly combatSystem: CombatSystem;
@@ -53,11 +59,31 @@ export class TowerCombatSystem implements TickSystem {
     /** Per-bowman attack cooldown timers, keyed by unit ID. */
     private readonly attackTimers = new Map<number, number>();
 
+    /**
+     * Active siege defenders, keyed by building ID.
+     * Pushed by the siege system via setDoorDefender / clearDoorDefender.
+     * When a defender is present, garrisoned bowmen throw stones at attackers
+     * fighting that defender instead of shooting at the nearest enemy.
+     */
+    private readonly doorDefenders = new Map<number, number>();
+
     constructor(config: TowerCombatSystemConfig) {
         this.garrisonManager = config.garrisonManager;
         this.combatSystem = config.combatSystem;
         this.gameState = config.gameState;
         this.eventBus = config.eventBus;
+    }
+
+    // ── Door defender tracking (called by siege system) ──────────────
+
+    /** Register that a defender is fighting at the door of a besieged building. */
+    setDoorDefender(buildingId: number, defenderId: number): void {
+        this.doorDefenders.set(buildingId, defenderId);
+    }
+
+    /** Clear the door defender for a building (defender died, siege ended, etc.). */
+    clearDoorDefender(buildingId: number): void {
+        this.doorDefenders.delete(buildingId);
     }
 
     tick(dt: number): void {
@@ -79,6 +105,7 @@ export class TowerCombatSystem implements TickSystem {
 
             // Clear stale targets — rebuilt each scan
             towerBowmanTargets.clear();
+            towerBowmanThrowingStones.clear();
 
             this.processAllTowers();
         } catch (e) {
@@ -90,6 +117,7 @@ export class TowerCombatSystem implements TickSystem {
     onEntityRemoved(entityId: number): void {
         this.attackTimers.delete(entityId);
         towerBowmanTargets.delete(entityId);
+        towerBowmanThrowingStones.delete(entityId);
     }
 
     private processAllTowers(): void {
@@ -137,10 +165,38 @@ export class TowerCombatSystem implements TickSystem {
             return;
         }
 
+        // During siege door combat, bowmen throw stones at attackers fighting the defender
+        const doorAttackers = this.findDoorAttackers(building.id, enemies);
+        const throwingStones = doorAttackers.length > 0;
+        const targets = throwingStones ? doorAttackers : enemies;
+
         // Each bowman independently picks nearest target and fires
         for (const bowmanId of bowmanIds) {
-            this.processBowman(bowmanId, building, enemies);
+            this.processBowman(bowmanId, building, targets);
+            if (throwingStones) {
+                towerBowmanThrowingStones.add(bowmanId);
+            }
         }
+    }
+
+    /**
+     * Find enemies that are actively fighting the siege defender at the door.
+     * Returns empty array if no door defender is registered for this building.
+     */
+    private findDoorAttackers(buildingId: number, enemies: Entity[]): Entity[] {
+        const defenderId = this.doorDefenders.get(buildingId);
+        if (defenderId === undefined) {
+            return [];
+        }
+
+        const result: Entity[] = [];
+        for (const enemy of enemies) {
+            const combatState = this.combatSystem.getState(enemy.id);
+            if (combatState && combatState.targetId === defenderId && combatState.status === CombatStatus.Fighting) {
+                result.push(enemy);
+            }
+        }
+        return result;
     }
 
     private processBowman(bowmanId: number, building: Entity, enemies: Entity[]): void {

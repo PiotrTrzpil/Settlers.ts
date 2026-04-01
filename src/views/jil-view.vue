@@ -14,6 +14,7 @@
             <button :class="{ active: viewMode === 'grid' }" @click="switchToGrid(() => {})">Grid</button>
             <Checkbox v-model="doAnimation" label="Animate" />
             <Checkbox v-model="magentaBg" label="Magenta BG" />
+            <Checkbox v-model="withCorrections" label="With corrections" />
             <template v-if="viewMode === 'grid'">
                 <span class="label">Direction:</span>
                 <select v-model="gridDirection" class="dir-select" @change="onGridDirectionChange">
@@ -159,6 +160,7 @@ import {
     renderImageToCanvas as renderImageToCanvasBase,
 } from '@/utilities/view-helpers';
 import type { IGfxImage } from '@/resources/gfx/igfx-image';
+import { getFrameCorrection, renderCorrectedImage } from './jil-view-corrections';
 import { useCompositeGridView } from '@/composables/useGridView';
 import {
     isSettlerFile as isSettlerFileCheck,
@@ -188,9 +190,16 @@ const { viewMode, setCanvasRef, clearRefs, canvasRefs, switchToGrid } = useCompo
 
 const doAnimation = ref(true);
 const magentaBg = ref(false);
+const withCorrections = ref(false);
 
-function renderImageToCanvas(img: IGfxImage, canvas: HTMLCanvasElement): void {
-    renderImageToCanvasBase(img, canvas, magentaBg.value ? '#ff00ff' : undefined);
+function renderImageToCanvas(img: IGfxImage, canvas: HTMLCanvasElement, correction?: { dx: number; dy: number }): void {
+    const bg = magentaBg.value ? '#ff00ff' : undefined;
+    renderCorrectedImage(img, canvas, bg, correction, renderImageToCanvasBase);
+}
+
+/** Look up correction for a frame, returning undefined when the checkbox is off. */
+function lookupCorrection(jobIndex: number, dirIndex: number, frameIndex: number) {
+    return withCorrections.value ? getFrameCorrection(getCurrentFileId(), jobIndex, dirIndex, frameIndex) : undefined;
 }
 
 const clearCanvas = (c: HTMLCanvasElement) => c.getContext('2d')?.clearRect(0, 0, c.width, c.height);
@@ -206,6 +215,7 @@ interface SavedJilState {
     viewMode?: string;
     doAnimation?: boolean;
     magentaBg?: boolean;
+    withCorrections?: boolean;
     gridDirection?: 'all' | number;
     scrollOffset?: number;
     jobIndex?: number;
@@ -224,21 +234,24 @@ function getSavedState(): SavedJilState | null {
 
 function loadSavedState(): void {
     try {
-        const saved = getSavedState();
-        if (!saved) {
+        const s = getSavedState();
+        if (!s) {
             return;
         }
-        if (saved.viewMode === 'single' || saved.viewMode === 'grid') {
-            viewMode.value = saved.viewMode;
+        if (s.viewMode === 'single' || s.viewMode === 'grid') {
+            viewMode.value = s.viewMode;
         }
-        if (typeof saved.doAnimation === 'boolean') {
-            doAnimation.value = saved.doAnimation;
+        if (typeof s.doAnimation === 'boolean') {
+            doAnimation.value = s.doAnimation;
         }
-        if (typeof saved.magentaBg === 'boolean') {
-            magentaBg.value = saved.magentaBg;
+        if (typeof s.magentaBg === 'boolean') {
+            magentaBg.value = s.magentaBg;
         }
-        if (saved.gridDirection === 'all' || typeof saved.gridDirection === 'number') {
-            gridDirection.value = saved.gridDirection;
+        if (typeof s.withCorrections === 'boolean') {
+            withCorrections.value = s.withCorrections;
+        }
+        if (s.gridDirection === 'all' || typeof s.gridDirection === 'number') {
+            gridDirection.value = s.gridDirection;
         }
     } catch {
         /* ignore corrupt data */
@@ -246,28 +259,23 @@ function loadSavedState(): void {
 }
 
 function saveState(): void {
-    // Don't overwrite scroll offset while a restore is pending (data just loaded, scroll is 0)
     // eslint-disable-next-line no-restricted-syntax -- saved state may not exist in localStorage; 0 is correct initial scroll offset
-    const prevScrollOffset = getSavedState()?.scrollOffset ?? 0;
-    let scrollOffset: number;
-    if (pendingScrollRestore) {
-        scrollOffset = prevScrollOffset;
-    } else if (virtualGridRef.value) {
-        scrollOffset = virtualGridRef.value.getScrollOffset();
-    } else {
-        scrollOffset = prevScrollOffset;
-    }
-    const state: SavedJilState = {
-        viewMode: viewMode.value,
-        doAnimation: doAnimation.value,
-        magentaBg: magentaBg.value,
-        gridDirection: gridDirection.value,
-        scrollOffset,
-        jobIndex: selectedJil.value?.index,
-        dirIndex: selectedDil.value ? dilList.value.indexOf(selectedDil.value) : undefined,
-        frameIndex: selectedGil.value ? gilList.value.indexOf(selectedGil.value) : undefined,
-    };
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    const prev = getSavedState()?.scrollOffset ?? 0;
+    const scrollOffset = pendingScrollRestore ? prev : (virtualGridRef.value?.getScrollOffset() ?? prev);
+    localStorage.setItem(
+        STORAGE_KEY,
+        JSON.stringify({
+            viewMode: viewMode.value,
+            doAnimation: doAnimation.value,
+            magentaBg: magentaBg.value,
+            withCorrections: withCorrections.value,
+            gridDirection: gridDirection.value,
+            scrollOffset,
+            jobIndex: selectedJil.value?.index,
+            dirIndex: selectedDil.value ? dilList.value.indexOf(selectedDil.value) : undefined,
+            frameIndex: selectedGil.value ? gilList.value.indexOf(selectedGil.value) : undefined,
+        } satisfies SavedJilState)
+    );
 }
 
 function restoreScrollOffset(): void {
@@ -289,7 +297,9 @@ const selectedDil = ref<IndexFileItem | null>(null);
 const selectedGil = ref<IndexFileItem | null>(null);
 
 // Save state whenever UI controls or selections change
-watch([viewMode, doAnimation, magentaBg, gridDirection, selectedJil, selectedDil, selectedGil], () => saveState());
+watch([viewMode, doAnimation, magentaBg, withCorrections, gridDirection, selectedJil, selectedDil, selectedGil], () =>
+    saveState()
+);
 
 const gfxFileReader = ref<GfxFileReader | null>(null);
 const dilFileReader = ref<DilFileReader | null>(null);
@@ -494,7 +504,9 @@ function renderFrame(gilItem: IndexFileItem): void {
         return;
     }
 
-    renderImageToCanvas(gfx, cavEl);
+    const dirIdx = selectedDil.value ? dilList.value.indexOf(selectedDil.value) : 0;
+    const frameIdx = gilList.value.indexOf(gilItem);
+    renderImageToCanvas(gfx, cavEl, lookupCorrection(selectedJil.value.index, dirIdx, frameIdx));
 }
 
 function onSelectGil() {
@@ -570,7 +582,7 @@ function renderGridAnimFrame(): void {
         const frameIndex = gridAnimFrame % frameItems.length;
         const offset = gilFileReader.value.getImageOffset(frameItems[frameIndex]!.index);
         const gfx = gfxFileReader.value.readImage(offset, item.index);
-        renderImageToCanvas(gfx, canvas);
+        renderImageToCanvas(gfx, canvas, lookupCorrection(item.index, dir, frameIndex));
     }
 }
 
@@ -606,7 +618,7 @@ function renderGridStaticDirection(): void {
 
         const offset = gilFileReader.value.getImageOffset(frameItems[0]!.index);
         const gfx = gfxFileReader.value.readImage(offset, item.index);
-        renderImageToCanvas(gfx, canvas);
+        renderImageToCanvas(gfx, canvas, lookupCorrection(item.index, dir, 0));
     }
 }
 
@@ -635,7 +647,7 @@ function renderJobSprite(item: IndexFileItem) {
         const offset = gilFileReader.value.getImageOffset(frameItems[0]!.index);
         const gfx = gfxFileReader.value.readImage(offset, item.index);
 
-        renderImageToCanvas(gfx, canvas);
+        renderImageToCanvas(gfx, canvas, lookupCorrection(item.index, dirIdx, 0));
     }
 }
 
@@ -693,7 +705,7 @@ function selectJobFromGrid(item: IndexFileItem) {
     viewMode.value = 'single';
 }
 
-watch(magentaBg, () => {
+watch([magentaBg, withCorrections], () => {
     if (viewMode.value === 'single') {
         if (selectedGil.value) {
             renderFrame(selectedGil.value);

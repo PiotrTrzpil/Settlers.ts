@@ -59,6 +59,14 @@
             />
             <div class="sub-layers" :class="{ disabled: !visibility.units }">
                 <LayerCheckbox
+                    v-model="visibility.showUnitPositions"
+                    label="Tile Positions"
+                    emoji="📍"
+                    :disabled="!visibility.units"
+                    sub
+                    @update:modelValue="saveAndEmit()"
+                />
+                <LayerCheckbox
                     v-model="visibility.showPathfinding"
                     label="Pathfinding"
                     emoji="🔍"

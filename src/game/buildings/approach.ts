@@ -8,6 +8,7 @@
  *   - In bounds
  *   - Terrain-passable
  *   - Not inside any building's footprint (buildingOccupancy)
+ *   - Adjacent to the door (never the door tile itself)
  *
  * Unit occupancy is NOT checked — units are transient obstacles resolved
  * at movement time via bump-or-wait. Checking unit occupancy here causes
@@ -23,11 +24,9 @@ import { getBuildingDoorPos } from '@/game/data/game-data-access';
 import { BuildingType } from './building-type';
 
 /**
- * Find the best tile from which a unit can approach a building.
- *
- * Checks the door tile first, then searches EXTENDED_OFFSETS order.
- * Returns the door position unchanged if no walkable tile is found
- * (e.g., the area is entirely building footprint or impassable terrain).
+ * Find the best walkable tile adjacent to a building's door.
+ * Never returns the door tile itself — always an adjacent neighbor.
+ * Falls back to the door position only if all adjacent tiles are blocked.
  */
 export function findBuildingApproachTile(
     building: Entity,
@@ -35,23 +34,20 @@ export function findBuildingApproachTile(
     gameState: GameState
 ): { x: number; y: number } {
     const door = getBuildingDoorPos(building.x, building.y, building.race, building.subType as BuildingType);
-    return findApproachTileNear(door.x, door.y, terrain, gameState) ?? door;
+    return findAdjacentWalkableTile(door.x, door.y, terrain, gameState) ?? door;
 }
 
 /**
- * Find the nearest walkable tile at or around (x, y).
- * Returns null if no suitable tile is found within the search radius.
+ * Find the nearest walkable tile adjacent to (x, y) — never returns (x, y) itself.
+ * Searches EXTENDED_OFFSETS (6 hex neighbors) in order.
+ * Returns null if no adjacent tile is walkable.
  */
-export function findApproachTileNear(
+export function findAdjacentWalkableTile(
     x: number,
     y: number,
     terrain: TerrainData,
     gameState: GameState
 ): { x: number; y: number } | null {
-    if (isWalkable(x, y, terrain, gameState)) {
-        return { x, y };
-    }
-
     for (const [dx, dy] of EXTENDED_OFFSETS) {
         const nx = x + dx;
         const ny = y + dy;

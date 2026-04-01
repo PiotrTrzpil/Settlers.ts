@@ -52,6 +52,8 @@ export interface LayerVisibility {
     decorationTextures: boolean;
     /** Show building footprint tile overlays */
     showBuildingFootprint: boolean;
+    /** Show unit logical tile positions and direction arrows */
+    showUnitPositions: boolean;
     /** Show pathfinding dots for selected units */
     showPathfinding: boolean;
     /** Show territory boundary dots from towers/castles */
@@ -75,6 +77,7 @@ export const DEFAULT_LAYER_VISIBILITY: LayerVisibility = {
     debugObjectTypeFilter: null,
     decorationTextures: true,
     showBuildingFootprint: false,
+    showUnitPositions: false,
     showPathfinding: true,
     showTerritory: true,
     showDecoLabels: false,

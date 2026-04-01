@@ -9,6 +9,7 @@ import { installRealGameData, resetTestGameData } from './test-game-data';
 import { createTestMap, TERRAIN } from './test-map';
 import { TimelineRecorder } from './timeline-recorder';
 import { wireSimulationTimeline } from './simulation-timeline';
+import { linkConsoleToSimulation } from './silence-console';
 import {
     SmartBuildingPlacer,
     INVARIANT_CHECK_INTERVAL,
@@ -94,6 +95,7 @@ export class Simulation {
         this.mapHeight = mapHeight;
         this.testId = nextSimulationId();
         this.timeline = new TimelineRecorder(this.testId);
+        linkConsoleToSimulation(this.testId);
 
         const loaded = installRealGameData();
         if (!loaded) {

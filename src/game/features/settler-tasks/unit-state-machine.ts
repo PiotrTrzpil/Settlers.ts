@@ -132,8 +132,9 @@ export class UnitStateMachine {
         }
 
         // Handle idle state for non-configured units
+        this.updateDirectionTracking(unit, runtime);
         const controller = this.gameState.movement.getController(unit.id);
-        this.animController.updateIdleUnit(unit, runtime.idleState, dt, controller?.state, controller?.direction);
+        this.animController.updateIdleUnit(unit, runtime.idleState, dt, controller?.state);
         return TickCategory.IDLE_ANIM;
     }
 
@@ -220,13 +221,7 @@ export class UnitStateMachine {
                 // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- handleIdle mutates runtime.state
                 if (runtime.state === SettlerState.IDLE && !this.isInCombat(settler.id)) {
                     const controller = this.gameState.movement.getController(settler.id);
-                    this.animController.updateIdleUnit(
-                        settler,
-                        runtime.idleState,
-                        dt,
-                        controller?.state,
-                        controller?.direction
-                    );
+                    this.animController.updateIdleUnit(settler, runtime.idleState, dt, controller?.state);
                 }
                 break;
 

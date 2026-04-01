@@ -21,6 +21,8 @@ export interface UnitStateView {
     readonly speed: number;
     readonly prevX: number;
     readonly prevY: number;
+    /** Current facing direction (EDirection enum value, 0-5). */
+    readonly direction: number;
 }
 
 /**
@@ -58,6 +60,9 @@ class UnitStateAdapter implements UnitStateView {
     }
     get prevY(): number {
         return this.controller.prevTileY;
+    }
+    get direction(): number {
+        return this.controller.direction;
     }
 }
 

@@ -49,6 +49,14 @@ export const CombatFeature: FeatureDefinition = {
         // Clean up on removal
         ctx.cleanupRegistry.onEntityRemoved(combatSystem.unregister.bind(combatSystem));
 
+        // Units entering buildings lose their movement controller — release from active combat
+        // but keep them registered (they're still military units that may re-emerge).
+        ctx.on('settler-location:entered', ({ unitId }) => {
+            if (combatSystem.isInCombat(unitId)) {
+                combatSystem.releaseFromCombat(unitId);
+            }
+        });
+
         // ── Death Angel (visual effect on unit death) ──────────────────────
         const deathAngelSystem = new DeathAngelSystem({
             executeCommand: ctx.executeCommand,

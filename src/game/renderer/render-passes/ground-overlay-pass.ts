@@ -46,6 +46,18 @@ export class GroundOverlayPass implements IRenderPass {
         s.drawBuildingFootprints(ctx.sortedEntities);
     }
 
+    /** Draw unit position tile highlights and direction arrows (called after entity sprites). */
+    public drawUnitPositions(gl: WebGL2RenderingContext, _projection: Float32Array, viewPoint: IViewPoint): void {
+        const { ctx } = this;
+        if (!ctx.renderSettings.showUnitPositions) {
+            return;
+        }
+
+        this.setupAttributes(gl);
+        const s = this.beginSession(gl, viewPoint);
+        s.drawUnitPositions(ctx.sortedEntities);
+    }
+
     private beginSession(gl: WebGL2RenderingContext, viewPoint: IViewPoint): SelectionOverlayRenderer {
         const { ctx } = this;
         return this.overlay.begin(gl, ctx.dynamicBuffer, ctx.aEntityPos, ctx.aColor, {

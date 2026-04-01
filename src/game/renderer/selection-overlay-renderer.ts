@@ -249,6 +249,11 @@ export class SelectionOverlayRenderer {
         this.tileRenderer.drawTileHighlights(this.session, highlights);
     }
 
+    /** Draw tile highlights and direction arrows for all unit entities. */
+    public drawUnitPositions(sortedEntities: Entity[]): void {
+        this.tileRenderer.drawUnitPositions(this.session, sortedEntities);
+    }
+
     // ========================================================================
     // Private helpers
     // ========================================================================

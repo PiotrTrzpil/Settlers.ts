@@ -23,7 +23,7 @@ import { BuildingType } from '../../buildings/building-type';
 import { TowerGarrisonManager } from './tower-garrison-manager';
 import { AutoGarrisonSystem } from './tower-garrison-auto-system';
 import { TowerCombatSystem } from './internal/tower-combat-system';
-import { towerBowmanTargets } from './internal/tower-combat-system';
+import { towerBowmanTargets, towerBowmanThrowingStones } from './internal/tower-combat-system';
 import { TowerGarrisonRenderPass } from './internal/tower-garrison-render-pass';
 import { isGarrisonBuildingType } from './internal/garrison-capacity';
 import { choreo } from '@/game/systems/choreo/choreo-builder';
@@ -38,9 +38,13 @@ import type {
     GarrisonUnitsCommand,
     UngarrisonUnitCommand,
     GarrisonSelectedUnitsCommand,
+    CaptureBuildingCommand,
 } from '@/game/commands/command-types';
 import { COMMAND_OK, commandFailed } from '@/game/commands/command-types';
+import { createLogger } from '@/utilities/logger';
 import { RenderLayer } from '@/game/renderer/render-passes/types';
+
+const log = createLogger('TowerGarrisonFeature');
 
 export interface TowerGarrisonExports {
     garrisonManager: TowerGarrisonManager;
@@ -108,6 +112,38 @@ export const TowerGarrisonFeature: FeatureDefinition = {
             }
         });
 
+        // When an enemy unit enters an empty garrison, capture the building.
+        // The finalizeGarrison check prevents enemy entry into occupied garrisons,
+        // but we also verify here: only capture if the garrison has exactly 1 unit
+        // (the one that just entered).
+        ctx.on('garrison:unitEntered', ({ buildingId, unitId }) => {
+            const building = ctx.gameState.getEntity(buildingId);
+            if (!building) {
+                return;
+            }
+            const unit = ctx.gameState.getEntity(unitId);
+            if (!unit || unit.player === building.player) {
+                return;
+            }
+            const garrison = manager.getGarrison(buildingId);
+            if (!garrison) {
+                return;
+            }
+            const total = garrison.swordsmanSlots.unitIds.length + garrison.bowmanSlots.unitIds.length;
+            if (total !== 1) {
+                return;
+            }
+            const oldPlayer = building.player;
+            ctx.executeCommand({ type: 'capture_building', buildingId, newPlayer: unit.player });
+            ctx.eventBus.emit('siege:buildingCaptured', {
+                buildingId,
+                oldPlayer,
+                newPlayer: unit.player,
+                level: 'info',
+            });
+            log.debug(`Building ${buildingId} captured by player ${unit.player} (was player ${oldPlayer})`);
+        });
+
         return {
             systems: [autoSystem, towerCombatSystem],
             systemGroup: 'Military',
@@ -135,6 +171,7 @@ export const TowerGarrisonFeature: FeatureDefinition = {
                             getSlots: g => g.bowmanSlots,
                             top: true,
                             targets: towerBowmanTargets,
+                            throwingStones: towerBowmanThrowingStones,
                         }),
                 },
             ],
@@ -215,6 +252,12 @@ export const TowerGarrisonFeature: FeatureDefinition = {
                     executeUngarrisonUnitCommand(cmd as UngarrisonUnitCommand, manager, ctx.gameState)
                         ? COMMAND_OK
                         : commandFailed('unit cannot be ungarrisoned'),
+                capture_building: cmd => {
+                    const capture = cmd as CaptureBuildingCommand;
+                    ctx.gameState.getEntityOrThrow(capture.buildingId, 'capture_building command target');
+                    ctx.gameState.changeEntityOwner(capture.buildingId, capture.newPlayer);
+                    return COMMAND_OK;
+                },
             },
         };
     },

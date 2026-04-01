@@ -33,6 +33,7 @@ export class ConsoleLogWriter {
     private readonly db: DatabaseType;
     private readonly stmtInsert: Statement;
     private readonly testId: string;
+    private readonly aliases: string[] = [];
     private buffer: Array<{ level: string; message: string }> = [];
 
     constructor(testId: string) {
@@ -40,6 +41,11 @@ export class ConsoleLogWriter {
         this.db = getOrCreateSharedDb();
         ensureSchema(this.db);
         this.stmtInsert = this.db.prepare('INSERT INTO console_log (test_id, level, message) VALUES (?, ?, ?)');
+    }
+
+    /** Link an additional test_id (e.g. sim_N_timestamp) so console output is queryable by both IDs. */
+    addAlias(aliasTestId: string): void {
+        this.aliases.push(aliasTestId);
     }
 
     record(level: string, args: unknown[]) {
@@ -54,10 +60,13 @@ export class ConsoleLogWriter {
         if (this.buffer.length === 0) return;
         const batch = this.buffer;
         this.buffer = [];
+        const allIds = [this.testId, ...this.aliases];
         withRetry(() => {
             this.db.transaction(() => {
                 for (const entry of batch) {
-                    this.stmtInsert.run(this.testId, entry.level, entry.message);
+                    for (const id of allIds) {
+                        this.stmtInsert.run(id, entry.level, entry.message);
+                    }
                 }
             })();
         });

@@ -51,6 +51,14 @@ export const GRID_DELTAS: ReadonlyArray<readonly [number, number]> = [
     [0, -1], // NORTH_EAST (edge-sharing)
 ];
 
+/**
+ * Normalized grid direction vectors for unbiased dot-product comparisons.
+ * Diagonal directions [1,1] and [-1,-1] have magnitude √2 in GRID_DELTAS;
+ * without normalization, getDirectionToward is biased toward those two.
+ */
+const NORM_DELTA_X: readonly number[] = GRID_DELTAS.map(([x, y]) => x / Math.sqrt(x * x + y * y));
+const NORM_DELTA_Y: readonly number[] = GRID_DELTAS.map(([x, y]) => y / Math.sqrt(x * x + y * y));
+
 /** Y scale factor for hex grid distance (sqrt(3)/2 * 0.999999) */
 export const Y_SCALE = (Math.sqrt(3) / 2) * 0.999999;
 
@@ -96,7 +104,7 @@ export function getStepDirection(dx: number, dy: number): EDirection {
  * For single-step deltas, returns the exact direction.
  * For multi-tile displacements, picks the closest direction via dot product.
  */
-export function getApproxDirection(fromX: number, fromY: number, toX: number, toY: number): EDirection {
+export function getDirectionToward(fromX: number, fromY: number, toX: number, toY: number): EDirection {
     const dx = toX - fromX;
     const dy = toY - fromY;
 
@@ -107,7 +115,7 @@ export function getApproxDirection(fromX: number, fromY: number, toX: number, to
     let bestDir = 0;
     let bestDot = -Infinity;
     for (let d = 0; d < NUMBER_OF_DIRECTIONS; d++) {
-        const dot = dx * GRID_DELTA_X[d]! + dy * GRID_DELTA_Y[d]!;
+        const dot = dx * NORM_DELTA_X[d]! + dy * NORM_DELTA_Y[d]!;
         if (dot > bestDot) {
             bestDot = dot;
             bestDir = d;

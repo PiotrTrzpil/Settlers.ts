@@ -17,6 +17,7 @@ import { parseIndexFilesInWorker } from '@/resources/gfx/parse-index-files';
 import { GfxImage } from '@/resources/gfx/gfx-image';
 import { EntityTextureAtlas, AtlasRegion } from './entity-texture-atlas';
 import { SpriteEntry, PIXELS_TO_WORLD } from './sprite-metadata';
+import { CORRECTIONS_BY_FILE } from './sprite-metadata/jil-frame-corrections';
 import { getDecoderPool } from './sprite-decoder-pool';
 import type { BatchSpriteDescriptor, BatchSpriteResult } from './sprite-batch-decode-worker';
 
@@ -96,6 +97,31 @@ function createSpriteEntry(
         heightWorld: height * PIXELS_TO_WORLD,
         paletteBaseOffset,
     };
+}
+
+/** Cyclically shift pixel data for mispositioned original-art frames. */
+function applyFrameCorrections(
+    frames: LoadedSprite[],
+    fileId: number,
+    jobIndex: number,
+    directionIndex: number,
+    atlas: EntityTextureAtlas
+): void {
+    const jobCorrections = CORRECTIONS_BY_FILE.get(fileId)?.get(jobIndex);
+    if (!jobCorrections) {
+        return;
+    }
+
+    const dirCorrection = jobCorrections.find(d => d.direction === directionIndex);
+    if (!dirCorrection) {
+        return;
+    }
+
+    for (const fc of dirCorrection.frames) {
+        if (fc.frame < frames.length) {
+            atlas.cyclicShiftRegion(frames[fc.frame]!.region, fc.dx, fc.dy);
+        }
+    }
 }
 
 export class SpriteLoader {
@@ -526,6 +552,8 @@ export class SpriteLoader {
         if (frames.length === 0) {
             return null;
         }
+
+        applyFrameCorrections(frames, Number(fileSet.fileId), jobIndex, directionIndex, atlas);
 
         return {
             frames,

@@ -317,6 +317,7 @@ export class WorkerTaskExecutor {
         }
 
         const node = nodes[job.nodeIndex]!;
+
         this.lifecycle.prepareNodeTick(settler, config, job, node);
 
         const isPileAction = node.task === ChoreoTaskType.GET_GOOD || node.task === ChoreoTaskType.PUT_GOOD;

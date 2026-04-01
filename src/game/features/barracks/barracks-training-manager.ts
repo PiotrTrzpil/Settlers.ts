@@ -165,7 +165,10 @@ export class BarracksTrainingManager {
         // 5. Consume inputs
         this.consumeInputs(buildingId, recipe);
 
-        // 6. Build and assign training choreography job
+        // 6. Assign carrier to barracks so WAIT_VIRTUAL can enterBuilding
+        this.settlerTaskSystem.assignWorkerToBuilding(carrierId, buildingId);
+
+        // 7. Build and assign training choreography job
         const doorPos = getBuildingDoorPos(barracks.x, barracks.y, barracks.race, BuildingType.Barrack);
         const job = buildTrainingJob(buildingId, doorPos.x, doorPos.y, TRAINING_DURATION_FRAMES);
         const assigned = this.settlerTaskSystem.assignJob(carrierId, job, doorPos);

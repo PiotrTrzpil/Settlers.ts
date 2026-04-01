@@ -5,9 +5,11 @@
  */
 
 import type { GameState } from '../../game-state';
+import type { CombatSystem } from '../combat/combat-system';
 import { EntityType, UnitType, BuildingType, type Entity } from '../../entity';
 import type { Race } from '../../core/race';
 import { getBaseUnitType } from '../../core/unit-types';
+import { CombatStatus } from '../combat/combat-state';
 import { isGarrisonBuildingType } from '../tower-garrison';
 import { getBuildingDoorPos } from '../../data/game-data-access';
 import { DOOR_ARRIVAL_DISTANCE } from './siege-types';
@@ -100,4 +102,22 @@ export function hasEnemyAtDoor(
         return true;
     }
     return false;
+}
+
+/**
+ * Find all enemy unit IDs currently in melee combat with the given defender.
+ * Used by the siege system to enforce the door attacker limit.
+ */
+export function findUnitsAttacking(defenderId: number, gameState: GameState, combatSystem: CombatSystem): number[] {
+    const result: number[] = [];
+    for (const entity of gameState.entities) {
+        if (entity.type !== EntityType.Unit || entity.hidden) {
+            continue;
+        }
+        const state = combatSystem.getState(entity.id);
+        if (state && state.targetId === defenderId && state.status === CombatStatus.Fighting) {
+            result.push(entity.id);
+        }
+    }
+    return result;
 }

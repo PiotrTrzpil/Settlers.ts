@@ -26,7 +26,7 @@ import { BuildingType, EntityType } from '@/game/entity';
 import { UnitType } from '@/game/core/unit-types';
 import { getRenderEntityWorldPos } from '@/game/renderer/world-position';
 import { toSpriteDirection } from '@/game/renderer/sprite-direction';
-import { getApproxDirection } from '@/game/systems/hex-directions';
+import { getDirectionToward } from '@/game/systems/hex-directions';
 import { TINT_NEUTRAL } from '@/game/renderer/tint-utils';
 import { PALETTE_TEXTURE_WIDTH } from '@/game/renderer/palette-texture';
 import { scaleSprite, ENTITY_SCALE } from '@/game/renderer/entity-renderer-constants';
@@ -41,6 +41,8 @@ export interface GarrisonRenderConfig {
     top: boolean;
     /** Optional target map for direction override (bowmen face their attack target) */
     targets?: ReadonlyMap<number, number>;
+    /** Optional set of bowman IDs currently throwing stones (siege door combat) */
+    throwingStones?: ReadonlySet<number>;
 }
 
 export class TowerGarrisonRenderPass implements PluggableRenderPass {
@@ -127,16 +129,26 @@ export class TowerGarrisonRenderPass implements PluggableRenderPass {
             return defaultSpriteDir;
         }
         const tower = this.gameState.getEntityOrThrow(buildingId, 'TowerGarrisonRenderPass.dir');
-        return toSpriteDirection(getApproxDirection(tower.x, tower.y, target.x, target.y));
+        return toSpriteDirection(getDirectionToward(tower.x, tower.y, target.x, target.y));
     }
 
     /**
      * Resolve the sprite for a garrisoned unit.
-     * Bowmen with a target use the SHOOT animation; all others use the static standing pose.
+     * Bowmen with a target use THROW_STONE (during siege) or SHOOT animation;
+     * all others use the static standing pose.
      */
-    private resolveSprite(unitType: UnitType, spriteDir: number, race: number, hasTarget: boolean): SpriteEntry | null {
+    private resolveSprite(
+        unitId: number,
+        unitType: UnitType,
+        spriteDir: number,
+        race: number,
+        hasTarget: boolean
+    ): SpriteEntry | null {
         if (hasTarget) {
-            const frame = this.resolveShootFrame(unitType, spriteDir, race);
+            // eslint-disable-next-line no-restricted-syntax -- throwingStones is nullable-by-design (only bowman pass provides it)
+            const throwing = this.config.throwingStones?.has(unitId) ?? false;
+            const action = throwing ? 'THROW_STONE' : 'SHOOT';
+            const frame = this.resolveAnimationFrame(unitType, spriteDir, race, action);
             if (frame) {
                 return frame;
             }
@@ -144,8 +156,13 @@ export class TowerGarrisonRenderPass implements PluggableRenderPass {
         return this.ctx.spriteResolver.getStaticUnitSprite(unitType, spriteDir, race);
     }
 
-    /** Look up the current SHOOT animation frame for the given unit type and direction. */
-    private resolveShootFrame(unitType: UnitType, spriteDir: number, race: number): SpriteEntry | null {
+    /** Look up the current animation frame for the given unit type, direction, and action. */
+    private resolveAnimationFrame(
+        unitType: UnitType,
+        spriteDir: number,
+        race: number,
+        action: string
+    ): SpriteEntry | null {
         const animEntry = this.ctx.spriteManager?.registry.getAnimatedEntity(EntityType.Unit, unitType, race);
         if (!animEntry) {
             return null;
@@ -154,7 +171,7 @@ export class TowerGarrisonRenderPass implements PluggableRenderPass {
         if (!prefix) {
             return null;
         }
-        const dirMap = animEntry.animationData.sequences.get(xmlKey(prefix, 'SHOOT'));
+        const dirMap = animEntry.animationData.sequences.get(xmlKey(prefix, action));
         if (!dirMap) {
             return null;
         }
@@ -188,7 +205,7 @@ export class TowerGarrisonRenderPass implements PluggableRenderPass {
             const spriteDir = this.resolveDirection(unitId, buildingId, slot.direction);
             const hasTarget = targets !== undefined && targets.has(unitId);
 
-            const rawSprite = this.resolveSprite(unit.subType as UnitType, spriteDir, unit.race, hasTarget);
+            const rawSprite = this.resolveSprite(unitId, unit.subType as UnitType, spriteDir, unit.race, hasTarget);
             if (!rawSprite) {
                 continue;
             }

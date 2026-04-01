@@ -56,6 +56,8 @@ export interface UnitRenderState {
     readonly moveProgress: number;
     readonly path: ReadonlyArray<{ x: number; y: number }>;
     readonly pathIndex: number;
+    /** Current facing direction (EDirection enum value, 0-5). */
+    readonly direction: number;
 }
 
 /**
@@ -89,6 +91,7 @@ const DEFAULT_BUILDING_RENDER_STATE: BuildingRenderState = {
  */
 export interface RenderSettings {
     showBuildingFootprint: boolean;
+    showUnitPositions: boolean;
     disablePlayerTinting: boolean;
     antialias: boolean;
 }
@@ -272,7 +275,12 @@ export class RenderContextBuilder {
     private _placementPreview: PlacementPreviewState | null = null;
     private _alpha = 0;
     private _layerVisibility: LayerVisibility = { ...DEFAULT_LAYER_VISIBILITY };
-    private _settings: RenderSettings = { showBuildingFootprint: false, disablePlayerTinting: false, antialias: false };
+    private _settings: RenderSettings = {
+        showBuildingFootprint: false,
+        showUnitPositions: false,
+        disablePlayerTinting: false,
+        antialias: false,
+    };
     private _groundHeight: Uint8Array = new Uint8Array(0);
     private _groundType: Uint8Array = new Uint8Array(0);
     private _mapWidth = 0;

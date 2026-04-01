@@ -10,7 +10,8 @@ import { Simulation, createSimulation, cleanupSimulation } from '../../helpers/t
 import { installRealGameData } from '../../helpers/test-game-data';
 import { UnitType } from '@/game/entity';
 import { BuildingType } from '@/game/buildings';
-import { SiegePhase, type SiegeState } from '@/game/features/building-siege';
+import type { SiegeState } from '@/game/features/building-siege';
+import { DOOR_ARRIVAL_DISTANCE } from '@/game/features/building-siege/siege-types';
 import type { BuildingGarrisonState } from '@/game/features/tower-garrison/types';
 import { getBuildingDoorPos } from '@/game/data/game-data-access';
 
@@ -53,18 +54,6 @@ function waitForGarrisoned(sim: Simulation, buildingId: number, count: number, l
     });
 }
 
-function waitForSiegePhase(sim: Simulation, buildingId: number, phase: SiegePhase, label: string): void {
-    sim.runUntil(() => getSiege(sim, buildingId)?.phase === phase, {
-        maxTicks: 10_000,
-        label,
-        diagnose: () => {
-            const s = getSiege(sim, buildingId);
-            if (!s) return 'no siege active';
-            return `phase=${SiegePhase[s.phase]}, defender=${s.activeDefenderId}`;
-        },
-    });
-}
-
 function waitForSiegeStarted(sim: Simulation, buildingId: number, label: string): void {
     sim.runUntil(() => getSiege(sim, buildingId) !== undefined, {
         maxTicks: 10_000,
@@ -73,14 +62,15 @@ function waitForSiegeStarted(sim: Simulation, buildingId: number, label: string)
     });
 }
 
-function waitForSiegeEnded(sim: Simulation, buildingId: number, label: string): void {
-    sim.runUntil(() => getSiege(sim, buildingId) === undefined, {
+function waitForBuildingCaptured(sim: Simulation, buildingId: number, newPlayer: number, label: string): void {
+    sim.runUntil(() => sim.state.getEntity(buildingId)?.player === newPlayer, {
         maxTicks: 15_000,
         label,
         diagnose: () => {
+            const b = sim.state.getEntity(buildingId);
+            if (!b) return 'building removed';
             const s = getSiege(sim, buildingId);
-            if (!s) return 'siege already ended';
-            return `phase=${SiegePhase[s.phase]}, defender=${s.activeDefenderId}`;
+            return `player=${b.player}, siege=${s ? `defender=${s.activeDefenderId}` : 'none'}`;
         },
     });
 }
@@ -133,7 +123,7 @@ describe('Building siege – combat', { timeout: 60_000 }, () => {
         const attackerId = sim.spawnUnit(tower.x + 5, tower.y, UnitType.Swordsman1, 1);
         moveUnit(sim, attackerId, tower.x, tower.y);
 
-        waitForSiegePhase(sim, towerId, SiegePhase.Fighting, 'siege reached fighting phase');
+        waitForSiegeStarted(sim, towerId, 'siege reached fighting phase');
 
         const siege = getSiege(sim, towerId)!;
         expect(siege.activeDefenderId).not.toBeNull();
@@ -165,7 +155,7 @@ describe('Building siege – combat', { timeout: 60_000 }, () => {
         moveUnit(sim, atk1, tower.x, tower.y);
         moveUnit(sim, atk2, tower.x, tower.y);
 
-        waitForSiegePhase(sim, towerId, SiegePhase.Fighting, 'fighting started');
+        waitForSiegeStarted(sim, towerId, 'fighting started');
 
         const firstDefenderId = getSiege(sim, towerId)!.activeDefenderId!;
         expect(garrisonedCount(sim, towerId)).toBe(2);
@@ -207,7 +197,7 @@ describe('Building siege – combat', { timeout: 60_000 }, () => {
         }
 
         waitForSiegeStarted(sim, towerId, 'siege started');
-        waitForSiegeEnded(sim, towerId, 'siege ended — tower captured');
+        waitForBuildingCaptured(sim, towerId, 1, 'tower captured');
 
         const capturedTower = sim.state.getEntityOrThrow(towerId, 'captured tower');
         expect(capturedTower.player).toBe(1);
@@ -249,7 +239,7 @@ describe('Building siege – edge cases', { timeout: 60_000 }, () => {
         moveUnit(sim, atk2, tower.x, tower.y);
 
         waitForSiegeStarted(sim, towerId, 'siege started');
-        waitForSiegeEnded(sim, towerId, 'siege ended — tower captured');
+        waitForBuildingCaptured(sim, towerId, 1, 'tower captured');
 
         const capturedTower = sim.state.getEntityOrThrow(towerId, 'captured tower');
         expect(capturedTower.player).toBe(1);
@@ -295,6 +285,86 @@ describe('Building siege – edge cases', { timeout: 60_000 }, () => {
         sim.runTicks(500);
 
         expect(getSiege(sim, towerId)).toBeUndefined();
+        expect(sim.errors).toHaveLength(0);
+    });
+
+    it('swordsman at distance 1 from door triggers siege immediately', () => {
+        sim = createSimulation({ skipTerritory: true });
+        sim.establishTerritory(0);
+        sim.establishTerritory(1);
+
+        const towerId = sim.placeBuilding(BuildingType.GuardTowerSmall, 0);
+        const tower = sim.state.getEntityOrThrow(towerId, 'tower');
+        const door = getBuildingDoorPos(tower.x, tower.y, tower.race, tower.subType as BuildingType);
+
+        const defId = sim.spawnUnitNear(towerId, UnitType.Swordsman1, 1, 0)[0]!;
+        garrisonUnits(sim, towerId, [defId]);
+        waitForGarrisoned(sim, towerId, 1, 'defender garrisoned');
+
+        // Place attacker exactly 1 tile from door (adjacent) — should trigger siege
+        sim.spawnUnit(door.x + 1, door.y, UnitType.Swordsman1, 1);
+
+        waitForSiegeStarted(sim, towerId, 'siege started from adjacent tile');
+        expect(sim.errors).toHaveLength(0);
+    });
+
+    it('swordsman at distance 2 from door does not immediately trigger siege', () => {
+        sim = createSimulation({ skipTerritory: true });
+        sim.establishTerritory(0);
+        sim.establishTerritory(1);
+
+        const towerId = sim.placeBuilding(BuildingType.GuardTowerSmall, 0);
+        const tower = sim.state.getEntityOrThrow(towerId, 'tower');
+        const door = getBuildingDoorPos(tower.x, tower.y, tower.race, tower.subType as BuildingType);
+
+        const defId = sim.spawnUnitNear(towerId, UnitType.Swordsman1, 1, 0)[0]!;
+        garrisonUnits(sim, towerId, [defId]);
+        waitForGarrisoned(sim, towerId, 1, 'defender garrisoned');
+
+        // Place attacker 2 tiles from door — outside DOOR_ARRIVAL_DISTANCE
+        expect(DOOR_ARRIVAL_DISTANCE).toBe(1);
+        const atkId = sim.spawnUnit(door.x + 2, door.y, UnitType.Swordsman1, 1);
+
+        // Run a few tick cycles — siege should NOT start yet (unit is too far)
+        sim.runTicks(50);
+        expect(getSiege(sim, towerId)).toBeUndefined();
+
+        // The unit should have been redirected toward the door
+        const atk = sim.state.getEntityOrThrow(atkId, 'attacker');
+        const controller = sim.state.movement.getController(atkId);
+        const isMovingOrArrived =
+            (controller && controller.state !== 'idle') ||
+            Math.max(Math.abs(atk.x - door.x), Math.abs(atk.y - door.y)) <= DOOR_ARRIVAL_DISTANCE;
+        expect(isMovingOrArrived).toBe(true);
+
+        expect(sim.errors).toHaveLength(0);
+    });
+
+    it('attacker does not stand on the door tile', () => {
+        sim = createSimulation({ skipTerritory: true });
+        sim.establishTerritory(0);
+        sim.establishTerritory(1);
+
+        const towerId = sim.placeBuilding(BuildingType.GuardTowerSmall, 0);
+        const tower = sim.state.getEntityOrThrow(towerId, 'tower');
+        const door = getBuildingDoorPos(tower.x, tower.y, tower.race, tower.subType as BuildingType);
+
+        const defId = sim.spawnUnitNear(towerId, UnitType.Swordsman1, 1, 0)[0]!;
+        garrisonUnits(sim, towerId, [defId]);
+        waitForGarrisoned(sim, towerId, 1, 'defender garrisoned');
+
+        const atkId = sim.spawnUnit(tower.x + 5, tower.y, UnitType.Swordsman1, 1);
+        moveUnit(sim, atkId, tower.x, tower.y);
+
+        waitForSiegeStarted(sim, towerId, 'siege started');
+
+        // Let the attacker settle into position
+        sim.runTicks(100);
+        const atk = sim.state.getEntity(atkId);
+        if (atk && !atk.hidden) {
+            const onDoor = atk.x === door.x && atk.y === door.y;
+            expect(onDoor, `attacker at (${atk.x},${atk.y}) should not be on door (${door.x},${door.y})`).toBe(false);
+        }
         expect(sim.errors).toHaveLength(0);
     });
 
@@ -353,7 +423,7 @@ describe('Building siege – territory update on capture', { timeout: 60_000 }, 
         }
 
         waitForSiegeStarted(sim, towerId, 'siege started');
-        waitForSiegeEnded(sim, towerId, 'siege ended — tower captured');
+        waitForBuildingCaptured(sim, towerId, 1, 'tower captured');
 
         // Building should now belong to player 1
         const capturedTower = sim.state.getEntityOrThrow(towerId, 'captured tower');

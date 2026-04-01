@@ -248,6 +248,10 @@ export class EntitySpriteResolver {
             if (frame) {
                 return { skip: false, transitioning: false, sprite: frame, progress: 1, transitionData: null };
             }
+            // hideOnComplete animations return null when finished — do not fall back to static sprite
+            if (vs.animation.hideOnComplete) {
+                return noSprite;
+            }
         }
 
         return { skip: false, transitioning: false, sprite: entry.staticSprite, progress: 1, transitionData: null };

@@ -152,13 +152,18 @@ export function executeMoveUnit(deps: MoveUnitDeps, cmd: MoveUnitCommand): Comma
         return commandFailed(`Unit ${cmd.entityId} is in combat and cannot be moved`);
     }
 
-    deps.combatSystem.releaseFromCombat(cmd.entityId);
+    if (deps.combatSystem.isInCombat(cmd.entityId)) {
+        deps.combatSystem.releaseFromCombat(cmd.entityId);
+    }
 
     // Resolve target outside building footprint
     const target = resolveTargetOutsideBuilding(deps.state, cmd.targetX, cmd.targetY);
 
     // March passively if target tile has no enemies — don't engage along the way
-    if (!hasEnemyNearTarget(deps.state, target.x, target.y, entity.player)) {
+    if (
+        deps.combatSystem.getState(cmd.entityId) &&
+        !hasEnemyNearTarget(deps.state, target.x, target.y, entity.player)
+    ) {
         deps.combatSystem.setPassive(cmd.entityId);
     }
 
@@ -199,8 +204,11 @@ export function executeMoveSelectedUnits(deps: MoveSelectedUnitsDeps, cmd: MoveS
         const rawTarget = { x: baseTarget.x + offset[0], y: baseTarget.y + offset[1] };
         const target = resolveTargetOutsideBuilding(state, rawTarget.x, rawTarget.y);
 
-        deps.combatSystem.releaseFromCombat(unit.id);
-        if (passiveMarch) {
+        const inCombat = deps.combatSystem.isInCombat(unit.id);
+        if (inCombat) {
+            deps.combatSystem.releaseFromCombat(unit.id);
+        }
+        if (inCombat && passiveMarch) {
             deps.combatSystem.setPassive(unit.id);
         }
 

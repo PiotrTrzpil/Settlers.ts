@@ -290,7 +290,7 @@ export class WorkerJobLifecycle {
                 this.emitWaitingAtHome(settler, homeBuilding, reason);
             }
             this.gameState.movement.moveUnit(settler.id, door.x, door.y);
-            this.animController.startWalkAnimation(settler, controller.direction);
+            this.animController.startWalkAnimation(settler);
         }
     }
 

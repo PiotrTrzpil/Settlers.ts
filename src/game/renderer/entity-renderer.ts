@@ -436,10 +436,11 @@ export class EntityRenderer extends RendererBase implements IRenderer {
         profiler.beginPhase('draw');
         for (const layer of layers) {
             this.executePassLayer(gl, projection, viewPoint, passCtx, layer);
-            // Building footprints render on top of entity sprites (between Entities and AboveEntities)
+            // Building footprints and unit positions render on top of entity sprites
             if (layer === RenderLayer.Entities && groundOverlayPass) {
                 this.setupColorShader(gl, projection);
                 groundOverlayPass.drawFootprints(gl, projection, viewPoint);
+                groundOverlayPass.drawUnitPositions(gl, projection, viewPoint);
             }
         }
         profiler.endPhase('draw');

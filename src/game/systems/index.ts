@@ -49,7 +49,7 @@ export {
     Y_SCALE,
     getNextHexPoint,
     getAllNeighbors,
-    getApproxDirection,
+    getDirectionToward,
     rotateDirection,
     hexDistance,
     hexDistanceTo,

@@ -264,6 +264,37 @@ export class EntityTextureAtlas extends ShaderTexture {
         }
     }
 
+    /**
+     * Cyclically shift pixels within a reserved region by (dx, dy).
+     * Pixels that move past one edge wrap around to the opposite edge.
+     */
+    public cyclicShiftRegion(region: AtlasRegion, dx: number, dy: number): void {
+        if (dx === 0 && dy === 0) {
+            return;
+        }
+
+        const { width: w, height: h } = region;
+        const layer = this.layers[region.layer]!;
+
+        // Read the region into a temporary buffer
+        const tmp = new Uint16Array(w * h);
+        for (let y = 0; y < h; y++) {
+            const srcRow = (region.y + y) * LAYER_SIZE + region.x;
+            tmp.set(layer.subarray(srcRow, srcRow + w), y * w);
+        }
+
+        // Write back with cyclic shift
+        for (let y = 0; y < h; y++) {
+            const srcY = (((y - dy) % h) + h) % h;
+            for (let x = 0; x < w; x++) {
+                const srcX = (((x - dx) % w) + w) % w;
+                layer[(region.y + y) * LAYER_SIZE + region.x + x] = tmp[srcY * w + srcX]!;
+            }
+        }
+
+        this.markDirty(region.layer, region.x, region.y, w, h);
+    }
+
     /** Expand the dirty region for a specific layer */
     private markDirty(layerIndex: number, x: number, y: number, w: number, h: number): void {
         this._hasPendingUploads = true;
@@ -594,7 +625,11 @@ export class EntityTextureAtlas extends ShaderTexture {
      * Extract a region from the atlas and convert from palette indices to RGBA ImageData.
      * Used for generating icon thumbnails (e.g. resource icons in UI).
      */
-    public extractRegion(region: AtlasRegion, paletteData?: Uint8Array | null, paletteBaseOffset = 0): ImageData | null {
+    public extractRegion(
+        region: AtlasRegion,
+        paletteData?: Uint8Array | null,
+        paletteBaseOffset = 0
+    ): ImageData | null {
         if (region.layer >= this.layers.length) {
             return null;
         }
@@ -619,7 +654,11 @@ export class EntityTextureAtlas extends ShaderTexture {
     }
 
     /** Resolve a single atlas pixel index to an RGBA uint32 value. */
-    private resolvePixel(rawIndex: number, paletteData: Uint8Array | null | undefined, paletteBaseOffset: number): number {
+    private resolvePixel(
+        rawIndex: number,
+        paletteData: Uint8Array | null | undefined,
+        paletteBaseOffset: number
+    ): number {
         if (rawIndex === 0) {
             return 0x00000000;
         } // transparent

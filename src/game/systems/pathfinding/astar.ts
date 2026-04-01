@@ -16,7 +16,7 @@
 
 import { tileKey, TileCoord } from '../../entity';
 import { isPassable } from '../../terrain';
-import { GRID_DELTAS, NUMBER_OF_DIRECTIONS, hexDistance, getApproxDirection } from '../hex-directions';
+import { GRID_DELTAS, NUMBER_OF_DIRECTIONS, hexDistance, getDirectionToward } from '../hex-directions';
 import { BucketPriorityQueue } from './bucket-priority-queue';
 import { smoothPath } from './path-smoothing';
 
@@ -204,7 +204,7 @@ function computePriority(
     // Tie-breaker: Prefer moves aligned with goal direction.
     // Must be >= 1 to affect bucket priority queue assignment (integer floors).
     // Range 0-6 vs MOVE_COST=10 gives meaningful guidance without bad paths.
-    const targetDir = getApproxDirection(cx, cy, ctx.goalX, ctx.goalY);
+    const targetDir = getDirectionToward(cx, cy, ctx.goalX, ctx.goalY);
     let dirDiff = Math.abs(direction - targetDir);
     if (dirDiff > 3) {
         dirDiff = 6 - dirDiff;

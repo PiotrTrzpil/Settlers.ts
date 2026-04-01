@@ -108,7 +108,11 @@ export class SettlerTaskSystem implements TickSystem, TaskDispatcher, WorkerStat
 
         this.handlerRegistry = new WorkHandlerRegistry();
 
-        this.animController = new IdleAnimationController(config.visualService, this.gameState.rng);
+        this.animController = new IdleAnimationController(
+            config.visualService,
+            this.gameState.rng,
+            this.gameState.movement
+        );
 
         this.workerExecutor = new WorkerTaskExecutor({
             choreoSystem: config.choreoSystem,
@@ -342,8 +346,7 @@ export class SettlerTaskSystem implements TickSystem, TaskDispatcher, WorkerStat
         runtime.moveTask = { type: 'move', targetX, targetY };
         runtime.state = SettlerState.WORKING;
 
-        const controller = this.gameState.movement.getController(entityId)!;
-        this.animController.startWalkAnimation(entity, controller.direction);
+        this.animController.startWalkAnimation(entity);
 
         log.debug(`Unit ${entityId} assigned move task to (${targetX}, ${targetY})`);
         return true;
@@ -381,8 +384,7 @@ export class SettlerTaskSystem implements TickSystem, TaskDispatcher, WorkerStat
         runtime.moveTask = null;
 
         if (moveTo) {
-            const controller = this.gameState.movement.getController(entityId)!;
-            this.animController.startWalkAnimation(entity, controller.direction);
+            this.animController.startWalkAnimation(entity);
         }
 
         log.debug(`Unit ${entityId} assigned job ${job.jobId}`);

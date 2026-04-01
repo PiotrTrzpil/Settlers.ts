@@ -110,6 +110,7 @@ function applyRenderEnvironment(
         .layerVisibility(ctx.layerVisibility)
         .settings({
             showBuildingFootprint: ctx.layerVisibility.showBuildingFootprint,
+            showUnitPositions: ctx.layerVisibility.showUnitPositions,
             disablePlayerTinting: g.settings.state.disablePlayerTinting,
             antialias: g.settings.state.antialias,
         })

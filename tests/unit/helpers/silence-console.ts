@@ -27,6 +27,14 @@ const origStderrWrite = process.stderr.write.bind(process.stderr);
 let writer: ConsoleLogWriter | undefined;
 let hintPrinted = false;
 
+/**
+ * Link the current console capture session to a simulation test_id.
+ * Called by Simulation constructor so `--console --test sim_xxx` works.
+ */
+export function linkConsoleToSimulation(simTestId: string): void {
+    writer?.addAlias(simTestId);
+}
+
 beforeEach(ctx => {
     const testId = ctx.task.file?.name ? `${ctx.task.file.name} > ${ctx.task.name}` : ctx.task.name;
 
