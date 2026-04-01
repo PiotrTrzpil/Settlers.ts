@@ -11,6 +11,7 @@
  *   npx tsx scripts/export-jil.ts 20 --jobs 1,5,19  # Only specific jobs
  *   npx tsx scripts/export-jil.ts 20 --output /tmp/jil-export
  */
+import './lib/node-image-data-polyfill';
 import { DilFileReader } from '../src/resources/gfx/dil-file-reader';
 import { GfxFileReader } from '../src/resources/gfx/gfx-file-reader';
 import { GilFileReader } from '../src/resources/gfx/gil-file-reader';
@@ -19,26 +20,6 @@ import { PaletteCollection } from '../src/resources/gfx/palette-collection';
 import { PilFileReader } from '../src/resources/gfx/pil-file-reader';
 import { NodeFileSystem } from '../src/resources/gfx/exporter/file-system';
 import { GfxImageExporter } from '../src/resources/gfx/exporter/gfx-image-exporter';
-
-// Polyfill ImageData for Node.js (used by GfxImage.getImageData)
-if (typeof globalThis.ImageData === 'undefined') {
-    (globalThis as Record<string, unknown>)['ImageData'] = class ImageData {
-        width: number;
-        height: number;
-        data: Uint8ClampedArray;
-        constructor(sw: number | Uint8ClampedArray, sh?: number) {
-            if (typeof sw === 'number') {
-                this.width = sw;
-                this.height = sh!;
-                this.data = new Uint8ClampedArray(sw * sh! * 4);
-            } else {
-                this.data = sw;
-                this.width = sh!;
-                this.height = sw.length / (4 * sh!);
-            }
-        }
-    };
-}
 
 const GFX_DIR = 'public/Siedler4/Gfx';
 const DEFAULT_OUTPUT = 'output/jil-export';

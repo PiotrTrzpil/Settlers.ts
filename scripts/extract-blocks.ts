@@ -4,29 +4,9 @@
  * Outputs PNG files to output/texture-blocks/.
  */
 
+import './lib/node-image-data-polyfill';
 import * as fs from 'fs/promises';
 import * as path from 'path';
-
-// Polyfill ImageData for Node.js
-if (typeof globalThis.ImageData === 'undefined') {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (globalThis as any).ImageData = class ImageData {
-        readonly data: Uint8ClampedArray;
-        readonly width: number;
-        readonly height: number;
-        constructor(dataOrWidth: Uint8ClampedArray | number, widthOrHeight: number, h?: number) {
-            if (typeof dataOrWidth === 'number') {
-                this.width = dataOrWidth;
-                this.height = widthOrHeight;
-                this.data = new Uint8ClampedArray(this.width * this.height * 4);
-            } else {
-                this.data = dataOrWidth;
-                this.width = widthOrHeight;
-                this.height = h ?? dataOrWidth.length / 4 / widthOrHeight;
-            }
-        }
-    };
-}
 
 import { BinaryReader } from '../src/resources/file/binary-reader';
 import { GhFileReader } from '../src/resources/gfx/gh-file-reader';

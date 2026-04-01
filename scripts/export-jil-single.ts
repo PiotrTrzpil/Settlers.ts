@@ -2,6 +2,7 @@
  * Export a single representative frame (d0_f000) per JIL job.
  * Usage: npx tsx scripts/export-jil-single.ts <baseName> --jobs 2,3,4 [--output dir]
  */
+import './lib/node-image-data-polyfill';
 import { DilFileReader } from '../src/resources/gfx/dil-file-reader';
 import { GfxFileReader } from '../src/resources/gfx/gfx-file-reader';
 import { GilFileReader } from '../src/resources/gfx/gil-file-reader';
@@ -10,25 +11,6 @@ import { PaletteCollection } from '../src/resources/gfx/palette-collection';
 import { PilFileReader } from '../src/resources/gfx/pil-file-reader';
 import { NodeFileSystem } from '../src/resources/gfx/exporter/file-system';
 import { GfxImageExporter } from '../src/resources/gfx/exporter/gfx-image-exporter';
-
-if (typeof globalThis.ImageData === 'undefined') {
-    (globalThis as Record<string, unknown>)['ImageData'] = class ImageData {
-        width: number;
-        height: number;
-        data: Uint8ClampedArray;
-        constructor(sw: number | Uint8ClampedArray, sh?: number) {
-            if (typeof sw === 'number') {
-                this.width = sw;
-                this.height = sh!;
-                this.data = new Uint8ClampedArray(sw * sh! * 4);
-            } else {
-                this.data = sw;
-                this.width = sh!;
-                this.height = sw.length / (4 * sh!);
-            }
-        }
-    };
-}
 
 const GFX_DIR = 'public/Siedler4/Gfx';
 

@@ -2,28 +2,9 @@
  * Export all images from 5.gfx (map objects) to PNG files.
  * Usage: npx tsx scripts/export-gfx5.ts
  */
+import './lib/node-image-data-polyfill';
 import { NodeFileSystem } from '../src/resources/gfx/exporter/file-system';
 import { GfxImageExporter } from '../src/resources/gfx/exporter/gfx-image-exporter';
-
-// Polyfill ImageData for Node.js (used by GfxImage.getImageData)
-if (typeof globalThis.ImageData === 'undefined') {
-    (globalThis as Record<string, unknown>)['ImageData'] = class ImageData {
-        width: number;
-        height: number;
-        data: Uint8ClampedArray;
-        constructor(sw: number | Uint8ClampedArray, sh?: number) {
-            if (typeof sw === 'number') {
-                this.width = sw;
-                this.height = sh!;
-                this.data = new Uint8ClampedArray(sw * sh! * 4);
-            } else {
-                this.data = sw;
-                this.width = sh!;
-                this.height = sw.length / (4 * sh!);
-            }
-        }
-    };
-}
 
 const GFX_DIR = 'public/Siedler4/Gfx';
 const OUTPUT_DIR = 'output/gfx5-export';
