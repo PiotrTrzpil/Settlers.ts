@@ -61,11 +61,10 @@ export class DemandQueue {
     /** Accumulated game time in seconds. */
     private gameTime = 0;
 
-    private readonly eventBus: EventBus | null;
+    private readonly eventBus: EventBus;
 
-    constructor(eventBus?: EventBus) {
-        // eslint-disable-next-line no-restricted-syntax -- optional dependency; null when not wired
-        this.eventBus = eventBus ?? null;
+    constructor(eventBus: EventBus) {
+        this.eventBus = eventBus;
     }
 
     /**
@@ -98,7 +97,7 @@ export class DemandQueue {
         this.addToBuildingIndex(entry.buildingId, entry.id);
         this.sortedCacheDirty = true;
 
-        this.eventBus?.emit('logistics:demandCreated', {
+        this.eventBus.emit('logistics:demandCreated', {
             demandId: entry.id,
             buildingId: entry.buildingId,
             materialType: entry.materialType,
@@ -140,7 +139,7 @@ export class DemandQueue {
         this.removeFromBuildingIndex(entry.buildingId, demandId);
         this.sortedCacheDirty = true;
 
-        this.eventBus?.emit('logistics:demandConsumed', {
+        this.eventBus.emit('logistics:demandConsumed', {
             demandId: entry.id,
             buildingId: entry.buildingId,
             materialType: entry.materialType,

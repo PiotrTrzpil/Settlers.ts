@@ -3,12 +3,13 @@ import { DemandQueue, DemandPriority } from '@/game/features/logistics/demand-qu
 import { TransportJobStore } from '@/game/features/logistics/transport-job-store';
 import { EMaterialType } from '@/game/economy/material-type';
 import { TransportPhase, type TransportJobRecord } from '@/game/features/logistics/transport-job-record';
+import { EventBus } from '@/game/event-bus';
 
 describe('DemandQueue state machine', () => {
     let demandQueue: DemandQueue;
 
     beforeEach(() => {
-        demandQueue = new DemandQueue();
+        demandQueue = new DemandQueue(new EventBus());
     });
 
     it('demand lifecycle: addDemand → getSortedDemands → consumeDemand', () => {
