@@ -14,9 +14,7 @@ export {
     SETTLER_KEY_TO_UNIT_TYPE,
     UNIT_BASE_JOB_INDICES,
     BUILDING_JOB_INDICES,
-    BUILDING_OVERLAY_JIL_INDICES,
-    type OverlayJilEntry,
-    resolveOverlayJilEntry,
+    OVERLAY_DIRECTION_BASE,
     RESOURCE_JOB_INDICES,
     CARRIER_MATERIAL_JOB_INDICES,
     TREE_JOB_OFFSET,
@@ -371,6 +369,11 @@ export class SpriteMetadataRegistry {
      */
     public registerMapObject(type: MapObjectType, entry: SpriteEntry, variation: number = 0): void {
         this.mapObjectsCategory.register(type, entry, variation);
+    }
+
+    /** Mark map object sprite loading as complete — enables warnings for genuinely missing types. */
+    public markMapObjectsLoaded(): void {
+        this.mapObjectsCategory.markLoadingComplete();
     }
 
     /**

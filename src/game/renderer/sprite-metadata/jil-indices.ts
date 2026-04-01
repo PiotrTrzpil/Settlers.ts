@@ -771,7 +771,7 @@ export const BUILDING_JOB_INDICES: Partial<Record<BuildingType, number>> = {
     [BuildingType.GuardTowerBig]: 47, // S4BuildingType.GUARDTOWERBIG
     [BuildingType.Castle]: 48, // S4BuildingType.CASTLE
     // Dark Tribe unique buildings (file 13.jil reuses slots 40-42; DarkTribe has no residences)
-    [BuildingType.MushroomFarm]: 40, // DarkTribe: slot 40 (RESIDENCESMALL in other races)
+    [BuildingType.MushroomFarm]: 49, // DarkTribe: race-specific building at job 49
     [BuildingType.Fortress]: 41, // DarkTribe: slot 41 (RESIDENCEMEDIUM in other races)
     [BuildingType.DarkTemple]: 42, // DarkTribe: slot 42 (RESIDENCEBIG in other races)
     [BuildingType.ManaCopterHall]: 80, // DarkTribe: S4BuildingType.MANACOPTERHALL
@@ -859,8 +859,8 @@ export const CARRIER_MATERIAL_JOB_INDICES: Partial<Record<EMaterialType, number>
     Object.entries(RESOURCE_JOB_INDICES).map(([type, idx]) => [type, idx + 1])
 ) as Partial<Record<EMaterialType, number>>;
 
-// Building overlay JIL indices are in jil-overlay-indices.ts
-export { type OverlayJilEntry, resolveOverlayJilEntry, BUILDING_OVERLAY_JIL_INDICES } from './jil-overlay-indices';
+// Building overlay direction convention is documented in jil-overlay-indices.ts
+export { OVERLAY_DIRECTION_BASE } from './jil-overlay-indices';
 
 // ============================================================
 // Tree job indices — file 5.jil

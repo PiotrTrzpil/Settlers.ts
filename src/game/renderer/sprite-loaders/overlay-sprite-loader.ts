@@ -54,23 +54,18 @@ export async function loadOverlaySprites(
                 ctx.atlas,
                 paletteBase
             );
-            if (anim && anim.frames.length > 0) {
-                ctx.registry.registerOverlayFrames(
-                    entry.gfxFile,
-                    entry.jobIndex,
-                    entry.directionIndex,
-                    anim.frames.map(f => f.entry)
-                );
-                return 1;
+            if (!anim || anim.frames.length === 0) {
+                // No animation data at this direction — the race's GFX doesn't
+                // include this overlay (0 frames). This is normal: each race has
+                // different overlays per building, and some directions are empty.
+                return 0;
             }
-            // Try single frame
-            const sprite = await ctx.spriteLoader.loadJobSprite(
-                fileSet,
-                { jobIndex: entry.jobIndex, directionIndex: entry.directionIndex },
-                ctx.atlas,
-                paletteBase
+            ctx.registry.registerOverlayFrames(
+                entry.gfxFile,
+                entry.jobIndex,
+                entry.directionIndex,
+                anim.frames.map(f => f.entry)
             );
-            ctx.registry.registerOverlayFrames(entry.gfxFile, entry.jobIndex, entry.directionIndex, [sprite.entry]);
             return 1;
         })
     );

@@ -10,11 +10,7 @@ import { raceIdToRace, getBuildingTypesByXmlId } from '../../data/game-data-acce
 import type { RaceId } from '@/resources/game-data';
 import { OverlayCondition, OverlayLayer, type BuildingOverlayDef, type OverlaySpriteRef } from './types';
 import type { OverlayRegistry } from './overlay-registry';
-import {
-    BUILDING_OVERLAY_JIL_INDICES,
-    BUILDING_JOB_INDICES,
-    resolveOverlayJilEntry,
-} from '../../renderer/sprite-metadata/jil-indices';
+import { BUILDING_JOB_INDICES, OVERLAY_DIRECTION_BASE } from '../../renderer/sprite-metadata/jil-indices';
 import { createLogger } from '@/utilities/logger';
 
 const log = createLogger('OverlayDataLoader');
@@ -32,17 +28,21 @@ const FLAG_FRAME_DURATION_MS = Math.round(1000 / 12);
 const FLAG_SPRITE_REF: OverlaySpriteRef = { gfxFile: 0, jobIndex: 0 };
 
 /**
- * Resolve a patch job name to a sprite ref.
- * @param parentJobIndex The parent building's JIL job index, needed for parent-relative entries (`{ dir }`).
- * Returns null if the overlay is unmapped (null) or unknown.
+ * Build a sprite ref for a patch overlay.
+ *
+ * The direction index is derived from the patch's position in the race-specific
+ * XML patch list: `directionIndex = 2 + patchIndex`. See the module-level doc in
+ * jil-overlay-indices.ts for the full explanation of this convention.
+ *
+ * @param patchIndex Position of this patch in the race's XML patch list (0-based).
+ * @param parentJobIndex The parent building's JIL job index.
  */
-function resolveOverlaySpriteRef(jobName: string, gfxFile: number, parentJobIndex?: number): OverlaySpriteRef | null {
-    // eslint-disable-next-line no-restricted-syntax -- index access returns undefined for missing keys
-    const resolved = resolveOverlayJilEntry(BUILDING_OVERLAY_JIL_INDICES[jobName] ?? null, parentJobIndex);
-    if (!resolved) {
-        return null;
-    }
-    return { gfxFile, jobIndex: resolved.jobIndex, directionIndex: resolved.directionIndex || undefined };
+function buildOverlaySpriteRef(gfxFile: number, patchIndex: number, parentJobIndex: number): OverlaySpriteRef {
+    return {
+        gfxFile,
+        jobIndex: parentJobIndex,
+        directionIndex: OVERLAY_DIRECTION_BASE + patchIndex,
+    };
 }
 
 /**
@@ -90,24 +90,20 @@ function createFlagDef(buildingInfo: BuildingInfo): BuildingOverlayDef {
     };
 }
 
-/** Convert a single BuildingPatch to a BuildingOverlayDef. Returns null if JIL index not yet mapped. */
+/** Convert a single BuildingPatch to a BuildingOverlayDef. */
 function patchToDef(
     patch: BuildingPatch,
     buildingXmlId: string,
-    slot: number,
+    patchIndex: number,
     gfxFile: number,
-    parentJobIndex?: number
-): BuildingOverlayDef | null {
-    const spriteRef = resolveOverlaySpriteRef(patch.job, gfxFile, parentJobIndex);
-    if (!spriteRef) {
-        return null;
-    }
-
+    parentJobIndex: number
+): BuildingOverlayDef {
+    const spriteRef = buildOverlaySpriteRef(gfxFile, patchIndex, parentJobIndex);
     const key = deriveOverlayKey(patch.job, buildingXmlId);
     const isEvent = patch.type === 'EVENT';
 
     return {
-        key: slot > 0 ? `${key}_s${slot}` : key,
+        key,
         layer: OverlayLayer.AboveBuilding,
         pixelOffsetX: 0,
         pixelOffsetY: 0,
@@ -121,32 +117,45 @@ function patchToDef(
 
 /**
  * Convert a building's patches into overlay definitions.
- * Skips patches whose JIL index is not yet mapped (returns null from patchToDef).
+ *
+ * ## Direction index derivation
+ *
+ * Each building job in the GFX file stores directions in a DIL (Direction Index
+ * List). The DIL reader's `getItems()` method returns a **compacted** array that
+ * skips null entries. Only patches with a job name occupy a real DIL direction;
+ * jobless patches correspond to null DIL slots and are skipped by compaction.
+ *
+ * The compacted direction index for a patch overlay is:
+ *   `directionIndex = OVERLAY_DIRECTION_BASE + overlayIndex`
+ * where `overlayIndex` counts only patches that have a job name (0-based).
+ *
+ * This is race-specific — each race has its own patch list, so the same overlay
+ * name maps to different compacted directions for different races.
+ *
  * Ensures unique keys by appending slot index on collision.
  */
 function convertPatches(
     patches: readonly BuildingPatch[],
     buildingXmlId: string,
     gfxFile: number,
-    parentJobIndex?: number
+    parentJobIndex: number
 ): BuildingOverlayDef[] {
     const defs: BuildingOverlayDef[] = [];
     const usedKeys = new Set<string>();
+    let overlayIndex = 0;
 
     for (const patch of patches) {
         if (!patch.job) {
             continue;
         }
-        let def = patchToDef(patch, buildingXmlId, 0, gfxFile, parentJobIndex);
-        if (!def) {
-            continue;
-        } // JIL index not yet mapped — skip until filled in
+        let def = patchToDef(patch, buildingXmlId, overlayIndex, gfxFile, parentJobIndex);
         // Ensure unique key within this building
         if (usedKeys.has(def.key)) {
             def = { ...def, key: `${def.key}_s${patch.slot}` };
         }
         usedKeys.add(def.key);
         defs.push(def);
+        overlayIndex++;
     }
 
     return defs;
@@ -177,7 +186,7 @@ function registerRaceOverlays(
             const parentJobIndex = BUILDING_JOB_INDICES[bt];
 
             // Animation patch overlays (smoke, fire, wheels, etc.)
-            if (buildingInfo.patches.length > 0) {
+            if (buildingInfo.patches.length > 0 && parentJobIndex !== undefined) {
                 defs.push(...convertPatches(buildingInfo.patches, buildingXmlId, gfxFile, parentJobIndex));
             }
 

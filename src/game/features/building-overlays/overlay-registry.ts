@@ -69,7 +69,13 @@ export class OverlayRegistry {
         const result: BuildingOverlayDef[] = [];
         for (const [key, defs] of this.defs) {
             if (key.endsWith(`:${race}`)) {
-                result.push(...defs);
+                for (const def of defs) {
+                    // Flag overlays use a sentinel spriteRef and are rendered via the
+                    // player-flag registry, not JIL sprites — skip them.
+                    if (!def.isFlag) {
+                        result.push(def);
+                    }
+                }
             }
         }
         return result;

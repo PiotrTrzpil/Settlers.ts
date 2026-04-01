@@ -38,9 +38,7 @@ export {
     BUILDING_SPRITE_FRAMES,
     type BuildingSpriteInfo,
     BUILDING_JOB_INDICES,
-    BUILDING_OVERLAY_JIL_INDICES,
-    type OverlayJilEntry,
-    resolveOverlayJilEntry,
+    OVERLAY_DIRECTION_BASE,
     getBuildingSpriteMap,
 
     // Unit data
