@@ -117,6 +117,16 @@ export const TowerGarrisonFeature: FeatureDefinition = {
             } satisfies TowerGarrisonExports,
             renderPasses: [
                 {
+                    id: 'tower-swordsman',
+                    layer: RenderLayer.BehindEntities,
+                    needs: { sprites: true },
+                    create: () =>
+                        new TowerGarrisonRenderPass(manager, ctx.gameState, {
+                            getSlots: g => g.swordsmanSlots,
+                            top: false,
+                        }),
+                },
+                {
                     id: 'tower-bowman',
                     layer: RenderLayer.AboveEntities,
                     needs: { sprites: true },

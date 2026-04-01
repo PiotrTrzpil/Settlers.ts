@@ -600,5 +600,6 @@ export async function loadMapObjectSprites(ctx: SpriteLoadContext): Promise<bool
             `${cropCount} crops, ${flagCount} flags, ${dotCount} territory dots, ${signCount} signs, ` +
             `${resourceCount} resources (${total} total)`
     );
+    ctx.registry.markMapObjectsLoaded();
     return total > 0;
 }

@@ -338,9 +338,7 @@ export class SettlerTaskSystem implements TickSystem, TaskDispatcher, WorkerStat
 
         this.workerTracker.release(entityId, runtime);
 
-        if (!this.locationManager.isCommitted(entity.id)) {
-            entity.hidden = false;
-        }
+        // Location manager is the sole owner of entity.hidden — no direct sets here.
         runtime.moveTask = { type: 'move', targetX, targetY };
         runtime.state = SettlerState.WORKING;
 
@@ -377,9 +375,7 @@ export class SettlerTaskSystem implements TickSystem, TaskDispatcher, WorkerStat
             }
         }
 
-        if (!this.locationManager.isCommitted(entity.id)) {
-            entity.hidden = false;
-        }
+        // Location manager is the sole owner of entity.hidden — no direct sets here.
         runtime.state = SettlerState.WORKING;
         runtime.job = job;
         runtime.moveTask = null;

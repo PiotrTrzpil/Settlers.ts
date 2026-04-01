@@ -19,10 +19,17 @@ export class MapObjectSpriteCategory implements SerializableSpriteCategory {
     private readonly entries: Map<MapObjectType, SpriteEntry[]> = new Map();
     /** Tracks types already warned about to avoid log spam in the render loop. */
     private readonly warnedTypes: Set<number> = new Set();
+    /** True once all map object sprite loading has completed. Prevents false "no sprite" warnings during async loading. */
+    private loadingComplete = false;
 
     /** Whether any map object sprites have been loaded. */
     get isLoaded(): boolean {
         return this.entries.size > 0;
+    }
+
+    /** Mark sprite loading as complete — enables "no sprite" warnings for genuinely missing types. */
+    markLoadingComplete(): void {
+        this.loadingComplete = true;
     }
 
     /**
@@ -45,7 +52,7 @@ export class MapObjectSpriteCategory implements SerializableSpriteCategory {
     get(type: MapObjectType, variation: number = 0): SpriteEntry | undefined {
         const variants = this.entries.get(type);
         if (!variants) {
-            if (!this.warnedTypes.has(type)) {
+            if (this.loadingComplete && !this.warnedTypes.has(type)) {
                 this.warnedTypes.add(type);
                 log.info(`No sprite for map object ${type}`);
             }
@@ -93,6 +100,7 @@ export class MapObjectSpriteCategory implements SerializableSpriteCategory {
         for (const [k, v] of map) {
             category.entries.set(k, v);
         }
+        category.loadingComplete = true;
         return category;
     }
 }

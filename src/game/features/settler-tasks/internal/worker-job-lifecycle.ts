@@ -166,16 +166,14 @@ export class WorkerJobLifecycle {
             jobId: job.jobId,
         });
 
-        if (this.locationManager.isInside(settler.id)) {
+        if (this.locationManager.isInside(settler.id) && runtime.homeAssignment) {
             // Workers with a home assignment exit to search for new work.
             // Units placed inside by dispatch jobs (garrison, worker dispatch)
             // stay inside — the job intentionally placed them there.
-            if (runtime.homeAssignment) {
-                this.locationManager.exitBuilding(settler.id);
-            }
-        } else {
-            settler.hidden = false;
+            this.locationManager.exitBuilding(settler.id);
         }
+        // No else — location manager is the sole owner of entity.hidden.
+        // If settler is not inside a building, it's already visible.
         this.animController.setIdleAnimation(settler);
 
         if (runtime.homeAssignment) {
@@ -216,7 +214,9 @@ export class WorkerJobLifecycle {
             }
         }
 
-        if (this.locationManager.isInside(settler.id)) {
+        // Only exit building for workers with a home assignment. Garrisoned units
+        // (no homeAssignment) must stay inside — mirrors the completeJob logic.
+        if (this.locationManager.isInside(settler.id) && runtime.homeAssignment) {
             this.locationManager.exitBuilding(settler.id);
         }
 
@@ -301,6 +301,8 @@ export class WorkerJobLifecycle {
                 this.emitNodeStarted(settler, job, node);
             }
 
+            // Location manager is the sole owner of entity.hidden — all visibility
+            // transitions go through enterBuilding / exitBuilding.
             const buildingId = this.getWorkerHomeBuilding(settler.id);
             if (buildingId !== null) {
                 const isInside = this.locationManager.isInside(settler.id);
@@ -309,8 +311,13 @@ export class WorkerJobLifecycle {
                 } else if (node.visible && isInside) {
                     this.locationManager.exitBuilding(settler.id);
                 }
-            } else {
-                settler.hidden = !node.visible;
+            } else if (!node.visible) {
+                // All visible=false nodes (WAIT_VIRTUAL) belong to settlers with a home building.
+                // Homeless settlers should never reach here.
+                throw new Error(
+                    `prepareNodeTick: settler ${settler.id} has visible=false node ` +
+                        `(${ChoreoTaskType[node.task]}) but no home building — cannot hide without a building`
+                );
             }
 
             job.progress = 0;
