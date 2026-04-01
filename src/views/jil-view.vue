@@ -192,6 +192,8 @@ const magentaBg = ref(false);
 function renderImageToCanvas(img: IGfxImage, canvas: HTMLCanvasElement): void {
     renderImageToCanvasBase(img, canvas, magentaBg.value ? '#ff00ff' : undefined);
 }
+
+const clearCanvas = (c: HTMLCanvasElement) => c.getContext('2d')?.clearRect(0, 0, c.width, c.height);
 const gridDirection = ref<'all' | number>(0);
 let animationTimer = 0;
 let scrollSaveTimer = 0;
@@ -554,12 +556,14 @@ function renderGridAnimFrame(): void {
         }
 
         const dirItems = dilFileReader.value.getItems(item.offset, item.length);
-        if (dir >= dirItems.length) {
+        if (dir >= dirItems.length || dirItems.length === 0) {
+            clearCanvas(canvas);
             continue;
         }
 
         const frameItems = gilFileReader.value.getItems(dirItems[dir]!.offset, dirItems[dir]!.length);
         if (frameItems.length === 0) {
+            clearCanvas(canvas);
             continue;
         }
 
@@ -589,12 +593,14 @@ function renderGridStaticDirection(): void {
         }
 
         const dirItems = dilFileReader.value.getItems(item.offset, item.length);
-        if (dir >= dirItems.length) {
+        if (dir >= dirItems.length || dirItems.length === 0) {
+            clearCanvas(canvas);
             continue;
         }
 
         const frameItems = gilFileReader.value.getItems(dirItems[dir]!.offset, dirItems[dir]!.length);
         if (frameItems.length === 0) {
+            clearCanvas(canvas);
             continue;
         }
 
