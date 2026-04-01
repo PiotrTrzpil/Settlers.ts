@@ -55,6 +55,7 @@ export function findCommand(): CliCommand {
         usage: 'find <BuildingType|UnitType> [--p N] [--n N] [--near X,Y] [--radius R]',
         desc: 'Find entities of a given type. --near X,Y filters by proximity (default radius 10)',
         execute(args: CliArgs, ctx: CliContext): CliResult {
+            // eslint-disable-next-line no-restricted-syntax -- CLI positional arg is optional; '' is the correct default when no argument provided
             const name = String(args._[0] ?? '');
             if (!name) {
                 return fail('usage: find <Type> [--near X,Y] [--radius R] [--p N] [--n N]');

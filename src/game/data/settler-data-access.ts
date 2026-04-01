@@ -102,7 +102,11 @@ function deriveSearchType(info: SettlerValueInfo): SearchType | null {
     const nonSeed = searchTypes.find(s => !s.endsWith('_SEED_POS'));
     const primaryXml = nonSeed ?? searchTypes[0]!;
     const searchKey = primaryXml.replace('SEARCH_', '');
-    return XML_SEARCH_TO_SEARCH_TYPE[searchKey] ?? null;
+    const result = XML_SEARCH_TO_SEARCH_TYPE[searchKey];
+    if (!result) {
+        throw new Error(`Unknown XML search type '${primaryXml}' — no mapping in XML_SEARCH_TO_SEARCH_TYPE`);
+    }
+    return result;
 }
 
 /**
@@ -144,7 +148,11 @@ function deriveSettlerConfig(info: SettlerValueInfo, settlerXmlId: string): Sett
     let plantSearch: SearchType | undefined;
     if (seedXml) {
         const key = seedXml.replace('SEARCH_', '');
-        plantSearch = XML_SEARCH_TO_SEARCH_TYPE[key];
+        const mapped = XML_SEARCH_TO_SEARCH_TYPE[key];
+        if (!mapped) {
+            throw new Error(`Unknown XML seed search type '${seedXml}' — no mapping in XML_SEARCH_TO_SEARCH_TYPE`);
+        }
+        plantSearch = mapped;
     }
 
     return { search, jobs: workJobs, plantSearch, buildingJobs: buildingJobsMap };

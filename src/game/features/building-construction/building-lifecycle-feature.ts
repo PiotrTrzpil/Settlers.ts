@@ -74,6 +74,7 @@ export class BuildingLifecycleHandler {
             const pileIndexByMaterial = new Map<EMaterialType, number>();
 
             return configs.map(cfg => {
+                // eslint-disable-next-line no-restricted-syntax -- map starts empty; first lookup for a material type legitimately returns undefined, 0 is the correct initial index
                 const pileIndex = pileIndexByMaterial.get(cfg.materialType) ?? 0;
                 pileIndexByMaterial.set(cfg.materialType, pileIndex + 1);
 

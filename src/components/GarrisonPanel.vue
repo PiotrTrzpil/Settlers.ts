@@ -88,13 +88,13 @@ import type { IconEntry } from '@/views/sprite-icon-loader';
 
 const props = defineProps<{
     buildingId: number;
-    game: Game | null;
+    game: Game;
     unitIcons: Record<string, IconEntry>;
 }>();
 
 const gameRef = computed(() => props.game);
 const buildingIdRef = computed(() => props.buildingId);
-const tick = computed(() => props.game?.viewState.state.tick ?? 0);
+const tick = computed(() => props.game.viewState.state.tick);
 
 const garrison = useGarrison(gameRef, buildingIdRef, tick);
 
@@ -115,7 +115,9 @@ const swordsmanSlots = computed<GarrisonSlotDisplay[]>(() => {
     }
     return Array.from({ length: g.swordsmanSlots.max }, (_, i) => ({
         slotIndex: i,
+        // eslint-disable-next-line no-restricted-syntax -- units[i] is absent for empty slots; null is correct for empty slot
         unitId: g.swordsmanSlots.units[i]?.unitId ?? null,
+        // eslint-disable-next-line no-restricted-syntax -- units[i] is absent for empty slots; 0 is correct default level
         level: g.swordsmanSlots.units[i]?.level ?? 0,
         iconKey: g.swordsmanSlots.units[i] ? (unitTypeToIconKey.get(g.swordsmanSlots.units[i].unitType) ?? null) : null,
     }));
@@ -128,7 +130,9 @@ const bowmanSlots = computed<GarrisonSlotDisplay[]>(() => {
     }
     return Array.from({ length: g.bowmanSlots.max }, (_, i) => ({
         slotIndex: i,
+        // eslint-disable-next-line no-restricted-syntax -- units[i] is absent for empty slots; null is correct for empty slot
         unitId: g.bowmanSlots.units[i]?.unitId ?? null,
+        // eslint-disable-next-line no-restricted-syntax -- units[i] is absent for empty slots; 0 is correct default level
         level: g.bowmanSlots.units[i]?.level ?? 0,
         iconKey: g.bowmanSlots.units[i] ? (unitTypeToIconKey.get(g.bowmanSlots.units[i].unitType) ?? null) : null,
     }));
@@ -142,7 +146,7 @@ function slotTitle(unitId: number | null): string {
 }
 
 function ungarrison(unitId: number): void {
-    props.game?.execute({ type: 'ungarrison_unit', buildingId: props.buildingId, unitId });
+    props.game.execute({ type: 'ungarrison_unit', buildingId: props.buildingId, unitId });
 }
 </script>
 

@@ -61,7 +61,8 @@ export class PilePositionResolver {
                         this.constructionSiteManager.getConstructionPilePosition(
                             params.buildingId,
                             material,
-                            params.pileIndex ?? 0
+                            // eslint-disable-next-line no-restricted-syntax -- pileIndex is an optional param; absent means first pile (index 0)
+                        params.pileIndex ?? 0
                         ) ?? null
                     );
                 }

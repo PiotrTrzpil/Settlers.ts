@@ -11,7 +11,7 @@ import { Race } from '../../core/race';
 import type { LuaRuntime } from '../lua-runtime';
 import type { GameState } from '@/game/game-state';
 import { EntityType, UnitType } from '@/game/entity';
-import type { Command, CommandResult } from '@/game/commands';
+import type { ExecuteCommand } from '@/game/commands';
 
 const log = new LogHandler('SettlersAPI');
 
@@ -120,7 +120,7 @@ export interface SettlersAPIContext {
     playerRaces?: Map<number, Race>;
     /** Optional: move a unit to a target position (uses pathfinding) */
     moveUnit?: (entityId: number, targetX: number, targetY: number) => boolean;
-    executeCommand?: (cmd: Command) => CommandResult;
+    executeCommand?: ExecuteCommand;
 }
 
 /**
@@ -160,7 +160,7 @@ export function registerSettlersAPI(runtime: LuaRuntime, context: SettlersAPICon
                 race,
             });
 
-            return result.effects?.length ?? 0;
+            return result.success ? result.count : 0;
         }
     );
 

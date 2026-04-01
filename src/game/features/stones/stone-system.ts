@@ -15,7 +15,7 @@ import type { EntityVisualService } from '../../animation/entity-visual-service'
 import { MapObjectType, isHarvestableStone, STONE_FULL_LEVEL, stoneTypeForLevel } from '@/game/types/map-object-types';
 import { createLogger } from '@/utilities/logger';
 import { findEmptySpot } from '../../systems/spatial-search';
-import type { Command, CommandResult } from '../../commands';
+import type { CommandExecutor } from '../../commands';
 import { PersistentMap } from '@/game/persistence/persistent-store';
 
 const log = createLogger('StoneSystem');
@@ -46,7 +46,7 @@ export interface StoneState {
 export interface StoneSystemConfig {
     gameState: GameState;
     visualService: EntityVisualService;
-    executeCommand: (cmd: Command) => CommandResult;
+    executeCommand: CommandExecutor;
 }
 
 /**
@@ -55,7 +55,7 @@ export interface StoneSystemConfig {
 export class StoneSystem {
     private gameState: GameState;
     private readonly visualService: EntityVisualService;
-    private readonly executeCommand: (cmd: Command) => CommandResult;
+    private readonly executeCommand: CommandExecutor;
 
     /** Persistent state storage: entityId -> StoneState */
     readonly persistentStore = new PersistentMap<StoneState>('stones');

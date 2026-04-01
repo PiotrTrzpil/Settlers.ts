@@ -162,7 +162,7 @@ export class TowerGarrisonManager {
     isEnRoute(unitId: number): boolean {
         const location = this.locationManager.getLocation(unitId);
         return (
-            location !== null &&
+            location !== undefined &&
             location.status === SettlerBuildingStatus.Approaching &&
             this.garrisons.has(location.buildingId)
         );
@@ -171,7 +171,7 @@ export class TowerGarrisonManager {
     /** Returns the tower ID this unit is walking to, or undefined if not en-route. */
     getTowerIdForEnRouteUnit(unitId: number): number | undefined {
         const location = this.locationManager.getLocation(unitId);
-        if (location === null || location.status !== SettlerBuildingStatus.Approaching) {
+        if (location === undefined || location.status !== SettlerBuildingStatus.Approaching) {
             return undefined;
         }
         if (!this.garrisons.has(location.buildingId)) {

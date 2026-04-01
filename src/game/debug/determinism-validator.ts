@@ -113,6 +113,7 @@ export function computeStateHash(game: GameCore): StateHash {
  * being present — a missing field produces 0 (hash still works for comparison).
  */
 function currentTick(game: GameCore): number {
+    // eslint-disable-next-line no-restricted-syntax -- currentTick may not be present (added by optional subsystem); 0 is documented correct fallback per function comment
     return (game as unknown as { currentTick?: number }).currentTick ?? 0;
 }
 

@@ -168,6 +168,7 @@ export function populateMapBuildings(
 
         result.push({ buildingId: entity.id, buildingType, race: entity.race });
 
+        // eslint-disable-next-line no-restricted-syntax -- map starts empty; first entry per player legitimately absent, [] is the correct initial value
         const entries = perPlayer.get(buildingData.player) ?? [];
         entries.push(`${buildingType}@(${buildingData.x},${buildingData.y})`);
         perPlayer.set(buildingData.player, entries);

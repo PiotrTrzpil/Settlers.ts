@@ -9,7 +9,7 @@ import { LogHandler } from '@/utilities/log-handler';
 import type { LuaRuntime } from '../lua-runtime';
 import type { GameState } from '@/game/game-state';
 import { EntityType } from '@/game/entity';
-import type { Command, CommandResult } from '@/game/commands';
+import type { ExecuteCommand } from '@/game/commands';
 
 const log = new LogHandler('GoodsAPI');
 
@@ -77,7 +77,7 @@ export const S4_GOOD_TYPES = {
 
 export interface GoodsAPIContext {
     gameState: GameState;
-    executeCommand?: (cmd: Command) => CommandResult;
+    executeCommand?: ExecuteCommand;
 }
 
 /**
@@ -118,10 +118,7 @@ export function registerGoodsAPI(runtime: LuaRuntime, context: GoodsAPIContext):
             amount,
         });
 
-        if (!result.success || !result.effects?.length) {
-            return -1;
-        }
-        return (result.effects[0] as { entityId: number }).entityId;
+        return result.success ? result.entityId : -1;
     });
 
     // Goods.RemoveGoods(player, goodType, amount) - Remove goods from player's inventory
@@ -157,10 +154,7 @@ export function registerGoodsAPI(runtime: LuaRuntime, context: GoodsAPIContext):
             amount,
         });
 
-        if (!result.success || !result.effects?.length) {
-            return -1;
-        }
-        return (result.effects[0] as { entityId: number }).entityId;
+        return result.success ? result.entityId : -1;
     });
 
     log.debug('Goods API registered');

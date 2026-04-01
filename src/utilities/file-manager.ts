@@ -125,6 +125,7 @@ export class FileManager {
 
     /** return a all files matching a given filter string */
     public filter(filterStr?: string): IFileSource[] {
+        // eslint-disable-next-line no-restricted-syntax -- filterStr is an optional parameter; '' matches all files
         const filterArray = (filterStr ?? '').split('|').map(f => Path.fixPath(f));
 
         return this.files.filter(f => filterArray.find(filter => this.checkFileNameFilter(f.name, filter, false)));

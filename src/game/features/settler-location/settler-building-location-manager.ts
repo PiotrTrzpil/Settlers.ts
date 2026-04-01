@@ -154,8 +154,8 @@ export class SettlerBuildingLocationManager implements ISettlerBuildingLocationM
     }
 
     /** Returns current location (approaching or inside), or null if settler is not tracked. */
-    getLocation(settlerId: number): SettlerBuildingLocation | null {
-        return this.locationMap.get(settlerId) ?? null;
+    getLocation(settlerId: number): SettlerBuildingLocation | undefined {
+        return this.locationMap.get(settlerId);
     }
 
     /** Returns true if settler is confirmed inside a building (hidden). If buildingId is given, also checks it matches. */

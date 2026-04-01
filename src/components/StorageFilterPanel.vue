@@ -39,7 +39,7 @@ import { useSelectionPanel } from '@/composables/useSelectionPanel';
 import { useStorageFilter, StorageDirection } from '@/composables/useStorageFilter';
 import type { EMaterialType } from '@/game/economy/material-type';
 
-const props = defineProps<{ game: Game | null }>();
+const props = defineProps<{ game: Game }>();
 
 const gameRef = computed(() => props.game);
 const { selectedEntity, tick } = useSelectionPanel(gameRef);

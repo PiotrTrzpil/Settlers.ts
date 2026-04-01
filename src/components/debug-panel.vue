@@ -59,6 +59,9 @@
                 </SettingsButton>
                 <SettingsButton danger @click="$emit('resetGameState')">Reset State</SettingsButton>
             </div>
+            <div class="button-row">
+                <SettingsButton @click="partialReload">Partial Reload</SettingsButton>
+            </div>
             <Checkbox v-model="selectAllUnits" label="All units selectable" />
         </CollapseSection>
 
@@ -152,6 +155,11 @@ function goToEntity(): void {
         return;
     }
     window.__settlers__?.viewpoint?.setPosition(entity.x, entity.y);
+}
+
+/** Reload the page — sprite cache (Cache API) and game state (IndexedDB) persist, so it's fast. */
+function partialReload(): void {
+    window.location.reload();
 }
 
 const props = defineProps<{

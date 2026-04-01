@@ -10,7 +10,7 @@ import { BuildingType } from '@/game/entity';
 import { HANDLED, type InputContext } from '@/game/input/input-mode';
 import { MouseButton, type PointerData, InputAction } from '@/game/input/input-actions';
 import { CursorType } from '@/game/input/render-state';
-import { commandFailed, commandSuccess } from '@/game/commands';
+import { commandFailed, COMMAND_OK } from '@/game/commands';
 
 function createPointerData(overrides: Partial<PointerData> = {}): PointerData {
     return {
@@ -47,7 +47,7 @@ function createMockInputContext() {
         },
         executeCommand: cmd => {
             commands.push(cmd);
-            return commandSuccess();
+            return COMMAND_OK;
         },
         localPlayerRace: null,
         pickEntityAtScreen: null,

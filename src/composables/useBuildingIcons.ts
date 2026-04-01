@@ -215,11 +215,11 @@ export function useBuildingIcons(fileManager: Ref<FileManager | null>, currentRa
         void loadIconsForRace(newRace);
     });
 
-    function getIconUrl(buildingType: BuildingType, selected = false): string | null {
+    function getIconUrl(buildingType: BuildingType, selected = false): string | undefined {
         if (selected) {
-            return selectedIconUrls.value.get(buildingType) ?? null;
+            return selectedIconUrls.value.get(buildingType);
         }
-        return iconUrls.value.get(buildingType) ?? null;
+        return iconUrls.value.get(buildingType);
     }
 
     return {

@@ -12,7 +12,7 @@ import type { LuaRuntime } from '../lua-runtime';
 import type { GameState } from '@/game/game-state';
 import { EntityType, BuildingType } from '@/game/entity';
 import { type ConstructionSiteManager } from '@/game/features/building-construction';
-import type { Command, CommandResult } from '@/game/commands';
+import type { ExecuteCommand } from '@/game/commands';
 
 const log = new LogHandler('BuildingsAPI');
 
@@ -133,7 +133,7 @@ export interface BuildingsAPIContext {
     constructionSiteManager: ConstructionSiteManager;
     /** Per-player race mapping (player index → Race) */
     playerRaces?: Map<number, Race>;
-    executeCommand?: (cmd: Command) => CommandResult;
+    executeCommand?: ExecuteCommand;
 }
 
 /**
@@ -185,10 +185,7 @@ export function registerBuildingsAPI(runtime: LuaRuntime, context: BuildingsAPIC
                 race,
             });
 
-            if (!result.success || !result.effects?.length) {
-                return -1;
-            }
-            return (result.effects[0] as { entityId: number }).entityId;
+            return result.success ? result.entityId : -1;
         }
     );
 
@@ -289,10 +286,7 @@ export function registerBuildingsAPI(runtime: LuaRuntime, context: BuildingsAPIC
                 race,
             });
 
-            if (!result.success || !result.effects?.length) {
-                return -1;
-            }
-            return (result.effects[0] as { entityId: number }).entityId;
+            return result.success ? result.entityId : -1;
         }
     );
 

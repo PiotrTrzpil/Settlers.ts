@@ -152,8 +152,7 @@ export function executeChangeTypeAtBarracks(
         return TaskResult.DONE;
     }
 
-    const firstEffect = spawnResult.effects?.[0];
-    const soldierId = firstEffect?.type === 'unit_spawned' ? firstEffect.entityId : 0;
+    const soldierId = spawnResult.entityId;
 
     // Remove the carrier after spawning. Carrier cleanup happens via entity:removed event.
     ctx.executeCommand!({ type: 'remove_entity', entityId: settler.id });

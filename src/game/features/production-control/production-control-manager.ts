@@ -146,6 +146,7 @@ export class ProductionControlManager {
             }
         }
 
+        // eslint-disable-next-line no-restricted-syntax -- productionCounts starts empty; absent entry means 0 produced so far
         state.productionCounts.set(index, (state.productionCounts.get(index) ?? 0) + 1);
         return index;
     }
@@ -185,6 +186,7 @@ export class ProductionControlManager {
         for (let i = 0; i < state.recipeCount; i++) {
             const weight = state.proportions.get(i) ?? 1;
             const targetShare = weight / totalWeight;
+            // eslint-disable-next-line no-restricted-syntax -- productionCounts starts empty; absent entry means 0 produced so far
             const produced = state.productionCounts.get(i) ?? 0;
             const actualShare = produced / totalProduced;
             const deficit = targetShare - actualShare;
@@ -232,6 +234,7 @@ export class ProductionControlManager {
         for (let i = 0; i < state.recipeCount; i++) {
             const weight = state.proportions.get(i) ?? 1;
             const targetShare = weight / totalWeight;
+            // eslint-disable-next-line no-restricted-syntax -- productionCounts starts empty; absent entry means 0 produced so far
             const produced = state.productionCounts.get(i) ?? 0;
             const actualShare = produced / totalProduced;
             const deficit = targetShare - actualShare;
@@ -257,6 +260,7 @@ export class ProductionControlManager {
         } // Building idles.
 
         const index = state.queue.shift()!;
+        // eslint-disable-next-line no-restricted-syntax -- productionCounts starts empty; absent entry means 0 produced so far
         state.productionCounts.set(index, (state.productionCounts.get(index) ?? 0) + 1);
         return index;
     }

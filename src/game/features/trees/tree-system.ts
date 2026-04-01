@@ -17,7 +17,7 @@ import type { CoreDeps } from '../feature';
 import { MapObjectCategory, MapObjectType } from '@/game/types/map-object-types';
 import { OBJECT_TYPE_CATEGORY } from '../../systems/map-objects';
 import type { EntityVisualService } from '../../animation/entity-visual-service';
-import type { Command, CommandResult } from '../../commands';
+import type { Command, CommandExecutor } from '../../commands';
 import { TREE_JOB_OFFSET, TREE_JOBS_PER_TYPE, TREE_JOB_INDICES } from '../../renderer/sprite-metadata/jil-indices';
 import type { EventBus } from '../../event-bus';
 import { PersistentMap } from '@/game/persistence/persistent-store';
@@ -82,7 +82,7 @@ const TREE_CONFIG: GrowableConfig = {
  */
 export interface TreeSystemConfig extends CoreDeps {
     visualService: EntityVisualService;
-    executeCommand: (cmd: Command) => CommandResult;
+    executeCommand: CommandExecutor;
 }
 
 export class TreeSystem extends GrowableSystem<TreeState> {
@@ -158,14 +158,24 @@ export class TreeSystem extends GrowableSystem<TreeState> {
     }
 
     protected onOffsetChanged(entityId: number, offset: number, state: TreeState): void {
-        // Normal trees have sway animation — random start frame to desync.
         // Variant index is encoded as direction in the animation entry.
         const baseOffset = offset - state.variant * TREE_JOBS_PER_TYPE;
         if (baseOffset === TREE_OFFSET.NORMAL) {
+            // Normal trees have sway animation — random start frame to desync.
             const startFrame = this.gameState.rng.nextInt(100);
             this.visualService.play(entityId, 'default', {
                 loop: true,
                 startFrame,
+                direction: state.variant,
+            });
+        } else if (baseOffset === TREE_OFFSET.FALLING) {
+            this.visualService.play(entityId, 'falling', {
+                loop: false,
+                direction: state.variant,
+            });
+        } else if (baseOffset === TREE_OFFSET.CANOPY_DISAPPEARING) {
+            this.visualService.play(entityId, 'canopy_disappearing', {
+                loop: false,
                 direction: state.variant,
             });
         } else {

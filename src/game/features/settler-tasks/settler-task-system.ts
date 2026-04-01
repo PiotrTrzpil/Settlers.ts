@@ -277,6 +277,7 @@ export class SettlerTaskSystem implements TickSystem, TaskDispatcher, WorkerStat
     }
 
     getOccupantCount(buildingId: number): number {
+        // eslint-disable-next-line no-restricted-syntax -- occupants map may not have an entry for buildings with no assigned workers; 0 is correct
         return this.workerTracker.occupants.get(buildingId) ?? 0;
     }
 

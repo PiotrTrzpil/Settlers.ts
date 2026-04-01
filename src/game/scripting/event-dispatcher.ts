@@ -160,6 +160,7 @@ export class LuaEventDispatcher {
      * Get count of handlers for an event
      */
     public getHandlerCount(event: ScriptEventType): number {
+        // eslint-disable-next-line no-restricted-syntax -- Map lookup: event may legitimately have no handlers registered; 0 is correct when absent
         return this.handlers.get(event)?.length ?? 0;
     }
 

@@ -1,4 +1,12 @@
-import type { Command, CommandResult } from './command-types';
+import type {
+    Command,
+    CommandResult,
+    CommandFailure,
+    SpawnCommand,
+    SpawnResult,
+    BatchSpawnCommand,
+    BatchSpawnResult,
+} from './command-types';
 
 type BoundHandler = (cmd: any) => CommandResult;
 
@@ -16,6 +24,9 @@ export class CommandHandlerRegistry {
         this.handlers.set(type, handler);
     }
 
+    execute(cmd: SpawnCommand): SpawnResult | CommandFailure;
+    execute(cmd: BatchSpawnCommand): BatchSpawnResult | CommandFailure;
+    execute(cmd: Command): CommandResult;
     execute(cmd: Command): CommandResult {
         const handler = this.handlers.get(cmd.type);
         if (!handler) {

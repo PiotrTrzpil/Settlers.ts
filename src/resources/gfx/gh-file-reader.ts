@@ -44,12 +44,12 @@ export class GhFileReader {
     }
 
     /** return a Image by index */
-    public getImage(index: number): IGfxImage | null {
+    public getImage(index: number): IGfxImage | undefined {
         if (index < 0 || index >= this.images.length) {
             GhFileReader.log.error('Image Index out of range: ' + index);
-            return null;
+            return undefined;
         }
-        return this.images[index] ?? null;
+        return this.images[index];
     }
 
     constructor(reader: BinaryReader) {

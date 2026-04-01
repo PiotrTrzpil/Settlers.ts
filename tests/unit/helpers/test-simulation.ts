@@ -38,7 +38,18 @@ import {
 import { EventBus, type GameEvents } from '@/game/event-bus';
 import { GameState } from '@/game/game-state';
 import { GameServices } from '@/game/game-services';
-import { CommandHandlerRegistry, registerAllHandlers } from '@/game/commands';
+import {
+    CommandHandlerRegistry,
+    registerAllHandlers,
+    type Command,
+    type CommandResult,
+    type SpawnCommand,
+    type SpawnResult,
+    type BatchSpawnCommand,
+    type BatchSpawnResult,
+    type CommandFailure,
+    type ExecuteCommand,
+} from '@/game/commands';
 import { BuildingType, isStorageBuilding } from '@/game/buildings/building-type';
 import { EntityType, UnitType, type TileCoord } from '@/game/entity';
 import { EMaterialType } from '@/game/economy/material-type';
@@ -116,7 +127,11 @@ export class Simulation {
         const settings = this.settings;
 
         this.commandRegistry = new CommandHandlerRegistry();
-        this.services = new GameServices(this.state, this.eventBus, cmd => this.commandRegistry.execute(cmd));
+        this.services = new GameServices(
+            this.state,
+            this.eventBus,
+            ((cmd: Command) => this.commandRegistry.execute(cmd)) as ExecuteCommand,
+        );
         this.services.setTerrainData(this.map.terrain);
 
         // Register feature-provided command handlers first, then central handlers
@@ -240,7 +255,10 @@ export class Simulation {
 
     // ─── Commands ─────────────────────────────────────────────────
 
-    execute(cmd: import('@/game/commands').Command) {
+    execute(cmd: SpawnCommand): SpawnResult | CommandFailure;
+    execute(cmd: BatchSpawnCommand): BatchSpawnResult | CommandFailure;
+    execute(cmd: Command): CommandResult;
+    execute(cmd: Command) {
         return this.commandRegistry.execute(cmd);
     }
 
@@ -316,7 +334,7 @@ export class Simulation {
         if (!result.success) {
             throw new Error(`Failed to place ${buildingType} at (${x}, ${y}): ${result.error}`);
         }
-        return this.resultEntityId(result);
+        return result.entityId;
     }
 
     placeGoods(material: EMaterialType, amount: number): number {
@@ -332,7 +350,7 @@ export class Simulation {
         if (!result.success) {
             throw new Error(`Failed to place ${material} at (${pos.x}, ${pos.y}): ${result.error}`);
         }
-        return this.resultEntityId(result);
+        return result.entityId;
     }
 
     placeGoodsAt(x: number, y: number, material: EMaterialType, amount: number): number {
@@ -347,7 +365,7 @@ export class Simulation {
         if (!result.success) {
             throw new Error(`Failed to place ${material} at (${x}, ${y}): ${result.error}`);
         }
-        return this.resultEntityId(result);
+        return result.entityId;
     }
 
     placeGoodsNear(buildingId: number, material: EMaterialType, amount: number) {
@@ -456,7 +474,7 @@ export class Simulation {
         if (!result.success) {
             throw new Error(`Failed to place mine ${buildingType} at (${pos.x}, ${pos.y}): ${result.error}`);
         }
-        const entityId = this.resultEntityId(result);
+        const entityId = result.entityId;
 
         fillOreSquare(this.services, pos.x, pos.y, 4, oreType, oreLevel, this.mapWidth, this.mapHeight);
         return entityId;
@@ -476,7 +494,7 @@ export class Simulation {
         if (!result.success) {
             throw new Error(`Failed to spawn ${unitType} at (${x}, ${y}): ${result.error}`);
         }
-        return this.resultEntityId(result);
+        return result.entityId;
     }
 
     spawnUnitNear(buildingId: number, unitType: UnitType, count = 1, player = 0): number[] {
@@ -572,12 +590,6 @@ export class Simulation {
         this.services.destroy();
     }
 
-    // ─── Private helpers ──────────────────────────────────────────
-
-    /** Extract entity ID from a successful command result. */
-    private resultEntityId(result: ReturnType<Simulation['execute']>): number {
-        return (result.effects![0]! as { entityId: number }).entityId;
-    }
 }
 
 // ─── Factory functions ───────────────────────────────────────────

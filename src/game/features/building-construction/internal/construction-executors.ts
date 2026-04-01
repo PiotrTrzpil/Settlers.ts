@@ -51,6 +51,7 @@ export function createBuildStepExecutor(
 
         // Consume one material unit every BUILD_CYCLES_PER_MATERIAL cycles.
         // Progress only advances when materials are available — no empty hammering.
+        // eslint-disable-next-line no-restricted-syntax -- counter starts absent for new sites; 0 is the correct initial cycle count
         const count = (cycleCounters.get(siteId) ?? 0) + 1;
         if (count >= BUILD_CYCLES_PER_MATERIAL) {
             const material = constructionSiteManager.consumeNextMaterial(siteId);
@@ -68,6 +69,7 @@ export function createBuildStepExecutor(
             0
         );
         const targetProgress =
+            // eslint-disable-next-line no-restricted-syntax -- counter just reset to 0 above; absent entry on first tick is equivalent to 0
             consumedAmount * progressPerMaterial + (cycleCounters.get(siteId) ?? 0) * progressPerCycle;
         constructionSiteManager.setConstructionProgress(siteId, targetProgress);
 

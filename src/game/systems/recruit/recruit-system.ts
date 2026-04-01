@@ -214,6 +214,7 @@ export class RecruitSystem implements TickSystem {
     }
 
     getQueuedCount(unitType: UnitType): number {
+        // eslint-disable-next-line no-restricted-syntax -- unit type may have no queue entry; 0 is the correct default (no units queued)
         return this.queue.get(unitType)?.count ?? 0;
     }
 

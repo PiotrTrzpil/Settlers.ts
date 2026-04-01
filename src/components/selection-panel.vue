@@ -300,7 +300,7 @@ import GarrisonPanel from './GarrisonPanel.vue';
 import type { IconEntry } from '@/views/sprite-icon-loader';
 
 const props = defineProps<{
-    game: Game | null;
+    game: Game;
     unitIcons: Record<string, IconEntry>;
 }>();
 
@@ -349,7 +349,7 @@ watch(selectedEntityId, () => (confirmingDestroy.value = false));
 
 function destroyBuilding(): void {
     const entity = selectedEntity.value;
-    if (!entity || !props.game) {
+    if (!entity) {
         return;
     }
     props.game.execute({ type: 'remove_entity', entityId: entity.id });

@@ -5,9 +5,16 @@ import type { EventBus } from '../../event-bus';
 import type { SettlerTaskSystem } from '../../features/settler-tasks';
 import type { CombatSystem } from '../../features/combat';
 import { FORMATION_OFFSETS } from '../command-types';
-import type { SpawnUnitCommand, MoveUnitCommand, MoveSelectedUnitsCommand, CommandResult } from '../command-types';
+import type {
+    SpawnUnitCommand,
+    MoveUnitCommand,
+    MoveSelectedUnitsCommand,
+    CommandResult,
+    CommandFailure,
+    SpawnResult,
+} from '../command-types';
 import type { UnitReservationRegistry } from '../../systems/unit-reservation';
-import { commandSuccess, commandFailed } from '../command-types';
+import { commandFailed, COMMAND_OK } from '../command-types';
 import type { RecruitSpecialistCommand } from '../command-types';
 import { SPECIALIST_TOOL_MAP } from '../../systems/recruit/specialist-tool-map';
 import type { RecruitSystem } from '../../systems/recruit/recruit-system';
@@ -52,7 +59,7 @@ function findValidSpawnTile(
     return null;
 }
 
-export function executeSpawnUnit(deps: SpawnUnitDeps, cmd: SpawnUnitCommand): CommandResult {
+export function executeSpawnUnit(deps: SpawnUnitDeps, cmd: SpawnUnitCommand): SpawnResult | CommandFailure {
     const { state, terrain } = deps;
 
     const isTileValid = (x: number, y: number) => {
@@ -94,9 +101,7 @@ export function executeSpawnUnit(deps: SpawnUnitDeps, cmd: SpawnUnitCommand): Co
         player: cmd.player,
     });
 
-    return commandSuccess([
-        { type: 'unit_spawned', entityId: entity.id, unitType: cmd.unitType, x: spawnX, y: spawnY },
-    ]);
+    return { success: true, entityId: entity.id };
 }
 
 /**
@@ -157,18 +162,13 @@ export function executeMoveUnit(deps: MoveUnitDeps, cmd: MoveUnitCommand): Comma
         deps.combatSystem.setPassive(cmd.entityId);
     }
 
-    const fromX = entity.x;
-    const fromY = entity.y;
-
     const success = deps.settlerTaskSystem.assignMoveTask(cmd.entityId, target.x, target.y);
 
     if (!success) {
         return commandFailed(`Cannot move unit ${cmd.entityId} to (${cmd.targetX}, ${cmd.targetY})`);
     }
 
-    return commandSuccess([
-        { type: 'entity_moved', entityId: cmd.entityId, fromX, fromY, toX: cmd.targetX, toY: cmd.targetY },
-    ]);
+    return COMMAND_OK;
 }
 
 export function executeMoveSelectedUnits(deps: MoveSelectedUnitsDeps, cmd: MoveSelectedUnitsCommand): CommandResult {
@@ -179,20 +179,13 @@ export function executeMoveSelectedUnits(deps: MoveSelectedUnitsDeps, cmd: MoveS
         return commandFailed('No units selected');
     }
 
-    const effects: {
-        type: 'entity_moved';
-        entityId: number;
-        fromX: number;
-        fromY: number;
-        toX: number;
-        toY: number;
-    }[] = [];
     const combatControllable = deps.isCombatControllable();
     // Resolve base target outside building footprint
     const baseTarget = resolveTargetOutsideBuilding(state, cmd.targetX, cmd.targetY);
     const firstUnit = selectedUnits[0]!;
     const passiveMarch = !hasEnemyNearTarget(state, baseTarget.x, baseTarget.y, firstUnit.player);
 
+    let movedCount = 0;
     for (let i = 0; i < selectedUnits.length; i++) {
         const unit = selectedUnits[i]!;
         if (deps.unitReservation.isReserved(unit.id)) {
@@ -211,28 +204,16 @@ export function executeMoveSelectedUnits(deps: MoveSelectedUnitsDeps, cmd: MoveS
             deps.combatSystem.setPassive(unit.id);
         }
 
-        const fromX = unit.x;
-        const fromY = unit.y;
-
-        const moved = deps.settlerTaskSystem.assignMoveTask(unit.id, target.x, target.y);
-
-        if (moved) {
-            effects.push({
-                type: 'entity_moved',
-                entityId: unit.id,
-                fromX,
-                fromY,
-                toX: target.x,
-                toY: target.y,
-            });
+        if (deps.settlerTaskSystem.assignMoveTask(unit.id, target.x, target.y)) {
+            movedCount++;
         }
     }
 
-    if (effects.length === 0) {
+    if (movedCount === 0) {
         return commandFailed(`Could not move any of ${selectedUnits.length} selected units`);
     }
 
-    return commandSuccess(effects);
+    return COMMAND_OK;
 }
 
 export interface RecruitSpecialistDeps {
@@ -266,5 +247,5 @@ export function executeRecruitSpecialist(deps: RecruitSpecialistDeps, cmd: Recru
         }
     }
 
-    return commandSuccess();
+    return COMMAND_OK;
 }

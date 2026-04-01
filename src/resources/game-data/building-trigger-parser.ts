@@ -46,6 +46,7 @@ function parseTriggerPatch(patchEl: Element): TriggerPatch {
 }
 
 function parseTrigger(triggerEl: Element): BuildingTrigger {
+    // eslint-disable-next-line no-restricted-syntax -- XML attribute parsing: getAttribute returns null for missing attributes (external data boundary)
     const id = triggerEl.getAttribute('id') ?? '';
 
     const effects: TriggerEffect[] = [];

@@ -10,7 +10,7 @@ import type { BuildingType } from '@/game/buildings/building-type';
 import type { Race } from '@/game/core/race';
 import type { TerrainData } from '@/game/terrain';
 import type { GameState } from '@/game/game-state';
-import type { Command, CommandResult } from '@/game/commands/command-types';
+import type { CommandExecutor } from '@/game/commands/command-types';
 import type { PlacementFilter } from '@/game/systems/placement/types';
 import type { BuildStep } from '../types';
 import { canPlaceBuildingFootprint } from '@/game/systems/placement';
@@ -31,7 +31,7 @@ const SEARCH_COOLDOWN = 30;
 export class EconomyPlanner {
     private readonly state: GameState;
     private readonly terrain: TerrainData;
-    private readonly executeCommand: (cmd: Command) => CommandResult;
+    private readonly executeCommand: CommandExecutor;
     private readonly getPlacementFilter: () => PlacementFilter | null;
     private readonly buildOrder: readonly BuildStep[];
     private readonly player: number;
@@ -48,7 +48,7 @@ export class EconomyPlanner {
     constructor(deps: {
         gameState: GameState;
         terrain: TerrainData;
-        executeCommand: (cmd: Command) => CommandResult;
+        executeCommand: CommandExecutor;
         getPlacementFilter: () => PlacementFilter | null;
         buildOrder: readonly BuildStep[];
         player: number;

@@ -93,14 +93,11 @@ import StatRow from './StatRow.vue';
 import OverlayPanel from './OverlayPanel.vue';
 
 const props = defineProps<{
-    game: Game | null;
+    game: Game;
 }>();
 
 // Player tabs — derive available players from game.playerRaces
 const playerIds = computed(() => {
-    if (!props.game) {
-        return [0];
-    }
     return [...props.game.playerRaces.keys()].sort((a, b) => a - b);
 });
 

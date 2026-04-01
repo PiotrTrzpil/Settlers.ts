@@ -66,7 +66,7 @@ function resolveConstructionOverlay(
     }
 
     out.push({
-        sprite: scaleSprite(constructionSprite, ENTITY_SCALE),
+        sprite: scaleSprite(constructionSprite.staticSprite, ENTITY_SCALE),
         worldOffsetX: 0,
         worldOffsetY: 0,
         layer: OverlayRenderLayer.BehindBuilding,
@@ -112,13 +112,13 @@ function resolveGarrisonOverlays(
             continue;
         }
 
-        const rawSprite = er.spriteManager.registry.getUnit(unit.subType as UnitType, slot.direction, unit.race);
-        if (!rawSprite) {
+        const rawEntry = er.spriteManager.registry.getUnit(unit.subType as UnitType, slot.direction, unit.race);
+        if (!rawEntry) {
             continue;
         }
 
         out.push({
-            sprite: scaleSprite(rawSprite, ENTITY_SCALE),
+            sprite: scaleSprite(rawEntry.staticSprite, ENTITY_SCALE),
             worldOffsetX: slot.offsetX * PIXELS_TO_WORLD,
             worldOffsetY: slot.offsetY * PIXELS_TO_WORLD,
             layer: OverlayRenderLayer.AboveBuilding,
@@ -157,6 +157,7 @@ function resolveCustomOverlays(entityId: number, g: Game, er: EntityRenderer, ou
         const frames = er.spriteManager?.registry.getOverlayFrames(
             spriteRef.gfxFile,
             spriteRef.jobIndex,
+            // eslint-disable-next-line no-restricted-syntax -- directionIndex is an optional sprite property; 0 is the correct default direction
             spriteRef.directionIndex ?? 0
         );
         if (!frames || frames.length === 0) {
@@ -171,6 +172,7 @@ function resolveCustomOverlays(entityId: number, g: Game, er: EntityRenderer, ou
             worldOffsetX: inst.def.pixelOffsetX * PIXELS_TO_WORLD,
             worldOffsetY: inst.def.pixelOffsetY * PIXELS_TO_WORLD,
             layer: inst.def.layer as number as OverlayRenderLayer,
+            // eslint-disable-next-line no-restricted-syntax -- teamColored is an optional overlay property; false (not team-colored) is the correct default
             teamColored: inst.def.teamColored ?? false,
             verticalProgress: 1.0,
         });

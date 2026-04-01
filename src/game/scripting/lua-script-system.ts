@@ -32,7 +32,7 @@ import { loadScriptFromString, validateScript, type ScriptSource } from './scrip
 import type { GameState } from '@/game/game-state';
 import type { IMapLandscape } from '@/resources/map/imap-landscape';
 import type { ConstructionSiteManager } from '@/game/features/building-construction';
-import type { Command, CommandResult } from '@/game/commands';
+import type { ExecuteCommand } from '@/game/commands';
 import type { Race } from '@/game/core/race';
 
 const log = new LogHandler('LuaScriptSystem');
@@ -64,7 +64,7 @@ export interface LuaScriptSystemConfig {
     /** Per-player race mapping (player index → Race) */
     playerRaces?: Map<number, Race>;
     /** Command executor for routing mutations through the command pipeline */
-    executeCommand?: (cmd: Command) => CommandResult;
+    executeCommand?: ExecuteCommand;
 }
 
 /**
@@ -128,8 +128,11 @@ export class LuaScriptSystem {
         const gameContext: GameAPIContext = {
             gameState: this.config.gameState,
             gameTime: this.gameTime,
+            // eslint-disable-next-line no-restricted-syntax -- optional config: absent when caller omits it; 0/1/1 are correct defaults for single-player sessions
             localPlayer: this.config.localPlayer ?? 0,
+            // eslint-disable-next-line no-restricted-syntax -- optional config: absent when caller omits it; 0/1/1 are correct defaults for single-player sessions
             playerCount: this.config.playerCount ?? 1,
+            // eslint-disable-next-line no-restricted-syntax -- optional config: absent when caller omits it; 0/1/1 are correct defaults for single-player sessions
             difficulty: this.config.difficulty ?? 1,
             mapWidth: this.config.mapWidth,
             mapHeight: this.config.mapHeight,
@@ -180,6 +183,7 @@ export class LuaScriptSystem {
 
         // Debug API context
         const debugContext: DebugAPIContext = {
+            // eslint-disable-next-line no-restricted-syntax -- optional config: absent in production builds; false is the correct safe default
             debugEnabled: this.config.debugEnabled ?? false,
         };
         registerDebugAPI(this.runtime, debugContext);

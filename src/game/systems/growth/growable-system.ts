@@ -19,7 +19,7 @@ import { EntityType } from '../../entity';
 import { MapObjectCategory, MapObjectType } from '@/game/types/map-object-types';
 import type { EntityVisualService } from '../../animation/entity-visual-service';
 import { findEmptySpot } from '../../systems/spatial-search';
-import type { Command, CommandResult } from '../../commands';
+import type { Command, CommandExecutor } from '../../commands';
 import { OBJECT_TYPE_CATEGORY } from '../../systems/map-objects';
 import { LogHandler } from '@/utilities/log-handler';
 import { sortedEntries } from '@/utilities/collections';
@@ -72,7 +72,7 @@ export interface GrowableSystemConfig {
     visualService: EntityVisualService;
     growableConfig: GrowableConfig;
     logName: string;
-    executeCommand: (cmd: Command) => CommandResult;
+    executeCommand: CommandExecutor;
 }
 
 /**
@@ -86,7 +86,7 @@ export abstract class GrowableSystem<TState extends GrowableState = GrowableStat
     protected readonly visualService: EntityVisualService;
     protected readonly config: GrowableConfig;
     protected readonly log: LogHandler;
-    protected readonly _executeCommand: (cmd: Command) => CommandResult;
+    protected readonly _executeCommand: CommandExecutor;
 
     constructor(cfg: GrowableSystemConfig) {
         this.gameState = cfg.gameState;

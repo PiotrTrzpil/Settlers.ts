@@ -14,6 +14,7 @@ export function analyzeResourceTypes(resourceType: Uint8Array): Map<number, numb
     for (let i = 0; i < resourceType.length; i++) {
         const val = resourceType[i]!;
         if (val !== 0) {
+            // eslint-disable-next-line no-restricted-syntax -- analysis map starts empty; 0 is the correct absent-entry default for counting occurrences
             counts.set(val, (counts.get(val) ?? 0) + 1);
         }
     }

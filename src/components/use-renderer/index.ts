@@ -141,7 +141,9 @@ function buildInputManager(deps: InputManagerDeps): InputManager {
         () => {
             const game = getGame();
             return {
+                // eslint-disable-next-line no-restricted-syntax -- game is nullable before load; false is correct default
                 placeBuildingsCompleted: game?.settings.state.placeBuildingsCompleted ?? false,
+                // eslint-disable-next-line no-restricted-syntax -- game is nullable before load; false is correct default
                 placeBuildingsWithWorker: game?.settings.state.placeBuildingsWithWorker ?? false,
             };
         }
@@ -407,6 +409,7 @@ export function useRenderer({
         executeGameCommand(command, getGame, onTileClick);
 
     const entityPicker = createEntityPicker(
+        // eslint-disable-next-line no-restricted-syntax -- game is nullable before load; [] is correct empty entity list when absent
         () => getGame()?.state.entities ?? [],
         () => state.entityRenderer?.spriteResolver ?? null,
         () => getGame()!.state.selection,
@@ -414,6 +417,7 @@ export function useRenderer({
     );
 
     const entityRectPicker = createEntityRectPicker(
+        // eslint-disable-next-line no-restricted-syntax -- game is nullable before load; [] is correct empty entity list when absent
         () => getGame()?.state.entities ?? [],
         () => state.entityRenderer?.spriteResolver ?? null,
         () => getGame()!.state.selection,
@@ -564,6 +568,7 @@ export function useRenderer({
         }
     }
 
+    // eslint-disable-next-line no-restricted-syntax -- entityRenderer is nullable before init; [] is correct empty label list when absent
     const getDecoLabels = (): DebugEntityLabel[] => state.entityRenderer?.debugDecoLabels ?? [];
 
     return {

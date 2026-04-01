@@ -9,7 +9,18 @@
 import { IMapLoader } from '@/resources/map/imap-loader';
 import { GameState } from './game-state';
 import { GameServices } from './game-services';
-import { type Command, type CommandResult, CommandHandlerRegistry, registerAllHandlers } from './commands';
+import {
+    type Command,
+    type CommandResult,
+    type CommandFailure,
+    type SpawnCommand,
+    type SpawnResult,
+    type BatchSpawnCommand,
+    type BatchSpawnResult,
+    type ExecuteCommand,
+    CommandHandlerRegistry,
+    registerAllHandlers,
+} from './commands';
 import { CommandJournal } from './persistence/command-journal';
 import { TerrainData } from './terrain';
 import { populateMapObjectsFromEntityData } from './systems/map-objects';
@@ -94,7 +105,11 @@ export class GameCore {
         setDirectionRunLength(this.settings.state.pathStraightness);
 
         this.commandRegistry = new CommandHandlerRegistry();
-        this.services = new GameServices(this.state, this.eventBus, cmd => this.commandRegistry.execute(cmd));
+        this.services = new GameServices(
+            this.state,
+            this.eventBus,
+            ((cmd: Command) => this.commandRegistry.execute(cmd)) as ExecuteCommand,
+        );
 
         this.wireCommandHandlers(mapLoader);
         const mapBuildings = this.populate(mapLoader);
@@ -216,7 +231,10 @@ export class GameCore {
 
     // ─── Commands ───────────────────────────────────────────────
 
-    /** Execute a command against the game state, recording to journal for replay */
+    /** Execute a command against the game state, recording to journal for replay. */
+    public execute(cmd: SpawnCommand): SpawnResult | CommandFailure;
+    public execute(cmd: BatchSpawnCommand): BatchSpawnResult | CommandFailure;
+    public execute(cmd: Command): CommandResult;
     public execute(cmd: Command): CommandResult {
         const result = this.commandRegistry.execute(cmd);
         if (result.success) {

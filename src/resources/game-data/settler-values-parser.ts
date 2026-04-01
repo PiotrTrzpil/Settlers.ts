@@ -22,6 +22,7 @@ export function parseSettlerValues(xmlContent: string): Map<RaceId, RaceSettlerV
                 continue;
             }
 
+            // eslint-disable-next-line no-restricted-syntax -- DOM getAttribute returns null for missing attributes; '' is correct default
             const id = child.getAttribute('id') ?? '';
             const animLists = getTextArray(child, 'animList');
             const role = getChildText(child, 'role');

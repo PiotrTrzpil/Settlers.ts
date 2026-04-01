@@ -4,7 +4,7 @@
  */
 
 import type { CliArgs, CliCommand, CliContext, CliResult } from '../types';
-import type { Command, CommandResult } from '@/game/commands/command-types';
+import type { Command } from '@/game/commands/command-types';
 import type { Game } from '@/game/game';
 import { ProductionMode } from '@/game/features/production-control';
 import { StorageDirection } from '@/game/systems/inventory/storage-filter-manager';
@@ -12,23 +12,10 @@ import { ok, fail } from './helpers';
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
-/** Execute a command and return ok/fail CliResult. */
-function exec(ctx: CliContext, cmd: Command, msgFn?: (result: CommandResult) => string): CliResult {
+/** Execute a non-spawn command and return ok/fail CliResult. */
+function exec(ctx: CliContext, cmd: Command): CliResult {
     const result = ctx.game.execute(cmd);
-    if (!result.success) {
-        return fail(result.error!);
-    }
-    return ok(msgFn ? msgFn(result) : 'ok');
-}
-
-function createdId(result: CommandResult): number | undefined {
-    const effect = result.effects?.[0];
-    return effect && 'entityId' in effect ? effect.entityId : undefined;
-}
-
-function idSuffix(result: CommandResult): string {
-    const id = createdId(result);
-    return id != null ? ' (id=' + id + ')' : '';
+    return result.success ? ok('ok') : fail(result.error);
 }
 
 /** Parse a positional as a required integer, throw with context on failure. */
@@ -111,22 +98,18 @@ function buildCommand(): CliCommand {
             const y = reqInt(args, 2, 'y');
             const buildingType = ctx.resolveBuilding(typeName);
             const done = !!args['done'];
-            return exec(
-                ctx,
-                {
-                    type: 'place_building',
-                    buildingType,
-                    x,
-                    y,
-                    player: ctx.player,
-                    completed: done,
-                    spawnWorker: true,
-                },
-                r => {
-                    const status = done ? 'completed' : 'construction';
-                    return `placed ${typeName} at ${x},${y} for player ${ctx.player} (${status})` + idSuffix(r);
-                }
-            );
+            const result = ctx.game.execute({
+                type: 'place_building',
+                buildingType,
+                x,
+                y,
+                player: ctx.player,
+                completed: done,
+                spawnWorker: true,
+            });
+            if (!result.success) return fail(result.error);
+            const status = done ? 'completed' : 'construction';
+            return ok(`placed ${typeName} at ${x},${y} for player ${ctx.player} (${status}) (id=${result.entityId})`);
         },
     };
 }
@@ -281,9 +264,9 @@ function spawnCommand(): CliCommand {
             const x = reqInt(args, 1, 'x');
             const y = reqInt(args, 2, 'y');
             const unitType = ctx.resolveUnit(typeName);
-            return exec(ctx, { type: 'spawn_unit', unitType, x, y, player: ctx.player }, r => {
-                return `spawned ${typeName} at ${x},${y} for player ${ctx.player}` + idSuffix(r);
-            });
+            const result = ctx.game.execute({ type: 'spawn_unit', unitType, x, y, player: ctx.player });
+            if (!result.success) return fail(result.error);
+            return ok(`spawned ${typeName} at ${x},${y} for player ${ctx.player} (id=${result.entityId})`);
         },
     };
 }
@@ -300,9 +283,9 @@ function pileCommand(): CliCommand {
             const x = reqInt(args, 2, 'x');
             const y = reqInt(args, 3, 'y');
             const materialType = ctx.resolveMaterial(materialName);
-            return exec(ctx, { type: 'place_pile', materialType, amount, x, y }, r => {
-                return `placed ${amount}x ${materialName} at ${x},${y}` + idSuffix(r);
-            });
+            const result = ctx.game.execute({ type: 'place_pile', materialType, amount, x, y });
+            if (!result.success) return fail(result.error);
+            return ok(`placed ${amount}x ${materialName} at ${x},${y} (id=${result.entityId})`);
         },
     };
 }

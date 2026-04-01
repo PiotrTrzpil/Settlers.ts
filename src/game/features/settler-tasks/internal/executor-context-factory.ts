@@ -11,7 +11,7 @@ import type { BuildingInventoryManager } from '../../inventory';
 import type { MaterialTransfer } from '../../material-transfer';
 import type { BarracksTrainingManager } from '../../barracks';
 import type { ConstructionSiteManager } from '../../building-construction/construction-site-manager';
-import type { Command, CommandResult } from '../../../commands';
+import type { ExecuteCommand } from '../../../commands';
 import type { ThrottledLogger } from '@/utilities/throttled-logger';
 import type {
     MovementContext,
@@ -37,7 +37,7 @@ export interface ExecutorContextDeps {
     triggerSystem: TriggerSystem;
     locationManager: ISettlerBuildingLocationManager;
     handlerErrorLogger: ThrottledLogger;
-    executeCommand?: (cmd: Command) => CommandResult;
+    executeCommand?: ExecuteCommand;
     getWorkerHomeBuilding: (settlerId: number) => number | null;
 }
 

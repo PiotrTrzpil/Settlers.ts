@@ -39,7 +39,7 @@ import type { EventBus } from '../../event-bus';
 import type { BuildingInventoryManager } from '../inventory';
 import type { MaterialTransfer } from '../material-transfer';
 import type { BarracksTrainingManager } from '../barracks';
-import type { Command, CommandResult } from '../../commands';
+import type { ExecuteCommand } from '../../commands';
 import type { ConstructionSiteManager } from '../building-construction/construction-site-manager';
 import { EMaterialType } from '../../economy';
 import { getWorkerBuildingTypes } from '../../data/game-data-access';
@@ -72,7 +72,7 @@ export interface WorkerTaskExecutorConfig extends CoreDeps {
     locationManager: ISettlerBuildingLocationManager;
     constructionSiteManager: ConstructionSiteManager;
     getBarracksTrainingManager?: () => BarracksTrainingManager | undefined;
-    executeCommand?: (cmd: Command) => CommandResult;
+    executeCommand?: ExecuteCommand;
 }
 
 export class WorkerTaskExecutor {
@@ -236,6 +236,7 @@ export class WorkerTaskExecutor {
 
     /** Accumulate elapsed time into the named idle timing bucket. */
     private addTiming(key: string, elapsed: number): void {
+        // eslint-disable-next-line no-restricted-syntax -- idleTimings is an index-typed object; absent key means 0 elapsed so far
         this.idleTimings[key] = (this.idleTimings[key] ?? 0) + elapsed;
     }
 

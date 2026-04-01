@@ -20,7 +20,7 @@ export interface CarrierDebugInfo {
  * Returns reactive carrier debug info for the given selected entity.
  */
 export function useCarrierDebugInfo(
-    game: Ref<Game | null>,
+    game: Ref<Game>,
     selectedEntity: Ref<Entity | undefined>,
     tick: Ref<number>
 ): { carrierDebug: Ref<CarrierDebugInfo | null> } {
@@ -31,16 +31,15 @@ export function useCarrierDebugInfo(
         if (!entity || entity.type !== EntityType.Unit) {
             return null;
         }
-        if (!game.value) {
-            return null;
-        }
 
         if (!game.value.services.carrierRegistry.has(entity.id)) {
             return null;
         }
 
         const movement = game.value.state.movement.getController(entity.id);
+        // eslint-disable-next-line no-restricted-syntax -- movement controller is absent for idle/unmoving carriers; 0 is correct display default
         const pathLength = movement?.path.length ?? 0;
+        // eslint-disable-next-line no-restricted-syntax -- movement controller is absent for idle/unmoving carriers; 0 is correct display default
         const pathProgress = movement?.pathIndex ?? 0;
 
         const activeJobId = game.value.services.settlerTaskSystem.getActiveJobId(entity.id);

@@ -159,6 +159,7 @@ export class GameState {
 
         // Buildings start non-operational (under construction) unless explicitly completed.
         // All other entity types are operational by default.
+        // eslint-disable-next-line no-restricted-syntax -- completed is an optional parameter; false is the correct default (buildings start under construction)
         const operational = type === EntityType.Building ? (completed ?? false) : true;
 
         const entity: Entity = {
@@ -190,6 +191,7 @@ export class GameState {
             x,
             y,
             player,
+            // eslint-disable-next-line no-restricted-syntax -- variation is optional in AddEntityOptions; 0 is the correct default sprite variation
             variation: variation ?? 0,
         });
 
@@ -317,6 +319,7 @@ export class GameState {
                 const desc =
                     occupant?.type === EntityType.Building
                         ? `building #${occupantId} (${String(occupant.subType)})`
+                        // eslint-disable-next-line no-restricted-syntax -- occupant type may be unknown when building an error description; 0 gives a safe enum fallback for display only
                         : `${EntityType[occupant?.type ?? 0]} #${occupantId}`;
                 throw new Error(
                     `addEntity: cannot place MapObject (subType=${subType}) at (${x},${y}) — tile occupied by ${desc}`

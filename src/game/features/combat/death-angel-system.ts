@@ -8,7 +8,7 @@
  */
 
 import type { TickSystem } from '../../core/tick-system';
-import type { Command, CommandResult } from '../../commands';
+import type { CommandExecutor } from '../../commands';
 import { createLogger } from '@/utilities/logger';
 
 const log = createLogger('DeathAngelSystem');
@@ -17,12 +17,12 @@ const log = createLogger('DeathAngelSystem');
 const ANGEL_DURATION = 3;
 
 export interface DeathAngelSystemConfig {
-    executeCommand: (cmd: Command) => CommandResult;
+    executeCommand: CommandExecutor;
 }
 
 export class DeathAngelSystem implements TickSystem {
     private readonly angels = new Map<number, number>();
-    private readonly executeCommand: (cmd: Command) => CommandResult;
+    private readonly executeCommand: CommandExecutor;
 
     constructor(cfg: DeathAngelSystemConfig) {
         this.executeCommand = cfg.executeCommand;

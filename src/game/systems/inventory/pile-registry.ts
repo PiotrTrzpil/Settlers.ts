@@ -44,6 +44,7 @@ export interface PileKindProvider {
 // ─────────────────────────────────────────────────────────────────────────────
 
 function serializeKey(key: PileSlotKey): string {
+    // eslint-disable-next-line no-restricted-syntax -- pileIndex is optional on PileSlotKey; 0 is the correct default when no disambiguation index is set
     const idx = key.pileIndex ?? 0;
     return `${key.buildingId}:${key.slotKind}:${key.material}:${idx}`;
 }
@@ -236,6 +237,7 @@ export class PileRegistry {
             }
 
             const counterKey = `${kind.buildingId}:${entity.subType}:${kind.kind}`;
+            // eslint-disable-next-line no-restricted-syntax -- Map starts empty; 0 is the correct starting index for the first pile of a given (building, material, kind) combination
             const idx = pileIndices.get(counterKey) ?? 0;
             const pileIndex = idx > 0 ? idx : undefined;
             pileIndices.set(counterKey, idx + 1);

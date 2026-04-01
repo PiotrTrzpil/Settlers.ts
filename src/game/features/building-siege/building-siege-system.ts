@@ -25,7 +25,7 @@ import type { TowerGarrisonManager } from '../tower-garrison/tower-garrison-mana
 import type { CombatSystem } from '../combat/combat-system';
 import type { UnitReservationRegistry } from '../../systems/unit-reservation';
 import type { SettlerTaskSystem } from '../settler-tasks';
-import type { Command, CommandResult } from '../../commands';
+import type { Command, CommandExecutor } from '../../commands';
 import {
     type BuildingSiegeSystemConfig,
     type SiegeState,
@@ -48,7 +48,7 @@ export class BuildingSiegeSystem implements TickSystem {
     private readonly combatSystem: CombatSystem;
     private readonly unitReservation: UnitReservationRegistry;
     private readonly settlerTaskSystem: SettlerTaskSystem;
-    private readonly executeCommand: (cmd: Command) => CommandResult;
+    private readonly executeCommand: CommandExecutor;
 
     private tickCounter = 0;
 

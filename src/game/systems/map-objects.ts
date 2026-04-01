@@ -373,7 +373,7 @@ export function countMapObjectsByCategory(state: GameState): Map<MapObjectCatego
         const category = OBJECT_TYPE_CATEGORY[entity.subType as MapObjectType];
 
         if (category) {
-            counts.set(category, (counts.get(category) ?? 0) + 1);
+            counts.set(category, counts.get(category)! + 1);
         }
     }
 

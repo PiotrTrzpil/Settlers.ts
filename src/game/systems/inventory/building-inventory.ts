@@ -15,7 +15,7 @@ import {
 import type { PileSlot } from './pile-slot';
 import type { ComponentStore } from '../../ecs';
 import type { GameState } from '../../game-state';
-import type { Command, CommandResult } from '../../commands';
+import type { ExecuteCommand } from '../../commands';
 import type { EventBus } from '../../event-bus';
 import { PersistentMap, PersistentValue } from '@/game/persistence/persistent-store';
 import { createLogger } from '@/utilities/logger';
@@ -56,7 +56,7 @@ export interface BuildingInventoryView {
     slotIds: ReadonlySet<number>;
 }
 export interface BuildingInventoryDeps {
-    executeCommand: (cmd: Command) => CommandResult;
+    executeCommand: ExecuteCommand;
     gameState: GameState;
     eventBus: EventBus;
 }

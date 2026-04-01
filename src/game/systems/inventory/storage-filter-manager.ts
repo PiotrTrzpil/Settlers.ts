@@ -41,8 +41,8 @@ export class StorageFilterManager {
     }
 
     /** Returns the direction for a material, or null if not configured (disabled). */
-    getDirection(buildingId: number, material: EMaterialType): StorageDirection | null {
-        return this.persistentStore.get(buildingId)?.get(material) ?? null;
+    getDirection(buildingId: number, material: EMaterialType): StorageDirection | undefined {
+        return this.persistentStore.get(buildingId)?.get(material);
     }
 
     /**
@@ -65,6 +65,7 @@ export class StorageFilterManager {
      * Legacy compat: returns true if the material has any direction set.
      */
     isAllowed(buildingId: number, material: EMaterialType): boolean {
+        // eslint-disable-next-line no-restricted-syntax -- building may have no storage filter config; false is the correct default (material not configured means not allowed)
         return this.persistentStore.get(buildingId)?.has(material) ?? false;
     }
 

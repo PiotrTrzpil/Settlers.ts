@@ -25,7 +25,7 @@ import { BuildingConstructionPhase, type TerrainContext, type ConstructionSite }
 
 import { captureOriginalTerrain, restoreOriginalTerrain, applySingleTileLeveling } from './terrain';
 import type { ConstructionSiteManager } from './construction-site-manager';
-import type { Command, CommandResult } from '../../commands';
+import type { CommandExecutor } from '../../commands';
 import { BUILDING_SPAWN_ON_COMPLETE } from './spawn-units';
 import type { ResidenceSpawnerSystem } from './residence-spawner';
 import type { MapSize } from '@/utilities/map-size';
@@ -36,7 +36,7 @@ import { ringTiles } from '../../systems/spatial-search';
  */
 export interface BuildingConstructionSystemConfig extends CoreDeps {
     constructionSiteManager: ConstructionSiteManager;
-    executeCommand: (cmd: Command) => CommandResult;
+    executeCommand: CommandExecutor;
 }
 
 /**
@@ -47,7 +47,7 @@ export interface BuildingConstructionSystemConfig extends CoreDeps {
 export class BuildingConstructionSystem implements TickSystem {
     private readonly state: GameState;
     private readonly constructionSiteManager: ConstructionSiteManager;
-    private readonly executeCommand: (cmd: Command) => CommandResult;
+    private readonly executeCommand: CommandExecutor;
     private terrainContext: TerrainContext | undefined; // OK: optional, set via setter
     private readonly eventBus: EventBus;
     private residenceSpawner: ResidenceSpawnerSystem | null = null;

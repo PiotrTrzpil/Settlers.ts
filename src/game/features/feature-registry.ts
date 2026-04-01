@@ -21,7 +21,7 @@ import type {
     BoundCommandHandler,
     PersistenceEntry,
 } from './feature';
-import type { Command, CommandResult, CommandType } from '../commands';
+import type { CommandType, ExecuteCommand } from '../commands';
 import type { Persistable } from '../persistence';
 import type { TerrainData } from '../terrain';
 import type { RenderPassDefinition } from '../renderer/render-passes/types';
@@ -39,7 +39,7 @@ export interface FeatureRegistryConfig extends CoreDeps {
     visualService: EntityVisualService;
     cleanupRegistry: EntityCleanupRegistry;
     unitReservation: UnitReservationRegistry;
-    executeCommand: (cmd: Command) => CommandResult;
+    executeCommand: ExecuteCommand;
     tickScheduler: TickScheduler;
 }
 
@@ -112,6 +112,7 @@ export class FeatureRegistry {
         }
 
         // Check dependencies are loaded
+        // eslint-disable-next-line no-restricted-syntax -- dependencies is an optional field on FeatureDefinition; absent means no dependencies
         for (const depId of definition.dependencies ?? []) {
             if (!this.instances.has(depId)) {
                 throw new Error(
@@ -124,6 +125,7 @@ export class FeatureRegistry {
         // Create context for this feature (with auto-tracked event subscriptions)
         const autoSubs = new EventSubscriptionManager();
         this.autoSubscriptions.set(definition.id, autoSubs);
+        // eslint-disable-next-line no-restricted-syntax -- dependencies is an optional field on FeatureDefinition; absent means no dependencies
         const ctx = this.createContext(definition.dependencies ?? [], autoSubs);
 
         // Create the feature instance
@@ -381,6 +383,7 @@ export class FeatureRegistry {
 
             visiting.add(def.id);
 
+            // eslint-disable-next-line no-restricted-syntax -- dependencies is an optional field on FeatureDefinition; absent means no dependencies
             for (const depId of def.dependencies ?? []) {
                 const dep = byId.get(depId);
                 if (dep) {

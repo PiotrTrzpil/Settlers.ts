@@ -43,7 +43,7 @@ export function getBuildingVisualState(site: ConstructionSite | undefined): Buil
             };
 
         case BuildingConstructionPhase.ConstructionRising:
-            if (constructionProgress < 0.5) {
+            if (constructionProgress <= 0.5) {
                 // First half: construction scaffold sprite rises from bottom to fully visible
                 return {
                     useConstructionSprite: true,

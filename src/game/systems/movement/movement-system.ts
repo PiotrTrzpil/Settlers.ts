@@ -270,12 +270,18 @@ export class MovementSystem implements TickSystem {
             x: fromX,
             y: fromY,
             level: 'warn',
+            // eslint-disable-next-line no-restricted-syntax -- diag is optional pathfinding diagnostic data; fallbacks are sentinel defaults when diagnostics are unavailable
             startPassable: diag?.startPassable ?? true,
+            // eslint-disable-next-line no-restricted-syntax -- diag is optional pathfinding diagnostic data; fallbacks are sentinel defaults when diagnostics are unavailable
             goalPassable: diag?.goalPassable ?? true,
+            // eslint-disable-next-line no-restricted-syntax -- diag is optional pathfinding diagnostic data; fallbacks are sentinel defaults when diagnostics are unavailable
             startInBuilding: diag?.startInBuilding ?? false,
+            // eslint-disable-next-line no-restricted-syntax -- diag is optional pathfinding diagnostic data; fallbacks are sentinel defaults when diagnostics are unavailable
             goalInBuilding: diag?.goalInBuilding ?? false,
             nodesSearched: diag?.nodesSearched ?? -1,
+            // eslint-disable-next-line no-restricted-syntax -- diag is optional pathfinding diagnostic data; fallbacks are sentinel defaults when diagnostics are unavailable
             exhausted: diag?.exhausted ?? false,
+            // eslint-disable-next-line no-restricted-syntax -- diag is optional pathfinding diagnostic data; empty string is the correct default when no neighbor info available
             neighborInfo: diag?.neighborInfo ?? '',
         });
     }

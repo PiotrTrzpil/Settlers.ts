@@ -99,6 +99,7 @@ export const TerritoryFeature: FeatureDefinition = {
                 ctx.cleanupRegistry.onEntityRemoved(territoryManager.removeBuilding.bind(territoryManager));
             },
             renderContributions: {
+                // eslint-disable-next-line no-restricted-syntax -- territoryManager is nullable before feature init; [] is correct when not yet loaded
                 territoryDots: () => exports.territoryManager?.getBoundaryDots() ?? [],
             },
             diagnostics: (): FeatureDiagnostics => ({
@@ -109,6 +110,7 @@ export const TerritoryFeature: FeatureDefinition = {
                         entries: [
                             {
                                 key: 'Buildings',
+                                // eslint-disable-next-line no-restricted-syntax -- territoryManager is nullable before feature init; 0 is correct when not yet loaded
                                 value: exports.territoryManager?.buildingCount ?? 0,
                             },
                         ],

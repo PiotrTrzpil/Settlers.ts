@@ -81,6 +81,7 @@ export class VictoryConditionsSystem implements TickSystem {
         if (!MILITARY_BUILDINGS.has(buildingType)) {
             return;
         }
+        // eslint-disable-next-line no-restricted-syntax -- castleCounts starts empty; absent entry means 0 military buildings for this player
         this.castleCounts.set(player, (this.castleCounts.get(player) ?? 0) + 1);
         this.dirty = true;
     }
@@ -89,6 +90,7 @@ export class VictoryConditionsSystem implements TickSystem {
         if (!MILITARY_BUILDINGS.has(buildingType)) {
             return;
         }
+        // eslint-disable-next-line no-restricted-syntax -- castleCounts starts empty; absent entry means 0 military buildings for this player
         const count = this.castleCounts.get(player) ?? 0;
         this.castleCounts.set(player, Math.max(0, count - 1));
         this.dirty = true;
@@ -98,8 +100,10 @@ export class VictoryConditionsSystem implements TickSystem {
         if (!MILITARY_BUILDINGS.has(buildingType)) {
             return;
         }
+        // eslint-disable-next-line no-restricted-syntax -- castleCounts starts empty; absent entry means 0 military buildings for this player
         const oldCount = this.castleCounts.get(oldPlayer) ?? 0;
         this.castleCounts.set(oldPlayer, Math.max(0, oldCount - 1));
+        // eslint-disable-next-line no-restricted-syntax -- castleCounts starts empty; absent entry means 0 military buildings for this player
         this.castleCounts.set(newPlayer, (this.castleCounts.get(newPlayer) ?? 0) + 1);
         this.dirty = true;
     }
@@ -205,6 +209,7 @@ export class VictoryConditionsSystem implements TickSystem {
             if (status !== PlayerStatus.Playing) {
                 continue;
             }
+            // eslint-disable-next-line no-restricted-syntax -- castleCounts starts empty; absent entry means player has 0 military buildings (should be eliminated)
             if ((this.castleCounts.get(player) ?? 0) === 0) {
                 this.eliminatePlayer(player);
             }

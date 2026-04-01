@@ -190,6 +190,7 @@ export function createSnapshot(game: GameCore): GameStateSnapshot {
         x: e.x,
         y: e.y,
         player: e.player,
+        // eslint-disable-next-line no-restricted-syntax -- visual state may not exist for all entities (e.g. decorations); 0 is the correct default sprite variation
         variation: game.services.visualService.getState(e.id)?.variation ?? 0,
         race: e.race,
         carrying: e.carrying,

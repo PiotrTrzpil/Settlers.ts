@@ -58,6 +58,7 @@ export class MusicController {
     }
 
     public isPlaying(): boolean {
+        // eslint-disable-next-line no-restricted-syntax -- currentMusic is nullable-by-design (no music loaded); false is the correct default when nothing is playing
         return this.currentMusic?.playing() ?? false;
     }
 

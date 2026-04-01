@@ -257,6 +257,7 @@ export function createRenderCallback(
                 MAX_SLOPE_DIFF
             );
 
+            // eslint-disable-next-line no-restricted-syntax -- renderState is nullable when no mode is active; [] is correct empty highlights default
             er.tileHighlights = renderState?.highlights ?? [];
         }
 

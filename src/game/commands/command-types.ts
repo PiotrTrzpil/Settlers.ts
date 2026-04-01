@@ -343,51 +343,64 @@ export type CommandType = Command['type'];
 
 // === Command Result Types ===
 
-/**
- * Effect produced by a command execution.
- * Used for debugging, replay, and undo functionality.
- */
-export type CommandEffect =
-    | { type: 'entity_created'; entityId: number; entityType: string }
-    | { type: 'entity_removed'; entityId: number }
-    | { type: 'entity_moved'; entityId: number; fromX: number; fromY: number; toX: number; toY: number }
-    | { type: 'selection_changed'; selectedIds: number[] }
-    | { type: 'building_placed'; entityId: number; buildingType: BuildingType; x: number; y: number }
-    | { type: 'unit_spawned'; entityId: number; unitType: UnitType; x: number; y: number }
-    | { type: 'tree_planted'; entityId: number; treeType: MapObjectType; x: number; y: number }
-    | { type: 'crop_planted'; entityId: number; cropType: MapObjectType; x: number; y: number };
+export type CommandResult = CommandSuccess | CommandFailure;
 
-/**
- * Result of command execution.
- * Provides detailed feedback for debugging, replay, and UI feedback.
- */
-export interface CommandResult {
-    /** Whether the command executed successfully */
-    success: boolean;
-
-    /**
-     * Error message if command failed.
-     * Provides context for debugging and user feedback.
-     */
-    error?: string;
-
-    /**
-     * Effects produced by the command.
-     * Used for debugging, replay, and undo functionality.
-     */
-    effects?: CommandEffect[];
+export interface CommandSuccess {
+    success: true;
 }
 
-/** Successful command result with no effects */
+export interface CommandFailure {
+    success: false;
+    error: string;
+}
+
+/** Result for commands that create a single entity. */
+export interface SpawnResult {
+    success: true;
+    entityId: number;
+}
+
+/** Result for batch spawn commands. */
+export interface BatchSpawnResult {
+    success: true;
+    count: number;
+}
+
+/** Commands whose handlers return SpawnResult on success. */
+export type SpawnCommand =
+    | PlaceBuildingCommand
+    | PlacePileCommand
+    | SpawnUnitCommand
+    | SpawnPileCommand
+    | SpawnMapObjectCommand
+    | PlantTreeCommand
+    | PlantCropCommand
+    | ScriptAddGoodsCommand
+    | ScriptAddBuildingCommand;
+
+/** Commands whose handlers return BatchSpawnResult on success. */
+export type BatchSpawnCommand = ScriptAddSettlersCommand | PlantTreesAreaCommand;
+
+/**
+ * Overloaded execute signature — maps command type to result type.
+ * Spawn commands return SpawnResult; batch spawn commands return BatchSpawnResult.
+ * Use on public-facing execute methods (GameCore, CommandHandlerRegistry).
+ */
+export interface ExecuteCommand {
+    (cmd: SpawnCommand): SpawnResult | CommandFailure;
+    (cmd: BatchSpawnCommand): BatchSpawnResult | CommandFailure;
+    (cmd: Command): CommandResult;
+}
+
+/**
+ * Simple command executor callback — used for internal wiring where
+ * overloaded return types are not needed.
+ */
+export type CommandExecutor = (cmd: Command) => CommandResult;
+
 export const COMMAND_OK: CommandResult = { success: true };
 
-/** Create a successful result with effects */
-export function commandSuccess(effects?: CommandEffect[]): CommandResult {
-    return effects ? { success: true, effects } : COMMAND_OK;
-}
-
-/** Create a failed result with error message */
-export function commandFailed(error: string): CommandResult {
+export function commandFailed(error: string): CommandFailure {
     return { success: false, error };
 }
 

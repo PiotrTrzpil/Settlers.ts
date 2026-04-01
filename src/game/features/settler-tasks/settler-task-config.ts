@@ -12,7 +12,7 @@ import type { BuildingOverlayManager } from '../building-overlays/building-overl
 import type { ProductionControlManager } from '../production-control';
 import type { BarracksTrainingManager } from '../barracks';
 import type { ConstructionSiteManager } from '../building-construction/construction-site-manager';
-import type { Command, CommandResult } from '../../commands';
+import type { ExecuteCommand } from '../../commands';
 import type { MaterialTransfer } from '../material-transfer';
 import type { ChoreoSystem } from '../../systems/choreo';
 import type { ISettlerBuildingLocationManager } from '../settler-location/types';
@@ -31,7 +31,7 @@ export interface SettlerTaskSystemConfig extends CoreDeps {
     getProductionControlManager?: () => ProductionControlManager;
     getBarracksTrainingManager?: () => BarracksTrainingManager;
     constructionSiteManager: ConstructionSiteManager;
-    executeCommand: (cmd: Command) => CommandResult;
+    executeCommand: ExecuteCommand;
     materialTransfer: MaterialTransfer;
     isInCombat?: (entityId: number) => boolean;
     locationManager: ISettlerBuildingLocationManager;

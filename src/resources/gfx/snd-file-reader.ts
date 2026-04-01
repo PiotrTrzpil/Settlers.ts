@@ -82,6 +82,7 @@ export class SndFileReader extends ResourceFile {
 
     /** Get the number of sounds in the archive */
     public get count(): number {
+        // eslint-disable-next-line no-restricted-syntax -- sil is null when SND file has no SIL section; 0 sounds is correct
         return this.sil?.offsets.length ?? 0;
     }
 }

@@ -27,9 +27,9 @@ const PLAYER_COLORS = [
 /**
  * Returns core selection-panel state for the entity selected in the game.
  *
- * @param game - Ref to the current Game instance (may be null)
+ * @param game - Ref to the current Game instance (guaranteed non-null inside game UI)
  */
-export function useSelectionPanel(game: Ref<Game | null>): {
+export function useSelectionPanel(game: Ref<Game>): {
     selectedEntity: Ref<Entity | undefined>;
     selectionCount: Ref<number>;
     tick: Ref<number>;
@@ -45,14 +45,11 @@ export function useSelectionPanel(game: Ref<Game | null>): {
     playerColor: Ref<string | undefined>;
 } {
     // Touch tick counter to force re-evaluation when entity properties change
-    const tick = computed(() => game.value?.viewState.state.tick ?? 0);
+    const tick = computed(() => game.value.viewState.state.tick);
 
     const selectedEntity = computed<Entity | undefined>(() => {
         // eslint-disable-next-line sonarjs/void-use -- intentionally touch reactive tick to trigger re-evaluation
         void tick.value;
-        if (!game.value) {
-            return undefined;
-        }
         const entityId = game.value.viewState.state.selectedEntityId;
         if (entityId === null) {
             return undefined;
@@ -62,7 +59,7 @@ export function useSelectionPanel(game: Ref<Game | null>): {
         return entity ? { ...entity } : undefined;
     });
 
-    const selectionCount = computed(() => game.value?.viewState.state.selectedCount ?? 0);
+    const selectionCount = computed(() => game.value.viewState.state.selectedCount);
 
     const isUnit = computed(() => selectedEntity.value?.type === EntityType.Unit);
     const isBuilding = computed(() => selectedEntity.value?.type === EntityType.Building);
@@ -154,9 +151,6 @@ export function useSelectionPanel(game: Ref<Game | null>): {
         if (!entity || entity.type !== EntityType.Building) {
             return null;
         }
-        if (!game.value) {
-            return null;
-        }
 
         const isUnderConstruction = game.value.services.constructionSiteManager.hasSite(entity.id);
         return isUnderConstruction ? 'building' : 'completed';
@@ -166,7 +160,7 @@ export function useSelectionPanel(game: Ref<Game | null>): {
         // eslint-disable-next-line sonarjs/void-use -- intentionally touch reactive tick to trigger re-evaluation
         void tick.value;
         const entity = selectedEntity.value;
-        if (!entity || entity.type !== EntityType.Building || !game.value) {
+        if (!entity || entity.type !== EntityType.Building) {
             return new Set<number>();
         }
         return game.value.services.settlerTaskSystem.getWorkersForBuilding(entity.id);

@@ -18,7 +18,7 @@ import type { GameState } from '@/game/game-state';
 import { EntityType, BuildingType } from '@/game/entity';
 import { UnitType } from '@/game/core/unit-types';
 import type { UnitReservationRegistry } from '@/game/systems/unit-reservation';
-import type { Command, CommandResult } from '@/game/commands';
+import type { CommandExecutor } from '@/game/commands';
 import { getBuildingDoorPos } from '@/game/data/game-data-access';
 import { createLogger } from '@/utilities/logger';
 import type { TowerGarrisonManager } from './tower-garrison-manager';
@@ -32,14 +32,14 @@ const SCAN_INTERVAL_TICKS = 30;
 export interface AutoGarrisonSystemConfig {
     manager: TowerGarrisonManager;
     unitReservation: UnitReservationRegistry;
-    executeCommand: (cmd: Command) => CommandResult;
+    executeCommand: CommandExecutor;
     gameState: GameState;
 }
 
 export class AutoGarrisonSystem implements TickSystem {
     private readonly manager: TowerGarrisonManager;
     private readonly unitReservation: UnitReservationRegistry;
-    private readonly executeCommand: (cmd: Command) => CommandResult;
+    private readonly executeCommand: CommandExecutor;
     private readonly gameState: GameState;
 
     private tickAccumulator = 0;

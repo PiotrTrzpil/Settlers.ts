@@ -9,7 +9,7 @@ import { EMaterialType } from '../../economy/material-type';
 import { BuildingType } from '../../entity';
 import { SlotKind } from '../../core/pile-kind';
 import type { PileKind } from '../../core/pile-kind';
-import type { Command, CommandResult } from '../../commands';
+import type { ExecuteCommand } from '../../commands';
 import type { PileSlot } from './pile-slot';
 import type { GameState } from '../../game-state';
 import { BUILDING_PRODUCTIONS, type Recipe } from '../../economy/building-production';
@@ -59,18 +59,6 @@ export function buildPileKind(slot: PileSlot): PileKind {
 }
 
 /**
- * Extract the newly created entity ID from a spawn_pile CommandResult.
- * Throws if the result doesn't contain an entity_created effect.
- */
-export function extractEntityId(result: CommandResult): number {
-    const effect = result.effects?.[0];
-    if (!effect || effect.type !== 'entity_created') {
-        throw new Error('spawn_pile: expected entity_created effect');
-    }
-    return (effect as { type: 'entity_created'; entityId: number }).entityId;
-}
-
-/**
  * Spawn a new pile entity for a slot using the executeCommand pipeline.
  * Updates slot.entityId in place.
  * playerNumber must be the owning player (from the building entity).
@@ -78,7 +66,7 @@ export function extractEntityId(result: CommandResult): number {
 export function spawnPileEntity(
     slot: PileSlot,
     playerNumber: number,
-    executeCommand: (cmd: Command) => CommandResult
+    executeCommand: ExecuteCommand
 ): void {
     const result = executeCommand({
         type: 'spawn_pile',
@@ -89,13 +77,16 @@ export function spawnPileEntity(
         quantity: slot.currentAmount,
         kind: buildPileKind(slot),
     });
-    slot.entityId = extractEntityId(result);
+    if (!result.success) {
+        throw new Error(`spawn_pile failed: ${result.error}`);
+    }
+    slot.entityId = result.entityId;
 }
 
 /**
  * Remove a pile entity and clear the entityId on the slot.
  */
-export function removePileEntity(slot: PileSlot, executeCommand: (cmd: Command) => CommandResult): void {
+export function removePileEntity(slot: PileSlot, executeCommand: ExecuteCommand): void {
     executeCommand({ type: 'remove_entity', entityId: slot.entityId! });
     slot.entityId = null;
 }

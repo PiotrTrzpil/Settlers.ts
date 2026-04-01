@@ -35,7 +35,7 @@ import type { EventBus, EventHandler, GameEvents } from '../event-bus';
 import type { EntityVisualService } from '../animation/entity-visual-service';
 import type { EntityCleanupRegistry } from '../systems/entity-cleanup-registry';
 import type { UnitReservationRegistry } from '../systems/unit-reservation';
-import type { Command, CommandResult, CommandType } from '../commands';
+import type { Command, CommandResult, CommandType, ExecuteCommand } from '../commands';
 import type { Persistable } from '../persistence';
 import type { TerrainData } from '../terrain';
 import type { RenderPassDefinition } from '../renderer/render-passes/types';
@@ -79,7 +79,7 @@ export interface FeatureContext extends CoreDeps {
     unitReservation: UnitReservationRegistry;
 
     /** Execute a game command. Available to all features at creation time. */
-    executeCommand: (cmd: Command) => CommandResult;
+    executeCommand: ExecuteCommand;
 
     /** Shared tick scheduler for deferred callbacks. */
     tickScheduler: TickScheduler;

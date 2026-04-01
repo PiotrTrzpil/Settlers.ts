@@ -23,11 +23,15 @@ export function useDebugMapObjects(getGame: () => Game | null) {
         }
 
         // Check if map has entity data with objects (trees)
+        // eslint-disable-next-line no-restricted-syntax -- entityData is optional map data; 0 length is correct when absent
         hasObjectTypeData.value = (game.mapLoader.entityData?.objects.length ?? 0) > 0;
         const counts = countMapObjectsByCategory(game.state);
         mapObjectCounts.value = {
+            // eslint-disable-next-line no-restricted-syntax -- Map entries absent for categories with zero objects; 0 is correct count
             trees: counts.get(MapObjectCategory.Trees) ?? 0,
+            // eslint-disable-next-line no-restricted-syntax -- Map entries absent for categories with zero objects; 0 is correct count
             goods: counts.get(MapObjectCategory.Goods) ?? 0,
+            // eslint-disable-next-line no-restricted-syntax -- Map entries absent for categories with zero objects; 0 is correct count
             crops: counts.get(MapObjectCategory.Crops) ?? 0,
         };
     }

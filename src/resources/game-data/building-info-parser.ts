@@ -95,6 +95,7 @@ function parseSettlerPos(settlerEl: Element): BuildingSettlerPos {
 }
 
 function parseBuilding(buildingEl: Element): BuildingInfo {
+    // eslint-disable-next-line no-restricted-syntax -- XML attribute parsing: getAttribute returns null for missing attributes (external data boundary)
     const id = buildingEl.getAttribute('id') ?? '';
 
     // Parse piles

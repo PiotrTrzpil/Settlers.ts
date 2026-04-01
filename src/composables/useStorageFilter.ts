@@ -29,12 +29,12 @@ const DIRECTION_CYCLE: ReadonlyArray<StorageDirection | null> = [
 /**
  * Returns reactive storage-filter state and a cycle action for the selected StorageArea building.
  *
- * @param game - Ref to the current Game instance (may be null)
+ * @param game - Ref to the current Game instance (guaranteed non-null inside game UI)
  * @param entity - Ref to the currently selected entity (may be null or undefined)
  * @param tick - Ref to the game tick counter, used to trigger re-evaluation each frame
  */
 export function useStorageFilter(
-    game: Ref<Game | null>,
+    game: Ref<Game>,
     entity: Ref<Entity | null | undefined>,
     tick: Ref<number>
 ): {
@@ -54,7 +54,7 @@ export function useStorageFilter(
         if (!isStorageBuilding(e.subType as BuildingType)) {
             return false;
         }
-        const isUnderConstruction = game.value?.services.constructionSiteManager.hasSite(e.id) ?? false;
+        const isUnderConstruction = game.value.services.constructionSiteManager.hasSite(e.id);
         return !isUnderConstruction;
     });
 
@@ -68,34 +68,32 @@ export function useStorageFilter(
             return [];
         }
 
-        const sfm = game.value?.services.storageFilterManager;
+        const sfm = game.value.services.storageFilterManager;
 
         return DROPPABLE_MATERIALS.map(m => ({
             material: m,
             name: m,
-            direction: sfm ? sfm.getDirection(e.id, m) : null,
+            direction: sfm.getDirection(e.id, m) ?? null,
         }));
     });
 
     function setDirection(material: EMaterialType, direction: StorageDirection | null): void {
         const e = entity.value;
-        const g = game.value;
-        if (!e || !g) {
+        if (!e) {
             return;
         }
-        g.execute({ type: 'set_storage_filter', buildingId: e.id, material, direction });
+        game.value.execute({ type: 'set_storage_filter', buildingId: e.id, material, direction });
     }
 
     function cycleDirection(material: EMaterialType): void {
         const e = entity.value;
-        const g = game.value;
-        if (!e || !g) {
+        if (!e) {
             return;
         }
-        const current = g.services.storageFilterManager.getDirection(e.id, material);
+        const current = game.value.services.storageFilterManager.getDirection(e.id, material) ?? null;
         const idx = DIRECTION_CYCLE.indexOf(current);
         const next = DIRECTION_CYCLE[(idx + 1) % DIRECTION_CYCLE.length]!;
-        g.execute({ type: 'set_storage_filter', buildingId: e.id, material, direction: next });
+        game.value.execute({ type: 'set_storage_filter', buildingId: e.id, material, direction: next });
     }
 
     return {

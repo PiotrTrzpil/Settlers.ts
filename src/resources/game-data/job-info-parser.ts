@@ -26,6 +26,7 @@ function parseJobNode(nodeEl: Element): JobNode {
 }
 
 function parseJob(jobEl: Element, raceId: RaceId): JobInfo {
+    // eslint-disable-next-line no-restricted-syntax -- XML attribute parsing: getAttribute returns null for missing attributes (external data boundary)
     const id = jobEl.getAttribute('id') ?? '';
     const nodes: JobNode[] = [];
 

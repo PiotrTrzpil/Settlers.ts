@@ -148,6 +148,7 @@ function buildRecipeSet(race: Race): TrainingRecipeSet {
     if (race === Race.DarkTribe) {
         return { recipes: [] };
     }
+    // eslint-disable-next-line no-restricted-syntax -- not all races have specialist recipes; absent entry legitimately means empty list
     const specialist = SPECIALIST_RECIPES.get(race) ?? [];
     return { recipes: [...COMMON_TRAINING_RECIPES, ...specialist] };
 }

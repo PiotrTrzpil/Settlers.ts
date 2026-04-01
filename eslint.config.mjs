@@ -125,16 +125,8 @@ export default tseslint.config(
             // Legitimate uses (counters, config defaults) must disable with a justification comment.
             'no-restricted-syntax': ['warn',
                 {
-                    selector: 'LogicalExpression[operator="??"] > Literal.right[value=0]',
-                    message: 'Optimistic: ?? 0 hides missing values. Use ! if guaranteed, throw if not. Disable with justification if intentional.',
-                },
-                {
-                    selector: 'LogicalExpression[operator="??"] > Literal.right[value=""]',
-                    message: 'Optimistic: ?? \'\' hides missing values. Use ! if guaranteed, throw if not. Disable with justification if intentional.',
-                },
-                {
-                    selector: 'LogicalExpression[operator="??"] > Literal.right[value=false]',
-                    message: 'Optimistic: ?? false hides missing values. Use ! if guaranteed, throw if not. Disable with justification if intentional.',
+                    selector: 'LogicalExpression[operator="??"] > Literal.right',
+                    message: 'Optimistic: ?? <literal> hides missing values. Use ! if guaranteed, throw if not. Disable with justification if intentional.',
                 },
                 {
                     selector: 'LogicalExpression[operator="??"] > ArrayExpression.right[elements.length=0]',

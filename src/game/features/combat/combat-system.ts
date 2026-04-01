@@ -21,7 +21,7 @@ import { CombatVisuals } from './combat-animations';
 import type { EntityVisualService } from '../../animation/entity-visual-service';
 import { createLogger } from '@/utilities/logger';
 import { sortedEntries } from '@/utilities/collections';
-import type { Command, CommandResult } from '../../commands';
+import type { CommandExecutor } from '../../commands';
 
 const log = createLogger('CombatSystem');
 
@@ -51,7 +51,7 @@ const PURSUIT_REPATH_INTERVAL = 1.0;
 
 export interface CombatSystemConfig extends CoreDeps {
     visualService: EntityVisualService;
-    executeCommand: (cmd: Command) => CommandResult;
+    executeCommand: CommandExecutor;
     isUnitReserved: (entityId: number) => boolean;
 }
 
@@ -60,7 +60,7 @@ export class CombatSystem implements TickSystem {
     private readonly gameState: GameState;
     private readonly eventBus: EventBus;
     private readonly visuals: CombatVisuals;
-    private readonly executeCommand: (cmd: Command) => CommandResult;
+    private readonly executeCommand: CommandExecutor;
     private readonly isUnitReserved: (entityId: number) => boolean;
 
     /** Accumulated time for periodic enemy scanning */

@@ -72,8 +72,8 @@ export class KeyframeManager {
     /**
      * Returns the most recent keyframe, or null if none have been taken yet.
      */
-    getLatestKeyframe(): Keyframe | null {
-        return this.keyframes[this.keyframes.length - 1] ?? null;
+    getLatestKeyframe(): Keyframe | undefined {
+        return this.keyframes[this.keyframes.length - 1];
     }
 
     /**

@@ -18,8 +18,11 @@ import type {
     PlantCropCommand,
     PlantTreesAreaCommand,
     CommandResult,
+    CommandFailure,
+    SpawnResult,
+    BatchSpawnResult,
 } from '../command-types';
-import { commandSuccess, commandFailed, COMMAND_OK } from '../command-types';
+import { commandFailed, COMMAND_OK } from '../command-types';
 
 export interface PlacePileDeps {
     state: GameState;
@@ -61,7 +64,7 @@ export interface PlantCropDeps {
     cropSystem: CropSystem;
 }
 
-export function executePlacePile(deps: PlacePileDeps, cmd: PlacePileCommand): CommandResult {
+export function executePlacePile(deps: PlacePileDeps, cmd: PlacePileCommand): SpawnResult | CommandFailure {
     const { state, terrain } = deps;
 
     if (!terrain.isInBounds(cmd.x, cmd.y)) {
@@ -85,17 +88,17 @@ export function executePlacePile(deps: PlacePileDeps, cmd: PlacePileCommand): Co
         quantity: cmd.amount,
     });
 
-    return commandSuccess([{ type: 'entity_created', entityId: entity.id, entityType: 'StackedPile' }]);
+    return { success: true, entityId: entity.id };
 }
 
-export function executeSpawnMapObject(deps: SpawnMapObjectDeps, cmd: SpawnMapObjectCommand): CommandResult {
+export function executeSpawnMapObject(deps: SpawnMapObjectDeps, cmd: SpawnMapObjectCommand): SpawnResult {
     const entity = deps.state.addEntity(EntityType.MapObject, cmd.objectType, cmd.x, cmd.y, 0, {
         variation: cmd.variation,
     });
-    return commandSuccess([{ type: 'entity_created', entityId: entity.id, entityType: 'MapObject' }]);
+    return { success: true, entityId: entity.id };
 }
 
-export function executeSpawnPile(deps: SpawnPileDeps, cmd: SpawnPileCommand): CommandResult {
+export function executeSpawnPile(deps: SpawnPileDeps, cmd: SpawnPileCommand): SpawnResult {
     const { state, terrain } = deps;
     if (!terrain.isInBounds(cmd.x, cmd.y)) {
         throw new Error(`spawn_pile: position (${cmd.x}, ${cmd.y}) out of bounds`);
@@ -110,7 +113,7 @@ export function executeSpawnPile(deps: SpawnPileDeps, cmd: SpawnPileCommand): Co
         });
     }
 
-    return commandSuccess([{ type: 'entity_created', entityId: entity.id, entityType: 'StackedPile' }]);
+    return { success: true, entityId: entity.id };
 }
 
 export function executeSetStorageFilter(deps: SetStorageFilterDeps, cmd: SetStorageFilterCommand): CommandResult {
@@ -134,7 +137,7 @@ export function executeSetStorageFilter(deps: SetStorageFilterDeps, cmd: SetStor
     return COMMAND_OK;
 }
 
-export function executePlantTree(deps: PlantTreeDeps, cmd: PlantTreeCommand): CommandResult {
+export function executePlantTree(deps: PlantTreeDeps, cmd: PlantTreeCommand): SpawnResult | CommandFailure {
     const { state } = deps;
 
     if (state.getGroundEntityAt(cmd.x, cmd.y)) {
@@ -147,18 +150,21 @@ export function executePlantTree(deps: PlantTreeDeps, cmd: PlantTreeCommand): Co
     deps.treeSystem.register(entity.id, cmd.treeType, true);
     deps.eventBus.emit('tree:planted', { entityId: entity.id, treeType: cmd.treeType, x: cmd.x, y: cmd.y });
 
-    return commandSuccess([{ type: 'tree_planted', entityId: entity.id, treeType: cmd.treeType, x: cmd.x, y: cmd.y }]);
+    return { success: true, entityId: entity.id };
 }
 
-export function executePlantTreesArea(deps: PlantTreesAreaDeps, cmd: PlantTreesAreaCommand): CommandResult {
+export function executePlantTreesArea(
+    deps: PlantTreesAreaDeps,
+    cmd: PlantTreesAreaCommand
+): BatchSpawnResult | CommandFailure {
     const planted = deps.treeSystem.plantTreesNear(cmd.centerX, cmd.centerY, cmd.count, cmd.radius);
     if (planted === 0) {
         return commandFailed(`Could not plant any trees near (${cmd.centerX}, ${cmd.centerY})`);
     }
-    return commandSuccess([{ type: 'entity_created', entityId: 0, entityType: `${planted} trees planted` }]);
+    return { success: true, count: planted };
 }
 
-export function executePlantCrop(deps: PlantCropDeps, cmd: PlantCropCommand): CommandResult {
+export function executePlantCrop(deps: PlantCropDeps, cmd: PlantCropCommand): SpawnResult | CommandFailure {
     const { state } = deps;
 
     if (state.getGroundEntityAt(cmd.x, cmd.y)) {
@@ -171,5 +177,5 @@ export function executePlantCrop(deps: PlantCropDeps, cmd: PlantCropCommand): Co
 
     deps.eventBus.emit('crop:planted', { entityId: entity.id, cropType: cmd.cropType, x: cmd.x, y: cmd.y });
 
-    return commandSuccess([{ type: 'crop_planted', entityId: entity.id, cropType: cmd.cropType, x: cmd.x, y: cmd.y }]);
+    return { success: true, entityId: entity.id };
 }

@@ -54,6 +54,7 @@ export class BuildingWorkerTracker {
     claim(settlerId: number, runtime: UnitRuntime, buildingId: number): void {
         runtime.homeAssignment = { buildingId, hasVisited: false };
         this.runtimes.reindex(settlerId);
+        // eslint-disable-next-line no-restricted-syntax -- occupants map starts empty; absent entry means 0 current occupants
         this.occupants.set(buildingId, (this.occupants.get(buildingId) ?? 0) + 1);
     }
 

@@ -74,7 +74,7 @@ export async function placeBuilding(
                 ...(completed && { completed: true }),
             });
             if (!cmdResult?.success) return null;
-            const entityId = (cmdResult.effects?.[0] as { entityId?: number })?.entityId;
+            const entityId = 'entityId' in cmdResult ? cmdResult.entityId : undefined;
             if (entityId == null) return null;
             const entity = game.state.getEntity(entityId);
             if (!entity) return null;
@@ -115,7 +115,7 @@ export async function placeResource(
                 amount: amt,
             });
             if (!cmdResult?.success) return null;
-            const entityId = (cmdResult.effects?.[0] as { entityId?: number })?.entityId;
+            const entityId = 'entityId' in cmdResult ? cmdResult.entityId : undefined;
             if (entityId == null) return null;
             const entity = game.state.getEntity(entityId);
             if (!entity) return null;
@@ -160,7 +160,7 @@ export async function spawnUnit(
                 race: 10,
             });
             if (!cmdResult?.success) return null;
-            const entityId = (cmdResult.effects?.[0] as { entityId?: number })?.entityId;
+            const entityId = 'entityId' in cmdResult ? cmdResult.entityId : undefined;
             if (entityId == null) return null;
             const entity = game.state.getEntity(entityId);
             if (!entity) return null;
@@ -220,7 +220,7 @@ export async function findBuildableTile(
                 race: 10,
             });
             if (result?.success) {
-                const entityId = (result.effects?.[0] as { entityId?: number })?.entityId;
+                const entityId = 'entityId' in result ? result.entityId : undefined;
                 if (entityId != null) {
                     game.execute({ type: 'remove_entity', entityId });
                 }
@@ -358,7 +358,7 @@ export async function plantTree(page: Page, x: number, y: number, treeType = 0):
             if (!game) return null;
             const result = game.execute({ type: 'plant_tree', treeType: tt, x: tx, y: ty });
             if (!result?.success) return null;
-            return (result.effects?.[0] as { entityId?: number })?.entityId ?? null;
+            return 'entityId' in result ? result.entityId : null;
         },
         { tx: x, ty: y, tt: treeType }
     );
@@ -448,7 +448,7 @@ export async function findBuildableTileNear(
                     race: 10,
                 });
                 if (result?.success) {
-                    const entityId = (result.effects?.[0] as { entityId?: number })?.entityId;
+                    const entityId = 'entityId' in result ? result.entityId : undefined;
                     if (entityId != null) {
                         game.execute({ type: 'remove_entity', entityId });
                     }

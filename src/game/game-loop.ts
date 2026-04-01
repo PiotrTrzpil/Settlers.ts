@@ -244,6 +244,7 @@ export class GameLoop {
             name: t.name,
             group: t.group ?? 'Other',
             enabled: t.get(),
+            // eslint-disable-next-line no-restricted-syntax -- requires is optional on feature toggles; [] is the correct empty default
             requires: t.requires ?? [],
         }));
         return [...systems, ...toggles];
@@ -316,6 +317,7 @@ export class GameLoop {
     ): void {
         const framePeriod = debugStats.recordFrame();
         const workTime = performance.now() - frameStart;
+        // eslint-disable-next-line no-restricted-syntax -- renderTiming is null in non-rendering frames; 0 is correct when no render occurred
         const renderTime = renderTiming?.render ?? 0;
 
         const defaults: FrameRenderTiming = {
@@ -480,6 +482,7 @@ export class GameLoop {
                 this.handleSystemError(system, e);
             }
             const elapsed = performance.now() - start;
+            // eslint-disable-next-line no-restricted-syntax -- accumulating timings map; 0 is the correct initial value for a new entry
             timings[errorState.name] = (timings[errorState.name] ?? 0) + elapsed;
 
             // Merge sub-timings from systems that provide them

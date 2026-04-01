@@ -153,6 +153,7 @@ function pilesCommand(): CliCommand {
             const totals = new Map<string, number>();
             let totalQty = 0;
             for (const p of piles) {
+                // eslint-disable-next-line no-restricted-syntax -- accumulating map totals; 0 is the correct initial value for a new key
                 totals.set(p.material, (totals.get(p.material) ?? 0) + p.quantity);
                 totalQty += p.quantity;
             }
@@ -199,6 +200,7 @@ function workersCommand(): CliCommand {
 
             const byState = new Map<string, number>();
             for (const w of workers) {
+                // eslint-disable-next-line no-restricted-syntax -- accumulating map totals; 0 is the correct initial value for a new key
                 byState.set(w.state, (byState.get(w.state) ?? 0) + 1);
             }
 
@@ -314,6 +316,7 @@ function econDetailCommand(): CliCommand {
 function formatBuildingCounts(state: GameState, player: number, ctx: CliContext, lines: string[]): void {
     const counts = new Map<BuildingType, number>();
     for (const e of state.entityIndex.ofTypeAndPlayer(EntityType.Building, player)) {
+        // eslint-disable-next-line no-restricted-syntax -- accumulating map totals; 0 is the correct initial value for a new key
         counts.set(e.subType as BuildingType, (counts.get(e.subType as BuildingType) ?? 0) + 1);
     }
     if (counts.size > 0) {
@@ -350,6 +353,7 @@ function formatStorageMaterials(state: GameState, player: number, ctx: CliContex
             if (!isOutputSlotWithMaterial(slot)) {
                 continue;
             }
+            // eslint-disable-next-line no-restricted-syntax -- accumulating map totals; 0 is the correct initial value for a new key
             totals.set(slot.materialType, (totals.get(slot.materialType) ?? 0) + slot.currentAmount);
         }
     }
@@ -395,6 +399,7 @@ function formatCarrierAndPileSummary(config: SnapshotConfig, player: number, lin
     if (piles.length > 0) {
         const pileTotals = new Map<string, number>();
         for (const p of piles) {
+            // eslint-disable-next-line no-restricted-syntax -- accumulating map totals; 0 is the correct initial value for a new key
             pileTotals.set(p.material, (pileTotals.get(p.material) ?? 0) + p.quantity);
         }
         const parts = [...pileTotals.entries()].map(([m, q]) => `${m}x${q}`);

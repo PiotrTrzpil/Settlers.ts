@@ -39,7 +39,7 @@ import type {
     UngarrisonUnitCommand,
     GarrisonSelectedUnitsCommand,
 } from '@/game/commands/command-types';
-import { commandSuccess, commandFailed } from '@/game/commands/command-types';
+import { COMMAND_OK, commandFailed } from '@/game/commands/command-types';
 import { RenderLayer } from '@/game/renderer/render-passes/types';
 
 export interface TowerGarrisonExports {
@@ -178,7 +178,7 @@ export const TowerGarrisonFeature: FeatureDefinition = {
                         unitReservation: ctx.unitReservation,
                     };
                     return executeGarrisonUnitsCommand(cmd as GarrisonUnitsCommand, cmdCtx)
-                        ? commandSuccess()
+                        ? COMMAND_OK
                         : commandFailed('no units fit available garrison slots');
                 },
                 garrison_selected_units: cmd => {
@@ -194,7 +194,7 @@ export const TowerGarrisonFeature: FeatureDefinition = {
                         cmdCtx
                     );
                     if (result === 'success') {
-                        return commandSuccess();
+                        return COMMAND_OK;
                     }
                     if (result === 'not_garrison_building') {
                         return commandFailed('not_garrison_building');
@@ -203,7 +203,7 @@ export const TowerGarrisonFeature: FeatureDefinition = {
                 },
                 ungarrison_unit: cmd =>
                     executeUngarrisonUnitCommand(cmd as UngarrisonUnitCommand, manager, ctx.gameState)
-                        ? commandSuccess()
+                        ? COMMAND_OK
                         : commandFailed('unit cannot be ungarrisoned'),
             },
         };

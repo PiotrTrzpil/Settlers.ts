@@ -126,12 +126,12 @@ export class MovementController {
         return this._stepsTakenThisTick;
     }
 
-    get nextWaypoint(): TileCoord | null {
+    get nextWaypoint(): TileCoord | undefined {
         if (this._phase.tag === 'idle') {
-            return null;
+            return undefined;
         }
         const { path, pathIndex } = this._phase;
-        return pathIndex < path.length ? (path[pathIndex] ?? null) : null;
+        return pathIndex < path.length ? path[pathIndex] : undefined;
     }
 
     get direction(): number {
@@ -142,12 +142,12 @@ export class MovementController {
         this._direction = direction;
     }
 
-    get goal(): TileCoord | null {
+    get goal(): TileCoord | undefined {
         if (this._phase.tag === 'idle') {
-            return null;
+            return undefined;
         }
         const { path } = this._phase;
-        return path.length > 0 ? (path[path.length - 1] ?? null) : null;
+        return path.length > 0 ? path[path.length - 1] : undefined;
     }
 
     /** How long the unit has been waiting for an occupied tile (only meaningful while moving). */

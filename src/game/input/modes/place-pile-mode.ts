@@ -22,8 +22,8 @@ export interface PlacePileEnterData extends PlacementModeEnterData<EMaterialType
     materialType?: EMaterialType;
     /** Legacy alias for materialType */
     resourceType?: EMaterialType;
-    /** Quantity to place (1-8, defaults to 1) */
-    amount?: number;
+    /** Quantity to place (1-8) */
+    amount: number;
 }
 
 /**
@@ -81,7 +81,7 @@ export class PlacePileMode extends BasePlacementMode<EMaterialType> {
         // Support materialType, resourceType, and subType for backward compatibility
         // Non-null assertion is safe because onEnter validates before calling this
         const materialType = (enterData.materialType ?? enterData.resourceType ?? enterData.subType)!;
-        const amount = enterData.amount ?? 1;
+        const amount = enterData.amount;
 
         return {
             subType: materialType,
@@ -111,6 +111,7 @@ export class PlacePileMode extends BasePlacementMode<EMaterialType> {
             ...enterData,
             subType: materialType,
             materialType,
+            // eslint-disable-next-line no-restricted-syntax -- external input: enterData is cast from untyped switchMode data; 1 is correct fallback
             amount: legacyData?.amount ?? 1,
         };
 

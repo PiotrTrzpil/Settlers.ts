@@ -176,6 +176,7 @@ export class ScriptService implements TickSystem {
      * Check if the service is initialized.
      */
     public get isInitialized(): boolean {
+        // eslint-disable-next-line no-restricted-syntax -- nullable-by-design: scriptSystem is null before initialize(); false is correct before system exists
         return this.scriptSystem?.ready ?? false;
     }
 
@@ -183,6 +184,7 @@ export class ScriptService implements TickSystem {
      * Check if a script has been loaded.
      */
     public get hasScript(): boolean {
+        // eslint-disable-next-line no-restricted-syntax -- nullable-by-design: scriptSystem is null before initialize(); false is correct before system exists
         return this.scriptSystem?.hasScript ?? false;
     }
 

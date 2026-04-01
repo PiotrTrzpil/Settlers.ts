@@ -67,6 +67,7 @@ export class PlaceBuildingMode extends BasePlacementMode<BuildingType> {
     }
 
     protected override isPositionValid(x: number, y: number, _buildingType: BuildingType): boolean {
+        // eslint-disable-next-line no-restricted-syntax -- nullable-by-design: grid is null until setGrid() is called; false (invalid) is correct before grid is ready
         return this.grid?.isValid(x, y) ?? false;
     }
 

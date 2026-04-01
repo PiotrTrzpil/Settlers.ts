@@ -13,7 +13,7 @@ import type { EMaterialType } from '../../economy/material-type';
 import type { GameState } from '../../game-state';
 import type { BuildingInventoryManager } from '../inventory';
 import type { EventBus } from '../../event-bus';
-import type { Command, CommandResult } from '../../commands';
+import type { CommandExecutor } from '../../commands';
 import { setCarrying, clearCarrying } from '../../entity';
 import { createLogger } from '@/utilities/logger';
 
@@ -22,13 +22,13 @@ const log = createLogger('MaterialTransfer');
 export class MaterialTransfer {
     private readonly gameState: GameState;
     private readonly inventoryManager: BuildingInventoryManager;
-    private readonly executeCommand: (cmd: Command) => CommandResult;
+    private readonly executeCommand: CommandExecutor;
     private readonly eventBus: EventBus;
 
     constructor(
         gameState: GameState,
         inventoryManager: BuildingInventoryManager,
-        executeCommand: (cmd: Command) => CommandResult,
+        executeCommand: CommandExecutor,
         eventBus: EventBus
     ) {
         this.gameState = gameState;

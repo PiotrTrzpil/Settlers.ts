@@ -15,7 +15,7 @@ import { OreType } from './ore-type';
 import { MapObjectType } from '@/game/types/map-object-types';
 import { EntityType, type Entity } from '../../entity';
 import { createLogger } from '@/utilities/logger';
-import type { Command, CommandResult } from '../../commands';
+import type { ExecuteCommand } from '../../commands';
 import { sortedEntries } from '@/utilities/collections';
 
 const log = createLogger('ResourceSignSystem');
@@ -44,7 +44,7 @@ const ORE_TYPE_TO_MAP_OBJECT: Partial<Record<OreType, MapObjectType>> = {
 };
 
 export interface ResourceSignSystemConfig {
-    executeCommand: (cmd: Command) => CommandResult;
+    executeCommand: ExecuteCommand;
     getGroundEntityAt: (x: number, y: number) => Entity | undefined;
 }
 
@@ -53,7 +53,7 @@ export class ResourceSignSystem implements TickSystem {
     private readonly signs = new Map<number, { x: number; y: number; expiresAt: number }>();
     private elapsed = 0;
     private oreVeinData!: OreVeinData; // OK: genuinely deferred — set via setOreVeinData() after terrain loads
-    private readonly executeCommand: (cmd: Command) => CommandResult;
+    private readonly executeCommand: ExecuteCommand;
     private readonly getGroundEntityAt: (x: number, y: number) => Entity | undefined;
 
     constructor(cfg: ResourceSignSystemConfig) {
@@ -104,11 +104,10 @@ export class ResourceSignSystem implements TickSystem {
         }
 
         const result = this.executeCommand({ type: 'spawn_map_object', objectType: signType, x, y, variation });
-        const effect = result.effects?.[0];
-        if (!effect || effect.type !== 'entity_created') {
+        if (!result.success) {
             return;
         }
-        this.signs.set(effect.entityId, { x, y, expiresAt: this.elapsed + SIGN_LIFETIME });
+        this.signs.set(result.entityId, { x, y, expiresAt: this.elapsed + SIGN_LIFETIME });
     }
 
     /**

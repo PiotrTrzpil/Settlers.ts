@@ -255,6 +255,7 @@ function helpCommand(allCommands: () => CliCommand[]): CliCommand {
         usage: 'help [command]',
         desc: 'List all commands or show specific command usage',
         execute(args: CliArgs, ctx: CliContext): CliResult {
+            // eslint-disable-next-line no-restricted-syntax -- CLI positional arg is optional; '' is the correct default when no argument provided
             const cmdName = String(args._[0] ?? '').toLowerCase();
 
             if (cmdName) {

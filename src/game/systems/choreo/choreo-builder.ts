@@ -128,6 +128,7 @@ export class ChoreoBuilder {
 
     /** Add a WAIT_VIRTUAL node with visible:false. */
     hidden(duration: number, trigger?: string): this {
+        // eslint-disable-next-line no-restricted-syntax -- trigger is an optional parameter; '' is the correct default when not provided
         this.nodes.push(node(ChoreoTaskType.WAIT_VIRTUAL, { duration, visible: false, trigger: trigger ?? '' }));
         return this;
     }

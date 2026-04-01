@@ -18,7 +18,7 @@ import type { CombatExports } from '@/game/features/combat';
 import type { SettlerTaskExports } from '@/game/features/settler-tasks';
 import { BuildingSiegeSystem } from './building-siege-system';
 import type { CaptureBuildingCommand } from '@/game/commands/command-types';
-import { commandSuccess } from '@/game/commands/command-types';
+import { COMMAND_OK } from '@/game/commands/command-types';
 
 export interface BuildingSiegeExports {
     siegeSystem: BuildingSiegeSystem;
@@ -77,7 +77,7 @@ export const BuildingSiegeFeature: FeatureDefinition = {
                     const capture = cmd as CaptureBuildingCommand;
                     ctx.gameState.getEntityOrThrow(capture.buildingId, 'capture_building command target');
                     ctx.gameState.changeEntityOwner(capture.buildingId, capture.newPlayer);
-                    return commandSuccess();
+                    return COMMAND_OK;
                 },
             },
         };

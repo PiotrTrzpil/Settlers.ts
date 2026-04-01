@@ -6,6 +6,7 @@ import type { ObjectInfo } from './types';
 import { parseXML, getChildNumber } from './xml-utils';
 
 function parseObject(objectEl: Element): ObjectInfo {
+    // eslint-disable-next-line no-restricted-syntax -- DOM getAttribute returns null for missing attributes; '' is correct default for absent id
     const id = objectEl.getAttribute('id') ?? '';
 
     return {

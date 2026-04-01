@@ -21,8 +21,10 @@ import type {
     RemoveEntityCommand,
     SpawnBuildingUnitsCommand,
     CommandResult,
+    CommandFailure,
+    SpawnResult,
 } from '../command-types';
-import { commandSuccess, commandFailed } from '../command-types';
+import { commandFailed, COMMAND_OK } from '../command-types';
 
 export interface PlaceBuildingDeps {
     state: GameState;
@@ -44,8 +46,6 @@ export interface SpawnBuildingUnitsDeps {
     eventBus: EventBus;
 }
 
-type UnitSpawnEffect = { type: 'unit_spawned'; entityId: number; unitType: UnitType; x: number; y: number };
-
 function isSpawnableTile(deps: SpawnBuildingUnitsDeps, x: number, y: number): boolean {
     return (
         deps.terrain.isInBounds(x, y) &&
@@ -62,8 +62,7 @@ function spawnUnitsNear(
     unitType: UnitType,
     count: number,
     player: number,
-    selectable: boolean | undefined,
-    effects: UnitSpawnEffect[]
+    selectable: boolean | undefined
 ): void {
     const { state, eventBus } = deps;
     let spawned = 0;
@@ -86,19 +85,12 @@ function spawnUnitsNear(
                 player,
             });
 
-            effects.push({ type: 'unit_spawned', entityId: spawnedEntity.id, unitType, x: tile.x, y: tile.y });
             spawned++;
         }
     }
 }
 
-function spawnWorkerInsideBuilding(
-    deps: SpawnBuildingUnitsDeps,
-    entity: Entity,
-    bx: number,
-    by: number,
-    effects: UnitSpawnEffect[]
-): void {
+function spawnWorkerInsideBuilding(deps: SpawnBuildingUnitsDeps, entity: Entity, bx: number, by: number): void {
     const { state, eventBus } = deps;
     const buildingType = entity.subType as BuildingType;
     const workerInfo = getBuildingWorkerInfo(entity.race, buildingType);
@@ -124,14 +116,6 @@ function spawnWorkerInsideBuilding(
         unitId: workerEntity.id,
         unitType: workerEntity.subType as UnitType,
     });
-
-    effects.push({
-        type: 'unit_spawned',
-        entityId: workerEntity.id,
-        unitType: workerInfo.unitType,
-        x: door.x,
-        y: door.y,
-    });
 }
 
 function isReplaceableOccupant(state: GameState, entityId: number): boolean {
@@ -152,7 +136,7 @@ function removeReplaceableMapObjects(state: GameState, footprint: ReadonlyArray<
     }
 }
 
-export function executePlaceBuilding(deps: PlaceBuildingDeps, cmd: PlaceBuildingCommand): CommandResult {
+export function executePlaceBuilding(deps: PlaceBuildingDeps, cmd: PlaceBuildingCommand): SpawnResult | CommandFailure {
     const { state, terrain } = deps;
     const race =
         cmd.race ??
@@ -243,11 +227,7 @@ export function executePlaceBuilding(deps: PlaceBuildingDeps, cmd: PlaceBuilding
         });
     }
 
-    const effects: any[] = [
-        { type: 'building_placed', entityId: entity.id, buildingType: cmd.buildingType, x: cmd.x, y: cmd.y },
-    ];
-
-    return commandSuccess(effects);
+    return { success: true, entityId: entity.id };
 }
 
 export function executeRemoveEntity(deps: RemoveEntityDeps, cmd: RemoveEntityCommand): CommandResult {
@@ -266,7 +246,7 @@ export function executeRemoveEntity(deps: RemoveEntityDeps, cmd: RemoveEntityCom
     }
 
     state.removeEntity(cmd.entityId);
-    return commandSuccess([{ type: 'entity_removed', entityId: cmd.entityId }]);
+    return COMMAND_OK;
 }
 
 export function executeSpawnBuildingUnits(deps: SpawnBuildingUnitsDeps, cmd: SpawnBuildingUnitsCommand): CommandResult {
@@ -274,16 +254,15 @@ export function executeSpawnBuildingUnits(deps: SpawnBuildingUnitsDeps, cmd: Spa
     const buildingType = entity.subType as BuildingType;
     const bx = entity.x;
     const by = entity.y;
-    const effects: UnitSpawnEffect[] = [];
 
     const spawnDef = BUILDING_SPAWN_ON_COMPLETE[buildingType];
     if (spawnDef && !spawnDef.spawnInterval) {
-        spawnUnitsNear(deps, bx, by, spawnDef.unitType, spawnDef.count, entity.player, spawnDef.selectable, effects);
+        spawnUnitsNear(deps, bx, by, spawnDef.unitType, spawnDef.count, entity.player, spawnDef.selectable);
     }
 
     if (cmd.spawnWorker && !spawnDef) {
-        spawnWorkerInsideBuilding(deps, entity, bx, by, effects);
+        spawnWorkerInsideBuilding(deps, entity, bx, by);
     }
 
-    return commandSuccess(effects);
+    return COMMAND_OK;
 }

@@ -10,7 +10,7 @@ import type {
     SelectSameUnitTypeCommand,
     CommandResult,
 } from '../command-types';
-import { commandSuccess, commandFailed } from '../command-types';
+import { COMMAND_OK, commandFailed } from '../command-types';
 
 export interface SelectionDeps {
     state: GameState;
@@ -25,13 +25,12 @@ export function executeSelect(deps: SelectionDeps, cmd: SelectCommand): CommandR
         const ent = state.getEntityOrThrow(cmd.entityId, 'entity to select');
         if (!sel.canSelect(ent, debugAll)) {
             sel.clear();
-            return commandSuccess([{ type: 'selection_changed', selectedIds: [] }]);
+            return COMMAND_OK;
         }
     }
 
     sel.select(cmd.entityId);
-
-    return commandSuccess([{ type: 'selection_changed', selectedIds: cmd.entityId !== null ? [cmd.entityId] : [] }]);
+    return COMMAND_OK;
 }
 
 export function executeSelectAtTile(deps: SelectionDeps, cmd: SelectAtTileCommand): CommandResult {
@@ -45,11 +44,11 @@ export function executeSelectAtTile(deps: SelectionDeps, cmd: SelectAtTileComman
         if (entity) {
             sel.toggle(entity.id);
         }
-        return commandSuccess([{ type: 'selection_changed', selectedIds: [...sel.selectedEntityIds] }]);
+        return COMMAND_OK;
     }
 
     sel.select(entity?.id ?? null);
-    return commandSuccess([{ type: 'selection_changed', selectedIds: entity ? [entity.id] : [] }]);
+    return COMMAND_OK;
 }
 
 export function executeToggleSelection(deps: SelectionDeps, cmd: ToggleSelectionCommand): CommandResult {
@@ -64,14 +63,14 @@ export function executeToggleSelection(deps: SelectionDeps, cmd: ToggleSelection
     }
 
     sel.toggle(cmd.entityId);
-    return commandSuccess([{ type: 'selection_changed', selectedIds: [...sel.selectedEntityIds] }]);
+    return COMMAND_OK;
 }
 
 export function executeSelectArea(deps: SelectionDeps, cmd: SelectAreaCommand): CommandResult {
     const { state } = deps;
     const allEntities = state.getEntitiesInRect(cmd.x1, cmd.y1, cmd.x2, cmd.y2);
-    const selectedIds = state.selection.selectArea(allEntities, debugStats.state.selectAllUnits);
-    return commandSuccess([{ type: 'selection_changed', selectedIds }]);
+    state.selection.selectArea(allEntities, debugStats.state.selectAllUnits);
+    return COMMAND_OK;
 }
 
 export function executeSelectMultiple(deps: SelectionDeps, cmd: SelectMultipleCommand): CommandResult {
@@ -80,8 +79,8 @@ export function executeSelectMultiple(deps: SelectionDeps, cmd: SelectMultipleCo
     const entities = cmd.entityIds
         .map(id => state.getEntityOrThrow(id, 'entity in multiple selection'))
         .filter((e): e is Entity => state.selection.canSelect(e, debugAll));
-    const selectedIds = state.selection.selectArea(entities, debugAll);
-    return commandSuccess([{ type: 'selection_changed', selectedIds }]);
+    state.selection.selectArea(entities, debugAll);
+    return COMMAND_OK;
 }
 
 export function executeSelectSameUnitType(deps: SelectionDeps, cmd: SelectSameUnitTypeCommand): CommandResult {
@@ -101,6 +100,6 @@ export function executeSelectSameUnitType(deps: SelectionDeps, cmd: SelectSameUn
                 e.type === EntityType.Unit && e.subType === subType && state.selection.canSelect(e, debugAll)
         );
 
-    const selectedIds = state.selection.selectArea(entities, debugAll);
-    return commandSuccess([{ type: 'selection_changed', selectedIds }]);
+    state.selection.selectArea(entities, debugAll);
+    return COMMAND_OK;
 }

@@ -20,7 +20,7 @@ import type { CoreDeps } from '../feature';
 import { EntityType } from '../../entity';
 import { MapObjectCategory, MapObjectType } from '@/game/types/map-object-types';
 import type { EntityVisualService } from '../../animation/entity-visual-service';
-import type { Command, CommandResult } from '../../commands';
+import type { Command, CommandExecutor } from '../../commands';
 import { findEmptySpot } from '../../systems/spatial-search';
 import type { EventBus } from '../../event-bus';
 import { PersistentMap } from '@/game/persistence/persistent-store';
@@ -105,7 +105,7 @@ const CROP_CONFIG: GrowableConfig = {
  */
 export interface CropSystemConfig extends CoreDeps {
     visualService: EntityVisualService;
-    executeCommand: (cmd: Command) => CommandResult;
+    executeCommand: CommandExecutor;
 }
 
 export class CropSystem extends GrowableSystem<CropState> {

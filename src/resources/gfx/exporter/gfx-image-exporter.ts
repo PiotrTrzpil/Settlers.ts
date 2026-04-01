@@ -241,6 +241,7 @@ export class GfxImageExporter {
                         continue;
                     }
 
+                    // eslint-disable-next-line no-restricted-syntax -- includeMetadata is an optional export config field; false is correct default
                     const filename = this.buildExportFilename(index, image, options.includeMetadata ?? false, 5);
                     const outputPath = this.fileWriter.join(outputDir, filename);
                     await this.exportImage(image, outputPath);
@@ -301,6 +302,7 @@ export class GfxImageExporter {
                         continue;
                     }
 
+                    // eslint-disable-next-line no-restricted-syntax -- includeMetadata is an optional export config field; false is correct default
                     const filename = this.buildExportFilename(index, image, options.includeMetadata ?? false, 3);
                     const outputPath = this.fileWriter.join(outputDir, filename);
                     await this.exportImage(image, outputPath);

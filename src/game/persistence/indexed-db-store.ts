@@ -167,6 +167,7 @@ export async function saveSession(session: SaveSession): Promise<void> {
         await idbPut(tx.objectStore('sessions'), session);
         await pruneSessionsIdb(_db, session.id);
     } else {
+        // eslint-disable-next-line no-restricted-syntax -- localStorage may have no sessions yet; [] is correct empty-list default at storage boundary
         const sessions = lsGet<SaveSession[]>(LS_SESSIONS_KEY) ?? [];
         const idx = sessions.findIndex(s => s.id === session.id);
         if (idx >= 0) {
@@ -185,6 +186,7 @@ export async function getSession(id: string): Promise<SaveSession | undefined> {
         const tx = _db.transaction(['sessions'], 'readonly');
         return idbGet<SaveSession>(tx.objectStore('sessions'), id);
     } else {
+        // eslint-disable-next-line no-restricted-syntax -- localStorage may have no sessions yet; [] is correct empty-list default at storage boundary
         const sessions = lsGet<SaveSession[]>(LS_SESSIONS_KEY) ?? [];
         return sessions.find(s => s.id === id);
     }
@@ -207,6 +209,7 @@ export async function listSessions(): Promise<SaveSession[]> {
         const tx = _db.transaction(['sessions'], 'readonly');
         sessions = await idbGetAll<SaveSession>(tx.objectStore('sessions'));
     } else {
+        // eslint-disable-next-line no-restricted-syntax -- localStorage may have no sessions yet; [] is correct empty-list default at storage boundary
         sessions = lsGet<SaveSession[]>(LS_SESSIONS_KEY) ?? [];
     }
     return sessions.sort((a, b) => b.updatedAt - a.updatedAt);
@@ -218,6 +221,7 @@ export async function deleteSession(id: string): Promise<void> {
         await deleteSessionIdb(_db, id);
     } else {
         deleteSessionLsData(id);
+        // eslint-disable-next-line no-restricted-syntax -- localStorage may have no sessions yet; [] is correct empty-list default at storage boundary
         const sessions = lsGet<SaveSession[]>(LS_SESSIONS_KEY) ?? [];
         lsSet(
             LS_SESSIONS_KEY,
@@ -287,11 +291,37 @@ export async function getJournal(sessionId: string): Promise<JournalEntry[]> {
             tx.objectStore('journals'),
             sessionId
         );
+        // eslint-disable-next-line no-restricted-syntax -- journal may not exist for a session yet; [] is correct empty default at storage boundary
         return record?.entries ?? [];
     } else {
         const record = lsGet<{ sessionId: string; entries: JournalEntry[] }>(lsJournalKey(sessionId));
+        // eslint-disable-next-line no-restricted-syntax -- journal may not exist in localStorage yet; [] is correct empty default at storage boundary
         return record?.entries ?? [];
     }
+}
+
+/** Delete ALL sessions, keyframes, and journal entries. Clears game-state localStorage keys too. */
+export async function clearAllGameState(): Promise<void> {
+    if (_db) {
+        const tx = _db.transaction(['sessions', 'keyframes', 'journals'], 'readwrite');
+        tx.objectStore('sessions').clear();
+        tx.objectStore('keyframes').clear();
+        tx.objectStore('journals').clear();
+        await new Promise<void>((resolve, reject) => {
+            tx.oncomplete = () => resolve();
+            tx.onerror = () => reject(tx.error);
+        });
+    } else {
+        // Clear all localStorage fallback keys
+        const keysToRemove = Object.keys(localStorage).filter(k => k.startsWith(LS_PREFIX));
+        for (const key of keysToRemove) {
+            localStorage.removeItem(key);
+        }
+    }
+
+    // Clear the legacy game-state keys used by the reset CLI command
+    localStorage.removeItem('settlers_game_state');
+    localStorage.removeItem('settlers_initial_state');
 }
 
 // ─── Private helpers ─────────────────────────────────────────────────────────

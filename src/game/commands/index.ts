@@ -27,8 +27,15 @@ export type {
     ScriptAddBuildingCommand,
     ScriptAddSettlersCommand,
     CommandResult,
-    CommandEffect,
     CommandType,
+    CommandSuccess,
+    CommandFailure,
+    SpawnResult,
+    BatchSpawnResult,
+    SpawnCommand,
+    BatchSpawnCommand,
+    ExecuteCommand,
+    CommandExecutor,
 } from './command-types';
 
 export {
@@ -39,7 +46,6 @@ export {
     isSelectionCommand,
     isMovementCommand,
     COMMAND_OK,
-    commandSuccess,
     commandFailed,
 } from './command-types';
 

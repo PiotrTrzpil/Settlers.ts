@@ -49,6 +49,7 @@ export class BuildingPileRegistry {
 
     /** Get all pile slots for a building type + race */
     getPileSlots(buildingType: BuildingType, race: Race): readonly PileSlot[] {
+        // eslint-disable-next-line no-restricted-syntax -- not all building types have pile slots; empty array is the correct absent-entry default
         return this.slots.get(registryKey(buildingType, race)) ?? [];
     }
 
@@ -69,6 +70,7 @@ export class BuildingPileRegistry {
 
     /** Get storage pile offsets (anchor-relative) for a building type + race */
     getStoragePilePositions(buildingType: BuildingType, race: Race): readonly StoragePilePosition[] {
+        // eslint-disable-next-line no-restricted-syntax -- not all building types have storage piles; empty array is the correct absent-entry default
         return this.storagePositions.get(registryKey(buildingType, race)) ?? [];
     }
 

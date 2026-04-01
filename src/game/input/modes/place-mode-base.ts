@@ -174,6 +174,7 @@ export abstract class BasePlacementMode<TSubType = number> extends BaseInputMode
             return;
         }
 
+        // eslint-disable-next-line no-restricted-syntax -- optional config field: player is legitimately absent when caller omits it; 0 is the correct default player
         this.currentPlayer = enterData.player ?? 0;
         context.setModeData(this.initializeModeData(enterData));
     }
@@ -338,7 +339,7 @@ export abstract class BasePlacementMode<TSubType = number> extends BaseInputMode
             modeData.previewValid = this.isPositionValid(modeData.previewX, modeData.previewY, modeData.subType);
             context.setModeData(modeData);
         } else {
-            this.logPlacement(modeData, false, result.error ?? 'Command failed');
+            this.logPlacement(modeData, false, result.error);
         }
     }
 

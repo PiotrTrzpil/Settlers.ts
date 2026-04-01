@@ -61,6 +61,7 @@ export class CameraMode extends BaseInputMode {
      * Get current camera X position.
      */
     get x(): number {
+        // eslint-disable-next-line no-restricted-syntax -- nullable-by-design: viewPoint is null until setViewPoint() is called; 0 is correct before camera is attached
         return this.viewPoint?.x ?? 0;
     }
 
@@ -68,6 +69,7 @@ export class CameraMode extends BaseInputMode {
      * Get current camera Y position.
      */
     get y(): number {
+        // eslint-disable-next-line no-restricted-syntax -- nullable-by-design: viewPoint is null until setViewPoint() is called; 0 is correct before camera is attached
         return this.viewPoint?.y ?? 0;
     }
 

@@ -10,7 +10,7 @@
 import type { Race } from '@/game/core/race';
 import type { GameState } from '@/game/game-state';
 import type { TerrainData } from '@/game/terrain';
-import type { Command, CommandResult } from '@/game/commands/command-types';
+import type { CommandExecutor } from '@/game/commands/command-types';
 import type { PlacementFilter } from '@/game/systems/placement/types';
 import type { Node } from '@/game/ai/behavior-tree';
 import type { AiPlayerConfig, AiPlayerState } from '../types';
@@ -38,7 +38,7 @@ export class AiPlayerController {
         race: Race;
         gameState: GameState;
         terrain: TerrainData;
-        executeCommand: (cmd: Command) => CommandResult;
+        executeCommand: CommandExecutor;
         getPlacementFilter: () => PlacementFilter | null;
         hasSite: (buildingId: number) => boolean;
         isGameOver: () => boolean;

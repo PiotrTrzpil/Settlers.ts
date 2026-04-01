@@ -63,6 +63,7 @@ export class BuildingAdjustMode extends BaseInputMode {
 
     /** Get the list of all registered handlers. */
     getHandlers(): readonly BuildingAdjustHandler[] {
+        // eslint-disable-next-line no-restricted-syntax -- nullable-by-design: getDeps() returns null before game loads; empty array is correct sentinel
         return this.getDeps()?.handlers ?? [];
     }
 

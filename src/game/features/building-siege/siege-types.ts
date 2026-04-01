@@ -9,7 +9,7 @@ import type { TowerGarrisonManager } from '../tower-garrison/tower-garrison-mana
 import type { CombatSystem } from '../combat/combat-system';
 import type { UnitReservationRegistry } from '../../systems/unit-reservation';
 import type { SettlerTaskSystem } from '../settler-tasks';
-import type { Command, CommandResult } from '../../commands';
+import type { CommandExecutor } from '../../commands';
 
 // ── Constants ──────────────────────────
 
@@ -51,5 +51,5 @@ export interface BuildingSiegeSystemConfig extends CoreDeps {
     combatSystem: CombatSystem;
     unitReservation: UnitReservationRegistry;
     settlerTaskSystem: SettlerTaskSystem;
-    executeCommand: (cmd: Command) => CommandResult;
+    executeCommand: CommandExecutor;
 }

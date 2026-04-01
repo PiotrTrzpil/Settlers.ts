@@ -59,7 +59,7 @@ import type { IconEntry } from '@/views/sprite-icon-loader';
 import { useSpecialists } from '@/composables/use-specialists';
 
 const props = defineProps<{
-    game: Game | null;
+    game: Game;
     race: Race;
     specialistIcons: Record<string, IconEntry>;
     getCameraCenter: () => { x: number; y: number } | null;
@@ -67,21 +67,17 @@ const props = defineProps<{
 
 const gameRef = computed(() => props.game);
 const raceRef = computed(() => props.race);
-const tick = computed(() => props.game?.viewState.state.tick ?? 0);
+const tick = computed(() => props.game.viewState.state.tick);
 
 const specialists = useSpecialists(gameRef, tick, raceRef);
 
 function recruit(unitType: UnitType, count: number): void {
-    const g = props.game;
-    if (!g) {
-        return;
-    }
     const cam = count > 0 ? props.getCameraCenter() : null;
-    g.execute({
+    props.game.execute({
         type: 'recruit_specialist',
         unitType,
         count,
-        player: g.currentPlayer,
+        player: props.game.currentPlayer,
         race: props.race,
         nearX: cam?.x,
         nearY: cam?.y,

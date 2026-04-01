@@ -95,7 +95,9 @@ describe('Combat – right-click enemy tower', { timeout: 30_000 }, () => {
         const result = garrisonSelected(sim, tileX, tileY);
         // Should fail with not_garrison_building so the caller falls through to move
         expect(result.success).toBe(false);
-        expect(result.error).toBe('not_garrison_building');
+        if (!result.success) {
+            expect(result.error).toBe('not_garrison_building');
+        }
         expect(sim.errors).toHaveLength(0);
     });
 

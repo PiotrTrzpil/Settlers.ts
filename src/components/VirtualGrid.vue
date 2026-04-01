@@ -136,6 +136,7 @@ defineExpose({
         virtualizer.value.scrollToIndex(rowIndex, { align: 'start' });
     },
     getScrollOffset(): number {
+        // eslint-disable-next-line no-restricted-syntax -- scrollEl is nullable (not yet mounted); 0 is the correct scroll offset when element is absent
         return scrollEl.value?.scrollTop ?? 0;
     },
     setScrollOffset(offset: number) {

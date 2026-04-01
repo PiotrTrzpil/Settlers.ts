@@ -13,7 +13,7 @@ import type { ThrottledLogger } from '@/utilities/throttled-logger';
 import type { EntityWorkHandler, PositionWorkHandler } from './types';
 import type { BarracksTrainingManager } from '../barracks';
 import type { MaterialTransfer } from '../material-transfer';
-import type { Command, CommandResult } from '../../commands';
+import type { ExecuteCommand } from '../../commands';
 import type { TaskResult, ChoreoJobState, ChoreoNode } from '../../systems/choreo';
 import type { ConstructionSiteManager } from '../building-construction/construction-site-manager';
 
@@ -125,7 +125,7 @@ export interface ControlContext {
     /** Barracks training manager — only needed by CHANGE_TYPE_AT_BARRACKS. */
     barracksTrainingManager?: BarracksTrainingManager;
     /** Command executor — needed by TRANSFORM_RECRUIT. */
-    executeCommand?: (cmd: Command) => CommandResult;
+    executeCommand?: ExecuteCommand;
     /** Inventory manager — needed by TRANSFORM_RECRUIT for pile withdrawal. */
     inventoryManager?: BuildingInventoryManager;
 }

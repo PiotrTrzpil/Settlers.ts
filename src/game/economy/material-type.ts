@@ -138,6 +138,7 @@ export const DROPPABLE_MATERIALS: readonly EMaterialType[] = Array.from(MATERIAL
 
 /** Check whether a material type can be dropped on the ground */
 export function isMaterialDroppable(type: EMaterialType): boolean {
+    // eslint-disable-next-line no-restricted-syntax -- EMaterialType may include values not in MATERIAL_CONFIGS (e.g. NO_MATERIAL); false is the correct safe default
     return MATERIAL_CONFIGS.get(type)?.droppable ?? false;
 }
 

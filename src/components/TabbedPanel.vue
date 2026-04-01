@@ -20,17 +20,16 @@
                 <layer-panel :counts="counts" @update:visibility="$emit('update:visibility', $event)" />
             </div>
             <div v-show="activeTab === 'settings'">
-                <settings-panel v-if="game" :game="game" />
+                <settings-panel :game="game" />
             </div>
             <div v-show="activeTab === 'logistics'">
                 <logistics-debug-panel :game="game" />
             </div>
             <div v-show="activeTab === 'features'">
-                <features-panel v-if="game" :game="game" />
+                <features-panel :game="game" />
             </div>
             <div v-show="activeTab === 'debug'">
                 <debug-panel
-                    v-if="game"
                     :game="game"
                     :paused="paused"
                     :currentRace="currentRace"
@@ -59,7 +58,7 @@ import FeaturesPanel from './features-panel.vue';
 provide('overlay-panel-embedded', true);
 
 defineProps<{
-    game: Game | null;
+    game: Game;
     paused: boolean;
     currentRace: number;
     counts?: LayerCounts;

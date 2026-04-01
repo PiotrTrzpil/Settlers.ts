@@ -179,7 +179,7 @@ export class SelectMode extends BaseInputMode {
                 context.executeCommand({ type: 'move_selected_units', targetX: tileX, targetY: tileY });
             } else {
                 // Garrison building rejected the units — show feedback, but do NOT move (tile is inside building).
-                context.showHint?.(garrisonResult.error ?? 'Cannot garrison', data.screenX, data.screenY);
+                context.showHint?.(garrisonResult.error, data.screenX, data.screenY);
             }
         }
     }
@@ -187,6 +187,7 @@ export class SelectMode extends BaseInputMode {
     /** Handle double-click: select all units of the same type visible on screen. */
     private handleDoubleClickSelect(seedEntityId: number, _data: PointerData, context: InputContext): void {
         // Use a large screen rect with padding — the picker clips to rendered entities anyway.
+        /* eslint-disable no-restricted-syntax -- pickEntitiesInScreenRect is nullable-by-design (null in tests/non-interactive contexts per InputContext interface); [] is correct when unavailable */
         const candidateIds =
             context.pickEntitiesInScreenRect?.(
                 -DOUBLE_CLICK_SCREEN_PAD,
@@ -194,6 +195,7 @@ export class SelectMode extends BaseInputMode {
                 window.innerWidth + DOUBLE_CLICK_SCREEN_PAD,
                 window.innerHeight + DOUBLE_CLICK_SCREEN_PAD
             ) ?? [];
+        /* eslint-enable no-restricted-syntax */
         context.executeCommand({ type: 'select_same_unit_type', seedEntityId, candidateIds });
     }
 
@@ -240,9 +242,13 @@ export class SelectMode extends BaseInputMode {
         if (dragState?.isDragging && dragState.button === MouseButton.Left) {
             const selectionBox: SelectionBox = {
                 type: 'selection_box',
+                // eslint-disable-next-line no-restricted-syntax -- nullable-by-design: tile coords absent when drag starts off-map; 0 is a safe visual fallback for the selection box outline
                 startTileX: dragState.startTileX ?? 0,
+                // eslint-disable-next-line no-restricted-syntax -- nullable-by-design: tile coords absent when drag starts off-map; 0 is a safe visual fallback for the selection box outline
                 startTileY: dragState.startTileY ?? 0,
+                // eslint-disable-next-line no-restricted-syntax -- nullable-by-design: tile coords absent when drag ends off-map; 0 is a safe visual fallback for the selection box outline
                 endTileX: dragState.currentTileX ?? 0,
+                // eslint-disable-next-line no-restricted-syntax -- nullable-by-design: tile coords absent when drag ends off-map; 0 is a safe visual fallback for the selection box outline
                 endTileY: dragState.currentTileY ?? 0,
                 startScreenX: dragState.startX,
                 startScreenY: dragState.startY,

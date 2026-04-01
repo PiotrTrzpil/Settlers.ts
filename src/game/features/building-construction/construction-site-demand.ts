@@ -176,6 +176,7 @@ export class ConstructionSiteDemandSystem implements TickSystem {
             return;
         }
 
+        // eslint-disable-next-line no-restricted-syntax -- site may have no demands yet; [] is the correct initial value
         const existing = this.demands.get(siteId) ?? [];
         const activeBuilders = existing.filter(d => d.role === 'builder').length;
         const count = site.building.slots.required - activeBuilders;

@@ -85,6 +85,7 @@ export async function loadOverlaySpritesAndUpdateFrameCounts(er: EntityRenderer,
     // Use .some() across the whole manifest — the first entry may fail to load (missing GFX job),
     // so checking only manifest[0] would trigger a reload every time.
     const alreadyLoaded = manifest.some(
+        // eslint-disable-next-line no-restricted-syntax -- directionIndex is an optional sprite manifest property; 0 is the correct default direction index
         e => spriteManager.spriteRegistry?.getOverlayFrames(e.gfxFile, e.jobIndex, e.directionIndex ?? 0) !== null
     );
 
@@ -113,6 +114,7 @@ export async function loadOverlaySpritesAndUpdateFrameCounts(er: EntityRenderer,
     }
 
     // Flag sprites are player-colored (not JIL-based) — update their frame count separately.
+    // eslint-disable-next-line no-restricted-syntax -- spriteRegistry is nullable before loading completes; 0 flag frames is correct when registry is absent
     game.services.buildingOverlayManager.setFlagFrameCount(spriteManager.spriteRegistry?.getFlagFrameCount(0) ?? 0);
 }
 

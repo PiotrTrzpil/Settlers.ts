@@ -11,7 +11,7 @@
 
 import type { GameState } from '@/game/game-state';
 import type { TerrainData } from '@/game/terrain';
-import type { Command, CommandResult } from '@/game/commands/command-types';
+import type { CommandExecutor } from '@/game/commands/command-types';
 import type { PlacementFilter } from '@/game/systems/placement/types';
 import type { AiPlayerConfig, AiPlayerState, AiPlayerSystem } from '../types';
 import { AiPlayerController } from './ai-player-controller';
@@ -19,7 +19,7 @@ import { AiPlayerController } from './ai-player-controller';
 export class AiPlayerSystemImpl implements AiPlayerSystem {
     private readonly controllers = new Map<number, AiPlayerController>();
     private readonly gameState: GameState;
-    private readonly executeCommand: (cmd: Command) => CommandResult;
+    private readonly executeCommand: CommandExecutor;
     private readonly isGameOver: () => boolean;
 
     private hasSite: (buildingId: number) => boolean = () => false;
@@ -28,7 +28,7 @@ export class AiPlayerSystemImpl implements AiPlayerSystem {
 
     constructor(deps: {
         gameState: GameState;
-        executeCommand: (cmd: Command) => CommandResult;
+        executeCommand: CommandExecutor;
         isGameOver: () => boolean;
     }) {
         this.gameState = deps.gameState;

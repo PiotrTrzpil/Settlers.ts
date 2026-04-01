@@ -164,6 +164,7 @@ export class BuildingOverlayManager implements TickSystem {
                 if (
                     ref.gfxFile === gfxFile &&
                     ref.jobIndex === jobIndex &&
+                    // eslint-disable-next-line no-restricted-syntax -- directionIndex is an optional sprite ref field; absent means direction 0
                     (ref.directionIndex ?? 0) === directionIndex
                 ) {
                     inst.frameCount = frameCount;

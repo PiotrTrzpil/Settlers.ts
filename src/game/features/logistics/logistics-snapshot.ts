@@ -216,6 +216,7 @@ export function gatherDemands(
 ): { demands: DemandSummary[]; rawDemands: DemandEntry[] } {
     const { demandQueue, gameState } = config;
     const now = demandQueue.getGameTime();
+    // eslint-disable-next-line no-restricted-syntax -- limit is an optional config field; absent means no limit (0)
     const limit = options?.limit ?? 0;
 
     const summaries: DemandSummary[] = [];
@@ -325,6 +326,7 @@ export function gatherCarriers(
     }
 
     carriers.sort((a, b) => a.entityId - b.entityId);
+    // eslint-disable-next-line no-restricted-syntax -- limit is an optional config field; absent means no limit (0)
     return applyLimit(carriers, options?.limit ?? 0);
 }
 
@@ -393,6 +395,7 @@ export function gatherProductionBuildings(
     }
 
     result.sort((a, b) => a.entityId - b.entityId);
+    // eslint-disable-next-line no-restricted-syntax -- limit is an optional config field; absent means no limit (0)
     return applyLimit(result, options?.limit ?? 0);
 }
 
@@ -449,6 +452,7 @@ export function gatherPiles(
     }
 
     result.sort((a, b) => a.entityId - b.entityId);
+    // eslint-disable-next-line no-restricted-syntax -- limit is an optional config field; absent means no limit (0)
     return applyLimit(result, options?.limit ?? 0);
 }
 
@@ -481,6 +485,7 @@ export function gatherWorkers(
     }
 
     result.sort((a, b) => a.entityId - b.entityId);
+    // eslint-disable-next-line no-restricted-syntax -- limit is an optional config field; absent means no limit (0)
     return applyLimit(result, options?.limit ?? 0);
 }
 
@@ -545,5 +550,6 @@ export function gatherTransportJobs(
     }
 
     result.sort((a, b) => a.id - b.id);
+    // eslint-disable-next-line no-restricted-syntax -- limit is an optional config field; absent means no limit (0)
     return applyLimit(result, options?.limit ?? 0);
 }

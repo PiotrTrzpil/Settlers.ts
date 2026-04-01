@@ -39,7 +39,7 @@ export function renderImageToCanvas(img: IGfxImage, canvas: HTMLCanvasElement, b
 }
 
 /** Collect all non-null images from a reader into a list */
-export function collectImages(getImageCount: () => number, getImage: (i: number) => IGfxImage | null): IGfxImage[] {
+export function collectImages(getImageCount: () => number, getImage: (i: number) => IGfxImage | null | undefined): IGfxImage[] {
     const list: IGfxImage[] = [];
     const count = getImageCount();
 

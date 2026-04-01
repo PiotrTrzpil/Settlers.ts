@@ -16,7 +16,7 @@ import { EntityType, UnitType, getUnitTypeSpeed } from './entity';
 import { isAngelUnitType } from './core/unit-types';
 import { EventBus, EventSubscriptionManager } from './event-bus';
 import { EntityVisualService } from './animation/entity-visual-service';
-import type { Command, CommandResult, CommandType } from './commands';
+import type { CommandType, ExecuteCommand } from './commands';
 import { EntityCleanupRegistry, CLEANUP_PRIORITY } from './systems/entity-cleanup-registry';
 import { UnitReservationRegistry } from './systems/unit-reservation';
 import { FeatureRegistry } from './features/feature-registry';
@@ -154,7 +154,7 @@ export class GameServices {
 
     private readonly gameState: GameState;
 
-    constructor(gameState: GameState, eventBus: EventBus, executeCommand: (cmd: Command) => CommandResult) {
+    constructor(gameState: GameState, eventBus: EventBus, executeCommand: ExecuteCommand) {
         this.gameState = gameState;
         // 1. Kernel services — created before features, provided via FeatureContext.
         //    UnitReservationRegistry must subscribe to entity:removed BEFORE cleanupRegistry
