@@ -245,6 +245,7 @@ function loadSavedState(): void {
 
 function saveState(): void {
     // Don't overwrite scroll offset while a restore is pending (data just loaded, scroll is 0)
+    // eslint-disable-next-line no-restricted-syntax -- saved state may not exist in localStorage; 0 is correct initial scroll offset
     const prevScrollOffset = getSavedState()?.scrollOffset ?? 0;
     let scrollOffset: number;
     if (pendingScrollRestore) {
@@ -341,10 +342,10 @@ function getCarrierMaterialLabel(jobIndex: number): string | null {
 function getWorkerLabel(jobIndex: number): string | null {
     return getWorkerLabelLookup(getCurrentFileId(), jobIndex);
 }
-function getNameForJob(jobIndex: number): string | null {
+function getNameForJob(jobIndex: number): string | undefined {
     return getNameForJobLookup(getCurrentFileId(), jobIndex);
 }
-function getBuildingForJob(jobIndex: number): string | null {
+function getBuildingForJob(jobIndex: number): string | undefined {
     return getNameForJob(jobIndex);
 }
 function isJobMapped(jobIndex: number): boolean {

@@ -96,17 +96,17 @@ export function getWorkerLabel(fileId: number | null, jobIndex: number): string 
 }
 
 /** Get a human-readable name for a job index based on the current file type. */
-export function getNameForJob(fileId: number | null, jobIndex: number): string | null {
+export function getNameForJob(fileId: number | null, jobIndex: number): string | undefined {
     if (fileId === null) {
-        return null;
+        return undefined;
     }
     if (BUILDING_FILE_IDS.has(fileId)) {
-        return jobToBuildingName.get(jobIndex) ?? null;
+        return jobToBuildingName.get(jobIndex);
     }
     if (fileId === GFX_FILE_NUMBERS.RESOURCES) {
-        return jobToResourceName.get(jobIndex) ?? null;
+        return jobToResourceName.get(jobIndex);
     }
-    return null;
+    return undefined;
 }
 
 /** Check if a job index has any known mapping (building, resource, worker, or carrier). */

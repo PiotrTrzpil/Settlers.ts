@@ -34,6 +34,13 @@
                         </button>
                         <span class="hint">Clears all cached sprite data</span>
                     </div>
+
+                    <div class="cache-controls">
+                        <button class="secondary-btn" @click="handleClearGameState" :disabled="isClearingState">
+                            {{ isClearingState ? 'Clearing...' : 'Clear Game State' }}
+                        </button>
+                        <span class="hint">Removes all saved sessions and game state</span>
+                    </div>
                 </div>
             </div>
 
@@ -81,6 +88,7 @@ import { FileManager } from '@/utilities/file-manager';
 import { LocalFileProvider } from '@/utilities/local-file-provider';
 import { GameSettingsManager } from '@/game/game-settings';
 import { clearAllCaches } from '@/game/renderer/sprite-cache';
+import { clearAllGameState, open as openSaveDb } from '@/game/persistence/indexed-db-store';
 
 // Local settings instance — loads from localStorage.
 // When Game is later created, it reads the same persisted state.
@@ -93,6 +101,7 @@ const props = defineProps<{
 const isValidSettlers = ref(false);
 const luaEnabled = ref(loadLuaSetting());
 const isClearing = ref(false);
+const isClearingState = ref(false);
 
 function loadLuaSetting(): boolean {
     try {
@@ -116,6 +125,16 @@ async function handleClearCache(): Promise<void> {
         await clearAllCaches();
     } finally {
         isClearing.value = false;
+    }
+}
+
+async function handleClearGameState(): Promise<void> {
+    isClearingState.value = true;
+    try {
+        await openSaveDb();
+        await clearAllGameState();
+    } finally {
+        isClearingState.value = false;
     }
 }
 

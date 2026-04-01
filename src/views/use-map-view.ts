@@ -1,18 +1,12 @@
-import { ref, shallowRef, computed, watch, reactive, onBeforeUnmount, type Ref, type ShallowRef } from 'vue';
+import { ref, shallowRef, computed, watch, reactive, type Ref } from 'vue';
 import { useRoute } from 'vue-router';
 import { MapLoader } from '@/resources/map/map-loader';
 import { Game } from '@/game/game';
 import { createTestMapLoader, createEmptyMapLoader } from '@/game/test-map-factory';
-import { BuildingType, TileCoord, UnitType } from '@/game/entity';
-import { Race } from '@/game/core/race';
-import type { EMaterialType } from '@/game/economy';
 import { BinaryReader } from '@/resources/file/binary-reader';
 import { FileManager, IFileSource } from '@/utilities/file-manager';
 import { LogHandler } from '@/utilities/log-handler';
-import { saveLayerVisibility } from '@/game/renderer/layer-visibility';
-import type { InputManager } from '@/game/input';
 import { debugStats } from '@/game/debug/debug-stats';
-import { GameEndReason } from '@/game/features/victory-conditions/victory-conditions-system';
 import {
     gameStatePersistence,
     restoreFromSnapshot,
@@ -21,10 +15,8 @@ import {
     setCurrentMapId,
     saveInitialState,
 } from '@/game/state/game-state-persistence';
-import { ALL_RESOURCES } from './palette-data';
 import { getGameDataLoader } from '@/resources/game-data';
-import { setupUIState, setupComputedState } from './use-map-view-state';
-import { createModeToggler, createGameActions, setupIconLoading, setupLifecycle } from './use-map-view-helpers';
+import { setupLifecycle } from './use-map-view-helpers';
 
 export type { LayerCounts } from './use-map-view-state';
 
@@ -85,14 +77,6 @@ async function loadMapFile(
     }
 }
 
-/** Resources available in the UI (re-exported from palette-data) */
-const availableResources = ALL_RESOURCES;
-
-/**
- * Try to restore saved game state, recording timing in mapLoadTimings.
- * If saved data is stale (version mismatch), pauses ticks and shows a warning
- * so the user can decide to discard. Returns true if stale data was detected.
- */
 /**
  * Try to restore saved game state, then start auto-saving.
  * If saved data is stale (version mismatch), pauses ticks and fires onStaleDetected.
@@ -121,23 +105,20 @@ async function restoreAndStartPersistence(game: Game, onStaleDetected: () => voi
 }
 
 /** Dismiss stale snapshot warning — discards saved data and unpauses ticks. */
-function dismissStaleSnapshotWarning(warning: Ref<boolean>, game: ShallowRef<Game | null>): void {
+function dismissStaleSnapshotWarning(warning: Ref<boolean>, game: Game): void {
     void clearSavedGameState();
     warning.value = false;
-    if (game.value) {
-        game.value.settings.state.paused = false;
-    }
+    game.settings.state.paused = false;
 }
 
 /** State container passed to the extracted loadMap logic. */
 interface MapLoadContext {
-    game: ShallowRef<Game | null>;
+    game: ReturnType<typeof shallowRef<Game | null>>;
     fileName: Ref<string | null>;
     mapInfo: Ref<string>;
     staleSnapshotWarning: Ref<boolean>;
     mapLoadState: { isLoading: boolean; currentFile: string | null; initialized: boolean };
     getFileManager: () => FileManager;
-    wireFeatureToggles: (g: Game) => void;
 }
 
 /**
@@ -191,7 +172,6 @@ async function loadMap(
             setCurrentMapId('__test_map__');
 
             ctx.game.value = createTestGame(fm);
-            ctx.wireFeatureToggles(ctx.game.value);
             saveInitialState(ctx.game.value);
             await restoreAndStartPersistence(ctx.game.value, onStale);
             return true;
@@ -204,7 +184,6 @@ async function loadMap(
             setCurrentMapId('__empty_map__');
 
             ctx.game.value = createEmptyMapGame(fm);
-            ctx.wireFeatureToggles(ctx.game.value);
             saveInitialState(ctx.game.value);
             gameStatePersistence.start(ctx.game.value);
             return true;
@@ -225,7 +204,6 @@ async function loadMap(
         mapLoadState.currentFile = file.name;
         ctx.mapInfo.value = result.mapInfo;
         ctx.game.value = result.game;
-        ctx.wireFeatureToggles(result.game);
 
         setCurrentMapId(file.name);
         saveInitialState(result.game);
@@ -245,14 +223,13 @@ async function loadMap(
     }
 }
 
-export function useMapView(
-    getFileManager: () => FileManager,
-    getInputManager?: () => InputManager | null,
-    selectedRace?: Ref<Race>
-) {
+/**
+ * Map-loading composable for the parent map-view component.
+ * Returns the game ref, file selection handler, stale snapshot state,
+ * and a dismissStaleSnapshot function. Game-dependent UI logic lives in GameMapView.
+ */
+export function useMapView(getFileManager: () => FileManager) {
     const route = useRoute();
-    // Check if testMap query param is present - use computed for reactivity
-    // in case the route isn't fully resolved when the composable first runs
     const isTestMap = computed(() => {
         const param = route.query['testMap'];
         return param === 'true' || param === '';
@@ -272,6 +249,8 @@ export function useMapView(
     const fileName = ref<string | null>(null);
     const mapInfo = ref('');
     const game = shallowRef<Game | null>(null);
+    /** Increments on each new game load — used as :key to force GameMapView re-creation */
+    const gameGeneration = ref(0);
     const staleSnapshotWarning = ref(false);
     const mapLoadState = reactive({
         isLoading: false,
@@ -286,7 +265,6 @@ export function useMapView(
         staleSnapshotWarning,
         mapLoadState,
         getFileManager,
-        wireFeatureToggles,
     };
 
     function initializeMap(): void {
@@ -324,172 +302,36 @@ export function useMapView(
     }
 
     // =========================================================================
-    // UI State + Computed State (extracted to use-map-view-state.ts)
-    // =========================================================================
-
-    const uiState = setupUIState();
-    const {
-        activeTab,
-        resourceAmount,
-        hoveredTile,
-        resourceIcons,
-        buildingIcons,
-        unitIcons,
-        specialistIcons,
-        layerVisibility,
-        updateLayerVisibility,
-    } = uiState;
-
-    /** Wire the Territory feature toggle to sync with layer visibility's showTerritory */
-    function wireFeatureToggles(g: Game): void {
-        g.onTerritoryToggle(enabled => {
-            layerVisibility.showTerritory = enabled;
-            saveLayerVisibility(layerVisibility);
-        });
-    }
-
-    const computedState = setupComputedState(game, selectedRace);
-    const {
-        showDebug,
-        selectedEntity,
-        selectionCount,
-        isPaused,
-        currentPlayerRace,
-        availableBuildings,
-        availableUnits,
-        currentMode,
-        placeBuildingType,
-        placeResourceType,
-        placeUnitType,
-        layerCounts,
-    } = computedState;
-
-    // =========================================================================
     // Lifecycle
     // =========================================================================
 
     setupLifecycle(game, initializeMap);
 
+    // Bump generation counter on each new game — drives :key on GameMapView to force re-creation
+    watch(game, g => {
+        if (g) {
+            gameGeneration.value++;
+        }
+    });
+
     // Re-initialize if FileManager changes (e.g., user selects new game directory)
     watch(getFileManager, () => {
-        // Reset initialization flag to allow re-init with new FileManager
         mapLoadState.initialized = false;
         mapLoadState.currentFile = null;
         initializeMap();
     });
 
-    // Update resource placement mode when amount changes
-    watch(resourceAmount, () => {
-        if (game.value?.viewState.state.mode === 'place_pile' && game.value.viewState.state.placePileType) {
-            const inputManager = getInputManager?.();
-            if (inputManager) {
-                inputManager.switchMode('place_pile', {
-                    resourceType: game.value.viewState.state.placePileType,
-                    amount: resourceAmount.value,
-                });
-            }
+    const dismissStaleSnapshot = () => {
+        if (game.value) {
+            dismissStaleSnapshotWarning(staleSnapshotWarning, game.value);
         }
-    });
-
-    function onTileClick(tile: TileCoord) {
-        hoveredTile.value = tile;
-    }
-
-    // Create mode and action handlers
-    const modeToggler = createModeToggler(
-        () => game.value,
-        () => getInputManager?.() ?? null
-    );
-    const gameActions = createGameActions(() => game.value, game);
-
-    const setPlaceMode = (buildingType: BuildingType, race: number) => modeToggler.setPlaceMode(buildingType, race);
-    const setPlaceResourceMode = (rt: EMaterialType) => modeToggler.setPlacePileMode(rt, resourceAmount.value);
-    const setPlaceUnitMode = (ut: UnitType) => modeToggler.setPlaceUnitMode(ut, currentPlayerRace.value);
-    const setSelectMode = () => modeToggler.setSelectMode();
-    const removeSelected = () => gameActions.removeSelected();
-    const togglePause = () => gameActions.togglePause();
-    const resetGameState = () => gameActions.resetGameState();
-
-    const dismissStaleSnapshot = () => dismissStaleSnapshotWarning(staleSnapshotWarning, game);
-
-    // =========================================================================
-    // Game End (victory / defeat) overlay
-    // =========================================================================
-
-    const gameEndResult = ref<{ won: boolean; reason: GameEndReason } | null>(null);
-
-    function onGameEnded({ winner, reason }: { winner: number | null; reason: string }): void {
-        gameEndResult.value = {
-            won: winner !== null,
-            reason: reason as GameEndReason,
-        };
-    }
-
-    function onStateRestored(): void {
-        gameEndResult.value = null;
-    }
-
-    watch(game, (g, oldG) => {
-        if (oldG) {
-            oldG.eventBus.off('game:ended', onGameEnded);
-            oldG.eventBus.off('game:stateRestored', onStateRestored);
-        }
-        gameEndResult.value = null;
-        if (g) {
-            g.eventBus.on('game:ended', onGameEnded);
-            g.eventBus.on('game:stateRestored', onStateRestored);
-        }
-    });
-
-    onBeforeUnmount(() => {
-        game.value?.eventBus.off('game:ended', onGameEnded);
-        game.value?.eventBus.off('game:stateRestored', onStateRestored);
-    });
-
-    const dismissGameEnd = () => {
-        gameEndResult.value = null;
     };
 
-    // Load icons from GFX files when game becomes available / race changes
-    setupIconLoading(game, getFileManager, currentPlayerRace, resourceIcons, buildingIcons, unitIcons, specialistIcons);
-
     return {
-        fileName,
-        mapInfo,
         game,
-        showDebug,
-        activeTab,
-        resourceAmount,
-        resourceIcons,
-        buildingIcons,
-        unitIcons,
-        specialistIcons,
-        hoveredTile,
-        selectedEntity,
-        selectionCount,
-        isPaused,
-        currentMode,
-        placeBuildingType,
-        placeResourceType,
-        placeUnitType,
-        availableBuildings,
-        availableUnits,
-        availableResources,
-        layerVisibility,
-        layerCounts,
+        gameGeneration,
         onFileSelect,
-        onTileClick,
-        setPlaceMode,
-        setPlaceResourceMode,
-        setPlaceUnitMode,
-        setSelectMode,
-        removeSelected,
-        togglePause,
-        resetGameState,
-        updateLayerVisibility,
         staleSnapshotWarning,
         dismissStaleSnapshot,
-        gameEndResult,
-        dismissGameEnd,
     };
 }

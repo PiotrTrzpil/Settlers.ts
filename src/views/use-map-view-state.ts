@@ -1,4 +1,4 @@
-import { ref, computed, watch, reactive, type Ref, type ShallowRef } from 'vue';
+import { ref, computed, watch, reactive, type Ref } from 'vue';
 import { BuildingType, Entity, TileCoord } from '@/game/entity';
 import { isUnitAvailableForRace, isBuildingAvailableForRace } from '@/game/data/race-availability';
 import { Race } from '@/game/core/race';
@@ -19,16 +19,6 @@ export interface LayerCounts {
     other: number;
 }
 
-const EMPTY_COUNTS: LayerCounts = {
-    buildings: 0,
-    units: 0,
-    piles: 0,
-    environment: 0,
-    trees: 0,
-    stones: 0,
-    plants: 0,
-    other: 0,
-};
 
 /** Reactive UI state for the map view sidebar and overlays. */
 export function setupUIState() {
@@ -69,26 +59,30 @@ export function setupUIState() {
     };
 }
 
-/** Computed properties derived from game state. */
-export function setupComputedState(game: ShallowRef<Game | null>, selectedRace?: Ref<Race>) {
+/**
+ * Computed properties derived from game state.
+ * Game is guaranteed non-null — this runs inside a component that only renders when game exists.
+ */
+export function setupComputedState(game: Game, selectedRace?: Ref<Race>) {
     const showDebug = computed({
-        get: () => game.value?.settings.state.showDebugGrid ?? false,
+        get: () => game.settings.state.showDebugGrid,
         set: (value: boolean) => {
-            if (game.value) {
-                game.value.settings.state.showDebugGrid = value;
-            }
+            game.settings.state.showDebugGrid = value;
         },
     });
 
-    const selectedEntity = computed<Entity | undefined>(() =>
-        game.value?.state.selection.selectedEntityId != null
-            ? game.value.state.getEntity(game.value.state.selection.selectedEntityId)
-            : undefined
-    );
-    const selectionCount = computed(() => game.value?.state.selection.selectedEntityIds.size ?? 0);
-    const isPaused = computed(() => (game.value ? !game.value.isRunning : false));
+    // selectedEntityId and selectedCount live on viewState.state (a Vue reactive object),
+    // so these computeds re-evaluate automatically when selection changes each tick.
+    const selectedEntity = computed<Entity | undefined>(() => {
+        const entityId = game.viewState.state.selectedEntityId;
+        if (entityId == null) {
+            return undefined;
+        }
+        return game.state.getEntity(entityId);
+    });
+    const selectionCount = computed(() => game.viewState.state.selectedCount);
     const currentPlayerRace = computed(
-        () => selectedRace?.value ?? game.value?.playerRaces.get(game.value.currentPlayer) ?? Race.Roman
+        () => selectedRace?.value ?? game.playerRaces.get(game.currentPlayer) ?? Race.Roman
     );
     const availableBuildings = computed(() =>
         ALL_BUILDINGS.filter(b => isBuildingAvailableForRace(b.type, currentPlayerRace.value))
@@ -97,17 +91,14 @@ export function setupComputedState(game: ShallowRef<Game | null>, selectedRace?:
         ALL_UNITS.filter(u => isUnitAvailableForRace(u.type, currentPlayerRace.value))
     );
 
-    // Mode state - sourced from the game's view state
-    const currentMode = computed(() => game.value?.viewState.state.mode ?? 'select');
-    const placeBuildingType = computed(() => game.value?.viewState.state.placeBuildingType ?? null);
-    const placeResourceType = computed(() => game.value?.viewState.state.placePileType ?? '');
-    const placeUnitType = computed(() => game.value?.viewState.state.placeUnitType ?? '');
+    // Mode state — sourced from the game's reactive view state
+    const currentMode = computed(() => game.viewState.state.mode);
+    const placeBuildingType = computed(() => game.viewState.state.placeBuildingType);
+    const placeResourceType = computed(() => game.viewState.state.placePileType);
+    const placeUnitType = computed(() => game.viewState.state.placeUnitType);
 
     const layerCounts = computed<LayerCounts>(() => {
-        const vs = game.value?.viewState.state;
-        if (!vs) {
-            return EMPTY_COUNTS;
-        }
+        const vs = game.viewState.state;
         return {
             buildings: vs.buildingCount,
             units: vs.unitCount,
@@ -124,7 +115,6 @@ export function setupComputedState(game: ShallowRef<Game | null>, selectedRace?:
         showDebug,
         selectedEntity,
         selectionCount,
-        isPaused,
         currentPlayerRace,
         availableBuildings,
         availableUnits,
