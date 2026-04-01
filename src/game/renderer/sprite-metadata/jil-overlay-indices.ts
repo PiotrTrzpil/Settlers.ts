@@ -30,6 +30,7 @@ export function resolveOverlayJilEntry(
     if (jobIndex === undefined) {
         return null;
     }
+    // eslint-disable-next-line no-restricted-syntax -- dir is an optional field on overlay entries; 0 (no directional variant) is correct default
     return { jobIndex, directionIndex: entry.dir ?? 0 };
 }
 

@@ -260,6 +260,7 @@ export class LandscapeRenderer extends RendererBase implements IRenderer {
         for (let y = 0; y < this.mapSize.height; y++) {
             for (let x = 0; x < this.mapSize.width; x++) {
                 const i = this.mapSize.toIndex(x, y) * 2;
+                // eslint-disable-next-line no-restricted-syntax -- Uint8Array indexing returns number|undefined in TS; bounds are guaranteed by mapSize but the type requires a fallback
                 buf.update(x, y, darknessMap[i] ?? 0, darknessMap[i + 1] ?? 0);
             }
         }
@@ -331,6 +332,7 @@ export class LandscapeRenderer extends RendererBase implements IRenderer {
         for (let y = 0; y < this.mapSize.height; y++) {
             for (let x = 0; x < this.mapSize.width; x++) {
                 const i = this.mapSize.toIndex(x, y) * 2;
+                // eslint-disable-next-line no-restricted-syntax -- Uint8Array indexing returns number|undefined in TS; bounds are guaranteed by mapSize but the type requires a fallback
                 this.darknessBuffer.update(x, y, map ? (map[i] ?? 0) : 0, map ? (map[i + 1] ?? 0) : 0);
             }
         }

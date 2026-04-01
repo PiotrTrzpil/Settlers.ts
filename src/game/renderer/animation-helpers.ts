@@ -102,7 +102,7 @@ export function resolveAnimationFrame(
     const frameIndex = shouldLoop
         ? playback.currentFrame % sequence.frames.length
         : Math.min(playback.currentFrame, sequence.frames.length - 1);
-    return sequence.frames[frameIndex] ?? null;
+    return sequence.frames[frameIndex]!;
 }
 
 /**

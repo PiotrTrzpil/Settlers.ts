@@ -98,11 +98,15 @@ export interface PlayOptions {
 function createPlayback(sequenceKey: string, opts: PlayOptions, existing: AnimationPlayback | null): AnimationPlayback {
     return {
         sequenceKey,
+        // eslint-disable-next-line no-restricted-syntax -- startFrame is an optional PlayOptions field; 0 is the correct default (start from beginning)
         currentFrame: opts.startFrame ?? 0,
+        // eslint-disable-next-line no-restricted-syntax -- direction is optional; falls back to existing playback direction, then 0 as the neutral default
         direction: opts.direction ?? existing?.direction ?? 0,
         elapsedMs: 0,
+        // eslint-disable-next-line no-restricted-syntax -- loop is an optional PlayOptions field; false is the correct default (play once)
         loop: opts.loop ?? false,
         playing: true,
+        // eslint-disable-next-line no-restricted-syntax -- hideOnComplete is an optional PlayOptions field; false is the correct default (stay visible after animation ends)
         hideOnComplete: opts.hideOnComplete ?? false,
     };
 }
@@ -165,11 +169,11 @@ export class EntityVisualService {
     }
 
     /**
-     * Get visual state or null. Used at renderer boundaries where entities may
+     * Get visual state or undefined. Used at renderer boundaries where entities may
      * be missing (race conditions, cleanup ordering).
      */
-    getState(entityId: number): EntityVisualState | null {
-        return this.states.get(entityId) ?? null;
+    getState(entityId: number): EntityVisualState | undefined {
+        return this.states.get(entityId);
     }
 
     // -------------------------------------------------------------------------
@@ -333,8 +337,8 @@ export class EntityVisualService {
     /**
      * Get current direction transition, or null if none active.
      */
-    getDirectionTransition(entityId: number): DirectionTransition | null {
-        return this.transitions.get(entityId) ?? null;
+    getDirectionTransition(entityId: number): DirectionTransition | undefined {
+        return this.transitions.get(entityId);
     }
 
     // -------------------------------------------------------------------------

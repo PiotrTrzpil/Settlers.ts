@@ -14,7 +14,7 @@ import {
     type BuildingSpriteInfo,
 } from '../sprite-metadata';
 import { ANIMATION_DEFAULTS } from '@/game/animation/animation';
-import type { LoadedGfxFileSet } from '../sprite-loader';
+import type { LoadedGfxFileSet, LoadedSprite } from '../sprite-loader';
 import { SafeLoadBatch, yieldToEventLoop } from '../batch-loader';
 import { BuildingType, EntityType } from '@/game/entity';
 import { isBuildingAvailableForRace } from '@/game/data/race-availability';
@@ -31,8 +31,8 @@ async function loadOneBuildingSprites(
     paletteBase: number,
     race: Race
 ): Promise<{
-    constructionEntry: SpriteEntry | null;
-    completedEntry: SpriteEntry | null;
+    constructionEntry: SpriteEntry;
+    completedEntry: SpriteEntry;
     animationFrames: SpriteEntry[] | null;
 } | null> {
     // Some buildings store construction/completed as separate JIL jobs (constructionIndex override)
@@ -55,7 +55,7 @@ async function loadOneBuildingSprites(
     );
 
     const frameCount = ctx.spriteLoader.getFrameCount(fileSet, info.index, completedDirIndex);
-    let completedSprite = null;
+    let completedSprite: LoadedSprite;
     let animationFrames: SpriteEntry[] | null = null;
 
     if (frameCount > 1) {
@@ -68,7 +68,9 @@ async function loadOneBuildingSprites(
         );
         if (anim?.frames.length) {
             animationFrames = anim.frames.map(f => f.entry);
-            completedSprite = anim.frames[0];
+            completedSprite = anim.frames[0]!;
+        } else {
+            throw new Error(`[building-sprite-loader] Animation load returned no frames for ${buildingType}`);
         }
     } else {
         completedSprite = await ctx.spriteLoader.loadJobSprite(
@@ -80,8 +82,8 @@ async function loadOneBuildingSprites(
     }
 
     return {
-        constructionEntry: constructionSprite?.entry ?? null,
-        completedEntry: completedSprite?.entry ?? null,
+        constructionEntry: constructionSprite.entry,
+        completedEntry: completedSprite.entry,
         animationFrames,
     };
 }
@@ -108,8 +110,8 @@ async function loadBuildingSpritesForFile(
     try {
         type BuildingData = {
             buildingType: BuildingType;
-            constructionEntry: SpriteEntry | null;
-            completedEntry: SpriteEntry | null;
+            constructionEntry: SpriteEntry;
+            completedEntry: SpriteEntry;
             animationFrames: SpriteEntry[] | null;
         };
 
@@ -134,10 +136,6 @@ async function loadBuildingSpritesForFile(
 
         // Finalize: GPU upload → register
         batch.finalize(ctx.atlas, ctx.gl, data => {
-            if (!data.constructionEntry && !data.completedEntry) {
-                return;
-            }
-
             if (data.animationFrames) {
                 const frames = new Map([[BUILDING_DIRECTION.COMPLETED, data.animationFrames]]);
                 ctx.registry.registerAnimatedEntity(

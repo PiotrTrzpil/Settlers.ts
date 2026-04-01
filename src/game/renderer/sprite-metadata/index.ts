@@ -41,7 +41,6 @@ export {
     BUILDING_OVERLAY_JIL_INDICES,
     type OverlayJilEntry,
     resolveOverlayJilEntry,
-    type BuildingSpriteEntries,
     getBuildingSpriteMap,
 
     // Unit data

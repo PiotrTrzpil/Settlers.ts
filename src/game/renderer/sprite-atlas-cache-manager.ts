@@ -120,6 +120,7 @@ export function computeLayerPriority(
     // Score layers by how many nearby entities need sprites from them
     const addScore = (layers: Set<number>, weight: number) => {
         for (const layer of layers) {
+            // eslint-disable-next-line no-restricted-syntax -- accumulator pattern: layer may not yet have a score entry
             layerScore.set(layer, (layerScore.get(layer) ?? 0) + weight);
         }
     };
@@ -134,7 +135,9 @@ export function computeLayerPriority(
     // Sort by score (highest first), then by index for stability
     const allLayers = Array.from({ length: totalLayers }, (_, i) => i);
     allLayers.sort((a, b) => {
+        // eslint-disable-next-line no-restricted-syntax -- layers without an explicit score legitimately have 0 priority
         const scoreA = layerScore.get(a) ?? 0;
+        // eslint-disable-next-line no-restricted-syntax -- layers without an explicit score legitimately have 0 priority
         const scoreB = layerScore.get(b) ?? 0;
         if (scoreB !== scoreA) {
             return scoreB - scoreA;
@@ -143,6 +146,7 @@ export function computeLayerPriority(
     });
 
     // Essential = layers that have any score (contain nearby entity sprites)
+    // eslint-disable-next-line no-restricted-syntax -- layers without a score entry have no sprites nearby; 0 is correct
     const essentialCount = allLayers.filter(l => (layerScore.get(l) ?? 0) > 0).length;
 
     log.debug(
@@ -246,8 +250,11 @@ export class SpriteAtlasCacheManager {
         const moduleCached = getAtlasCache(race);
         if (moduleCached) {
             const result = this.restoreFromModuleCache(gl, moduleCached, textureUnit, paletteManager);
-            onEssentialReady();
-            return result;
+            if (result) {
+                onEssentialReady();
+                return result;
+            }
+            // Stale cache — fall through to streaming or fresh load
         }
 
         // Tier 2: streaming restore from Cache API
@@ -307,13 +314,18 @@ export class SpriteAtlasCacheManager {
     // Private helpers
     // ==========================================================================
 
-    /** Restore from module cache (all layers available immediately). */
+    /** Restore from module cache (all layers available immediately). Returns null if cache is stale. */
     private restoreFromModuleCache(
         gl: WebGL2RenderingContext,
         cached: CachedAtlasData,
         textureUnit: number,
         paletteManager: PaletteTextureManager
-    ): CacheRestoreResult {
+    ): CacheRestoreResult | null {
+        if (cached.registryData.version !== SpriteMetadataRegistry.CACHE_VERSION) {
+            log.debug('Module cache version mismatch, discarding');
+            return null;
+        }
+
         const t0 = performance.now();
 
         const atlas = EntityTextureAtlas.fromCache(
@@ -416,6 +428,10 @@ export class SpriteAtlasCacheManager {
         const { meta } = streamMeta;
 
         // Phase 1: Restore registry (fast, ~2ms) — no palette wait needed
+        if (meta.registryData.version !== SpriteMetadataRegistry.CACHE_VERSION) {
+            log.debug('Streaming cache version mismatch, discarding');
+            return null;
+        }
         const tRegistry = performance.now();
         const registry = SpriteMetadataRegistry.deserialize(meta.registryData);
         const registryMs = Math.round(performance.now() - tRegistry);

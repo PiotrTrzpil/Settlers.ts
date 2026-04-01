@@ -144,6 +144,7 @@ export class SpriteRenderManager {
 
     /** Whether a specific atlas layer has been uploaded to GPU. */
     isLayerUploaded(layer: number): boolean {
+        // eslint-disable-next-line no-restricted-syntax -- _spriteAtlas is null before sprites are loaded; false is correct (layer not uploaded)
         return this._spriteAtlas?.isLayerUploaded(layer) ?? false;
     }
 
@@ -220,6 +221,7 @@ export class SpriteRenderManager {
 
         if (loaded) {
             SpriteRenderManager.log.debug(
+                // eslint-disable-next-line no-restricted-syntax -- _spriteRegistry may be null during race switch; 0 is correct for debug log
                 `Switched to ${Race[race]}: ${this._spriteRegistry?.getBuildingCount() ?? 0} building sprites loaded`
             );
         } else {
@@ -252,7 +254,7 @@ export class SpriteRenderManager {
         if (!this._spriteAtlas) {
             return null;
         }
-        const paletteData = this._paletteManager.getPaletteData() ?? undefined;
+        const paletteData = this._paletteManager.getPaletteData();
         return this._spriteAtlas.extractRegion(region, paletteData, paletteBaseOffset);
     }
 

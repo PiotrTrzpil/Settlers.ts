@@ -57,8 +57,8 @@ const SKIP_RESULT: SpriteResolveResult = {
 export class EntitySpriteResolver {
     constructor(
         private readonly sprites: SpriteRenderManager | null,
-        private readonly getVisualState: (entityId: number) => EntityVisualState | null,
-        private readonly getDirectionTransition: (entityId: number) => DirectionTransition | null,
+        private readonly getVisualState: (entityId: number) => EntityVisualState | undefined,
+        private readonly getDirectionTransition: (entityId: number) => DirectionTransition | undefined,
         private readonly getBuildingRenderState: (entityId: number) => BuildingRenderState,
         private readonly pileStates: ReadonlyMap<number, StackedPileState>,
         private readonly layerVisibility: LayerVisibility
@@ -118,35 +118,23 @@ export class EntitySpriteResolver {
 
         let sprite: SpriteEntry | null;
         if (renderState.useConstructionSprite) {
-            sprite =
+            const entry =
                 this.sprites.registry.getBuildingConstruction(buildingType, entity.race) ??
                 this.sprites.registry.getBuilding(buildingType, entity.race);
+            sprite = entry?.staticSprite ?? null;
         } else {
-            const fallback = this.sprites.registry.getBuilding(buildingType, entity.race);
-            const vs = this.getVisualState(entity.id);
-            if (vs?.animation) {
-                const animEntry = this.sprites.registry.getAnimatedEntity(
-                    entity.type,
-                    entity.subType as number,
-                    entity.race
-                );
-                if (animEntry) {
-                    const frame = resolveAnimationFrame(
-                        vs.animation,
-                        animEntry.animationData,
-                        entity.type,
-                        entity.subType as number
-                    );
-                    if (frame) {
-                        sprite = frame;
-                    } else {
-                        sprite = fallback;
-                    }
-                } else {
-                    sprite = fallback;
-                }
+            const entry = this.sprites.registry.getBuilding(buildingType, entity.race);
+            if (!entry) {
+                sprite = null;
             } else {
-                sprite = fallback;
+                const vs = this.getVisualState(entity.id);
+                if (vs?.animation && entry.isAnimated) {
+                    sprite =
+                        resolveAnimationFrame(vs.animation, entry.animationData, entity.type, entity.subType as number) ??
+                        entry.staticSprite;
+                } else {
+                    sprite = entry.staticSprite;
+                }
             }
         }
 
@@ -165,25 +153,21 @@ export class EntitySpriteResolver {
         }
 
         const vs = this.getVisualState(entity.id);
+        // eslint-disable-next-line no-restricted-syntax -- renderer frame loop: visual state is nullable-by-design for map objects without animation
         const variation = vs?.variation ?? 0;
-        const staticSprite = this.sprites.registry.getMapObject(entity.subType as MapObjectType, variation);
-
-        if (vs?.animation) {
-            const entry = this.sprites.registry.getAnimatedEntity(entity.type, entity.subType as number, entity.race);
-            if (entry) {
-                const frame = resolveAnimationFrame(
-                    vs.animation,
-                    entry.animationData,
-                    entity.type,
-                    entity.subType as number
-                );
-                if (frame) {
-                    return frame;
-                }
-            }
+        const entry = this.sprites.registry.getMapObject(entity.subType as MapObjectType, variation);
+        if (!entry) {
+            return null;
         }
 
-        return staticSprite;
+        if (vs?.animation && entry.isAnimated) {
+            return (
+                resolveAnimationFrame(vs.animation, entry.animationData, entity.type, entity.subType as number) ??
+                entry.staticSprite
+            );
+        }
+
+        return entry.staticSprite;
     }
 
     /** Stacked resource sprite based on quantity. */
@@ -197,7 +181,7 @@ export class EntitySpriteResolver {
         }
         const quantity = state.quantity;
         const direction = Math.max(0, Math.min(quantity - 1, 7));
-        return this.sprites.registry.getGoodSprite(entity.subType as EMaterialType, direction) ?? null;
+        return this.sprites.registry.getGoodSprite(entity.subType as EMaterialType, direction)?.staticSprite ?? null;
     }
 
     /** Unit sprite resolution — pre-resolves transition sprites if mid-direction-change. */
@@ -245,27 +229,22 @@ export class EntitySpriteResolver {
             }
         }
 
+        // eslint-disable-next-line no-restricted-syntax -- animation direction is optional; 0 (south) is the correct standing default
         const spriteDir = toSpriteDirection(vs.animation?.direction ?? 0);
-        const staticSprite = this.sprites.registry.getUnit(entity.subType as UnitType, spriteDir, entity.race);
+        const unitType = entity.subType as UnitType;
+        const entry = this.sprites.registry.getUnit(unitType, spriteDir, entity.race);
+        if (!entry) {
+            return noSprite;
+        }
 
-        if (vs.animation) {
-            const unitType = entity.subType as UnitType;
-            const entry = this.sprites.registry.getAnimatedEntity(entity.type, unitType, entity.race);
-            if (entry) {
-                const frame = resolveAnimationFrame(
-                    vs.animation,
-                    entry.animationData,
-                    entity.type,
-                    unitType,
-                    spriteDir
-                );
-                if (frame) {
-                    return { skip: false, transitioning: false, sprite: frame, progress: 1, transitionData: null };
-                }
+        if (vs.animation && entry.isAnimated) {
+            const frame = resolveAnimationFrame(vs.animation, entry.animationData, entity.type, unitType, spriteDir);
+            if (frame) {
+                return { skip: false, transitioning: false, sprite: frame, progress: 1, transitionData: null };
             }
         }
 
-        return { skip: false, transitioning: false, sprite: staticSprite, progress: 1, transitionData: null };
+        return { skip: false, transitioning: false, sprite: entry.staticSprite, progress: 1, transitionData: null };
     }
 
     /** Get animated sprite for a specific direction (used for direction transitions). */
@@ -279,17 +258,20 @@ export class EntitySpriteResolver {
             return null;
         }
 
-        const fallback = this.sprites.registry.getUnit(unitType, spriteDir, race);
-        const animatedEntry = this.sprites.registry.getAnimatedEntity(EntityType.Unit, unitType, race);
-        if (!animatedEntry) {
-            return fallback;
+        const entry = this.sprites.registry.getUnit(unitType, spriteDir, race);
+        if (!entry) {
+            return null;
+        }
+
+        if (!entry.isAnimated) {
+            return entry.staticSprite;
         }
 
         return getAnimatedSpriteForDirection(
             playback,
-            animatedEntry.animationData,
+            entry.animationData,
             spriteDir,
-            fallback,
+            entry.staticSprite,
             EntityType.Unit,
             unitType
         );
@@ -303,16 +285,17 @@ export class EntitySpriteResolver {
      */
     private readonly getSpriteEntryMap: Record<EntityType, (entity: Entity) => SpriteEntry | null> = {
         [EntityType.Building]: entity =>
-            this.sprites?.registry.getBuilding(entity.subType as BuildingType, entity.race) ?? null,
+            this.sprites?.registry.getBuilding(entity.subType as BuildingType, entity.race)?.staticSprite ?? null,
         [EntityType.MapObject]: entity => {
             if (!this.layerVisibility.decorationTextures) {
                 return null;
             }
-            return this.sprites?.registry.getMapObject(entity.subType as MapObjectType) ?? null;
+            return this.sprites?.registry.getMapObject(entity.subType as MapObjectType)?.staticSprite ?? null;
         },
         [EntityType.StackedPile]: entity =>
-            this.sprites?.registry.getGoodSprite(entity.subType as EMaterialType) ?? null,
-        [EntityType.Unit]: entity => this.sprites?.registry.getUnit(entity.subType as UnitType, 0, entity.race) ?? null,
+            this.sprites?.registry.getGoodSprite(entity.subType as EMaterialType)?.staticSprite ?? null,
+        [EntityType.Unit]: entity =>
+            this.sprites?.registry.getUnit(entity.subType as UnitType, 0, entity.race)?.staticSprite ?? null,
         [EntityType.Decoration]: () => null,
         [EntityType.None]: () => null,
     };
@@ -347,9 +330,15 @@ export class EntitySpriteResolver {
 
         switch (entityType) {
             case 'building':
-                return race !== undefined ? this.sprites.registry.getBuilding(subType as BuildingType, race) : null;
+                return race !== undefined
+                    ? (this.sprites.registry.getBuilding(subType as BuildingType, race)?.staticSprite ?? null)
+                    : null;
             case 'pile':
-                return this.sprites.registry.getGoodSprite(subType as unknown as EMaterialType, variation ?? 0);
+                // eslint-disable-next-line no-restricted-syntax -- preview context: variation is an optional parameter with 0 as valid default
+                return (
+                    this.sprites.registry.getGoodSprite(subType as unknown as EMaterialType, variation ?? 0)
+                        ?.staticSprite ?? null
+                );
             case 'unit':
                 return this.getUnitPreviewSprite(subType as UnitType, race, level ?? 1);
             default: {
@@ -364,7 +353,7 @@ export class EntitySpriteResolver {
         if (!this.sprites) {
             return null;
         }
-        return this.sprites.registry.getUnit(unitType, spriteDir, race);
+        return this.sprites.registry.getUnit(unitType, spriteDir, race)?.staticSprite ?? null;
     }
 
     /** Get unit preview sprite — each leveled UnitType has its own registered sprites. */

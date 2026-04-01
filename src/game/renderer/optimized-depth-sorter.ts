@@ -223,13 +223,13 @@ export class OptimizedDepthSorter {
 
         switch (entity.type) {
             case EntityType.Building:
-                return spriteManager.registry.getBuilding(entity.subType as BuildingType, entity.race);
+                return spriteManager.registry.getBuilding(entity.subType as BuildingType, entity.race)?.staticSprite ?? null;
             case EntityType.MapObject:
-                return spriteManager.registry.getMapObject(entity.subType as MapObjectType);
+                return spriteManager.registry.getMapObject(entity.subType as MapObjectType)?.staticSprite ?? null;
             case EntityType.Unit:
-                return spriteManager.registry.getUnit(entity.subType as UnitType, 0, entity.race);
+                return spriteManager.registry.getUnit(entity.subType as UnitType, 0, entity.race)?.staticSprite ?? null;
             case EntityType.StackedPile:
-                return spriteManager.registry.getGoodSprite(entity.subType as EMaterialType);
+                return spriteManager.registry.getGoodSprite(entity.subType as EMaterialType)?.staticSprite ?? null;
             case EntityType.Decoration:
             case EntityType.None:
                 return null;

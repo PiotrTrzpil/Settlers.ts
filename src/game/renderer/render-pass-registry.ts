@@ -99,6 +99,7 @@ export class RenderPassRegistry {
      */
     getPassesForLayer(layer: RenderLayer): readonly PassSlot[] {
         this.assertInitialized();
+        // eslint-disable-next-line no-restricted-syntax -- a layer may legitimately have no passes registered; empty array is correct
         return this.slotsByLayer.get(layer) ?? [];
     }
 

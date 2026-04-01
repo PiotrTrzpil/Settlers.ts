@@ -202,10 +202,10 @@ export interface IRenderContext {
     readonly getBuildingOverlays: (entityId: number) => readonly BuildingOverlayRenderData[];
 
     // === Animation ===
-    /** Get the visual state for an entity (null if not tracked) */
-    readonly getVisualState: (entityId: number) => EntityVisualState | null;
-    /** Get direction transition for a unit (null if not transitioning) */
-    readonly getDirectionTransition: (entityId: number) => DirectionTransition | null;
+    /** Get the visual state for an entity (undefined if not tracked) */
+    readonly getVisualState: (entityId: number) => EntityVisualState | undefined;
+    /** Get direction transition for a unit (undefined if not transitioning) */
+    readonly getDirectionTransition: (entityId: number) => DirectionTransition | undefined;
 
     // === Combat ===
     /** Get health ratio (0-1) for a unit. Returns null if no health tracking (civilian units). */
@@ -265,8 +265,8 @@ export class RenderContextBuilder {
     private _pileStates: ReadonlyMap<number, StackedPileState> = new Map();
     private _buildingRenderStateGetter: (entityId: number) => BuildingRenderState = () => DEFAULT_BUILDING_RENDER_STATE;
     private _buildingOverlaysGetter: (entityId: number) => readonly BuildingOverlayRenderData[] = () => EMPTY_OVERLAYS;
-    private _visualStateGetter: (entityId: number) => EntityVisualState | null = () => null;
-    private _directionTransitionGetter: (entityId: number) => DirectionTransition | null = () => null;
+    private _visualStateGetter: (entityId: number) => EntityVisualState | undefined = () => undefined;
+    private _directionTransitionGetter: (entityId: number) => DirectionTransition | undefined = () => undefined;
     private _healthRatioGetter: (entityId: number) => number | null = () => null;
     private _selection: SelectionState = { primaryId: null, ids: new Set() };
     private _placementPreview: PlacementPreviewState | null = null;
@@ -308,12 +308,12 @@ export class RenderContextBuilder {
         return this;
     }
 
-    visualStateGetter(getter: (entityId: number) => EntityVisualState | null): this {
+    visualStateGetter(getter: (entityId: number) => EntityVisualState | undefined): this {
         this._visualStateGetter = getter;
         return this;
     }
 
-    directionTransitionGetter(getter: (entityId: number) => DirectionTransition | null): this {
+    directionTransitionGetter(getter: (entityId: number) => DirectionTransition | undefined): this {
         this._directionTransitionGetter = getter;
         return this;
     }

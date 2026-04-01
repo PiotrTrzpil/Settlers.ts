@@ -39,16 +39,27 @@ async function loadTreeTypeSprites(
     treeType: MapObjectType,
     variantBases: number[]
 ): Promise<number> {
+    /** Offsets that have multi-frame animations (not just static sprites) */
+    const ANIMATED_OFFSETS: ReadonlySet<number> = new Set([
+        TREE_JOB_OFFSET.NORMAL,
+        TREE_JOB_OFFSET.FALLING,
+        TREE_JOB_OFFSET.CANOPY_DISAPPEARING,
+    ]);
+
     type TreeStageData = {
         treeType: MapObjectType;
         variation: number;
         variantIndex: number;
         firstFrame: SpriteEntry;
         allFrames: SpriteEntry[] | null;
+        /** Which frame map to collect into (null = static-only) */
+        animTarget: 'sway' | 'falling' | 'canopy' | null;
     };
 
     let loaded = 0;
     const swayFrames = new Map<number, SpriteEntry[]>();
+    const fallingFrames = new Map<number, SpriteEntry[]>();
+    const canopyFrames = new Map<number, SpriteEntry[]>();
     const batch = new SafeLoadBatch<TreeStageData>();
 
     for (let v = 0; v < variantBases.length; v++) {
@@ -63,13 +74,19 @@ async function loadTreeTypeSprites(
                 ctx.paletteBase
             );
             if (anim?.frames.length) {
-                const isNormal = offset === TREE_JOB_OFFSET.NORMAL;
+                let animTarget: TreeStageData['animTarget'] = null;
+                if (ANIMATED_OFFSETS.has(offset) && anim.frames.length > 1) {
+                    if (offset === TREE_JOB_OFFSET.NORMAL) animTarget = 'sway';
+                    else if (offset === TREE_JOB_OFFSET.FALLING) animTarget = 'falling';
+                    else if (offset === TREE_JOB_OFFSET.CANOPY_DISAPPEARING) animTarget = 'canopy';
+                }
                 batch.add({
                     treeType,
                     variation: v * TREE_JOBS_PER_TYPE + offset,
                     variantIndex: v,
                     firstFrame: anim.frames[0]!.entry,
-                    allFrames: isNormal ? anim.frames.map(f => f.entry) : null,
+                    allFrames: animTarget ? anim.frames.map(f => f.entry) : null,
+                    animTarget,
                 });
             }
         }
@@ -78,13 +95,17 @@ async function loadTreeTypeSprites(
     // GPU upload → register all variants for this tree type
     batch.finalize(ctx.atlas, ctx.gl, data => {
         ctx.registry.registerMapObject(data.treeType, data.firstFrame, data.variation);
-        if (data.allFrames) {
-            swayFrames.set(data.variantIndex, data.allFrames);
+        if (data.allFrames && data.animTarget) {
+            const targetMap =
+                data.animTarget === 'sway' ? swayFrames
+                    : data.animTarget === 'falling' ? fallingFrames
+                        : canopyFrames;
+            targetMap.set(data.variantIndex, data.allFrames);
         }
         loaded++;
     });
 
-    // Register single animation entry — variant encoded as direction
+    // Register sway animation as the default sequence — variant encoded as direction
     if (swayFrames.size > 0) {
         ctx.registry.registerAnimatedEntity(
             EntityType.MapObject,
@@ -92,6 +113,30 @@ async function loadTreeTypeSprites(
             swayFrames,
             ANIMATION_DEFAULTS.FRAME_DURATION_MS,
             true
+        );
+    }
+
+    // Register falling animation as an additional sequence (one-shot)
+    if (fallingFrames.size > 0) {
+        ctx.registry.registerAnimationSequence(
+            EntityType.MapObject,
+            treeType,
+            'falling',
+            fallingFrames,
+            ANIMATION_DEFAULTS.FRAME_DURATION_MS,
+            false
+        );
+    }
+
+    // Register canopy disappearing animation as an additional sequence (one-shot)
+    if (canopyFrames.size > 0) {
+        ctx.registry.registerAnimationSequence(
+            EntityType.MapObject,
+            treeType,
+            'canopy_disappearing',
+            canopyFrames,
+            ANIMATION_DEFAULTS.FRAME_DURATION_MS,
+            false
         );
     }
 
@@ -398,18 +443,17 @@ async function loadResourceMapObjects(ctx: FileLoadContext): Promise<number> {
 
         const type = Number(typeStr) as MapObjectType;
 
-        // Load 8 directions for quantities 1-8
-        for (let dir = 0; dir < 8; dir++) {
+        // Load directions for quantities (up to 8)
+        const dirCount = Math.min(ctx.spriteLoader.getDirectionCount(ctx.fileSet, info.index), 8);
+        for (let dir = 0; dir < dirCount; dir++) {
             const sprite = await ctx.spriteLoader.loadJobSprite(
                 ctx.fileSet,
                 { jobIndex: info.index, directionIndex: dir },
                 ctx.atlas,
                 ctx.paletteBase
             );
-            if (sprite) {
-                ctx.registry.registerMapObject(type, sprite.entry, dir);
-                loadedCount++;
-            }
+            ctx.registry.registerMapObject(type, sprite.entry, dir);
+            loadedCount++;
         }
     }
 

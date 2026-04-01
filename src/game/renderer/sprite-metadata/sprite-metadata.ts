@@ -40,14 +40,14 @@ import { BUILDING_JOB_INDICES, RESOURCE_JOB_INDICES, UNIT_BASE_JOB_INDICES, TREE
 
 // Re-export category types and entries
 export type { SpriteEntry, AnimatedSpriteEntry } from './types';
-export type { BuildingSpriteEntries } from './categories/building-sprite-category';
 
 // Import internal types for use in this file
 import type { SpriteEntry, AnimatedSpriteEntry } from './types';
-import type { BuildingSpriteEntries } from './categories/building-sprite-category';
+import { staticEntry } from './types';
 
 import {
     BuildingSpriteCategory,
+    ConstructionSpriteCategory,
     UnitSpriteCategory,
     MapObjectSpriteCategory,
     GoodSpriteCategory,
@@ -303,6 +303,7 @@ export function getMapObjectSpriteMap(): Partial<Record<MapObjectType, MapObject
  */
 export class SpriteMetadataRegistry {
     private buildings = new BuildingSpriteCategory();
+    private construction = new ConstructionSpriteCategory();
     private units = new UnitSpriteCategory();
     private mapObjectsCategory = new MapObjectSpriteCategory();
     private goodsCategory = new GoodSpriteCategory();
@@ -326,34 +327,39 @@ export class SpriteMetadataRegistry {
      */
     public registerBuilding(
         type: BuildingType,
-        construction: SpriteEntry | null,
-        completed: SpriteEntry | null,
+        constructionSprite: SpriteEntry,
+        completedSprite: SpriteEntry,
         race: number
     ): void {
-        this.buildings.register(type, construction, completed, race);
+        this.buildings.register(type, completedSprite, race);
+        this.construction.register(type, constructionSprite, race);
         this._loadedRaces.add(race);
     }
 
     /**
-     * Look up the completed sprite entry for a building type and race.
-     * Falls back to any loaded race if the requested race has no sprites.
+     * Look up the completed building sprite, with animation data if registered.
+     * Returns undefined if sprites for this race haven't been loaded yet.
      */
-    public getBuilding(type: BuildingType, race: number): SpriteEntry | null {
-        return this.buildings.getCompleted(type, race);
+    public getBuilding(type: BuildingType, race: number): AnimatedSpriteEntry | undefined {
+        if (!this.buildings.isRaceLoaded(race)) {
+            return undefined;
+        }
+        const animEntry = this.animated.getEntry(EntityType.Building, type, race);
+        if (animEntry) {
+            return animEntry;
+        }
+        return staticEntry(this.buildings.get(type, race));
     }
 
     /**
-     * Look up the construction sprite entry for a building type and race.
+     * Look up the construction sprite for a building type and race.
+     * Returns undefined if construction sprites for this race haven't been loaded yet.
      */
-    public getBuildingConstruction(type: BuildingType, race: number): SpriteEntry | null {
-        return this.buildings.getConstruction(type, race);
-    }
-
-    /**
-     * Get both construction and completed sprites for a building type and race.
-     */
-    public getBuildingSprites(type: BuildingType, race: number): BuildingSpriteEntries | null {
-        return this.buildings.getSprites(type, race);
+    public getBuildingConstruction(type: BuildingType, race: number): AnimatedSpriteEntry | undefined {
+        if (!this.construction.isRaceLoaded(race)) {
+            return undefined;
+        }
+        return staticEntry(this.construction.get(type, race));
     }
 
     // ========================================================================
@@ -368,11 +374,19 @@ export class SpriteMetadataRegistry {
     }
 
     /**
-     * Look up the sprite entry for a map object type (and optional variation).
-     * Returns null if no sprite is registered for this type.
+     * Look up the sprite for a map object type, with animation data if registered.
+     * Returns undefined if map object sprites haven't been loaded yet.
      */
-    public getMapObject(type: MapObjectType, variation: number = 0): SpriteEntry | null {
-        return this.mapObjectsCategory.get(type, variation);
+    public getMapObject(type: MapObjectType, variation: number = 0): AnimatedSpriteEntry | undefined {
+        if (!this.mapObjectsCategory.isLoaded) {
+            return undefined;
+        }
+        const animEntry = this.animated.getEntry(EntityType.MapObject, type);
+        if (animEntry) {
+            return animEntry;
+        }
+        const sprite = this.mapObjectsCategory.get(type, variation);
+        return sprite ? staticEntry(sprite) : undefined;
     }
 
     // ========================================================================
@@ -393,13 +407,23 @@ export class SpriteMetadataRegistry {
     }
 
     /** Get a normal (upright) flag sprite frame. */
-    public getFlag(playerIndex: number, frame: number): SpriteEntry | null {
+    public getFlag(playerIndex: number, frame: number): SpriteEntry {
         return this.decoration.getFlag(playerIndex, frame);
     }
 
     /** Get a lowered (paused) flag sprite frame. */
-    public getFlagDown(playerIndex: number, frame: number): SpriteEntry | null {
+    public getFlagDown(playerIndex: number, frame: number): SpriteEntry {
         return this.decoration.getFlagDown(playerIndex, frame);
+    }
+
+    /** Get all flag frames as an animated entry for a player. */
+    public getFlagAnimation(playerIndex: number): AnimatedSpriteEntry {
+        return this.decoration.getFlagAnimation(playerIndex);
+    }
+
+    /** Get all lowered-flag frames as an animated entry for a player. */
+    public getFlagDownAnimation(playerIndex: number): AnimatedSpriteEntry {
+        return this.decoration.getFlagDownAnimation(playerIndex);
     }
 
     /** Number of normal flag animation frames per player color. */
@@ -417,8 +441,11 @@ export class SpriteMetadataRegistry {
     }
 
     /** Get the territory dot sprite for a player index. */
-    public getTerritoryDot(playerIndex: number): SpriteEntry | null {
-        return this.decoration.getTerritoryDot(playerIndex);
+    public getTerritoryDot(playerIndex: number): AnimatedSpriteEntry | undefined {
+        if (!this.decoration.hasTerritoryDotSprites()) {
+            return undefined;
+        }
+        return staticEntry(this.decoration.getTerritoryDot(playerIndex));
     }
 
     public hasTerritoryDotSprites(): boolean {
@@ -449,7 +476,7 @@ export class SpriteMetadataRegistry {
      * Get loaded overlay sprite frames.
      * Returns null if the overlay hasn't been loaded.
      */
-    public getOverlayFrames(gfxFile: number, jobIndex: number, directionIndex: number): readonly SpriteEntry[] | null {
+    public getOverlayFrames(gfxFile: number, jobIndex: number, directionIndex: number): readonly SpriteEntry[] | undefined {
         return this.overlays.get(gfxFile, jobIndex, directionIndex);
     }
 
@@ -465,11 +492,14 @@ export class SpriteMetadataRegistry {
     }
 
     /**
-     * Look up the sprite entry for a resource/material type.
-     * Returns null if no sprite is registered for this type.
+     * Look up the sprite for a resource/material type, with animation data if registered.
+     * Returns undefined if good sprites haven't been loaded yet.
      */
-    public getGoodSprite(type: EMaterialType, direction: number = 0): SpriteEntry | null {
-        return this.goodsCategory.get(type, direction);
+    public getGoodSprite(type: EMaterialType, direction: number = 0): AnimatedSpriteEntry | undefined {
+        if (!this.goodsCategory.isLoaded) {
+            return undefined;
+        }
+        return staticEntry(this.goodsCategory.get(type, direction));
     }
 
     // ========================================================================
@@ -486,11 +516,20 @@ export class SpriteMetadataRegistry {
     }
 
     /**
-     * Look up the sprite entry for a unit type, direction, and race.
+     * Look up the sprite for a unit type, with animation data if registered.
+     * Returns undefined if sprites for this race haven't been loaded yet.
      * @param direction Sprite direction index (see SpriteDirection enum) (defaults to 0)
      */
-    public getUnit(type: UnitType, direction: number = 0, race?: number): SpriteEntry | null {
-        return this.units.get(type, direction, race);
+    public getUnit(type: UnitType, direction: number = 0, race?: number): AnimatedSpriteEntry | undefined {
+        // Race is always provided by entity lookups; optional only for legacy callers
+        if (race === undefined || !this.units.isRaceLoaded(race)) {
+            return undefined;
+        }
+        const animEntry = this.animated.getEntry(EntityType.Unit, type, race);
+        if (animEntry) {
+            return animEntry;
+        }
+        return staticEntry(this.units.get(type, direction, race));
     }
 
     // ========================================================================
@@ -547,7 +586,7 @@ export class SpriteMetadataRegistry {
         entityType: EntityType,
         subType: number | string,
         race?: number
-    ): AnimatedSpriteEntry | null {
+    ): AnimatedSpriteEntry | undefined {
         return this.animated.getEntry(entityType, subType, race);
     }
 
@@ -609,6 +648,7 @@ export class SpriteMetadataRegistry {
     /** Clear all registered sprites. */
     public clear(): void {
         this.buildings.clear();
+        this.construction.clear();
         this.mapObjectsCategory.clear();
         this.goodsCategory.clear();
         this.units.clear();
@@ -649,9 +689,9 @@ export class SpriteMetadataRegistry {
         if (!raceMap) {
             return layers;
         }
-        for (const [type, sprites] of raceMap) {
-            if (types.has(type) && sprites.completed) {
-                layers.add(sprites.completed.atlasRegion.layer);
+        for (const [type, sprite] of raceMap) {
+            if (types.has(type)) {
+                layers.add(sprite.atlasRegion.layer);
             }
         }
         return layers;
@@ -685,10 +725,14 @@ export class SpriteMetadataRegistry {
      * Serialize registry data for caching.
      * Delegates to each category — the registry never knows category-internal formats.
      */
+    /** Cache format version — bump when serialization format changes to invalidate old caches. */
+    static readonly CACHE_VERSION = 2;
+
     public serialize(): SerializedRegistryData {
         return {
-            version: 1,
+            version: SpriteMetadataRegistry.CACHE_VERSION,
             buildings: this.buildings.serialize(),
+            construction: this.construction.serialize(),
             units: this.units.serialize(),
             mapObjects: this.mapObjectsCategory.serialize(),
             goods: this.goodsCategory.serialize(),
@@ -705,8 +749,14 @@ export class SpriteMetadataRegistry {
      * Each category's static deserialize() handles its own reconstruction.
      */
     public static deserialize(data: SerializedRegistryData): SpriteMetadataRegistry {
+        if (data.version !== SpriteMetadataRegistry.CACHE_VERSION) {
+            throw new Error(
+                `[SpriteMetadataRegistry] Cache version mismatch: expected ${SpriteMetadataRegistry.CACHE_VERSION}, got ${data.version}`
+            );
+        }
         const registry = new SpriteMetadataRegistry();
         registry.buildings = BuildingSpriteCategory.deserialize(data.buildings);
+        registry.construction = ConstructionSpriteCategory.deserialize(data.construction);
         registry.units = UnitSpriteCategory.deserialize(data.units);
         registry.mapObjectsCategory = MapObjectSpriteCategory.deserialize(data.mapObjects);
         registry.goodsCategory = GoodSpriteCategory.deserialize(data.goods);

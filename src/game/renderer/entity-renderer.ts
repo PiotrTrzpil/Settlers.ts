@@ -239,6 +239,7 @@ export class EntityRenderer extends RendererBase implements IRenderer {
                 .then(loaded => {
                     if (loaded) {
                         EntityRenderer.log.debug(
+                            // eslint-disable-next-line no-restricted-syntax -- optional chain on nullable-by-design lazy-loaded manager; 0 is correct fallback for debug log
                             `Sprite loading complete: ${this.spriteManager?.spriteRegistry?.getBuildingCount() ?? 0} building sprites for ${this.spriteManager?.currentRace != null ? Race[this.spriteManager.currentRace] : 'unknown'}`
                         );
                     }
@@ -408,7 +409,9 @@ export class EntityRenderer extends RendererBase implements IRenderer {
                 this.setupColorShader(gl, projection);
             }
             slot.pass.draw(gl, projection, viewPoint);
+            // eslint-disable-next-line no-restricted-syntax -- frame stats counters: passes initialise these to undefined until first draw
             this.frameDrawCalls += slot.pass.lastDrawCalls ?? 0;
+            // eslint-disable-next-line no-restricted-syntax -- frame stats counters: passes initialise these to undefined until first draw
             this.frameSpriteCount += slot.pass.lastSpriteCount ?? 0;
         }
     }
@@ -474,7 +477,9 @@ export class EntityRenderer extends RendererBase implements IRenderer {
             drawCalls: this.frameDrawCalls,
             spriteCount: this.frameSpriteCount,
             // Detailed breakdown from entity-layer orchestrator
+            // eslint-disable-next-line no-restricted-syntax -- entityLayerPass is nullable-by-design: not registered until after first render
             textured: entityLayerPass?.timings.textured ?? 0,
+            // eslint-disable-next-line no-restricted-syntax -- entityLayerPass is nullable-by-design: not registered until after first render
             color: entityLayerPass?.timings.color ?? 0,
             selection: this.frameSelectionTime,
         };
@@ -579,6 +584,7 @@ export class EntityRenderer extends RendererBase implements IRenderer {
         const sortCtx: OptimizedSortContext = {
             spriteManager: this.spriteManager,
             getWorldPos: frameCtx.getWorldPos.bind(frameCtx),
+            // eslint-disable-next-line no-restricted-syntax -- renderer frame loop: visual state can legitimately be absent between ticks
             getVariation: entityId => rc.getVisualState(entityId)?.variation ?? 0,
         };
         this.depthSorter.sortByDepth(this.sortedEntities, sortCtx);

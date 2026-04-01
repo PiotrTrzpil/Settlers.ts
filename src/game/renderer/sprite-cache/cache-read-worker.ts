@@ -134,6 +134,7 @@ async function handleStart(req: CacheStreamRequest): Promise<void> {
         const palMsg: CachePaletteResponse = {
             type: 'palette',
             paletteBuffer,
+            // eslint-disable-next-line no-restricted-syntax -- paletteBuffer can legitimately be null when palette loading fails; 0 byte count is correct
             paletteBytes: paletteBuffer?.byteLength ?? 0,
             readMs: Math.round(tPalette - tKickoff),
         };

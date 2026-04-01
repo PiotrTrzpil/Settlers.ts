@@ -10,15 +10,26 @@
 import { MapObjectType } from '@/game/types/map-object-types';
 import type { SpriteEntry, SerializableSpriteCategory } from '../types';
 import { mapToArray, arrayToMap } from '../sprite-metadata-helpers';
+import { LogHandler } from '@/utilities/log-handler';
+
+const log = new LogHandler('MapObjectSpriteCategory');
 
 export class MapObjectSpriteCategory implements SerializableSpriteCategory {
     /** Map object sprites keyed by type → variation[] */
     private readonly entries: Map<MapObjectType, SpriteEntry[]> = new Map();
+    /** Tracks types already warned about to avoid log spam in the render loop. */
+    private readonly warnedTypes: Set<number> = new Set();
+
+    /** Whether any map object sprites have been loaded. */
+    get isLoaded(): boolean {
+        return this.entries.size > 0;
+    }
 
     /**
      * Register a sprite entry for a map object type (with optional variation index).
      */
     register(type: MapObjectType, entry: SpriteEntry, variation: number = 0): void {
+        // eslint-disable-next-line no-restricted-syntax -- accumulator pattern: Map may not yet have an entry for this type
         const existing = this.entries.get(type) ?? [];
         if (existing.length <= variation) {
             existing.length = variation + 1;
@@ -29,10 +40,27 @@ export class MapObjectSpriteCategory implements SerializableSpriteCategory {
 
     /**
      * Look up the sprite entry for a map object type (and optional variation).
-     * Returns null if no sprite is registered for this type.
+     * Returns undefined if the type or variation is not registered.
      */
-    get(type: MapObjectType, variation: number = 0): SpriteEntry | null {
-        return this.entries.get(type)?.[variation] ?? null;
+    get(type: MapObjectType, variation: number = 0): SpriteEntry | undefined {
+        const variants = this.entries.get(type);
+        if (!variants) {
+            if (!this.warnedTypes.has(type)) {
+                this.warnedTypes.add(type);
+                log.info(`No sprite for map object ${type}`);
+            }
+            return undefined;
+        }
+        const sprite = variants[variation];
+        if (!sprite) {
+            const key = type * 1000 + variation;
+            if (!this.warnedTypes.has(key)) {
+                this.warnedTypes.add(key);
+                log.info(`No variation ${variation} for map object ${type}`);
+            }
+            return undefined;
+        }
+        return sprite;
     }
 
     hasSprites(): boolean {
@@ -45,6 +73,7 @@ export class MapObjectSpriteCategory implements SerializableSpriteCategory {
 
     clear(): void {
         this.entries.clear();
+        this.warnedTypes.clear();
     }
 
     /**

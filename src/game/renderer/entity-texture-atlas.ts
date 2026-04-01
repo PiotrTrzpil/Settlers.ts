@@ -594,7 +594,7 @@ export class EntityTextureAtlas extends ShaderTexture {
      * Extract a region from the atlas and convert from palette indices to RGBA ImageData.
      * Used for generating icon thumbnails (e.g. resource icons in UI).
      */
-    public extractRegion(region: AtlasRegion, paletteData?: Uint8Array, paletteBaseOffset = 0): ImageData | null {
+    public extractRegion(region: AtlasRegion, paletteData?: Uint8Array | null, paletteBaseOffset = 0): ImageData | null {
         if (region.layer >= this.layers.length) {
             return null;
         }
@@ -619,7 +619,7 @@ export class EntityTextureAtlas extends ShaderTexture {
     }
 
     /** Resolve a single atlas pixel index to an RGBA uint32 value. */
-    private resolvePixel(rawIndex: number, paletteData: Uint8Array | undefined, paletteBaseOffset: number): number {
+    private resolvePixel(rawIndex: number, paletteData: Uint8Array | null | undefined, paletteBaseOffset: number): number {
         if (rawIndex === 0) {
             return 0x00000000;
         } // transparent

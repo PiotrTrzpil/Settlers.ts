@@ -5,7 +5,8 @@
  * @module renderer/sprite-metadata/categories
  */
 
-export { BuildingSpriteCategory, type BuildingSpriteEntries } from './building-sprite-category';
+export { BuildingSpriteCategory } from './building-sprite-category';
+export { ConstructionSpriteCategory } from './construction-sprite-category';
 export { UnitSpriteCategory } from './unit-sprite-category';
 export { MapObjectSpriteCategory } from './map-object-sprite-category';
 export { GoodSpriteCategory } from './good-sprite-category';

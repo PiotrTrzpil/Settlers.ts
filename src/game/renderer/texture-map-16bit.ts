@@ -123,6 +123,7 @@ export class TextureMap16Bit extends ShaderTexture {
         let slot = this.slots.find(s => s.height === height && s.leftSize >= width);
         if (slot == null) {
             // create new slot
+            // eslint-disable-next-line no-restricted-syntax -- slots may be empty on first allocation; 0 (top of texture) is correct starting Y
             const freeY = this.slots[this.slots.length - 1]?.bottom ?? 0;
             slot = new Slot(freeY, this.imgWidthHeight, height);
             this.slots.push(slot);

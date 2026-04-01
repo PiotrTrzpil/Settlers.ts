@@ -206,8 +206,8 @@ export interface PluggableRenderPass extends IRenderPass {
 export interface PassContext extends SpatialPassData, ColorShaderPassData, SpritePassData, EntityFramePassData {
     // Entity state providers
     readonly getBuildingOverlays: (entityId: number) => readonly BuildingOverlayRenderData[];
-    readonly getVisualState: (entityId: number) => EntityVisualState | null;
-    readonly getDirectionTransition: (entityId: number) => DirectionTransition | null;
+    readonly getVisualState: (entityId: number) => EntityVisualState | undefined;
+    readonly getDirectionTransition: (entityId: number) => DirectionTransition | undefined;
     readonly getHealthRatio: (entityId: number) => number | null;
 
     // Render parameters

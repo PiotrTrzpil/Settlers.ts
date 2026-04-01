@@ -15,6 +15,11 @@ export class GoodSpriteCategory implements SerializableSpriteCategory {
     /** Resource sprites keyed by material type → direction */
     private readonly entries: Map<EMaterialType, Map<number, SpriteEntry>> = new Map();
 
+    /** Whether any good sprites have been loaded. */
+    get isLoaded(): boolean {
+        return this.entries.size > 0;
+    }
+
     /**
      * Register a sprite entry for a resource/material type.
      */
@@ -29,15 +34,19 @@ export class GoodSpriteCategory implements SerializableSpriteCategory {
 
     /**
      * Look up the sprite entry for a resource/material type.
-     * Returns null if no sprite is registered for this type.
+     * Throws if the type is not registered (sprite map bug).
      * Falls back to direction 0 if the requested direction is not found.
      */
-    get(type: EMaterialType, direction: number = 0): SpriteEntry | null {
+    get(type: EMaterialType, direction: number = 0): SpriteEntry {
         const dirMap = this.entries.get(type);
         if (!dirMap) {
-            return null;
+            throw new Error(`[GoodSpriteCategory] No sprite for material ${type}`);
         }
-        return dirMap.get(direction) ?? dirMap.get(0) ?? null;
+        const sprite = dirMap.get(direction) ?? dirMap.get(0);
+        if (!sprite) {
+            throw new Error(`[GoodSpriteCategory] No direction ${direction} for material ${type}`);
+        }
+        return sprite;
     }
 
     hasSprites(): boolean {

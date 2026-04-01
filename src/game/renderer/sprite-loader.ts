@@ -206,11 +206,8 @@ export class SpriteLoader {
         config: JobSpriteConfig,
         atlas: EntityTextureAtlas,
         paletteBaseOffset: number
-    ): Promise<LoadedSprite | null> {
+    ): Promise<LoadedSprite> {
         const gfxImage = this.getJobImage(fileSet, config);
-        if (!gfxImage) {
-            return null;
-        }
         return this.packSpriteIntoAtlas(gfxImage, atlas, paletteBaseOffset);
     }
 
@@ -218,37 +215,36 @@ export class SpriteLoader {
      * Get a GFX image by job index without decoding.
      * Shared helper for sync and async loading.
      */
-    private getJobImage(fileSet: LoadedGfxFileSet, config: JobSpriteConfig): GfxImage | null {
+    private getJobImage(fileSet: LoadedGfxFileSet, config: JobSpriteConfig): GfxImage {
         const start = performance.now();
         const { jobIndex, directionIndex = 1, frameIndex = 0 } = config;
+        const fid = fileSet.fileId;
 
         if (!fileSet.jilReader || !fileSet.dilReader) {
-            SpriteLoader.log.debug(`JIL/DIL not available for file ${fileSet.fileId}`);
-            return null;
+            throw new Error(`[SpriteLoader] JIL/DIL not available for file ${fid}`);
         }
 
         // Navigate: job -> direction -> frame
         // Use getItem(jobIndex) directly to access the correct job, not indexed array
-        const totalJobs = fileSet.jilReader.length;
         const jobItem = fileSet.jilReader.getItem(jobIndex);
         if (!jobItem) {
-            SpriteLoader.log.debug(
-                `Job index ${jobIndex} not found in file ${fileSet.fileId} (total jobs: ${totalJobs})`
+            throw new Error(
+                `[SpriteLoader] Job ${jobIndex} not found in file ${fid} (total: ${fileSet.jilReader.length})`
             );
-            return null;
         }
-        // Note: removed verbose per-job loading log - too noisy during normal operation
         const dirItems = fileSet.dilReader.getItems(jobItem.offset, jobItem.length);
         if (directionIndex >= dirItems.length) {
-            SpriteLoader.log.debug(`Direction ${directionIndex} out of range for job ${jobIndex}`);
-            return null;
+            throw new Error(
+                `[SpriteLoader] Direction ${directionIndex} out of range for job ${jobIndex} in file ${fid} (has ${dirItems.length})`
+            );
         }
 
         const dirItem = dirItems[directionIndex]!;
         const frameItems = fileSet.gilReader.getItems(dirItem.offset, dirItem.length);
         if (frameIndex >= frameItems.length) {
-            SpriteLoader.log.debug(`Frame ${frameIndex} out of range for job ${jobIndex} direction ${directionIndex}`);
-            return null;
+            throw new Error(
+                `[SpriteLoader] Frame ${frameIndex} out of range for job ${jobIndex} dir ${directionIndex} in file ${fid} (has ${frameItems.length})`
+            );
         }
 
         // Get the GFX image
@@ -258,13 +254,12 @@ export class SpriteLoader {
 
         // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- readImage may return null at GFX file boundary
         if (!gfxImage) {
-            SpriteLoader.log.debug(`Failed to read image for job ${jobIndex} in file ${fileSet.fileId}`);
-            return null;
+            throw new Error(`[SpriteLoader] Failed to read GFX image for job ${jobIndex} in file ${fid}`);
         }
 
         const elapsed = performance.now() - start;
         if (elapsed > SpriteLoader.SLOW_OP_THRESHOLD_MS) {
-            console.warn(`[SpriteLoader] getJobImage(${fileSet.fileId}, job=${jobIndex}) took ${elapsed.toFixed(1)}ms`);
+            console.warn(`[SpriteLoader] getJobImage(${fid}, job=${jobIndex}) took ${elapsed.toFixed(1)}ms`);
         }
 
         return gfxImage;
@@ -283,7 +278,7 @@ export class SpriteLoader {
         atlas: EntityTextureAtlas,
         paletteBaseOffset: number,
         trimOverride?: SpriteTrim
-    ): Promise<LoadedSprite | null> {
+    ): Promise<LoadedSprite> {
         let gfxImage: GfxImage | null;
 
         if (paletteIndex !== null) {
@@ -293,7 +288,7 @@ export class SpriteLoader {
         }
 
         if (!gfxImage) {
-            return null;
+            throw new Error(`[SpriteLoader] No GFX image at GIL index ${gilIndex} in file ${fileSet.fileId}`);
         }
         return this.packSpriteIntoAtlas(gfxImage, atlas, paletteBaseOffset, trimOverride);
     }
@@ -301,14 +296,13 @@ export class SpriteLoader {
     /**
      * Get a GFX image by direct GIL index without decoding.
      */
-    private getDirectImage(fileSet: LoadedGfxFileSet, gilIndex: number, paletteIndex: number): GfxImage | null {
+    private getDirectImage(fileSet: LoadedGfxFileSet, gilIndex: number, paletteIndex: number): GfxImage {
         const gfxOffset = fileSet.gilReader.getImageOffset(gilIndex);
         const gfxImage = fileSet.gfxReader.readImage(gfxOffset, paletteIndex);
 
         // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- readImage may return null at GFX file boundary
         if (!gfxImage) {
-            SpriteLoader.log.debug(`Failed to read image at GIL index ${gilIndex}`);
-            return null;
+            throw new Error(`[SpriteLoader] Failed to read GFX image at GIL index ${gilIndex}`);
         }
 
         return gfxImage;
@@ -357,18 +351,16 @@ export class SpriteLoader {
         atlas: EntityTextureAtlas,
         paletteBaseOffset: number,
         trimOverride?: SpriteTrim
-    ): LoadedSprite | null {
+    ): LoadedSprite {
         const trim = trimOverride ?? SpriteLoader.DEFAULT_TRIM;
         const trimmedHeight = gfxImage.height - trim.top - trim.bottom;
         if (trimmedHeight <= 0) {
-            SpriteLoader.log.debug(`Sprite too small after trimming: ${gfxImage.width}x${gfxImage.height}`);
-            return null;
+            throw new Error(`[SpriteLoader] Sprite too small after trimming: ${gfxImage.width}x${gfxImage.height}`);
         }
 
         const region = atlas.reserve(gfxImage.width, trimmedHeight);
         if (!region) {
-            SpriteLoader.log.error(`Atlas full, cannot fit sprite ${gfxImage.width}x${trimmedHeight}`);
-            return null;
+            throw new Error(`[SpriteLoader] Atlas full, cannot fit sprite ${gfxImage.width}x${trimmedHeight}`);
         }
 
         const rawIndices = gfxImage.getIndexData();
@@ -399,7 +391,7 @@ export class SpriteLoader {
         atlas: EntityTextureAtlas,
         paletteBaseOffset: number,
         trimOverride?: SpriteTrim
-    ): Promise<LoadedSprite | null> {
+    ): Promise<LoadedSprite> {
         const trim = trimOverride ?? SpriteLoader.DEFAULT_TRIM;
         const pool = getDecoderPool();
         const params = gfxImage.getDecodeParams();
@@ -408,15 +400,13 @@ export class SpriteLoader {
         const trimmedHeight = params.height - trim.top - trim.bottom;
 
         if (trimmedHeight <= 0) {
-            SpriteLoader.log.debug(`Sprite too small after trimming: ${params.width}x${params.height}`);
-            return null;
+            throw new Error(`[SpriteLoader] Sprite too small after trimming: ${params.width}x${params.height}`);
         }
 
         const region = atlas.reserve(trimmedWidth, trimmedHeight);
 
         if (!region) {
-            SpriteLoader.log.error(`Atlas full, cannot fit sprite ${trimmedWidth}x${trimmedHeight}`);
-            return null;
+            throw new Error(`[SpriteLoader] Atlas full, cannot fit sprite ${trimmedWidth}x${trimmedHeight}`);
         }
 
         try {

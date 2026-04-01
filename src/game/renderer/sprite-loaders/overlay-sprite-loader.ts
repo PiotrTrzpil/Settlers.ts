@@ -22,6 +22,7 @@ export async function loadOverlaySprites(
     const seen = new Set<string>();
     const unique: { gfxFile: number; jobIndex: number; directionIndex: number }[] = [];
     for (const entry of manifest) {
+        // eslint-disable-next-line no-restricted-syntax -- directionIndex is an optional field in the manifest; 0 (no directional variant) is correct default
         const dir = entry.directionIndex ?? 0;
         const key = `${entry.gfxFile}:${entry.jobIndex}:${dir}`;
         if (seen.has(key)) {

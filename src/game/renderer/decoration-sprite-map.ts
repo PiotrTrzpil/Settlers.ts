@@ -195,6 +195,7 @@ export function buildDecorationSpriteMap(): Map<number, DecorationSpriteRef> {
         if (LOADER_CATEGORIES.has(entry.category)) {
             continue;
         }
+        // eslint-disable-next-line no-restricted-syntax -- accumulator pattern: Map may not yet have an entry for this category
         const list = byCategory.get(entry.category) ?? [];
         list.push(entry.type ?? entry.raw);
         byCategory.set(entry.category, list);

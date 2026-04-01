@@ -40,8 +40,8 @@ export class OverlaySpriteCategory implements SerializableSpriteCategory {
      * Get loaded overlay sprite frames.
      * Returns null if the overlay hasn't been loaded.
      */
-    get(gfxFile: number, jobIndex: number, directionIndex: number): readonly SpriteEntry[] | null {
-        return this.frames.get(overlayKey(gfxFile, jobIndex, directionIndex)) ?? null;
+    get(gfxFile: number, jobIndex: number, directionIndex: number): readonly SpriteEntry[] | undefined {
+        return this.frames.get(overlayKey(gfxFile, jobIndex, directionIndex));
     }
 
     clear(): void {

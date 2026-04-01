@@ -31,8 +31,7 @@ export class GilSpriteManifest {
     }
 
     /** Resolve a single sprite from the registry. Returns null if not loaded. */
-    resolve(gilIndex: number, registry: SpriteMetadataRegistry): SpriteEntry | null {
-        const frames = registry.getOverlayFrames(this.gfxFile, gilIndex, 0);
-        return frames?.[0] ?? null;
+    resolve(gilIndex: number, registry: SpriteMetadataRegistry): SpriteEntry | undefined {
+        return registry.getOverlayFrames(this.gfxFile, gilIndex, 0)?.[0];
     }
 }

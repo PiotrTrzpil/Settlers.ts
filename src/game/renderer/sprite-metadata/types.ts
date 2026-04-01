@@ -31,6 +31,7 @@ export interface SpriteEntry {
 
 /**
  * Animation entry containing sequence data for animated sprites.
+ * Every renderable entity has one — "static" sprites are single-frame animations.
  */
 export interface AnimatedSpriteEntry {
     /** Static sprite (first frame) for non-animated rendering */
@@ -39,6 +40,17 @@ export interface AnimatedSpriteEntry {
     animationData: AnimationData;
     /** Whether this sprite has multiple frames */
     isAnimated: boolean;
+}
+
+/** Wrap a static SpriteEntry into an AnimatedSpriteEntry with a single-frame default sequence. */
+export function staticEntry(sprite: SpriteEntry): AnimatedSpriteEntry {
+    const sequence = { frames: [sprite], frameDurationMs: 0, loop: false };
+    const directionMap = new Map([[0, sequence]]);
+    return {
+        staticSprite: sprite,
+        animationData: { sequences: new Map([['default', directionMap]]), defaultSequence: 'default' },
+        isAnimated: false,
+    };
 }
 
 /**
@@ -60,6 +72,7 @@ export interface SerializableSpriteCategory {
 export interface SerializedRegistryData {
     version: number;
     buildings: unknown;
+    construction: unknown;
     units: unknown;
     mapObjects: unknown;
     goods: unknown;

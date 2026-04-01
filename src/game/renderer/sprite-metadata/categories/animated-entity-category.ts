@@ -231,20 +231,21 @@ export class AnimatedEntityCategory implements SerializableSpriteCategory {
      * Get animated entity data. Checks race-specific storage first (for buildings/units),
      * then falls back to shared storage (for map objects, resources).
      */
-    getEntry(entityType: EntityType, subType: number | string, race?: number): AnimatedSpriteEntry | null {
+    getEntry(entityType: EntityType, subType: number | string, race?: number): AnimatedSpriteEntry | undefined {
         if (race !== undefined) {
             const raceEntry = this.byRace.get(race)?.get(entityType)?.get(subType);
             if (raceEntry) {
                 return raceEntry;
             }
         }
-        return this.sharedEntities.get(entityType)?.get(subType) ?? null;
+        return this.sharedEntities.get(entityType)?.get(subType);
     }
 
     /**
      * Check if an entity type/subtype has animation data.
      */
     hasAnimation(entityType: EntityType, subType: number | string, race?: number): boolean {
+        // eslint-disable-next-line no-restricted-syntax -- entry may not exist for this entity type/subtype; false is correct for "no animation"
         return this.getEntry(entityType, subType, race)?.isAnimated ?? false;
     }
 

@@ -91,6 +91,7 @@ export class Renderer {
         const webGlogger = new LogHandler('WebGL');
 
         function processWebGlDebugErrors(err: number, funcName: string, args: IArguments) {
+            // eslint-disable-next-line no-restricted-syntax -- third-party WebGLDebugUtils can return null/undefined; empty string is correct fallback for string concatenation
             const argString = WebGLDebugUtils.glFunctionArgsToString(funcName, args) ?? '';
 
             webGlogger.error(

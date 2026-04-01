@@ -142,6 +142,7 @@ export class ViewPoint implements IViewPoint {
 
     constructor(canvas: HTMLCanvasElement, options?: ViewPointOptions) {
         this.canvas = canvas;
+        // eslint-disable-next-line no-restricted-syntax -- externalInput is an optional config flag; false (use built-in event listeners) is the correct default
         this.externalInput = options?.externalInput ?? false;
 
         // disable touch scroll

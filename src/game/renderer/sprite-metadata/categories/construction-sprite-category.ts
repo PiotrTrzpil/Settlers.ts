@@ -1,8 +1,8 @@
 /**
- * BuildingSpriteCategory
+ * ConstructionSpriteCategory
  *
- * Manages completed-state (D1) sprite entries for building types, keyed by race → buildingType.
- * Construction sprites are in ConstructionSpriteCategory (separate, deferrable).
+ * Manages construction-state (D0) sprite entries for building types, keyed by race → buildingType.
+ * Separated from completed sprites so construction sprites can be loaded later (deferred).
  *
  * @module renderer/sprite-metadata/categories
  */
@@ -11,8 +11,8 @@ import { BuildingType } from '@/game/entity';
 import type { SpriteEntry, SerializableSpriteCategory } from '../types';
 import { mapToArray, arrayToMap } from '../sprite-metadata-helpers';
 
-export class BuildingSpriteCategory implements SerializableSpriteCategory {
-    /** Completed building sprites keyed by race → buildingType */
+export class ConstructionSpriteCategory implements SerializableSpriteCategory {
+    /** Construction building sprites keyed by race → buildingType */
     private readonly byRace: Map<number, Map<BuildingType, SpriteEntry>> = new Map();
     private readonly _loadedRaces: Set<number> = new Set();
 
@@ -20,12 +20,12 @@ export class BuildingSpriteCategory implements SerializableSpriteCategory {
         return this._loadedRaces;
     }
 
-    /** Whether sprites have been loaded for a given race. */
+    /** Whether construction sprites have been loaded for a given race. */
     isRaceLoaded(race: number): boolean {
         return this._loadedRaces.has(race);
     }
 
-    /** Register the completed sprite for a building type. */
+    /** Register the construction sprite for a building type. */
     register(type: BuildingType, sprite: SpriteEntry, race: number): void {
         let raceMap = this.byRace.get(race);
         if (!raceMap) {
@@ -37,13 +37,13 @@ export class BuildingSpriteCategory implements SerializableSpriteCategory {
     }
 
     /**
-     * Look up the completed sprite for a building type and race.
+     * Look up the construction sprite for a building type and race.
      * Throws if the race is loaded but the building type is missing.
      */
     get(type: BuildingType, race: number): SpriteEntry {
         const sprite = this.byRace.get(race)?.get(type);
         if (!sprite) {
-            throw new Error(`[BuildingSpriteCategory] No completed sprite for ${type} (race=${race})`);
+            throw new Error(`[ConstructionSpriteCategory] No construction sprite for ${type} (race=${race})`);
         }
         return sprite;
     }
@@ -52,30 +52,17 @@ export class BuildingSpriteCategory implements SerializableSpriteCategory {
         return this.byRace.size > 0;
     }
 
-    getCount(): number {
-        let count = 0;
-        for (const raceMap of this.byRace.values()) {
-            count += raceMap.size;
-        }
-        return count;
-    }
-
     clear(): void {
         this.byRace.clear();
         this._loadedRaces.clear();
-    }
-
-    /** Expose the internal map for layer analysis. */
-    getRaceMap(): ReadonlyMap<number, ReadonlyMap<BuildingType, SpriteEntry>> {
-        return this.byRace;
     }
 
     serialize(): unknown {
         return mapToArray(this.byRace).map(([race, typeMap]) => [race, mapToArray(typeMap)]);
     }
 
-    static deserialize(data: unknown): BuildingSpriteCategory {
-        const category = new BuildingSpriteCategory();
+    static deserialize(data: unknown): ConstructionSpriteCategory {
+        const category = new ConstructionSpriteCategory();
         const rows = data as Array<[number, Array<[BuildingType, SpriteEntry]>]>;
         for (const [race, typeEntries] of rows) {
             const typeMap = arrayToMap(typeEntries);

@@ -7,7 +7,6 @@
  */
 
 import { UnitType } from '@/game/entity';
-import { Race } from '@/game/core/race';
 import type { SpriteEntry, SerializableSpriteCategory } from '../types';
 import { mapToArray, arrayToMap } from '../sprite-metadata-helpers';
 
@@ -15,10 +14,14 @@ export class UnitSpriteCategory implements SerializableSpriteCategory {
     /** Unit sprites keyed by race → unitType → direction */
     private readonly byRace: Map<number, Map<UnitType, Map<number, SpriteEntry>>> = new Map();
     private readonly _loadedRaces: Set<number> = new Set();
-    private readonly _warnedUnits = new Set<string>();
 
     get loadedRaces(): ReadonlySet<number> {
         return this._loadedRaces;
+    }
+
+    /** Whether sprites have been loaded for a given race. */
+    isRaceLoaded(race: number): boolean {
+        return this._loadedRaces.has(race);
     }
 
     /**
@@ -42,42 +45,15 @@ export class UnitSpriteCategory implements SerializableSpriteCategory {
 
     /**
      * Look up the sprite entry for a unit type, direction, and race.
+     * Throws if the race is loaded but the unit type is missing.
      * @param direction Sprite direction index (see SpriteDirection enum) (defaults to 0)
      */
-    get(type: UnitType, direction: number = 0, race?: number): SpriteEntry | null {
-        let dirMap: Map<number, SpriteEntry> | undefined;
-        if (race !== undefined) {
-            dirMap = this.byRace.get(race)?.get(type);
-            if (!dirMap) {
-                this.warnMissing(type, race);
-                return null;
-            }
-        } else {
-            // No race specified — find in any loaded race (legacy callers only)
-            for (const raceMap of this.byRace.values()) {
-                dirMap = raceMap.get(type);
-                if (dirMap) {
-                    break;
-                }
-            }
-            if (!dirMap) {
-                return null;
-            }
+    get(type: UnitType, direction: number = 0, race: number): SpriteEntry {
+        const dirMap = this.byRace.get(race)?.get(type);
+        if (!dirMap) {
+            throw new Error(`[UnitSpriteCategory] No sprite for unit ${type} (race=${race})`);
         }
-        return dirMap.get(direction) ?? dirMap.get(0) ?? null;
-    }
-
-    private warnMissing(type: UnitType, race: number): void {
-        // Don't warn if this race hasn't finished loading yet — the sprite may arrive soon
-        if (!this._loadedRaces.has(race)) {
-            return;
-        }
-        const key = `${race}:${type}`;
-        if (this._warnedUnits.has(key)) {
-            return;
-        }
-        this._warnedUnits.add(key);
-        console.warn(`[SpriteRegistry] No sprite for unit ${type} (race=${Race[race]})`);
+        return dirMap.get(direction) ?? dirMap.get(0)!;
     }
 
     hasSprites(): boolean {
