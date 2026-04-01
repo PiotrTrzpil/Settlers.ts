@@ -80,7 +80,7 @@ ESLint enforces these hard limits (skip blank lines & comments):
 
 **When creating a new file:** outline the structure first (functions, responsibilities, rough line counts). If the outline exceeds limits, split into multiple files BEFORE writing any code. Do NOT write a huge file and refactor after.
 
-**When editing an existing file that's near/over the limit:** do NOT shave off small bits (removing comments, inlining trivial helpers) to squeeze under the limit. Instead, extract a coherent chunk — a logical group of related functions or a self-contained responsibility — into its own module.
+**MANDATORY: When editing an existing file that's near/over the limit:** NEVER EVER trim, shave off small bits (removing comments, inlining trivial helpers) to squeeze under the limit. Instead, extract a coherent chunk — a logical group of related functions or a self-contained responsibility — into its own module.
 
 ## CRITICAL — Fix Root Causes, Not Symptoms (MANDATORY)
 

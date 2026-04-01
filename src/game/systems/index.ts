@@ -52,6 +52,8 @@ export {
     getApproxDirection,
     rotateDirection,
     hexDistance,
+    hexDistanceTo,
+    findNearestByHexDistance,
     squaredHexDistance,
 } from './hex-directions';
 

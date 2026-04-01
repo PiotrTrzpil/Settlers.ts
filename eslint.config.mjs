@@ -120,6 +120,28 @@ export default tseslint.config(
             '@typescript-eslint/no-unnecessary-type-assertion': 'error',
             '@typescript-eslint/no-deprecated': 'warn',
 
+            // Optimistic programming: ban ?? with literal fallbacks (0, '', false, []).
+            // These almost always hide contract violations — use ! or throw instead.
+            // Legitimate uses (counters, config defaults) must disable with a justification comment.
+            'no-restricted-syntax': ['warn',
+                {
+                    selector: 'LogicalExpression[operator="??"] > Literal.right[value=0]',
+                    message: 'Optimistic: ?? 0 hides missing values. Use ! if guaranteed, throw if not. Disable with justification if intentional.',
+                },
+                {
+                    selector: 'LogicalExpression[operator="??"] > Literal.right[value=""]',
+                    message: 'Optimistic: ?? \'\' hides missing values. Use ! if guaranteed, throw if not. Disable with justification if intentional.',
+                },
+                {
+                    selector: 'LogicalExpression[operator="??"] > Literal.right[value=false]',
+                    message: 'Optimistic: ?? false hides missing values. Use ! if guaranteed, throw if not. Disable with justification if intentional.',
+                },
+                {
+                    selector: 'LogicalExpression[operator="??"] > ArrayExpression.right[elements.length=0]',
+                    message: 'Optimistic: ?? [] hides missing values. Use ! if guaranteed, throw if not. Disable with justification if intentional.',
+                },
+            ],
+
             // ESLint comments — require a description for every disable comment
             '@eslint-community/eslint-comments/require-description': 'warn',
             '@eslint-community/eslint-comments/no-unlimited-disable': 'error',

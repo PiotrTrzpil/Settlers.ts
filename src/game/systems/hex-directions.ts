@@ -150,6 +150,31 @@ export function hexDistance(x1: number, y1: number, x2: number, y2: number): num
 }
 
 /**
+ * Grid distance between two positioned objects (entities, coords, etc.).
+ * Convenience wrapper over hexDistance that accepts {x,y} objects.
+ */
+export function hexDistanceTo(a: TileCoord, b: TileCoord): number {
+    return hexDistance(a.x, a.y, b.x, b.y);
+}
+
+/**
+ * Find the nearest item to `origin` from a list of candidates, by hex distance.
+ * Returns null if candidates is empty.
+ */
+export function findNearestByHexDistance<T extends TileCoord>(origin: TileCoord, candidates: Iterable<T>): T | null {
+    let best: T | null = null;
+    let bestDist = Infinity;
+    for (const c of candidates) {
+        const dist = hexDistance(origin.x, origin.y, c.x, c.y);
+        if (dist < bestDist) {
+            bestDist = dist;
+            best = c;
+        }
+    }
+    return best;
+}
+
+/**
  * Squared hex distance (avoids sqrt, useful for comparisons).
  */
 export function squaredHexDistance(x1: number, y1: number, x2: number, y2: number): number {

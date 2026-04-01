@@ -12,6 +12,11 @@ import {
     TREE_JOB_OFFSET,
     TREE_JOB_INDICES,
     TREE_JOBS_PER_TYPE,
+    DARK_TREE_JOB_INDICES,
+    DARK_TREE_STATIC_JOB_INDICES,
+    applyJilFrameSkips,
+    TERRITORY_DOT_JOB,
+    RESOURCE_SIGN_JOBS,
 } from '../sprite-metadata';
 import { ANIMATION_DEFAULTS } from '@/game/animation/animation';
 import { SafeLoadBatch } from '../batch-loader';
@@ -118,51 +123,53 @@ async function loadTreeSprites(ctx: FileLoadContext): Promise<number> {
 }
 
 // =============================================================================
-// Dark tree sprites (GIL-based, no growth stages or cut variants)
+// Dark tree sprites (JIL-based, no growth stages or cut variants)
 // =============================================================================
 
-/** Dark tree type → GIL range mapping. 6 animated types (16 sway frames each), 1:1 with raw bytes 23-28. */
-const DARK_TREE_ANIMATED_GIL: ReadonlyArray<{ types: MapObjectType[]; start: number; count: number }> = [
-    { types: [MapObjectType.DarkTree1A], ...MAP_OBJECT_SPRITES.DARK_TREE_1 },
-    { types: [MapObjectType.DarkTree1B], ...MAP_OBJECT_SPRITES.DARK_TREE_2 },
-    { types: [MapObjectType.DarkTree2A], ...MAP_OBJECT_SPRITES.DARK_TREE_3 },
-    { types: [MapObjectType.DarkTree2B], ...MAP_OBJECT_SPRITES.DARK_TREE_4 },
-    { types: [MapObjectType.DarkTree3A], ...MAP_OBJECT_SPRITES.DARK_TREE_5 },
-    { types: [MapObjectType.DarkTree3B], ...MAP_OBJECT_SPRITES.DARK_TREE_6 },
-];
-
-/** Static dark trees: pine (GIL 782) and palm (GIL 783). */
-const DARK_TREE_STATIC_GIL: ReadonlyArray<{ types: MapObjectType[]; gilIndex: number }> = [
-    { types: [MapObjectType.DarkTree4A, MapObjectType.DarkTree5A], gilIndex: MAP_OBJECT_SPRITES.DARK_PINE },
-    { types: [MapObjectType.DarkTree4B], gilIndex: MAP_OBJECT_SPRITES.DARK_PALM },
-];
-
-/** Collect sway frames from a GIL range. Returns null if fewer than 2 frames loaded. */
-function collectSwayFrames(sprites: Map<number, SpriteEntry>, start: number, count: number): SpriteEntry[] | null {
-    const frames: SpriteEntry[] = [];
-    for (let i = 0; i < count; i++) {
-        const entry = sprites.get(start + i);
-        if (entry) {
-            frames.push(entry);
-        }
+/**
+ * Load dark tree sprites using JIL jobs.
+ * 6 animated types (16 sway frames each) + 2 static types (dark pine, dark palm).
+ */
+async function loadDarkTreeSprites(ctx: FileLoadContext): Promise<number> {
+    if (!ctx.fileSet.jilReader || !ctx.fileSet.dilReader) {
+        log.debug('Dark tree JIL/DIL not available, skipping');
+        return 0;
     }
-    return frames.length > 1 ? frames : null;
-}
 
-/** Register animated dark tree types from pre-loaded sprites. */
-function registerAnimatedDarkTrees(sprites: Map<number, SpriteEntry>, ctx: FileLoadContext): number {
     let loaded = 0;
-    for (const { types, start, count } of DARK_TREE_ANIMATED_GIL) {
-        const firstEntry = sprites.get(start);
-        if (!firstEntry) {
+    const batch = new SafeLoadBatch<{
+        types: MapObjectType[];
+        firstFrame: SpriteEntry;
+        swayFrames: SpriteEntry[] | null;
+    }>();
+
+    // Animated dark trees — each is a single JIL job with 16 sway frames
+    for (const { types, job } of DARK_TREE_JOB_INDICES) {
+        const anim = await ctx.spriteLoader.loadJobAnimation(ctx.fileSet, job, 0, ctx.atlas, ctx.paletteBase);
+        if (!anim?.frames.length) {
             continue;
         }
 
-        const swayFrames = collectSwayFrames(sprites, start, count);
-        const frameMap = swayFrames ? new Map<number, SpriteEntry[]>([[0, swayFrames]]) : null;
+        const frames = applyJilFrameSkips(
+            anim.frames.map(f => f.entry),
+            job
+        );
+        batch.add({ types, firstFrame: frames[0]!, swayFrames: frames.length > 1 ? frames : null });
+    }
 
+    // Static dark trees — single-frame JIL jobs
+    for (const { types, job } of DARK_TREE_STATIC_JOB_INDICES) {
+        const anim = await ctx.spriteLoader.loadJobAnimation(ctx.fileSet, job, 0, ctx.atlas, ctx.paletteBase);
+        if (!anim?.frames.length) {
+            continue;
+        }
+        batch.add({ types, firstFrame: anim.frames[0]!.entry, swayFrames: null });
+    }
+
+    batch.finalize(ctx.atlas, ctx.gl, ({ types, firstFrame, swayFrames }) => {
+        const frameMap = swayFrames ? new Map<number, SpriteEntry[]>([[0, swayFrames]]) : null;
         for (const type of types) {
-            ctx.registry.registerMapObject(type, firstEntry);
+            ctx.registry.registerMapObject(type, firstFrame);
             if (frameMap) {
                 ctx.registry.registerAnimatedEntity(
                     EntityType.MapObject,
@@ -174,43 +181,9 @@ function registerAnimatedDarkTrees(sprites: Map<number, SpriteEntry>, ctx: FileL
             }
             loaded++;
         }
-    }
+    });
+
     return loaded;
-}
-
-/** Register static dark tree types (pine, palm) from pre-loaded sprites. */
-function registerStaticDarkTrees(sprites: Map<number, SpriteEntry>, ctx: FileLoadContext): number {
-    let loaded = 0;
-    for (const { types, gilIndex } of DARK_TREE_STATIC_GIL) {
-        const entry = sprites.get(gilIndex);
-        if (!entry) {
-            continue;
-        }
-        for (const type of types) {
-            ctx.registry.registerMapObject(type, entry);
-            loaded++;
-        }
-    }
-    return loaded;
-}
-
-/**
- * Load dark tree sprites from direct GIL indices.
- * 6 animated types (16 sway frames each) + 2 static types (dark pine, dark palm).
- */
-async function loadDarkTreeSprites(ctx: FileLoadContext): Promise<number> {
-    const allIndices: number[] = [];
-    for (const { start, count } of DARK_TREE_ANIMATED_GIL) {
-        for (let i = 0; i < count; i++) {
-            allIndices.push(start + i);
-        }
-    }
-    for (const { gilIndex } of DARK_TREE_STATIC_GIL) {
-        allIndices.push(gilIndex);
-    }
-
-    const sprites = await loadGilSpriteBatch(allIndices, ctx);
-    return registerAnimatedDarkTrees(sprites, ctx) + registerStaticDarkTrees(sprites, ctx);
 }
 
 // =============================================================================
@@ -259,40 +232,57 @@ async function loadStoneSprites(ctx: FileLoadContext): Promise<number> {
 // Decoration sprites
 // =============================================================================
 
+/** Register a sprite entry for multiple entity keys. Returns the count registered. */
+function registerDecoEntries(entry: SpriteEntry, entityKeys: number[], registry: FileLoadContext['registry']): number {
+    for (const key of entityKeys) {
+        registry.registerMapObject(key as MapObjectType, entry);
+    }
+    return entityKeys.length;
+}
+
 /**
- * Load decoration sprites (non-tree map objects) using direct GIL indices.
- * Deduplicates by GIL index so each unique sprite is loaded once,
- * then registered for all entity keys that share it.
+ * Load decoration sprites (non-tree map objects).
+ * Sprites with a jilJob are loaded via JIL; others use direct GIL indices.
+ * Deduplicates so each unique sprite is loaded once, then registered for all entity keys that share it.
  */
 async function loadDecorationSprites(ctx: FileLoadContext): Promise<number> {
     const decoMap = buildDecorationSpriteMap();
 
-    // Group entity keys by gilIndex — avoids loading the same sprite twice
+    // Split into GIL-based and JIL-based groups, deduplicating by key
     const byGilIndex = new Map<number, number[]>();
+    const byJilJob = new Map<number, number[]>();
+
     for (const [entityKey, ref] of decoMap) {
-        const existing = byGilIndex.get(ref.gilIndex);
+        const map = ref.jilJob != null ? byJilJob : byGilIndex;
+        const key = ref.jilJob != null ? ref.jilJob : ref.gilIndex;
+        const existing = map.get(key);
         if (existing) {
             existing.push(entityKey);
         } else {
-            byGilIndex.set(ref.gilIndex, [entityKey]);
+            map.set(key, [entityKey]);
         }
     }
 
-    const sprites = await loadGilSpriteBatch([...byGilIndex.keys()], ctx);
+    let total = 0;
 
-    let totalRegistered = 0;
+    // Load GIL-based decorations
+    const gilSprites = await loadGilSpriteBatch([...byGilIndex.keys()], ctx);
     for (const [gilIndex, entityKeys] of byGilIndex) {
-        const entry = sprites.get(gilIndex);
-        if (!entry) {
-            continue;
-        }
-        for (const key of entityKeys) {
-            ctx.registry.registerMapObject(key as MapObjectType, entry);
-            totalRegistered++;
+        const entry = gilSprites.get(gilIndex);
+        if (entry) {
+            total += registerDecoEntries(entry, entityKeys, ctx.registry);
         }
     }
 
-    return totalRegistered;
+    // Load JIL-based decorations
+    for (const [job, entityKeys] of byJilJob) {
+        const anim = await ctx.spriteLoader.loadJobAnimation(ctx.fileSet, job, 0, ctx.atlas, ctx.paletteBase);
+        if (anim?.frames.length) {
+            total += registerDecoEntries(anim.frames[0]!.entry, entityKeys, ctx.registry);
+        }
+    }
+
+    return total;
 }
 
 // =============================================================================
@@ -334,7 +324,7 @@ function registerFlagSet(
 
 /**
  * Load small animated flag sprites (8 player colors × 12 normal + 12 lowered frames).
- * Flags are loaded from MAP_OBJECT_SPRITES in the landscape GFX file (5.gfx).
+ * Flags are loaded from MAP_OBJECT_SPRITES in the map objects GFX file (5.gfx).
  */
 async function loadFlagSprites(ctx: FileLoadContext): Promise<number> {
     const FLAG_NORMAL: FlagRange[] = [
@@ -371,39 +361,21 @@ async function loadFlagSprites(ctx: FileLoadContext): Promise<number> {
 // =============================================================================
 
 /**
- * Load territory dot sprites (8 player colors) from direct GIL indices.
+ * Load territory dot sprites (8 player colors) from JIL job 533.
+ * The job has 8 frames in direction 0 — one per player color.
  */
 async function loadTerritoryDotSprites(ctx: FileLoadContext): Promise<number> {
-    const DOT_GIL_INDICES = [
-        MAP_OBJECT_SPRITES.TERRITORY_DOT_RED,
-        MAP_OBJECT_SPRITES.TERRITORY_DOT_BLUE,
-        MAP_OBJECT_SPRITES.TERRITORY_DOT_GREEN,
-        MAP_OBJECT_SPRITES.TERRITORY_DOT_YELLOW,
-        MAP_OBJECT_SPRITES.TERRITORY_DOT_PURPLE,
-        MAP_OBJECT_SPRITES.TERRITORY_DOT_ORANGE,
-        MAP_OBJECT_SPRITES.TERRITORY_DOT_TEAL,
-        MAP_OBJECT_SPRITES.TERRITORY_DOT_GRAY,
-    ];
-
-    const sprites = await loadGilSpriteBatch(DOT_GIL_INDICES, ctx);
+    const anim = await ctx.spriteLoader.loadJobAnimation(ctx.fileSet, TERRITORY_DOT_JOB, 0, ctx.atlas, ctx.paletteBase);
+    if (!anim?.frames.length) {
+        log.warn('Territory dot JIL job returned no frames');
+        return 0;
+    }
 
     let loaded = 0;
-    for (let playerIndex = 0; playerIndex < DOT_GIL_INDICES.length; playerIndex++) {
-        const entry = sprites.get(DOT_GIL_INDICES[playerIndex]!);
-        if (entry) {
-            ctx.registry.registerTerritoryDot(playerIndex, entry);
-            loaded++;
-        } else {
-            console.warn(
-                `[loadTerritoryDotSprites] GIL ${DOT_GIL_INDICES[playerIndex]} (player ${playerIndex}) returned null`
-            );
-        }
+    for (let playerIndex = 0; playerIndex < anim.frames.length; playerIndex++) {
+        ctx.registry.registerTerritoryDot(playerIndex, anim.frames[playerIndex]!.entry);
+        loaded++;
     }
-
-    if (loaded === 0) {
-        console.warn('[loadTerritoryDotSprites] No territory dot sprites loaded from GIL 1850-1857');
-    }
-
     return loaded;
 }
 
@@ -449,45 +421,45 @@ async function loadResourceMapObjects(ctx: FileLoadContext): Promise<number> {
 // =============================================================================
 
 /**
- * Load resource sign sprites from direct GIL indices in file 5.
+ * Load resource sign sprites from JIL jobs in file 5.
  * Signs show ore type and richness: empty (1 sprite), then 3 variations per ore type.
  */
 async function loadResourceSignSprites(ctx: FileLoadContext): Promise<number> {
-    const S = MAP_OBJECT_SPRITES.RESOURCE_SIGNS;
+    const S = RESOURCE_SIGN_JOBS;
 
-    // (MapObjectType, variation, gilIndex) triples
-    const entries: Array<{ type: MapObjectType; variation: number; gilIndex: number }> = [
-        { type: MapObjectType.ResEmpty, variation: 0, gilIndex: S.EMPTY },
-        { type: MapObjectType.ResCoal, variation: 0, gilIndex: S.COAL.LOW },
-        { type: MapObjectType.ResCoal, variation: 1, gilIndex: S.COAL.MED },
-        { type: MapObjectType.ResCoal, variation: 2, gilIndex: S.COAL.RICH },
-        { type: MapObjectType.ResGold, variation: 0, gilIndex: S.GOLD.LOW },
-        { type: MapObjectType.ResGold, variation: 1, gilIndex: S.GOLD.MED },
-        { type: MapObjectType.ResGold, variation: 2, gilIndex: S.GOLD.RICH },
-        { type: MapObjectType.ResIron, variation: 0, gilIndex: S.IRON.LOW },
-        { type: MapObjectType.ResIron, variation: 1, gilIndex: S.IRON.MED },
-        { type: MapObjectType.ResIron, variation: 2, gilIndex: S.IRON.RICH },
-        { type: MapObjectType.ResStone, variation: 0, gilIndex: S.STONE.LOW },
-        { type: MapObjectType.ResStone, variation: 1, gilIndex: S.STONE.MED },
-        { type: MapObjectType.ResStone, variation: 2, gilIndex: S.STONE.RICH },
-        { type: MapObjectType.ResSulfur, variation: 0, gilIndex: S.SULFUR.LOW },
-        { type: MapObjectType.ResSulfur, variation: 1, gilIndex: S.SULFUR.MED },
-        { type: MapObjectType.ResSulfur, variation: 2, gilIndex: S.SULFUR.RICH },
+    // (MapObjectType, variation, jilJob) triples
+    const entries: Array<{ type: MapObjectType; variation: number; job: number }> = [
+        { type: MapObjectType.ResEmpty, variation: 0, job: S.EMPTY },
+        { type: MapObjectType.ResCoal, variation: 0, job: S.COAL.LOW },
+        { type: MapObjectType.ResCoal, variation: 1, job: S.COAL.MED },
+        { type: MapObjectType.ResCoal, variation: 2, job: S.COAL.RICH },
+        { type: MapObjectType.ResGold, variation: 0, job: S.GOLD.LOW },
+        { type: MapObjectType.ResGold, variation: 1, job: S.GOLD.MED },
+        { type: MapObjectType.ResGold, variation: 2, job: S.GOLD.RICH },
+        { type: MapObjectType.ResIron, variation: 0, job: S.IRON.LOW },
+        { type: MapObjectType.ResIron, variation: 1, job: S.IRON.MED },
+        { type: MapObjectType.ResIron, variation: 2, job: S.IRON.RICH },
+        { type: MapObjectType.ResStone, variation: 0, job: S.STONE.LOW },
+        { type: MapObjectType.ResStone, variation: 1, job: S.STONE.MED },
+        { type: MapObjectType.ResStone, variation: 2, job: S.STONE.RICH },
+        { type: MapObjectType.ResSulfur, variation: 0, job: S.SULFUR.LOW },
+        { type: MapObjectType.ResSulfur, variation: 1, job: S.SULFUR.MED },
+        { type: MapObjectType.ResSulfur, variation: 2, job: S.SULFUR.RICH },
     ];
 
-    const sprites = await loadGilSpriteBatch(
-        entries.map(e => e.gilIndex),
-        ctx
-    );
-
-    let loaded = 0;
-    for (const { type, variation, gilIndex } of entries) {
-        const entry = sprites.get(gilIndex);
-        if (entry) {
-            ctx.registry.registerMapObject(type, entry, variation);
-            loaded++;
+    const batch = new SafeLoadBatch<{ type: MapObjectType; variation: number; entry: SpriteEntry }>();
+    for (const { type, variation, job } of entries) {
+        const anim = await ctx.spriteLoader.loadJobAnimation(ctx.fileSet, job, 0, ctx.atlas, ctx.paletteBase);
+        if (anim?.frames.length) {
+            batch.add({ type, variation, entry: anim.frames[0]!.entry });
         }
     }
+
+    let loaded = 0;
+    batch.finalize(ctx.atlas, ctx.gl, ({ type, variation, entry }) => {
+        ctx.registry.registerMapObject(type, entry, variation);
+        loaded++;
+    });
 
     return loaded;
 }

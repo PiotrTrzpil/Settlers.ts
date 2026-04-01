@@ -10,8 +10,10 @@ export enum CombatStatus {
     Idle = 0,
     /** Moving toward a detected enemy */
     Pursuing = 1,
-    /** Adjacent to enemy, actively fighting */
+    /** Adjacent to enemy, actively fighting (melee) */
     Fighting = 2,
+    /** In range, shooting at enemy (ranged units only) */
+    Shooting = 3,
 }
 
 /** Per-unit combat state tracked by CombatSystem */
@@ -54,11 +56,23 @@ const LEVEL_MULTIPLIERS: readonly [number, number, number] = [1.0, 1.5, 2.0];
 /** Default stats for military units not explicitly configured */
 const DEFAULT_COMBAT_STATS: CombatStats = { maxHealth: 80, attackPower: 10, attackCooldown: 2.0 };
 
+/** Unit types that have ranged attacks (shoot when far, melee when close). */
+const RANGED_BASE_TYPES: ReadonlySet<UnitType> = new Set([
+    UnitType.Bowman1,
+    UnitType.BlowgunWarrior1,
+    UnitType.BackpackCatapultist1,
+]);
+
+/** Check if a unit type is a ranged attacker (bowman, blowgun warrior, catapultist). */
+export function isRangedUnitType(unitType: UnitType): boolean {
+    return RANGED_BASE_TYPES.has(getBaseUnitType(unitType));
+}
+
 /** Get combat stats for a unit type. Level is derived from the UnitType itself. */
 export function getCombatStats(unitType: UnitType): CombatStats {
     const base = COMBAT_STATS[getBaseUnitType(unitType)] ?? DEFAULT_COMBAT_STATS;
     const level = getUnitLevel(unitType);
-    const mult = LEVEL_MULTIPLIERS[level - 1] ?? 1;
+    const mult = LEVEL_MULTIPLIERS[level - 1]!;
     if (mult === 1) {
         return base;
     }

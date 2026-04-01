@@ -15,10 +15,9 @@ import type { GameState } from '../../game-state';
 import type { EventBus } from '../../event-bus';
 import type { Entity } from '../../entity';
 import { EntityType, isUnitTypeMilitary, UnitType, tileKey, EXTENDED_OFFSETS } from '../../entity';
-import { hexDistance, getApproxDirection } from '../../systems/hex-directions';
-import { CombatState, CombatStatus, createCombatState, getCombatStats } from './combat-state';
-import { xmlKey } from '../../animation/animation';
-import { UNIT_XML_PREFIX } from '../../renderer/sprite-metadata';
+import { hexDistanceTo, findNearestByHexDistance } from '../../systems/hex-directions';
+import { CombatState, CombatStatus, createCombatState, getCombatStats, isRangedUnitType } from './combat-state';
+import { CombatVisuals } from './combat-animations';
 import type { EntityVisualService } from '../../animation/entity-visual-service';
 import { createLogger } from '@/utilities/logger';
 import { sortedEntries } from '@/utilities/collections';
@@ -29,8 +28,14 @@ const log = createLogger('CombatSystem');
 /** Detection range: how far a unit scans for enemies (in hex tiles) */
 const DETECTION_RANGE = 17;
 
-/** Fight range: hex distance at which a unit can attack (1 = adjacent) */
+/** Melee fight range: hex distance at which a unit can melee attack (1 = adjacent) */
 const FIGHT_RANGE = 1;
+
+/** Distance threshold: ranged units shoot when enemy is farther than this, melee when closer. */
+const RANGED_MELEE_THRESHOLD = 2;
+
+/** Maximum range at which ranged units can shoot. */
+const SHOOT_RANGE = 8;
 
 /**
  * How often idle units scan for enemies (seconds).
@@ -54,7 +59,7 @@ export class CombatSystem implements TickSystem {
     private readonly states = new Map<number, CombatState>();
     private readonly gameState: GameState;
     private readonly eventBus: EventBus;
-    private readonly visualService: EntityVisualService;
+    private readonly visuals: CombatVisuals;
     private readonly executeCommand: (cmd: Command) => CommandResult;
     private readonly isUnitReserved: (entityId: number) => boolean;
 
@@ -70,7 +75,7 @@ export class CombatSystem implements TickSystem {
     constructor(cfg: CombatSystemConfig) {
         this.gameState = cfg.gameState;
         this.eventBus = cfg.eventBus;
-        this.visualService = cfg.visualService;
+        this.visuals = new CombatVisuals(cfg.visualService, cfg.gameState);
         this.executeCommand = cfg.executeCommand;
         this.isUnitReserved = cfg.isUnitReserved;
     }
@@ -151,13 +156,13 @@ export class CombatSystem implements TickSystem {
         if (!state) {
             return;
         }
-        const wasFighting = state.status === CombatStatus.Fighting;
+        const wasEngaged = state.status === CombatStatus.Fighting || state.status === CombatStatus.Shooting;
         state.status = CombatStatus.Idle;
         state.targetId = null;
         state.attackTimer = 0;
         this.pursuitTimers.delete(entityId);
-        if (wasFighting) {
-            this.applyIdleAnimation(entityId);
+        if (wasEngaged) {
+            this.visuals.applyIdleAnimation(entityId);
         }
     }
 
@@ -215,6 +220,9 @@ export class CombatSystem implements TickSystem {
             case CombatStatus.Fighting:
                 this.handleFighting(state, entity, dt);
                 break;
+            case CombatStatus.Shooting:
+                this.handleShooting(state, entity, dt);
+                break;
         }
     }
 
@@ -226,15 +234,34 @@ export class CombatSystem implements TickSystem {
             return;
         }
 
-        const dist = hexDistance(entity.x, entity.y, target.x, target.y);
+        const dist = hexDistanceTo(entity, target);
+        const ranged = isRangedUnitType(state.unitType);
 
-        // Adjacent enemy — engage immediately (all units)
+        // Adjacent enemy — engage melee immediately (all units)
         if (dist <= FIGHT_RANGE) {
             state.targetId = target.id;
             state.status = CombatStatus.Fighting;
             state.attackTimer = 0;
-            this.applyFightAnimation(entity, target);
+            this.visuals.applyFightAnimation(entity, target);
             log.debug(`Unit ${state.entityId} engaging adjacent enemy ${target.id}`);
+            return;
+        }
+
+        // Ranged units within melee threshold — close in for melee
+        if (ranged && dist <= RANGED_MELEE_THRESHOLD) {
+            state.targetId = target.id;
+            this.transitionToPursue(state, entity, target);
+            log.debug(`Unit ${state.entityId} closing to melee range on enemy ${target.id}`);
+            return;
+        }
+
+        // Ranged units within shoot range — start shooting
+        if (ranged && dist <= SHOOT_RANGE) {
+            state.targetId = target.id;
+            state.status = CombatStatus.Shooting;
+            state.attackTimer = 0;
+            this.visuals.applyShootAnimation(entity, target);
+            log.debug(`Unit ${state.entityId} shooting at enemy ${target.id} from distance ${dist}`);
             return;
         }
 
@@ -244,58 +271,66 @@ export class CombatSystem implements TickSystem {
         }
 
         state.targetId = target.id;
-        state.status = CombatStatus.Pursuing;
-        this.pursuitTimers.set(state.entityId, PURSUIT_REPATH_INTERVAL); // path immediately
-        this.applyWalkAnimation(entity, target);
+        this.transitionToPursue(state, entity, target);
         log.debug(`Unit ${state.entityId} detected enemy ${target.id}, pursuing`);
     }
 
     private handlePursuing(state: CombatState, entity: Entity, _dt: number): void {
-        // Validate target still exists and is alive
         const target = this.validateTarget(state, entity);
         if (!target) {
             return;
         }
 
-        // Keep animation direction in sync with movement controller (only while actively walking —
-        // idle controllers retain a stale direction from before combat that would override the
-        // correct target-facing direction set by applyWalkAnimation / applyFightAnimation)
-        const controller = this.gameState.movement.getController(state.entityId);
-        if (controller && controller.state === 'moving') {
-            const vs = this.visualService.getState(entity.id);
-            if (vs?.animation && vs.animation.direction !== controller.direction) {
-                this.visualService.setDirection(entity.id, controller.direction);
-            }
+        this.visuals.syncDirectionWithController(entity);
+
+        const dist = hexDistanceTo(entity, target);
+
+        // Close enough to fight melee
+        if (dist <= FIGHT_RANGE) {
+            this.stopAndEngage(state, entity, target, CombatStatus.Fighting);
+            return;
         }
 
-        const dist = hexDistance(entity.x, entity.y, target.x, target.y);
-
-        // Close enough to fight
-        if (dist <= FIGHT_RANGE) {
-            state.status = CombatStatus.Fighting;
-            state.attackTimer = 0;
-
-            // Stop moving — we're in range
-            if (controller && controller.state !== 'idle') {
-                controller.clearPath();
-            }
-
-            // Play fight animation facing the target
-            this.applyFightAnimation(entity, target);
-
-            log.debug(`Unit ${state.entityId} engaging enemy ${target.id}`);
+        // Ranged units: if within shoot range but beyond melee threshold, stop and shoot
+        if (isRangedUnitType(state.unitType) && dist > RANGED_MELEE_THRESHOLD && dist <= SHOOT_RANGE) {
+            this.stopAndEngage(state, entity, target, CombatStatus.Shooting);
             return;
         }
 
         // Re-path periodically toward the (possibly moving) target.
-        // Resolve target outside building footprints so units don't walk into buildings.
-        const elapsed = this.pursuitTimers.get(state.entityId) ?? 0;
+        const elapsed = this.pursuitTimers.get(state.entityId)!;
         if (elapsed >= PURSUIT_REPATH_INTERVAL) {
             this.pursuitTimers.set(state.entityId, 0);
             const dest = this.resolveOutsideBuilding(target.x, target.y);
             this.gameState.movement.moveUnit(state.entityId, dest.x, dest.y);
-            this.applyWalkAnimation(entity, target);
+            this.visuals.applyWalkAnimation(entity, target);
         }
+    }
+
+    /** Stop movement and transition to a combat engagement status (Fighting or Shooting). */
+    private stopAndEngage(
+        state: CombatState,
+        entity: Entity,
+        target: Entity,
+        status: CombatStatus.Fighting | CombatStatus.Shooting
+    ): void {
+        state.status = status;
+        state.attackTimer = 0;
+
+        const controller = this.gameState.movement.getController(state.entityId);
+        if (controller && controller.state !== 'idle') {
+            controller.clearPath();
+        }
+
+        if (status === CombatStatus.Shooting) {
+            this.visuals.applyShootAnimation(entity, target);
+        } else {
+            this.visuals.applyFightAnimation(entity, target);
+        }
+
+        log.debug(
+            `Unit ${state.entityId} engaging enemy ${target.id} (${status === CombatStatus.Shooting ? 'ranged' : 'melee'})`
+        );
     }
 
     private handleFighting(state: CombatState, entity: Entity, dt: number): void {
@@ -304,34 +339,58 @@ export class CombatSystem implements TickSystem {
             return;
         }
 
-        // Check if target moved out of range
-        const dist = hexDistance(entity.x, entity.y, target.x, target.y);
+        // Check if target moved out of melee range
+        const dist = hexDistanceTo(entity, target);
         if (dist > FIGHT_RANGE) {
             if (this.isUnitReserved(state.entityId)) {
-                // Reserved units (siege defenders) don't chase — go idle and wait
                 this.transitionToIdle(state, entity);
+            } else if (isRangedUnitType(state.unitType) && dist > RANGED_MELEE_THRESHOLD && dist <= SHOOT_RANGE) {
+                // Ranged unit: target moved away but still in shoot range — switch to shooting
+                state.status = CombatStatus.Shooting;
+                state.attackTimer = 0;
+                this.visuals.applyShootAnimation(entity, target);
             } else {
-                // Target moved away — re-pursue
-                state.status = CombatStatus.Pursuing;
-                this.pursuitTimers.set(state.entityId, PURSUIT_REPATH_INTERVAL);
+                this.transitionToPursue(state, entity, target);
             }
             return;
         }
 
-        // Keep facing the target (target may shift position while adjacent)
-        const direction = getApproxDirection(entity.x, entity.y, target.x, target.y);
-        const vs = this.visualService.getState(entity.id);
-        if (vs?.animation && vs.animation.direction !== direction) {
-            this.visualService.setDirection(entity.id, direction);
+        this.visuals.updateFacingDirection(entity, target);
+        this.tickDamage(state, target, dt);
+    }
+
+    private handleShooting(state: CombatState, entity: Entity, dt: number): void {
+        const target = this.validateTarget(state, entity);
+        if (!target) {
+            return;
         }
 
-        // Apply damage on cooldown
-        const stats = getCombatStats(state.unitType);
-        state.attackTimer += dt;
-        if (state.attackTimer >= stats.attackCooldown) {
-            state.attackTimer -= stats.attackCooldown;
-            this.applyDamage(state, target, stats.attackPower);
+        const dist = hexDistanceTo(entity, target);
+
+        // Enemy closed in — switch to melee
+        if (dist <= RANGED_MELEE_THRESHOLD) {
+            if (dist <= FIGHT_RANGE) {
+                state.status = CombatStatus.Fighting;
+                state.attackTimer = 0;
+                this.visuals.applyFightAnimation(entity, target);
+            } else {
+                this.transitionToPursue(state, entity, target);
+            }
+            return;
         }
+
+        // Enemy moved out of shoot range — pursue or idle
+        if (dist > SHOOT_RANGE) {
+            if (this.isUnitReserved(state.entityId)) {
+                this.transitionToIdle(state, entity);
+            } else {
+                this.transitionToPursue(state, entity, target);
+            }
+            return;
+        }
+
+        this.visuals.updateFacingDirection(entity, target);
+        this.tickDamage(state, target, dt);
     }
 
     // ── Damage & death ────────────────────────────────────────────────────
@@ -341,6 +400,15 @@ export class CombatSystem implements TickSystem {
      * Handles health decrement, event emission, and death if health reaches zero.
      */
     applyExternalDamage(attackerId: number, targetId: number, damage: number): void {
+        this.inflictDamage(attackerId, targetId, damage);
+    }
+
+    private applyDamage(attacker: CombatState, targetEntity: Entity, damage: number): void {
+        this.inflictDamage(attacker.entityId, targetEntity.id, damage);
+    }
+
+    /** Core damage logic: decrement health, emit event, kill if dead. */
+    private inflictDamage(attackerId: number, targetId: number, damage: number): void {
         const targetState = this.states.get(targetId);
         if (!targetState) {
             return;
@@ -360,26 +428,6 @@ export class CombatSystem implements TickSystem {
         }
     }
 
-    private applyDamage(attacker: CombatState, targetEntity: Entity, damage: number): void {
-        const targetState = this.states.get(targetEntity.id);
-        if (!targetState) {
-            return;
-        }
-
-        targetState.health -= damage;
-
-        this.eventBus.emit('combat:unitAttacked', {
-            unitId: attacker.entityId,
-            targetId: targetEntity.id,
-            damage,
-            remainingHealth: Math.max(0, targetState.health),
-        });
-
-        if (targetState.health <= 0) {
-            this.killUnit(targetState, attacker.entityId);
-        }
-    }
-
     private killUnit(state: CombatState, killedBy: number): void {
         log.debug(`Unit ${state.entityId} killed by ${killedBy}`);
 
@@ -392,7 +440,7 @@ export class CombatSystem implements TickSystem {
         // Clear any combatants targeting the dead unit
         for (const other of this.states.values()) {
             if (other.targetId === state.entityId) {
-                const wasFighting = other.status === CombatStatus.Fighting;
+                const wasEngaged = other.status === CombatStatus.Fighting || other.status === CombatStatus.Shooting;
                 other.targetId = null;
                 other.status = CombatStatus.Idle;
                 other.attackTimer = 0;
@@ -404,9 +452,9 @@ export class CombatSystem implements TickSystem {
                     controller.clearPath();
                 }
 
-                // Restore idle animation if unit was fighting
-                if (wasFighting) {
-                    this.applyIdleAnimation(other.entityId);
+                // Restore idle animation if unit was fighting or shooting
+                if (wasEngaged) {
+                    this.visuals.applyIdleAnimation(other.entityId);
                 }
             }
         }
@@ -419,35 +467,20 @@ export class CombatSystem implements TickSystem {
 
     private findNearestEnemy(entity: Entity): Entity | null {
         const nearby = this.gameState.getEntitiesInRadius(entity.x, entity.y, DETECTION_RANGE);
-
-        let bestTarget: Entity | null = null;
-        let bestDist = Infinity;
-
-        for (const candidate of nearby) {
-            if (candidate.type !== EntityType.Unit || candidate.hidden) {
-                continue;
+        const enemies = nearby.filter(c => {
+            if (c.type !== EntityType.Unit || c.hidden) {
+                return false;
             }
-            if (candidate.player === entity.player) {
-                continue;
+            if (c.player === entity.player) {
+                return false;
             }
-            if (!isUnitTypeMilitary(candidate.subType as UnitType)) {
-                continue;
+            if (!isUnitTypeMilitary(c.subType as UnitType)) {
+                return false;
             }
-
-            // Only target units that are registered and alive
-            const candidateState = this.states.get(candidate.id);
-            if (!candidateState || candidateState.health <= 0) {
-                continue;
-            }
-
-            const dist = hexDistance(entity.x, entity.y, candidate.x, candidate.y);
-            if (dist < bestDist) {
-                bestDist = dist;
-                bestTarget = candidate;
-            }
-        }
-
-        return bestTarget;
+            const state = this.states.get(c.id);
+            return state !== undefined && state.health > 0;
+        });
+        return findNearestByHexDistance(entity, enemies);
     }
 
     /**
@@ -478,13 +511,30 @@ export class CombatSystem implements TickSystem {
         return target;
     }
 
-    /** Reset to idle and restore idle animation if unit was fighting. */
+    /** Reset to idle and restore idle animation if unit was fighting or shooting. */
     private transitionToIdle(state: CombatState, _entity?: Entity): void {
-        const wasFighting = state.status === CombatStatus.Fighting;
+        const wasEngaged = state.status === CombatStatus.Fighting || state.status === CombatStatus.Shooting;
         state.status = CombatStatus.Idle;
         state.attackTimer = 0;
-        if (wasFighting) {
-            this.applyIdleAnimation(state.entityId);
+        if (wasEngaged) {
+            this.visuals.applyIdleAnimation(state.entityId);
+        }
+    }
+
+    /** Switch to pursuing a target — sets status, starts pursuit timer, plays walk animation. */
+    private transitionToPursue(state: CombatState, entity: Entity, target: Entity): void {
+        state.status = CombatStatus.Pursuing;
+        this.pursuitTimers.set(state.entityId, PURSUIT_REPATH_INTERVAL);
+        this.visuals.applyWalkAnimation(entity, target);
+    }
+
+    /** Apply damage on cooldown. Shared by handleFighting and handleShooting. */
+    private tickDamage(state: CombatState, target: Entity, dt: number): void {
+        const stats = getCombatStats(state.unitType);
+        state.attackTimer += dt;
+        if (state.attackTimer >= stats.attackCooldown) {
+            state.attackTimer -= stats.attackCooldown;
+            this.applyDamage(state, target, stats.attackPower);
         }
     }
 
@@ -503,45 +553,5 @@ export class CombatSystem implements TickSystem {
             }
         }
         return { x, y };
-    }
-
-    // ── Animation helpers ─────────────────────────────────────────────────
-
-    /** Play walk animation facing the target (used during pursuit). */
-    private applyWalkAnimation(entity: Entity, target: Entity): void {
-        const direction = getApproxDirection(entity.x, entity.y, target.x, target.y);
-        const prefix = UNIT_XML_PREFIX[entity.subType as UnitType]!;
-        this.visualService.applyIntent(entity.id, {
-            sequence: xmlKey(prefix, 'WALK'),
-            loop: true,
-            stopped: false,
-        });
-        this.visualService.setDirection(entity.id, direction);
-    }
-
-    /** Play fight animation and face the target. */
-    private applyFightAnimation(entity: Entity, target: Entity): void {
-        const direction = getApproxDirection(entity.x, entity.y, target.x, target.y);
-        const prefix = UNIT_XML_PREFIX[entity.subType as UnitType]!;
-        this.visualService.applyIntent(entity.id, {
-            sequence: xmlKey(prefix, 'FIGHT'),
-            loop: true,
-            stopped: false,
-        });
-        this.visualService.setDirection(entity.id, direction);
-    }
-
-    /** Restore idle animation (stopped on frame 0 of walk). */
-    private applyIdleAnimation(entityId: number): void {
-        const entity = this.gameState.getEntity(entityId);
-        if (!entity) {
-            return;
-        }
-        const prefix = UNIT_XML_PREFIX[entity.subType as UnitType]!;
-        this.visualService.applyIntent(entityId, {
-            sequence: xmlKey(prefix, 'WALK'),
-            loop: false,
-            stopped: true,
-        });
     }
 }

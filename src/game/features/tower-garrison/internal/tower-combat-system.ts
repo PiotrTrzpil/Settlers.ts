@@ -15,7 +15,7 @@ import type { GameState } from '../../../game-state';
 import type { EventBus } from '../../../event-bus';
 import type { Entity } from '../../../entity';
 import { EntityType, UnitType } from '../../../entity';
-import { hexDistance } from '../../../systems/hex-directions';
+import { hexDistanceTo, findNearestByHexDistance } from '../../../systems/hex-directions';
 import { getCombatStats } from '../../combat/combat-state';
 
 import { createLogger } from '@/utilities/logger';
@@ -121,7 +121,7 @@ export class TowerCombatSystem implements TickSystem {
             if (candidate.player === building.player) {
                 continue;
             }
-            if (hexDistance(building.x, building.y, candidate.x, candidate.y) > TOWER_ATTACK_RANGE) {
+            if (hexDistanceTo(building, candidate) > TOWER_ATTACK_RANGE) {
                 continue;
             }
 
@@ -181,22 +181,10 @@ export class TowerCombatSystem implements TickSystem {
     }
 
     /**
-     * Pick nearest enemy by hexDistance from building. Ties broken by entity ID (lowest wins).
+     * Pick nearest enemy by hexDistance from building.
      * Caller guarantees enemies is non-empty.
      */
     private findNearestEnemy(building: Entity, enemies: Entity[]): Entity {
-        let best = enemies[0]!;
-        let bestDist = hexDistance(building.x, building.y, best.x, best.y);
-
-        for (let i = 1; i < enemies.length; i++) {
-            const candidate = enemies[i]!;
-            const dist = hexDistance(building.x, building.y, candidate.x, candidate.y);
-            if (dist < bestDist || (dist === bestDist && candidate.id < best.id)) {
-                best = candidate;
-                bestDist = dist;
-            }
-        }
-
-        return best;
+        return findNearestByHexDistance(building, enemies)!;
     }
 }
