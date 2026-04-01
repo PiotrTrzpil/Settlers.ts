@@ -70,6 +70,7 @@ export const SETTLER_JOB_INDICES = {
         FG_SEED_PLANTS: 68,
         FG_CUT_GRAIN: 69,
         FG_PICKUP_GRAIN: 70,
+        // FG index 71 exists for Vikings only — animation purpose unknown
     },
     // FA_ = SETTLER_FARMERANIMALS — animal rancher (AnimalRanch + DonkeyRanch)
     animal_farmer: {
@@ -78,7 +79,8 @@ export const SETTLER_JOB_INDICES = {
         FA_WALK_GRAIN: 74,
         FA_PICKUP_WATER: 75,
         FA_PICKUP_GRAIN: 76,
-        FA_WALK_EMPTY_FOOD: 78,
+        FA_WALK_EMPTY_FOOD: 77,
+        FA_WALK_FULL_FOOD: 78,
         FA_FEED: 79,
     },
     fisher: {
@@ -118,11 +120,11 @@ export const SETTLER_JOB_INDICES = {
         SME_WALK_GOLDORE: 105,
         SME_WALK_IRONBAR: 106,
         SME_WALK_IRONORE: 107,
-        SME_WORK: 108,
+        SME_PICKUP_COAL: 108,
         SME_PICKUP_GOLDBAR: 109,
-        SME_WORK_GOLD: 110, // (second work variant — no separate XML name)
+        SME_PICKUP_GOLDORE: 110,
         SME_PICKUP_IRONBAR: 111,
-        SME_PICKUP_COAL: 112,
+        SME_WORK: 112,
         SME_PICKUP_IRONORE: 113,
     },
     miner: {
@@ -195,16 +197,25 @@ export const SETTLER_JOB_INDICES = {
         HE_WALK: 167,
         HE_CONJURE: 168,
     },
+    // CO_ = Charcoal burner
+    charcoal_burner: {
+        CO_WALK: 169,
+        CO_WALK_LOG: 170,
+        CO_WALK_COAL: 171,
+        CO_PICKUP_COAL: 172,
+        CO_PICKUP_LOG: 173,
+    },
     // AM_ = SETTLER_AMMOMAKERHUTWORKER
     ammunition_maker: {
         AM_WALK: 174,
         AM_WALK_FIRSTGOOD: 175, // coal
         AM_WALK_SECONDGOOD: 176, // sulfur
+        AM_WALK_THIRDGOOD: 177,
         AM_WALK_AMMO: 178,
         AM_PICKUP_FIRSTGOOD: 179, // coal
         AM_PICKUP_SECONDGOOD: 180, // sulfur
+        AM_PICKUP_THIRDGOOD: 181,
         AM_PICKUP_AMMO: 182,
-        AM_WORK: 166, // (shares VM_WORK animation)
     },
     // SYW_ = SETTLER_SHIPYARDWORKER
     shipyard_worker: {
@@ -283,23 +294,23 @@ export const SETTLER_JOB_INDICES = {
     bowman_1: {
         BML01_WALK: 236,
         BML01_SHOOT: 237,
-        BML01_THROW_STONE: 238,
-        BML01_FIGHT: 239,
-        BML01_SHOOT_2: 240, // (extra shoot variant)
+        BML01_STOW_BOW: 238,
+        BML01_THROW_STONE: 239,
+        BML01_FIGHT: 240,
     },
     bowman_2: {
         BML02_WALK: 242,
         BML02_SHOOT: 243,
-        BML02_THROW_STONE: 244,
-        BML02_FIGHT: 245,
-        BML02_SHOOT_2: 246,
+        BML02_STOW_BOW: 244,
+        BML02_THROW_STONE: 245,
+        BML02_FIGHT: 246,
     },
     bowman_3: {
         BML03_WALK: 248,
         BML03_SHOOT: 249,
-        BML03_THROW_STONE: 250,
-        BML03_FIGHT: 251,
-        BML03_SHOOT_2: 252,
+        BML03_STOW_BOW: 250,
+        BML03_THROW_STONE: 251,
+        BML03_FIGHT: 252,
     },
     // MEL_ = Roman specialist (Medic)
     specialist_1: {
@@ -401,18 +412,19 @@ export const SETTLER_JOB_INDICES = {
         G_SEARCH: 306, // walking search — treated as walk
         G_WORK: 307,
     },
-    // DG_ = Gardener (landscape maker)
+    // GA_ = Gardener (landscape maker)
     gardener: {
-        DG_WALK: 308,
-        DG_SEED: 309,
-        DG_WORK: 310,
+        GA_WALK: 308,
+        GA_WORK: 309,
+        GA_BEAT_MUSHROOM: 310,
     },
     // TS_ = Temple Servant
     temple_servant: {
         TS_WALK: 328,
         TS_WALK_WINE: 329,
         TS_PICKUP_WINE: 330,
-        TS_WORK: 331, // or TS_ANIM
+        TS_WORK: 331,
+        TS_ANIM: 332,
     },
     angel_1: {
         ANGEL1_WALK: 333,
@@ -453,32 +465,29 @@ export const SETTLER_JOB_INDICES = {
         SOM_PICKUP_OIL: 362,
     },
 
-    // MF_ = Mushroom Farmer (Dark Tribe, file 23.jil)
-    mushroom_farmer: {
-        MF_WALK: 313,
-        MF_PLANT: 314,
-    },
-    // GA_ = Dark Gardener (Dark Tribe)
+    // DG_ = Dark Gardener (Dark Tribe)
     dark_gardener: {
-        GA_WALK: 315,
-        GA_WALK_MANA: 316, // (carry mana — no direct XML match)
-        GA_BEAT_MUSHROOM: 317,
-        GA_WORK: 318,
-        GA_WORK_3: 319,
-        GA_WORK_4: 320,
-        GA_WORK_5: 321,
-        GA_WORK_6: 322,
+        DG_WALK: 313,
+        DG_SEED: 314,
+    },
+    // MF_ = Mushroom Farmer (Dark Tribe)
+    mushroom_farmer: {
+        MF_WALK: 315,
+        MF_WALK_SMALLMUSHROOM: 316,
+        MF_PLANT: 317,
+        MF_FIGHT: 318,
+        MF_WALK_MANA: 321,
     },
     // SHM_ = Shaman (Dark Tribe)
     shaman: {
         SHM_WALK: 323,
         SHM_ENSLAVE: 324,
     },
-    // CO_ = Slaved Settler (Dark Tribe)
+    // SS_ = Slaved Settler (Dark Tribe)
     slaved_settler: {
-        CO_WALK: 325,
-        CO_WALK_COAL: 326,
-        CO_WALK_LOG: 327,
+        SS_WALK: 325,
+        SS_POLISH: 326,
+        SS_POLISH_2: 327,
     },
     manacopter_master: {
         MC_WALK: 363,
@@ -939,3 +948,82 @@ export const TREE_JOB_INDICES: Partial<Record<MapObjectType, number[]>> = {
         //TREE_BASE_JOB + 22 * TREE_JOBS_PER_TYPE,
     ],
 };
+
+// ============================================================
+// Dark tree job indices — file 5.jil
+// ============================================================
+
+/**
+ * JIL job indices for dark trees in 5.jil.
+ * Unlike normal trees, dark trees have NO growth stages or cut variants —
+ * each animated type is a single job with 16 sway frames, and static types have 1 frame.
+ *
+ * Animated: jobs 243-248 (6 types, 16 frames each)
+ * Static:  job 249 (dark pine), job 251 (dark palm)
+ *
+ * Note: DARK_TREE_6 (job 248) has a 2px horizontal glitch in frames 0-1 —
+ * the loader skips those frames at runtime.
+ */
+export const DARK_TREE_JOB_INDICES: ReadonlyArray<{ types: MapObjectType[]; job: number }> = [
+    { types: [MapObjectType.DarkTree1A], job: 243 },
+    { types: [MapObjectType.DarkTree1B], job: 244 },
+    { types: [MapObjectType.DarkTree2A], job: 245 },
+    { types: [MapObjectType.DarkTree2B], job: 246 },
+    { types: [MapObjectType.DarkTree3A], job: 247 },
+    { types: [MapObjectType.DarkTree3B], job: 248 },
+];
+
+export const DARK_TREE_STATIC_JOB_INDICES: ReadonlyArray<{ types: MapObjectType[]; job: number }> = [
+    { types: [MapObjectType.DarkTree4A, MapObjectType.DarkTree5A], job: 249 },
+    { types: [MapObjectType.DarkTree4B], job: 251 },
+];
+
+// ============================================================
+// Dark tribe tree job indices — file 5.jil
+// ============================================================
+
+/** JIL jobs for dark tribe mushroom trees (static, 1 frame each). */
+export const DARK_TRIBE_TREE_JOBS = {
+    /** Dark tribe mushroom tree A (138x122) */
+    A: 324,
+    /** Dark tribe mushroom tree B (139x104) */
+    B: 325,
+    /** Dark tribe mushroom tree C, purple (134x120) */
+    C: 326,
+} as const;
+
+// ============================================================
+// Sea rock job indices — file 5.jil
+// ============================================================
+
+/** JIL jobs for animated sea rocks (10 frames each). */
+export const SEA_ROCK_JOBS = {
+    A: 327,
+    B: 328,
+    C: 329,
+    D: 330,
+} as const;
+
+// ============================================================
+// Territory dot job index — file 5.jil
+// ============================================================
+
+/** JIL job for territory dots — 8 frames (one per player color) in direction 0. */
+export const TERRITORY_DOT_JOB = 533;
+
+// ============================================================
+// Resource sign job indices — file 5.jil
+// ============================================================
+
+/**
+ * JIL jobs for geologist resource signs (1 frame each).
+ * Order: empty, then coal/gold/iron/stone/sulfur × low/med/rich.
+ */
+export const RESOURCE_SIGN_JOBS = {
+    EMPTY: 417,
+    COAL: { LOW: 418, MED: 419, RICH: 420 },
+    GOLD: { LOW: 421, MED: 422, RICH: 423 },
+    IRON: { LOW: 424, MED: 425, RICH: 426 },
+    STONE: { LOW: 427, MED: 428, RICH: 429 },
+    SULFUR: { LOW: 430, MED: 431, RICH: 432 },
+} as const;

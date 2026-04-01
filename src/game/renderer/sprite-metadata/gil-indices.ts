@@ -85,9 +85,14 @@ export const BUILDING_ICON_INDICES: Record<Race, Partial<Record<BuildingType, [n
 // ============================================================
 
 /**
- * File 5.gfx (MAP_OBJECTS) — sprite index assignments.
+ * File 5.gfx (MAP_OBJECTS) — GIL index assignments for decorations, stones, flags, etc.
  *
- * GIL indices for decoration/object sprites.
+ * Some sprite categories have been migrated to JIL-based loading (see jil-indices.ts):
+ * - Dark trees (686-783) → DARK_TREE_JOB_INDICES, DARK_TREE_STATIC_JOB_INDICES
+ * - Dark tribe mushroom trees (1001-1003) → DARK_TRIBE_TREE_JOBS
+ * - Sea rocks (1004-1043) → SEA_ROCK_JOBS
+ * - Resource signs (1208-1223) → RESOURCE_SIGN_JOBS
+ * - Territory dots (1850-1857) → TERRITORY_DOT_JOB
  */
 export const MAP_OBJECT_SPRITES = {
     // ── Harvestable stone variant A (784-796) ─────────────────
@@ -96,13 +101,13 @@ export const MAP_OBJECT_SPRITES = {
      * 13 depletion stages: index 0 = most depleted, index 12 = full.
      * Variants: A (784), B (1080), A_DARK (1543), B_DARK (1093).
      */
-    STONE_STAGES_A: { start: 784, end: 796, count: 13 },
+    STONE_STAGES_A: { start: 784, count: 13 },
     /** Harvestable stone variant B — standard style, 13 stages (varying sizes) */
-    STONE_STAGES_B: { start: 1080, end: 1092, count: 13 },
+    STONE_STAGES_B: { start: 1080, count: 13 },
     /** Harvestable stone variant A dark/polluted, 13 stages (121x105) */
-    STONE_STAGES_A_DARK: { start: 1543, end: 1555, count: 13 },
+    STONE_STAGES_A_DARK: { start: 1543, count: 13 },
     /** Harvestable stone variant B dark/polluted — 13 stages (varying sizes) */
-    STONE_STAGES_B_DARK: { start: 1093, end: 1105, count: 13 },
+    STONE_STAGES_B_DARK: { start: 1093, count: 13 },
 
     // ── Single-frame special decorations (797, 854-879, 960) ─
     /** Abandoned overgrown Trojan horse decoration (403x294) */
@@ -164,49 +169,49 @@ export const MAP_OBJECT_SPRITES = {
 
     // ── Animated bushes (798-853): 7 groups of 8 frames ──────
     /** Small yellow-green bush, 8 anim frames (54x42) */
-    BUSH_SMALL_YELLOW: { start: 798, end: 805, count: 8 },
+    BUSH_SMALL_YELLOW: { start: 798, count: 8 },
     /** Larger dark-green bush/plant, 8 anim frames (88x76) */
-    BUSH_LARGE_DARK: { start: 806, end: 813, count: 8 },
+    BUSH_LARGE_DARK: { start: 806, count: 8 },
     /** Medium green bush with berries, 8 frames (80x62) */
-    BUSH_MEDIUM_BERRY: { start: 814, end: 821, count: 8 },
+    BUSH_MEDIUM_BERRY: { start: 814, count: 8 },
     /** Bush variant C (59x51) */
-    BUSH_VARIANT_C: { start: 822, end: 829, count: 8 },
+    BUSH_VARIANT_C: { start: 822, count: 8 },
     /** Bush variant D (70x57) */
-    BUSH_VARIANT_D: { start: 830, end: 837, count: 8 },
+    BUSH_VARIANT_D: { start: 830, count: 8 },
     /** Bush variant E, low/wide (70x41) */
-    BUSH_VARIANT_E: { start: 838, end: 845, count: 8 },
+    BUSH_VARIANT_E: { start: 838, count: 8 },
     /** Bush with red berries (58x51) */
-    BUSH_RED_BERRY: { start: 846, end: 853, count: 8 },
+    BUSH_RED_BERRY: { start: 846, count: 8 },
 
     // ── Animated grass/reeds (880-959): 10 groups of 8 frames ─
     /** Large grass reeds (117x71) */
-    GRASS_REEDS_LARGE_A: { start: 880, end: 887, count: 8 },
+    GRASS_REEDS_LARGE_A: { start: 880, count: 8 },
     /** Medium-large grass reeds (103x67) */
-    GRASS_REEDS_MEDIUM_A: { start: 888, end: 895, count: 8 },
+    GRASS_REEDS_MEDIUM_A: { start: 888, count: 8 },
     /** Medium grass with orange flowers (66x57) */
-    GRASS_FLOWERS_ORANGE: { start: 896, end: 903, count: 8 },
+    GRASS_FLOWERS_ORANGE: { start: 896, count: 8 },
     /** Small green weeds (43x39) */
-    GRASS_WEEDS_SMALL: { start: 904, end: 911, count: 8 },
+    GRASS_WEEDS_SMALL: { start: 904, count: 8 },
     /** Small grass with orange bits (45x32) */
-    GRASS_SMALL_ORANGE: { start: 912, end: 919, count: 8 },
+    GRASS_SMALL_ORANGE: { start: 912, count: 8 },
     /** Wide grass reeds spread (130x83) */
-    GRASS_REEDS_WIDE: { start: 920, end: 927, count: 8 },
+    GRASS_REEDS_WIDE: { start: 920, count: 8 },
     /** Medium grass reeds B (99x57) */
-    GRASS_REEDS_MEDIUM_B: { start: 928, end: 935, count: 8 },
+    GRASS_REEDS_MEDIUM_B: { start: 928, count: 8 },
     /** Large grass reeds B (111x69) */
-    GRASS_REEDS_LARGE_B: { start: 936, end: 943, count: 8 },
+    GRASS_REEDS_LARGE_B: { start: 936, count: 8 },
     /** Medium grass with yellow flowers (100x65) */
-    GRASS_FLOWERS_YELLOW: { start: 944, end: 951, count: 8 },
+    GRASS_FLOWERS_YELLOW: { start: 944, count: 8 },
     /** Small grass plant (70x44) */
-    GRASS_PLANT_SMALL: { start: 952, end: 959, count: 8 },
+    GRASS_PLANT_SMALL: { start: 952, count: 8 },
 
     // ── Animated pond (961-976): 16 frames ─────────────────
     /** Decorative pond with fish (147x88) */
-    POND: { start: 961, end: 976, count: 16 },
+    POND: { start: 961, count: 16 },
 
     // ── Animated ruined building (977-987): 11 frames ────
     /** Overgrown stone building ruins with beams (128x124) */
-    BUILDING_RUIN_ANIM: { start: 977, end: 987, count: 11 },
+    BUILDING_RUIN_ANIM: { start: 977, count: 11 },
 
     // ── Single-frame misc decorations (988-1003) ─────────
     /** Scarecrow (83x75) */
@@ -235,37 +240,6 @@ export const MAP_OBJECT_SPRITES = {
     VOLCANIC_ROCK_SMALL: 999,
     /** Colorful vine/creeper ground cover (123x81) */
     VINE_GROUND_COVER: 1000,
-    /** Dark tribe mushroom tree A (138x122) */
-    DARK_TRIBE_TREE_A: 1001,
-    /** Dark tribe mushroom tree B (139x104) */
-    DARK_TRIBE_TREE_B: 1002,
-    /** Dark tribe mushroom tree C, purple (134x120) */
-    DARK_TRIBE_TREE_C: 1003,
-
-    // ── Dark tree sprites (686-781): 6 visual types × 16 sway frames ──
-    // No growth stages or cut variants — just sway animation.
-    // 8 MapObjectType entries share 6 visual types (A/B variants share sprites).
-    DARK_TREE_1: { start: 686, count: 16 },
-    DARK_TREE_2: { start: 702, count: 16 },
-    DARK_TREE_3: { start: 718, count: 16 },
-    DARK_TREE_4: { start: 734, count: 16 },
-    DARK_TREE_5: { start: 750, count: 16 },
-    DARK_TREE_6: { start: 766, count: 16 },
-    /** Dark pine tree — static single frame */
-    DARK_PINE: 782,
-    /** Dark palm tree — static single frame */
-    DARK_PALM: 783,
-
-    // ── Animated sea rocks (1004-1043): 4 groups of 10 frames ─
-    /** Sea rock island with waves A (75x79) */
-    SEA_ROCK_A: { start: 1004, end: 1013, count: 10 },
-    /** Sea rock island smaller B (61x67) */
-    SEA_ROCK_B: { start: 1014, end: 1023, count: 10 },
-    /** Tall sea rock with waves C (54x71) */
-    SEA_ROCK_C: { start: 1024, end: 1033, count: 10 },
-    /** Sea cliff with waterfall D (48x64) */
-    SEA_ROCK_D: { start: 1034, end: 1043, count: 10 },
-
     // ── Dark tribe single decorations (1044-1048) ────────
     /** Dark tribe purple flower plant (77x62) */
     DARK_TRIBE_FLOWER: 1044,
@@ -284,13 +258,13 @@ export const MAP_OBJECT_SPRITES = {
 
     // ── Trojan horse construction (1050-1058) ────────────
     /** Trojan horse being built with scaffolding, 8 anim frames (415x318) */
-    TROJAN_HORSE_CONSTRUCTION: { start: 1050, end: 1057, count: 8 },
+    TROJAN_HORSE_CONSTRUCTION: { start: 1050, count: 8 },
     /** Completed Trojan horse on wheels (375x228) */
     TROJAN_HORSE_COMPLETE: 1058,
 
     // ── Magic portal (1059-1075): 17 anim frames ─────────
     /** Animated magic portal with green swirling energy (190x240) */
-    MAGIC_PORTAL: { start: 1059, end: 1075, count: 17 },
+    MAGIC_PORTAL: { start: 1059, count: 17 },
 
     // ── Desert cactus stages (1076-1079): large → tiny ───
     /** Desert cactus large (92x84) */
@@ -338,7 +312,7 @@ export const MAP_OBJECT_SPRITES = {
 
     // ── Animated dark green bush (1116-1123): 8 frames ───
     /** Animated dark green bush (59x54) */
-    BUSH_DARK_GREEN: { start: 1116, end: 1123, count: 8 },
+    BUSH_DARK_GREEN: { start: 1116, count: 8 },
 
     // ── Single decoration (1124) ─────────────────────────
     /** Grave/tombstone */
@@ -358,17 +332,17 @@ export const MAP_OBJECT_SPRITES = {
 
     // ── Animated river reeds/cattails (1130-1183): 6 groups of 9 frames ─
     /** Tall river reeds/cattails (123x132) */
-    RIVER_REEDS_TALL: { start: 1130, end: 1138, count: 9 },
+    RIVER_REEDS_TALL: { start: 1130, count: 9 },
     /** River/swamp ferns (129x85) */
-    RIVER_FERNS: { start: 1139, end: 1147, count: 9 },
+    RIVER_FERNS: { start: 1139, count: 9 },
     /** Large flowering river plants (217x168) */
-    RIVER_FLOWERS_LARGE: { start: 1148, end: 1156, count: 9 },
+    RIVER_FLOWERS_LARGE: { start: 1148, count: 9 },
     /** Single cattail/bulrush (113x112) */
-    CATTAIL_SINGLE: { start: 1157, end: 1165, count: 9 },
+    CATTAIL_SINGLE: { start: 1157, count: 9 },
     /** Double cattails (134x118) */
-    CATTAIL_DOUBLE: { start: 1166, end: 1174, count: 9 },
+    CATTAIL_DOUBLE: { start: 1166, count: 9 },
     /** Triple cattails (125x130) */
-    CATTAIL_TRIPLE: { start: 1175, end: 1183, count: 9 },
+    CATTAIL_TRIPLE: { start: 1175, count: 9 },
 
     // ── Beach/shore decorations (1184-1199) ──────────────
     /** Seashell/clam (71x47) */
@@ -404,50 +378,37 @@ export const MAP_OBJECT_SPRITES = {
     /** Small daisies/flowers on grass (81x51) */
     DAISIES: 1200,
 
-    /**
-     * Resource signs (1208-1223): wooden signs placed by geologists on mountains.
-     * 1208 = empty/no resource. Then groups of 3 (low, medium, rich) per resource type.
-     */
-    RESOURCE_SIGNS: {
-        EMPTY: 1208,
-        COAL: { LOW: 1209, MED: 1210, RICH: 1211 },
-        GOLD: { LOW: 1212, MED: 1213, RICH: 1214 },
-        IRON: { LOW: 1215, MED: 1216, RICH: 1217 },
-        STONE: { LOW: 1218, MED: 1219, RICH: 1220 },
-        SULFUR: { LOW: 1221, MED: 1222, RICH: 1223 },
-    },
-
     // ── Grain growth stages (1224-1243) ───────────────────
     /** Grain seed — just planted */
     GRAIN_SEED: 1224,
     /** Grain growing stages 1-3 */
-    GRAIN_GROWING: { start: 1225, end: 1227, count: 3 },
+    GRAIN_GROWING: { start: 1225, count: 3 },
     /** Grain fully grown — animated, 7 frames */
-    GRAIN_GROWN: { start: 1228, end: 1234, count: 7 },
+    GRAIN_GROWN: { start: 1228, count: 7 },
     /** Grain cut/harvested */
     GRAIN_CUT: 1235,
     /** Grain fully grown dry variant — 8 frames */
-    GRAIN_GROWN_DRY: { start: 1236, end: 1243, count: 8 },
+    GRAIN_GROWN_DRY: { start: 1236, count: 8 },
 
     // ── Grain visual variant 2 (1244-1263) ──────────────────
     /** Grain variant 2 seed — just planted */
     GRAIN_V2_SEED: 1244,
     /** Grain variant 2 growing stages 1-3 */
-    GRAIN_V2_GROWING: { start: 1245, end: 1247, count: 3 },
+    GRAIN_V2_GROWING: { start: 1245, count: 3 },
     /** Grain variant 2 fully grown — animated, 7 frames */
-    GRAIN_V2_GROWN: { start: 1248, end: 1254, count: 7 },
+    GRAIN_V2_GROWN: { start: 1248, count: 7 },
     /** Grain variant 2 cut/harvested */
     GRAIN_V2_CUT: 1255,
     /** Grain variant 2 fully grown dry variant — 8 frames */
-    GRAIN_V2_GROWN_DRY: { start: 1256, end: 1263, count: 8 },
+    GRAIN_V2_GROWN_DRY: { start: 1256, count: 8 },
 
     // ── Agave growth stages (1264-1282) ─────────────────────
     /** Agave seedling */
     AGAVE_SEEDLING: 1264,
     /** Agave growing stages 1-2 */
-    AGAVE_GROWING: { start: 1265, end: 1266, count: 2 },
+    AGAVE_GROWING: { start: 1265, count: 2 },
     /** Agave fully grown — animated, 15 frames */
-    AGAVE_GROWN: { start: 1267, end: 1281, count: 15 },
+    AGAVE_GROWN: { start: 1267, count: 15 },
     /** Agave cut/harvested */
     AGAVE_CUT: 1282,
 
@@ -457,11 +418,11 @@ export const MAP_OBJECT_SPRITES = {
 
     // ── Beehive (1361-1375) ─────────────────────────────────
     /** Beehive active — animated, 12 frames */
-    BEEHIVE_GROWN: { start: 1361, end: 1372, count: 12 },
+    BEEHIVE_GROWN: { start: 1361, count: 12 },
     /** Beehive empty/used */
     BEEHIVE_EMPTY: 1373,
     /** Beehive destroyed — 2 frames */
-    BEEHIVE_DESTROYED: { start: 1374, end: 1375, count: 2 },
+    BEEHIVE_DESTROYED: { start: 1374, count: 2 },
 
     // ── Misc decorations (1521-1522) ──────────────────────
     /** Grave/tombstone variant B */
@@ -477,65 +438,48 @@ export const MAP_OBJECT_SPRITES = {
     /** Sunflower growth stage 3 — tall sprout */
     SUNFLOWER_STAGE_3: 1622,
     /** Sunflower fully grown — animated, 8 frames */
-    SUNFLOWER_GROWN: { start: 1623, end: 1630, count: 8 },
+    SUNFLOWER_GROWN: { start: 1623, count: 8 },
     /** Sunflower cut/harvested */
     SUNFLOWER_CUT: 1631,
 
     // ── Sea wave patches (1640-1849) ────────────────────────
     // Groups of 15 animation frames — small wave patches
     /** Tiny sea wave patch (31x17) */
-    SEA_WAVE_TINY: { start: 1640, end: 1654, count: 15 },
+    SEA_WAVE_TINY: { start: 1640, count: 15 },
     /** Small sea wave patch (41x28) */
-    SEA_WAVE_SMALL_A: { start: 1655, end: 1669, count: 15 },
+    SEA_WAVE_SMALL_A: { start: 1655, count: 15 },
     /** Small-medium sea wave patch (47x29) */
-    SEA_WAVE_SMALL_B: { start: 1670, end: 1684, count: 15 },
+    SEA_WAVE_SMALL_B: { start: 1670, count: 15 },
     /** Medium sea wave patch (59x38) */
-    SEA_WAVE_MEDIUM: { start: 1685, end: 1699, count: 15 },
+    SEA_WAVE_MEDIUM: { start: 1685, count: 15 },
     /** Wide sea wave patch (78x27) */
-    SEA_WAVE_WIDE: { start: 1700, end: 1714, count: 15 },
+    SEA_WAVE_WIDE: { start: 1700, count: 15 },
     /** Large sea wave patch (76x53) */
-    SEA_WAVE_LARGE_A: { start: 1715, end: 1729, count: 15 },
+    SEA_WAVE_LARGE_A: { start: 1715, count: 15 },
 
     // Groups of 12 animation frames — larger wave patches
     /** Medium wave patch B (49x27) */
-    SEA_WAVE_MEDIUM_B: { start: 1730, end: 1741, count: 12 },
+    SEA_WAVE_MEDIUM_B: { start: 1730, count: 12 },
     /** Large wave patch (118x64) */
-    SEA_WAVE_LARGE_B: { start: 1742, end: 1753, count: 12 },
+    SEA_WAVE_LARGE_B: { start: 1742, count: 12 },
     /** Extra-large wave patch (211x96) */
-    SEA_WAVE_XLARGE: { start: 1754, end: 1765, count: 12 },
+    SEA_WAVE_XLARGE: { start: 1754, count: 12 },
     /** Tiny wave patch B (26x11) */
-    SEA_WAVE_TINY_B: { start: 1766, end: 1777, count: 12 },
+    SEA_WAVE_TINY_B: { start: 1766, count: 12 },
     /** Small wave patch C (50x20) */
-    SEA_WAVE_SMALL_C: { start: 1778, end: 1789, count: 12 },
+    SEA_WAVE_SMALL_C: { start: 1778, count: 12 },
     /** Large wave patch C (98x56) */
-    SEA_WAVE_LARGE_C: { start: 1790, end: 1801, count: 12 },
+    SEA_WAVE_LARGE_C: { start: 1790, count: 12 },
     /** Large wave patch D (97x60) */
-    SEA_WAVE_LARGE_D: { start: 1802, end: 1813, count: 12 },
+    SEA_WAVE_LARGE_D: { start: 1802, count: 12 },
     /** Small wave patch D (50x20) */
-    SEA_WAVE_SMALL_D: { start: 1814, end: 1825, count: 12 },
+    SEA_WAVE_SMALL_D: { start: 1814, count: 12 },
     /** Small wave patch E (50x20) */
-    SEA_WAVE_SMALL_E: { start: 1826, end: 1837, count: 12 },
+    SEA_WAVE_SMALL_E: { start: 1826, count: 12 },
     /** Small wave patch F (50x20) */
-    SEA_WAVE_SMALL_F: { start: 1838, end: 1849, count: 12 },
+    SEA_WAVE_SMALL_F: { start: 1838, count: 12 },
 
     // ── Territory dots (1850-1857): 8 team colors ───────────
-    /** Territory marker dot — red / player 1 (14x16) */
-    TERRITORY_DOT_RED: 1850,
-    /** Territory marker dot — blue / player 2 (14x16) */
-    TERRITORY_DOT_BLUE: 1851,
-    /** Territory marker dot — green / player 3 (14x16) */
-    TERRITORY_DOT_GREEN: 1852,
-    /** Territory marker dot — yellow / player 4 (14x16) */
-    TERRITORY_DOT_YELLOW: 1853,
-    /** Territory marker dot — purple / player 5 (14x16) */
-    TERRITORY_DOT_PURPLE: 1854,
-    /** Territory marker dot — orange / player 6 (14x16) */
-    TERRITORY_DOT_ORANGE: 1855,
-    /** Territory marker dot — teal / player 7 (14x16) */
-    TERRITORY_DOT_TEAL: 1856,
-    /** Territory marker dot — gray / player 8 (14x16) */
-    TERRITORY_DOT_GRAY: 1857,
-
     // ── Ground resource icons (1858-1863) ───────────────────
     /** Gold ore ground icon — yellow (20x16) */
     RESOURCE_ICON_GOLD: 1858,
@@ -656,28 +600,28 @@ export const HUD_OVERLAY_SPRITES = {
     // ── Health dots — small (10x11) ────────────────────────────
     // 8 levels: index 0 = green (healthy) → index 7 = red (critical)
     /** Small health indicator dots, 8 levels green→red (10x11) */
-    HEALTH_DOT_SMALL: { start: 2, end: 9, count: 8 },
+    HEALTH_DOT_SMALL: { start: 2, count: 8 },
 
     // ── Health dots — medium (14x14) ───────────────────────────
     // Two variants: dark (normal view) and bright (selected/highlighted)
     /** Medium health dots — dark/dim variant, 8 levels green→red (14x14) */
-    HEALTH_DOT_DARK: { start: 10, end: 17, count: 8 },
+    HEALTH_DOT_DARK: { start: 10, count: 8 },
     /** Medium health dots — bright/selected variant, 8 levels green→red (14x14) */
-    HEALTH_DOT_BRIGHT: { start: 18, end: 25, count: 8 },
+    HEALTH_DOT_BRIGHT: { start: 18, count: 8 },
 
     // ── Health ovals — upper position (16x12, offset y≈117) ───
     // 8 levels: green (healthy) → red (critical)
     /** Health oval indicator — upper position, 8 levels green→red (16x12) */
-    HEALTH_OVAL_UPPER: { start: 65, end: 72, count: 8 },
+    HEALTH_OVAL_UPPER: { start: 65, count: 8 },
 
     // ── Health ovals — lower position (16x12, offset y≈142) ───
     /** Health oval indicator — lower position, 8 levels green→red (16x12) */
-    HEALTH_OVAL_LOWER: { start: 81, end: 88, count: 8 },
+    HEALTH_OVAL_LOWER: { start: 81, count: 8 },
 
     // ── Vertical progress bar (7x20) ──────────────────────────
     // 16 fill levels: index 0 = nearly empty → index 15 = nearly full
     /** Vertical progress bar, 16 levels empty→full (7x20) */
-    VERTICAL_PROGRESS_BAR: { start: 36, end: 51, count: 16 },
+    VERTICAL_PROGRESS_BAR: { start: 36, count: 16 },
 
     // ── Combat & military icons ────────────────────────────────
     /** Combat/attack marker — red burst (25x25) */
@@ -691,15 +635,15 @@ export const HUD_OVERLAY_SPRITES = {
 
     // ── Level digit glyphs (5–7x9) ────────────────────────────
     /** Small level/number glyphs, 8 characters (5–7x9) */
-    LEVEL_DIGIT: { start: 52, end: 59, count: 8 },
+    LEVEL_DIGIT: { start: 52, count: 8 },
 
     // ── Ammo indicators — upper position (28x25, offset y≈113) ─
     // 5 fill levels: index 0 = full → index 4 = depleted
     /** Ammo indicator — upper position, 5 fill levels (28x25) */
-    AMMO_INDICATOR_UPPER: { start: 60, end: 64, count: 5 },
+    AMMO_INDICATOR_UPPER: { start: 60, count: 5 },
     // ── Ammo indicators — lower position (28x25, offset y≈138) ─
     /** Ammo indicator — lower position, 5 fill levels (28x25) */
-    AMMO_INDICATOR_LOWER: { start: 76, end: 80, count: 5 },
+    AMMO_INDICATOR_LOWER: { start: 76, count: 5 },
 
     // ── Status dots — small (9x9) ─────────────────────────────
     /** Small status dot — dark green (9x9) */

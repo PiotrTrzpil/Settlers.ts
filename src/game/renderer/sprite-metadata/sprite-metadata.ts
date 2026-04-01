@@ -22,10 +22,18 @@ export {
     TREE_JOB_OFFSET,
     TREE_JOBS_PER_TYPE,
     TREE_JOB_INDICES,
+    DARK_TREE_JOB_INDICES,
+    DARK_TREE_STATIC_JOB_INDICES,
+    DARK_TRIBE_TREE_JOBS,
+    SEA_ROCK_JOBS,
+    TERRITORY_DOT_JOB,
+    RESOURCE_SIGN_JOBS,
     type SettlerAnimData,
     stripXmlPrefix,
     UNIT_XML_PREFIX,
 } from './jil-indices';
+
+export { type JilFrameSkip, applyJilFrameSkips } from './jil-frame-skips';
 
 // Import for local use by functions in this file
 import { BUILDING_JOB_INDICES, RESOURCE_JOB_INDICES, UNIT_BASE_JOB_INDICES, TREE_JOB_INDICES } from './jil-indices';
