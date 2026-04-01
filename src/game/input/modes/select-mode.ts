@@ -105,6 +105,7 @@ export class SelectMode extends BaseInputMode {
 
             const prev = context.getModeData<SelectModeData>();
             const now = performance.now();
+            // eslint-disable-next-line no-restricted-syntax -- optional chaining; null when source is absent
             const pickedId = context.pickEntityAtScreen?.(data.screenX, data.screenY) ?? null;
 
             const isDoubleClick =
@@ -195,7 +196,7 @@ export class SelectMode extends BaseInputMode {
                 window.innerWidth + DOUBLE_CLICK_SCREEN_PAD,
                 window.innerHeight + DOUBLE_CLICK_SCREEN_PAD
             ) ?? [];
-        /* eslint-enable no-restricted-syntax */
+        /* eslint-enable no-restricted-syntax -- re-enable after double-click entity picking block */
         context.executeCommand({ type: 'select_same_unit_type', seedEntityId, candidateIds });
     }
 

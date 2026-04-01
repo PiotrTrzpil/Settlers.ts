@@ -49,6 +49,7 @@ export function dumpWorkerAssignments(source: SettlerDebugSource): string {
     let unassigned = 0;
 
     for (const [entityId, runtime] of source.runtimes) {
+        // eslint-disable-next-line no-restricted-syntax -- optional chaining; null when source is absent
         const buildingId = runtime.homeAssignment?.buildingId ?? null;
         if (buildingId === null) {
             unassigned++;
@@ -65,6 +66,7 @@ export function dumpWorkerAssignments(source: SettlerDebugSource): string {
     const lines: string[] = [];
 
     for (const [buildingId, settlers] of byBuilding) {
+        // eslint-disable-next-line no-restricted-syntax -- nullable field with display/config default
         const stateList = settlers.map(id => source.getSettlerState(id)?.toLowerCase() ?? 'unknown').join(', ');
         lines.push(`Building ${buildingId}: settlers [${settlers.join(', ')}] (${stateList})`);
     }

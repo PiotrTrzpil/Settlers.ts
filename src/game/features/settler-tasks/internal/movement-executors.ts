@@ -184,6 +184,7 @@ function makeGoToTarget(arrivalDist: number): MovementExecutorFn {
             }
             const wp = job.waypoints[wpIndex]!;
             job.targetPos = { x: wp.x, y: wp.y };
+            // eslint-disable-next-line no-restricted-syntax -- value is nullable by API contract; null coercion
             job.targetId = wp.entityId ?? null;
         }
 

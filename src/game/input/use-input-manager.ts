@@ -139,6 +139,7 @@ export function useInputManager(options: UseInputManagerOptions): UseInputManage
     watch(
         () => options.tileResolver?.value,
         resolver => {
+            // eslint-disable-next-line no-restricted-syntax -- optional dependency; null when not wired
             manager.value?.setTileResolver(resolver ?? null);
         }
     );
@@ -147,6 +148,7 @@ export function useInputManager(options: UseInputManagerOptions): UseInputManage
     watch(
         () => options.commandExecutor?.value,
         executor => {
+            // eslint-disable-next-line no-restricted-syntax -- optional dependency; null when not wired
             manager.value?.setCommandExecutor(executor ?? null);
         }
     );

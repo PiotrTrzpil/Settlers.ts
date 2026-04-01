@@ -179,6 +179,7 @@ export function useLayerPanel(onEmit: (value: LayerVisibility) => void): {
     }
 
     function changeObjectFilter(delta: number): void {
+        // eslint-disable-next-line no-restricted-syntax -- optional value with sensible numeric default
         const current = visibility.debugObjectTypeFilter ?? 1;
         visibility.debugObjectTypeFilter = Math.max(1, Math.min(255, current + delta));
         saveAndEmit();

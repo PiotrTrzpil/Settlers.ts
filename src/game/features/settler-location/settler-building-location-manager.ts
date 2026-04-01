@@ -133,6 +133,7 @@ export class SettlerBuildingLocationManager implements ISettlerBuildingLocationM
         if (!location || location.status !== SettlerBuildingStatus.Inside) {
             throw new Error(
                 `SettlerBuildingLocationManager.exitBuilding: settler ${settlerId} is not Inside any building ` +
+                    // eslint-disable-next-line no-restricted-syntax -- nullable field with display/config default
                     `(status=${location?.status ?? 'not-tracked'})`
             );
         }

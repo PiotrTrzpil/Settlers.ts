@@ -121,6 +121,7 @@ export class EntitySpriteResolver {
             const entry =
                 this.sprites.registry.getBuildingConstruction(buildingType, entity.race) ??
                 this.sprites.registry.getBuilding(buildingType, entity.race);
+            // eslint-disable-next-line no-restricted-syntax -- optional chaining; null when source is absent
             sprite = entry?.staticSprite ?? null;
         } else {
             const entry = this.sprites.registry.getBuilding(buildingType, entity.race);
@@ -130,8 +131,12 @@ export class EntitySpriteResolver {
                 const vs = this.getVisualState(entity.id);
                 if (vs?.animation && entry.isAnimated) {
                     sprite =
-                        resolveAnimationFrame(vs.animation, entry.animationData, entity.type, entity.subType as number) ??
-                        entry.staticSprite;
+                        resolveAnimationFrame(
+                            vs.animation,
+                            entry.animationData,
+                            entity.type,
+                            entity.subType as number
+                        ) ?? entry.staticSprite;
                 } else {
                     sprite = entry.staticSprite;
                 }
@@ -181,6 +186,7 @@ export class EntitySpriteResolver {
         }
         const quantity = state.quantity;
         const direction = Math.max(0, Math.min(quantity - 1, 7));
+        // eslint-disable-next-line no-restricted-syntax -- optional chaining; null when source is absent
         return this.sprites.registry.getGoodSprite(entity.subType as EMaterialType, direction)?.staticSprite ?? null;
     }
 
@@ -285,16 +291,20 @@ export class EntitySpriteResolver {
      */
     private readonly getSpriteEntryMap: Record<EntityType, (entity: Entity) => SpriteEntry | null> = {
         [EntityType.Building]: entity =>
+            // eslint-disable-next-line no-restricted-syntax -- optional chaining; null when source is absent
             this.sprites?.registry.getBuilding(entity.subType as BuildingType, entity.race)?.staticSprite ?? null,
         [EntityType.MapObject]: entity => {
             if (!this.layerVisibility.decorationTextures) {
                 return null;
             }
+            // eslint-disable-next-line no-restricted-syntax -- optional chaining; null when source is absent
             return this.sprites?.registry.getMapObject(entity.subType as MapObjectType)?.staticSprite ?? null;
         },
         [EntityType.StackedPile]: entity =>
+            // eslint-disable-next-line no-restricted-syntax -- optional chaining; null when source is absent
             this.sprites?.registry.getGoodSprite(entity.subType as EMaterialType)?.staticSprite ?? null,
         [EntityType.Unit]: entity =>
+            // eslint-disable-next-line no-restricted-syntax -- optional chaining; null when source is absent
             this.sprites?.registry.getUnit(entity.subType as UnitType, 0, entity.race)?.staticSprite ?? null,
         [EntityType.Decoration]: () => null,
         [EntityType.None]: () => null,
@@ -331,15 +341,18 @@ export class EntitySpriteResolver {
         switch (entityType) {
             case 'building':
                 return race !== undefined
-                    ? (this.sprites.registry.getBuilding(subType as BuildingType, race)?.staticSprite ?? null)
+                    ? // eslint-disable-next-line no-restricted-syntax -- optional chaining; null when source is absent
+                      (this.sprites.registry.getBuilding(subType as BuildingType, race)?.staticSprite ?? null)
                     : null;
             case 'pile':
-                // eslint-disable-next-line no-restricted-syntax -- preview context: variation is an optional parameter with 0 as valid default
                 return (
+                    // eslint-disable-next-line no-restricted-syntax -- optional value with sensible numeric default
                     this.sprites.registry.getGoodSprite(subType as unknown as EMaterialType, variation ?? 0)
+                        // eslint-disable-next-line no-restricted-syntax -- optional chaining; null when source is absent
                         ?.staticSprite ?? null
                 );
             case 'unit':
+                // eslint-disable-next-line no-restricted-syntax -- optional value with sensible numeric default
                 return this.getUnitPreviewSprite(subType as UnitType, race, level ?? 1);
             default: {
                 const _exhaustive: never = entityType;
@@ -353,6 +366,7 @@ export class EntitySpriteResolver {
         if (!this.sprites) {
             return null;
         }
+        // eslint-disable-next-line no-restricted-syntax -- optional chaining; null when source is absent
         return this.sprites.registry.getUnit(unitType, spriteDir, race)?.staticSprite ?? null;
     }
 

@@ -73,6 +73,7 @@ export function useStorageFilter(
         return DROPPABLE_MATERIALS.map(m => ({
             material: m,
             name: m,
+            // eslint-disable-next-line no-restricted-syntax -- value is nullable by API contract; null coercion
             direction: sfm.getDirection(e.id, m) ?? null,
         }));
     });
@@ -90,6 +91,7 @@ export function useStorageFilter(
         if (!e) {
             return;
         }
+        // eslint-disable-next-line no-restricted-syntax -- value is nullable by API contract; null coercion
         const current = game.value.services.storageFilterManager.getDirection(e.id, material) ?? null;
         const idx = DIRECTION_CYCLE.indexOf(current);
         const next = DIRECTION_CYCLE[(idx + 1) % DIRECTION_CYCLE.length]!;

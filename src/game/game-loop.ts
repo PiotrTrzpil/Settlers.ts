@@ -147,6 +147,7 @@ export class GameLoop {
         const name = system.constructor.name || 'Unknown';
         this.systemErrors.set(system, {
             name,
+            // eslint-disable-next-line no-restricted-syntax -- nullable field with display/config default
             group: group ?? 'Other',
             consecutiveFailures: 0,
             disabled: false,
@@ -242,6 +243,7 @@ export class GameLoop {
         }));
         const toggles = this.featureToggles.map(t => ({
             name: t.name,
+            // eslint-disable-next-line no-restricted-syntax -- nullable field with display/config default
             group: t.group ?? 'Other',
             enabled: t.get(),
             // eslint-disable-next-line no-restricted-syntax -- requires is optional on feature toggles; [] is the correct empty default

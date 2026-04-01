@@ -110,6 +110,7 @@ export class CarrierAssigner {
             inventoryManager: config.inventoryManager,
             gameState: config.gameState,
         };
+        // eslint-disable-next-line no-restricted-syntax -- optional config/prop with sensible default
         this.carrierFilter = config.carrierFilter ?? null;
     }
 

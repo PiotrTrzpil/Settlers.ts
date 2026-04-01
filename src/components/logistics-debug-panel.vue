@@ -128,6 +128,7 @@ const displayedDemands = computed(() => {
     const priorityOrder: Record<string, number> = { High: 0, Normal: 1, Low: 2 };
     return [...state.value.demands]
         .sort((a, b) => {
+            // eslint-disable-next-line no-restricted-syntax -- optional value with sensible numeric default
             const pDiff = (priorityOrder[a.priority] ?? 1) - (priorityOrder[b.priority] ?? 1);
             if (pDiff !== 0) {
                 return pDiff;

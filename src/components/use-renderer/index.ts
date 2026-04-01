@@ -184,6 +184,7 @@ function buildInputManager(deps: InputManagerDeps): InputManager {
         },
         raceProvider: () => {
             const g = getGame();
+            // eslint-disable-next-line no-restricted-syntax -- Map.get() returns undefined for missing keys
             return g?.playerRaces.get(g.currentPlayer) ?? null;
         },
     });
@@ -279,7 +280,9 @@ function setupRenderers(state: RendererMutableState, game: Game, getDebugGrid: (
         game.terrain.groundHeight,
         getDebugGrid(),
         game.useProceduralTextures,
+        // eslint-disable-next-line no-restricted-syntax -- optional chaining; null when source is absent
         game.mapLoader.landscape.getTerrainAttributes?.() ?? null,
+        // eslint-disable-next-line no-restricted-syntax -- optional chaining; null when source is absent
         game.mapLoader.landscape.getGameplayAttributes?.() ?? null
     );
     state.renderer.add(state.landscapeRenderer);
@@ -320,6 +323,7 @@ function initGLAndBindEvents(state: RendererMutableState, game: Game, deps: Init
     const gl = renderer.gl;
     if (gl) {
         state.rendererInitStart = performance.now();
+        // eslint-disable-next-line no-restricted-syntax -- Map.get() returns undefined for missing keys
         const localPlayerRace = game.playerRaces.get(game.currentPlayer) ?? null;
         // Persist race for eager prefetch on next page load
         if (localPlayerRace !== null) {
@@ -354,6 +358,7 @@ function initGLAndBindEvents(state: RendererMutableState, game: Game, deps: Init
         landscapeRenderer: state.landscapeRenderer,
         inputManager: state.inputManager,
         debugGrid: deps.getDebugGrid(),
+        // eslint-disable-next-line no-restricted-syntax -- optional flag with sensible boolean default
         darkLandDilation: deps.getGame()?.settings.state.darkLandDilation ?? true,
         layerVisibility: deps.getLayerVisibility(),
         placementGrid: state.placementGrid,
@@ -411,6 +416,7 @@ export function useRenderer({
     const entityPicker = createEntityPicker(
         // eslint-disable-next-line no-restricted-syntax -- game is nullable before load; [] is correct empty entity list when absent
         () => getGame()?.state.entities ?? [],
+        // eslint-disable-next-line no-restricted-syntax -- optional chaining; null when source is absent
         () => state.entityRenderer?.spriteResolver ?? null,
         () => getGame()!.state.selection,
         () => buildPickerContext(getGame, state.renderer, state.entityRenderer, canvas)
@@ -419,6 +425,7 @@ export function useRenderer({
     const entityRectPicker = createEntityRectPicker(
         // eslint-disable-next-line no-restricted-syntax -- game is nullable before load; [] is correct empty entity list when absent
         () => getGame()?.state.entities ?? [],
+        // eslint-disable-next-line no-restricted-syntax -- optional chaining; null when source is absent
         () => state.entityRenderer?.spriteResolver ?? null,
         () => getGame()!.state.selection,
         () => buildPickerContext(getGame, state.renderer, state.entityRenderer, canvas)

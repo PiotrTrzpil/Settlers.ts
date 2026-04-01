@@ -75,6 +75,7 @@ function lsCommand(): CliCommand {
         usage: 'ls [buildings|units|military] [--p N] [--n N]',
         desc: 'List entities by type (--n limits rows, default 30)',
         execute(args: CliArgs, ctx: CliContext): CliResult {
+            // eslint-disable-next-line no-restricted-syntax -- index access returns undefined for missing keys
             const subCmd = String(args._[0] ?? 'buildings').toLowerCase();
             const { player } = ctx;
             const { state } = ctx.game;
@@ -188,6 +189,7 @@ function mapCommand(): CliCommand {
                 return fail('usage: map <x> <y> [radius|sm|md|lg|xl] [--layer ...] [--place BuildingType]');
             }
 
+            // eslint-disable-next-line no-restricted-syntax -- index access returns undefined for missing keys
             const sizeArg = String(args._[2] ?? 'sm');
             const sizeOrRadius: MapSizePreset | number = SIZE_PRESET_NAMES.has(sizeArg)
                 ? (sizeArg as MapSizePreset)

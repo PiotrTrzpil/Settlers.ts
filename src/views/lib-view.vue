@@ -109,6 +109,7 @@ async function load(file: IFileSource) {
 
     // Auto-select first item
     if (libContent.value.length > 0) {
+        // eslint-disable-next-line no-restricted-syntax -- index access returns undefined for missing keys
         selectedItem.value = libContent.value[0] ?? null;
         onSelectItem();
     }

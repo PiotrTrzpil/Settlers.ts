@@ -117,7 +117,9 @@ export class WorkerJobLifecycle {
         const posStr = positionTarget ? `(${positionTarget.x},${positionTarget.y})` : 'none';
         log.debug(
             `Settler ${settler.id} starting choreo job ${selected.id}, ` +
+                // eslint-disable-next-line no-restricted-syntax -- nullable field with display/config default
                 `target ${entityTarget?.entityId ?? 'none'}, pos ${posStr}, ` +
+                // eslint-disable-next-line no-restricted-syntax -- nullable field with display/config default
                 `home ${homeBuilding?.id ?? 'none'}`
         );
 
@@ -125,8 +127,10 @@ export class WorkerJobLifecycle {
             unitId: settler.id,
             unitType: settler.subType as UnitType,
             jobId: selected.id,
+            // eslint-disable-next-line no-restricted-syntax -- optional chaining; null when source is absent
             targetId: entityTarget?.entityId ?? null,
             targetPos: jobState.targetPos,
+            // eslint-disable-next-line no-restricted-syntax -- optional chaining; null when source is absent
             homeBuilding: homeBuilding?.id ?? null,
         });
     }
@@ -232,6 +236,7 @@ export class WorkerJobLifecycle {
             jobId: job.jobId,
             nodeIndex: job.nodeIndex,
             failedStep,
+            // eslint-disable-next-line no-restricted-syntax -- value is nullable by API contract; null coercion
             targetId: job.targetId ?? null,
             workStarted: job.workStarted,
             wasCarrying: !!settler.carrying,

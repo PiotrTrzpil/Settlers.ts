@@ -143,6 +143,7 @@ export class GameState {
         opts?: AddEntityOptions
     ): Entity {
         const { selectable, variation, occupancy: explicitOccupancy, race: explicitRace, completed } = opts ?? {};
+        // eslint-disable-next-line no-restricted-syntax -- optional flag with sensible boolean default
         const occupancy = explicitOccupancy ?? true;
 
         // Resolve race: explicit opt > player lookup > fallback for non-unit/building types
@@ -319,8 +320,8 @@ export class GameState {
                 const desc =
                     occupant?.type === EntityType.Building
                         ? `building #${occupantId} (${String(occupant.subType)})`
-                        // eslint-disable-next-line no-restricted-syntax -- occupant type may be unknown when building an error description; 0 gives a safe enum fallback for display only
-                        : `${EntityType[occupant?.type ?? 0]} #${occupantId}`;
+                        : // eslint-disable-next-line no-restricted-syntax -- occupant type may be unknown when building an error description; 0 gives a safe enum fallback for display only
+                          `${EntityType[occupant?.type ?? 0]} #${occupantId}`;
                 throw new Error(
                     `addEntity: cannot place MapObject (subType=${subType}) at (${x},${y}) — tile occupied by ${desc}`
                 );

@@ -123,6 +123,7 @@ export class RecruitSystem implements TickSystem {
             hint?: { x: number; y: number };
         }
     ): RecruitmentCandidate | null {
+        // eslint-disable-next-line no-restricted-syntax -- index access returns undefined for missing keys
         const toolMaterial = SPECIALIST_TOOL_MAP[unitType] ?? null;
 
         if (toolMaterial !== null) {
@@ -158,6 +159,7 @@ export class RecruitSystem implements TickSystem {
             return null;
         }
 
+        // eslint-disable-next-line no-restricted-syntax -- index access returns undefined for missing keys
         const toolMaterial = SPECIALIST_TOOL_MAP[unitType] ?? null;
 
         if (toolMaterial !== null) {

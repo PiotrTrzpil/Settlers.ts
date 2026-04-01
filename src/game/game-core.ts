@@ -95,6 +95,7 @@ export class GameCore {
             mapLoader.landscape.getGroundType(),
             mapLoader.landscape.getGroundHeight(),
             mapLoader.mapSize,
+            // eslint-disable-next-line no-restricted-syntax -- optional chaining; null when source is absent
             mapLoader.landscape.getTerrainAttributes?.() ?? null
         );
 
@@ -105,11 +106,8 @@ export class GameCore {
         setDirectionRunLength(this.settings.state.pathStraightness);
 
         this.commandRegistry = new CommandHandlerRegistry();
-        this.services = new GameServices(
-            this.state,
-            this.eventBus,
-            ((cmd: Command) => this.commandRegistry.execute(cmd)) as ExecuteCommand,
-        );
+        this.services = new GameServices(this.state, this.eventBus, ((cmd: Command) =>
+            this.commandRegistry.execute(cmd)) as ExecuteCommand);
 
         this.wireCommandHandlers(mapLoader);
         const mapBuildings = this.populate(mapLoader);

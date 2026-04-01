@@ -11,6 +11,7 @@ export function updatePlacementModeState(er: EntityRenderer, renderState: ModeRe
 
     // Handle new unified PlacementPreview type
     if (preview?.type === 'placement') {
+        // eslint-disable-next-line no-restricted-syntax -- optional value with sensible numeric default
         const amount = (preview.extra?.['amount'] as number | undefined) ?? 1;
         const variation = preview.entityType === 'pile' ? Math.max(0, Math.min(amount - 1, 7)) : undefined;
 
@@ -37,6 +38,7 @@ export function updatePlacementModeState(er: EntityRenderer, renderState: ModeRe
         // Handle legacy ResourcePreview for backward compatibility
         // eslint-disable-next-line @typescript-eslint/no-deprecated -- legacy union type
         const resourcePreview: ResourcePreview = preview;
+        // eslint-disable-next-line no-restricted-syntax -- optional value with sensible numeric default
         const amount = resourcePreview.amount ?? 1;
         er.placementPreview = {
             tile: { x: resourcePreview.x, y: resourcePreview.y },

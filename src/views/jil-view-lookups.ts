@@ -112,7 +112,7 @@ export function getNameForJob(fileId: number | null, jobIndex: number): string |
 /** Check if a job index has any known mapping (building, resource, worker, or carrier). */
 export function isJobMapped(fileId: number | null, jobIndex: number): boolean {
     return (
-        getNameForJob(fileId, jobIndex) !== null ||
+        getNameForJob(fileId, jobIndex) !== undefined ||
         getWorkerLabel(fileId, jobIndex) !== null ||
         getCarrierMaterialLabel(fileId, jobIndex) !== null
     );

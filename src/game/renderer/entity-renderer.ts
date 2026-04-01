@@ -285,6 +285,7 @@ export class EntityRenderer extends RendererBase implements IRenderer {
     }
 
     public getRace(): Race {
+        // eslint-disable-next-line no-restricted-syntax -- optional chaining; null when source is absent
         const race = this.spriteManager?.currentRace ?? null;
         if (race === null) {
             throw new Error('EntityRenderer: no race set — call setInitialRace() before init()');

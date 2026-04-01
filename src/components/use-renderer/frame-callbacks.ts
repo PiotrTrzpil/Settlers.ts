@@ -253,6 +253,7 @@ export function createRenderCallback(
             ctx.indicatorRenderer?.setState(
                 inPlacementMode,
                 ctx.placementGrid,
+                // eslint-disable-next-line no-restricted-syntax -- optional chaining; null when source is absent
                 er.placementPreview?.tile ?? null,
                 MAX_SLOPE_DIFF
             );

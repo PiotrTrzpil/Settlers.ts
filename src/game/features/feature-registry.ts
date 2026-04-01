@@ -92,6 +92,7 @@ export class FeatureRegistry {
         if (this.instances.has(featureId)) {
             throw new Error(`Feature '${featureId}' already registered`);
         }
+        // eslint-disable-next-line no-restricted-syntax -- nullable field with display/config default
         const resolved = persistence ?? 'none';
         this.instances.set(featureId, { exports, persistence: resolved });
         this.exports.set(featureId, exports);
@@ -139,6 +140,7 @@ export class FeatureRegistry {
 
         // Collect systems with their group label
         if (instance.systems) {
+            // eslint-disable-next-line no-restricted-syntax -- nullable field with display/config default
             const group = instance.systemGroup ?? 'Other';
             for (const system of instance.systems) {
                 this.allSystems.push({ system, group });

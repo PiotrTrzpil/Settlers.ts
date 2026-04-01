@@ -216,7 +216,9 @@ function restoreJobIntent(entityId: number, intent: SerializedJobIntent, ctx: Re
 
     const jobState = createChoreoJobState(intent.jobId, choreoJob.nodes, false);
     jobState.nodeIndex = Math.min(intent.nodeIndex, choreoJob.nodes.length - 1);
+    // eslint-disable-next-line no-restricted-syntax -- value is nullable by API contract; null coercion
     jobState.targetId = intent.targetId ?? null;
+    // eslint-disable-next-line no-restricted-syntax -- value is nullable by API contract; null coercion
     jobState.targetPos = intent.targetPos ?? null;
 
     runtime.job = jobState;

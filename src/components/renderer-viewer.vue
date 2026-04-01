@@ -44,6 +44,7 @@ const { setRace, getRace, getInputManager, getCamera, centerOnPlayerStart, getDe
         getDebugGrid: () => props.debugGrid,
         getLayerVisibility: () => props.layerVisibility ?? DEFAULT_LAYER_VISIBILITY,
         onTileClick: tile => emit('tileClick', tile),
+        // eslint-disable-next-line no-restricted-syntax -- optional config/prop with sensible default
         getInitialCamera: () => props.initialCamera ?? null,
     });
 

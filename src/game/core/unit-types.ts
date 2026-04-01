@@ -221,6 +221,7 @@ const LEVEL_INFO: ReadonlyMap<UnitType, { base: UnitType; level: number }> = (()
 
 /** Get the combat level (1-3) for a unit type. Non-leveled types return 1. */
 export function getUnitLevel(unitType: UnitType): number {
+    // eslint-disable-next-line no-restricted-syntax -- Map.get() returns undefined for missing keys
     return LEVEL_INFO.get(unitType)?.level ?? 1;
 }
 

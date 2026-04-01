@@ -521,7 +521,7 @@ export class SpriteLoader {
         const framePromises = frameImages.map(img => this.packSpriteIntoAtlas(img, atlas, paletteBaseOffset));
         const results = await Promise.all(framePromises);
 
-        const frames: LoadedSprite[] = results.filter((r): r is LoadedSprite => r !== null);
+        const frames: LoadedSprite[] = results;
 
         if (frames.length === 0) {
             return null;

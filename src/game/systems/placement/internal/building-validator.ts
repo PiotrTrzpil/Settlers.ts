@@ -140,6 +140,7 @@ export function canPlaceBuildingFootprint(
         groundOccupancy,
         buildingFootprint,
         race,
+        // eslint-disable-next-line no-restricted-syntax -- optional dependency; null when not wired
         placementFilter: placementFilter ?? null,
         player,
         isReplaceableOccupant,

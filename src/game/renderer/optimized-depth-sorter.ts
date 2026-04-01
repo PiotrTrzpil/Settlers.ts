@@ -220,19 +220,26 @@ export class OptimizedDepthSorter {
         if (!spriteManager?.hasSprites) {
             return null;
         }
+        return lookupStaticSprite(entity, spriteManager.registry);
+    }
+}
 
-        switch (entity.type) {
-            case EntityType.Building:
-                return spriteManager.registry.getBuilding(entity.subType as BuildingType, entity.race)?.staticSprite ?? null;
-            case EntityType.MapObject:
-                return spriteManager.registry.getMapObject(entity.subType as MapObjectType)?.staticSprite ?? null;
-            case EntityType.Unit:
-                return spriteManager.registry.getUnit(entity.subType as UnitType, 0, entity.race)?.staticSprite ?? null;
-            case EntityType.StackedPile:
-                return spriteManager.registry.getGoodSprite(entity.subType as EMaterialType)?.staticSprite ?? null;
-            case EntityType.Decoration:
-            case EntityType.None:
-                return null;
-        }
+function lookupStaticSprite(entity: Entity, registry: SpriteRenderManager['registry']): SpriteEntry | null {
+    switch (entity.type) {
+        case EntityType.Building:
+            // eslint-disable-next-line no-restricted-syntax -- optional chaining; null when source is absent
+            return registry.getBuilding(entity.subType as BuildingType, entity.race)?.staticSprite ?? null;
+        case EntityType.MapObject:
+            // eslint-disable-next-line no-restricted-syntax -- optional chaining; null when source is absent
+            return registry.getMapObject(entity.subType as MapObjectType)?.staticSprite ?? null;
+        case EntityType.Unit:
+            // eslint-disable-next-line no-restricted-syntax -- optional chaining; null when source is absent
+            return registry.getUnit(entity.subType as UnitType, 0, entity.race)?.staticSprite ?? null;
+        case EntityType.StackedPile:
+            // eslint-disable-next-line no-restricted-syntax -- optional chaining; null when source is absent
+            return registry.getGoodSprite(entity.subType as EMaterialType)?.staticSprite ?? null;
+        case EntityType.Decoration:
+        case EntityType.None:
+            return null;
     }
 }

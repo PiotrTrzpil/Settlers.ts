@@ -344,6 +344,7 @@ const debugExpanded = ref(true);
 
 // Destroy building
 const confirmingDestroy = ref(false);
+// eslint-disable-next-line no-restricted-syntax -- optional chaining; null when source is absent
 const selectedEntityId = computed(() => selectedEntity.value?.id ?? null);
 watch(selectedEntityId, () => (confirmingDestroy.value = false));
 

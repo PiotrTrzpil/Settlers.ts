@@ -137,6 +137,7 @@ export function executeGarrisonUnitsCommand(cmd: GarrisonUnitsCommand, ctx: Garr
                         const u = gameState.getEntity(id);
                         const role = u ? getGarrisonRole(u.subType as UnitType) : 'missing';
                         const enRouteId = manager.getTowerIdForEnRouteUnit(id);
+                        // eslint-disable-next-line no-restricted-syntax -- nullable field with display/config default
                         return `${id}(role=${role ?? 'none'}, enRoute=${enRouteId ?? '-'})`;
                     })
                     .join(', ')}]`

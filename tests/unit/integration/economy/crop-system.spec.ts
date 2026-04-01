@@ -17,13 +17,8 @@
  */
 
 import { describe, it, expect, afterEach } from 'vitest';
-import {
-    createSimulation,
-    cleanupSimulation,
-    type Simulation,
-    scanFreeTiles,
-    printBuildingDiagnosticMap,
-} from '../../helpers/test-simulation';
+import { createSimulation, cleanupSimulation, type Simulation } from '../../helpers/test-simulation';
+import { scanFreeTiles, printBuildingDiagnosticMap } from '../../helpers/simulation-diagnostics';
 import { installRealGameData } from '../../helpers/test-game-data';
 import { BuildingType } from '@/game/buildings/building-type';
 import { EMaterialType } from '@/game/economy/material-type';

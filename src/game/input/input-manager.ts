@@ -73,12 +73,19 @@ export class InputManager {
     constructor(options: InputManagerOptions) {
         this.config = options.config ?? getDefaultInputConfig();
         this.target = options.target;
+        // eslint-disable-next-line no-restricted-syntax -- optional config/prop with sensible default
         this.tileResolver = options.tileResolver ?? null;
+        // eslint-disable-next-line no-restricted-syntax -- optional config/prop with sensible default
         this.commandExecutor = options.commandExecutor ?? null;
+        // eslint-disable-next-line no-restricted-syntax -- optional config/prop with sensible default
         this.entityPicker = options.entityPicker ?? null;
+        // eslint-disable-next-line no-restricted-syntax -- optional config/prop with sensible default
         this.entityRectPicker = options.entityRectPicker ?? null;
+        // eslint-disable-next-line no-restricted-syntax -- optional config/prop with sensible default
         this.onModeChange = options.onModeChange ?? null;
+        // eslint-disable-next-line no-restricted-syntax -- optional config/prop with sensible default
         this.raceProvider = options.raceProvider ?? null;
+        // eslint-disable-next-line no-restricted-syntax -- optional config/prop with sensible default
         this.hintProvider = options.hintProvider ?? null;
 
         // Create input state tracker
@@ -342,6 +349,7 @@ export class InputManager {
             switchMode: this.switchMode.bind(this),
             getModeData: <T>() => this.modeData.get(this.currentModeName) as T | undefined,
             setModeData: <T>(data: T) => this.modeData.set(this.currentModeName, data),
+            // eslint-disable-next-line no-restricted-syntax -- optional chaining; null when source is absent
             localPlayerRace: this.raceProvider?.() ?? null,
             pickEntityAtScreen: this.entityPicker,
             pickEntitiesInScreenRect: this.entityRectPicker,
@@ -350,6 +358,7 @@ export class InputManager {
     }
 
     private resolveTile(screenX: number, screenY: number): TileCoord | null {
+        // eslint-disable-next-line no-restricted-syntax -- optional chaining; null when source is absent
         return this.tileResolver?.(screenX, screenY) ?? null;
     }
 

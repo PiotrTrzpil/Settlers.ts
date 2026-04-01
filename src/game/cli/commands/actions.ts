@@ -107,7 +107,9 @@ function buildCommand(): CliCommand {
                 completed: done,
                 spawnWorker: true,
             });
-            if (!result.success) return fail(result.error);
+            if (!result.success) {
+                return fail(result.error);
+            }
             const status = done ? 'completed' : 'construction';
             return ok(`placed ${typeName} at ${x},${y} for player ${ctx.player} (${status}) (id=${result.entityId})`);
         },
@@ -265,7 +267,9 @@ function spawnCommand(): CliCommand {
             const y = reqInt(args, 2, 'y');
             const unitType = ctx.resolveUnit(typeName);
             const result = ctx.game.execute({ type: 'spawn_unit', unitType, x, y, player: ctx.player });
-            if (!result.success) return fail(result.error);
+            if (!result.success) {
+                return fail(result.error);
+            }
             return ok(`spawned ${typeName} at ${x},${y} for player ${ctx.player} (id=${result.entityId})`);
         },
     };
@@ -284,7 +288,9 @@ function pileCommand(): CliCommand {
             const y = reqInt(args, 3, 'y');
             const materialType = ctx.resolveMaterial(materialName);
             const result = ctx.game.execute({ type: 'place_pile', materialType, amount, x, y });
-            if (!result.success) return fail(result.error);
+            if (!result.success) {
+                return fail(result.error);
+            }
             return ok(`placed ${amount}x ${materialName} at ${x},${y} (id=${result.entityId})`);
         },
     };

@@ -64,6 +64,7 @@ export class DemandQueue {
     private readonly eventBus: EventBus | null;
 
     constructor(eventBus?: EventBus) {
+        // eslint-disable-next-line no-restricted-syntax -- optional dependency; null when not wired
         this.eventBus = eventBus ?? null;
     }
 

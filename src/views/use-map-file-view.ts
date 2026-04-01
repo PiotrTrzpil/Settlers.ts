@@ -104,6 +104,7 @@ const chunkCategoryMap: Partial<Record<MapChunkType, ChunkInfo['category']>> = {
 
 /** Get category for a chunk type */
 function getChunkCategory(type: MapChunkType): ChunkInfo['category'] {
+    // eslint-disable-next-line no-restricted-syntax -- index access returns undefined for missing keys
     return chunkCategoryMap[type] ?? 'unknown';
 }
 
@@ -419,6 +420,7 @@ export function useMapFileView(getFileManager: () => FileManager | null): UseMap
 
     const previewChunk = computed<MapChunk | null>(() => {
         const preview = chunks.value.find((c: ChunkInfo) => c.chunk.chunkType === MapChunkType.MapPreview);
+        // eslint-disable-next-line no-restricted-syntax -- optional chaining; null when source is absent
         return preview?.chunk ?? null;
     });
 

@@ -119,6 +119,7 @@ const swordsmanSlots = computed<GarrisonSlotDisplay[]>(() => {
         unitId: g.swordsmanSlots.units[i]?.unitId ?? null,
         // eslint-disable-next-line no-restricted-syntax -- units[i] is absent for empty slots; 0 is correct default level
         level: g.swordsmanSlots.units[i]?.level ?? 0,
+        // eslint-disable-next-line no-restricted-syntax -- Map.get() returns undefined for missing keys
         iconKey: g.swordsmanSlots.units[i] ? (unitTypeToIconKey.get(g.swordsmanSlots.units[i].unitType) ?? null) : null,
     }));
 });
@@ -134,6 +135,7 @@ const bowmanSlots = computed<GarrisonSlotDisplay[]>(() => {
         unitId: g.bowmanSlots.units[i]?.unitId ?? null,
         // eslint-disable-next-line no-restricted-syntax -- units[i] is absent for empty slots; 0 is correct default level
         level: g.bowmanSlots.units[i]?.level ?? 0,
+        // eslint-disable-next-line no-restricted-syntax -- Map.get() returns undefined for missing keys
         iconKey: g.bowmanSlots.units[i] ? (unitTypeToIconKey.get(g.bowmanSlots.units[i].unitType) ?? null) : null,
     }));
 });

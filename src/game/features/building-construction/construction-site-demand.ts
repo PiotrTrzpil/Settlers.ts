@@ -531,6 +531,7 @@ export class ConstructionSiteDemandSystem implements TickSystem {
         if (!siteDemands) {
             return null;
         }
+        // eslint-disable-next-line no-restricted-syntax -- value is nullable by API contract; null coercion
         return siteDemands.find(d => d.workerId === workerId) ?? null;
     }
 

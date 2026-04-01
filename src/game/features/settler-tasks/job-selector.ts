@@ -109,6 +109,7 @@ export class JobSelector {
             if (!job?.nodes.length) {
                 continue;
             }
+            // eslint-disable-next-line no-restricted-syntax -- value is nullable by API contract; null coercion
             if (isJobSelectable(job.nodes[0]!, job, target, homeBuilding !== null, positionTarget ?? null)) {
                 return job;
             }

@@ -61,6 +61,7 @@ const props = defineProps<{
 
 const cav = useTemplateRef<HTMLCanvasElement>('cav');
 
+// eslint-disable-next-line no-restricted-syntax -- optional config/prop with sensible default
 const useWidth = ref(props.width ?? 128);
 const imagePointInfo = ref('');
 const bytePerPixel = ref(4);
@@ -139,6 +140,7 @@ function updateContent() {
             {
                 const cavEl = cav.value;
                 if (cavEl) {
+                    // eslint-disable-next-line no-restricted-syntax -- optional config/prop with sensible default
                     toImg(props.value, bytePerPixel.value, byteOffset.value, useWidth.value, props.height ?? 1, cavEl);
                 }
             }
@@ -241,6 +243,7 @@ watch(
 watch(
     () => props.width,
     () => {
+        // eslint-disable-next-line no-restricted-syntax -- optional config/prop with sensible default
         useWidth.value = props.width ?? 128;
     }
 );

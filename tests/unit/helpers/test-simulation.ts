@@ -1,13 +1,6 @@
 /**
- * Headless simulation harness — runs the full game systems pipeline
- * (buildings, workers, carriers, logistics) without a browser.
- *
+ * Headless simulation harness — runs the full game systems pipeline without a browser.
  * Uses GameServices with a synthetic map and ticks all systems in a tight loop.
- * Building placement is automatic via SmartBuildingPlacer (in simulation-world-builder.ts).
- *
- * Records a structured timeline for diagnostics. On runUntil() timeout, dumps
- * timeline entries, world snapshot, and simulation errors.
- *
  * See test-scenarios.ts for pre-configured simulation setups (createScenario).
  */
 
@@ -127,11 +120,8 @@ export class Simulation {
         const settings = this.settings;
 
         this.commandRegistry = new CommandHandlerRegistry();
-        this.services = new GameServices(
-            this.state,
-            this.eventBus,
-            ((cmd: Command) => this.commandRegistry.execute(cmd)) as ExecuteCommand,
-        );
+        this.services = new GameServices(this.state, this.eventBus, ((cmd: Command) =>
+            this.commandRegistry.execute(cmd)) as ExecuteCommand);
         this.services.setTerrainData(this.map.terrain);
 
         // Register feature-provided command handlers first, then central handlers
@@ -589,10 +579,7 @@ export class Simulation {
     destroy() {
         this.services.destroy();
     }
-
 }
-
-// ─── Factory functions ───────────────────────────────────────────
 
 export function createSimulation(opts: SimulationOptions = {}): Simulation {
     return new Simulation(opts);
@@ -603,8 +590,4 @@ export function cleanupSimulation(): void {
     resetTestGameData();
 }
 
-// Re-export scenario builders for convenience
 export { createScenario, type SingleBuildingSim, type ChainSim } from './test-scenarios';
-
-// Re-export diagnostic helpers for convenience
-export { scanFreeTiles, printBuildingDiagnosticMap, type TileCandidate } from './simulation-diagnostics';

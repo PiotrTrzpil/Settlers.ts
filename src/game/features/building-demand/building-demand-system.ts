@@ -168,6 +168,7 @@ export class BuildingDemandSystem implements TickSystem {
         const demand: BuildingDemand = {
             buildingId,
             unitType: workerInfo.unitType,
+            // eslint-disable-next-line no-restricted-syntax -- value is nullable by API contract; null coercion
             toolMaterial: workerInfo.tool ?? null,
             player: entity.player,
             race,

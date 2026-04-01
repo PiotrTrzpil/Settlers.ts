@@ -4,9 +4,9 @@
 
 /** Get text content of a child element by tag name */
 export function getChildText(parent: Element, tagName: string): string {
-    const el = parent.getElementsByTagName(tagName)[0];
-    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- el may be undefined, textContent may be null at runtime
-    return el?.textContent?.trim() ?? '';
+    const el = parent.getElementsByTagName(tagName)[0] as Element | undefined;
+    // eslint-disable-next-line no-restricted-syntax -- el may be undefined; empty string is the correct fallback
+    return el?.textContent.trim() ?? '';
 }
 
 /** Get text content as number, with default value */
@@ -38,8 +38,7 @@ export function getValueArray(parent: Element, containerTag: string): number[] {
     const values: number[] = [];
     const valueElements = container.getElementsByTagName('value');
     for (let i = 0; i < valueElements.length; i++) {
-        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- textContent may be null at runtime
-        const text = valueElements[i]!.textContent?.trim() ?? '0';
+        const text = valueElements[i]!.textContent.trim() || '0';
         values.push(parseInt(text, 10));
     }
     return values;

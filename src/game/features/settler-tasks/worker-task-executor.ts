@@ -182,7 +182,8 @@ export class WorkerTaskExecutor {
 
         // Resolve home building from existing assignment (push-based — no scanning)
         const homeBuilding = runtime.homeAssignment
-            ? (this.gameState.getEntity(runtime.homeAssignment.buildingId) ?? null)
+            ? // eslint-disable-next-line no-restricted-syntax -- value is nullable by API contract; null coercion
+              (this.gameState.getEntity(runtime.homeAssignment.buildingId) ?? null)
             : null;
 
         // WORKPLACE settlers without an assignment skip work search — assignment comes from push only
@@ -303,6 +304,7 @@ export class WorkerTaskExecutor {
             throw new Error(
                 `handleWorking: settler ${settler.id} (${settler.subType as UnitType}) ` +
                     `is in WORKING state but has no job. ` +
+                    // eslint-disable-next-line no-restricted-syntax -- optional chaining; null when source is absent
                     `homeAssignment=${runtime.homeAssignment?.buildingId ?? null}`
             );
         }
@@ -438,6 +440,7 @@ export class WorkerTaskExecutor {
     private parseMaterial(entity: string): EMaterialType | null {
         const key = entity.replace(/^GOOD_/, '');
         const value = EMaterialType[key as keyof typeof EMaterialType] as EMaterialType | undefined;
+        // eslint-disable-next-line no-restricted-syntax -- value is nullable by API contract; null coercion
         return value ?? null;
     }
 }

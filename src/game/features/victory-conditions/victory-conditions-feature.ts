@@ -78,7 +78,9 @@ export const VictoryConditionsFeature: FeatureDefinition = {
                             label: 'Status',
                             entries: [
                                 { key: 'Game ended', value: result.ended },
+                                // eslint-disable-next-line no-restricted-syntax -- nullable field with display/config default
                                 { key: 'Winner', value: result.winner ?? 'none' },
+                                // eslint-disable-next-line no-restricted-syntax -- nullable field with display/config default
                                 { key: 'Reason', value: result.reason ?? 'n/a' },
                                 { key: 'Active players', value: active.length },
                                 { key: 'Active', value: active.join(', ') || 'none' },

@@ -229,6 +229,7 @@ export class BuildingPositionResolverImpl implements BuildingPositionResolver {
         buildingId: number,
         material: EMaterialType
     ): { x: number; y: number } | null {
+        // eslint-disable-next-line no-restricted-syntax -- value is nullable by API contract; null coercion
         return this.constructionSiteManager.getConstructionPilePosition(buildingId, material, 0) ?? null;
     }
 }

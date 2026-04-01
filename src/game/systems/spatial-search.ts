@@ -122,6 +122,7 @@ type SpotCandidate = { x: number; y: number; distSq: number };
 
 /** Collect valid spots in expanding rings, stopping once no closer spots are possible. */
 function collectCandidates(cx: number, cy: number, config: FindEmptySpotConfig): SpotCandidate[] {
+    // eslint-disable-next-line no-restricted-syntax -- optional config/prop with sensible default
     const minRadius = config.minRadius ?? 2;
     const candidates: SpotCandidate[] = [];
 

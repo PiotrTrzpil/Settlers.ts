@@ -77,7 +77,9 @@ function carriersCommand(): CliCommand {
                 `${c.x},${c.y}`,
                 c.status,
                 c.carryingMaterial ? `${c.carryingMaterial}x${c.carryingAmount}` : '-',
+                // eslint-disable-next-line no-restricted-syntax -- nullable field with display/config default
                 c.jobPhase ?? '-',
+                // eslint-disable-next-line no-restricted-syntax -- nullable field with display/config default
                 c.jobMaterial ?? '-',
                 c.jobDest !== null ? String(c.jobDest) : '-',
             ]);
@@ -120,6 +122,7 @@ function reqsCommand(): CliCommand {
                     r.material,
                     r.priority,
                     `${r.age}s`,
+                    // eslint-disable-next-line no-restricted-syntax -- nullable field with display/config default
                     r.reason ?? '-',
                 ]);
                 lines.push(ctx.fmt.table(rows, ['id', 'building', 'material', 'priority', 'age', 'reason']));

@@ -320,6 +320,7 @@ const gridRowHeight = computed(() => {
 const directionCounts = ref<Map<number, number>>(new Map());
 
 function getDirectionCount(jobIndex: number): number {
+    // eslint-disable-next-line no-restricted-syntax -- Map.get() returns undefined for missing keys
     return directionCounts.value.get(jobIndex) ?? 1;
 }
 
@@ -429,6 +430,7 @@ async function doLoad(fileId: string) {
     const saved = getSavedState();
     const savedJob = saved?.jobIndex;
     const restoredJil = savedJob !== undefined ? jilList.value.find(item => item.index === savedJob) : undefined;
+    // eslint-disable-next-line no-restricted-syntax -- index access returns undefined for missing keys
     selectedJil.value = restoredJil ?? jilList.value[0] ?? null;
     onSelectJil();
 
@@ -454,6 +456,7 @@ function onSelectJil() {
     }
 
     dilList.value = dilFileReader.value.getItems(selectedJil.value.offset, selectedJil.value.length);
+    // eslint-disable-next-line no-restricted-syntax -- index access returns undefined for missing keys
     selectedDil.value = dilList.value[0] ?? null;
     onSelectDil();
 }
@@ -464,6 +467,7 @@ function onSelectDil() {
     }
 
     gilList.value = gilFileReader.value.getItems(selectedDil.value.offset, selectedDil.value.length);
+    // eslint-disable-next-line no-restricted-syntax -- index access returns undefined for missing keys
     selectedGil.value = gilList.value[0] ?? null;
     onSelectGil();
 }
@@ -697,6 +701,7 @@ watch(doAnimation, animating => {
     if (viewMode.value === 'single') {
         // Sync the frame select to show whichever frame we stopped on
         if (!animating && gilList.value.length > 0) {
+            // eslint-disable-next-line no-restricted-syntax -- index access returns undefined for missing keys
             selectedGil.value = gilList.value[animFrameIndex] ?? gilList.value[0] ?? null;
         }
     } else {

@@ -147,6 +147,7 @@ const BUILDING_SYMBOL_MAP: ReadonlyMap<BuildingType, string> = new Map([
 ]);
 
 function buildingSymbol(subType: BuildingType): string {
+    // eslint-disable-next-line no-restricted-syntax -- Map.get() returns undefined for missing keys
     return BUILDING_SYMBOL_MAP.get(subType) ?? 'B';
 }
 

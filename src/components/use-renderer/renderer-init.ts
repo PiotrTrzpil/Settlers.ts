@@ -86,7 +86,7 @@ export async function loadOverlaySpritesAndUpdateFrameCounts(er: EntityRenderer,
     // so checking only manifest[0] would trigger a reload every time.
     const alreadyLoaded = manifest.some(
         // eslint-disable-next-line no-restricted-syntax -- directionIndex is an optional sprite manifest property; 0 is the correct default direction index
-        e => spriteManager.spriteRegistry?.getOverlayFrames(e.gfxFile, e.jobIndex, e.directionIndex ?? 0) !== null
+        e => spriteManager.spriteRegistry?.getOverlayFrames(e.gfxFile, e.jobIndex, e.directionIndex ?? 0) !== undefined
     );
 
     if (!alreadyLoaded) {

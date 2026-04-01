@@ -37,6 +37,7 @@ const FLAG_SPRITE_REF: OverlaySpriteRef = { gfxFile: 0, jobIndex: 0 };
  * Returns null if the overlay is unmapped (null) or unknown.
  */
 function resolveOverlaySpriteRef(jobName: string, gfxFile: number, parentJobIndex?: number): OverlaySpriteRef | null {
+    // eslint-disable-next-line no-restricted-syntax -- index access returns undefined for missing keys
     const resolved = resolveOverlayJilEntry(BUILDING_OVERLAY_JIL_INDICES[jobName] ?? null, parentJobIndex);
     if (!resolved) {
         return null;

@@ -1,3 +1,4 @@
+/* oxlint-disable eslint(max-lines) -- pure data file: JIL index constants are most useful kept together */
 /**
  * JIL job index constants for GFX files.
  *

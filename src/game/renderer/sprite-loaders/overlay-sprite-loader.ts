@@ -70,11 +70,8 @@ export async function loadOverlaySprites(
                 ctx.atlas,
                 paletteBase
             );
-            if (sprite) {
-                ctx.registry.registerOverlayFrames(entry.gfxFile, entry.jobIndex, entry.directionIndex, [sprite.entry]);
-                return 1;
-            }
-            return 0;
+            ctx.registry.registerOverlayFrames(entry.gfxFile, entry.jobIndex, entry.directionIndex, [sprite.entry]);
+            return 1;
         })
     );
 

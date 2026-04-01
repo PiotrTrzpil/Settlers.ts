@@ -1,10 +1,5 @@
 <template>
-    <div
-        class="game-layout"
-        data-testid="game-ui"
-        @mouseup="blurNonTextInput"
-        @change="blurNonTextInput"
-    >
+    <div class="game-layout" data-testid="game-ui" @mouseup="blurNonTextInput" @change="blurNonTextInput">
         <!-- LEFT SIDEBAR -->
         <aside class="sidebar">
             <!-- Player selector -->
@@ -29,21 +24,13 @@
 
             <!-- Tab strip -->
             <div class="sidebar-tabs">
-                <button
-                    class="tab-btn"
-                    :class="{ active: activeTab === 'buildings' }"
-                    @click="activeTab = 'buildings'"
-                >
+                <button class="tab-btn" :class="{ active: activeTab === 'buildings' }" @click="activeTab = 'buildings'">
                     Build
                 </button>
                 <button class="tab-btn" :class="{ active: activeTab === 'units' }" @click="activeTab = 'units'">
                     Units
                 </button>
-                <button
-                    class="tab-btn"
-                    :class="{ active: activeTab === 'resources' }"
-                    @click="activeTab = 'resources'"
-                >
+                <button class="tab-btn" :class="{ active: activeTab === 'resources' }" @click="activeTab = 'resources'">
                     Goods
                 </button>
                 <button
@@ -206,8 +193,8 @@
                 <div class="stale-save-dialog">
                     <h2 class="stale-save-title">Incompatible Save Data</h2>
                     <p class="stale-save-message">
-                        A saved game was found, but it was created with an older version and can no longer be
-                        loaded. The game is paused until you decide.
+                        A saved game was found, but it was created with an older version and can no longer be loaded.
+                        The game is paused until you decide.
                     </p>
                     <div class="stale-save-actions">
                         <button class="stale-save-btn stale-save-btn--discard" @click="$emit('dismissStaleSnapshot')">
@@ -234,9 +221,7 @@
                         }}
                     </p>
                     <div class="game-end-actions">
-                        <button class="game-end-btn game-end-btn--continue" @click="dismissGameEnd">
-                            Continue
-                        </button>
+                        <button class="game-end-btn game-end-btn--continue" @click="dismissGameEnd">Continue</button>
                         <button class="game-end-btn game-end-btn--quit" @click="$router.push('/')">Quit</button>
                     </div>
                 </div>
@@ -293,7 +278,7 @@ const props = defineProps<{
     staleSnapshotWarning: boolean;
 }>();
 
-const emit = defineEmits<{
+defineEmits<{
     (e: 'fileSelect', file: IFileSource): void;
     (e: 'dismissStaleSnapshot'): void;
 }>();
@@ -356,6 +341,7 @@ const isPaused = ref(!game.isRunning);
 // Mode & Action Handlers
 // =========================================================================
 
+// eslint-disable-next-line no-restricted-syntax -- optional chaining; null when source is absent
 const getInputManager = () => rendererRef.value?.getInputManager?.() ?? null;
 
 const modeToggler = createModeToggler(game, getInputManager);

@@ -107,6 +107,7 @@ export class Renderer {
         this.viewPoint = new ViewPoint(canvas, { externalInput: options?.externalInput });
         // Note: onMove callback removed - the game loop now drives all rendering via drawOnce()
 
+        // eslint-disable-next-line no-restricted-syntax -- optional config/prop with sensible default
         const antialias = options?.antialias ?? true;
         let newGl = canvas.getContext('webgl2', {
             antialias,

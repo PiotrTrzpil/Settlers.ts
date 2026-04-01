@@ -79,6 +79,7 @@ export function useBuildingAdjustments(selectedEntity: Ref<Entity | undefined>):
             return null;
         }
         const active = mode.getActiveAdjustment();
+        // eslint-disable-next-line no-restricted-syntax -- optional chaining; null when source is absent
         return active?.item.key ?? null;
     });
 

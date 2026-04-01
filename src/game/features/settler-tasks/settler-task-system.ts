@@ -76,6 +76,7 @@ export class SettlerTaskSystem implements TickSystem, TaskDispatcher, WorkerStat
         this.settlerConfigs = buildAllSettlerConfigs();
         this.choreographyStore = new JobChoreographyStore();
 
+        // eslint-disable-next-line no-restricted-syntax -- optional chaining; null when source is absent
         const byBuilding = this.runtimes.addIndex<number>((_id, runtime) => runtime.homeAssignment?.buildingId ?? null);
 
         this.workerTracker = new BuildingWorkerTracker(
@@ -225,10 +226,12 @@ export class SettlerTaskSystem implements TickSystem, TaskDispatcher, WorkerStat
     }
 
     getActiveJobId(entityId: number): string | null {
+        // eslint-disable-next-line no-restricted-syntax -- optional chaining; null when source is absent
         return this.runtimes.get(entityId)?.job?.jobId ?? null;
     }
 
     getSettlerState(entityId: number): SettlerState | null {
+        // eslint-disable-next-line no-restricted-syntax -- Map.get() returns undefined for missing keys
         return this.runtimes.get(entityId)?.state ?? null;
     }
 
@@ -257,6 +260,7 @@ export class SettlerTaskSystem implements TickSystem, TaskDispatcher, WorkerStat
         if (buildingId === null) {
             return null;
         }
+        // eslint-disable-next-line no-restricted-syntax -- value is nullable by API contract; null coercion
         return this.gameState.getEntity(buildingId) ?? null;
     }
 

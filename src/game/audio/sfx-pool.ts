@@ -18,6 +18,7 @@ export class SfxPool {
         private poolSize: number,
         private createHowl: (config: SoundConfig) => Howl | null
     ) {
+        // eslint-disable-next-line no-restricted-syntax -- optional config/prop with sensible default
         this.baseVolume = config.volume ?? 1.0;
         this.initPool();
     }

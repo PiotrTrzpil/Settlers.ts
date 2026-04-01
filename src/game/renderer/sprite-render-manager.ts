@@ -239,6 +239,7 @@ export class SpriteRenderManager {
         return {
             getAnimationData: (entityType: EntityType, subType: number | string, race?: number) => {
                 const entry = this.registry.getAnimatedEntity(entityType, subType, race);
+                // eslint-disable-next-line no-restricted-syntax -- optional chaining; null when source is absent
                 return entry?.animationData ?? null;
             },
             hasAnimation: (entityType: EntityType, subType: number | string, race?: number) =>
@@ -349,7 +350,7 @@ export class SpriteRenderManager {
             // Selection indicators are now serialized in the registry — skip reloading if present.
             const firstGilIndex = SELECTION_INDICATOR_MANIFEST.gilIndices[0]!;
             const alreadyCached =
-                cached.registry.getOverlayFrames(SELECTION_INDICATOR_MANIFEST.gfxFile, firstGilIndex, 0) !== null;
+                cached.registry.getOverlayFrames(SELECTION_INDICATOR_MANIFEST.gfxFile, firstGilIndex, 0) !== undefined;
             if (!alreadyCached) {
                 const ctx: SpriteLoadContext = {
                     spriteLoader: this.spriteLoader,

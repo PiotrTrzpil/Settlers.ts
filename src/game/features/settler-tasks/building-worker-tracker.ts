@@ -38,6 +38,7 @@ export class BuildingWorkerTracker {
 
     /** Get the assigned building ID for a settler, or null if unassigned. */
     getAssignedBuilding(settlerId: number): number | null {
+        // eslint-disable-next-line no-restricted-syntax -- optional chaining; null when source is absent
         return this.runtimes.get(settlerId)?.homeAssignment?.buildingId ?? null;
     }
 

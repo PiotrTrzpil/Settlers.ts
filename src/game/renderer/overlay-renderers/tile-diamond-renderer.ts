@@ -104,6 +104,7 @@ export class TileDiamondRenderer {
             const ty = Math.round(h.y);
             const idx = s.ctx.mapSize.toIndex(tx, ty);
             const hWorld = heightToWorld(s.ctx.groundHeight[idx]!);
+            // eslint-disable-next-line no-restricted-syntax -- optional value with sensible numeric default
             const alpha = h.alpha ?? 0.5;
             const [r, g, b] = parseHexColor(h.color);
 

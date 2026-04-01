@@ -338,6 +338,7 @@ export function gatherLogisticsSnapshot(
     player: number,
     options?: { limit?: number }
 ): LogisticsDebugState {
+    // eslint-disable-next-line no-restricted-syntax -- optional config/prop with sensible default
     const limit = options?.limit ?? 15;
     const stats = createEmptyStats();
     const { demands } = gatherDemands(config, player, stats, { limit, diagnose: true });

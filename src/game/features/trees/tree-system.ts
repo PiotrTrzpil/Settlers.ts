@@ -113,6 +113,7 @@ export class TreeSystem extends GrowableSystem<TreeState> {
 
     protected createState(planted: boolean, objectType: MapObjectType): TreeState {
         const stage = planted ? TreeStage.Growing : TreeStage.Normal;
+        // eslint-disable-next-line no-restricted-syntax -- optional value with sensible numeric default
         const variantCount = TREE_JOB_INDICES[objectType]?.length ?? 1;
         const variant = this.gameState.rng.nextInt(variantCount);
         const state: TreeState = { stage, progress: 0, stumpTimer: 0, currentOffset: 0, variant };

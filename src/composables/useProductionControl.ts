@@ -87,6 +87,7 @@ export function useProductionControl(
                 index: i,
                 output: r.output,
                 outputName: r.output,
+                // eslint-disable-next-line no-restricted-syntax -- Map.get() returns undefined for missing keys
                 weight: prodState.proportions.get(i) ?? 1,
             });
         }

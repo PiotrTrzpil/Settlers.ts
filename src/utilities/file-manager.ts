@@ -83,6 +83,7 @@ export class FileManager {
     /** return a file matching a given file name */
     public findFile(filePath: string, exactMatch = true): IFileSource | null {
         const file = this.files.find(f => this.checkFileNameFilter(f.name, filePath, exactMatch));
+        // eslint-disable-next-line no-restricted-syntax -- value is nullable by API contract; null coercion
         return file ?? null;
     }
 

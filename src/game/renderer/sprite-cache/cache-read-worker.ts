@@ -109,6 +109,7 @@ async function handleStart(req: CacheStreamRequest): Promise<void> {
         layerUrls = req.layerUrls;
         layerReadPromises = [];
         for (let i = 0; i < meta.layerCount; i++) {
+            // eslint-disable-next-line no-restricted-syntax -- optional chaining; null when source is absent
             layerReadPromises.push(cache.match(layerUrls[i]!).then(r => r?.arrayBuffer() ?? null));
         }
         const tKickoff = performance.now();

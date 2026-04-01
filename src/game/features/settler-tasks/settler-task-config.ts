@@ -54,12 +54,19 @@ export function buildDebugEntry(entityId: number, runtime: UnitRuntime): Settler
     return {
         entityId,
         state: runtime.state,
+        // eslint-disable-next-line no-restricted-syntax -- optional chaining; null when source is absent
         jobId: job?.jobId ?? null,
+        // eslint-disable-next-line no-restricted-syntax -- optional chaining; null when source is absent
         jobType: job?.type ?? null,
+        // eslint-disable-next-line no-restricted-syntax -- optional chaining; null when source is absent
         taskIndex: job?.nodeIndex ?? null,
+        // eslint-disable-next-line no-restricted-syntax -- optional chaining; null when source is absent
         progress: job?.progress ?? null,
+        // eslint-disable-next-line no-restricted-syntax -- optional chaining; null when source is absent
         targetId: job?.targetId ?? null,
+        // eslint-disable-next-line no-restricted-syntax -- optional chaining; null when source is absent
         carryingGood: job?.carryingGood ?? null,
+        // eslint-disable-next-line no-restricted-syntax -- optional chaining; null when source is absent
         assignedBuilding: runtime.homeAssignment?.buildingId ?? null,
     };
 }

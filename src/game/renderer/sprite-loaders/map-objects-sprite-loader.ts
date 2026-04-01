@@ -33,6 +33,40 @@ const log = new LogHandler('MapObjectsSpriteLoader');
 // Tree sprites
 // =============================================================================
 
+type AnimTarget = 'sway' | 'falling' | 'canopy' | null;
+
+function resolveAnimTarget(offset: number, frameCount: number, animatedOffsets: ReadonlySet<number>): AnimTarget {
+    if (!animatedOffsets.has(offset) || frameCount <= 1) {
+        return null;
+    }
+    switch (offset) {
+        case TREE_JOB_OFFSET.NORMAL:
+            return 'sway';
+        case TREE_JOB_OFFSET.FALLING:
+            return 'falling';
+        case TREE_JOB_OFFSET.CANOPY_DISAPPEARING:
+            return 'canopy';
+        default:
+            return null;
+    }
+}
+
+function getAnimFrameMap(
+    target: NonNullable<AnimTarget>,
+    sway: Map<number, SpriteEntry[]>,
+    falling: Map<number, SpriteEntry[]>,
+    canopy: Map<number, SpriteEntry[]>
+): Map<number, SpriteEntry[]> {
+    switch (target) {
+        case 'sway':
+            return sway;
+        case 'falling':
+            return falling;
+        case 'canopy':
+            return canopy;
+    }
+}
+
 /** Load all variant sprites for a single tree type. */
 async function loadTreeTypeSprites(
     ctx: FileLoadContext,
@@ -53,7 +87,7 @@ async function loadTreeTypeSprites(
         firstFrame: SpriteEntry;
         allFrames: SpriteEntry[] | null;
         /** Which frame map to collect into (null = static-only) */
-        animTarget: 'sway' | 'falling' | 'canopy' | null;
+        animTarget: AnimTarget;
     };
 
     let loaded = 0;
@@ -73,22 +107,18 @@ async function loadTreeTypeSprites(
                 ctx.atlas,
                 ctx.paletteBase
             );
-            if (anim?.frames.length) {
-                let animTarget: TreeStageData['animTarget'] = null;
-                if (ANIMATED_OFFSETS.has(offset) && anim.frames.length > 1) {
-                    if (offset === TREE_JOB_OFFSET.NORMAL) animTarget = 'sway';
-                    else if (offset === TREE_JOB_OFFSET.FALLING) animTarget = 'falling';
-                    else if (offset === TREE_JOB_OFFSET.CANOPY_DISAPPEARING) animTarget = 'canopy';
-                }
-                batch.add({
-                    treeType,
-                    variation: v * TREE_JOBS_PER_TYPE + offset,
-                    variantIndex: v,
-                    firstFrame: anim.frames[0]!.entry,
-                    allFrames: animTarget ? anim.frames.map(f => f.entry) : null,
-                    animTarget,
-                });
+            if (!anim?.frames.length) {
+                continue;
             }
+            const animTarget = resolveAnimTarget(offset, anim.frames.length, ANIMATED_OFFSETS);
+            batch.add({
+                treeType,
+                variation: v * TREE_JOBS_PER_TYPE + offset,
+                variantIndex: v,
+                firstFrame: anim.frames[0]!.entry,
+                allFrames: animTarget ? anim.frames.map(f => f.entry) : null,
+                animTarget,
+            });
         }
     }
 
@@ -96,10 +126,7 @@ async function loadTreeTypeSprites(
     batch.finalize(ctx.atlas, ctx.gl, data => {
         ctx.registry.registerMapObject(data.treeType, data.firstFrame, data.variation);
         if (data.allFrames && data.animTarget) {
-            const targetMap =
-                data.animTarget === 'sway' ? swayFrames
-                    : data.animTarget === 'falling' ? fallingFrames
-                        : canopyFrames;
+            const targetMap = getAnimFrameMap(data.animTarget, swayFrames, fallingFrames, canopyFrames);
             targetMap.set(data.variantIndex, data.allFrames);
         }
         loaded++;

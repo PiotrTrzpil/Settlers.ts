@@ -360,6 +360,7 @@ export class SoundManager implements IAudioManager {
      * Get the effective volume for a sound.
      */
     public getEffectiveVolume(config: SoundConfig): number {
+        // eslint-disable-next-line no-restricted-syntax -- optional config/prop with sensible default
         const baseVol = config.volume ?? 1.0;
         const categoryVol = config.type === SoundType.Music ? this.musicVolume : this.sfxVolume;
         return baseVol * categoryVol * this.masterVolume;
@@ -389,6 +390,7 @@ export class SoundManager implements IAudioManager {
             src,
             format,
             loop: config.loop,
+            // eslint-disable-next-line no-restricted-syntax -- optional config/prop with sensible default
             volume: (config.volume ?? 1.0) * this.sfxVolume * this.masterVolume,
             autoplay: false,
         });

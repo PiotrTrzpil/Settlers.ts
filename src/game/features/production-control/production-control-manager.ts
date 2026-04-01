@@ -175,6 +175,7 @@ export class ProductionControlManager {
 
         let totalWeight = 0;
         for (let i = 0; i < state.recipeCount; i++) {
+            // eslint-disable-next-line no-restricted-syntax -- Map.get() returns undefined for missing keys
             totalWeight += state.proportions.get(i) ?? 1;
         }
         if (totalWeight === 0) {
@@ -184,6 +185,7 @@ export class ProductionControlManager {
         let bestIndex = 0;
         let bestDeficit = -Infinity;
         for (let i = 0; i < state.recipeCount; i++) {
+            // eslint-disable-next-line no-restricted-syntax -- Map.get() returns undefined for missing keys
             const weight = state.proportions.get(i) ?? 1;
             const targetShare = weight / totalWeight;
             // eslint-disable-next-line no-restricted-syntax -- productionCounts starts empty; absent entry means 0 produced so far
@@ -220,6 +222,7 @@ export class ProductionControlManager {
 
         let totalWeight = 0;
         for (let i = 0; i < state.recipeCount; i++) {
+            // eslint-disable-next-line no-restricted-syntax -- Map.get() returns undefined for missing keys
             totalWeight += state.proportions.get(i) ?? 1;
         }
 
@@ -232,6 +235,7 @@ export class ProductionControlManager {
         let bestDeficit = -Infinity;
 
         for (let i = 0; i < state.recipeCount; i++) {
+            // eslint-disable-next-line no-restricted-syntax -- Map.get() returns undefined for missing keys
             const weight = state.proportions.get(i) ?? 1;
             const targetShare = weight / totalWeight;
             // eslint-disable-next-line no-restricted-syntax -- productionCounts starts empty; absent entry means 0 produced so far

@@ -208,9 +208,6 @@ function resolveFlagInstance(
     }
 
     const rawSprite = er.spriteManager.registry.getFlag(entity.player, frameIndex % flagFrameCount);
-    if (!rawSprite) {
-        return;
-    }
 
     // Isometric tile-to-world delta: same projection as tileToWorld but for offsets only
     const worldOffsetX = tileOffsetX - tileOffsetY * 0.5;

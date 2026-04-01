@@ -36,6 +36,7 @@ defineEmits<{
 }>();
 
 const displayValue = computed(() => {
+    // eslint-disable-next-line no-restricted-syntax -- optional config/prop with sensible default
     const decimals = props.decimals ?? (props.step < 1 ? (String(props.step).split('.')[1]?.length ?? 1) : 0);
     return decimals > 0 ? props.modelValue.toFixed(decimals) : String(props.modelValue);
 });

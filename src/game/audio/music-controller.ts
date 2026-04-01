@@ -239,6 +239,7 @@ export class MusicController {
 
             // Calculate and apply target volume
             const volMultiplier = this.soundManager.getMusicVolumeMultiplier();
+            // eslint-disable-next-line no-restricted-syntax -- optional config/prop with sensible default
             const baseVol = config.volume ?? 1.0;
             const targetVol = baseVol * volMultiplier;
             newMusic.fade(0, targetVol, fadeDuration);
@@ -300,6 +301,7 @@ export class MusicController {
     public updateVolume(): void {
         if (this.currentMusic && this._currentMusicId) {
             const config = SOUND_LIBRARY.find(s => s.id === this._currentMusicId);
+            // eslint-disable-next-line no-restricted-syntax -- optional config/prop with sensible default
             const baseVol = config?.volume ?? 1.0;
             const volMultiplier = this.soundManager.getMusicVolumeMultiplier();
             this.currentMusic.volume(baseVol * volMultiplier);

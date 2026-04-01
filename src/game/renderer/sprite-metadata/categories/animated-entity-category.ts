@@ -154,10 +154,12 @@ export class AnimatedEntityCategory implements SerializableSpriteCategory {
             sequences.set(walkSequenceKey, walkDirectionMap);
         } else {
             // Non-unit entities (buildings, map objects) or units without a walk key
+            // eslint-disable-next-line no-restricted-syntax -- nullable field with display/config default
             const defaultKey = walkSequenceKey ?? 'default';
             sequences.set(defaultKey, directionMap);
         }
 
+        // eslint-disable-next-line no-restricted-syntax -- nullable field with display/config default
         const defaultSequence = walkSequenceKey ?? 'default';
         const animationData: AnimationData = {
             sequences,

@@ -62,7 +62,8 @@ export class PilePositionResolver {
                             params.buildingId,
                             material,
                             // eslint-disable-next-line no-restricted-syntax -- pileIndex is an optional param; absent means first pile (index 0)
-                        params.pileIndex ?? 0
+                            params.pileIndex ?? 0
+                            // eslint-disable-next-line no-restricted-syntax -- value is nullable by API contract; null coercion
                         ) ?? null
                     );
                 }
@@ -80,6 +81,7 @@ export class PilePositionResolver {
                             `on building ${building.id} (${bt}); slot skipped`
                     );
                 }
+                // eslint-disable-next-line no-restricted-syntax -- value is nullable by API contract; null coercion
                 return pos ?? null;
             }
 

@@ -47,6 +47,7 @@ export function executeSelectAtTile(deps: SelectionDeps, cmd: SelectAtTileComman
         return COMMAND_OK;
     }
 
+    // eslint-disable-next-line no-restricted-syntax -- optional chaining; null when source is absent
     sel.select(entity?.id ?? null);
     return COMMAND_OK;
 }

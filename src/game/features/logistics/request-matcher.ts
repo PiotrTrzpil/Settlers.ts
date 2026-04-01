@@ -52,7 +52,9 @@ export class RequestMatcher {
         this.gameState = config.gameState;
         this.inventoryManager = config.inventoryManager;
         this.jobStore = config.jobStore;
+        // eslint-disable-next-line no-restricted-syntax -- optional config/prop with sensible default
         this.storageFilterManager = config.storageFilterManager ?? null;
+        // eslint-disable-next-line no-restricted-syntax -- optional config/prop with sensible default
         this.matchFilter = config.matchFilter ?? null;
     }
 

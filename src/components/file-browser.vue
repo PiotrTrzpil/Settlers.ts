@@ -72,6 +72,7 @@ function doFilter() {
 
     // Auto-select first file if available and nothing selected
     if (files.value.length > 0 && !selectedFile.value) {
+        // eslint-disable-next-line no-restricted-syntax -- index access returns undefined for missing keys
         selectedFile.value = files.value[0] ?? null;
         emit('select', selectedFile.value!);
     }

@@ -68,6 +68,7 @@ class FileCache {
                 const tx = db.transaction(this.STORE_NAME, 'readonly');
                 const store = tx.objectStore(this.STORE_NAME);
                 const request = store.get(key);
+                // eslint-disable-next-line no-restricted-syntax -- value is nullable by API contract; null coercion
                 request.onsuccess = () => resolve(request.result ?? null);
                 request.onerror = () => resolve(null);
             } catch {

@@ -77,6 +77,7 @@ export class CameraMode extends BaseInputMode {
      * Get current zoom level.
      */
     get zoom(): number {
+        // eslint-disable-next-line no-restricted-syntax -- optional value with sensible numeric default
         return this.viewPoint?.zoomValue ?? 1;
     }
 

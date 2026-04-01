@@ -16,10 +16,6 @@ installRealGameData();
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
-function moveUnit(sim: Simulation, entityId: number, targetX: number, targetY: number) {
-    return sim.execute({ type: 'move_unit', entityId, targetX, targetY });
-}
-
 function combatStatus(sim: Simulation, entityId: number): CombatStatus {
     return sim.services.combatSystem.getState(entityId)!.status;
 }
