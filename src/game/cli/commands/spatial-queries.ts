@@ -5,7 +5,7 @@
  */
 
 import type { CliArgs, CliCommand, CliContext, CliResult } from '../types';
-import { EntityType, tileKey } from '@/game/entity';
+import { EntityType, tileKey, Tile } from '@/game/entity';
 import type { GameState } from '@/game/game-state';
 import { isPassable } from '@/game/terrain';
 import { getGroundTypeName } from '@/resources/map/s4-types';
@@ -29,7 +29,7 @@ function resolveEntitySubType(
 }
 
 /** Parse --near X,Y argument into coordinates. */
-function parseNearArg(args: CliArgs): { x: number; y: number } | null {
+function parseNearArg(args: CliArgs): Tile | null {
     const nearArg = args['near'];
     if (typeof nearArg !== 'string') {
         return null;

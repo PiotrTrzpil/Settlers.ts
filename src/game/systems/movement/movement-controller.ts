@@ -1,4 +1,4 @@
-import { TileCoord } from '../../entity';
+import { Tile } from '../../entity';
 import { getStepDirection, EDirection, getStepDistanceFactor } from '../hex-directions';
 
 /**
@@ -14,7 +14,7 @@ export type MovementState = 'idle' | 'moving';
  */
 type ControllerPhase =
     | { readonly tag: 'idle' }
-    | { readonly tag: 'moving'; path: TileCoord[]; pathIndex: number; waitTime: number };
+    | { readonly tag: 'moving'; path: Tile[]; pathIndex: number; waitTime: number };
 
 const IDLE: ControllerPhase = { tag: 'idle' };
 
@@ -103,7 +103,7 @@ export class MovementController {
         this._speed = speed;
     }
 
-    get path(): ReadonlyArray<TileCoord> {
+    get path(): ReadonlyArray<Tile> {
         return this._phase.tag !== 'idle' ? this._phase.path : [];
     }
 
@@ -126,7 +126,7 @@ export class MovementController {
         return this._stepsTakenThisTick;
     }
 
-    get nextWaypoint(): TileCoord | undefined {
+    get nextWaypoint(): Tile | undefined {
         if (this._phase.tag === 'idle') {
             return undefined;
         }
@@ -142,7 +142,7 @@ export class MovementController {
         this._direction = direction;
     }
 
-    get goal(): TileCoord | undefined {
+    get goal(): Tile | undefined {
         if (this._phase.tag === 'idle') {
             return undefined;
         }
@@ -182,7 +182,7 @@ export class MovementController {
     // =====================================================================
 
     /** Start following a new path from stationary state. */
-    startPath(path: TileCoord[]): void {
+    startPath(path: Tile[]): void {
         if (path.length === 0) {
             return;
         }
@@ -202,7 +202,7 @@ export class MovementController {
     }
 
     /** Redirect to a new path while potentially in motion. */
-    redirectPath(path: TileCoord[]): void {
+    redirectPath(path: Tile[]): void {
         if (path.length === 0) {
             this.clearPath();
             return;
@@ -215,7 +215,7 @@ export class MovementController {
     }
 
     /** Replace entire remaining path. */
-    replacePath(newPath: TileCoord[]): void {
+    replacePath(newPath: Tile[]): void {
         const visualBefore = this.computeVisualPosition();
         const p = this.activePathPhase();
         p.path = [...newPath];
@@ -284,7 +284,7 @@ export class MovementController {
     }
 
     /** Execute a move to the next waypoint. Returns new position or null. */
-    executeMove(): TileCoord | null {
+    executeMove(): Tile | null {
         if (!this.canMove()) {
             return null;
         }

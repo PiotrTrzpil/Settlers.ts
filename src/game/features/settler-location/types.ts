@@ -43,7 +43,9 @@ export interface ISettlerBuildingLocationManager {
 
     /**
      * Mark settler as exiting the building.
-     * Sets entity.hidden = false. Throws if settler is not tracked as Inside.
+     * Sets entity.hidden = false, places entity at the building's approach tile,
+     * and creates the movement controller there.
+     * Throws if settler is not tracked as Inside.
      */
     exitBuilding(settlerId: number): void;
 

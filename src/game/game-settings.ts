@@ -23,7 +23,6 @@ export interface GameSettings {
     sfxVolume: number;
 
     // Display
-    showDebugGrid: boolean;
     disablePlayerTinting: boolean;
     showBuildingFootprint: boolean;
     darkLandDilation: boolean;
@@ -75,7 +74,6 @@ const DEFAULT_SETTINGS: GameSettings = {
     sfxVolume: 0.7,
 
     // Display
-    showDebugGrid: false,
     disablePlayerTinting: false,
     showBuildingFootprint: false,
     darkLandDilation: true,

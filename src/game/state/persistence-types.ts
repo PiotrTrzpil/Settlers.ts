@@ -12,6 +12,7 @@
 import type { TreeStage } from '../features/trees/tree-system';
 import type { StoneStage } from '../features/stones/stone-system';
 import type { SettlerState } from '../features/settler-tasks/types';
+import type { Tile } from '@/game/core/coordinates';
 
 export interface SerializedTree {
     stage: TreeStage;
@@ -51,7 +52,7 @@ export interface SerializedUnitRuntime {
     /** Settler state at save time */
     state: SettlerState;
     /** Move task target (if unit was moving via player command) */
-    moveTarget?: { x: number; y: number };
+    moveTarget?: Tile;
     /** Active job intent (if unit was working) */
     job?: SerializedJobIntent;
     /** Building assignment */
@@ -70,5 +71,5 @@ export interface SerializedJobIntent {
     /** Target entity ID if the job had acquired one (e.g., tree to chop). */
     targetId?: number;
     /** Target position if the job had one. */
-    targetPos?: { x: number; y: number };
+    targetPos?: Tile;
 }

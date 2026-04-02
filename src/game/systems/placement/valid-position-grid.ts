@@ -7,7 +7,7 @@
  */
 
 import { MapSize } from '@/utilities/map-size';
-import { BuildingType, getBuildingFootprint, getBuildingBlockArea } from '../../entity';
+import { BuildingType, getBuildingFootprint, getBuildingBlockArea, Tile } from '../../entity';
 import type { Race } from '../../core/race';
 import type { PlacementContext, PlacementFilter } from './types';
 import { validateBuildingPlacement } from './internal/building-validator';
@@ -316,7 +316,7 @@ export class ValidPositionGrid {
      * relative to the center. We walk the perimeter: top edge, right edge,
      * bottom edge, left edge.
      */
-    private getRingTile(r: number, pos: number): { x: number; y: number } {
+    private getRingTile(r: number, pos: number): Tile {
         const cx = this.request.centerX;
         const cy = this.request.centerY;
         const sideLen = 2 * r;

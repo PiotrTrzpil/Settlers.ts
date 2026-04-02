@@ -16,7 +16,7 @@
  * units from ever reaching the building entrance.
  */
 
-import type { Entity } from '@/game/entity';
+import type { Entity, Tile } from '@/game/entity';
 import { EXTENDED_OFFSETS, tileKey } from '@/game/entity';
 import type { TerrainData } from '@/game/terrain';
 import type { GameState } from '@/game/game-state';
@@ -28,11 +28,7 @@ import { BuildingType } from './building-type';
  * Never returns the door tile itself — always an adjacent neighbor.
  * Falls back to the door position only if all adjacent tiles are blocked.
  */
-export function findBuildingApproachTile(
-    building: Entity,
-    terrain: TerrainData,
-    gameState: GameState
-): { x: number; y: number } {
+export function findBuildingApproachTile(building: Entity, terrain: TerrainData, gameState: GameState): Tile {
     const door = getBuildingDoorPos(building.x, building.y, building.race, building.subType as BuildingType);
     return findAdjacentWalkableTile(door.x, door.y, terrain, gameState) ?? door;
 }
@@ -47,7 +43,7 @@ export function findAdjacentWalkableTile(
     y: number,
     terrain: TerrainData,
     gameState: GameState
-): { x: number; y: number } | null {
+): Tile | null {
     for (const [dx, dy] of EXTENDED_OFFSETS) {
         const nx = x + dx;
         const ny = y + dy;

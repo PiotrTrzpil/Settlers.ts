@@ -20,6 +20,8 @@ import { EntityType, getUnitTypeSpeed, type UnitType } from '@/game/entity';
 import { CLEANUP_PRIORITY } from '@/game/systems/entity-cleanup-registry';
 import { createLogger } from '@/utilities/logger';
 import { SettlerBuildingStatus, type ISettlerBuildingLocationManager, type SettlerBuildingLocation } from './types';
+import { getBuildingDoorPos } from '@/game/data/game-data-access';
+import { BuildingType } from '@/game/buildings/building-type';
 
 const log = createLogger('SettlerBuildingLocationManager');
 
@@ -125,7 +127,8 @@ export class SettlerBuildingLocationManager implements ISettlerBuildingLocationM
     }
 
     /**
-     * Mark settler as exiting the building. Sets entity.hidden = false.
+     * Mark settler as exiting the building. Places the entity at the building's
+     * door tile, sets entity.hidden = false, and creates the movement controller.
      * Throws if settler is not tracked as Inside.
      */
     exitBuilding(settlerId: number): void {
@@ -141,13 +144,17 @@ export class SettlerBuildingLocationManager implements ISettlerBuildingLocationM
         const buildingId = location.buildingId;
         this.locationMap.delete(settlerId);
 
+        const building = this.ctx.gameState.getEntityOrThrow(buildingId, 'SettlerBuildingLocationManager.exitBuilding');
         const entity = this.ctx.gameState.getEntityOrThrow(settlerId, 'SettlerBuildingLocationManager.exitBuilding');
+        const door = getBuildingDoorPos(building.x, building.y, building.race, building.subType as BuildingType);
+        entity.x = door.x;
+        entity.y = door.y;
         entity.hidden = false;
 
         // Restore movement controller and unitOccupancy (removed on enterBuilding)
         if (entity.type === EntityType.Unit) {
             const speed = getUnitTypeSpeed(entity.subType as UnitType);
-            this.ctx.gameState.movement.createController(settlerId, entity.x, entity.y, speed);
+            this.ctx.gameState.movement.createController(settlerId, door.x, door.y, speed);
             this.ctx.gameState.restoreTileOccupancy(settlerId);
         }
 

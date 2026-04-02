@@ -6,7 +6,7 @@
  * other units and resolve collisions locally via bump-or-wait.
  */
 
-import { TileCoord } from '../../entity';
+import { Tile } from '../../entity';
 import { findPathAStar, type PathfindingTerrain } from '../pathfinding';
 
 /**
@@ -15,7 +15,7 @@ import { findPathAStar, type PathfindingTerrain } from '../pathfinding';
  */
 export interface IPathfinder {
     /** Find a path from start to goal. Returns null if no path exists. */
-    findPath(startX: number, startY: number, goalX: number, goalY: number): TileCoord[] | null;
+    findPath(startX: number, startY: number, goalX: number, goalY: number): Tile[] | null;
 
     /** Returns true if terrain data has been set. */
     hasTerrainData(): boolean;
@@ -57,7 +57,7 @@ export class PathfindingService implements IPathfinder {
      * @param goalY Goal Y coordinate
      * @returns Array of waypoints (not including start), or null if unreachable
      */
-    findPath(startX: number, startY: number, goalX: number, goalY: number): TileCoord[] | null {
+    findPath(startX: number, startY: number, goalX: number, goalY: number): Tile[] | null {
         if (!this.terrain) {
             throw new Error('PathfindingService.findPath: terrain data not set');
         }

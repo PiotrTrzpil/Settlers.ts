@@ -1,6 +1,6 @@
 import { BasePlacementMode, type PlacementModeData, type PlacementModeEnterData } from './place-mode-base';
 import type { InputContext } from '../input-mode';
-import { UnitType } from '../../entity';
+import { UnitType, Tile } from '../../entity';
 import type { Race } from '../../core/race';
 import type { PlacementEntityType } from '../render-state';
 
@@ -47,7 +47,7 @@ export class PlaceUnitMode extends BasePlacementMode<UnitType> {
     /**
      * Units are placed directly at cursor position (no offset).
      */
-    protected resolveAnchorPosition(tileX: number, tileY: number, _unitType: UnitType): { x: number; y: number } {
+    protected resolveAnchorPosition(tileX: number, tileY: number, _unitType: UnitType): Tile {
         return { x: tileX, y: tileY };
     }
 

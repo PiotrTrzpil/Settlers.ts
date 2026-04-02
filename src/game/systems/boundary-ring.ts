@@ -97,6 +97,107 @@ function angularBin<T>(items: ScreenDot<T>[], minSpacing: number): ScreenDot<T>[
     return Array.from(bins.values()).map(b => b.sd);
 }
 
+// ── Spatial clustering ───────────────────────────────────────────
+
+/** Gap threshold: dots further apart than this form separate clusters. */
+const CLUSTER_GAP = 3;
+
+/** Path-compressing find for union-find array. */
+function ufFind(parent: Int32Array, i: number): number {
+    while (parent[i] !== i) {
+        parent[i] = parent[parent[i]!]!;
+        i = parent[i]!;
+    }
+    return i;
+}
+
+/** Union two elements by root. */
+function ufUnion(parent: Int32Array, a: number, b: number): void {
+    const ra = ufFind(parent, a);
+    const rb = ufFind(parent, b);
+    if (ra !== rb) {
+        parent[ra] = rb;
+    }
+}
+
+/** Grid cell key for spatial hashing. */
+function clusterCellKey(sx: number, sy: number): number {
+    return Math.floor(sy / CLUSTER_GAP) * 100003 + Math.floor(sx / CLUSTER_GAP);
+}
+
+/**
+ * Split dots into spatially connected clusters using a grid hash + union-find.
+ * Dots in adjacent grid cells (gap ≤ CLUSTER_GAP) are merged into one cluster.
+ * Separates isolated patches (captured footprints, pioneer expansions) from the
+ * main territory so angular binning works per-cluster.
+ */
+function spatialClusters<T>(dots: ScreenDot<T>[]): ScreenDot<T>[][] {
+    if (dots.length <= 1) {
+        return [dots];
+    }
+
+    const parent = new Int32Array(dots.length);
+    for (let i = 0; i < parent.length; i++) {
+        parent[i] = i;
+    }
+
+    const cells = hashDotsIntoCells(dots, parent);
+    mergeAdjacentCells(dots, cells, parent);
+    return collectClusters(dots, parent);
+}
+
+/** Hash dots into grid cells, merging dots that land in the same cell. */
+function hashDotsIntoCells<T>(dots: ScreenDot<T>[], parent: Int32Array): Map<number, number[]> {
+    const cells = new Map<number, number[]>();
+    for (let i = 0; i < dots.length; i++) {
+        const key = clusterCellKey(dots[i]!.sx, dots[i]!.sy);
+        let bucket = cells.get(key);
+        if (!bucket) {
+            bucket = [];
+            cells.set(key, bucket);
+        }
+        if (bucket.length > 0) {
+            ufUnion(parent, i, bucket[0]!);
+        }
+        bucket.push(i);
+    }
+    return cells;
+}
+
+/** Merge dots in neighboring grid cells (8-connected). */
+function mergeAdjacentCells<T>(dots: ScreenDot<T>[], cells: Map<number, number[]>, parent: Int32Array): void {
+    for (let i = 0; i < dots.length; i++) {
+        const cx = Math.floor(dots[i]!.sx / CLUSTER_GAP);
+        const cy = Math.floor(dots[i]!.sy / CLUSTER_GAP);
+        for (let dy = -1; dy <= 1; dy++) {
+            for (let dx = -1; dx <= 1; dx++) {
+                if (dx === 0 && dy === 0) {
+                    continue;
+                }
+                const neighbor = cells.get((cy + dy) * 100003 + (cx + dx));
+                if (neighbor) {
+                    ufUnion(parent, i, neighbor[0]!);
+                }
+            }
+        }
+    }
+}
+
+/** Group dots by their union-find root into separate cluster arrays. */
+function collectClusters<T>(dots: ScreenDot<T>[], parent: Int32Array): ScreenDot<T>[][] {
+    const clusterMap = new Map<number, ScreenDot<T>[]>();
+    for (let i = 0; i < dots.length; i++) {
+        const root = ufFind(parent, i);
+        let cluster = clusterMap.get(root);
+        if (!cluster) {
+            cluster = [];
+            clusterMap.set(root, cluster);
+        }
+        cluster.push(dots[i]!);
+    }
+    return Array.from(clusterMap.values());
+}
+
 // ── Distance pruning ─────────────────────────────────────────────────
 
 function hashKey(cx: number, cy: number): number {
@@ -141,29 +242,37 @@ function hasNearby<T extends BoundaryDot>(
 }
 
 /**
- * Remove dots that are too close to an already-accepted same-player neighbor.
- * Cross-player dots coexist; visual separation is handled by inward offsets.
+ * Distance-prune within a single cluster, returning ScreenDots (not unwrapped).
  */
-function distancePrune<T extends BoundaryDot>(candidates: ScreenDot<T>[], minDistSq: number): T[] {
-    const accepted: T[] = [];
+function distancePruneToScreenDots<T extends BoundaryDot>(
+    candidates: ScreenDot<T>[],
+    minDistSq: number
+): ScreenDot<T>[] {
+    if (minDistSq <= 0) {
+        return candidates;
+    }
+    const accepted: ScreenDot<T>[] = [];
     const hash = new Map<number, ScreenDot<T>[]>();
 
     for (const sd of candidates) {
         if (hasNearby(sd, hash, minDistSq)) {
             continue;
         }
-
-        accepted.push(sd.dot);
-        const hKey = hashKey(Math.floor(sd.sx), Math.floor(sd.sy));
-        let bucket = hash.get(hKey);
-        if (!bucket) {
-            bucket = [];
-            hash.set(hKey, bucket);
-        }
-        bucket.push(sd);
+        accepted.push(sd);
+        addToHash(hash, sd);
     }
 
     return accepted;
+}
+
+function addToHash<T>(hash: Map<number, ScreenDot<T>[]>, sd: ScreenDot<T>): void {
+    const hKey = hashKey(Math.floor(sd.sx), Math.floor(sd.sy));
+    let bucket = hash.get(hKey);
+    if (!bucket) {
+        bucket = [];
+        hash.set(hKey, bucket);
+    }
+    bucket.push(sd);
 }
 
 // ── Public API ────────────────────────────────────────────────────────
@@ -186,30 +295,49 @@ export function thinDotsInScreenSpace<T extends BoundaryDot>(raw: T[], minSpacin
         return [...raw];
     }
 
-    // Project to screen space
-    const projected: ScreenDot<T>[] = raw.map(dot => ({
-        dot,
-        sx: dot.x - dot.y * 0.5,
-        sy: dot.y * 0.5,
-    }));
+    const byPlayer = projectAndGroupByPlayer(raw);
 
-    // Group by player for independent angular binning
+    // Angular-bin each spatial cluster independently so isolated patches
+    // (e.g. captured tower footprints) aren't swallowed by a distant main territory.
+    // Large clusters get distance-pruned to remove thick bands; small clusters
+    // skip distance pruning since angular binning alone is sufficient.
+    const result: T[] = [];
+    for (const group of byPlayer.values()) {
+        for (const cluster of spatialClusters(group)) {
+            thinCluster(cluster, minSpacing, result);
+        }
+    }
+
+    return result;
+}
+
+/** Project tiles to screen space and group by player. */
+function projectAndGroupByPlayer<T extends BoundaryDot>(raw: T[]): Map<number, ScreenDot<T>[]> {
     const byPlayer = new Map<number, ScreenDot<T>[]>();
-    for (const sd of projected) {
-        let group = byPlayer.get(sd.dot.player);
+    for (const dot of raw) {
+        const sd: ScreenDot<T> = { dot, sx: dot.x - dot.y * 0.5, sy: dot.y * 0.5 };
+        let group = byPlayer.get(dot.player);
         if (!group) {
             group = [];
-            byPlayer.set(sd.dot.player, group);
+            byPlayer.set(dot.player, group);
         }
         group.push(sd);
     }
+    return byPlayer;
+}
 
-    const binned: ScreenDot<T>[] = [];
-    for (const group of byPlayer.values()) {
-        binned.push(...angularBin(group, minSpacing));
+/** Angular-bin and optionally distance-prune a single cluster, appending results. */
+function thinCluster<T extends BoundaryDot>(cluster: ScreenDot<T>[], minSpacing: number, out: T[]): void {
+    const SMALL_CLUSTER_THRESHOLD = 30;
+    const binned = angularBin(cluster, minSpacing);
+    if (cluster.length >= SMALL_CLUSTER_THRESHOLD) {
+        const minDistSq = minSpacing * minSpacing;
+        for (const sd of distancePruneToScreenDots(binned, minDistSq)) {
+            out.push(sd.dot);
+        }
+    } else {
+        for (const sd of binned) {
+            out.push(sd.dot);
+        }
     }
-
-    // Final distance prune for inter-player overlap
-    const minDistSq = minSpacing * minSpacing;
-    return distancePrune(binned, minDistSq);
 }

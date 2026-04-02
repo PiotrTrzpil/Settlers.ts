@@ -1,3 +1,5 @@
+import type { Tile } from '@/game/core/coordinates';
+
 /**
  * Spiral search from a center point outward.
  *
@@ -20,7 +22,7 @@ export function spiralSearch(
     h: number,
     predicate: (x: number, y: number) => boolean,
     maxRadius?: number
-): { x: number; y: number } | null {
+): Tile | null {
     const limit = maxRadius ?? Math.ceil(Math.max(w, h) / 2);
     for (let r = 0; r < limit; r++) {
         for (let dx = -r; dx <= r; dx++) {

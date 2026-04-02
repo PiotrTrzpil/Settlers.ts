@@ -32,7 +32,7 @@ export { smoothPath, type PathSmoothingParams } from './path-smoothing';
 
 // Backward-compatible alias
 import { findPathAStar, type PathfindingTerrain } from './astar';
-import { TileCoord } from '../../entity';
+import { Tile } from '../../entity';
 
 /**
  * Find a path between two points on the hex grid.
@@ -52,7 +52,7 @@ export function findPath(
     mapWidth: number,
     mapHeight: number,
     buildingOccupancy: Set<string>
-): TileCoord[] | null {
+): Tile[] | null {
     const terrain: PathfindingTerrain = {
         groundType,
         groundHeight,

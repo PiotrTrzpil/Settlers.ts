@@ -5,10 +5,10 @@
 
 import { describe, it, expect } from 'vitest';
 import { MovementController } from '@/game/systems/movement/movement-controller';
-import type { TileCoord } from '@/game/entity';
+import type { Tile } from '@/game/entity';
 
 // Diagonal hex path: SE steps (+1,+1)
-const diagonalPath: TileCoord[] = [
+const diagonalPath: Tile[] = [
     { x: 21, y: 61 },
     { x: 22, y: 62 },
     { x: 23, y: 63 },

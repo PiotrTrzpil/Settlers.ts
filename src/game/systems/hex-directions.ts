@@ -1,4 +1,4 @@
-import { TileCoord } from '../entity';
+import { Tile } from '../entity';
 
 /**
  * Six-direction isometric diamond grid.
@@ -65,7 +65,7 @@ export const Y_SCALE = (Math.sqrt(3) / 2) * 0.999999;
 /**
  * Get the next tile position in the given hex direction.
  */
-export function getNextHexPoint(pos: TileCoord, direction: EDirection): TileCoord {
+export function getNextHexPoint(pos: Tile, direction: EDirection): Tile {
     return {
         x: pos.x + GRID_DELTA_X[direction]!,
         y: pos.y + GRID_DELTA_Y[direction]!,
@@ -75,8 +75,8 @@ export function getNextHexPoint(pos: TileCoord, direction: EDirection): TileCoor
 /**
  * Get all 6 hex neighbors of a position.
  */
-export function getAllNeighbors(pos: TileCoord): TileCoord[] {
-    const neighbors: TileCoord[] = [];
+export function getAllNeighbors(pos: Tile): Tile[] {
+    const neighbors: Tile[] = [];
     for (let d = 0; d < NUMBER_OF_DIRECTIONS; d++) {
         neighbors.push({
             x: pos.x + GRID_DELTA_X[d]!,
@@ -161,7 +161,7 @@ export function hexDistance(x1: number, y1: number, x2: number, y2: number): num
  * Grid distance between two positioned objects (entities, coords, etc.).
  * Convenience wrapper over hexDistance that accepts {x,y} objects.
  */
-export function hexDistanceTo(a: TileCoord, b: TileCoord): number {
+export function hexDistanceTo(a: Tile, b: Tile): number {
     return hexDistance(a.x, a.y, b.x, b.y);
 }
 
@@ -169,7 +169,7 @@ export function hexDistanceTo(a: TileCoord, b: TileCoord): number {
  * Find the nearest item to `origin` from a list of candidates, by hex distance.
  * Returns null if candidates is empty.
  */
-export function findNearestByHexDistance<T extends TileCoord>(origin: TileCoord, candidates: Iterable<T>): T | null {
+export function findNearestByHexDistance<T extends Tile>(origin: Tile, candidates: Iterable<T>): T | null {
     let best: T | null = null;
     let bestDist = Infinity;
     for (const c of candidates) {

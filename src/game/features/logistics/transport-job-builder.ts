@@ -9,7 +9,7 @@
  * (JOB_CARRIER_TRANSPORT_GOOD) was just 4 trivial nodes with no real data.
  */
 
-import { EntityType } from '../../entity';
+import { EntityType, Tile } from '../../entity';
 import { BuildingType } from '../../buildings/building-type';
 import { getBuildingDoorPos } from '../../data/game-data-access';
 import { ChoreoTaskType, type ChoreoJobState, type TransportOps } from '../../systems/choreo/types';
@@ -26,7 +26,7 @@ import type { BuildingInventoryManager } from '../../systems/inventory/building-
  * Injected at construction so the builder has no direct dependency on settler-tasks internals.
  */
 export interface TransportPositionResolver {
-    getSourcePilePosition(buildingId: number, material: string): { x: number; y: number } | null;
+    getSourcePilePosition(buildingId: number, material: string): Tile | null;
 }
 
 export interface TransportJobBuilderConfig {
@@ -146,7 +146,7 @@ export class TransportJobBuilder {
     }
 
     /** Resolve a source pile position, falling back to building door or entity position. */
-    private resolvePilePos(buildingId: number, pile: { x: number; y: number } | null): { x: number; y: number } {
+    private resolvePilePos(buildingId: number, pile: Tile | null): Tile {
         if (pile) {
             return pile;
         }

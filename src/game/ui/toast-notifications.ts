@@ -71,6 +71,13 @@ export function toastWarn(source: string, message: string): void {
     toast.warn(`[${source}] ${message}`, { autoClose: 6000, toastId: key });
 }
 
+/**
+ * Show an informational toast.  Not throttled — intended for one-off game events.
+ */
+export function toastInfo(message: string, autoClose = 6000): void {
+    toast.info(message, { autoClose });
+}
+
 /** Clear all throttle state (e.g., on game reset). */
 export function toastClearThrottle(): void {
     throttle.clear();

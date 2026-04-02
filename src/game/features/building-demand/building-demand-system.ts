@@ -26,6 +26,7 @@ import type { DispatchRecruitmentOpts } from '../../systems/recruit/recruit-syst
 import { choreo } from '../../systems/choreo/choreo-builder';
 import { getBuildingWorkerInfo } from '../../data/game-data-access';
 import { createLogger } from '@/utilities/logger';
+import type { Tile } from '@/game/core/coordinates';
 
 const log = createLogger('BuildingDemand');
 
@@ -37,7 +38,7 @@ export interface BuildingDemandSystemConfig {
     gameState: GameState;
     eventBus: EventBus;
     findIdleSpecialist: (unitType: UnitType, player: number, nearX: number, nearY: number) => number | null;
-    assignJob: (unitId: number, job: ChoreoJobState, moveTo?: { x: number; y: number }) => boolean;
+    assignJob: (unitId: number, job: ChoreoJobState, moveTo?: Tile) => boolean;
     assignWorkerToBuilding: (settlerId: number, buildingId: number) => void;
     /** Full recruitment dispatch — find candidate, build choreo, assign job, register transform. */
     dispatchRecruitment: (unitType: UnitType, player: number, opts?: DispatchRecruitmentOpts) => number | null;

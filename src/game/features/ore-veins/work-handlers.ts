@@ -7,6 +7,7 @@ import type { TerrainData } from '../../terrain';
 import type { OreVeinData } from './ore-vein-data';
 import type { ResourceSignSystem } from './resource-sign-system';
 import { WorkHandlerType, type PositionWorkHandler } from '../settler-tasks/types';
+import type { Tile } from '@/game/core/coordinates';
 
 const GEOLOGIST_SEARCH_RADIUS = 20;
 
@@ -59,9 +60,9 @@ function findLocalCandidate(
     oy: number,
     oreVeinData: OreVeinData,
     terrain: TerrainData
-): { x: number; y: number } | null {
+): Tile | null {
     const maxOriginDistSq = GEOLOGIST_SEARCH_RADIUS * GEOLOGIST_SEARCH_RADIUS;
-    let best: { x: number; y: number } | null = null;
+    let best: Tile | null = null;
     let bestOriginDist = Infinity;
 
     const x0 = Math.max(0, x - LOCAL_SEARCH_RADIUS);
@@ -103,7 +104,7 @@ export function createGeologistHandler(
     terrain: TerrainData,
     signSystem: ResourceSignSystem
 ): PositionWorkHandler {
-    const originBySettler = new Map<number, { x: number; y: number }>();
+    const originBySettler = new Map<number, Tile>();
     /**
      * Settlers activated by a move command. Geologists idle after spawn until the
      * player issues a move command, which triggers `onSettlerRemoved` and adds

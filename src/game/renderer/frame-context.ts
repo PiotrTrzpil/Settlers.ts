@@ -16,7 +16,7 @@
  *   }
  */
 
-import { Entity, EntityType } from '../entity';
+import { Entity, EntityType, Tile } from '../entity';
 import type { UnitStateLookup } from './render-context';
 import { MapSize } from '@/utilities/map-size';
 import { IViewPoint } from './i-view-point';
@@ -318,7 +318,7 @@ function computeTileBounds(worldBounds: Bounds, viewPoint: IViewPoint): Bounds {
  * Approximate world-to-tile conversion (ignores height for culling).
  * Good enough for bounds calculation since we add margin anyway.
  */
-function worldToTileApprox(worldX: number, worldY: number, viewPoint: IViewPoint): { x: number; y: number } {
+function worldToTileApprox(worldX: number, worldY: number, viewPoint: IViewPoint): Tile {
     const vpIntX = Math.floor(viewPoint.x);
     const vpIntY = Math.floor(viewPoint.y);
     const vpFracX = viewPoint.x - vpIntX;

@@ -5,7 +5,7 @@
  * Extracted from game-state.ts to keep the main entity store under the line limit.
  */
 
-import { EntityType, UnitType, isUnitTypeSelectable } from './entity';
+import { EntityType, UnitType, isUnitTypeSelectable, Tile } from './entity';
 import type { MovementSystem, MovementController } from './systems/movement/index';
 
 /**
@@ -15,7 +15,7 @@ import type { MovementSystem, MovementController } from './systems/movement/inde
  */
 export interface UnitStateView {
     readonly entityId: number;
-    readonly path: ReadonlyArray<{ x: number; y: number }>;
+    readonly path: ReadonlyArray<Tile>;
     readonly pathIndex: number;
     readonly moveProgress: number;
     readonly speed: number;
@@ -43,7 +43,7 @@ class UnitStateAdapter implements UnitStateView {
     get entityId(): number {
         return this.controller.entityId;
     }
-    get path(): ReadonlyArray<{ x: number; y: number }> {
+    get path(): ReadonlyArray<Tile> {
         return this.controller.path;
     }
     get pathIndex(): number {

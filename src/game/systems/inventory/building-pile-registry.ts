@@ -8,7 +8,7 @@
  * Constructed at startup from GameData. Replaces the hand-maintained stack-positions.yaml.
  */
 
-import type { TileCoord } from '../../core/coordinates';
+import type { Tile } from '../../core/coordinates';
 import { EMaterialType } from '../../economy/material-type';
 import { Race } from '../../core/race';
 import { BuildingType } from '../../buildings/building-type';
@@ -75,12 +75,7 @@ export class BuildingPileRegistry {
     }
 
     /** Get storage pile positions as world coordinates */
-    getStoragePileWorldPositions(
-        buildingType: BuildingType,
-        race: Race,
-        buildingX: number,
-        buildingY: number
-    ): TileCoord[] {
+    getStoragePileWorldPositions(buildingType: BuildingType, race: Race, buildingX: number, buildingY: number): Tile[] {
         const offsets = this.getStoragePilePositions(buildingType, race);
         return offsets.map(p => ({ x: buildingX + p.dx, y: buildingY + p.dy }));
     }
@@ -92,7 +87,7 @@ export class BuildingPileRegistry {
         material: EMaterialType,
         buildingX: number,
         buildingY: number
-    ): TileCoord | null {
+    ): Tile | null {
         const slots = this.getPileSlots(buildingType, race);
         const slot = slots.find(s => s.material === material);
         if (!slot) {
@@ -109,7 +104,7 @@ export class BuildingPileRegistry {
         material: EMaterialType,
         buildingX: number,
         buildingY: number
-    ): TileCoord | null {
+    ): Tile | null {
         const slots = this.getPileSlots(buildingType, race);
         const slot = slots.find(s => s.material === material && s.slotType === slotType);
         if (!slot) {

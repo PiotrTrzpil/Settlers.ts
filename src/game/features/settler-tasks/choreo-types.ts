@@ -5,7 +5,7 @@
  * feature-dependent context interfaces and executor function signatures.
  */
 
-import type { Entity } from '../../entity';
+import type { Entity, Tile } from '../../entity';
 import type { GameState } from '../../game-state';
 import type { EventBus } from '../../event-bus';
 import type { BuildingInventoryManager } from '../inventory';
@@ -53,11 +53,11 @@ export interface JobPartResolver {
 /** Converts building-relative (x, y) to world hex coordinates. */
 export interface BuildingPositionResolver {
     /** Resolve (buildingId, x, y, useWork) → world hex position. */
-    resolvePosition(buildingId: number, x: number, y: number, useWork: boolean): { x: number; y: number };
+    resolvePosition(buildingId: number, x: number, y: number, useWork: boolean): Tile;
     /** Get the source (input) pile position for a material at a building. */
-    getSourcePilePosition(buildingId: number, material: string): { x: number; y: number } | null;
+    getSourcePilePosition(buildingId: number, material: string): Tile | null;
     /** Get the destination (output) pile position for a material at a building. */
-    getDestinationPilePosition(buildingId: number, material: string): { x: number; y: number } | null;
+    getDestinationPilePosition(buildingId: number, material: string): Tile | null;
     /** Get the work area radius (in tiles) for a building. Returns 0 if no work area. */
     getWorkAreaRadius(buildingId: number): number;
 }

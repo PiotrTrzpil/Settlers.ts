@@ -12,7 +12,7 @@ import { createSimulation, cleanupSimulation, type Simulation } from '../../help
 import { installRealGameData } from '../../helpers/test-game-data';
 import { TERRAIN, setTerrainAt, blockColumnWithGap } from '../../helpers/test-map';
 import { BuildingType } from '@/game/buildings/building-type';
-import { tileKey, getBuildingFootprint, type TileCoord } from '@/game/entity';
+import { tileKey, getBuildingFootprint, type Tile } from '@/game/entity';
 import { UnitType } from '@/game/core/unit-types';
 import { Race } from '@/game/core/race';
 import { getBuildingDoorPos } from '@/game/data/game-data-access';
@@ -23,7 +23,7 @@ installRealGameData();
 // ─── Assertion helpers ──────────────────────────────────────────────
 
 /** Assert no visited tile appears in buildingOccupancy. */
-function assertAvoidedFootprints(visited: TileCoord[], buildingOccupancy: Set<string>): void {
+function assertAvoidedFootprints(visited: Tile[], buildingOccupancy: Set<string>): void {
     for (const tile of visited) {
         const key = tileKey(tile.x, tile.y);
         expect(buildingOccupancy.has(key), `unit stepped on building tile (${tile.x}, ${tile.y})`).toBe(false);
@@ -31,7 +31,7 @@ function assertAvoidedFootprints(visited: TileCoord[], buildingOccupancy: Set<st
 }
 
 /** Assert every visited tile is passable terrain (type > 8). */
-function assertAllPassable(visited: TileCoord[], groundType: Uint8Array, mapWidth: number): void {
+function assertAllPassable(visited: Tile[], groundType: Uint8Array, mapWidth: number): void {
     for (const tile of visited) {
         const idx = tile.y * mapWidth + tile.x;
         expect(groundType[idx]!, `unit visited impassable tile (${tile.x}, ${tile.y})`).toBeGreaterThan(8);
@@ -61,7 +61,7 @@ function spawnGroup(
  * Returns { ids, targets } ready for runWithPositionTracking.
  */
 function moveGroupTo(s: Simulation, ids: number[], targetX: number) {
-    const targets: TileCoord[] = [];
+    const targets: Tile[] = [];
     for (const id of ids) {
         const e = s.state.getEntityOrThrow(id, 'moveGroup');
         targets.push({ x: targetX, y: e.y });
@@ -82,7 +82,7 @@ function spawnOpposingGroups(
     const rightGroup = spawnGroup(s, { count, x: rightX, startY, spacing: ySpacing, unitType });
 
     const ids: number[] = [];
-    const targets: TileCoord[] = [];
+    const targets: Tile[] = [];
     for (let i = 0; i < count; i++) {
         ids.push(leftGroup[i]!);
         targets.push({ x: rightX, y: startY + i * ySpacing });
@@ -104,10 +104,10 @@ function spawnOpposingGroups(
 function runWithPositionTracking(
     s: Simulation,
     ids: number[],
-    targets: TileCoord[],
+    targets: Tile[],
     opts: { maxTicks: number; label: string; dt?: number }
-): Map<number, TileCoord[]> {
-    const trails = new Map<number, TileCoord[]>();
+): Map<number, Tile[]> {
+    const trails = new Map<number, Tile[]>();
     for (const id of ids) {
         const e = s.state.getEntityOrThrow(id, 'track-init');
         trails.set(id, [{ x: e.x, y: e.y }]);
@@ -151,7 +151,7 @@ function runWithPositionTracking(
 }
 
 /** Assert no unit teleported — every consecutive position must be a hex neighbor. */
-function assertNoTeleports(trails: Map<number, TileCoord[]>) {
+function assertNoTeleports(trails: Map<number, Tile[]>) {
     for (const [id, trail] of trails) {
         for (let i = 1; i < trail.length; i++) {
             const prev = trail[i - 1]!;
@@ -186,7 +186,7 @@ const DIR_NAMES = ['NE', 'E', 'SE', 'SW', 'W', 'NW'];
  * Assert no unit makes a sharp turn (> 120deg on hex grid).
  * maxAngle: maximum allowed hex turn steps (default 2 = 120deg).
  */
-function assertSmoothMovement(trails: Map<number, TileCoord[]>, maxAngle = 2) {
+function assertSmoothMovement(trails: Map<number, Tile[]>, maxAngle = 2) {
     for (const [id, trail] of trails) {
         if (trail.length < 3) continue;
 
@@ -212,7 +212,7 @@ function assertSmoothMovement(trails: Map<number, TileCoord[]>, maxAngle = 2) {
 }
 
 /** Assert every unit sits on its target and no two share a tile. */
-function assertAllArrived(s: Simulation, ids: number[], targets: TileCoord[]) {
+function assertAllArrived(s: Simulation, ids: number[], targets: Tile[]) {
     const occupied = new Set<string>();
     for (let i = 0; i < ids.length; i++) {
         const e = s.state.getEntityOrThrow(ids[i]!, 'verify');

@@ -1,4 +1,5 @@
-import { EntityType, UnitType, EXTENDED_OFFSETS, getUnitLevel, tileKey, isUnitTypeMilitary } from '../../entity';
+import { EntityType, UnitType, EXTENDED_OFFSETS, getUnitLevel, tileKey, isUnitTypeMilitary, Tile } from '../../entity';
+import { UnitCategory, getUnitCategory } from '../../core/unit-types';
 import type { GameState } from '../../game-state';
 import type { TerrainData } from '../../terrain';
 import type { EventBus } from '../../event-bus';
@@ -33,6 +34,8 @@ export interface MoveUnitDeps {
     unitReservation: UnitReservationRegistry;
     /** Whether units in combat can be redirected by player commands. */
     isCombatControllable: () => boolean;
+    /** Territory owner lookup — workers cannot move outside their territory. */
+    getOwner: (x: number, y: number) => number;
 }
 
 export interface MoveSelectedUnitsDeps {
@@ -42,13 +45,11 @@ export interface MoveSelectedUnitsDeps {
     unitReservation: UnitReservationRegistry;
     /** Whether units in combat can be redirected by player commands. */
     isCombatControllable: () => boolean;
+    /** Territory owner lookup — workers cannot move outside their territory. */
+    getOwner: (x: number, y: number) => number;
 }
 
-function findValidSpawnTile(
-    x: number,
-    y: number,
-    isValid: (x: number, y: number) => boolean
-): { x: number; y: number } | null {
+function findValidSpawnTile(x: number, y: number, isValid: (x: number, y: number) => boolean): Tile | null {
     for (const [dx, dy] of EXTENDED_OFFSETS) {
         const nx = x + dx;
         const ny = y + dy;
@@ -108,7 +109,7 @@ export function executeSpawnUnit(deps: SpawnUnitDeps, cmd: SpawnUnitCommand): Sp
  * If the target tile is inside a building footprint, find the nearest
  * walkable tile outside. Returns the original target if it's already clear.
  */
-function resolveTargetOutsideBuilding(state: GameState, x: number, y: number): { x: number; y: number } {
+function resolveTargetOutsideBuilding(state: GameState, x: number, y: number): Tile {
     if (!state.buildingOccupancy.has(tileKey(x, y))) {
         return { x, y };
     }
@@ -138,6 +139,18 @@ function hasEnemyNearTarget(state: GameState, targetX: number, targetY: number, 
     return false;
 }
 
+/** Workers (carriers, diggers, etc.) cannot be commanded to move outside their player's territory. */
+function isWorkerOutsideTerritory(
+    entity: { subType: string | number; player: number },
+    target: Tile,
+    getOwner: (x: number, y: number) => number
+): boolean {
+    return (
+        getUnitCategory(entity.subType as UnitType) === UnitCategory.Worker &&
+        getOwner(target.x, target.y) !== entity.player
+    );
+}
+
 export function executeMoveUnit(deps: MoveUnitDeps, cmd: MoveUnitCommand): CommandResult {
     const entity = deps.state.getEntity(cmd.entityId);
     if (!entity) {
@@ -158,6 +171,10 @@ export function executeMoveUnit(deps: MoveUnitDeps, cmd: MoveUnitCommand): Comma
 
     // Resolve target outside building footprint
     const target = resolveTargetOutsideBuilding(deps.state, cmd.targetX, cmd.targetY);
+
+    if (isWorkerOutsideTerritory(entity, target, deps.getOwner)) {
+        return commandFailed(`Worker ${cmd.entityId} cannot move outside territory`);
+    }
 
     // March passively if target tile has no enemies — don't engage along the way
     if (
@@ -185,7 +202,6 @@ export function executeMoveSelectedUnits(deps: MoveSelectedUnitsDeps, cmd: MoveS
     }
 
     const combatControllable = deps.isCombatControllable();
-    // Resolve base target outside building footprint
     const baseTarget = resolveTargetOutsideBuilding(state, cmd.targetX, cmd.targetY);
     const firstUnit = selectedUnits[0]!;
     const passiveMarch = !hasEnemyNearTarget(state, baseTarget.x, baseTarget.y, firstUnit.player);
@@ -193,26 +209,9 @@ export function executeMoveSelectedUnits(deps: MoveSelectedUnitsDeps, cmd: MoveS
     let movedCount = 0;
     for (let i = 0; i < selectedUnits.length; i++) {
         const unit = selectedUnits[i]!;
-        if (deps.unitReservation.isReserved(unit.id)) {
-            continue;
-        }
-        if (!combatControllable && deps.combatSystem.isInCombat(unit.id)) {
-            continue;
-        }
-
         const offset = FORMATION_OFFSETS[Math.min(i, FORMATION_OFFSETS.length - 1)]!;
-        const rawTarget = { x: baseTarget.x + offset[0], y: baseTarget.y + offset[1] };
-        const target = resolveTargetOutsideBuilding(state, rawTarget.x, rawTarget.y);
-
-        const inCombat = deps.combatSystem.isInCombat(unit.id);
-        if (inCombat) {
-            deps.combatSystem.releaseFromCombat(unit.id);
-        }
-        if (inCombat && passiveMarch) {
-            deps.combatSystem.setPassive(unit.id);
-        }
-
-        if (deps.settlerTaskSystem.assignMoveTask(unit.id, target.x, target.y)) {
+        const target = resolveTargetOutsideBuilding(state, baseTarget.x + offset[0], baseTarget.y + offset[1]);
+        if (tryMoveSelectedUnit(deps, unit, target, combatControllable, passiveMarch)) {
             movedCount++;
         }
     }
@@ -222,6 +221,35 @@ export function executeMoveSelectedUnits(deps: MoveSelectedUnitsDeps, cmd: MoveS
     }
 
     return COMMAND_OK;
+}
+
+/** Attempt to move a single unit from a multi-select move command. */
+function tryMoveSelectedUnit(
+    deps: MoveSelectedUnitsDeps,
+    unit: { id: number; subType: string | number; player: number },
+    target: Tile,
+    combatControllable: boolean,
+    passiveMarch: boolean
+): boolean {
+    if (deps.unitReservation.isReserved(unit.id)) {
+        return false;
+    }
+    if (!combatControllable && deps.combatSystem.isInCombat(unit.id)) {
+        return false;
+    }
+    if (isWorkerOutsideTerritory(unit, target, deps.getOwner)) {
+        return false;
+    }
+
+    const inCombat = deps.combatSystem.isInCombat(unit.id);
+    if (inCombat) {
+        deps.combatSystem.releaseFromCombat(unit.id);
+    }
+    if (inCombat && passiveMarch) {
+        deps.combatSystem.setPassive(unit.id);
+    }
+
+    return deps.settlerTaskSystem.assignMoveTask(unit.id, target.x, target.y);
 }
 
 export interface RecruitSpecialistDeps {

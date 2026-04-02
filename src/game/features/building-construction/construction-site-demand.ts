@@ -14,7 +14,7 @@ import type { EventBus } from '../../event-bus';
 import { EventSubscriptionManager } from '../../event-bus';
 import type { ChoreoJobState } from '../../systems/choreo/types';
 import { UnitType } from '../../core/unit-types';
-import { EntityType } from '../../entity';
+import { EntityType, Tile } from '../../entity';
 import type { DispatchRecruitmentOpts } from '../../systems/recruit/recruit-system';
 import type { ConstructionSiteManager } from './construction-site-manager';
 import { buildDigTileJob, buildBuildStepJob, buildRecruitDiggerJob, buildRecruitBuilderJob } from './construction-jobs';
@@ -49,7 +49,7 @@ export interface ConstructionSiteDemandConfig {
     eventBus: EventBus;
     siteManager: ConstructionSiteManager;
     findIdleSpecialist: (unitType: UnitType, player: number, nearX: number, nearY: number) => number | null;
-    assignJob: (unitId: number, job: ChoreoJobState, moveTo?: { x: number; y: number }) => boolean;
+    assignJob: (unitId: number, job: ChoreoJobState, moveTo?: Tile) => boolean;
     /** Full recruitment dispatch — find candidate, build choreo, assign job, register transform. */
     dispatchRecruitment: (unitType: UnitType, player: number, opts?: DispatchRecruitmentOpts) => number | null;
 }

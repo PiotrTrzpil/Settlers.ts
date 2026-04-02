@@ -3,7 +3,7 @@
  * Centralized building-related types, enums, and size configurations.
  */
 
-import { type TileCoord, tileKey } from '../core/coordinates';
+import { type Tile, tileKey } from '../core/coordinates';
 import { Race } from '../core/race';
 import { getBuildingFootprintAt, getBuildingBlockAreaAt } from '@/resources/game-data';
 import { getBuildingInfo } from '../data/game-data-access';
@@ -53,7 +53,7 @@ export function isMineBuilding(buildingType: BuildingType): boolean {
  * @param race Race of the owning player (required — throws for wrong race/building combo)
  * @returns Hotspot offset {x, y} in tile units
  */
-export function getBuildingHotspot(buildingType: BuildingType, race: Race): { x: number; y: number } {
+export function getBuildingHotspot(buildingType: BuildingType, race: Race): Tile {
     const info = getBuildingInfo(race, buildingType);
     if (!info) {
         throw new Error(`No BuildingInfo for ${buildingType} / race ${Race[race]}`);
@@ -71,7 +71,7 @@ export function getBuildingHotspot(buildingType: BuildingType, race: Race): { x:
  * @param buildingType Type of building
  * @param race Race of the owning player (required — throws for wrong race/building combo)
  */
-export function getBuildingFootprint(x: number, y: number, buildingType: BuildingType, race: Race): TileCoord[] {
+export function getBuildingFootprint(x: number, y: number, buildingType: BuildingType, race: Race): Tile[] {
     const info = getBuildingInfo(race, buildingType);
     if (!info) {
         throw new Error(`No BuildingInfo for ${buildingType} / race ${Race[race]}`);
@@ -92,7 +92,7 @@ export function getBuildingFootprint(x: number, y: number, buildingType: Buildin
  * Uses blockPosLines (not buildingPosLines). The door is at the edge of this area,
  * so no corridor carving is needed.
  */
-export function getBuildingBlockArea(x: number, y: number, buildingType: BuildingType, race: Race): TileCoord[] {
+export function getBuildingBlockArea(x: number, y: number, buildingType: BuildingType, race: Race): Tile[] {
     const info = getBuildingInfo(race, buildingType);
     if (!info) {
         throw new Error(`No BuildingInfo for ${buildingType} / race ${Race[race]}`);
@@ -116,7 +116,7 @@ export function getBuildingPassableTiles(
     y: number,
     buildingType: BuildingType,
     race: Race,
-    blockArea: TileCoord[]
+    blockArea: Tile[]
 ): Set<string> {
     const passable = new Set<string>();
     let info: ReturnType<typeof getBuildingInfo>;

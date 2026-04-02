@@ -60,6 +60,8 @@ export interface LayerVisibility {
     showTerritory: boolean;
     /** Always show debug labels (object type numbers) for all map objects, even hidden ones */
     showDecoLabels: boolean;
+    /** Show debug wireframe grid overlay on landscape */
+    showDebugGrid: boolean;
 }
 
 /** Default layer visibility (all visible) */
@@ -81,6 +83,7 @@ export const DEFAULT_LAYER_VISIBILITY: LayerVisibility = {
     showPathfinding: true,
     showTerritory: true,
     showDecoLabels: false,
+    showDebugGrid: false,
 };
 
 // ============================================================================

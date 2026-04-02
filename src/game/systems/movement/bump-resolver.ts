@@ -7,7 +7,7 @@
  * Extracted from MovementSystem to keep file sizes manageable.
  */
 
-import { TileCoord, tileKey } from '../../entity';
+import { Tile, tileKey } from '../../entity';
 import type { EventBus, GameEvents } from '../../event-bus';
 import { getAllNeighbors } from '../hex-directions';
 import { isPassable } from '../../terrain';
@@ -21,7 +21,7 @@ import { setPathfindingEntityContext } from '../pathfinding';
  * Prefers tiles perpendicular to the bumper's travel direction (side-step),
  * penalizes tiles ahead of the bumper (which cause repeated bumps).
  */
-function scoreBumpTile(tile: TileCoord, occupant: MovementController, travelDx: number, travelDy: number): number {
+function scoreBumpTile(tile: Tile, occupant: MovementController, travelDx: number, travelDy: number): number {
     const dx = tile.x - occupant.tileX;
     const dy = tile.y - occupant.tileY;
     return -(dx * travelDx + dy * travelDy);
@@ -197,7 +197,7 @@ export class BumpResolver {
         return false;
     }
 
-    private executeBump(bumperId: number, occupant: MovementController, occupantId: number, dest: TileCoord): void {
+    private executeBump(bumperId: number, occupant: MovementController, occupantId: number, dest: Tile): void {
         if (this.deps.verbose) {
             this.deps.eventBus.emit('movement:bump', {
                 unitId: bumperId,
@@ -219,7 +219,7 @@ export class BumpResolver {
     }
 
     private trySwap(bumper: MovementController, occupant: MovementController, occupantId: number): boolean {
-        const bumperTile: TileCoord = { x: bumper.tileX, y: bumper.tileY };
+        const bumperTile: Tile = { x: bumper.tileX, y: bumper.tileY };
         if (!this.isTilePassableForBump(bumperTile.x, bumperTile.y)) {
             return false;
         }
@@ -227,7 +227,7 @@ export class BumpResolver {
         return true;
     }
 
-    private repathBumpedOccupant(occupant: MovementController, dest: TileCoord): void {
+    private repathBumpedOccupant(occupant: MovementController, dest: Tile): void {
         const goal = occupant.goal;
         if (!goal) {
             return;
@@ -253,7 +253,7 @@ export class BumpResolver {
         return 'priority';
     }
 
-    private clearTileForBump(bumper: MovementController, dest: TileCoord, depth: number): boolean {
+    private clearTileForBump(bumper: MovementController, dest: Tile, depth: number): boolean {
         const destOccupantId = this.getUnitAt(tileKey(dest.x, dest.y), bumper.entityId);
         if (destOccupantId === undefined) {
             return true;
@@ -261,17 +261,13 @@ export class BumpResolver {
         return this.tryBump(bumper, destOccupantId, depth + 1);
     }
 
-    private findBumpDestination(
-        occupant: MovementController,
-        bumper: MovementController,
-        depth: number
-    ): TileCoord | null {
+    private findBumpDestination(occupant: MovementController, bumper: MovementController, depth: number): Tile | null {
         const neighbors = getAllNeighbors({ x: occupant.tileX, y: occupant.tileY });
         const travelDx = occupant.tileX - bumper.tileX;
         const travelDy = occupant.tileY - bumper.tileY;
 
-        const free: TileCoord[] = [];
-        const bumpable: TileCoord[] = [];
+        const free: Tile[] = [];
+        const bumpable: Tile[] = [];
 
         for (const n of neighbors) {
             if (n.x === bumper.tileX && n.y === bumper.tileY) {
@@ -314,11 +310,11 @@ export class BumpResolver {
     }
 
     private pickBestBumpTile(
-        candidates: TileCoord[],
+        candidates: Tile[],
         occupant: MovementController,
         travelDx: number,
         travelDy: number
-    ): TileCoord {
+    ): Tile {
         let best = candidates[0]!;
         let bestScore = scoreBumpTile(best, occupant, travelDx, travelDy);
         for (let i = 1; i < candidates.length; i++) {

@@ -3,6 +3,7 @@
 import type { BuildingType } from '@/game/buildings/building-type';
 import type { Race } from '@/game/core/race';
 import type { TickSystem } from '@/game/core/tick-system';
+import type { Tile } from '@/game/core/coordinates';
 
 /** A single step in the AI's build order. */
 export interface BuildStep {
@@ -29,7 +30,7 @@ export interface AiPlayerState {
     readonly buildingsPlaced: number;
     readonly soldiersCount: number;
     readonly attacksSent: number;
-    readonly attackTarget: { x: number; y: number } | null;
+    readonly attackTarget: Tile | null;
 }
 
 // ─── Feature exports (accessed via ctx.getFeature('ai-player')) ──

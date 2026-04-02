@@ -14,7 +14,7 @@
  *   Different-sign   → axis-aligned only → |dx|+|dy| steps
  */
 
-import { TileCoord } from '../../entity';
+import { Tile } from '../../entity';
 
 /**
  * Bresenham-style even interleave of two direction types.
@@ -56,7 +56,7 @@ function evenInterleave(a: Dir, countA: number, b: Dir, countB: number): Dir[] {
  *
  * @returns Array of tile coordinates from start to end (inclusive)
  */
-export function getHexLine(x1: number, y1: number, x2: number, y2: number): TileCoord[] {
+export function getHexLine(x1: number, y1: number, x2: number, y2: number): Tile[] {
     const dx = x2 - x1;
     const dy = y2 - y1;
 
@@ -126,7 +126,7 @@ interface Dir {
 }
 
 /** Extract step directions from a tile sequence. */
-function extractStepDirs(tiles: TileCoord[]): Dir[] {
+function extractStepDirs(tiles: Tile[]): Dir[] {
     const dirs: Dir[] = [];
     for (let i = 0; i < tiles.length - 1; i++) {
         dirs.push({ dx: tiles[i + 1]!.x - tiles[i]!.x, dy: tiles[i + 1]!.y - tiles[i]!.y });
@@ -177,8 +177,8 @@ function interleaveRuns(a: Dir, countA: number, b: Dir, countB: number, startWit
 }
 
 /** Rebuild tile coordinates from a start point and a direction sequence. */
-function rebuildTilesFromDirs(start: TileCoord, dirs: Dir[]): TileCoord[] {
-    const result: TileCoord[] = [start];
+function rebuildTilesFromDirs(start: Tile, dirs: Dir[]): Tile[] {
+    const result: Tile[] = [start];
     let { x, y } = start;
     for (const dir of dirs) {
         x += dir.dx;
@@ -201,7 +201,7 @@ function rebuildTilesFromDirs(start: TileCoord, dirs: Dir[]): TileCoord[] {
  * @param tiles The raw hex line tiles
  * @param maxRunLength Override for the module-level setting (for testing)
  */
-export function groupDirectionRuns(tiles: TileCoord[], maxRunLength?: number): TileCoord[] {
+export function groupDirectionRuns(tiles: Tile[], maxRunLength?: number): Tile[] {
     const runLen = maxRunLength ?? _directionRunLength;
     if (tiles.length <= 2 || runLen <= 1) {
         return tiles;

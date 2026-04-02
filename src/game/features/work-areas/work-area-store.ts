@@ -14,6 +14,7 @@ import type { TileOffset } from '../../input/building-adjust/types';
 import { hasWorkArea } from './types';
 import { getBuildingInfo } from '../../data/game-data-access';
 import { PersistentMap } from '@/game/persistence/persistent-store';
+import type { Tile } from '@/game/core/coordinates';
 
 export class WorkAreaStore {
     /** Per-instance overrides (entityId → offset), auto-persisted. */
@@ -71,7 +72,7 @@ export class WorkAreaStore {
         buildingY: number,
         buildingType: BuildingType,
         race: Race
-    ): { x: number; y: number } {
+    ): Tile {
         const offset = this.getOffset(buildingType, race, buildingId);
         return { x: buildingX + offset.dx, y: buildingY + offset.dy };
     }

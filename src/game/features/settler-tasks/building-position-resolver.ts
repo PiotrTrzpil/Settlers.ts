@@ -20,7 +20,7 @@ import type { BuildingPileRegistry } from '../../systems/inventory/building-pile
 import type { BuildingInventoryManager } from '../../systems/inventory/building-inventory';
 import type { WorkAreaStore } from '../work-areas/work-area-store';
 import type { ConstructionSiteManager } from '../building-construction/construction-site-manager';
-import { EntityType, BuildingType, type Entity } from '../../entity';
+import { EntityType, BuildingType, type Entity, Tile } from '../../entity';
 import { EMaterialType } from '../../economy/material-type';
 import { SlotKind } from '../../core/pile-kind';
 
@@ -96,7 +96,7 @@ export class BuildingPositionResolverImpl implements BuildingPositionResolver {
      * @param y           Tile Y offset from anchor (useWork=false) or work center (useWork=true)
      * @param useWork     When true, apply offset from the building's work-area center
      */
-    resolvePosition(buildingId: number, x: number, y: number, useWork: boolean): { x: number; y: number } {
+    resolvePosition(buildingId: number, x: number, y: number, useWork: boolean): Tile {
         const building = this.gameState.getEntityOrThrow(buildingId, 'BuildingPositionResolver.resolvePosition');
         assertIsBuilding(building, buildingId);
 
@@ -121,7 +121,7 @@ export class BuildingPositionResolverImpl implements BuildingPositionResolver {
      * For storage buildings, queries the InventoryVisualizer for existing stack positions.
      * Returns null for storage buildings with no existing stack (caller falls back to door).
      */
-    getSourcePilePosition(buildingId: number, material: string): { x: number; y: number } | null {
+    getSourcePilePosition(buildingId: number, material: string): Tile | null {
         const materialType = parseMaterialString(material);
         if (materialType === null) {
             return null;
@@ -143,7 +143,7 @@ export class BuildingPositionResolverImpl implements BuildingPositionResolver {
      * For storage buildings, queries the InventoryVisualizer for existing stack positions.
      * Returns null for storage buildings with no existing stack (caller falls back to door).
      */
-    getDestinationPilePosition(buildingId: number, material: string): { x: number; y: number } | null {
+    getDestinationPilePosition(buildingId: number, material: string): Tile | null {
         const materialType = parseMaterialString(material);
         if (materialType === null) {
             return null;
@@ -172,7 +172,7 @@ export class BuildingPositionResolverImpl implements BuildingPositionResolver {
         buildingId: number,
         material: EMaterialType,
         slotType: SlotKind.Input | SlotKind.Output
-    ): { x: number; y: number } | null {
+    ): Tile | null {
         const building = this.gameState.getEntityOrThrow(buildingId, 'resolvePileFromRegistry');
         // Free piles are not buildings — return null so caller falls back to entity position
         if (building.type !== EntityType.Building) {
@@ -225,10 +225,7 @@ export class BuildingPositionResolverImpl implements BuildingPositionResolver {
      * Returns the first pre-computed pile position for this material.
      * Returns null if the building is not under construction or has no position for this material.
      */
-    private resolveConstructionPilePosition(
-        buildingId: number,
-        material: EMaterialType
-    ): { x: number; y: number } | null {
+    private resolveConstructionPilePosition(buildingId: number, material: EMaterialType): Tile | null {
         // eslint-disable-next-line no-restricted-syntax -- value is nullable by API contract; null coercion
         return this.constructionSiteManager.getConstructionPilePosition(buildingId, material, 0) ?? null;
     }

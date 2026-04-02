@@ -16,6 +16,7 @@ import type { TransportJobDeps } from './transport-job-service';
 import { cancel as cancelJob } from './transport-job-service';
 import type { ChoreoJobState } from '../../systems/choreo';
 import { sortedEntries } from '@/utilities/collections';
+import type { Tile } from '@/game/core/coordinates';
 
 /** A queued assignment waiting for a busy carrier to finish its current job. */
 export interface QueuedAssignment {
@@ -26,7 +27,7 @@ export interface QueuedAssignment {
     /** The choreo job state to assign when the carrier becomes available. */
     job: ChoreoJobState;
     /** First movement target for assignJob. */
-    moveTo: { x: number; y: number };
+    moveTo: Tile;
 }
 
 /**

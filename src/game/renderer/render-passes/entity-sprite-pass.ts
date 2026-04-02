@@ -195,8 +195,8 @@ export class EntitySpritePass implements IRenderPass {
         const { ctx } = this;
         const zoom = viewPoint.zoom;
 
-        const indicator = resolveSelectionIndicator(entity, ctx.spriteManager!, zoom);
-        if (!indicator) {
+        const result = resolveSelectionIndicator(entity, ctx.spriteManager!, zoom);
+        if (!result) {
             return;
         }
 
@@ -209,18 +209,23 @@ export class EntitySpritePass implements IRenderPass {
 
         const worldPos = getRenderEntityWorldPos(entity, ctx, viewPoint);
 
-        // Place indicator at the top of the unit sprite (offsetY is negative → moves up)
-        const spriteTopY = worldPos.worldY + unitSprite.offsetY;
-        ctx.spriteBatchRenderer.addSprite(gl, worldPos.worldX, spriteTopY, indicator, 0, TINT_NEUTRAL);
+        // Place indicator centered on the upper portion of the unit sprite
+        const baseY = worldPos.worldY + unitSprite.offsetY * 0.8;
+        ctx.spriteBatchRenderer.addSprite(
+            gl,
+            worldPos.worldX + result.offsetX,
+            baseY + result.offsetY,
+            result.sprite,
+            0,
+            TINT_NEUTRAL
+        );
         this.lastSpriteCount++;
 
-        // Health dot — centered in the bracket (for military units with health tracking)
+        // Health dot — always centered on the unit, unaffected by bracket nudge
         const healthRatio = ctx.getHealthRatio(entity.id);
         if (healthRatio !== null) {
             const dot = resolveHealthDot(healthRatio, ctx.spriteManager!, zoom);
-            // Center of bracket = spriteTopY + indicator.offsetY + indicator.heightWorld/2
-            const bracketCenterY = spriteTopY + indicator.offsetY + indicator.heightWorld / 2;
-            ctx.spriteBatchRenderer.addSprite(gl, worldPos.worldX, bracketCenterY, dot, 0, TINT_NEUTRAL);
+            ctx.spriteBatchRenderer.addSprite(gl, worldPos.worldX, baseY, dot, 0, TINT_NEUTRAL);
             this.lastSpriteCount++;
         }
     }

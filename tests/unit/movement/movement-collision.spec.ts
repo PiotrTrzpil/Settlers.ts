@@ -7,12 +7,12 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { createGameState, addUnit, addUnitWithPath } from '../helpers/test-game';
 import type { GameState } from '@/game/game-state';
-import { tileKey, type TileCoord } from '@/game/entity';
+import { tileKey, type Tile } from '@/game/entity';
 import { hexDistance, getAllNeighbors } from '@/game/systems/hex-directions';
 
 // ─── Helpers ──────────────────────────────────────────────────────────
 
-function pos(x: number, y: number): TileCoord {
+function pos(x: number, y: number): Tile {
     return { x, y };
 }
 
@@ -23,7 +23,7 @@ function tickFor(state: GameState, seconds: number, dt = 0.1): void {
     }
 }
 
-type Trail = { entity: TileCoord[]; visual: { x: number; y: number }[] };
+type Trail = { entity: Tile[]; visual: { x: number; y: number }[] };
 
 function trackPositions(state: GameState, entityIds: number[], ticks: number, dt = 0.1): Map<number, Trail> {
     const trails = new Map<number, Trail>();
@@ -79,7 +79,7 @@ function assertNoVisualTeleportBack(trail: Trail, entityId: number): void {
     }
 }
 
-function blockNeighbors(state: GameState, tile: TileCoord, except?: TileCoord[]): void {
+function blockNeighbors(state: GameState, tile: Tile, except?: Tile[]): void {
     const skip = new Set(except?.map(p => tileKey(p.x, p.y)) ?? []);
     for (const n of getAllNeighbors(tile)) {
         if (!skip.has(tileKey(n.x, n.y))) {
@@ -413,7 +413,7 @@ describe('Movement collision – multi-unit & edge cases', () => {
 
         addUnit(state, 12, 10);
 
-        const positions: TileCoord[] = [];
+        const positions: Tile[] = [];
         for (let i = 0; i < 40; i++) {
             state.movement.update(0.1);
             positions.push({ x: unitA.x, y: unitA.y });

@@ -1,4 +1,4 @@
-import { EntityType, UnitType, tileKey, getBuildingFootprint, type Entity } from '../../entity';
+import { EntityType, UnitType, tileKey, getBuildingFootprint, type Entity, Tile } from '../../entity';
 import type { GameState } from '../../game-state';
 import type { TerrainData } from '../../terrain';
 import type { EventBus } from '../../event-bus';
@@ -127,7 +127,7 @@ function isReplaceableOccupant(state: GameState, entityId: number): boolean {
 }
 
 /** Remove replaceable map objects from footprint tiles before placing a building. */
-function removeReplaceableMapObjects(state: GameState, footprint: ReadonlyArray<{ x: number; y: number }>): void {
+function removeReplaceableMapObjects(state: GameState, footprint: ReadonlyArray<Tile>): void {
     for (const tile of footprint) {
         const occupantId = state.groundOccupancy.get(tileKey(tile.x, tile.y));
         if (occupantId !== undefined && isReplaceableOccupant(state, occupantId)) {

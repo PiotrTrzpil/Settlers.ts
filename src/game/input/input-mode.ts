@@ -1,6 +1,6 @@
 import type { InputAction, PointerData, DragData, KeyboardData } from './input-actions';
 import type { InputState } from './input-state';
-import type { TileCoord } from '../entity';
+import type { Tile } from '../entity';
 import { type ModeRenderState, createDefaultRenderState } from './render-state';
 import type { CommandResult } from '../commands';
 import type { Race } from '../core/race';
@@ -12,7 +12,7 @@ export interface InputContext {
     /** Current input state */
     state: InputState;
     /** Current tile under cursor (if resolved) */
-    currentTile: TileCoord | null;
+    currentTile: Tile | null;
     /** Execute a game command. Returns CommandResult with success, error, and effects. */
     executeCommand: (command: Record<string, unknown>) => CommandResult;
     /** Switch to a different mode */

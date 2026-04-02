@@ -1,3 +1,5 @@
+import type { Tile } from '@/game/core/coordinates';
+
 /**
  * Coordinate System for the Isometric Tile Engine
  *
@@ -269,7 +271,7 @@ export interface ScreenToTileParams {
  * Returns null if the result is outside map bounds (should not happen
  * with clamping, but provides type safety).
  */
-export function screenToTile(params: ScreenToTileParams): { x: number; y: number } | null {
+export function screenToTile(params: ScreenToTileParams): Tile | null {
     const {
         screenX,
         screenY,

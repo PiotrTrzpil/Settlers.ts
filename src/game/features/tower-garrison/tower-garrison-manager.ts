@@ -12,7 +12,7 @@
  * - Clean up silently when units are removed externally
  */
 
-import type { Entity } from '@/game/entity';
+import type { Entity, Tile } from '@/game/entity';
 import type { GameState } from '@/game/game-state';
 import type { EventBus } from '@/game/event-bus';
 import type { CoreDeps } from '../feature';
@@ -367,12 +367,9 @@ export class TowerGarrisonManager {
             }
         }
 
-        const tower = this.gameState.getEntityOrThrow(towerId, 'TowerGarrisonManager.ejectUnit');
-
         const unit = this.gameState.getEntityOrThrow(unitId, 'TowerGarrisonManager.ejectUnit');
         this.unitReservation.release(unitId);
         this.locationManager.exitBuilding(unitId);
-        this.placeAtApproach(unit, tower);
 
         this.eventBus.emit('garrison:unitExited', { buildingId: towerId, unitId, unitType: unit.subType as UnitType });
         log.debug(`Unit ${unitId} ejected from tower ${towerId}`);
@@ -389,7 +386,7 @@ export class TowerGarrisonManager {
      * Checks the door tile first, then searches EXTENDED_OFFSETS. Falls back
      * to the door position if terrain is not yet set or no free tile is found.
      */
-    getApproachTile(building: Entity): { x: number; y: number } {
+    getApproachTile(building: Entity): Tile {
         if (!this.terrain) {
             log.warn(`getApproachTile: terrain not set for building ${building.id} — falling back to door pos`);
             return getBuildingDoorPos(building.x, building.y, building.race, building.subType as BuildingType);

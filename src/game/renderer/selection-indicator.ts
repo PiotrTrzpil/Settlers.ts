@@ -9,13 +9,14 @@
  * (8 levels: green=healthy → red=critical).
  *
  * Indicators are zoom-compensated so they stay at a constant screen size,
- * and positioned at the top of the unit sprite (above the head).
+ * and centered on the top edge of the unit sprite (framing the head area).
  */
 
 import type { Entity } from '../entity';
 import { EntityType, UnitType, isUnitTypeMilitary } from '../entity';
 import { getUnitLevel } from '../core/unit-types';
 import { HUD_OVERLAY_SPRITES } from './sprite-metadata/gil-indices';
+import { PIXELS_TO_WORLD } from './sprite-metadata';
 import { GilSpriteManifest } from './sprite-metadata/gil-sprite-manifest';
 import type { SpriteEntry } from './sprite-metadata';
 import type { SpriteRenderManager } from './sprite-render-manager';
@@ -34,6 +35,11 @@ const REFERENCE_ZOOM = 0.05;
 
 /** Health dot config — single source of truth for dot variant and level count. */
 const HEALTH_DOT = HUD_OVERLAY_SPRITES.HEALTH_DOT_SMALL;
+
+/** Per-bracket pixel nudges (applied before zoom scaling) to fix visual alignment. */
+const BRACKET_NUDGE = new Map<number, { dx: number; dy: number }>([
+    [HUD_OVERLAY_SPRITES.MILITARY_BRACKET_LVL2, { dx: 24, dy: 34 }],
+]);
 
 /** GFX file 7 = HUD overlay sprites. */
 const HUD_GFX_FILE = 7;
@@ -121,24 +127,43 @@ export function getSelectionBracketGilIndex(entity: Entity): number | null {
  * Resolve the selection indicator SpriteEntry for an entity.
  * Applies zoom compensation so the indicator stays at a constant screen size.
  *
- * The returned sprite is positioned so that it sits centered horizontally
- * and anchored at the bottom — when drawn at the sprite's top Y coordinate
- * the indicator appears just above the unit's head.
+ * The returned sprite is centered both horizontally and vertically on the
+ * draw position — when drawn at the unit sprite's top Y coordinate the
+ * bracket frames the unit's head area.
  *
  * Returns null for entities that don't use sprite-based selection.
  */
+export interface SelectionIndicatorResult {
+    sprite: SpriteEntry;
+    /** Extra world-space offset to apply when drawing (e.g. to nudge oversized brackets). */
+    offsetX: number;
+    offsetY: number;
+}
+
 export function resolveSelectionIndicator(
     entity: Entity,
     spriteManager: SpriteRenderManager,
     currentZoom: number
-): SpriteEntry | null {
+): SelectionIndicatorResult | null {
     const gilIndex = getSelectionBracketGilIndex(entity);
     if (gilIndex === null) {
         return null;
     }
-    const sprite = resolveFromManifest(gilIndex, spriteManager);
-    // Center horizontally; anchor bottom edge at draw position so it sits above the head.
-    return zoomScaledSprite(sprite, SELECTION_INDICATOR_BASE_SCALE, currentZoom, 'bottom');
+    const raw = resolveFromManifest(gilIndex, spriteManager);
+    const sprite = zoomScaledSprite(raw, SELECTION_INDICATOR_BASE_SCALE, currentZoom, 'center');
+
+    // LVL2 bracket (70x68) is much larger than the others — nudge to align visually.
+    // Nudge values are in pixels, converted to world space with zoom compensation.
+    const nudge = BRACKET_NUDGE.get(gilIndex);
+    if (nudge) {
+        const zoomScale = REFERENCE_ZOOM / currentZoom;
+        return {
+            sprite,
+            offsetX: nudge.dx * PIXELS_TO_WORLD * zoomScale,
+            offsetY: nudge.dy * PIXELS_TO_WORLD * zoomScale,
+        };
+    }
+    return { sprite, offsetX: 0, offsetY: 0 };
 }
 
 /**

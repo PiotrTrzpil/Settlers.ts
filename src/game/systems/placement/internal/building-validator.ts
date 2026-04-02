@@ -5,21 +5,17 @@
 
 import { tileKey, getBuildingFootprint, getBuildingBlockArea, BuildingType, isMineBuilding } from '../../../entity';
 import type { Race } from '../../../core/race';
+import type { Tile } from '../../../core/coordinates';
 import type { TerrainData } from '../../../terrain';
 import type { PlacementContext, PlacementFilter, PlacementResult } from '../types';
 import { PlacementStatus } from '../types';
 import { isBuildable, isMineBuildable } from './terrain';
 import { computeSlopeDifficulty } from './slope';
 
-interface TileCoord {
-    x: number;
-    y: number;
-}
-
 /**
  * Check if footprint is within map bounds.
  */
-function isFootprintInBounds(footprint: TileCoord[], ctx: PlacementContext): boolean {
+function isFootprintInBounds(footprint: Tile[], ctx: PlacementContext): boolean {
     return footprint.every(t => t.x >= 0 && t.x < ctx.mapSize.width && t.y >= 0 && t.y < ctx.mapSize.height);
 }
 
@@ -28,7 +24,7 @@ function isFootprintInBounds(footprint: TileCoord[], ctx: PlacementContext): boo
  * Mines require rock/mountain terrain; all other buildings reject it.
  * Returns the blocking status or null if tile is OK.
  */
-function checkTileBasics(tile: TileCoord, ctx: PlacementContext, isMine: boolean): PlacementStatus | null {
+function checkTileBasics(tile: Tile, ctx: PlacementContext, isMine: boolean): PlacementStatus | null {
     const idx = ctx.mapSize.toIndex(tile.x, tile.y);
     const terrainOk = isMine ? isMineBuildable(ctx.groundType[idx]!) : isBuildable(ctx.groundType[idx]!);
     if (!terrainOk) {
@@ -47,7 +43,7 @@ function checkTileBasics(tile: TileCoord, ctx: PlacementContext, isMine: boolean
  * Check placement filter against all footprint tiles.
  * Returns the first rejection status, or null if all tiles pass.
  */
-function checkPlacementFilter(footprint: TileCoord[], ctx: PlacementContext): PlacementStatus | null {
+function checkPlacementFilter(footprint: Tile[], ctx: PlacementContext): PlacementStatus | null {
     if (!ctx.placementFilter || ctx.player === undefined) {
         return null;
     }

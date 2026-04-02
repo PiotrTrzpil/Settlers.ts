@@ -11,7 +11,7 @@ import type { Race } from './core/race';
 import type { UnitType } from './core/unit-types';
 import type { EMaterialType } from './economy';
 import type { MapObjectType } from './types/map-object-types';
-import type { EntityType } from './entity';
+import type { EntityType, Tile } from './entity';
 import type { GameEventBase, TrainingRecipe } from './event-types';
 
 /** Feature-specific events — merged into GameEvents via intersection. */
@@ -217,7 +217,7 @@ export interface GameEventsFeatures {
         unitId: number;
         jobId: string;
         targetId: number | null;
-        targetPos: { x: number; y: number } | null;
+        targetPos: Tile | null;
         homeBuilding: number | null;
     };
 

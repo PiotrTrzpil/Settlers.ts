@@ -1,6 +1,6 @@
 import { BasePlacementMode, type PlacementModeData, type PlacementModeEnterData } from './place-mode-base';
 import type { InputContext } from '../input-mode';
-import { BuildingType } from '../../entity';
+import { BuildingType, Tile } from '../../entity';
 import type { Race } from '../../core/race';
 import type { PlacementEntityType } from '../render-state';
 import type { TerrainData } from '../../terrain';
@@ -83,11 +83,7 @@ export class PlaceBuildingMode extends BasePlacementMode<BuildingType> {
      * Calculate anchor position by centering the building footprint on cursor.
      * Uses XML hotspot to offset from cursor to the building's anchor point.
      */
-    protected resolveAnchorPosition(
-        tileX: number,
-        tileY: number,
-        _buildingType: BuildingType
-    ): { x: number; y: number } {
+    protected resolveAnchorPosition(tileX: number, tileY: number, _buildingType: BuildingType): Tile {
         return { x: tileX, y: tileY };
     }
 

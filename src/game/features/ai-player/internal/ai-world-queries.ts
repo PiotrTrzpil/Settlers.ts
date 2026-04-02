@@ -5,7 +5,7 @@
  * No side effects, no commands issued.
  */
 
-import { EntityType, BuildingType, isUnitTypeMilitary, type UnitType } from '@/game/entity';
+import { EntityType, BuildingType, isUnitTypeMilitary, type UnitType, Tile } from '@/game/entity';
 import type { Entity } from '@/game/entity';
 import type { GameState } from '@/game/game-state';
 import type { GameServices } from '@/game/game-services';
@@ -77,7 +77,7 @@ export function getPlayerMilitaryUnits(state: GameState, player: number): readon
  * building (Castle > GuardTowerBig > GuardTowerSmall).
  * Throws if the player has no territory buildings.
  */
-export function getPlayerBasePosition(state: GameState, player: number): { x: number; y: number } {
+export function getPlayerBasePosition(state: GameState, player: number): Tile {
     const buildings = getPlayerBuildings(state, player);
     let best: Entity | null = null;
     let bestPriority = -1;

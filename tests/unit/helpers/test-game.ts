@@ -8,7 +8,7 @@
  */
 
 import { GameState, UnitStateView } from '@/game/game-state';
-import { EntityType, BuildingType, UnitType, getUnitTypeSpeed, type Entity } from '@/game/entity';
+import { EntityType, BuildingType, UnitType, getUnitTypeSpeed, type Entity, Tile } from '@/game/entity';
 import { Race } from '@/game/core/race';
 import { createTestMap } from './test-map';
 import { EventBus } from '@/game/event-bus';
@@ -115,7 +115,7 @@ export function addUnitWithPath(
     state: GameState,
     startX: number,
     startY: number,
-    path: Array<{ x: number; y: number }>,
+    path: Array<Tile>,
     speed = 2
 ): { entity: Entity; unitState: UnitStateView } {
     const { entity, unitState } = addUnit(state, startX, startY);

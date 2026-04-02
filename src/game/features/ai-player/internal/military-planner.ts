@@ -8,7 +8,7 @@
  * - Select nearest enemy castle as attack target
  */
 
-import { BuildingType, UnitType } from '@/game/entity';
+import { BuildingType, UnitType, Tile } from '@/game/entity';
 import type { Entity } from '@/game/entity';
 import type { GameState } from '@/game/game-state';
 import type { Race } from '@/game/core/race';
@@ -31,7 +31,7 @@ export class MilitaryPlanner {
     private readonly race: Race;
 
     private attacksSent = 0;
-    private lastAttackTarget: { x: number; y: number } | null = null;
+    private lastAttackTarget: Tile | null = null;
 
     constructor(deps: {
         gameState: GameState;
@@ -111,7 +111,7 @@ export class MilitaryPlanner {
     }
 
     /** Last attack target position, or null if no attacks have been sent. */
-    getAttackTarget(): { x: number; y: number } | null {
+    getAttackTarget(): Tile | null {
         return this.lastAttackTarget;
     }
 

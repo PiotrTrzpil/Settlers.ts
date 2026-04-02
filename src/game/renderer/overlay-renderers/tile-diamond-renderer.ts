@@ -1,4 +1,4 @@
-import { Entity, EntityType, getBuildingFootprint, BuildingType, tileKey } from '../../entity';
+import { Entity, EntityType, getBuildingFootprint, BuildingType, tileKey, Tile } from '../../entity';
 import { getBuildingDoorPos } from '../../data/game-data-access';
 import { getBuildingBlockArea } from '../../buildings/types';
 import type { TileHighlight } from '../../input/render-state';
@@ -276,11 +276,7 @@ export class TileDiamondRenderer {
 }
 
 /** Pick tile color: door=orange-red, block area=cyan, placement-only zone=purple. */
-function getFootprintTileColor(
-    tile: { x: number; y: number },
-    doorPos: { x: number; y: number },
-    blockKeys: Set<string>
-): readonly number[] {
+function getFootprintTileColor(tile: Tile, doorPos: Tile, blockKeys: Set<string>): readonly number[] {
     if (tile.x === doorPos.x && tile.y === doorPos.y) {
         return FOOTPRINT_DOOR_COLOR;
     }

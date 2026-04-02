@@ -7,6 +7,7 @@
 
 import type { FeatureDefinition } from '../feature';
 import { EntityType, isUnitTypeMilitary, UnitType } from '../../entity';
+import { UnitCategory, getUnitCategory } from '../../core/unit-types';
 import { xmlKey } from '../../animation/animation';
 import { UNIT_XML_PREFIX } from '../../renderer/sprite-metadata';
 import { CombatSystem } from './combat-system';
@@ -32,16 +33,18 @@ export const CombatFeature: FeatureDefinition = {
             isUnitReserved: id => ctx.unitReservation.isReserved(id),
         });
 
-        // Auto-register military units when they spawn
+        // Register military and specialist units with combat (specialists are defenseless targets)
+        const isCombatParticipant = (unitType: UnitType) =>
+            isUnitTypeMilitary(unitType) || getUnitCategory(unitType) === UnitCategory.Specialist;
+
         ctx.on('unit:spawned', ({ unitId, unitType, player }) => {
-            if (isUnitTypeMilitary(unitType)) {
+            if (isCombatParticipant(unitType)) {
                 combatSystem.register(unitId, player, unitType);
             }
         });
 
-        // Also catch units created via entity:created (e.g., map loading)
         ctx.on('entity:created', ({ entityId, entityType: type, subType, player }) => {
-            if (type === EntityType.Unit && isUnitTypeMilitary(subType as UnitType)) {
+            if (type === EntityType.Unit && isCombatParticipant(subType as UnitType)) {
                 combatSystem.register(entityId, player, subType as UnitType);
             }
         });

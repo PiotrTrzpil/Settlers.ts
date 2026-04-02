@@ -5,7 +5,7 @@
  * CHANGE_JOB, CHANGE_JOB_COME_TO_WORK, and military stubs.
  */
 
-import type { Entity } from '../../../entity';
+import type { Entity, Tile } from '../../../entity';
 import { getUnitTypeAtLevel } from '../../../entity';
 import { ringTiles } from '../../../systems/spatial-search';
 import { createLogger } from '@/utilities/logger';
@@ -125,7 +125,7 @@ export function executeChangeTypeAtBarracks(
 
     // Find a free tile near the carrier (at the door = footprint edge).
     // Uses the same ringTiles pattern as spawnUnitsNear for building completion.
-    let spawnPos: { x: number; y: number } | null = null;
+    let spawnPos: Tile | null = null;
     for (let r = 1; r <= 4 && !spawnPos; r++) {
         for (const tile of ringTiles(settler.x, settler.y, r)) {
             if (!ctx.gameState.getGroundEntityAt(tile.x, tile.y)) {

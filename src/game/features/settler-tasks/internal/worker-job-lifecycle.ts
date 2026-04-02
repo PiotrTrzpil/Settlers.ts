@@ -5,7 +5,7 @@
  * the max-lines limit while preserving the same logic.
  */
 
-import { type Entity, UnitType } from '../../../entity';
+import { type Entity, UnitType, Tile } from '../../../entity';
 import { createLogger } from '@/utilities/logger';
 import { hexDistance } from '../../../systems/hex-directions';
 import { TaskResult, SettlerState, type SettlerConfig } from '../types';
@@ -98,7 +98,7 @@ export class WorkerJobLifecycle {
         selected: ChoreoJob,
         entityTarget: { entityId: number; x: number; y: number } | null,
         homeBuilding: Entity | null,
-        positionTarget?: { x: number; y: number } | null
+        positionTarget?: Tile | null
     ): void {
         if (this.locationManager.isInside(settler.id)) {
             this.locationManager.exitBuilding(settler.id);

@@ -45,7 +45,7 @@ import {
     type ExecuteCommand,
 } from '@/game/commands';
 import { BuildingType, isStorageBuilding } from '@/game/buildings/building-type';
-import { EntityType, UnitType, type TileCoord } from '@/game/entity';
+import { EntityType, UnitType, type Tile } from '@/game/entity';
 import { EMaterialType } from '@/game/economy/material-type';
 import { StorageDirection } from '@/game/systems/inventory/storage-filter-manager';
 import { GameSettingsManager } from '@/game/game-settings';
@@ -497,7 +497,7 @@ export class Simulation {
         return this.state.movement.moveUnit(entityId, targetX, targetY);
     }
 
-    simulateMovement(entityId: number, opts: { maxTicks?: number; target?: TileCoord } = {}): TileCoord[] {
+    simulateMovement(entityId: number, opts: { maxTicks?: number; target?: Tile } = {}): Tile[] {
         return simulateMovement(this, entityId, opts);
     }
 

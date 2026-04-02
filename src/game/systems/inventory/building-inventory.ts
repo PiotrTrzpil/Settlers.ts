@@ -1,10 +1,9 @@
 /** Building inventory management — PileSlot-based model. */
 
-import { BuildingType, isStorageBuilding, type Entity, type StackedPileState } from '../../entity';
+import { BuildingType, isStorageBuilding, type Entity, type StackedPileState, Tile } from '../../entity';
 import { EMaterialType } from '../../economy/material-type';
 import { Race } from '../../core/race';
 import { SlotKind, type PileKind } from '../../core/pile-kind';
-import type { TileCoord } from '../../core/coordinates';
 import type { Recipe } from '../../economy/building-production';
 import {
     getInventoryConfig,
@@ -70,7 +69,7 @@ export type SlotPositionResolver = (
     buildingId: number,
     building: Entity,
     configs: ReadonlyArray<{ materialType: EMaterialType; kind: SlotKind }>
-) => Array<TileCoord | null>;
+) => Array<Tile | null>;
 export class BuildingInventoryManager {
     /** All slots, indexed by stable slotId — auto-persisted. */
     readonly slotStore = new PersistentMap<PileSlot>('buildingInventories');
@@ -478,12 +477,7 @@ export class BuildingInventoryManager {
     }
 
     /** Register an existing free pile entity as a PileSlot (building destroyed / place_pile). */
-    registerFreePile(
-        entityId: number,
-        material: EMaterialType,
-        quantity: number,
-        position: { x: number; y: number }
-    ): void {
+    registerFreePile(entityId: number, material: EMaterialType, quantity: number, position: Tile): void {
         const slotId = this.nextSlotIdStore.get();
         this.nextSlotIdStore.set(slotId + 1);
         const slot: PileSlot = {
@@ -531,7 +525,7 @@ export class BuildingInventoryManager {
         }
     }
 
-    private addSlot(buildingId: number, cfg: SlotConfig, kind: SlotKind, position: TileCoord): void {
+    private addSlot(buildingId: number, cfg: SlotConfig, kind: SlotKind, position: Tile): void {
         const slotId = this.nextSlotIdStore.get();
         this.nextSlotIdStore.set(slotId + 1);
         const slot: PileSlot = {

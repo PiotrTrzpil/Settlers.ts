@@ -25,6 +25,7 @@ import { SPECIALIST_TOOL_MAP } from './specialist-tool-map';
 import { createRecruitmentJob } from './recruitment-job';
 import { createLogger } from '@/utilities/logger';
 import { query } from '../../ecs';
+import type { Tile } from '@/game/core/coordinates';
 
 const log = createLogger('RecruitSystem');
 
@@ -41,9 +42,9 @@ export interface RecruitmentCandidate {
 /** Options for dispatchRecruitment. */
 export interface DispatchRecruitmentOpts {
     /** Destination after recruitment (optimizes carrier→tool→target distance). */
-    target?: { x: number; y: number };
+    target?: Tile;
     /** Camera-center hint (for player-queued recruitment from UI). */
-    hint?: { x: number; y: number };
+    hint?: Tile;
     /**
      * Additional choreo steps appended after the recruitment prefix.
      * Receives the ChoreoBuilder with walk-to-tool + transform already added,
@@ -60,7 +61,7 @@ interface QueueEntry {
     race: Race;
     count: number;
     /** Camera-center hint supplied at enqueue time. null = no preference. */
-    near: { x: number; y: number } | null;
+    near: Tile | null;
 }
 
 // ─── Config ───────────────────────────────────────────────────────────
@@ -71,7 +72,7 @@ export interface RecruitSystemConfig {
     idleCarrierPool: IdleCarrierPool;
     unitTransformer: UnitTransformer;
     toolSourceResolver: ToolSourceResolver;
-    assignJob: (unitId: number, job: ChoreoJobState, moveTo?: { x: number; y: number }) => boolean;
+    assignJob: (unitId: number, job: ChoreoJobState, moveTo?: Tile) => boolean;
 }
 
 // ─── System ───────────────────────────────────────────────────────────
@@ -119,8 +120,8 @@ export class RecruitSystem implements TickSystem {
         unitType: UnitType,
         player: number,
         opts?: {
-            target?: { x: number; y: number };
-            hint?: { x: number; y: number };
+            target?: Tile;
+            hint?: Tile;
         }
     ): RecruitmentCandidate | null {
         // eslint-disable-next-line no-restricted-syntax -- index access returns undefined for missing keys
@@ -179,7 +180,7 @@ export class RecruitSystem implements TickSystem {
         toolMaterial: EMaterialType | null,
         player: number,
         race: Race,
-        near: { x: number; y: number } | null = null
+        near: Tile | null = null
     ): void {
         const existing = this.queue.get(unitType);
         if (existing) {
@@ -321,7 +322,7 @@ export class RecruitSystem implements TickSystem {
     private findToolBasedCandidate(
         toolMaterial: EMaterialType,
         player: number,
-        opts?: { target?: { x: number; y: number }; hint?: { x: number; y: number } }
+        opts?: { target?: Tile; hint?: Tile }
     ): RecruitmentCandidate | null {
         // Hint mode: find tool nearest to hint, then carrier nearest to tool
         if (opts?.hint) {
@@ -332,11 +333,7 @@ export class RecruitSystem implements TickSystem {
         return this.resolveToolByScan(toolMaterial, player, opts?.target);
     }
 
-    private resolveToolWithHint(
-        toolMaterial: EMaterialType,
-        hint: { x: number; y: number },
-        player: number
-    ): RecruitmentCandidate | null {
+    private resolveToolWithHint(toolMaterial: EMaterialType, hint: Tile, player: number): RecruitmentCandidate | null {
         const toolPile = this.toolSourceResolver.findNearestToolPile(toolMaterial, hint.x, hint.y, player);
         if (!toolPile) {
             return null;
@@ -352,11 +349,7 @@ export class RecruitSystem implements TickSystem {
      * Scan all idle carriers. For each, find the nearest tool pile and compute
      * total trip cost: carrier→tool + (tool→target if target given).
      */
-    private resolveToolByScan(
-        toolMaterial: EMaterialType,
-        player: number,
-        target?: { x: number; y: number }
-    ): RecruitmentCandidate | null {
+    private resolveToolByScan(toolMaterial: EMaterialType, player: number, target?: Tile): RecruitmentCandidate | null {
         let best: RecruitmentCandidate | null = null;
         let bestCost = Infinity;
 
@@ -387,13 +380,7 @@ export class RecruitSystem implements TickSystem {
 }
 
 /** Squared distance for carrier→tool leg, plus optional tool→target leg. */
-function tripCost(
-    carrierX: number,
-    carrierY: number,
-    toolX: number,
-    toolY: number,
-    target?: { x: number; y: number }
-): number {
+function tripCost(carrierX: number, carrierY: number, toolX: number, toolY: number, target?: Tile): number {
     const cdx = carrierX - toolX;
     const cdy = carrierY - toolY;
     let cost = cdx * cdx + cdy * cdy;

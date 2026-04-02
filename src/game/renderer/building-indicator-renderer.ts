@@ -2,7 +2,7 @@ import type { IRenderer } from './i-renderer';
 import { IViewPoint } from './i-view-point';
 import { MapSize } from '@/utilities/map-size';
 import { TilePicker } from '../input/tile-picker';
-import { TileCoord } from '../entity';
+import { Tile } from '../entity';
 import { PlacementStatus } from '../systems/placement';
 import { ShaderProgram } from './shader-program';
 import type { ValidPositionGrid, ValidPositionEntry } from '../systems/placement/valid-position-grid';
@@ -97,7 +97,7 @@ export class BuildingIndicatorRenderer implements IRenderer {
 
     // State set per-frame by the glue layer
     private enabled = false;
-    private hoveredTile: TileCoord | null = null;
+    private hoveredTile: Tile | null = null;
     private grid: ValidPositionGrid | null = null;
     private maxSlopeDiff: number = 8;
 
@@ -113,7 +113,7 @@ export class BuildingIndicatorRenderer implements IRenderer {
     public setState(
         indicatorsEnabled: boolean,
         grid: ValidPositionGrid | null,
-        hoveredTile: TileCoord | null,
+        hoveredTile: Tile | null,
         maxSlopeDiff: number
     ): void {
         this.enabled = indicatorsEnabled;

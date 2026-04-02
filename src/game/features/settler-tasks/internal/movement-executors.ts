@@ -9,7 +9,7 @@
  * Each executor matches the MovementExecutorFn signature defined in choreo-types.ts.
  */
 
-import { EntityType, BuildingType, tileKey, type Entity } from '../../../entity';
+import { EntityType, BuildingType, tileKey, type Entity, Tile } from '../../../entity';
 import { getBuildingDoorPos } from '../../../data/game-data-access';
 import { hexDistance } from '../../../systems/hex-directions';
 import { createLogger } from '@/utilities/logger';
@@ -306,7 +306,7 @@ function searchViaEntityHandler(settler: Entity, job: ChoreoJobState, ctx: Movem
 }
 
 /** Get the search center for a position handler — work area center or settler position. */
-function getPositionSearchCenter(settler: Entity, ctx: MovementContext): { x: number; y: number } {
+function getPositionSearchCenter(settler: Entity, ctx: MovementContext): Tile {
     if (ctx.positionHandler?.useWorkAreaCenter) {
         const homeId = ctx.getWorkerHomeBuilding(settler.id);
         if (homeId !== null) {

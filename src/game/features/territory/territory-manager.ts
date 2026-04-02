@@ -14,6 +14,7 @@ import { TERRITORY_RADIUS, type TerritoryDot } from './territory-types';
 import type { BuildingType } from '../../buildings/types';
 import { thinDotsInScreenSpace, isoDistSq } from '../../systems/boundary-ring';
 import { type ComponentStore, mapStore } from '../../ecs';
+import type { Tile } from '@/game/core/coordinates';
 
 // ── Types ────────────────────────────────────────────────────────────
 
@@ -83,6 +84,58 @@ export class TerritoryManager {
     }
 
     // ─────────────────────────────────────────────────────────────
+    // Persistence
+    // ─────────────────────────────────────────────────────────────
+
+    /** Snapshot the territory grid for serialization (one byte per tile). */
+    snapshotGrid(): Uint8Array {
+        this.recomputeIfDirty();
+        return new Uint8Array(this.territoryGrid);
+    }
+
+    /**
+     * Restore the territory grid from a snapshot and rebuild the distance grid
+     * from registered buildings. Suppresses the pending recompute so the
+     * restored ownership is used as-is (preserving order-dependent boundaries).
+     */
+    restoreGrid(territory: Uint8Array): void {
+        this.territoryGrid.set(territory);
+        this.rebuildDistanceGrid();
+        this.dirty = false;
+        this.boundaryDirty = true;
+        this.onRecomputed?.();
+    }
+
+    /** Recompute distanceGrid from buildings without touching territoryGrid. */
+    private rebuildDistanceGrid(): void {
+        this.distanceGrid.fill(Infinity);
+        for (const building of this.buildings.values()) {
+            const ownerValue = building.player + 1;
+            const screenR = building.radius * 0.5;
+            const rSq = screenR * screenR;
+            const minY = Math.max(0, building.y - building.radius);
+            const maxY = Math.min(this.mapHeight - 1, building.y + building.radius);
+            const minX = Math.max(0, building.x - building.radius);
+            const maxX = Math.min(this.mapWidth - 1, building.x + building.radius);
+            for (let y = minY; y <= maxY; y++) {
+                const dy = y - building.y;
+                const rowOffset = y * this.mapWidth;
+                for (let x = minX; x <= maxX; x++) {
+                    const dx = x - building.x;
+                    const distSq = isoDistSq(dx, dy);
+                    if (distSq > rSq) {
+                        continue;
+                    }
+                    const idx = rowOffset + x;
+                    if (this.territoryGrid[idx] === ownerValue && distSq < this.distanceGrid[idx]!) {
+                        this.distanceGrid[idx] = distSq;
+                    }
+                }
+            }
+        }
+    }
+
+    // ─────────────────────────────────────────────────────────────
     // Building Registration
     // ─────────────────────────────────────────────────────────────
 
@@ -123,6 +176,26 @@ export class TerritoryManager {
         const oldOwner = oldValue === 0 ? -1 : oldValue - 1;
         this.territoryGrid[idx] = player + 1;
         this.onTileChanged?.(x, y, oldOwner, player);
+        this.boundaryDirty = true;
+    }
+
+    /**
+     * Claim a set of tiles for a player (e.g. captured tower footprint).
+     * Writes directly to the computed grid — does NOT trigger recompute.
+     */
+    claimTiles(tiles: readonly Tile[], player: number): void {
+        this.recomputeIfDirty();
+        const ownerValue = player + 1;
+        for (const { x, y } of tiles) {
+            const idx = y * this.mapWidth + x;
+            const oldValue = this.territoryGrid[idx]!;
+            const oldOwner = oldValue === 0 ? -1 : oldValue - 1;
+            if (oldOwner !== player) {
+                this.territoryGrid[idx] = ownerValue;
+                this.distanceGrid[idx] = 0;
+                this.onTileChanged?.(x, y, oldOwner, player);
+            }
+        }
         this.boundaryDirty = true;
     }
 

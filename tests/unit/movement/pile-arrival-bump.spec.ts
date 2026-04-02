@@ -14,7 +14,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { createGameState, addUnit, addUnitWithPath } from '../helpers/test-game';
 import type { GameState } from '@/game/game-state';
-import { tileKey, type TileCoord } from '@/game/entity';
+import { tileKey, type Tile } from '@/game/entity';
 
 /** Assert tile occupancy has exactly one entry per unit, matching entity position. */
 function assertOccupancyConsistent(state: GameState, entityIds: number[]): void {
@@ -40,7 +40,7 @@ function assertOccupancyConsistent(state: GameState, entityIds: number[]): void 
 
 describe('Pile arrival – basic bump behavior', () => {
     let state: GameState;
-    const PILE_TILE: TileCoord = { x: 15, y: 10 };
+    const PILE_TILE: Tile = { x: 15, y: 10 };
 
     beforeEach(() => {
         state = createGameState();
@@ -161,7 +161,7 @@ describe('Pile arrival – door bump behavior', () => {
     });
 
     it('unit walking to door tile pushes idle occupant off the door', () => {
-        const DOOR: TileCoord = { x: 15, y: 10 };
+        const DOOR: Tile = { x: 15, y: 10 };
 
         const { entity: doorUnit } = addUnit(state, DOOR.x, DOOR.y);
 
@@ -182,7 +182,7 @@ describe('Pile arrival – door bump behavior', () => {
     });
 
     it('GO_HOME with ARRIVAL_DIST=1: worker must still push door occupant', () => {
-        const DOOR: TileCoord = { x: 15, y: 10 };
+        const DOOR: Tile = { x: 15, y: 10 };
 
         const { entity: doorUnit } = addUnit(state, DOOR.x, DOOR.y);
 
@@ -210,7 +210,7 @@ describe('Pile arrival – door bump behavior', () => {
             state.buildingOccupancy.add(tileKey(t.x, t.y));
         }
 
-        const DOOR: TileCoord = { x: 15, y: 10 };
+        const DOOR: Tile = { x: 15, y: 10 };
 
         const { entity: doorUnit } = addUnit(state, DOOR.x, DOOR.y);
 
@@ -232,7 +232,7 @@ describe('Pile arrival – door bump behavior', () => {
     });
 
     it('busy unit is also not pushed via recursive bump chain', () => {
-        const PILE_TILE: TileCoord = { x: 15, y: 10 };
+        const PILE_TILE: Tile = { x: 15, y: 10 };
         const { entity: busyUnit } = addUnit(state, PILE_TILE.x, PILE_TILE.y);
         const busyController = state.movement.getController(busyUnit.id)!;
         busyController.busy = true;

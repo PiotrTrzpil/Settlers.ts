@@ -1,4 +1,4 @@
-import { Entity, EntityType } from '../entity';
+import { Entity, EntityType, Tile } from '../entity';
 import { TilePicker } from '../input/tile-picker';
 import type { TileHighlight } from '../input/render-state';
 import { tileToWorld, heightToWorld, TILE_CENTER_X, TILE_CENTER_Y } from '../systems/coordinate-system';
@@ -34,7 +34,7 @@ function shiftBuildingWorldPos(pos: { worldX: number; worldY: number }): { world
  * Uses the actual terrain face vertices (integer offsets) so the bounds match the visible tiles.
  */
 export function calculateFootprintBounds(
-    footprint: { x: number; y: number }[],
+    footprint: Tile[],
     mapSize: { toIndex(x: number, y: number): number },
     groundHeight: Uint8Array,
     viewPointX: number,

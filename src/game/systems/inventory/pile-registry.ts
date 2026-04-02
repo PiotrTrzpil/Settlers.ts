@@ -12,7 +12,7 @@
  * spawning/removing entities. The registry only maintains the index.
  */
 
-import type { TileCoord } from '../../core/coordinates';
+import type { Tile } from '../../core/coordinates';
 import type { EMaterialType } from '../../economy/material-type';
 import type { Entity } from '../../entity';
 import { EntityType } from '../../entity';
@@ -92,7 +92,7 @@ export class PileRegistry {
      * Register a linked pile entity.
      * Throws if the slot key is already registered — this indicates a double-spawn bug.
      */
-    register(entityId: number, key: PileSlotKey, position: TileCoord): void {
+    register(entityId: number, key: PileSlotKey, position: Tile): void {
         const s = serializeKey(key);
 
         if (this.forward.has(s)) {

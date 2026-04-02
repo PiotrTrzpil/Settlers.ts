@@ -15,7 +15,7 @@
 import { describe, it, expect, afterEach } from 'vitest';
 import { Simulation, createSimulation, cleanupSimulation } from '../../helpers/test-simulation';
 import { installRealGameData } from '../../helpers/test-game-data';
-import { EntityType, UnitType } from '@/game/entity';
+import { EntityType, UnitType, Tile } from '@/game/entity';
 import { TERRAIN } from '../../helpers/test-map';
 
 installRealGameData();
@@ -34,8 +34,8 @@ function countProspected(sim: Simulation, cx: number, cy: number, radius: number
 }
 
 /** Collect all prospected tile coords within a square region. */
-function getProspectedTiles(sim: Simulation, cx: number, cy: number, radius: number): { x: number; y: number }[] {
-    const tiles: { x: number; y: number }[] = [];
+function getProspectedTiles(sim: Simulation, cx: number, cy: number, radius: number): Tile[] {
+    const tiles: Tile[] = [];
     for (let dy = -radius; dy <= radius; dy++) {
         for (let dx = -radius; dx <= radius; dx++) {
             if (sim.services.oreVeinData.isProspected(cx + dx, cy + dy)) {
@@ -57,8 +57,8 @@ function collectProspectingOrder(
     radius: number,
     targetCount: number,
     maxTicks = 60_000
-): { x: number; y: number }[] {
-    const order: { x: number; y: number }[] = [];
+): Tile[] {
+    const order: Tile[] = [];
     const seen = new Set<string>();
     const pollInterval = 30;
 
@@ -75,7 +75,7 @@ function collectProspectingOrder(
     return order;
 }
 
-function dist(a: { x: number; y: number }, b: { x: number; y: number }): number {
+function dist(a: Tile, b: Tile): number {
     const dx = a.x - b.x;
     const dy = a.y - b.y;
     return Math.sqrt(dx * dx + dy * dy);

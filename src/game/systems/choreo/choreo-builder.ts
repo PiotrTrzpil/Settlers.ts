@@ -10,6 +10,7 @@ import type { TerrainData } from '@/game/terrain';
 import { findBuildingApproachTile } from '@/game/buildings/approach';
 import { ChoreoTaskType, createChoreoJobState, type ChoreoNode, type ChoreoJobState } from './types';
 import type { UnitType } from '@/game/core/unit-types';
+import type { Tile } from '@/game/core/coordinates';
 
 // ─────────────────────────────────────────────────────────────
 // Context injection for building-aware helpers
@@ -54,7 +55,7 @@ export class ChoreoBuilder {
     private readonly nodes: ChoreoNode[] = [];
     private readonly waypoints: Array<{ x: number; y: number; entityId?: number }> = [];
     private _targetId: number | null = null;
-    private _targetPos: { x: number; y: number } | null = null;
+    private _targetPos: Tile | null = null;
     private _metadata: Record<string, number | string> | undefined;
     private _goToCount = 0;
 

@@ -3,7 +3,7 @@
  * This is a base module with no dependencies to avoid circular imports.
  */
 
-export interface TileCoord {
+export interface Tile {
     x: number;
     y: number;
 }

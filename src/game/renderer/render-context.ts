@@ -9,7 +9,7 @@
  * happens in the composable/glue layer (use-renderer.ts) before entering the renderer.
  */
 
-import type { Entity, StackedPileState, TileCoord } from '../entity';
+import type { Entity, StackedPileState, Tile } from '../entity';
 import type { Race } from '../core/race';
 import type { EntityVisualState, DirectionTransition } from '../animation/entity-visual-service';
 import type { IViewPoint } from './i-view-point';
@@ -31,7 +31,7 @@ export type PlacementEntityType = 'building' | 'pile' | 'unit';
  */
 export interface PlacementPreviewState {
     /** Tile position for the preview */
-    tile: TileCoord;
+    tile: Tile;
     /** Whether placement is valid at this position */
     valid: boolean;
     /** Entity type being placed */
@@ -54,7 +54,7 @@ export interface UnitRenderState {
     readonly prevX: number;
     readonly prevY: number;
     readonly moveProgress: number;
-    readonly path: ReadonlyArray<{ x: number; y: number }>;
+    readonly path: ReadonlyArray<Tile>;
     readonly pathIndex: number;
     /** Current facing direction (EDirection enum value, 0-5). */
     readonly direction: number;

@@ -19,7 +19,7 @@ import { BuildingType } from '@/game/buildings/building-type';
 import { EMaterialType } from '@/game/economy/material-type';
 import { getBuildingDoorPos } from '@/game/data/game-data-access';
 import { hexDistance } from '@/game/systems/hex-directions';
-import { UnitType } from '@/game/entity';
+import { UnitType, Tile } from '@/game/entity';
 
 function grainFarmSite() {
     const s = createScenario.constructionSite(
@@ -72,7 +72,7 @@ describe('Farmer movement after construction', { timeout: 60_000 }, () => {
         expect(doorToCenter, 'door and work area center should be apart').toBeGreaterThan(1);
 
         // Track planted positions
-        const plantedPositions: { x: number; y: number }[] = [];
+        const plantedPositions: Tile[] = [];
         sim.eventBus.on('crop:planted', e => plantedPositions.push({ x: e.x, y: e.y }));
 
         // Wait for first crop to be planted
@@ -133,7 +133,7 @@ describe('Farmer movement after construction', { timeout: 60_000 }, () => {
             farm.race
         );
 
-        const plantedPositions: { x: number; y: number }[] = [];
+        const plantedPositions: Tile[] = [];
         sim.eventBus.on('crop:planted', e => plantedPositions.push({ x: e.x, y: e.y }));
 
         sim.runUntil(() => plantedPositions.length >= 1, {
@@ -165,7 +165,7 @@ describe('Farmer movement after construction', { timeout: 60_000 }, () => {
         const farm = sim.state.getEntity(s.siteId)!;
         const door = getBuildingDoorPos(farm.x, farm.y, farm.race, BuildingType.GrainFarm);
 
-        const plantedPositions: { x: number; y: number }[] = [];
+        const plantedPositions: Tile[] = [];
         sim.eventBus.on('crop:planted', e => plantedPositions.push({ x: e.x, y: e.y }));
 
         // Wait for several crops

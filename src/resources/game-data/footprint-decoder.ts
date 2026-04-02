@@ -9,7 +9,7 @@
  */
 
 import type { BuildingInfo } from './types';
-import type { TileCoord } from '@/game/core/coordinates';
+import type { Tile } from '@/game/core/coordinates';
 
 /**
  * Decode buildingPosLines bitmask into tile coordinates.
@@ -19,8 +19,8 @@ import type { TileCoord } from '@/game/core/coordinates';
  * @param hotSpotY Y coordinate of the building's anchor point (in tile coords from top of bitmask)
  * @returns Array of tile coordinates relative to the building's placement position (0,0)
  */
-export function decodeBuildingFootprint(buildingPosLines: number[], hotSpotX: number, hotSpotY: number): TileCoord[] {
-    const tiles: TileCoord[] = [];
+export function decodeBuildingFootprint(buildingPosLines: number[], hotSpotX: number, hotSpotY: number): Tile[] {
+    const tiles: Tile[] = [];
 
     for (let row = 0; row < buildingPosLines.length; row++) {
         // Treat as unsigned 32-bit by >>> 0
@@ -50,7 +50,7 @@ export function decodeBuildingFootprint(buildingPosLines: number[], hotSpotX: nu
  * Get the building footprint tiles from BuildingInfo.
  * Returns tiles relative to building placement position (0,0).
  */
-export function getBuildingFootprintFromInfo(info: BuildingInfo): TileCoord[] {
+export function getBuildingFootprintFromInfo(info: BuildingInfo): Tile[] {
     return decodeBuildingFootprint(info.buildingPosLines, info.hotSpotX, info.hotSpotY);
 }
 
@@ -62,7 +62,7 @@ export function getBuildingFootprintFromInfo(info: BuildingInfo): TileCoord[] {
  * @param placeY World Y coordinate where building is placed
  * @returns Array of absolute world tile coordinates
  */
-export function getBuildingFootprintAt(info: BuildingInfo, placeX: number, placeY: number): TileCoord[] {
+export function getBuildingFootprintAt(info: BuildingInfo, placeX: number, placeY: number): Tile[] {
     const relativeFootprint = getBuildingFootprintFromInfo(info);
     return relativeFootprint.map(tile => ({
         x: placeX + tile.x,
@@ -79,14 +79,14 @@ export function getBuildingFootprintAt(info: BuildingInfo, placeX: number, place
  *
  * Returns tiles relative to building placement position (0,0).
  */
-export function getBuildingBlockAreaFromInfo(info: BuildingInfo): TileCoord[] {
+export function getBuildingBlockAreaFromInfo(info: BuildingInfo): Tile[] {
     return decodeBuildingFootprint(info.blockPosLines, info.hotSpotX, info.hotSpotY);
 }
 
 /**
  * Get absolute movement-blocking tile coordinates for a building placed at (x, y).
  */
-export function getBuildingBlockAreaAt(info: BuildingInfo, placeX: number, placeY: number): TileCoord[] {
+export function getBuildingBlockAreaAt(info: BuildingInfo, placeX: number, placeY: number): Tile[] {
     const relativeTiles = getBuildingBlockAreaFromInfo(info);
     return relativeTiles.map(tile => ({
         x: placeX + tile.x,
@@ -97,7 +97,7 @@ export function getBuildingBlockAreaAt(info: BuildingInfo, placeX: number, place
 /**
  * Calculate bounding box of a building's footprint.
  */
-export function getFootprintBounds(tiles: TileCoord[]): {
+export function getFootprintBounds(tiles: Tile[]): {
     minX: number;
     maxX: number;
     minY: number;

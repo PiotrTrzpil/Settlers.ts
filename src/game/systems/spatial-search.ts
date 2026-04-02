@@ -6,7 +6,7 @@
  */
 
 import type { GameState } from '../game-state';
-import type { Entity } from '../entity';
+import type { Entity, Tile } from '../entity';
 import type { SeededRng } from '../core/rng';
 
 // ─────────────────────────────────────────────────────────────
@@ -17,7 +17,7 @@ import type { SeededRng } from '../core/rng';
  * Generate tiles on the perimeter of a square ring at the given radius.
  * Yields positions in a deterministic order (top-left to bottom-right along edges).
  */
-export function* ringTiles(cx: number, cy: number, radius: number): Generator<{ x: number; y: number }> {
+export function* ringTiles(cx: number, cy: number, radius: number): Generator<Tile> {
     for (let dy = -radius; dy <= radius; dy++) {
         for (let dx = -radius; dx <= radius; dx++) {
             if (Math.abs(dx) === radius || Math.abs(dy) === radius) {
@@ -93,7 +93,7 @@ export interface FindEmptySpotConfig {
 }
 
 /** Check whether a tile is a valid empty spot given the config constraints. */
-function isValidSpot(tile: { x: number; y: number }, config: FindEmptySpotConfig): boolean {
+function isValidSpot(tile: Tile, config: FindEmptySpotConfig): boolean {
     if (tile.x < 0 || tile.y < 0) {
         return false;
     }

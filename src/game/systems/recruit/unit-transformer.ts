@@ -32,7 +32,7 @@ import type { GameState } from '../../game-state';
 import type { EventBus } from '../../event-bus';
 import { EventSubscriptionManager } from '../../event-bus';
 import type { ChoreoJobState } from '../choreo';
-import { EntityType, EXTENDED_OFFSETS } from '../../entity';
+import { EntityType, EXTENDED_OFFSETS, Tile } from '../../entity';
 
 import { UnitType } from '../../core/unit-types';
 import { EMaterialType } from '../../economy/material-type';
@@ -49,7 +49,7 @@ export interface UnitTransformerConfig {
     eventBus: EventBus;
     carrierRegistry: CarrierRegistry;
     toolSourceResolver: ToolSourceResolver;
-    assignJob: (unitId: number, job: ChoreoJobState, moveTo?: { x: number; y: number }) => boolean;
+    assignJob: (unitId: number, job: ChoreoJobState, moveTo?: Tile) => boolean;
     unitReservation: UnitReservationRegistry;
 }
 
@@ -65,7 +65,7 @@ export class UnitTransformer {
     private readonly eventBus: EventBus;
     private readonly carrierRegistry: CarrierRegistry;
     private readonly toolSourceResolver: ToolSourceResolver;
-    private readonly assignJob: (unitId: number, job: ChoreoJobState, moveTo?: { x: number; y: number }) => boolean;
+    private readonly assignJob: (unitId: number, job: ChoreoJobState, moveTo?: Tile) => boolean;
     private readonly unitReservation: UnitReservationRegistry;
     private readonly subscriptions = new EventSubscriptionManager();
 

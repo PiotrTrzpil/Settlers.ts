@@ -10,16 +10,12 @@ import { getBuildingDoorPos } from '@/game/data/game-data-access';
 import { Race } from '@/game/core/race';
 import { ringTiles } from '@/game/systems/spatial-search';
 import type { GameState } from '@/game/game-state';
+import type { Tile } from '@/game/core/coordinates';
 
 export type TileCandidate = { x: number; y: number; distSq: number };
 
 /** Scan expanding rings around center to find free (unoccupied) tiles, sorted by distance. */
-export function scanFreeTiles(
-    state: GameState,
-    center: { x: number; y: number },
-    maxRadius: number,
-    limit: number
-): TileCandidate[] {
+export function scanFreeTiles(state: GameState, center: Tile, maxRadius: number, limit: number): TileCandidate[] {
     const candidates: TileCandidate[] = [];
     for (let r = 0; r <= maxRadius && candidates.length < limit; r++) {
         for (const tile of ringTiles(center.x, center.y, r)) {
@@ -35,10 +31,10 @@ export function scanFreeTiles(
 
 /** Print ASCII tile map showing building footprint, door, work center, and candidate tiles. */
 export function printBuildingDiagnosticMap(
-    building: { x: number; y: number },
+    building: Tile,
     buildingType: BuildingType,
     race: Race,
-    center: { x: number; y: number },
+    center: Tile,
     candidates: TileCandidate[]
 ): void {
     const door = getBuildingDoorPos(building.x, building.y, race, buildingType);
@@ -69,9 +65,9 @@ export function printBuildingDiagnosticMap(
 }
 
 function printTileGrid(
-    building: { x: number; y: number },
-    center: { x: number; y: number },
-    door: { x: number; y: number },
+    building: Tile,
+    center: Tile,
+    door: Tile,
     fullFootprint: Set<string>,
     blockArea: Set<string>,
     candMap: Map<string, number>

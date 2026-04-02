@@ -5,7 +5,7 @@
  * checks to find shortcuts through the path.
  */
 
-import { TileCoord, tileKey } from '../../entity';
+import { Tile, tileKey } from '../../entity';
 import { isPassable } from '../../terrain';
 import { getHexLine } from './hex-line';
 
@@ -65,7 +65,7 @@ function hasLineOfSight(
 function findFurthestVisible(
     currentX: number,
     currentY: number,
-    path: TileCoord[],
+    path: Tile[],
     startIdx: number,
     params: PathSmoothingParams
 ): number {
@@ -90,18 +90,13 @@ function findFurthestVisible(
  * @param params Smoothing parameters (terrain, occupancy, etc.)
  * @returns Smoothed path as tile-by-tile waypoints
  */
-export function smoothPath(
-    path: TileCoord[],
-    startX: number,
-    startY: number,
-    params: PathSmoothingParams
-): TileCoord[] {
+export function smoothPath(path: Tile[], startX: number, startY: number, params: PathSmoothingParams): Tile[] {
     if (path.length <= 1) {
         return path;
     }
 
     // First pass: find key waypoints using line-of-sight
-    const keyWaypoints: TileCoord[] = [];
+    const keyWaypoints: Tile[] = [];
     let currentX = startX;
     let currentY = startY;
     let i = 0;
@@ -116,7 +111,7 @@ export function smoothPath(
     }
 
     // Second pass: expand key waypoints into tile-by-tile path
-    const smoothed: TileCoord[] = [];
+    const smoothed: Tile[] = [];
     currentX = startX;
     currentY = startY;
 

@@ -6,7 +6,7 @@
 
 import type { GameState } from '../../game-state';
 import type { TickSystem } from '../../core/tick-system';
-import { EntityType, UnitType, BuildingType, tileKey, type Entity } from '../../entity';
+import { EntityType, UnitType, BuildingType, tileKey, type Entity, Tile } from '../../entity';
 import type { EventBus } from '../../event-bus';
 import { isAngelUnitType } from '../../core/unit-types';
 import { createLogger } from '@/utilities/logger';
@@ -359,7 +359,7 @@ export class SettlerTaskSystem implements TickSystem, TaskDispatcher, WorkerStat
         }
     }
 
-    assignJob(entityId: number, job: JobState, moveTo?: { x: number; y: number }): boolean {
+    assignJob(entityId: number, job: JobState, moveTo?: Tile): boolean {
         const entity = this.gameState.getEntityOrThrow(entityId, 'unit for job assignment');
         const runtime = this.getRuntime(entityId);
 

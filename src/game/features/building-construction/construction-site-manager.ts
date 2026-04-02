@@ -22,7 +22,7 @@ import type { SeededRng } from '../../core/rng';
 import { type ComponentStore, mapStore } from '../../ecs';
 import { BuildingConstructionPhase, type CapturedTerrainTile, type ConstructionSite } from './types';
 import { PersistentMap } from '@/game/persistence/persistent-store';
-import type { TileCoord } from '../../core/coordinates';
+import type { Tile } from '../../core/coordinates';
 import { assignConstructionPilePositions } from '../../systems/inventory/construction-pile-positions';
 import type { BuildingInventoryManager } from '../../systems/inventory/building-inventory';
 import { SlotKind } from '../../core/pile-kind';
@@ -406,7 +406,7 @@ export class ConstructionSiteManager {
      * Get a random position along the lower border of the building footprint.
      * Builders walk to a random tile on the highest-Y row of the footprint each work cycle.
      */
-    getRandomBuilderWorkPos(buildingId: number): { x: number; y: number } {
+    getRandomBuilderWorkPos(buildingId: number): Tile {
         const site = this.getSiteOrThrow(buildingId, 'getRandomBuilderWorkPos');
         const footprint = getBuildingFootprint(site.tileX, site.tileY, site.buildingType, site.race);
 
@@ -500,11 +500,7 @@ export class ConstructionSiteManager {
      * Get the pre-computed pile position for a material at a specific pile index.
      * Returns undefined if the site/material/index doesn't exist.
      */
-    getConstructionPilePosition(
-        buildingId: number,
-        material: EMaterialType,
-        pileIndex: number = 0
-    ): TileCoord | undefined {
+    getConstructionPilePosition(buildingId: number, material: EMaterialType, pileIndex: number = 0): Tile | undefined {
         return this.persistentStore.get(buildingId)?.pilePositions.get(material)?.[pileIndex];
     }
 
@@ -512,7 +508,7 @@ export class ConstructionSiteManager {
      * Get all pre-computed pile positions for a material at a construction site.
      * Returns undefined if the site doesn't exist or has no positions for that material.
      */
-    getConstructionPilePositions(buildingId: number, material: EMaterialType): readonly TileCoord[] | undefined {
+    getConstructionPilePositions(buildingId: number, material: EMaterialType): readonly Tile[] | undefined {
         return this.persistentStore.get(buildingId)?.pilePositions.get(material);
     }
 

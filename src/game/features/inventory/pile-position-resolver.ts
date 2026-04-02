@@ -7,7 +7,7 @@
  * - 'storage'              → BuildingPileRegistry.getStoragePileWorldPositions (first free slot)
  */
 
-import type { TileCoord } from '../../core/coordinates';
+import type { Tile } from '../../core/coordinates';
 import { tileKey } from '../../core/coordinates';
 import type { Entity } from '../../entity';
 import { EntityType, BuildingType } from '../../entity';
@@ -48,7 +48,7 @@ export class PilePositionResolver {
         usedPositions: ReadonlySet<string>;
         /** For construction piles: which pile index (when a material has multiple piles). Default 0. */
         pileIndex?: number;
-    }): TileCoord | null {
+    }): Tile | null {
         const { building, material, slotKind, usedPositions } = params;
         const bt = building.subType as BuildingType;
 
@@ -115,7 +115,7 @@ export class PilePositionResolver {
      * Returns the ordered list of candidate staging tiles for construction piles.
      * Exposed primarily for tests.
      */
-    getConstructionCandidates(building: Entity): TileCoord[] {
+    getConstructionCandidates(building: Entity): Tile[] {
         return getConstructionCandidates(building.subType as BuildingType, building.race, building.x, building.y);
     }
 }

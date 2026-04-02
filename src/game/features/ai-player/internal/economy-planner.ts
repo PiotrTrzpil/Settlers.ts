@@ -14,7 +14,7 @@ import type { CommandExecutor } from '@/game/commands/command-types';
 import type { PlacementFilter } from '@/game/systems/placement/types';
 import type { BuildStep } from '../types';
 import { canPlaceBuildingFootprint } from '@/game/systems/placement';
-import { EntityType } from '@/game/entity';
+import { EntityType, Tile } from '@/game/entity';
 import { isNonBlockingMapObject } from '@/game/data/game-data-access';
 import { spiralSearch } from '@/game/utils/spiral-search';
 import { getPlayerBuildings, getPlayerBasePosition } from './ai-world-queries';
@@ -157,7 +157,7 @@ export class EconomyPlanner {
      * Spiral-search outward from the base to find a valid placement position
      * for the given building type.
      */
-    private findPlacementPosition(buildingType: BuildingType): { x: number; y: number } | null {
+    private findPlacementPosition(buildingType: BuildingType): Tile | null {
         const basePos = getPlayerBasePosition(this.state, this.player);
         const filter = this.getPlacementFilter();
         const replaceCheck = (id: number) => {

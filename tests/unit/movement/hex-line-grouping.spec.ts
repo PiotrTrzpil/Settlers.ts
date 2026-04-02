@@ -1,10 +1,10 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { getHexLine, groupDirectionRuns, setDirectionRunLength } from '@/game/systems/pathfinding/hex-line';
 import { hexDistance } from '@/game/systems/hex-directions';
-import type { TileCoord } from '@/game/entity';
+import type { Tile } from '@/game/entity';
 
 /** Extract direction deltas from a tile sequence */
-function getDirections(tiles: TileCoord[]): Array<{ dx: number; dy: number }> {
+function getDirections(tiles: Tile[]): Array<{ dx: number; dy: number }> {
     const dirs: Array<{ dx: number; dy: number }> = [];
     for (let i = 0; i < tiles.length - 1; i++) {
         dirs.push({
@@ -16,7 +16,7 @@ function getDirections(tiles: TileCoord[]): Array<{ dx: number; dy: number }> {
 }
 
 /** Count direction changes (how many times consecutive steps differ) */
-function countDirectionChanges(tiles: TileCoord[]): number {
+function countDirectionChanges(tiles: Tile[]): number {
     const dirs = getDirections(tiles);
     let changes = 0;
     for (let i = 1; i < dirs.length; i++) {
@@ -28,7 +28,7 @@ function countDirectionChanges(tiles: TileCoord[]): number {
 }
 
 /** Get max run length in a tile sequence */
-function getMaxRunLength(tiles: TileCoord[]): number {
+function getMaxRunLength(tiles: Tile[]): number {
     const dirs = getDirections(tiles);
     if (dirs.length === 0) return 0;
     let maxRun = 1;

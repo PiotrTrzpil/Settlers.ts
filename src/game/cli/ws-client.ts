@@ -77,10 +77,15 @@ export function connectCliWs(cli: GameCli): CliWsHandle | undefined {
                 console.error(`[cli-ws] command "${msg.cmd}" threw:`, err);
                 result = { ok: false, output: `internal error: ${errMsg}` };
             }
+            const output =
+                result.output.length > 1_000_000
+                    ? result.output.slice(0, 1_000_000) +
+                      `\n\n[truncated — output was ${(result.output.length / 1024 / 1024).toFixed(1)}MB]`
+                    : result.output;
             const response: WsResultMessage = {
                 id: msg.id,
                 ok: result.ok,
-                output: result.output,
+                output,
             };
             ws!.send(JSON.stringify(response));
         };

@@ -2,6 +2,7 @@ import { BasePlacementMode, type PlacementModeData, type PlacementModeEnterData 
 import type { InputContext } from '../input-mode';
 import { EMaterialType } from '../../economy';
 import type { PlacementEntityType } from '../render-state';
+import type { Tile } from '@/game/core/coordinates';
 
 /**
  * Resource-specific mode data.
@@ -50,11 +51,7 @@ export class PlacePileMode extends BasePlacementMode<EMaterialType> {
     /**
      * Resources are placed directly at cursor position (no offset).
      */
-    protected resolveAnchorPosition(
-        tileX: number,
-        tileY: number,
-        _materialType: EMaterialType
-    ): { x: number; y: number } {
+    protected resolveAnchorPosition(tileX: number, tileY: number, _materialType: EMaterialType): Tile {
         return { x: tileX, y: tileY };
     }
 

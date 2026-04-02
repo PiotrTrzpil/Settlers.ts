@@ -5,7 +5,7 @@
  * settlers that use choreography job sequences (XML-defined).
  */
 
-import type { Entity } from '../../entity';
+import type { Entity, Tile } from '../../entity';
 import type { CoreDeps } from '../feature';
 import { UnitType } from '../../entity';
 import type { ThrottledLogger } from '@/utilities/throttled-logger';
@@ -260,7 +260,7 @@ export class WorkerTaskExecutor {
         entityHandler: EntityWorkHandler | undefined,
         positionHandler: PositionWorkHandler | undefined,
         homeBuilding: Entity | null
-    ): { entity: { entityId: number; x: number; y: number } | null; position: { x: number; y: number } | null } | null {
+    ): { entity: { entityId: number; x: number; y: number } | null; position: Tile | null } | null {
         const entity = entityHandler ? this.findEntityTarget(entityHandler, settler, homeBuilding) : null;
         if (entity === undefined) {
             return null;
@@ -386,7 +386,7 @@ export class WorkerTaskExecutor {
         handler: PositionWorkHandler,
         settler: Entity,
         homeBuilding: Entity | null
-    ): { x: number; y: number } | null | undefined {
+    ): Tile | null | undefined {
         const center = this.getSearchCenter(handler, settler, homeBuilding);
         return safeCall(
             () => handler.findPosition(center.x, center.y, settler.id),
@@ -400,7 +400,7 @@ export class WorkerTaskExecutor {
         handler: { useWorkAreaCenter?: boolean },
         settler: Entity,
         homeBuilding: Entity | null
-    ): { x: number; y: number } {
+    ): Tile {
         if (handler.useWorkAreaCenter && homeBuilding) {
             return this.buildingPositionResolver.resolvePosition(homeBuilding.id, 0, 0, true);
         }

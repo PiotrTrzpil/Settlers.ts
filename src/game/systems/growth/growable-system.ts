@@ -15,7 +15,7 @@
 
 import type { TickSystem } from '../../core/tick-system';
 import type { GameState } from '../../game-state';
-import { EntityType } from '../../entity';
+import { EntityType, Tile } from '../../entity';
 import { MapObjectCategory, MapObjectType } from '@/game/types/map-object-types';
 import type { EntityVisualService } from '../../animation/entity-visual-service';
 import { findEmptySpot } from '../../systems/spatial-search';
@@ -50,7 +50,7 @@ export interface GrowableConfig {
 
 /** Interface for systems that support finding spots and planting entities */
 export interface PlantingCapable {
-    findPlantingSpot(cx: number, cy: number, radius?: number): { x: number; y: number } | null;
+    findPlantingSpot(cx: number, cy: number, radius?: number): Tile | null;
     plantEntity(x: number, y: number, settlerId: number): void;
 }
 
@@ -195,7 +195,7 @@ export abstract class GrowableSystem<TState extends GrowableState = GrowableStat
     // ── Planting ─────────────────────────────────────────────────
 
     /** Find an empty tile near (cx, cy) that respects spacing constraints */
-    findPlantingSpot(cx: number, cy: number, radius?: number): { x: number; y: number } | null {
+    findPlantingSpot(cx: number, cy: number, radius?: number): Tile | null {
         const searchRadius = radius ?? this.config.plantingSearchRadius;
         return findEmptySpot(cx, cy, {
             gameState: this.gameState,

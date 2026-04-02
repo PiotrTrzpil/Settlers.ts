@@ -37,6 +37,9 @@ export const BuildingSiegeFeature: FeatureDefinition = {
             doorDefenderNotifier: towerCombatSystem,
         });
 
+        // Let combat system defer to siege when a building door is closer than the nearest enemy
+        combatSystem.setEngagementFilter((entityId, enemyDist) => siegeSystem.hasDoorCloserThan(entityId, enemyDist));
+
         // --- Event subscriptions ---
 
         ctx.on('unit:movementStopped', ({ unitId }) => {

@@ -26,7 +26,7 @@ import { TerrainData } from './terrain';
 import { populateMapObjectsFromEntityData } from './systems/map-objects';
 import { expandTrees } from './features/trees/tree-expansion';
 import { populateMapBuildings, type MapBuildingEntry } from './features/building-construction';
-import { EntityType } from './entity';
+import { EntityType, Tile } from './entity';
 import { populateMapSettlers } from './systems/map-settlers';
 import { populateMapStacks } from './systems/map-stacks';
 import { Race, s4TribeToRace } from './core/race';
@@ -276,7 +276,7 @@ export class GameCore {
     // ─── Queries ────────────────────────────────────────────────
 
     /** Find the starting position for the current player from map data */
-    public findPlayerStartPosition(): { x: number; y: number } | null {
+    public findPlayerStartPosition(): Tile | null {
         const playerInfo = this.mapLoader.entityData?.players.find(p => p.playerIndex === this.currentPlayer);
         if (playerInfo?.startX != null && playerInfo.startY != null) {
             return { x: playerInfo.startX, y: playerInfo.startY };
@@ -285,7 +285,7 @@ export class GameCore {
     }
 
     /** Find the first buildable land tile, spiraling out from map center */
-    public findLandTile(): { x: number; y: number } | null {
+    public findLandTile(): Tile | null {
         const { width: w, height: h } = this.terrain;
         const cx = Math.floor(w / 2);
         const cy = Math.floor(h / 2);

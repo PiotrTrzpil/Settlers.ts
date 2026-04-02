@@ -12,7 +12,7 @@
  * the ConstructionSite for the entire construction lifecycle.
  */
 
-import type { TileCoord } from '../../core/coordinates';
+import type { Tile } from '../../core/coordinates';
 import { tileKey } from '../../core/coordinates';
 import type { BuildingType } from '../../buildings/building-type';
 import type { EMaterialType } from '../../economy/material-type';
@@ -64,7 +64,7 @@ function getCandidateTiles(
     tileX: number,
     tileY: number,
     count: number
-): TileCoord[] {
+): Tile[] {
     const door = getBuildingDoorPos(tileX, tileY, race, buildingType);
 
     // Exclude tiles inside the building's block area so piles are always
@@ -99,7 +99,7 @@ export function getConstructionCandidates(
     race: Race,
     tileX: number,
     tileY: number
-): TileCoord[] {
+): Tile[] {
     const costs = getConstructionCosts(buildingType, race);
     let totalSlots = 0;
     for (const cost of costs) {
@@ -120,7 +120,7 @@ export function assignConstructionPilePositions(
     race: Race,
     tileX: number,
     tileY: number
-): Map<EMaterialType, TileCoord[]> {
+): Map<EMaterialType, Tile[]> {
     const costs = getConstructionCosts(buildingType, race);
 
     // Calculate total number of pile slots needed across all materials
@@ -130,12 +130,12 @@ export function assignConstructionPilePositions(
     }
 
     const candidates = getCandidateTiles(buildingType, race, tileX, tileY, totalSlots);
-    const positions = new Map<EMaterialType, TileCoord[]>();
+    const positions = new Map<EMaterialType, Tile[]>();
     let candidateIdx = 0;
 
     for (const cost of costs) {
         const slotsNeeded = Math.ceil(cost.count / SLOT_CAPACITY);
-        const materialPositions: TileCoord[] = [];
+        const materialPositions: Tile[] = [];
 
         for (let i = 0; i < slotsNeeded; i++) {
             if (candidateIdx >= candidates.length) {

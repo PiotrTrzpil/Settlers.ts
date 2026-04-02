@@ -8,6 +8,7 @@
  */
 
 import { EMaterialType } from '../../economy';
+import type { Tile } from '@/game/core/coordinates';
 
 // ─────────────────────────────────────────────────────────────
 // ChoreoTaskType — 1:1 mapping from jobInfo.xml
@@ -170,9 +171,9 @@ export interface TransportData {
     /** Amount to transport (may be reduced after pickup if source had less). */
     amount: number;
     /** Pre-resolved source position (output pile / door for pickup). */
-    sourcePos: { x: number; y: number };
+    sourcePos: Tile;
     /** Pre-resolved destination position (input pile / door for delivery). */
-    destPos: { x: number; y: number };
+    destPos: Tile;
     /** Target PileSlot ID at the destination (stable across inventory lifecycle). */
     slotId: number;
     /** Lifecycle operations — closures over the specific TransportJobRecord, set by the job builder. */
@@ -201,7 +202,7 @@ export interface ChoreoJobState {
     /** Target entity found by SEARCH */
     targetId: number | null;
     /** Target position (from building position resolution) */
-    targetPos: { x: number; y: number } | null;
+    targetPos: Tile | null;
     /** Carried material (after GET_GOOD / RESOURCE_GATHERING) */
     carryingGood: EMaterialType | null;
     /** Whether work was started for current node (for cleanup tracking) */

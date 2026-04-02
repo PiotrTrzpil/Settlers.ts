@@ -8,7 +8,7 @@
  * Per-instance override ('work-area-instance') — adjusts this specific building only.
  */
 
-import type { BuildingType } from '../../entity';
+import type { BuildingType, Tile } from '../../entity';
 import type { Race } from '../../core/race';
 import type { TileHighlight } from '../../input/render-state';
 import type { BuildingAdjustHandler, AdjustableItem, TileOffset } from './types';
@@ -65,7 +65,7 @@ export class WorkAreaAdjustHandler implements BuildingAdjustHandler {
         buildingY: number,
         buildingType: BuildingType,
         race: Race
-    ): { x: number; y: number } {
+    ): Tile {
         return this.store.getAbsoluteCenter(buildingId, buildingX, buildingY, buildingType, race);
     }
 

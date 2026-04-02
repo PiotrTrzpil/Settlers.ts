@@ -3,6 +3,7 @@ import { InputAction, MouseButton, type PointerData } from '../input-actions';
 import { CursorType, type ModeRenderState, type PlacementPreview, type PlacementEntityType } from '../render-state';
 import type { Race } from '../../core/race';
 import { LogHandler } from '../../../utilities/log-handler';
+import type { Tile } from '@/game/core/coordinates';
 
 /**
  * Generic data for any placement mode.
@@ -94,7 +95,7 @@ export abstract class BasePlacementMode<TSubType = number> extends BaseInputMode
      * @param subType The entity subtype being placed
      * @returns Anchor position for preview
      */
-    protected abstract resolveAnchorPosition(tileX: number, tileY: number, subType: TSubType): { x: number; y: number };
+    protected abstract resolveAnchorPosition(tileX: number, tileY: number, subType: TSubType): Tile;
 
     /**
      * Create the placement command to execute.

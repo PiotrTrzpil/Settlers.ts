@@ -6,13 +6,30 @@
 
 import type { GameState } from '../../game-state';
 import type { CombatSystem } from '../combat/combat-system';
-import { EntityType, UnitType, BuildingType, type Entity } from '../../entity';
+import { EntityType, UnitType, BuildingType, type Entity, type Tile, EXTENDED_OFFSETS, tileKey } from '../../entity';
 import type { Race } from '../../core/race';
 import { getBaseUnitType } from '../../core/unit-types';
 import { CombatStatus } from '../combat/combat-state';
 import { isGarrisonBuildingType } from '../tower-garrison';
 import { getBuildingDoorPos } from '../../data/game-data-access';
 import { DOOR_ARRIVAL_DISTANCE } from './siege-types';
+
+/** Returns walkable tiles adjacent to the building's door (not inside building footprint). */
+export function findDoorAdjacentTiles(
+    building: { x: number; y: number; race: Race; subType: number | string },
+    gameState: GameState
+): Tile[] {
+    const door = getBuildingDoorPos(building.x, building.y, building.race, building.subType as BuildingType);
+    const tiles: Tile[] = [];
+    for (const [dx, dy] of EXTENDED_OFFSETS) {
+        const x = door.x + dx;
+        const y = door.y + dy;
+        if (!gameState.buildingOccupancy.has(tileKey(x, y))) {
+            tiles.push({ x, y });
+        }
+    }
+    return tiles;
+}
 
 /** Returns true if the given UnitType is a swordsman (any level). */
 export function isSwordsman(unitType: UnitType): boolean {

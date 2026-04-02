@@ -17,7 +17,7 @@
 
 import { GrowableSystem, type GrowableConfig, type GrowableState, type PlantingCapable } from '../../systems/growth';
 import type { CoreDeps } from '../feature';
-import { EntityType } from '../../entity';
+import { EntityType, Tile } from '../../entity';
 import { MapObjectCategory, MapObjectType } from '@/game/types/map-object-types';
 import type { EntityVisualService } from '../../animation/entity-visual-service';
 import type { Command, CommandExecutor } from '../../commands';
@@ -279,12 +279,7 @@ export class CropSystem extends GrowableSystem<CropState> {
      * Find a planting spot with per-type proximity filtering.
      * Only same-type crops count for minimum distance.
      */
-    findPlantingSpotForType(
-        cx: number,
-        cy: number,
-        cropType: MapObjectType,
-        radius?: number
-    ): { x: number; y: number } | null {
+    findPlantingSpotForType(cx: number, cy: number, cropType: MapObjectType, radius?: number): Tile | null {
         const searchRadius = radius ?? this.config.plantingSearchRadius;
         return findEmptySpot(cx, cy, {
             gameState: this.gameState,

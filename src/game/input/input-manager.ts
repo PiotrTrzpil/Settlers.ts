@@ -24,7 +24,7 @@ import type {
     EntityRectPicker,
     InputManagerOptions,
 } from './input-types';
-import type { TileCoord } from '../entity';
+import type { Tile } from '../entity';
 import type { Race } from '../core/race';
 
 export type {
@@ -236,7 +236,7 @@ export class InputManager {
     /**
      * Get the tile at the center of the screen/camera.
      */
-    getCenterTile(): TileCoord | null {
+    getCenterTile(): Tile | null {
         const el = this.target.value;
         if (!el || !this.tileResolver) {
             return null;
@@ -357,12 +357,12 @@ export class InputManager {
         };
     }
 
-    private resolveTile(screenX: number, screenY: number): TileCoord | null {
+    private resolveTile(screenX: number, screenY: number): Tile | null {
         // eslint-disable-next-line no-restricted-syntax -- optional chaining; null when source is absent
         return this.tileResolver?.(screenX, screenY) ?? null;
     }
 
-    private createPointerData(e: PointerEvent | WheelEvent, tile?: TileCoord | null): PointerData {
+    private createPointerData(e: PointerEvent | WheelEvent, tile?: Tile | null): PointerData {
         const rect = this.target.value?.getBoundingClientRect();
         const screenX = rect ? e.clientX - rect.left : e.clientX;
         const screenY = rect ? e.clientY - rect.top : e.clientY;

@@ -26,10 +26,11 @@ import type { PreAssignmentQueue } from './pre-assignment-queue';
 import { TransportPhase } from './transport-job-record';
 import type { Index } from '@/game/utils/indexed-map';
 import type { BuildingInventoryManager } from '../inventory';
+import type { Tile } from '@/game/core/coordinates';
 
 /** Assigns a job to a settler and optionally starts movement. */
 export interface JobAssigner {
-    assignJob(entityId: number, job: ChoreoJobState, moveTo?: { x: number; y: number }): boolean;
+    assignJob(entityId: number, job: ChoreoJobState, moveTo?: Tile): boolean;
 }
 
 /** A busy carrier in PickedUp phase that could be pre-assigned to a new job. */

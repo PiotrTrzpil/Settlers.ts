@@ -10,7 +10,7 @@ import { describe, it, expect, afterEach } from 'vitest';
 import { createSimulation, cleanupSimulation, type Simulation } from '../../helpers/test-simulation';
 import { installRealGameData } from '../../helpers/test-game-data';
 import { BuildingType } from '@/game/buildings/building-type';
-import { tileKey, type TileCoord, UnitType } from '@/game/entity';
+import { tileKey, type Tile, UnitType } from '@/game/entity';
 import { Race, AVAILABLE_RACES } from '@/game/core/race';
 import { getBuildingDoorPos, hasBuildingXmlMapping } from '@/game/data/game-data-access';
 import { getBuildingBlockArea, getBuildingPassableTiles, isMineBuilding } from '@/game/buildings/types';
@@ -77,7 +77,7 @@ function checkDoorAtEdge(race: Race, bt: BuildingType): string | null {
 const VERBOSE = !!process.env['VERBOSE_MOVEMENT'];
 
 /** Diagnose why A* failed to reach a door — prints neighbor and occupancy info. */
-function diagnosePathfindFailure(sim: Simulation, door: TileCoord, label: string): string {
+function diagnosePathfindFailure(sim: Simulation, door: Tile, label: string): string {
     const neighbors = getAllNeighbors(door);
     const tileInfo = neighbors.map(t => {
         const k = tileKey(t.x, t.y);
@@ -87,7 +87,7 @@ function diagnosePathfindFailure(sim: Simulation, door: TileCoord, label: string
 }
 
 /** Check if any visited tile is in buildingOccupancy. */
-function checkVisitedForBlocked(visited: TileCoord[], occupancy: Set<string>, label: string): string | null {
+function checkVisitedForBlocked(visited: Tile[], occupancy: Set<string>, label: string): string | null {
     for (const tile of visited) {
         if (occupancy.has(tileKey(tile.x, tile.y))) {
             return `${label}: stepped on blocked tile (${tile.x},${tile.y})`;
@@ -139,11 +139,11 @@ function checkDoorPathfinding(sim: Simulation, race: Race, bt: BuildingType): st
     }
 
     if (!failure) {
-        failure = checkVisitedForBlocked(path as TileCoord[], sim.state.buildingOccupancy, label);
+        failure = checkVisitedForBlocked(path as Tile[], sim.state.buildingOccupancy, label);
     }
 
     if (failure && VERBOSE) {
-        const pathStr = path.map((t: TileCoord) => `(${t.x},${t.y})`).join('→');
+        const pathStr = path.map((t: Tile) => `(${t.x},${t.y})`).join('→');
         failure +=
             `\n  unit_start=(${unit.x},${unit.y}) door=(${door.x},${door.y})` +
             `\n  raw_path:      ${capturedRaw}` +

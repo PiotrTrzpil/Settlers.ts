@@ -4,6 +4,7 @@
  */
 
 import type { MapSize } from '@/utilities/map-size';
+import type { Tile } from '../../core/coordinates';
 import { PlacementStatus } from './types';
 
 /**
@@ -11,11 +12,6 @@ import { PlacementStatus } from './types';
  * Empirically derived from 374 original maps: all buildings have adjacent diffs ≤ 12.
  */
 export const MAX_SLOPE_DIFF = 12;
-
-interface TileCoord {
-    x: number;
-    y: number;
-}
 
 /** Cardinal direction offsets for neighbor checking */
 const CARDINAL_OFFSETS: ReadonlyArray<[number, number]> = [
@@ -37,11 +33,7 @@ const CARDINAL_OFFSETS: ReadonlyArray<[number, number]> = [
  * leveling during construction will smooth those edges anyway.
  */
 // eslint-disable-next-line sonarjs/cognitive-complexity -- iterative slope calculation over tile neighbours
-export function computeSlopeDifficulty(
-    tiles: TileCoord[],
-    groundHeight: Uint8Array,
-    mapSize: MapSize
-): PlacementStatus {
+export function computeSlopeDifficulty(tiles: Tile[], groundHeight: Uint8Array, mapSize: MapSize): PlacementStatus {
     if (tiles.length === 0) {
         return PlacementStatus.Easy;
     }
@@ -102,7 +94,7 @@ export function computeSlopeDifficulty(
 /**
  * Check if slope is valid (within MAX_SLOPE_DIFF).
  */
-export function isSlopeValid(tiles: TileCoord[], groundHeight: Uint8Array, mapSize: MapSize): boolean {
+export function isSlopeValid(tiles: Tile[], groundHeight: Uint8Array, mapSize: MapSize): boolean {
     const status = computeSlopeDifficulty(tiles, groundHeight, mapSize);
     return status !== PlacementStatus.TooSteep;
 }
@@ -113,7 +105,7 @@ export function isSlopeValid(tiles: TileCoord[], groundHeight: Uint8Array, mapSi
  * neighbor within the footprint — the same metric used by computeSlopeDifficulty.
  * Used for continuous color gradients in the building indicator.
  */
-export function computeHeightRange(tiles: TileCoord[], groundHeight: Uint8Array, mapSize: MapSize): number {
+export function computeHeightRange(tiles: Tile[], groundHeight: Uint8Array, mapSize: MapSize): number {
     if (tiles.length <= 1) {
         return 0;
     }

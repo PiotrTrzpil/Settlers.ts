@@ -24,6 +24,7 @@ import type { JobChoreographyStore } from './job-choreography-store';
 import { SettlerState } from './types';
 import { ChoreoTaskType, createChoreoJobState } from './choreo-types';
 import { raceToRaceId } from '../../data/game-data-access';
+import type { Tile } from '@/game/core/coordinates';
 
 const log = createLogger('SettlerTaskPersistence');
 
@@ -164,7 +165,7 @@ function restoreHomeAssignment(
     }
 }
 
-function restoreMoveTask(entityId: number, target: { x: number; y: number }, ctx: RestoreContext): void {
+function restoreMoveTask(entityId: number, target: Tile, ctx: RestoreContext): void {
     const entity = ctx.gameState.getEntity(entityId);
     if (!entity) {
         log.warn(`Skipping move task for unit ${entityId}: entity not found`);

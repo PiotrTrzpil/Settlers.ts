@@ -17,6 +17,7 @@ import { EMaterialType } from '../economy/material-type';
 import { MapObjectType } from '../types/map-object-types';
 import { isBuildingAvailableForRace } from './race-availability';
 import { MAP_OBJECT_TYPE_TO_XML_ID } from './map-object-xml-mapping';
+import type { Tile } from '@/game/core/coordinates';
 
 // ============ Race translation ============
 
@@ -228,12 +229,7 @@ export function getBuildingDoorOffset(race: Race, buildingType: BuildingType): {
  * Combines building position with door offset. When the offset is zero,
  * the building anchor itself is the door.
  */
-export function getBuildingDoorPos(
-    bx: number,
-    by: number,
-    race: Race,
-    buildingType: BuildingType
-): { x: number; y: number } {
+export function getBuildingDoorPos(bx: number, by: number, race: Race, buildingType: BuildingType): Tile {
     const door = getBuildingDoorOffset(race, buildingType);
     return door ? { x: bx + door.dx, y: by + door.dy } : { x: bx, y: by };
 }

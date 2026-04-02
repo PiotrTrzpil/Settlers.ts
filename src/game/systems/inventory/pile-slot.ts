@@ -8,7 +8,7 @@
  * Free piles are standalone PileSlots with kind='free' and buildingId=null.
  */
 
-import type { TileCoord } from '../../core/coordinates';
+import type { Tile } from '../../core/coordinates';
 import type { EMaterialType } from '../../economy/material-type';
 import type { SlotKind } from '../../core/pile-kind';
 
@@ -36,7 +36,7 @@ export interface PileSlot {
     /** Maximum capacity (typically SLOT_CAPACITY = 8). */
     maxCapacity: number;
     /** World tile position where the pile entity is placed. */
-    position: TileCoord;
+    position: Tile;
     /** Pile entity ID (created when amount > 0, removed when amount reaches 0). null = no entity. */
     entityId: number | null;
     /** Slot purpose: output/input/construction/storage/free. */

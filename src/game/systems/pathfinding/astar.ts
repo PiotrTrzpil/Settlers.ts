@@ -14,7 +14,7 @@
  *   // Returns array of waypoints from start (exclusive) to goal (inclusive)
  */
 
-import { tileKey, TileCoord } from '../../entity';
+import { tileKey, Tile } from '../../entity';
 import { isPassable } from '../../terrain';
 import { GRID_DELTAS, NUMBER_OF_DIRECTIONS, hexDistance, getDirectionToward } from '../hex-directions';
 import { BucketPriorityQueue } from './bucket-priority-queue';
@@ -253,8 +253,8 @@ function processNeighbor(cx: number, cy: number, currentIdx: number, direction: 
  * Reconstruct path from parent array.
  * Returns waypoints from start (exclusive) to goal (inclusive).
  */
-function reconstructPath(goalIdx: number, parent: Int32Array, mapWidth: number): TileCoord[] {
-    const path: TileCoord[] = [];
+function reconstructPath(goalIdx: number, parent: Int32Array, mapWidth: number): Tile[] {
+    const path: Tile[] = [];
     let idx = goalIdx;
 
     while (parent[idx]! !== -1) {
@@ -273,10 +273,10 @@ function reconstructPath(goalIdx: number, parent: Int32Array, mapWidth: number):
 // ═══════════════════════════════════════════════════════════════════════════
 
 /** Debug hook: captures raw (pre-smoothing) and smoothed paths for diagnostics. */
-let _debugPathCallback: ((raw: TileCoord[], smoothed: TileCoord[]) => void) | undefined;
+let _debugPathCallback: ((raw: Tile[], smoothed: Tile[]) => void) | undefined;
 
 /** Set a callback to inspect raw vs smoothed paths. Pass undefined to clear. */
-export function setPathDebugHook(cb: ((raw: TileCoord[], smoothed: TileCoord[]) => void) | undefined): void {
+export function setPathDebugHook(cb: ((raw: Tile[], smoothed: Tile[]) => void) | undefined): void {
     _debugPathCallback = cb;
 }
 
@@ -370,7 +370,7 @@ function buildFinalPath(
     groundType: Uint8Array,
     mapHeight: number,
     buildingOccupancy: Set<string>
-): TileCoord[] {
+): Tile[] {
     const rawPath = reconstructPath(goalIdx, parent, mapWidth);
     const smoothed = smoothPath(rawPath, startX, startY, { groundType, mapWidth, mapHeight, buildingOccupancy });
     if (_debugPathCallback) {
@@ -406,7 +406,7 @@ export function findPathAStar(
     goalY: number,
     terrain: PathfindingTerrain,
     buildingOccupancy: Set<string>
-): TileCoord[] | null {
+): Tile[] | null {
     // Trivial case: already at goal
     if (startX === goalX && startY === goalY) {
         return [];

@@ -5,13 +5,13 @@
  */
 
 import type { Ref } from 'vue';
-import type { TileCoord } from '../entity';
+import type { Tile } from '../entity';
 import type { InputConfig } from './input-config';
 import type { Race } from '../core/race';
 import type { CommandResult } from '../commands';
 
 /** Tile resolver function type. */
-export type TileResolver = (screenX: number, screenY: number) => TileCoord | null;
+export type TileResolver = (screenX: number, screenY: number) => Tile | null;
 
 /** Command executor function type. Returns CommandResult with success status, error details, and effects. */
 export type CommandExecutor = (command: Record<string, unknown>) => CommandResult;

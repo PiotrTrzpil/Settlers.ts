@@ -8,7 +8,7 @@
 import { describe, it, expect, afterEach } from 'vitest';
 import { Simulation, createSimulation, cleanupSimulation } from '../../helpers/test-simulation';
 import { installRealGameData } from '../../helpers/test-game-data';
-import { UnitType } from '@/game/entity';
+import { UnitType, Tile } from '@/game/entity';
 import { BuildingType } from '@/game/buildings';
 import type { SiegeState } from '@/game/features/building-siege';
 import { DOOR_ARRIVAL_DISTANCE } from '@/game/features/building-siege/siege-types';
@@ -444,7 +444,7 @@ describe('Building siege – territory update on capture', { timeout: 60_000 }, 
         const tm = sim.services.territoryManager;
 
         // Snapshot ALL tiles owned by player 0 before the second tower is placed
-        const player0TilesBefore: { x: number; y: number }[] = [];
+        const player0TilesBefore: Tile[] = [];
         for (let dx = -60; dx <= 60; dx++) {
             for (let dy = -60; dy <= 60; dy++) {
                 const tx = tower0.x + dx;

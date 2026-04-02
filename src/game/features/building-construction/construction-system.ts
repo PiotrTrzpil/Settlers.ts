@@ -19,7 +19,7 @@ import type { TickSystem } from '../../core/tick-system';
 import type { CoreDeps } from '../feature';
 import type { GameState } from '../../game-state';
 import { type EventBus, EventSubscriptionManager } from '../../event-bus';
-import { EntityType, BuildingType, tileKey, getBuildingFootprint } from '../../entity';
+import { EntityType, BuildingType, tileKey, getBuildingFootprint, Tile } from '../../entity';
 import { getBuildingBlockArea } from '../../buildings/types';
 import { BuildingConstructionPhase, type TerrainContext, type ConstructionSite } from './types';
 
@@ -410,11 +410,7 @@ export class BuildingConstructionSystem implements TickSystem {
     /**
      * Find the nearest free tile that is NOT part of the given footprint.
      */
-    private findNearestFreeOutside(
-        cx: number,
-        cy: number,
-        footprintKeys: Set<string>
-    ): { x: number; y: number } | null {
+    private findNearestFreeOutside(cx: number, cy: number, footprintKeys: Set<string>): Tile | null {
         for (let radius = 1; radius <= 10; radius++) {
             for (const tile of ringTiles(cx, cy, radius)) {
                 const key = tileKey(tile.x, tile.y);

@@ -1,5 +1,5 @@
 import type { EMaterialType } from '../economy';
-import type { BuildingType } from '../entity';
+import type { BuildingType, Tile } from '../entity';
 import type { Race } from '../core/race';
 
 /**
@@ -122,7 +122,7 @@ export interface TileHighlight {
 export interface PathPreview {
     type: 'path';
     /** Path waypoints */
-    waypoints: Array<{ x: number; y: number }>;
+    waypoints: Array<Tile>;
     /** Color of the path line */
     color: string;
 }
@@ -148,7 +148,7 @@ export interface ModeRenderState {
     highlights?: TileHighlight[];
 
     /** Hover tile indicator */
-    hoverTile?: { x: number; y: number } | null;
+    hoverTile?: Tile | null;
 
     /** Custom status text to display */
     statusText?: string;

@@ -4,7 +4,7 @@
 
 import type { ChoreoJobState } from './choreo-types';
 import type { BuildingType } from '../../buildings/building-type';
-import type { UnitType } from '../../entity';
+import type { UnitType, Tile } from '../../entity';
 
 /** Search types - what a settler looks for */
 export enum SearchType {
@@ -127,7 +127,7 @@ export interface EntityWorkHandler {
 export interface PositionWorkHandler {
     type: WorkHandlerType.POSITION;
     /** Find a position to work at */
-    findPosition(x: number, y: number, settlerId?: number): { x: number; y: number } | null;
+    findPosition(x: number, y: number, settlerId?: number): Tile | null;
     /** If true, worker waits (idles) when no position is found instead of failing */
     shouldWaitForWork?: boolean;
     /** If true, search center is the work area center (not the settler's position). */
@@ -143,7 +143,7 @@ export type WorkHandler = EntityWorkHandler | PositionWorkHandler;
 
 /** Narrow interface for assigning tasks to units. Used by logistics, building-demand, siege, etc. */
 export interface TaskDispatcher {
-    assignJob(entityId: number, job: ChoreoJobState, moveTo?: { x: number; y: number }): boolean;
+    assignJob(entityId: number, job: ChoreoJobState, moveTo?: Tile): boolean;
     assignMoveTask(entityId: number, targetX: number, targetY: number): boolean;
     assignWorkerToBuilding(settlerId: number, buildingId: number): void;
     releaseWorkerAssignment(settlerId: number): void;

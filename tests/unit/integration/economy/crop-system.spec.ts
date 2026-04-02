@@ -24,6 +24,7 @@ import { BuildingType } from '@/game/buildings/building-type';
 import { EMaterialType } from '@/game/economy/material-type';
 import { Race } from '@/game/core/race';
 import { MapObjectType } from '@/game/types/map-object-types';
+import type { Tile } from '@/game/core/coordinates';
 
 // ── Helpers ──────────────────────────────────────────────────────
 
@@ -39,13 +40,13 @@ function getWorkAreaCenter(sim: Simulation, buildingId: number) {
 }
 
 function collectPlantedPositions(sim: Simulation) {
-    const positions: { x: number; y: number }[] = [];
+    const positions: Tile[] = [];
     sim.eventBus.on('crop:planted', e => positions.push({ x: e.x, y: e.y }));
     return positions;
 }
 
 /** Chebyshev (chessboard) distance */
-function chebyshev(a: { x: number; y: number }, b: { x: number; y: number }) {
+function chebyshev(a: Tile, b: Tile) {
     return Math.max(Math.abs(a.x - b.x), Math.abs(a.y - b.y));
 }
 
@@ -301,7 +302,7 @@ describe('Crop system – work area & lifecycle invariants', { timeout: 10_000 }
         const farY = center.y;
         sim.execute({ type: 'spawn_map_object', objectType: MapObjectType.Grain, x: farX, y: farY });
 
-        const harvestedPositions: { x: number; y: number }[] = [];
+        const harvestedPositions: Tile[] = [];
         sim.eventBus.on('crop:harvested', e => {
             const entity = sim.state.getEntity(e.entityId);
             if (entity) harvestedPositions.push({ x: entity.x, y: entity.y });

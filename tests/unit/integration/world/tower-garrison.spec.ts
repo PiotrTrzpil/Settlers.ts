@@ -21,7 +21,7 @@
 import { describe, it, expect, afterEach } from 'vitest';
 import { Simulation, createSimulation, cleanupSimulation } from '../../helpers/test-simulation';
 import { installRealGameData } from '../../helpers/test-game-data';
-import { UnitType, tileKey } from '@/game/entity';
+import { UnitType, tileKey, Tile } from '@/game/entity';
 import { BuildingType } from '@/game/buildings';
 import { Race } from '@/game/core/race';
 import { getBuildingDoorPos } from '@/game/data/game-data-access';
@@ -506,7 +506,7 @@ describe('Tower garrison – garrison edge cases', { timeout: 30_000 }, () => {
 
         const secondId = sim.spawnUnit(tower.x + 15, tower.y, UnitType.Swordsman1);
 
-        let stoppedPos: { x: number; y: number } | null = null;
+        let stoppedPos: Tile | null = null;
         sim.eventBus.on('unit:movementStopped', ({ unitId }) => {
             if (unitId === secondId) {
                 const u = sim.state.getEntity(secondId);
@@ -523,7 +523,7 @@ describe('Tower garrison – garrison edge cases', { timeout: 30_000 }, () => {
             const u = sim.state.getEntityOrThrow(secondId, 'diag');
             const chebyshev = Math.max(Math.abs(u.x - door.x), Math.abs(u.y - door.y));
             console.log(`[DIAG] tower=(${tower.x},${tower.y}) door=(${door.x},${door.y})`);
-            const sp = stoppedPos as { x: number; y: number } | null;
+            const sp = stoppedPos as Tile | null;
             console.log(`[DIAG] unit stopped at (${sp?.x},${sp?.y}), now at (${u.x},${u.y})`);
             console.log(`[DIAG] chebyshev from door=${chebyshev}`);
             console.log(`[DIAG] door in buildingOccupancy=${sim.state.buildingOccupancy.has(tileKey(door.x, door.y))}`);

@@ -2,7 +2,7 @@
  * Combat state types and unit combat configuration.
  */
 
-import { UnitType, getBaseUnitType, getUnitLevel } from '../../core/unit-types';
+import { UnitType, UnitCategory, getBaseUnitType, getUnitLevel, getUnitCategory } from '../../core/unit-types';
 
 /** Combat behavior state for a military unit */
 export enum CombatStatus {
@@ -56,6 +56,9 @@ const LEVEL_MULTIPLIERS: readonly [number, number, number] = [1.0, 1.5, 2.0];
 /** Default stats for military units not explicitly configured */
 const DEFAULT_COMBAT_STATS: CombatStats = { maxHealth: 80, attackPower: 10, attackCooldown: 2.0 };
 
+/** Specialists are defenseless — they die in one hit and cannot fight back. */
+const SPECIALIST_COMBAT_STATS: CombatStats = { maxHealth: 1, attackPower: 0, attackCooldown: 99 };
+
 /** Unit types that have ranged attacks (shoot when far, melee when close). */
 const RANGED_BASE_TYPES: ReadonlySet<UnitType> = new Set([
     UnitType.Bowman1,
@@ -70,6 +73,9 @@ export function isRangedUnitType(unitType: UnitType): boolean {
 
 /** Get combat stats for a unit type. Level is derived from the UnitType itself. */
 export function getCombatStats(unitType: UnitType): CombatStats {
+    if (getUnitCategory(unitType) === UnitCategory.Specialist) {
+        return SPECIALIST_COMBAT_STATS;
+    }
     const base = COMBAT_STATS[getBaseUnitType(unitType)] ?? DEFAULT_COMBAT_STATS;
     const level = getUnitLevel(unitType);
     const mult = LEVEL_MULTIPLIERS[level - 1]!;

@@ -1,4 +1,4 @@
-import { TileCoord } from '../entity';
+import { Tile } from '../entity';
 import { IViewPointReadonly } from '../renderer/i-view-point';
 import { MapSize } from '@/utilities/map-size';
 import { screenToTile, tileToWorld, heightToWorld } from '../systems/coordinate-system';
@@ -25,7 +25,7 @@ export class TilePicker {
         viewPoint: IViewPointReadonly,
         mapSize: MapSize,
         groundHeight: Uint8Array
-    ): TileCoord | null {
+    ): Tile | null {
         return screenToTile({
             screenX,
             screenY,

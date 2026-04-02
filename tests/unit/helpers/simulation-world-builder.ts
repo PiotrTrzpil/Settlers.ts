@@ -11,7 +11,7 @@ import { getBuildingFootprint } from '@/game/buildings/types';
 import { SlotKind } from '@/game/core/pile-kind';
 import { Race } from '@/game/core/race';
 import { query } from '@/game/ecs';
-import { EntityType, UnitType, tileKey } from '@/game/entity';
+import { EntityType, UnitType, tileKey, Tile } from '@/game/entity';
 import type { GameServices } from '@/game/game-services';
 import type { GameState } from '@/game/game-state';
 import { MapObjectType } from '@/game/types/map-object-types';
@@ -106,7 +106,7 @@ export class SmartBuildingPlacer {
     }
 
     /** Find the closest valid position to center. */
-    findBuildingPosition(buildingType: BuildingType, race = Race.Roman): { x: number; y: number } {
+    findBuildingPosition(buildingType: BuildingType, race = Race.Roman): Tile {
         const result = spiralSearch(this.centerX, this.centerY, this.mapWidth, this.mapHeight, (x, y) => {
             if (
                 !canPlaceBuildingFootprint(
@@ -130,7 +130,7 @@ export class SmartBuildingPlacer {
     }
 
     /** Find any non-occupied tile near center (for goods piles). */
-    findOpenPosition(): { x: number; y: number } {
+    findOpenPosition(): Tile {
         const result = spiralSearch(
             this.centerX,
             this.centerY,
@@ -143,7 +143,7 @@ export class SmartBuildingPlacer {
     }
 
     /** Find a position with enough clearance for a mine. */
-    findMinePosition(clearance = 8): { x: number; y: number } {
+    findMinePosition(clearance = 8): Tile {
         const result = spiralSearch(this.centerX, this.centerY, this.mapWidth, this.mapHeight, (x, y) => {
             if (x - clearance < 0 || x + clearance >= this.mapWidth) return false;
             if (y - clearance < 0 || y + clearance >= this.mapHeight) return false;
@@ -249,7 +249,7 @@ export function tilesNearBuilding(
     far: boolean,
     mapWidth: number,
     mapHeight: number
-): { x: number; y: number }[] {
+): Tile[] {
     const b = state.getEntityOrThrow(buildingId, 'tilesNearBuilding');
     const skip = far ? 25 : footprintRadius(b) + 1;
     return findEmptyTiles(state, b.x, b.y, count, mapWidth, mapHeight, skip);
@@ -274,9 +274,9 @@ function findEmptyTiles(
     mapWidth: number,
     mapHeight: number,
     skipRadius = 2
-): { x: number; y: number }[] {
+): Tile[] {
     const placed = new Set<string>();
-    const results: { x: number; y: number }[] = [];
+    const results: Tile[] = [];
     for (let i = 0; i < count; i++) {
         const pos = spiralSearch(cx, cy, mapWidth, mapHeight, (x, y) => {
             const dist = Math.max(Math.abs(x - cx), Math.abs(y - cy));
@@ -289,14 +289,14 @@ function findEmptyTiles(
     return results;
 }
 
-export function placeTreeEntities(state: GameState, services: GameServices, tiles: { x: number; y: number }[]): void {
+export function placeTreeEntities(state: GameState, services: GameServices, tiles: Tile[]): void {
     for (const pos of tiles) {
         const tree = state.addEntity(EntityType.MapObject, MapObjectType.TreePine, pos.x, pos.y, 0);
         services.treeSystem.register(tree.id, MapObjectType.TreePine, false);
     }
 }
 
-export function placeStoneEntities(state: GameState, services: GameServices, tiles: { x: number; y: number }[]): void {
+export function placeStoneEntities(state: GameState, services: GameServices, tiles: Tile[]): void {
     for (const pos of tiles) {
         const stone = state.addEntity(EntityType.MapObject, MapObjectType.ResourceStone12, pos.x, pos.y, 0);
         services.stoneSystem.register(stone.id, MapObjectType.ResourceStone12);

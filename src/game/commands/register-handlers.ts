@@ -98,10 +98,16 @@ export function registerAllHandlers(registry: CommandHandlerRegistry, deps: Comm
     registry.register('recruit_specialist', cmd => executeRecruitSpecialist({ recruitSystem, unitTransformer }, cmd));
     const isCombatControllable = () => settings.combatControllable;
     registry.register('move_unit', cmd =>
-        executeMoveUnit({ state, settlerTaskSystem, combatSystem, unitReservation, isCombatControllable }, cmd)
+        executeMoveUnit(
+            { state, settlerTaskSystem, combatSystem, unitReservation, isCombatControllable, getOwner },
+            cmd
+        )
     );
     registry.register('move_selected_units', cmd =>
-        executeMoveSelectedUnits({ state, settlerTaskSystem, combatSystem, unitReservation, isCombatControllable }, cmd)
+        executeMoveSelectedUnits(
+            { state, settlerTaskSystem, combatSystem, unitReservation, isCombatControllable, getOwner },
+            cmd
+        )
     );
 
     // Buildings

@@ -17,7 +17,8 @@
 import type { TickSystem } from '../../core/tick-system';
 import type { GameState } from '../../game-state';
 import type { EventBus } from '../../event-bus';
-import { EntityType, UnitType, BuildingType, type Entity } from '../../entity';
+import { EntityType, UnitType, BuildingType, type Entity, type Tile, tileKey } from '../../entity';
+import { hexDistanceTo } from '../../systems/hex-directions';
 import { dispatchUnitToGarrison } from '../tower-garrison/internal/garrison-dispatch';
 import { getBuildingDoorPos } from '../../data/game-data-access';
 import { sortedEntries } from '@/utilities/collections';
@@ -40,7 +41,7 @@ import {
     findNearbyEnemyGarrison,
     findSwordsmanAtDoor,
     hasEnemyAtDoor,
-    findUnitsAttacking,
+    findDoorAdjacentTiles,
 } from './siege-helpers';
 
 export { type SiegeState, type BuildingSiegeSystemConfig } from './siege-types';
@@ -75,8 +76,38 @@ export class BuildingSiegeSystem implements TickSystem {
         return this.sieges.get(buildingId);
     }
 
-    /** Remove a siege and notify the tower combat system to stop throwing stones. */
+    /**
+     * Returns true if an enemy garrison door is strictly closer than `enemyDist`
+     * to the given unit. Used by the combat system's engagement filter to let
+     * swordsmen prefer a nearby door over a farther enemy unit.
+     */
+    hasDoorCloserThan(entityId: number, enemyDist: number): boolean {
+        const unit = this.gameState.getEntity(entityId);
+        if (!unit || !isSwordsman(unit.subType as UnitType)) {
+            return false;
+        }
+        if (this.unitReservation.isReserved(entityId)) {
+            return false;
+        }
+        const target = findNearbyEnemyGarrison(unit, BUILDING_SEARCH_RADIUS, this.gameState);
+        if (!target) {
+            return false;
+        }
+        const door = getBuildingDoorPos(target.x, target.y, target.race, target.subType as BuildingType);
+        return hexDistanceTo(unit, door) < enemyDist;
+    }
+
+    /** Remove a siege, release all participants, and notify tower combat to stop throwing stones. */
     private removeSiege(buildingId: number): void {
+        const siege = this.sieges.get(buildingId);
+        if (siege) {
+            if (siege.activeDefenderId !== null) {
+                this.releaseSiegeUnit(siege.activeDefenderId);
+            }
+            for (const id of siege.doorAttackerIds) {
+                this.releaseSiegeUnit(id);
+            }
+        }
         this.sieges.delete(buildingId);
         this.doorDefenderNotifier.clearDoorDefender(buildingId);
     }
@@ -97,14 +128,32 @@ export class BuildingSiegeSystem implements TickSystem {
         }
     }
 
-    /** Called when a unit is defeated — advance siege if it was the defender. */
+    /** Called when a unit is defeated — advance siege or reassign targets. */
     onUnitDefeated(entityId: number, defeatedBy: number): void {
         try {
             for (const [buildingId, siege] of this.sieges) {
+                // Defender killed → eject next
                 if (siege.activeDefenderId === entityId) {
                     siege.activeDefenderId = null;
                     this.unitReservation.release(entityId);
+                    for (const id of siege.doorAttackerIds) {
+                        this.releaseSiegeUnit(id);
+                    }
+                    siege.doorAttackerIds = [];
                     this.advanceSiege(buildingId, siege);
+                    return;
+                }
+                // Door attacker killed → reassign defender's target
+                const idx = siege.doorAttackerIds.indexOf(entityId);
+                if (idx !== -1) {
+                    siege.doorAttackerIds.splice(idx, 1);
+                    if (siege.activeDefenderId !== null && siege.doorAttackerIds.length > 0) {
+                        this.combatSystem.lockTarget(
+                            siege.activeDefenderId,
+                            siege.doorAttackerIds[0]!,
+                            'siege-defender'
+                        );
+                    }
                     return;
                 }
             }
@@ -134,12 +183,8 @@ export class BuildingSiegeSystem implements TickSystem {
 
     /** Cancel siege when the building is destroyed. */
     cancelSiege(buildingId: number): void {
-        const siege = this.sieges.get(buildingId);
-        if (!siege) {
+        if (!this.sieges.has(buildingId)) {
             return;
-        }
-        if (siege.activeDefenderId !== null) {
-            this.unitReservation.release(siege.activeDefenderId);
         }
         this.removeSiege(buildingId);
         log.debug(`Siege on building ${buildingId} cancelled`);
@@ -223,60 +268,86 @@ export class BuildingSiegeSystem implements TickSystem {
         }
         // Cancel siege if all attackers left the door area
         if (!hasEnemyAtDoor(building, this.gameState)) {
-            if (siege.activeDefenderId !== null) {
-                this.unitReservation.release(siege.activeDefenderId);
-            }
             this.removeSiege(buildingId);
             log.debug(`Siege on ${buildingId} cancelled — no attackers at door`);
             return;
         }
-        // Enforce max door attacker limit
+        // Enforce door combat invariants
         if (siege.activeDefenderId !== null) {
-            this.enforceDoorAttackerLimit(siege);
+            this.enforceSiegeInvariants(building, siege);
         }
     }
 
-    // ── Door attacker enforcement ──────────────────────────
+    // ── Door combat invariants ──────────────────────────
 
     /**
-     * Enforce MAX_DOOR_ATTACKERS: only the first N enemies actively fighting the
-     * door defender are allowed to continue. Excess units are released from combat
-     * so they stand by until a slot opens.
+     * Enforce siege positioning invariant: door attacker slots are filled
+     * with enemy swordsmen on adjacent tiles. New arrivals are assigned
+     * targets immediately — no per-tick target forcing needed because
+     * reserved units never self-retarget (combat system skips them).
      */
-    private enforceDoorAttackerLimit(siege: SiegeState): void {
-        const defenderId = siege.activeDefenderId!;
-        const allFighting = findUnitsAttacking(defenderId, this.gameState, this.combatSystem);
+    private enforceSiegeInvariants(building: Entity, siege: SiegeState): void {
+        const adjacentTiles = findDoorAdjacentTiles(building, this.gameState);
+        this.fillDoorAttackerSlots(siege, building, adjacentTiles);
+    }
 
-        // Keep existing tracked attackers that are still fighting, then fill remaining slots
-        const stillValid = siege.doorAttackerIds.filter(id => allFighting.includes(id));
-        for (const id of allFighting) {
-            if (stillValid.length >= MAX_DOOR_ATTACKERS) {
+    /**
+     * Find enemy swordsmen standing on door-adjacent tiles and assign them
+     * as door attackers. Reserves them and sets busy so they don't move.
+     */
+    private fillDoorAttackerSlots(siege: SiegeState, building: Entity, adjacentTiles: Tile[]): void {
+        // Remove stale entries (unit gone or no longer on an adjacent tile)
+        siege.doorAttackerIds = siege.doorAttackerIds.filter(id => {
+            const unit = this.gameState.getEntity(id);
+            if (!unit) {
+                return false;
+            }
+            return adjacentTiles.some(t => t.x === unit.x && t.y === unit.y);
+        });
+
+        if (siege.doorAttackerIds.length >= MAX_DOOR_ATTACKERS) {
+            return;
+        }
+
+        // Scan adjacent tiles for enemy swordsmen to fill open slots
+        for (const tile of adjacentTiles) {
+            if (siege.doorAttackerIds.length >= MAX_DOOR_ATTACKERS) {
                 break;
             }
-            if (!stillValid.includes(id)) {
-                stillValid.push(id);
+            const occupantId = this.gameState.unitOccupancy.get(tileKey(tile.x, tile.y));
+            if (occupantId === undefined || siege.doorAttackerIds.includes(occupantId)) {
+                continue;
             }
-        }
-        siege.doorAttackerIds = stillValid;
+            const unit = this.gameState.getEntity(occupantId);
+            if (!unit || unit.type !== EntityType.Unit || unit.hidden) {
+                continue;
+            }
+            if (unit.player === building.player || !isSwordsman(unit.subType as UnitType)) {
+                continue;
+            }
+            // Assign as door attacker: reserve, busy, and lock combat targets
+            siege.doorAttackerIds.push(occupantId);
+            this.setBusy(occupantId, true);
+            if (!this.unitReservation.isReserved(occupantId)) {
+                this.unitReservation.reserve(occupantId, {
+                    purpose: 'siege-door-attacker',
+                    onForcedRelease: () => {},
+                });
+            }
+            this.combatSystem.lockTarget(occupantId, siege.activeDefenderId!, 'siege-door-attacker');
 
-        // Release any excess fighters not in the allowed list
-        for (const id of allFighting) {
-            if (!siege.doorAttackerIds.includes(id)) {
-                this.combatSystem.releaseFromCombat(id);
-                log.debug(`Released excess attacker ${id} from door combat at building ${siege.buildingId}`);
+            // If defender has no lock yet, point it at this attacker
+            if (!this.combatSystem.isLocked(siege.activeDefenderId!)) {
+                this.combatSystem.lockTarget(siege.activeDefenderId!, occupantId, 'siege-defender');
             }
+
+            log.debug(`Attacker ${occupantId} assigned to door at building ${siege.buildingId}`);
         }
     }
 
     // ── Siege initiation ──────────────────────────
 
     private tryStartSiege(unit: Entity): void {
-        // Don't eject defenders while there are visible enemy units nearby —
-        // let the combat system handle field enemies first.
-        if (this.combatSystem.hasNearbyThreats(unit.id)) {
-            return;
-        }
-
         const target = findNearbyEnemyGarrison(unit, BUILDING_SEARCH_RADIUS, this.gameState);
         if (!target) {
             return;
@@ -287,13 +358,26 @@ export class BuildingSiegeSystem implements TickSystem {
         }
 
         const door = getBuildingDoorPos(target.x, target.y, target.race, target.subType as BuildingType);
-        const doorDist = Math.max(Math.abs(unit.x - door.x), Math.abs(unit.y - door.y));
+        const doorDist = hexDistanceTo(unit, door);
+
+        // If field enemies are nearby, only proceed if the door is strictly closer
+        const hasThreats = this.combatSystem.hasNearbyThreats(unit.id);
+        if (hasThreats) {
+            const nearestEnemy = this.combatSystem.findNearestEnemy(unit);
+            if (nearestEnemy && hexDistanceTo(unit, nearestEnemy) <= doorDist) {
+                return;
+            }
+        }
 
         // Attackers must stand adjacent to the door (distance 1), not on it
         if (doorDist === 0 || doorDist > DOOR_ARRIVAL_DISTANCE) {
             if (!this.combatSystem.isInCombat(unit.id)) {
                 const tile = this.garrisonManager.getApproachTile(target);
                 this.settlerTaskSystem.assignMoveTask(unit.id, tile.x, tile.y);
+                if (hasThreats) {
+                    // Mark passive so the combat system won't divert to farther enemies en route
+                    this.combatSystem.setPassive(unit.id);
+                }
             }
             return;
         }
@@ -348,6 +432,7 @@ export class BuildingSiegeSystem implements TickSystem {
         }
 
         siege.activeDefenderId = nextDefenderId;
+        this.setBusy(nextDefenderId, true);
         this.doorDefenderNotifier.setDoorDefender(buildingId, nextDefenderId);
 
         this.eventBus.emit('siege:defenderEjected', {
@@ -386,5 +471,27 @@ export class BuildingSiegeSystem implements TickSystem {
             unitReservation: this.unitReservation,
             settlerTaskSystem: this.settlerTaskSystem,
         });
+    }
+
+    // ── Helpers ──────────────────────────
+
+    /** Set or clear the movement controller's busy flag to prevent/allow bumping. */
+    private setBusy(entityId: number, busy: boolean): void {
+        const controller = this.gameState.movement.getController(entityId);
+        if (controller) {
+            controller.busy = busy;
+        }
+    }
+
+    /** Release a siege participant: clear busy, unlock, release from combat and reservation. */
+    private releaseSiegeUnit(id: number): void {
+        this.setBusy(id, false);
+        this.combatSystem.unlockTarget(id);
+        if (this.combatSystem.isInCombat(id)) {
+            this.combatSystem.releaseFromCombat(id);
+        }
+        if (this.unitReservation.isReserved(id)) {
+            this.unitReservation.release(id);
+        }
     }
 }

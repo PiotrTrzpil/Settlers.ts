@@ -8,21 +8,29 @@
  * Event wiring for building lifecycle happens after creation.
  *
  * When territory changes after a tower capture, buildings of the losing player
- * on lost territory are destroyed, and non-military units are displaced to
- * the nearest friendly territory tile.
+ * on lost territory are destroyed, and free civilian units (not assigned to
+ * a building) are displaced to the nearest friendly territory tile.
  */
 
 import type { FeatureDefinition, FeatureContext, FeatureDiagnostics } from '../feature';
-import type { BuildingType } from '../../buildings/types';
+import { getBuildingFootprint, type BuildingType } from '../../buildings/types';
 import type { TerrainData } from '../../terrain';
-import { EntityType } from '../../entity';
-import { isUnitTypeMilitary, type UnitType } from '../../core/unit-types';
+import { EntityType, Tile } from '../../entity';
+import { isUnitTypeMilitary, UnitCategory, getUnitCategory, type UnitType } from '../../core/unit-types';
+import type { SettlerTaskExports } from '../settler-tasks/settler-tasks-feature';
 import { TerritoryManager, type TerritoryChange } from './territory-manager';
+import { TerritoryPersistence } from './territory-persistence';
 import { SpatialGrid } from '../../spatial-grid';
 import { TERRITORY_BUILDINGS } from './territory-types';
 import { createLogger } from '@/utilities/logger';
 
 const log = createLogger('Territory');
+
+/**
+ * BFS tile limit for the survival check. Workers with no friendly territory
+ * within this range die immediately after a territory change.
+ */
+const SURVIVAL_SEARCH_RADIUS = 1000;
 
 export interface TerritoryExports {
     territoryManager: TerritoryManager | null;
@@ -30,16 +38,19 @@ export interface TerritoryExports {
 
 export const TerritoryFeature: FeatureDefinition = {
     id: 'territory',
+    dependencies: ['settler-tasks'],
 
     create(ctx: FeatureContext) {
         const exports: TerritoryExports = { territoryManager: null };
+        const persistence = new TerritoryPersistence();
 
         return {
             exports,
-            persistence: 'none',
+            persistence: [persistence],
             onTerrainReady(terrain: TerrainData) {
                 const territoryManager = new TerritoryManager(terrain.width, terrain.height);
                 exports.territoryManager = territoryManager;
+                persistence.setManager(territoryManager);
 
                 // Create SpatialGrid and wire it into GameState
                 const spatialIndex = new SpatialGrid(
@@ -92,6 +103,10 @@ export const TerritoryFeature: FeatureDefinition = {
                         const entity = ctx.gameState.getEntityOrThrow(buildingId, 'territory:building:ownerChanged');
                         territoryManager.removeBuilding(buildingId);
                         territoryManager.addBuilding(buildingId, entity.x, entity.y, newPlayer, buildingType);
+                        // The building footprint itself must belong to the new owner immediately,
+                        // even if surrounding tiles are still contested by the old owner's other towers.
+                        const footprint = getBuildingFootprint(entity.x, entity.y, buildingType, entity.race);
+                        territoryManager.claimTiles(footprint, newPlayer);
                     }
                 });
 
@@ -146,11 +161,11 @@ function handleTerritoryChanges(
     }
 
     destroyBuildingsOnLostTerritory(ctx, territoryManager, affectedPlayers);
-    displaceUnitsOnLostTerritory(ctx, territoryManager, affectedPlayers);
+    displaceOrKillUnitsOnLostTerritory(ctx, territoryManager, affectedPlayers);
 }
 
-/** Check if a building should be destroyed due to lost territory. */
-function isBuildingOnEnemyTerritory(ctx: FeatureContext, tm: TerritoryManager, id: number, player: number): boolean {
+/** Check if a non-territory building should be destroyed due to lost territory. */
+function isBuildingOnLostTerritory(ctx: FeatureContext, tm: TerritoryManager, id: number, player: number): boolean {
     const entity = ctx.gameState.getEntity(id);
     if (!entity) {
         return false;
@@ -158,13 +173,12 @@ function isBuildingOnEnemyTerritory(ctx: FeatureContext, tm: TerritoryManager, i
     if (TERRITORY_BUILDINGS.has(entity.subType as BuildingType)) {
         return false;
     }
-    const tileOwner = tm.getOwner(entity.x, entity.y);
-    return tileOwner >= 0 && tileOwner !== player;
+    return !tm.isInTerritory(entity.x, entity.y, player);
 }
 
 /**
  * Destroy non-territory buildings belonging to players who lost territory,
- * if those buildings now sit on enemy territory.
+ * if those buildings no longer sit on their player's territory.
  */
 function destroyBuildingsOnLostTerritory(
     ctx: FeatureContext,
@@ -176,20 +190,20 @@ function destroyBuildingsOnLostTerritory(
     for (const player of affectedPlayers) {
         const buildingIds = ctx.gameState.entityIndex.idsOfTypeAndPlayer(EntityType.Building, player);
         for (const id of buildingIds) {
-            if (isBuildingOnEnemyTerritory(ctx, tm, id, player)) {
+            if (isBuildingOnLostTerritory(ctx, tm, id, player)) {
                 toRemove.push(id);
             }
         }
     }
 
     for (const id of toRemove) {
-        log.info(`Destroying building ${id} — on enemy territory`);
+        log.info(`Destroying building ${id} — on lost territory`);
         ctx.executeCommand({ type: 'remove_entity', entityId: id });
     }
 }
 
-/** Check if a non-military unit should be displaced due to lost territory. */
-function shouldDisplaceUnit(ctx: FeatureContext, tm: TerritoryManager, id: number, player: number): boolean {
+/** Check if a non-military unit is on lost territory. */
+function isUnitOnLostTerritory(ctx: FeatureContext, tm: TerritoryManager, id: number, player: number): boolean {
     const entity = ctx.gameState.getEntity(id);
     if (!entity || entity.hidden) {
         return false;
@@ -197,33 +211,70 @@ function shouldDisplaceUnit(ctx: FeatureContext, tm: TerritoryManager, id: numbe
     if (isUnitTypeMilitary(entity.subType as UnitType)) {
         return false;
     }
-    const tileOwner = tm.getOwner(entity.x, entity.y);
-    return tileOwner >= 0 && tileOwner !== player;
+    return !tm.isInTerritory(entity.x, entity.y, player);
 }
 
 /**
- * Displace non-military units belonging to players who lost territory.
- * Units on tiles now owned by another player are moved to the nearest
- * tile still owned by their player.
+ * Handle non-military units on lost territory:
+ * - Free civilians (no building assignment) are displaced to the nearest friendly tile.
+ * - If no friendly territory exists within BFS range, the unit dies immediately
+ *   (workers AND specialists — only military survives total territory loss).
  */
-function displaceUnitsOnLostTerritory(
+function displaceOrKillUnitsOnLostTerritory(
     ctx: FeatureContext,
     tm: TerritoryManager,
     affectedPlayers: ReadonlySet<number>
 ): void {
+    const { settlerTaskSystem } = ctx.getFeature<SettlerTaskExports>('settler-tasks');
+    const getAssigned = settlerTaskSystem.getAssignedBuilding.bind(settlerTaskSystem);
+    const toKill: number[] = [];
+
     for (const player of affectedPlayers) {
         const unitIds = ctx.gameState.entityIndex.idsOfTypeAndPlayer(EntityType.Unit, player);
         for (const id of unitIds) {
-            if (!shouldDisplaceUnit(ctx, tm, id, player)) {
+            if (!isUnitOnLostTerritory(ctx, tm, id, player)) {
                 continue;
             }
-            const entity = ctx.gameState.getEntity(id)!;
-            const target = findNearestFriendlyTile(tm, entity.x, entity.y, player);
-            if (target) {
-                ctx.executeCommand({ type: 'move_unit', entityId: id, targetX: target.x, targetY: target.y });
+            const action = resolveUnitFate(ctx, tm, id, player, getAssigned);
+            if (action === 'kill') {
+                toKill.push(id);
             }
         }
     }
+
+    for (const id of toKill) {
+        log.info(`Killing unit ${id} — no friendly territory reachable`);
+        ctx.eventBus.emit('combat:unitDefeated', { unitId: id, defeatedBy: -1, level: 'info' });
+        ctx.executeCommand({ type: 'remove_entity', entityId: id });
+    }
+}
+
+/** Decide what happens to a non-military unit on lost territory. */
+function resolveUnitFate(
+    ctx: FeatureContext,
+    tm: TerritoryManager,
+    id: number,
+    player: number,
+    getAssigned: (unitId: number) => number | null
+): 'kill' | 'displace' | 'none' {
+    const entity = ctx.gameState.getEntity(id)!;
+    const nearby = findNearestFriendlyTile(tm, entity.x, entity.y, player, SURVIVAL_SEARCH_RADIUS);
+
+    if (!nearby && getUnitCategory(entity.subType as UnitType) === UnitCategory.Worker) {
+        return 'kill';
+    }
+
+    // Free civilian with reachable territory — displace
+    if (nearby && getAssigned(id) === null) {
+        const target = findNearestFriendlyTile(tm, entity.x, entity.y, player);
+        if (target) {
+            ctx.executeCommand({ type: 'move_unit', entityId: id, targetX: target.x, targetY: target.y });
+            return 'displace';
+        }
+    }
+
+    // Building-assigned workers with reachable territory: handled by their building
+    return 'none';
 }
 
 /** BFS search for the nearest tile owned by the given player. */
@@ -231,11 +282,12 @@ function findNearestFriendlyTile(
     tm: TerritoryManager,
     startX: number,
     startY: number,
-    player: number
-): { x: number; y: number } | null {
-    const MAX_SEARCH = 2000;
+    player: number,
+    maxSearch = 2000
+): Tile | null {
+    const MAX_SEARCH = maxSearch;
     const visited = new Set<number>();
-    const queue: { x: number; y: number }[] = [{ x: startX, y: startY }];
+    const queue: Tile[] = [{ x: startX, y: startY }];
     visited.add(startY * 10000 + startX);
 
     const GRID_DX = [1, -1, 0, 0, 1, -1];
