@@ -157,6 +157,16 @@ export class JobChoreographyStore {
         return undefined;
     }
 
+    /**
+     * Register a synthetic job (not from XML) so selectJob can resolve it.
+     * Used by domain features that define their own choreography (e.g. pioneers).
+     */
+    registerSyntheticJob(job: ChoreoJob): void {
+        for (const raceId of ALL_RACE_IDS) {
+            this.cache.set(cacheKey(raceId, job.id), job);
+        }
+    }
+
     // Expose for testing
     get cacheSize(): number {
         return this.cache.size;

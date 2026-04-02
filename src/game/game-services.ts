@@ -71,6 +71,7 @@ import { VictoryConditionsFeature, type VictoryConditionsExports } from './featu
 import { BuildingSiegeFeature, type BuildingSiegeExports } from './features/building-siege';
 import type { BuildingSiegeSystem } from './features/building-siege/building-siege-system';
 import { AiPlayerFeature, type AiPlayerExports } from './features/ai-player';
+import { PioneerFeature } from './features/pioneer';
 
 // Re-export types that external code imports transitively via GameServices
 import type { CarrierRegistry } from './features/carriers';
@@ -259,6 +260,7 @@ export class GameServices {
             // Tier 2: depend on tier-0 and tier-1
             SettlerTaskFeature,
             // Tier 3: depend on settler-tasks
+            PioneerFeature,
             LogisticsDispatcherFeature,
             // Tier 4: depend on logistics-dispatcher
             BarracksFeature,

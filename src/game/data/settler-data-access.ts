@@ -39,6 +39,7 @@ const UNIT_TYPE_TO_XML_SETTLER: Partial<Record<UnitType, string>> = {
     [UnitType.SunflowerFarmer]: 'SETTLER_SUNFLOWERFARMER',
     [UnitType.TempleServant]: 'SETTLER_TEMPLE_SERVANT',
     [UnitType.Geologist]: 'SETTLER_GEOLOGIST',
+    [UnitType.Pioneer]: 'SETTLER_PIONEER',
 };
 
 const ALL_RACE_IDS: RaceId[] = ['RACE_ROMAN', 'RACE_VIKING', 'RACE_MAYA', 'RACE_DARK', 'RACE_TROJAN'];
@@ -63,6 +64,7 @@ const XML_SEARCH_TO_SEARCH_TYPE: Record<string, SearchType> = {
     GOOD: SearchType.GOOD,
     VINE: SearchType.VINE,
     WATER: SearchType.WATER,
+    TERRAIN: SearchType.TERRAIN,
 };
 
 /** Job ID patterns that are NOT work jobs (idle behaviors, check-in routines). */
@@ -264,6 +266,11 @@ export function buildAllSettlerConfigs(): Map<UnitType, SettlerConfig> {
         if (config) {
             configs.set(unitType, config);
         }
+    }
+
+    // Pioneer: manual config fallback — original XML may not define SETTLER_PIONEER.
+    if (!configs.has(UnitType.Pioneer)) {
+        configs.set(UnitType.Pioneer, { search: SearchType.TERRAIN, jobs: ['PIONEER_CLAIM_TILE'] });
     }
 
     // Military units: no autonomous work, but can execute dispatch jobs.
