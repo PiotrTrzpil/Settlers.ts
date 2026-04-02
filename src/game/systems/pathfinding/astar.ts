@@ -35,6 +35,8 @@ let _parent = new Int32Array(0);
 let _flags = new Uint8Array(0);
 /** Integer-indexed building occupancy bitmap — avoids tileKey string creation in hot loop. */
 let _buildingBitmap = new Uint8Array(0);
+/** Integer-indexed unit occupancy bitmap — penalizes crowded tiles without blocking them. */
+let _unitOccupancyBitmap = new Uint8Array(0);
 const _openQueue = new BucketPriorityQueue();
 
 function prepareBuffers(totalTiles: number): void {
@@ -43,6 +45,7 @@ function prepareBuffers(totalTiles: number): void {
         _parent = new Int32Array(totalTiles);
         _flags = new Uint8Array(totalTiles);
         _buildingBitmap = new Uint8Array(totalTiles);
+        _unitOccupancyBitmap = new Uint8Array(totalTiles);
         _bufferSize = totalTiles;
     }
     _gCost.fill(Infinity, 0, totalTiles);
@@ -61,6 +64,28 @@ function populateBuildingBitmap(buildingOccupancy: Set<string>, mapWidth: number
         const idx = x + y * mapWidth;
         if (idx >= 0 && idx < totalTiles) {
             _buildingBitmap[idx] = 1;
+        }
+    }
+}
+
+/** Snapshot the Map-keyed unit occupancy into the integer-indexed bitmap. */
+function populateUnitOccupancyBitmap(
+    unitOccupancy: Map<string, number>,
+    mapWidth: number,
+    totalTiles: number,
+    excludeEntityId?: number
+): void {
+    _unitOccupancyBitmap.fill(0, 0, totalTiles);
+    for (const [key, entityId] of unitOccupancy) {
+        if (entityId === excludeEntityId) {
+            continue;
+        }
+        const comma = key.indexOf(',');
+        const x = +key.slice(0, comma);
+        const y = +key.slice(comma + 1);
+        const idx = x + y * mapWidth;
+        if (idx >= 0 && idx < totalTiles) {
+            _unitOccupancyBitmap[idx] = 1;
         }
     }
 }
@@ -139,6 +164,7 @@ interface SearchContext {
     goalY: number;
     goalIdx: number;
     buildingBitmap: Uint8Array;
+    unitOccupancyBitmap: Uint8Array;
     gCost: Float32Array;
     parent: Int32Array;
     flags: Uint8Array;
@@ -151,8 +177,8 @@ interface SearchContext {
 
 /**
  * Check if a tile can be entered.
- * Only considers terrain passability and building footprints — unit occupancy is ignored
- * (collisions are resolved at movement time via bump-or-wait).
+ * Only considers terrain passability and building footprints for blocking.
+ * Unit-occupied tiles are penalized (1.5x cost) but not blocked.
  */
 function canEnterTile(_nx: number, _ny: number, nIdx: number, ctx: SearchContext): boolean {
     // Already processed?
@@ -235,8 +261,9 @@ function processNeighbor(cx: number, cy: number, currentIdx: number, direction: 
         return;
     }
 
-    // Compute tentative g-cost
-    const tentativeG = ctx.gCost[currentIdx]! + MOVE_COST;
+    // Compute tentative g-cost — penalize unit-occupied tiles (1.5x) unless it's the goal
+    const occupancyPenalty = nIdx !== ctx.goalIdx && ctx.unitOccupancyBitmap[nIdx] ? 5 : 0;
+    const tentativeG = ctx.gCost[currentIdx]! + MOVE_COST + occupancyPenalty;
 
     // Only update if this is a better path
     if (tentativeG < ctx.gCost[nIdx]!) {
@@ -385,8 +412,8 @@ function buildFinalPath(
  * Uses A* with hex distance heuristic and bucket priority queue.
  * Applies path smoothing to remove unnecessary zigzags.
  *
- * A* only considers terrain and building footprints for blocking — unit occupancy
- * is ignored. Collisions with other units are resolved at movement time via bump-or-wait.
+ * A* considers terrain and building footprints for blocking. Unit-occupied tiles
+ * are penalized (1.5x cost) but not blocked — collisions are resolved at movement time.
  *
  * TODO: Map objects with blocking > 0 in objectInfo.xml (trees, cacti, large stones, etc.)
  * should also block pathfinding. Currently units can path through blocking map objects.
@@ -405,7 +432,9 @@ export function findPathAStar(
     goalX: number,
     goalY: number,
     terrain: PathfindingTerrain,
-    buildingOccupancy: Set<string>
+    buildingOccupancy: Set<string>,
+    unitOccupancy?: Map<string, number>,
+    pathfindingEntityId?: number
 ): Tile[] | null {
     // Trivial case: already at goal
     if (startX === goalX && startY === goalY) {
@@ -432,6 +461,11 @@ export function findPathAStar(
     const totalTiles = mapWidth * mapHeight;
     prepareBuffers(totalTiles);
     populateBuildingBitmap(buildingOccupancy, mapWidth, totalTiles);
+    if (unitOccupancy) {
+        populateUnitOccupancyBitmap(unitOccupancy, mapWidth, totalTiles, pathfindingEntityId);
+    } else {
+        _unitOccupancyBitmap.fill(0, 0, totalTiles);
+    }
     const gCost = _gCost;
     const parent = _parent;
     const flags = _flags;
@@ -443,6 +477,7 @@ export function findPathAStar(
         goalY,
         goalIdx,
         buildingBitmap: _buildingBitmap,
+        unitOccupancyBitmap: _unitOccupancyBitmap,
         gCost,
         parent,
         flags,

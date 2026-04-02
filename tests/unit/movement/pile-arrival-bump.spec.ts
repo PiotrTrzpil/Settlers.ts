@@ -47,13 +47,12 @@ describe('Pile arrival – basic bump behavior', () => {
     });
 
     it('arriving carrier pushes idle unit off the pile tile', () => {
+        // Carrier created first → lower ID → can bump higher-ID idle unit
+        const { entity: carrier } = addUnit(state, 12, 10);
         const { entity: idleUnit } = addUnit(state, PILE_TILE.x, PILE_TILE.y);
+        expect(carrier.id).toBeLessThan(idleUnit.id);
 
-        const { entity: carrier } = addUnitWithPath(state, 12, 10, [
-            { x: 13, y: 10 },
-            { x: 14, y: 10 },
-            { x: 15, y: 10 },
-        ]);
+        state.movement.moveUnit(carrier.id, PILE_TILE.x, PILE_TILE.y);
 
         for (let i = 0; i < 40; i++) {
             state.movement.update(0.1);
@@ -87,15 +86,14 @@ describe('Pile arrival – basic bump behavior', () => {
     });
 
     it('carrier waits for busy unit to finish, then pushes it', () => {
+        // Carrier created first → lower ID → can bump after busy clears
+        const { entity: carrier } = addUnit(state, 12, 10);
         const { entity: busyUnit } = addUnit(state, PILE_TILE.x, PILE_TILE.y);
+        expect(carrier.id).toBeLessThan(busyUnit.id);
         const busyController = state.movement.getController(busyUnit.id)!;
         busyController.busy = true;
 
-        const { entity: carrier } = addUnitWithPath(state, 12, 10, [
-            { x: 13, y: 10 },
-            { x: 14, y: 10 },
-            { x: 15, y: 10 },
-        ]);
+        state.movement.moveUnit(carrier.id, PILE_TILE.x, PILE_TILE.y);
 
         for (let i = 0; i < 10; i++) {
             state.movement.update(0.1);
@@ -117,19 +115,13 @@ describe('Pile arrival – basic bump behavior', () => {
     });
 
     it('three carriers converging on pile tile take turns via push', () => {
+        // c2 and c3 created first (lower IDs) can bump c1 (highest ID, idle on pile)
+        const { entity: c2 } = addUnit(state, 12, 10);
+        const { entity: c3 } = addUnit(state, 18, 10);
         const { entity: c1 } = addUnit(state, PILE_TILE.x, PILE_TILE.y);
 
-        const { entity: c2 } = addUnitWithPath(state, 12, 10, [
-            { x: 13, y: 10 },
-            { x: 14, y: 10 },
-            { x: 15, y: 10 },
-        ]);
-
-        const { entity: c3 } = addUnitWithPath(state, 18, 10, [
-            { x: 17, y: 10 },
-            { x: 16, y: 10 },
-            { x: 15, y: 10 },
-        ]);
+        state.movement.moveUnit(c2.id, PILE_TILE.x, PILE_TILE.y);
+        state.movement.moveUnit(c3.id, PILE_TILE.x, PILE_TILE.y);
 
         const pileOccupants: number[] = [];
         const pileKey = tileKey(PILE_TILE.x, PILE_TILE.y);
@@ -163,13 +155,12 @@ describe('Pile arrival – door bump behavior', () => {
     it('unit walking to door tile pushes idle occupant off the door', () => {
         const DOOR: Tile = { x: 15, y: 10 };
 
+        // Worker created first → lower ID → can bump higher-ID idle unit
+        const { entity: worker } = addUnit(state, 12, 10);
         const { entity: doorUnit } = addUnit(state, DOOR.x, DOOR.y);
+        expect(worker.id).toBeLessThan(doorUnit.id);
 
-        const { entity: worker } = addUnitWithPath(state, 12, 10, [
-            { x: 13, y: 10 },
-            { x: 14, y: 10 },
-            { x: 15, y: 10 },
-        ]);
+        state.movement.moveUnit(worker.id, DOOR.x, DOOR.y);
 
         for (let i = 0; i < 40; i++) {
             state.movement.update(0.1);
@@ -184,9 +175,11 @@ describe('Pile arrival – door bump behavior', () => {
     it('GO_HOME with ARRIVAL_DIST=1: worker must still push door occupant', () => {
         const DOOR: Tile = { x: 15, y: 10 };
 
-        const { entity: doorUnit } = addUnit(state, DOOR.x, DOOR.y);
-
+        // Worker created first → lower ID → can bump
         const { entity: worker } = addUnit(state, 12, 10);
+        const { entity: doorUnit } = addUnit(state, DOOR.x, DOOR.y);
+        expect(worker.id).toBeLessThan(doorUnit.id);
+
         state.movement.moveUnit(worker.id, DOOR.x, DOOR.y);
 
         for (let i = 0; i < 60; i++) {
@@ -212,13 +205,12 @@ describe('Pile arrival – door bump behavior', () => {
 
         const DOOR: Tile = { x: 15, y: 10 };
 
+        // Worker created first → lower ID → can bump
+        const { entity: worker } = addUnit(state, 15, 13);
         const { entity: doorUnit } = addUnit(state, DOOR.x, DOOR.y);
+        expect(worker.id).toBeLessThan(doorUnit.id);
 
-        const { entity: worker } = addUnitWithPath(state, 15, 13, [
-            { x: 15, y: 12 },
-            { x: 15, y: 11 },
-            { x: 15, y: 10 },
-        ]);
+        state.movement.moveUnit(worker.id, DOOR.x, DOOR.y);
 
         for (let i = 0; i < 40; i++) {
             state.movement.update(0.1);

@@ -7,6 +7,7 @@ import { type ComponentStore, mapStore } from '../../ecs';
 import { LogHandler } from '@/utilities/log-handler';
 import { consumeLastPathfindingFailure, setPathfindingEntityContext } from '../pathfinding';
 import { BumpResolver } from './bump-resolver';
+import { runCrowdDispersal, clearDispersalCooldown } from './crowd-dispersal';
 
 const log = new LogHandler('MovementSystem');
 
@@ -111,6 +112,7 @@ export class MovementSystem implements TickSystem {
         this.buildingFootprint = config.buildingFootprint;
         this.pathfinder = new PathfindingService();
         this.pathfinder.setBuildingOccupancy(config.buildingOccupancy);
+        this.pathfinder.setUnitOccupancy(config.unitOccupancy);
 
         this.bumpResolverDeps = {
             controllers: this.controllers,
@@ -166,6 +168,7 @@ export class MovementSystem implements TickSystem {
         }
         this.controllers.delete(entityId);
         this.prevStates.delete(entityId);
+        clearDispersalCooldown(entityId);
     }
 
     hasController(entityId: number): boolean {
@@ -200,8 +203,10 @@ export class MovementSystem implements TickSystem {
                 continue;
             }
             setPathfindingEntityContext(ctrl.entityId);
+            this.pathfinder.setPathfindingEntityId(ctrl.entityId);
             const newPath = this.pathfinder.findPath(ctrl.tileX, ctrl.tileY, goal.x, goal.y);
             setPathfindingEntityContext(undefined);
+            this.pathfinder.setPathfindingEntityId(undefined);
             if (newPath && newPath.length > 0) {
                 ctrl.replacePath(newPath);
             } else {
@@ -229,8 +234,10 @@ export class MovementSystem implements TickSystem {
         const fromY = controller.tileY;
 
         setPathfindingEntityContext(entityId);
+        this.pathfinder.setPathfindingEntityId(entityId);
         const path = this.pathfinder.findPath(fromX, fromY, targetX, targetY);
         setPathfindingEntityContext(undefined);
+        this.pathfinder.setPathfindingEntityId(undefined);
 
         if (!path || path.length === 0) {
             this.emitPathFailed(entityId, fromX, fromY, targetX, targetY);
@@ -322,6 +329,17 @@ export class MovementSystem implements TickSystem {
                 }
             }
         }
+
+        runCrowdDispersal(
+            this,
+            this.controllers.values(),
+            this.unitOccupancy,
+            this.buildingOccupancy,
+            this.bumpResolverDeps.terrainGroundType,
+            this.bumpResolverDeps.terrainMapWidth,
+            this.bumpResolverDeps.terrainMapHeight,
+            deltaSec
+        );
     }
 
     private updateController(controller: MovementController, deltaSec: number): void {
@@ -449,8 +467,10 @@ export class MovementSystem implements TickSystem {
         const goal = controller.goal;
         if (goal) {
             setPathfindingEntityContext(controller.entityId);
+            this.pathfinder.setPathfindingEntityId(controller.entityId);
             const newPath = this.pathfinder.findPath(controller.tileX, controller.tileY, goal.x, goal.y);
             setPathfindingEntityContext(undefined);
+            this.pathfinder.setPathfindingEntityId(undefined);
             if (newPath && newPath.length > 0) {
                 controller.replacePath(newPath);
             }

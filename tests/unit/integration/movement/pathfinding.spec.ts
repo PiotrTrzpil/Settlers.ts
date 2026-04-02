@@ -559,9 +559,10 @@ describe('Group collision pathfinding (real game data)', { timeout: 5000 }, () =
         expect(sim.state.buildingOccupancy.size).toBeGreaterThan(0);
         sim.runTicks(120);
 
+        // Marching group created first → lower IDs → can bump idle settlers
+        const marchGroup = spawnGroup(sim, { count: 10, x: 10, startY: 26 });
         spawnGroup(sim, { count: 5, x: 35, startY: 28, spacing: 4 });
 
-        const marchGroup = spawnGroup(sim, { count: 10, x: 10, startY: 26 });
         const { ids, targets } = moveGroupTo(sim, marchGroup, 90);
 
         const trails = runWithPositionTracking(sim, ids, targets, {

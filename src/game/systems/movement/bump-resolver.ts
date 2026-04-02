@@ -156,7 +156,8 @@ export class BumpResolver {
         if (occupant.state === 'moving' && occupant.waitTime === 0) {
             return false;
         }
-        if (occupant.state !== 'idle' && bumper.entityId >= occupant.entityId) {
+        // jsettlers-style: lower entity ID always wins — prevents mutual push loops
+        if (bumper.entityId >= occupant.entityId) {
             return false;
         }
         return true;

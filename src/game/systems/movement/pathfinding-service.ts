@@ -2,8 +2,8 @@
  * PathfindingService wraps the low-level findPathAStar function with terrain and
  * building occupancy state, providing a cleaner API for movement-related pathfinding.
  *
- * Unit occupancy is never considered during pathfinding — units always path through
- * other units and resolve collisions locally via bump-or-wait.
+ * Unit occupancy is used as a cost penalty (1.5x) during pathfinding — units prefer
+ * to path around crowded tiles but can still path through them.
  */
 
 import { Tile } from '../../entity';
@@ -11,7 +11,7 @@ import { findPathAStar, type PathfindingTerrain } from '../pathfinding';
 
 /**
  * Interface for the pathfinding service.
- * Units always pathfind ignoring other units — only terrain and buildings block.
+ * Units pathfind with a cost penalty on occupied tiles — only terrain and buildings fully block.
  */
 export interface IPathfinder {
     /** Find a path from start to goal. Returns null if no path exists. */
@@ -27,6 +27,8 @@ export interface IPathfinder {
 export class PathfindingService implements IPathfinder {
     private terrain: PathfindingTerrain | undefined;
     private buildingOccupancy: Set<string> = new Set();
+    private unitOccupancy: Map<string, number> | undefined;
+    private pathfindingEntityId: number | undefined;
 
     /**
      * Set the terrain data used for all subsequent pathfinding calls.
@@ -42,14 +44,28 @@ export class PathfindingService implements IPathfinder {
         this.buildingOccupancy = buildingOccupancy;
     }
 
+    /**
+     * Set the unit occupancy map — these tiles receive a cost penalty during pathfinding.
+     */
+    setUnitOccupancy(unitOccupancy: Map<string, number>): void {
+        this.unitOccupancy = unitOccupancy;
+    }
+
+    /**
+     * Set the entity ID of the unit being pathfound for, so its own tile is excluded from penalty.
+     */
+    setPathfindingEntityId(entityId: number | undefined): void {
+        this.pathfindingEntityId = entityId;
+    }
+
     /** Returns true if terrain data has been loaded. */
     hasTerrainData(): boolean {
         return this.terrain !== undefined;
     }
 
     /**
-     * Find a path between two points. Only terrain and buildings are obstacles;
-     * unit occupancy is never considered.
+     * Find a path between two points. Terrain and buildings block; unit-occupied
+     * tiles are penalized but not blocked.
      *
      * @param startX Starting X coordinate
      * @param startY Starting Y coordinate
@@ -62,6 +78,15 @@ export class PathfindingService implements IPathfinder {
             throw new Error('PathfindingService.findPath: terrain data not set');
         }
 
-        return findPathAStar(startX, startY, goalX, goalY, this.terrain, this.buildingOccupancy);
+        return findPathAStar(
+            startX,
+            startY,
+            goalX,
+            goalY,
+            this.terrain,
+            this.buildingOccupancy,
+            this.unitOccupancy,
+            this.pathfindingEntityId
+        );
     }
 }
