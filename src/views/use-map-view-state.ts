@@ -1,5 +1,5 @@
 import { ref, computed, watch, reactive, type Ref } from 'vue';
-import { BuildingType, Entity, TileCoord } from '@/game/entity';
+import { BuildingType, Entity, Tile } from '@/game/entity';
 import { isUnitAvailableForRace, isBuildingAvailableForRace } from '@/game/data/race-availability';
 import { Race } from '@/game/core/race';
 import type { Game } from '@/game/game';
@@ -19,7 +19,6 @@ export interface LayerCounts {
     other: number;
 }
 
-
 /** Reactive UI state for the map view sidebar and overlays. */
 export function setupUIState() {
     const VALID_TABS = new Set(['buildings', 'units', 'resources', 'specialists']);
@@ -32,7 +31,7 @@ export function setupUIState() {
     watch(activeTab, tab => localStorage.setItem('sidebar_active_tab', tab));
 
     const resourceAmount = ref(1);
-    const hoveredTile = ref<TileCoord | null>(null);
+    const hoveredTile = ref<Tile | null>(null);
     const resourceIcons = ref<Record<string, string>>({});
     const buildingIcons = ref<Partial<Record<BuildingType, IconEntry>>>({});
     const unitIcons = ref<Record<string, IconEntry>>({});
@@ -64,13 +63,6 @@ export function setupUIState() {
  * Game is guaranteed non-null — this runs inside a component that only renders when game exists.
  */
 export function setupComputedState(game: Game, selectedRace?: Ref<Race>) {
-    const showDebug = computed({
-        get: () => game.settings.state.showDebugGrid,
-        set: (value: boolean) => {
-            game.settings.state.showDebugGrid = value;
-        },
-    });
-
     // selectedEntityId and selectedCount live on viewState.state (a Vue reactive object),
     // so these computeds re-evaluate automatically when selection changes each tick.
     const selectedEntity = computed<Entity | undefined>(() => {
@@ -112,7 +104,6 @@ export function setupComputedState(game: Game, selectedRace?: Ref<Race>) {
     });
 
     return {
-        showDebug,
         selectedEntity,
         selectionCount,
         currentPlayerRace,

@@ -25,7 +25,6 @@ import { MapObjectType } from '@/game/types/map-object-types';
 
 const props = defineProps<{
     game: Game | null;
-    debugGrid: boolean;
     layerVisibility?: LayerVisibility;
     initialCamera?: { x: number; y: number; zoom: number } | null;
 }>();
@@ -41,7 +40,6 @@ const { setRace, getRace, getInputManager, getCamera, centerOnPlayerStart, getDe
     useRenderer({
         canvas: cav,
         getGame: () => props.game,
-        getDebugGrid: () => props.debugGrid,
         getLayerVisibility: () => props.layerVisibility ?? DEFAULT_LAYER_VISIBILITY,
         onTileClick: tile => emit('tileClick', tile),
         // eslint-disable-next-line no-restricted-syntax -- optional config/prop with sensible default

@@ -10,7 +10,6 @@ import {
     BUILDING_JOB_INDICES,
     RESOURCE_JOB_INDICES,
     TREE_JOB_INDICES,
-    TREE_JOBS_PER_TYPE,
     TREE_JOB_OFFSET,
     DARK_TREE_JOB_INDICES,
     DARK_TREE_STATIC_JOB_INDICES,
@@ -21,8 +20,6 @@ import {
     type SettlerAnimData,
 } from '../../src/game/renderer/sprite-metadata/jil-indices';
 import { MapObjectType } from '../../src/game/types/map-object-types';
-import { BuildingType } from '../../src/game/entity';
-import { EMaterialType } from '../../src/game/economy';
 
 /** GFX file number -> category label */
 const FILE_LABELS: Record<string, string> = {
@@ -65,10 +62,7 @@ export function buildFileLabel(fileNum: string): string {
  * Build reverse index: "fileNum:jobIndex" -> "unitName/actionName" or similar.
  * Reuses all naming data from the game's jil-indices.ts constants.
  */
-export function buildJobNameIndex(): Map<string, string> {
-    const index = new Map<string, string>();
-
-    // --- Settler jobs (files 20-24 share the same indices) ---
+function addSettlerJobs(index: Map<string, string>): void {
     for (const [unitKey, animData] of Object.entries(SETTLER_JOB_INDICES)) {
         const unitType = SETTLER_KEY_TO_UNIT_TYPE[unitKey];
         const unitLabel = unitKey.replace(/_/g, ' ');
@@ -80,36 +74,9 @@ export function buildJobNameIndex(): Map<string, string> {
             }
         }
     }
+}
 
-    // --- Building jobs (files 10-14) ---
-    const buildingTypeNames = Object.entries(BuildingType)
-        .filter(([, v]) => typeof v === 'number') as [string, number][];
-    const buildingNumToName = new Map(buildingTypeNames.map(([k, v]) => [v, k]));
-
-    for (const [btStr, jobIndex] of Object.entries(BUILDING_JOB_INDICES)) {
-        const bt = Number(btStr) as BuildingType;
-        const name = buildingNumToName.get(bt) ?? `Building_${bt}`;
-        for (const file of BUILDING_FILES) {
-            index.set(`${file}:${jobIndex}`, name);
-        }
-    }
-
-    // --- Resource jobs (file 3) ---
-    const matTypeNames = Object.entries(EMaterialType)
-        .filter(([, v]) => typeof v === 'number') as [string, number][];
-    const matNumToName = new Map(matTypeNames.map(([k, v]) => [v, k]));
-
-    for (const [mtStr, jobIndex] of Object.entries(RESOURCE_JOB_INDICES)) {
-        const mt = Number(mtStr) as EMaterialType;
-        const name = matNumToName.get(mt) ?? `Material_${mt}`;
-        index.set(`3:${jobIndex}`, `resource/${name}`);
-    }
-
-    // --- Tree jobs (file 5) ---
-    const mapObjNames = Object.entries(MapObjectType)
-        .filter(([, v]) => typeof v === 'number') as [string, number][];
-    const mapObjNumToName = new Map(mapObjNames.map(([k, v]) => [v, k]));
-
+function addTreeJobs(index: Map<string, string>, mapObjNumToName: Map<number, string>): void {
     const treeStageNames = Object.entries(TREE_JOB_OFFSET) as [string, number][];
 
     for (const [motStr, baseJobs] of Object.entries(TREE_JOB_INDICES)) {
@@ -120,13 +87,41 @@ export function buildJobNameIndex(): Map<string, string> {
             const baseJob = baseJobs![v]!;
             for (const [stageName, offset] of treeStageNames) {
                 const jobIndex = baseJob + offset;
-                const label = baseJobs!.length > 1
-                    ? `${treeName}/v${v}/${stageName}`
-                    : `${treeName}/${stageName}`;
+                const label = baseJobs!.length > 1 ? `${treeName}/v${v}/${stageName}` : `${treeName}/${stageName}`;
                 index.set(`5:${jobIndex}`, label);
             }
         }
     }
+}
+
+/**
+ * Build reverse index: "fileNum:jobIndex" -> "unitName/actionName" or similar.
+ * Reuses all naming data from the game's jil-indices.ts constants.
+ */
+export function buildJobNameIndex(): Map<string, string> {
+    const index = new Map<string, string>();
+
+    addSettlerJobs(index);
+
+    // --- Building jobs (files 10-14) ---
+    for (const [buildingType, jobIndex] of Object.entries(BUILDING_JOB_INDICES)) {
+        if (jobIndex === undefined) continue;
+        for (const file of BUILDING_FILES) {
+            index.set(`${file}:${jobIndex}`, buildingType);
+        }
+    }
+
+    // --- Resource jobs (file 3) ---
+    for (const [materialType, jobIndex] of Object.entries(RESOURCE_JOB_INDICES)) {
+        if (jobIndex === undefined) continue;
+        index.set(`3:${jobIndex}`, `resource/${materialType}`);
+    }
+
+    // --- Tree jobs (file 5) ---
+    const mapObjNames = Object.entries(MapObjectType).filter(([, v]) => typeof v === 'number') as [string, number][];
+    const mapObjNumToName = new Map(mapObjNames.map(([k, v]) => [v, k]));
+
+    addTreeJobs(index, mapObjNumToName);
 
     // --- Dark trees (file 5) ---
     for (const entry of DARK_TREE_JOB_INDICES) {

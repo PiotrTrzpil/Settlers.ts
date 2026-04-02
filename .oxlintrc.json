@@ -27,6 +27,18 @@
             }
         },
         {
+            "files": ["**/jil-frame-corrections.ts"],
+            "rules": {
+                "max-lines": "off"
+            }
+        },
+        {
+            "files": ["**/components/*-panel.vue", "**/views/*-view.vue"],
+            "rules": {
+                "max-lines": ["error", { "max": 800 }]
+            }
+        },
+        {
             "files": ["tests/e2e/**/*.ts"],
             "rules": {
                 "max-lines-per-function": "off",

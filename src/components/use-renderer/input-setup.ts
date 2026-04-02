@@ -4,7 +4,7 @@
 
 import { ref, type Ref } from 'vue';
 import type { Game } from '@/game/game';
-import { BuildingType, UnitType } from '@/game/entity';
+import { BuildingType, UnitType, Tile } from '@/game/entity';
 import type { BuildingAdjustHandler } from '@/game/input/building-adjust/types';
 import { BuildingAdjustMode } from '@/game/input';
 import { WorkAreaAdjustHandler } from '@/game/input/building-adjust';
@@ -18,7 +18,7 @@ export function updateTileDebugStats(
     tileX: number,
     tileY: number,
     getGame: () => Game | null,
-    onTileClick: (tile: { x: number; y: number }) => void
+    onTileClick: (tile: Tile) => void
 ): void {
     onTileClick({ x: tileX, y: tileY });
     debugStats.state.hasTile = true;

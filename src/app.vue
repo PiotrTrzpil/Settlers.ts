@@ -235,4 +235,66 @@ button:focus {
 button:focus-visible {
     outline: none;
 }
+
+/* ── vue3-toastify overrides — match game panel theme ── */
+
+.Toastify__toast-container {
+    --toastify-font-family: monospace;
+    --toastify-toast-width: 320px;
+}
+
+.Toastify__toast {
+    background: rgba(44, 30, 14, 0.94);
+    border: 1px solid var(--border-strong);
+    border-radius: 4px;
+    color: var(--text);
+    font-family: monospace;
+    font-size: 12px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+    min-height: 44px;
+    padding: 8px 12px;
+}
+
+.Toastify__toast-body {
+    color: var(--text);
+    font-size: 12px;
+    padding: 0;
+}
+
+/* Close button */
+.Toastify__close-button {
+    color: var(--text-muted);
+    opacity: 1;
+}
+
+.Toastify__close-button:hover {
+    color: var(--text);
+}
+
+/* Progress bar */
+.Toastify__progress-bar {
+    height: 2px;
+}
+
+.Toastify__progress-bar--error {
+    background: var(--status-bad);
+}
+
+.Toastify__progress-bar--warning {
+    background: var(--status-warn);
+}
+
+.Toastify__progress-bar--info {
+    background: var(--border-active);
+}
+
+.Toastify__progress-bar--success {
+    background: var(--status-good);
+}
+
+/* Hide the default colored icon backgrounds */
+.Toastify__toast-icon {
+    width: 16px;
+    height: 16px;
+}
 </style>

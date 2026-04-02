@@ -7,7 +7,7 @@ import { EntityRenderer } from '@/game/renderer/entity-renderer';
 import { BuildingIndicatorRenderer } from '@/game/renderer/building-indicator-renderer';
 import { Renderer } from '@/game/renderer/renderer';
 import { TilePicker } from '@/game/input/tile-picker';
-import { type TileCoord, BuildingType, EntityType } from '@/game/entity';
+import { type Tile, BuildingType, EntityType } from '@/game/entity';
 import { Race, saveSavedRace } from '@/game/renderer/sprite-metadata';
 import { canPlaceResource, canPlaceUnit, canPlaceBuildingFootprint } from '@/game/systems/placement';
 import { isNonBlockingMapObject } from '@/game/data/game-data-access';
@@ -122,12 +122,12 @@ function createPlacementGrid(
 interface InputManagerDeps {
     canvas: Ref<HTMLElement | null>;
     getGame: () => Game | null;
-    resolveTile: (screenX: number, screenY: number) => TileCoord | null;
+    resolveTile: (screenX: number, screenY: number) => Tile | null;
     executeCommand: (cmd: Record<string, unknown>) => CommandResult;
     entityPicker: ReturnType<typeof createEntityPicker>;
     entityRectPicker: ReturnType<typeof createEntityRectPicker>;
     hintProvider: (msg: string, sx: number, sy: number) => void;
-    onTileClick: (tile: { x: number; y: number }) => void;
+    onTileClick: (tile: Tile) => void;
     getRenderer: () => Renderer | null;
     onPlacementGridChange: (grid: ValidPositionGrid | null) => void;
 }
@@ -219,7 +219,7 @@ function buildInputManager(deps: InputManagerDeps): InputManager {
 function executeGameCommand(
     command: Record<string, unknown>,
     getGame: () => Game | null,
-    onTileClick: (tile: { x: number; y: number }) => void
+    onTileClick: (tile: Tile) => void
 ): CommandResult {
     const game = getGame();
     if (!game) {
@@ -246,9 +246,8 @@ function executeGameCommand(
 interface UseRendererOptions {
     canvas: Ref<HTMLCanvasElement | null>;
     getGame: () => Game | null;
-    getDebugGrid: () => boolean;
     getLayerVisibility: () => LayerVisibility;
-    onTileClick: (tile: { x: number; y: number }) => void;
+    onTileClick: (tile: Tile) => void;
     getInitialCamera?: () => { x: number; y: number; zoom: number } | null;
 }
 
@@ -268,7 +267,7 @@ interface RendererMutableState {
  * Create and configure renderers for the current game.
  * Populates landscapeRenderer, indicatorRenderer, and entityRenderer on the state object.
  */
-function setupRenderers(state: RendererMutableState, game: Game, getDebugGrid: () => boolean): void {
+function setupRenderers(state: RendererMutableState, game: Game, getLayerVisibility: () => LayerVisibility): void {
     if (!state.renderer) {
         return;
     }
@@ -278,7 +277,7 @@ function setupRenderers(state: RendererMutableState, game: Game, getDebugGrid: (
         game.terrain.mapSize,
         game.terrain.groundType,
         game.terrain.groundHeight,
-        getDebugGrid(),
+        getLayerVisibility().showDebugGrid,
         game.useProceduralTextures,
         // eslint-disable-next-line no-restricted-syntax -- optional chaining; null when source is absent
         game.mapLoader.landscape.getTerrainAttributes?.() ?? null,
@@ -304,7 +303,6 @@ function setupRenderers(state: RendererMutableState, game: Game, getDebugGrid: (
 
 interface InitGLDeps {
     getGame: () => Game | null;
-    getDebugGrid: () => boolean;
     getLayerVisibility: () => LayerVisibility;
     selectionBox: Ref<SelectionBox | null>;
 }
@@ -357,7 +355,6 @@ function initGLAndBindEvents(state: RendererMutableState, game: Game, deps: Init
         indicatorRenderer: state.indicatorRenderer,
         landscapeRenderer: state.landscapeRenderer,
         inputManager: state.inputManager,
-        debugGrid: deps.getDebugGrid(),
         // eslint-disable-next-line no-restricted-syntax -- optional flag with sensible boolean default
         darkLandDilation: deps.getGame()?.settings.state.darkLandDilation ?? true,
         layerVisibility: deps.getLayerVisibility(),
@@ -374,7 +371,6 @@ function initGLAndBindEvents(state: RendererMutableState, game: Game, deps: Init
 export function useRenderer({
     canvas,
     getGame,
-    getDebugGrid,
     getLayerVisibility,
     onTileClick,
     getInitialCamera,
@@ -396,7 +392,7 @@ export function useRenderer({
     /**
      * Resolve screen coordinates to tile coordinates.
      */
-    function resolveTile(screenX: number, screenY: number): TileCoord | null {
+    function resolveTile(screenX: number, screenY: number): Tile | null {
         const game = getGame();
         if (!game || !state.tilePicker || !state.renderer) {
             return null;
@@ -472,8 +468,8 @@ export function useRenderer({
             state.inputManager.setSettings(game.settings.state);
         }
 
-        setupRenderers(state, game, getDebugGrid);
-        initGLAndBindEvents(state, game, { getGame, getDebugGrid, getLayerVisibility, selectionBox });
+        setupRenderers(state, game, getLayerVisibility);
+        initGLAndBindEvents(state, game, { getGame, getLayerVisibility, selectionBox });
 
         // Restore camera: prefer explicit prop (settings recreation), then per-map localStorage (HMR),
         // then center on player start (fresh map load / reset)

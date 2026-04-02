@@ -45,7 +45,6 @@
         </CollapseSection>
 
         <CollapseSection title="Display" persist-key="settings-display">
-            <Checkbox label="Debug grid" v-model="settings.showDebugGrid" />
             <Checkbox label="Disable player tinting" v-model="settings.disablePlayerTinting" />
         </CollapseSection>
 

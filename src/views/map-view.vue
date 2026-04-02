@@ -25,7 +25,7 @@
                     />
                 </div>
             </div>
-            <renderer-viewer :game="null" :debugGrid="false" :layerVisibility="fallbackLayerVisibility" />
+            <renderer-viewer :game="null" :layerVisibility="fallbackLayerVisibility" />
         </div>
     </div>
 </template>
@@ -44,13 +44,9 @@ const props = defineProps<{
     fileManager: FileManager;
 }>();
 
-const {
-    game,
-    gameGeneration,
-    onFileSelect,
-    staleSnapshotWarning,
-    dismissStaleSnapshot,
-} = useMapView(() => props.fileManager);
+const { game, gameGeneration, onFileSelect, staleSnapshotWarning, dismissStaleSnapshot } = useMapView(
+    () => props.fileManager
+);
 
 const { fileManager } = props;
 

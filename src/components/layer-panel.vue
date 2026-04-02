@@ -190,6 +190,15 @@
             </div>
         </CollapseSection>
 
+        <CollapseSection title="Debug" :default-open="false" persist-key="layer-debug">
+            <LayerCheckbox
+                v-model="visibility.showDebugGrid"
+                label="Debug Grid"
+                emoji="🔲"
+                @update:modelValue="saveAndEmit()"
+            />
+        </CollapseSection>
+
         <!-- Quick actions -->
         <section class="quick-actions-section">
             <div class="quick-actions">

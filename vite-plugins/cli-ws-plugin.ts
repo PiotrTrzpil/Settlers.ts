@@ -87,6 +87,10 @@ export function cliWsPlugin(): Plugin {
             wss.on('connection', (ws: WebSocket) => {
                 alive.set(ws, true);
                 ws.on('pong', () => alive.set(ws, true));
+                ws.on('error', (err: Error) => {
+                    console.warn(`[cli-ws] WebSocket error: ${err.message}`);
+                    ws.terminate();
+                });
 
                 // First message determines the role
                 let identified = false;

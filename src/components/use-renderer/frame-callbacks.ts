@@ -34,7 +34,6 @@ export interface CallbackContext {
     indicatorRenderer: BuildingIndicatorRenderer | null;
     landscapeRenderer: LandscapeRenderer | null;
     inputManager: InputManager | null;
-    debugGrid: boolean;
     darkLandDilation: boolean;
     layerVisibility: LayerVisibility;
     placementGrid: ValidPositionGrid | null;
@@ -264,7 +263,7 @@ export function createRenderCallback(
         }
 
         if (landscapeRenderer) {
-            landscapeRenderer.debugGrid = ctx.debugGrid;
+            landscapeRenderer.debugGrid = ctx.layerVisibility.showDebugGrid;
             landscapeRenderer.darkLandDilation = ctx.darkLandDilation;
         }
 

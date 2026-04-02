@@ -33,7 +33,7 @@ const BORDER_WIDTH = 3;
  * These animations have intentional large movement (miner cart entering/exiting/tipping)
  * that the border-pixel detector would incorrectly flag as displacement bugs.
  */
-const EXCLUDED_JOBS = new Set([
+const EXCLUDED_JOBS: Set<number> = new Set([
     // Miner push-in animations (cart entering mine)
     SETTLER_JOB_INDICES.miner.M_PUSHIN_COAL,
     SETTLER_JOB_INDICES.miner.M_PUSHIN_IRONORE,
@@ -109,16 +109,38 @@ interface Spike {
     deviation: number;
 }
 
+/** Find leftmost/rightmost columns with enough opaque pixels to count as a real edge. */
+function findSpriteEdges(columnDensity: number[], width: number): { leftEdge: number; rightEdge: number } {
+    let leftEdge = 0;
+    for (let x = 0; x < width; x++) {
+        if (columnDensity[x]! >= EDGE_MIN_PIXELS) {
+            leftEdge = x;
+            break;
+        }
+    }
+    let rightEdge = width - 1;
+    for (let x = width - 1; x >= 0; x--) {
+        if (columnDensity[x]! >= EDGE_MIN_PIXELS) {
+            rightEdge = x;
+            break;
+        }
+    }
+    return { leftEdge, rightEdge };
+}
+
 function computeFrameInfo(image: GfxImage, frameIndex: number): FrameInfo {
     const imgData = image.getImageData();
     const pixels = new Uint32Array(imgData.data.buffer);
     const { width, height } = image;
     const columnDensity = new Array<number>(width).fill(0);
-    let sumY = 0, count = 0, leftBorder = 0, rightBorder = 0;
+    let sumY = 0,
+        count = 0,
+        leftBorder = 0,
+        rightBorder = 0;
 
     for (let y = 0; y < height; y++) {
         for (let x = 0; x < width; x++) {
-            if (((pixels[y * width + x]!) >>> 24) > 0) {
+            if (pixels[y * width + x]! >>> 24 > 0) {
                 columnDensity[x]!++;
                 sumY += y;
                 count++;
@@ -128,15 +150,7 @@ function computeFrameInfo(image: GfxImage, frameIndex: number): FrameInfo {
         }
     }
 
-    // Find left/right edges of the sprite's main mass
-    let leftEdge = 0;
-    for (let x = 0; x < width; x++) {
-        if (columnDensity[x]! >= EDGE_MIN_PIXELS) { leftEdge = x; break; }
-    }
-    let rightEdge = width - 1;
-    for (let x = width - 1; x >= 0; x--) {
-        if (columnDensity[x]! >= EDGE_MIN_PIXELS) { rightEdge = x; break; }
-    }
+    const { leftEdge, rightEdge } = findSpriteEdges(columnDensity, width);
 
     return {
         index: frameIndex,
@@ -149,6 +163,26 @@ function computeFrameInfo(image: GfxImage, frameIndex: number): FrameInfo {
         rightBorderPixels: rightBorder,
         centroidY: count > 0 ? sumY / count : 0,
     };
+}
+
+/**
+ * Compute the horizontal displacement between baseline and current frame.
+ * Uses the edge shift from the side where the border spike appeared, since
+ * ghost pixels keep the opposite edge in place.
+ */
+function computeDisplacementDx(
+    f0: FrameInfo,
+    curr: FrameInfo,
+    leftExcess: number,
+    rightExcess: number,
+    threshold: number
+): number {
+    const leftShift = f0.leftEdge - curr.leftEdge; // positive = curr shifted left
+    const rightShift = f0.rightEdge - curr.rightEdge; // positive = curr shifted left
+    if (leftExcess >= threshold && rightExcess >= threshold) {
+        return Math.abs(leftShift) >= Math.abs(rightShift) ? leftShift : rightShift;
+    }
+    return leftExcess >= threshold ? leftShift : rightShift;
 }
 
 function detectSpikes(frames: FrameInfo[], file: string, job: number, dir: number): Spike[] {
@@ -165,26 +199,11 @@ function detectSpikes(frames: FrameInfo[], file: string, job: number, dir: numbe
         const curr = frames[i]!;
         if (curr.opaquePixels < 50) continue;
 
-        // Detection: frame has significantly more border pixels than frame 0
         const leftExcess = curr.leftBorderPixels - f0.leftBorderPixels;
         const rightExcess = curr.rightBorderPixels - f0.rightBorderPixels;
         if (leftExcess < MIN_BORDER_SPIKE && rightExcess < MIN_BORDER_SPIKE) continue;
 
-        // Measure dx from edge shift on the side where the border spike appeared.
-        // If extra pixels appeared on the LEFT border → sprite shifted left → use left edge.
-        // If on the RIGHT border → sprite shifted right → use right edge.
-        // Ghost pixels keep the opposite edge in place, so only the spike side is reliable.
-        const leftShift = f0.leftEdge - curr.leftEdge;   // positive = curr shifted left
-        const rightShift = f0.rightEdge - curr.rightEdge; // positive = curr shifted left
-        let dx: number;
-        if (leftExcess >= MIN_BORDER_SPIKE && rightExcess >= MIN_BORDER_SPIKE) {
-            // Both sides spiked — use the larger shift
-            dx = Math.abs(leftShift) >= Math.abs(rightShift) ? leftShift : rightShift;
-        } else if (leftExcess >= MIN_BORDER_SPIKE) {
-            dx = leftShift; // shifted left, left edge is the reliable one
-        } else {
-            dx = rightShift; // shifted right, right edge is the reliable one
-        }
+        const dx = computeDisplacementDx(f0, curr, leftExcess, rightExcess, MIN_BORDER_SPIKE);
         const dy = Math.round(f0.centroidY - curr.centroidY);
         const deviation = Math.round(Math.sqrt(dx * dx + dy * dy) * 10) / 10;
         if (deviation < 3) continue;
@@ -205,8 +224,10 @@ async function loadFileSet(baseName: string, nodeFs: NodeFileSystem) {
     const hasPi4 = await nodeFs.exists(resolve('pi4'));
 
     const [gfxData, gilData, jilData, dilData, paletteData, pilData] = await Promise.all([
-        nodeFs.readFile(resolve('gfx')), nodeFs.readFile(resolve('gil')),
-        nodeFs.readFile(resolve('jil')), nodeFs.readFile(resolve('dil')),
+        nodeFs.readFile(resolve('gfx')),
+        nodeFs.readFile(resolve('gil')),
+        nodeFs.readFile(resolve('jil')),
+        nodeFs.readFile(resolve('dil')),
         nodeFs.readFile(hasPa6 ? resolve('pa6') : resolve('p46')),
         nodeFs.readFile(hasPi4 ? resolve('pi4') : resolve('pil')),
     ]);
@@ -237,7 +258,9 @@ function readDirectionFrames(
             const image = fileSet.gfxReader.readImage(gfxOffset, jobIndex);
             if (!image || image.width === 0 || image.height === 0) continue;
             frames.push(computeFrameInfo(image, f));
-        } catch { /* skip */ }
+        } catch {
+            /* skip */
+        }
     }
     return frames;
 }
@@ -246,30 +269,35 @@ function readDirectionFrames(
 // Scan all files → collect spikes
 // ---------------------------------------------------------------------------
 
+async function scanSingleFile(baseName: string, nodeFs: NodeFileSystem, minDev: number): Promise<Spike[]> {
+    const fileSet = await loadFileSet(baseName, nodeFs);
+    const { jilReader } = fileSet;
+    const spikes: Spike[] = [];
+    console.error(`[${baseName}.jil] scanning ${jilReader.length} jobs...`);
+
+    for (let jobIndex = 0; jobIndex < jilReader.length; jobIndex++) {
+        if (EXCLUDED_JOBS.has(jobIndex)) continue;
+        const jilItem = jilReader.getItem(jobIndex);
+        if (!jilItem || jilItem.length <= 0) continue;
+
+        for (let d = 0; d < jilItem.length; d++) {
+            const frames = readDirectionFrames(fileSet, jobIndex, jilItem.offset + d);
+            spikes.push(...detectSpikes(frames, baseName, jobIndex, d).filter(s => s.deviation >= minDev));
+        }
+    }
+
+    return spikes;
+}
+
 async function scanFiles(filesToProcess: string[], minDev: number): Promise<Spike[]> {
     const nodeFs = new NodeFileSystem();
     const allSpikes: Spike[] = [];
 
     for (const baseName of filesToProcess) {
-        let fileSet;
-        try { fileSet = await loadFileSet(baseName, nodeFs); }
-        catch { continue; }
-
-        const { jilReader } = fileSet;
-        console.error(`[${baseName}.jil] scanning ${jilReader.length} jobs...`);
-
-        for (let jobIndex = 0; jobIndex < jilReader.length; jobIndex++) {
-            if (EXCLUDED_JOBS.has(jobIndex)) continue;
-            const jilItem = jilReader.getItem(jobIndex);
-            if (!jilItem || jilItem.length <= 0) continue;
-
-            for (let d = 0; d < jilItem.length; d++) {
-                const frames = readDirectionFrames(fileSet, jobIndex, jilItem.offset + d);
-                const spikes = detectSpikes(frames, baseName, jobIndex, d);
-                for (const s of spikes) {
-                    if (s.deviation >= minDev) allSpikes.push(s);
-                }
-            }
+        try {
+            allSpikes.push(...(await scanSingleFile(baseName, nodeFs, minDev)));
+        } catch {
+            continue;
         }
     }
 
@@ -294,15 +322,25 @@ function buildSymbolicIndex(): Map<number, string> {
 // Code generation
 // ---------------------------------------------------------------------------
 
-interface DirGroup { direction: number; frames: { frame: number; dx: number; dy: number }[] }
-interface JobGroup { file: number; job: number; directions: DirGroup[] }
+interface DirGroup {
+    direction: number;
+    frames: { frame: number; dx: number; dy: number }[];
+}
+interface JobGroup {
+    file: number;
+    job: number;
+    directions: DirGroup[];
+}
 
 function groupSpikes(spikes: Spike[]): JobGroup[] {
     const byFileJob = new Map<string, Spike[]>();
     for (const s of spikes) {
         const key = `${s.file}:${s.job}`;
         let list = byFileJob.get(key);
-        if (!list) { list = []; byFileJob.set(key, list); }
+        if (!list) {
+            list = [];
+            byFileJob.set(key, list);
+        }
         list.push(s);
     }
 
@@ -312,7 +350,10 @@ function groupSpikes(spikes: Spike[]): JobGroup[] {
         const byDir = new Map<number, Spike[]>();
         for (const e of entries) {
             let list = byDir.get(e.direction);
-            if (!list) { list = []; byDir.set(e.direction, list); }
+            if (!list) {
+                list = [];
+                byDir.set(e.direction, list);
+            }
             list.push(e);
         }
         const directions: DirGroup[] = [];
@@ -330,9 +371,36 @@ function groupSpikes(spikes: Spike[]): JobGroup[] {
 
 function raceLabel(fileNum: number): string {
     const labels: Record<number, string> = {
-        20: 'Roman', 21: 'Viking', 22: 'Mayan', 23: 'DarkTribe', 24: 'Trojan',
+        20: 'Roman',
+        21: 'Viking',
+        22: 'Mayan',
+        23: 'DarkTribe',
+        24: 'Trojan',
     };
     return labels[fileNum] ?? `file ${fileNum}`;
+}
+
+function generateFileBlock(L: string[], fileGroups: JobGroup[], fileNum: number, sym: Map<number, string>): void {
+    L.push(`/** ${raceLabel(fileNum)} (${fileNum}.jil) */`);
+    L.push(
+        `export const FRAME_CORRECTIONS_${fileNum}: ReadonlyMap<number, readonly DirectionCorrection[]> = new Map([`
+    );
+    for (const g of fileGroups) {
+        const keyExpr = sym.get(g.job) ?? String(g.job);
+        const comment = sym.has(g.job) ? '' : ` // unmapped job`;
+        L.push(`    [${keyExpr}, [${comment}`);
+        for (const d of g.directions) {
+            const dn = d.direction < DIRECTION_NAMES.length ? DIRECTION_NAMES[d.direction] : `d${d.direction}`;
+            L.push(`        { direction: ${d.direction}, /* ${dn} */ frames: [`);
+            for (const f of d.frames) {
+                L.push(`            { frame: ${f.frame}, dx: ${f.dx}, dy: ${f.dy} },`);
+            }
+            L.push(`        ] },`);
+        }
+        L.push(`    ]],`);
+    }
+    L.push(`]);`);
+    L.push(``);
 }
 
 function generateTs(groups: JobGroup[], sym: Map<number, string>): string {
@@ -374,7 +442,10 @@ function generateTs(groups: JobGroup[], sym: Map<number, string>): string {
     const byFile = new Map<number, JobGroup[]>();
     for (const g of groups) {
         let list = byFile.get(g.file);
-        if (!list) { list = []; byFile.set(g.file, list); }
+        if (!list) {
+            list = [];
+            byFile.set(g.file, list);
+        }
         list.push(g);
     }
 
@@ -382,24 +453,7 @@ function generateTs(groups: JobGroup[], sym: Map<number, string>): string {
 
     for (const fileNum of fileNums) {
         const fileGroups = byFile.get(fileNum)!;
-        L.push(`/** ${raceLabel(fileNum)} (${fileNum}.jil) */`);
-        L.push(`export const FRAME_CORRECTIONS_${fileNum}: ReadonlyMap<number, readonly DirectionCorrection[]> = new Map([`);
-        for (const g of fileGroups) {
-            const keyExpr = sym.get(g.job) ?? String(g.job);
-            const comment = sym.has(g.job) ? '' : ` // unmapped job`;
-            L.push(`    [${keyExpr}, [${comment}`);
-            for (const d of g.directions) {
-                const dn = d.direction < DIRECTION_NAMES.length ? DIRECTION_NAMES[d.direction] : `d${d.direction}`;
-                L.push(`        { direction: ${d.direction}, /* ${dn} */ frames: [`);
-                for (const f of d.frames) {
-                    L.push(`            { frame: ${f.frame}, dx: ${f.dx}, dy: ${f.dy} },`);
-                }
-                L.push(`        ] },`);
-            }
-            L.push(`    ]],`);
-        }
-        L.push(`]);`);
-        L.push(``);
+        generateFileBlock(L, fileGroups, fileNum, sym);
     }
 
     L.push(`/** All correction maps indexed by GFX file number. */`);

@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+/* global console, process */
 /**
  * Query timeline SQLite databases from test runs.
  *
@@ -357,7 +358,8 @@ if (args.console) {
 } else {
     const testId = args.test || autoPickTest(db);
     if (!testId) die('No tests found in DB.');
-    hasFilter ? cmdQuery(db, testId) : cmdSummary(db, testId);
+    if (hasFilter) cmdQuery(db, testId);
+    else cmdSummary(db, testId);
 }
 
 db.close();

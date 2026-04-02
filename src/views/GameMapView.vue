@@ -178,7 +178,6 @@
                 ref="rendererRef"
                 :key="rendererKey"
                 :game="game"
-                :debugGrid="showDebug"
                 :layerVisibility="layerVisibility"
                 :initialCamera="savedCamera"
                 @tileClick="onTileClick"
@@ -260,6 +259,7 @@ import { saveLayerVisibility } from '@/game/renderer/layer-visibility';
 import { BuildingType, UnitType } from '@/game/entity';
 import type { EMaterialType } from '@/game/economy';
 import { GameEndReason } from '@/game/features/victory-conditions/victory-conditions-system';
+import { toastInfo } from '@/game/ui/toast-notifications';
 import { ALL_RESOURCES } from './palette-data';
 
 import FileBrowser from '@/components/file-browser.vue';
@@ -319,7 +319,6 @@ game.onTerritoryToggle(enabled => {
 // =========================================================================
 
 const {
-    showDebug,
     selectedEntity,
     selectionCount,
     currentPlayerRace,
@@ -482,11 +481,20 @@ function onStateRestored(): void {
     gameEndResult.value = null;
 }
 
+function onPlayerEliminated({ player }: { player: number }): void {
+    if (player === game.currentPlayer) {
+        return; // The game-end overlay handles the local player's defeat
+    }
+    toastInfo(`Player ${player + 1} has been eliminated`, 8000);
+}
+
 game.eventBus.on('game:ended', onGameEnded);
+game.eventBus.on('game:playerEliminated', onPlayerEliminated);
 game.eventBus.on('game:stateRestored', onStateRestored);
 
 onBeforeUnmount(() => {
     game.eventBus.off('game:ended', onGameEnded);
+    game.eventBus.off('game:playerEliminated', onPlayerEliminated);
     game.eventBus.off('game:stateRestored', onStateRestored);
 });
 

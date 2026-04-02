@@ -124,20 +124,17 @@ function computeFrameInfo(image: GfxImage, frameIndex: number): FrameInfo {
 
     return {
         index: frameIndex,
-        width, height,
-        left: image.left, top: image.top,
-        centroidX, centroidY,
+        width,
+        height,
+        left: image.left,
+        top: image.top,
+        centroidX,
+        centroidY,
         opaquePixels: opaqueCount,
     };
 }
 
-function detectJumps(
-    frames: FrameInfo[],
-    file: string,
-    job: number,
-    direction: number,
-    threshold: number
-): Jump[] {
+function detectJumps(frames: FrameInfo[], file: string, job: number, direction: number, threshold: number): Jump[] {
     const jumps: Jump[] = [];
     if (frames.length < 2) return jumps;
 
@@ -153,9 +150,13 @@ function detectJumps(
         if (dLeft > threshold || dTop > threshold) {
             const delta = Math.max(dLeft, dTop);
             jumps.push({
-                file, job, direction,
-                fromFrame: prev.index, toFrame: curr.index,
-                kind: 'offset', delta,
+                file,
+                job,
+                direction,
+                fromFrame: prev.index,
+                toFrame: curr.index,
+                kind: 'offset',
+                delta,
                 detail: `left: ${prev.left}->${curr.left} (d${dLeft}), top: ${prev.top}->${curr.top} (d${dTop})`,
             });
         }
@@ -166,9 +167,13 @@ function detectJumps(
         if (dW > threshold || dH > threshold) {
             const delta = Math.max(dW, dH);
             jumps.push({
-                file, job, direction,
-                fromFrame: prev.index, toFrame: curr.index,
-                kind: 'size', delta,
+                file,
+                job,
+                direction,
+                fromFrame: prev.index,
+                toFrame: curr.index,
+                kind: 'size',
+                delta,
                 detail: `${prev.width}x${prev.height} -> ${curr.width}x${curr.height} (dw${dW}, dh${dH})`,
             });
         }
@@ -184,8 +189,11 @@ function detectJumps(
 
         if (centroidDist > threshold) {
             jumps.push({
-                file, job, direction,
-                fromFrame: prev.index, toFrame: curr.index,
+                file,
+                job,
+                direction,
+                fromFrame: prev.index,
+                toFrame: curr.index,
                 kind: 'centroid',
                 delta: Math.round(centroidDist * 10) / 10,
                 detail: `world centroid (${prevWX.toFixed(1)},${prevWY.toFixed(1)}) -> (${currWX.toFixed(1)},${currWY.toFixed(1)})`,
@@ -236,11 +244,7 @@ async function loadFileSet(baseName: string, nodeFs: NodeFileSystem): Promise<Lo
 // Per-direction analysis
 // ---------------------------------------------------------------------------
 
-function analyzeDirection(
-    fileSet: LoadedFileSet,
-    jobIndex: number,
-    dilOffset: number
-): FrameInfo[] {
+function analyzeDirection(fileSet: LoadedFileSet, jobIndex: number, dilOffset: number): FrameInfo[] {
     const { gilReader, gfxReader, dilReader } = fileSet;
     const dilItem = dilReader.getItem(dilOffset);
     if (!dilItem || dilItem.length <= 0) return [];
@@ -295,110 +299,69 @@ function formatGroupKey(
 // Main
 // ---------------------------------------------------------------------------
 
-async function main() {
-    const args = parseArgs();
-    const nodeFs = new NodeFileSystem();
+interface ScanStats {
+    totalJobs: number;
+    totalDirections: number;
+    totalFrames: number;
+}
 
-    // Build reverse index: "fileNum:jobIndex" -> human-readable name
-    const jobNameIndex = buildJobNameIndex();
+function scanFileJobs(
+    fileSet: LoadedFileSet,
+    baseName: string,
+    jobs: number[],
+    args: Args,
+    jobNameIndex: Map<string, string>,
+    directionCounts: Map<string, number>,
+    allJumps: Jump[],
+    stats: ScanStats
+): void {
+    for (const jobIndex of jobs) {
+        const jilItem = fileSet.jilReader.getItem(jobIndex);
+        if (!jilItem || jilItem.length <= 0) continue;
 
-    // Discover JIL files
-    const allJilFiles = await nodeFs.listFiles(GFX_DIR, /\.jil$/i);
-    const baseNames = allJilFiles
-        .map(f => nodeFs.basenameWithoutExt(f))
-        .sort((a, b) => Number(a) - Number(b));
+        stats.totalJobs++;
+        const jobKey = `${baseName}:${jobIndex}`;
+        directionCounts.set(jobKey, jilItem.length);
 
-    const filesToProcess = args.files
-        ? baseNames.filter(b => args.files!.includes(b))
-        : baseNames;
+        for (let d = 0; d < jilItem.length; d++) {
+            const frames = analyzeDirection(fileSet, jobIndex, jilItem.offset + d);
+            if (frames.length < 2) continue;
 
-    console.log(`Analyzing ${filesToProcess.length} JIL file(s) with threshold=${args.threshold}px`);
-    if (args.minDelta > 0) console.log(`Filtering results to min delta >= ${args.minDelta}px`);
-    console.log('');
+            stats.totalDirections++;
+            stats.totalFrames += frames.length;
 
-    const allJumps: Jump[] = [];
-    // Track direction count per file/job for display
-    const directionCounts = new Map<string, number>();
-    let totalJobs = 0;
-    let totalDirections = 0;
-    let totalFrames = 0;
-
-    for (const baseName of filesToProcess) {
-        let fileSet: LoadedFileSet;
-        try {
-            fileSet = await loadFileSet(baseName, nodeFs);
-        } catch (e) {
-            console.log(`  Skipping ${baseName}: ${e instanceof Error ? e.message : String(e)}`);
-            continue;
-        }
-
-        const { jilReader } = fileSet;
-        const jobs = args.jobFilter
-            ? args.jobFilter.filter(j => j < jilReader.length)
-            : Array.from({ length: jilReader.length }, (_, i) => i);
-
-        console.log(`[${buildFileLabel(baseName)}] ${jilReader.length} jobs, scanning ${jobs.length}...`);
-
-        for (const jobIndex of jobs) {
-            const jilItem = jilReader.getItem(jobIndex);
-            if (!jilItem || jilItem.length <= 0) continue;
-
-            totalJobs++;
-            const jobKey = `${baseName}:${jobIndex}`;
-            directionCounts.set(jobKey, jilItem.length);
-
-            for (let d = 0; d < jilItem.length; d++) {
-                const frames = analyzeDirection(fileSet, jobIndex, jilItem.offset + d);
-                if (frames.length < 2) continue;
-
-                totalDirections++;
-                totalFrames += frames.length;
-
-                if (args.verbose) {
-                    const jobName = jobNameIndex.get(jobKey);
-                    const label = jobName ? `${jobName}` : `job ${jobIndex}`;
-                    for (const fr of frames) {
-                        console.log(
-                            `    ${label} ${formatDirectionName(d, jilItem.length)} f${fr.index}: ` +
-                            `${fr.width}x${fr.height} offset=(${fr.left},${fr.top}) ` +
-                            `centroid=(${fr.centroidX.toFixed(1)},${fr.centroidY.toFixed(1)}) ` +
-                            `opaque=${fr.opaquePixels}`
-                        );
-                    }
-                }
-
-                const jumps = detectJumps(frames, baseName, jobIndex, d, args.threshold);
-                allJumps.push(...jumps);
+            if (args.verbose) {
+                printVerboseFrames(frames, jobNameIndex.get(jobKey), jobIndex, d, jilItem.length);
             }
+
+            allJumps.push(...detectJumps(frames, baseName, jobIndex, d, args.threshold));
         }
     }
+}
 
-    // Apply min-delta filter
-    const filtered = args.minDelta > 0
-        ? allJumps.filter(j => j.delta >= args.minDelta)
-        : allJumps;
-
-    // ---------------------------------------------------------------------------
-    // Report
-    // ---------------------------------------------------------------------------
-    console.log('');
-    console.log('='.repeat(80));
-    console.log(`ANALYSIS COMPLETE: ${totalJobs} jobs, ${totalDirections} directions, ${totalFrames} frames`);
-    console.log(`Found ${allJumps.length} jump(s) exceeding ${args.threshold}px threshold`);
-    if (args.minDelta > 0) {
-        console.log(`Showing ${filtered.length} jump(s) with delta >= ${args.minDelta}px`);
+function printVerboseFrames(
+    frames: FrameInfo[],
+    jobName: string | undefined,
+    jobIndex: number,
+    dir: number,
+    numDirs: number
+): void {
+    const label = jobName ?? `job ${jobIndex}`;
+    for (const fr of frames) {
+        console.log(
+            `    ${label} ${formatDirectionName(dir, numDirs)} f${fr.index}: ` +
+                `${fr.width}x${fr.height} offset=(${fr.left},${fr.top}) ` +
+                `centroid=(${fr.centroidX.toFixed(1)},${fr.centroidY.toFixed(1)}) ` +
+                `opaque=${fr.opaquePixels}`
+        );
     }
-    console.log('='.repeat(80));
+}
 
-    if (filtered.length === 0) {
-        console.log('No jumps detected.');
-        return;
-    }
-
+function printReport(filtered: Jump[], directionCounts: Map<string, number>, jobNameIndex: Map<string, string>): void {
     // Group by file -> job -> direction
     const grouped = new Map<string, Jump[]>();
     for (const jump of filtered) {
-        const numDirs = directionCounts.get(`${jump.file}:${jump.job}`) ?? 1; // eslint-disable-line no-restricted-syntax -- fallback for missing
+        const numDirs = directionCounts.get(`${jump.file}:${jump.job}`) ?? 1;
         const key = formatGroupKey(jump.file, jump.job, jump.direction, numDirs, jobNameIndex);
         let list = grouped.get(key);
         if (!list) {
@@ -429,11 +392,68 @@ async function main() {
     console.log('Summary by kind:');
     const byKind = new Map<string, number>();
     for (const j of filtered) {
-        byKind.set(j.kind, (byKind.get(j.kind) ?? 0) + 1); // eslint-disable-line no-restricted-syntax -- aggregation default
+        byKind.set(j.kind, (byKind.get(j.kind) ?? 0) + 1);
     }
     for (const [kind, count] of byKind) {
         console.log(`  ${kind}: ${count}`);
     }
+}
+
+async function main() {
+    const args = parseArgs();
+    const nodeFs = new NodeFileSystem();
+    const jobNameIndex = buildJobNameIndex();
+
+    const allJilFiles = await nodeFs.listFiles(GFX_DIR, /\.jil$/i);
+    const baseNames = allJilFiles.map(f => nodeFs.basenameWithoutExt(f)).sort((a, b) => Number(a) - Number(b));
+
+    const filesToProcess = args.files ? baseNames.filter(b => args.files!.includes(b)) : baseNames;
+
+    console.log(`Analyzing ${filesToProcess.length} JIL file(s) with threshold=${args.threshold}px`);
+    if (args.minDelta > 0) console.log(`Filtering results to min delta >= ${args.minDelta}px`);
+    console.log('');
+
+    const allJumps: Jump[] = [];
+    const directionCounts = new Map<string, number>();
+    const stats: ScanStats = { totalJobs: 0, totalDirections: 0, totalFrames: 0 };
+
+    for (const baseName of filesToProcess) {
+        let fileSet: LoadedFileSet;
+        try {
+            fileSet = await loadFileSet(baseName, nodeFs);
+        } catch (e) {
+            console.log(`  Skipping ${baseName}: ${e instanceof Error ? e.message : String(e)}`);
+            continue;
+        }
+
+        const { jilReader } = fileSet;
+        const jobs = args.jobFilter
+            ? args.jobFilter.filter(j => j < jilReader.length)
+            : Array.from({ length: jilReader.length }, (_, i) => i);
+
+        console.log(`[${buildFileLabel(baseName)}] ${jilReader.length} jobs, scanning ${jobs.length}...`);
+        scanFileJobs(fileSet, baseName, jobs, args, jobNameIndex, directionCounts, allJumps, stats);
+    }
+
+    const filtered = args.minDelta > 0 ? allJumps.filter(j => j.delta >= args.minDelta) : allJumps;
+
+    console.log('');
+    console.log('='.repeat(80));
+    console.log(
+        `ANALYSIS COMPLETE: ${stats.totalJobs} jobs, ${stats.totalDirections} directions, ${stats.totalFrames} frames`
+    );
+    console.log(`Found ${allJumps.length} jump(s) exceeding ${args.threshold}px threshold`);
+    if (args.minDelta > 0) {
+        console.log(`Showing ${filtered.length} jump(s) with delta >= ${args.minDelta}px`);
+    }
+    console.log('='.repeat(80));
+
+    if (filtered.length === 0) {
+        console.log('No jumps detected.');
+        return;
+    }
+
+    printReport(filtered, directionCounts, jobNameIndex);
 }
 
 main().catch(console.error);
