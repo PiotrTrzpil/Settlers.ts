@@ -7,7 +7,7 @@
  */
 
 import { MapSize } from '@/utilities/map-size';
-import { BuildingType, getBuildingFootprint, getBuildingBlockArea, Tile } from '../../entity';
+import { BuildingType, getBuildingFootprint, getBuildingBlockArea, Tile, isInMapBounds } from '../../entity';
 import type { Race } from '../../core/race';
 import type { PlacementContext, PlacementFilter } from './types';
 import { validateBuildingPlacement } from './internal/building-validator';
@@ -220,7 +220,7 @@ export class ValidPositionGrid {
 
     /** Evaluate a single tile and add to valid set if placement succeeds. */
     private evaluateTile(x: number, y: number): void {
-        if (x < 0 || x >= this.mapWidth || y < 0 || y >= this.mapHeight) {
+        if (!isInMapBounds(x, y, this.mapWidth, this.mapHeight)) {
             return;
         }
 
@@ -281,7 +281,7 @@ export class ValidPositionGrid {
                 for (let dx = -5; dx <= 5; dx++) {
                     const nx = tx + dx;
                     const ny = ty + dy;
-                    if (nx >= 0 && nx < this.mapWidth && ny >= 0 && ny < this.mapHeight) {
+                    if (isInMapBounds(nx, ny, this.mapWidth, this.mapHeight)) {
                         expandedZone.add(this.mapSizeRef.toIndex(nx, ny));
                     }
                 }
@@ -349,11 +349,11 @@ function computeRingPerimeter(r: number): number {
 
 /** Add a tile and all its hex neighbors to a set (by tile index). */
 function addTileAndNeighborsToSet(x: number, y: number, mapSize: MapSize, set: Set<number>): void {
-    if (x >= 0 && x < mapSize.width && y >= 0 && y < mapSize.height) {
+    if (isInMapBounds(x, y, mapSize.width, mapSize.height)) {
         set.add(mapSize.toIndex(x, y));
     }
     for (const n of getAllNeighbors({ x, y })) {
-        if (n.x >= 0 && n.x < mapSize.width && n.y >= 0 && n.y < mapSize.height) {
+        if (isInMapBounds(n.x, n.y, mapSize.width, mapSize.height)) {
             set.add(mapSize.toIndex(n.x, n.y));
         }
     }

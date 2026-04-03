@@ -13,7 +13,7 @@ import type { FeatureDefinition, FeatureContext } from '../feature';
 import { StoneSystem } from './stone-system';
 import { EntityType } from '../../entity';
 import { MapObjectType } from '@/game/types/map-object-types';
-import type { SettlerTaskExports } from '../settler-tasks/settler-tasks-feature';
+import type { SettlerTaskExports } from '../settler-tasks';
 import { SearchType } from '../settler-tasks';
 import { createStonecuttingHandler } from './work-handlers';
 

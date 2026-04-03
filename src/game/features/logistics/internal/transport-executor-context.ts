@@ -12,7 +12,7 @@ import type { EventBus } from '../../../event-bus';
 import type { BuildingInventoryManager } from '../../inventory';
 import type { MaterialTransfer } from '../../material-transfer';
 import type { ConstructionSiteManager } from '../../building-construction/construction-site-manager';
-import type { MovementContext } from '../../settler-tasks/choreo-types';
+import type { MovementContext } from '../../settler-tasks';
 
 import {
     executeTransportGoToSource,

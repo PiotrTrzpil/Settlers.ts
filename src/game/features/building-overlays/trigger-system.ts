@@ -13,7 +13,7 @@
  */
 
 import { createLogger } from '@/utilities/logger';
-import type { TriggerSystem } from '@/game/features/settler-tasks/choreo-types';
+import type { TriggerSystem } from '@/game/features/settler-tasks';
 import type { GameState } from '@/game/game-state';
 import type { GameDataLoader } from '@/resources/game-data/game-data-loader';
 import type { BuildingTrigger } from '@/resources/game-data/types';

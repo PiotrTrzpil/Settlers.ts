@@ -14,10 +14,10 @@
  */
 
 import type { FeatureDefinition, FeatureContext, FeatureInstance } from '../feature';
-import type { SettlerTaskExports } from '@/game/features/settler-tasks/settler-tasks-feature';
-import type { SettlerLocationExports } from '@/game/features/settler-location/types';
+import type { SettlerTaskExports } from '@/game/features/settler-tasks';
+import type { SettlerLocationExports } from '@/game/features/settler-location';
 import type { CombatExports } from '@/game/features/combat';
-import type { BuildingConstructionExports } from '../building-construction/building-construction-feature';
+import type { BuildingConstructionExports } from '../building-construction';
 import { EntityType } from '../../entity';
 import { BuildingType } from '../../buildings/building-type';
 import { TowerGarrisonManager } from './tower-garrison-manager';

@@ -7,10 +7,10 @@
  * normal tick systems.
  */
 
-import { BuildingType, EntityType, Tile } from '../../entity';
+import { BuildingType, EntityType, Tile, tileKey } from '../../entity';
 import type { GameState } from '../../game-state';
 import { getBuildingDoorPos } from '../../data/game-data-access';
-import { GRID_DELTAS, NUMBER_OF_DIRECTIONS } from '../../systems/hex-directions';
+import { bfsFind } from '@/game/core/tile-search';
 import { createLogger } from '@/utilities/logger';
 
 const log = createLogger('InitialWorkerAssignment');
@@ -41,7 +41,7 @@ export function relocateUnitsFromFootprints(gameState: GameState): void {
         const target = findFreeTileNear(door.x, door.y, taken, gameState);
         entity.x = target.x;
         entity.y = target.y;
-        taken.add(`${target.x},${target.y}`);
+        taken.add(tileKey(target.x, target.y));
         relocated++;
     }
     if (relocated > 0) {
@@ -51,30 +51,10 @@ export function relocateUnitsFromFootprints(gameState: GameState): void {
 
 /** Find the nearest non-building, non-taken tile using BFS outward from the door. */
 function findFreeTileNear(doorX: number, doorY: number, taken: Set<string>, gameState: GameState): Tile {
-    const visited = new Set<string>();
-    const queue: Tile[] = [{ x: doorX, y: doorY }];
-    visited.add(`${doorX},${doorY}`);
-
-    while (queue.length > 0) {
-        const { x, y } = queue.shift()!;
-        for (let d = 0; d < NUMBER_OF_DIRECTIONS; d++) {
-            const [dx, dy] = GRID_DELTAS[d]!;
-            const nx = x + dx;
-            const ny = y + dy;
-            const key = `${nx},${ny}`;
-            if (visited.has(key)) {
-                continue;
-            }
-            visited.add(key);
-            if (!taken.has(key) && !gameState.getGroundEntityAt(nx, ny)) {
-                return { x: nx, y: ny };
-            }
-            // Keep expanding through building tiles to find the edge
-            if (visited.size < 100) {
-                queue.push({ x: nx, y: ny });
-            }
+    return (
+        bfsFind(doorX, doorY, (x, y) => !taken.has(tileKey(x, y)) && !gameState.getGroundEntityAt(x, y), 100) ?? {
+            x: doorX,
+            y: doorY,
         }
-    }
-
-    return { x: doorX, y: doorY };
+    );
 }

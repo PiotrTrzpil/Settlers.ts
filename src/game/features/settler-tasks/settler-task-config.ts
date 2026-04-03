@@ -15,7 +15,7 @@ import type { ConstructionSiteManager } from '../building-construction/construct
 import type { ExecuteCommand } from '../../commands';
 import type { MaterialTransfer } from '../material-transfer';
 import type { ChoreoSystem } from '../../systems/choreo';
-import type { ISettlerBuildingLocationManager } from '../settler-location/types';
+import type { ISettlerBuildingLocationManager } from '../settler-location';
 import type { TickScheduler } from '../../systems/tick-scheduler';
 import type { UnitRuntime } from './unit-state-machine';
 import type { EMaterialType } from '../../economy';

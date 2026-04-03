@@ -9,9 +9,9 @@
 import type { FeatureDefinition, FeatureContext } from '../feature';
 import type { InventoryExports } from '../inventory';
 import type { CarrierFeatureExports } from '../carriers';
-import type { ProductionControlExports } from '../production-control/production-control-feature';
-import type { SettlerTaskExports } from '../settler-tasks/settler-tasks-feature';
-import type { BuildingConstructionExports } from '../building-construction/building-construction-feature';
+import type { ProductionControlExports } from '../production-control';
+import type { SettlerTaskExports } from '../settler-tasks';
+import type { BuildingConstructionExports } from '../building-construction';
 import { BarracksTrainingManager } from './barracks-training-manager';
 import { BuildingType } from '../../buildings/building-type';
 import { EntityType } from '../../entity';

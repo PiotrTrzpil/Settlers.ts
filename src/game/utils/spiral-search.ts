@@ -1,4 +1,4 @@
-import type { Tile } from '@/game/core/coordinates';
+import { isInMapBounds, type Tile } from '@/game/core/coordinates';
 
 /**
  * Spiral search from a center point outward.
@@ -32,7 +32,7 @@ export function spiralSearch(
                 } // perimeter only
                 const x = cx + dx;
                 const y = cy + dy;
-                if (x < 0 || y < 0 || x >= w || y >= h) {
+                if (!isInMapBounds(x, y, w, h)) {
                     continue;
                 }
                 if (predicate(x, y)) {

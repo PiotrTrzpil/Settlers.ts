@@ -19,7 +19,7 @@ import { ResourceSignSystem } from './resource-sign-system';
 import { OreVeinData } from './ore-vein-data';
 import { OreVeinPersistence } from './ore-vein-persistence';
 import { populateOreVeins, loadOreVeinsFromResourceData } from './populate-ore-veins';
-import type { SettlerTaskExports } from '../settler-tasks/settler-tasks-feature';
+import type { SettlerTaskExports } from '../settler-tasks';
 import { SearchType } from '../settler-tasks';
 import { createGeologistHandler } from './work-handlers';
 

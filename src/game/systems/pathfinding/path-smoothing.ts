@@ -5,7 +5,7 @@
  * checks to find shortcuts through the path.
  */
 
-import { Tile, tileKey } from '../../entity';
+import { Tile, tileKey, isInMapBounds } from '../../entity';
 import { isPassable } from '../../terrain';
 import { getHexLine } from './hex-line';
 
@@ -38,7 +38,7 @@ function hasLineOfSight(
         const { x, y } = tiles[i]!;
 
         // Bounds check
-        if (x < 0 || x >= mapWidth || y < 0 || y >= mapHeight) {
+        if (!isInMapBounds(x, y, mapWidth, mapHeight)) {
             return false;
         }
 

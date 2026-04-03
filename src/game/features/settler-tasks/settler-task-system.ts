@@ -34,7 +34,7 @@ import { JobPartResolverImpl } from './job-part-resolver';
 import { TriggerSystemImpl } from '../building-overlays/trigger-system';
 import { getGameDataLoader } from '@/resources/game-data';
 import type { OreVeinData } from '../ore-veins/ore-vein-data';
-import type { ISettlerBuildingLocationManager } from '../settler-location/types';
+import type { ISettlerBuildingLocationManager } from '../settler-location';
 import { BuildingWorkerTracker } from './building-worker-tracker';
 import { IndexedMap } from '@/game/utils/indexed-map';
 import type { TickScheduler } from '../../systems/tick-scheduler';

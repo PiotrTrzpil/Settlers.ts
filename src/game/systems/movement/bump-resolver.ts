@@ -7,7 +7,7 @@
  * Extracted from MovementSystem to keep file sizes manageable.
  */
 
-import { Tile, tileKey } from '../../entity';
+import { Tile, tileKey, isInMapBounds } from '../../entity';
 import type { EventBus, GameEvents } from '../../event-bus';
 import { getAllNeighbors } from '../hex-directions';
 import { isPassable } from '../../terrain';
@@ -123,7 +123,7 @@ export class BumpResolver {
      * in bounds, passable terrain, not blocked by a completed building.
      */
     isTilePassableForBump(x: number, y: number): boolean {
-        if (x < 0 || x >= this.deps.terrainMapWidth || y < 0 || y >= this.deps.terrainMapHeight) {
+        if (!isInMapBounds(x, y, this.deps.terrainMapWidth, this.deps.terrainMapHeight)) {
             return false;
         }
         if (this.deps.terrainGroundType) {

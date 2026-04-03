@@ -2,7 +2,8 @@
  * Combat helper functions — pure queries extracted from combat-system.ts.
  */
 
-import { tileKey, EXTENDED_OFFSETS, Tile, EntityType, isUnitTypeMilitary, UnitType, type Entity } from '../../entity';
+import { tileKey, Tile, EntityType, isUnitTypeMilitary, UnitType, type Entity } from '../../entity';
+import { bfsFind } from '../../core/tile-search';
 import type { GameState } from '../../game-state';
 import type { CombatState } from './combat-state';
 import { findNearestByHexDistance } from '../../systems/hex-directions';
@@ -15,31 +16,8 @@ export function resolveOutsideBuilding(x: number, y: number, buildingOccupancy: 
     if (!buildingOccupancy.has(tileKey(x, y))) {
         return { x, y };
     }
-    // BFS using EXTENDED_OFFSETS from each frontier tile
-    const visited = new Set<string>();
-    visited.add(tileKey(x, y));
-    let frontier: Array<Tile> = [{ x, y }];
-
-    for (let ring = 0; ring < 3; ring++) {
-        const nextFrontier: Array<Tile> = [];
-        for (const pos of frontier) {
-            for (const [dx, dy] of EXTENDED_OFFSETS) {
-                const nx = pos.x + dx;
-                const ny = pos.y + dy;
-                const key = tileKey(nx, ny);
-                if (visited.has(key)) {
-                    continue;
-                }
-                visited.add(key);
-                if (!buildingOccupancy.has(key)) {
-                    return { x: nx, y: ny };
-                }
-                nextFrontier.push({ x: nx, y: ny });
-            }
-        }
-        frontier = nextFrontier;
-    }
-    return { x, y };
+    // BFS outward to find nearest tile outside any building footprint (max ~54 tiles = 3 rings)
+    return bfsFind(x, y, (nx, ny) => !buildingOccupancy.has(tileKey(nx, ny)), 54) ?? { x, y };
 }
 
 /** Detection range: how far a unit scans for enemies (in hex tiles). */

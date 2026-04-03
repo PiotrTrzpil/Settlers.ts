@@ -3,7 +3,7 @@
  * Used by unit and resource validators which have identical validation logic.
  */
 
-import { tileKey } from '../../../entity';
+import { tileKey, isInMapBounds } from '../../../entity';
 import type { TerrainData } from '../../../terrain';
 import type { PlacementContext, PlacementResult } from '../types';
 import { PlacementStatus } from '../types';
@@ -23,7 +23,7 @@ import { isPassable } from './terrain';
  */
 export function validateSingleTilePlacement(x: number, y: number, ctx: PlacementContext): PlacementResult {
     // Bounds check
-    if (x < 0 || y < 0 || x >= ctx.mapSize.width || y >= ctx.mapSize.height) {
+    if (!isInMapBounds(x, y, ctx.mapSize.width, ctx.mapSize.height)) {
         return { canPlace: false, status: PlacementStatus.InvalidTerrain };
     }
 

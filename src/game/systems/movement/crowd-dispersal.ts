@@ -3,7 +3,7 @@
  * crowded units to random free neighbors (flocking repulsion).
  */
 
-import { tileKey, type Tile } from '../../entity';
+import { tileKey, isInMapBounds, type Tile } from '../../entity';
 import { getAllNeighbors } from '../hex-directions';
 import { isPassable } from '../../terrain';
 import type { MovementController } from './movement-controller';
@@ -31,7 +31,7 @@ function isValidNeighbor(
     terrainMapHeight: number,
     buildingOccupancy: Set<string>
 ): boolean {
-    if (n.x < 0 || n.x >= terrainMapWidth || n.y < 0 || n.y >= terrainMapHeight) {
+    if (!isInMapBounds(n.x, n.y, terrainMapWidth, terrainMapHeight)) {
         return false;
     }
     const nIdx = n.x + n.y * terrainMapWidth;

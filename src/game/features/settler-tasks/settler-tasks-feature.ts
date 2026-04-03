@@ -9,13 +9,13 @@
 import type { FeatureDefinition, FeatureContext } from '../feature';
 import type { InventoryExports } from '../inventory';
 import type { BuildingOverlayFeatureExports } from '../building-overlays';
-import type { BuildingConstructionExports } from '../building-construction/building-construction-feature';
+import type { BuildingConstructionExports } from '../building-construction';
 import type { WorkAreaExports } from '../work-areas/work-areas-feature';
-import type { ProductionControlExports } from '../production-control/production-control-feature';
+import type { ProductionControlExports } from '../production-control';
 import type { MaterialTransferExports } from '../material-transfer/material-transfer-feature';
 import type { CombatExports } from '../combat';
 import type { BuildingPileRegistry } from '../inventory';
-import type { SettlerLocationExports } from '../settler-location/types';
+import type { SettlerLocationExports } from '../settler-location';
 import type { TerrainData } from '../../terrain';
 import type { BarracksTrainingManager } from '../barracks';
 import { SettlerTaskSystem, SearchType } from './index';

@@ -7,9 +7,9 @@
 import type { FeatureDefinition, FeatureContext } from '../feature';
 import type { SettlerTaskExports } from '../settler-tasks';
 import type { RecruitExports } from '../recruit';
-import type { BuildingConstructionExports } from '../building-construction/building-construction-feature';
+import type { BuildingConstructionExports } from '../building-construction';
 import { BuildingDemandSystem } from './building-demand-system';
-import type { SettlerLocationExports } from '../settler-location/types';
+import type { SettlerLocationExports } from '../settler-location';
 import { ChoreoTaskType } from '@/game/systems/choreo';
 import { createEnterBuildingExecutor } from '../settler-tasks';
 import { EntityType, BuildingType } from '../../entity';

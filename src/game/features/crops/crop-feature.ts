@@ -16,7 +16,7 @@ import { MapObjectCategory, MapObjectType } from '@/game/types/map-object-types'
 import { OBJECT_TYPE_CATEGORY } from '../../systems/map-objects';
 import type { PlantCropCommand } from '../../commands/command-types';
 import { executePlantCrop } from '../../commands/handlers/system-handlers';
-import type { SettlerTaskExports } from '../settler-tasks/settler-tasks-feature';
+import type { SettlerTaskExports } from '../settler-tasks';
 import { SearchType } from '../settler-tasks';
 import { createCropHarvestHandler } from './work-handlers';
 import { createPlantingHandler } from '../trees/work-handlers';

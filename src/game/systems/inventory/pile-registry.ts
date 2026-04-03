@@ -12,7 +12,7 @@
  * spawning/removing entities. The registry only maintains the index.
  */
 
-import type { Tile } from '../../core/coordinates';
+import { tileKey, type Tile } from '../../core/coordinates';
 import type { EMaterialType } from '../../economy/material-type';
 import type { Entity } from '../../entity';
 import { EntityType } from '../../entity';
@@ -66,10 +66,6 @@ function deserializeKey(s: string): PileSlotKey {
     return { buildingId, material, slotKind: slotKind as LinkedSlotKind, pileIndex };
 }
 
-function makeTileKey(x: number, y: number): string {
-    return `${x},${y}`;
-}
-
 // ─────────────────────────────────────────────────────────────────────────────
 // PileRegistry
 // ─────────────────────────────────────────────────────────────────────────────
@@ -101,7 +97,7 @@ export class PileRegistry {
 
         this.forward.set(s, entityId);
         this.reverse.set(entityId, s);
-        this.entityPosition.set(entityId, makeTileKey(position.x, position.y));
+        this.entityPosition.set(entityId, tileKey(position.x, position.y));
 
         // Update linked index
         let buildingLinked = this.linked.get(key.buildingId);
@@ -117,7 +113,7 @@ export class PileRegistry {
             buildingPositions = new Set<string>();
             this.positions.set(key.buildingId, buildingPositions);
         }
-        buildingPositions.add(makeTileKey(position.x, position.y));
+        buildingPositions.add(tileKey(position.x, position.y));
     }
 
     /**

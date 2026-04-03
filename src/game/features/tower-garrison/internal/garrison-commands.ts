@@ -10,7 +10,7 @@ import { BuildingType } from '@/game/buildings/building-type';
 import { UnitType } from '@/game/core/unit-types';
 import { createLogger } from '@/utilities/logger';
 import type { UnitReservationRegistry } from '@/game/systems/unit-reservation';
-import type { ISettlerBuildingLocationManager } from '@/game/features/settler-location/types';
+import type { ISettlerBuildingLocationManager } from '@/game/features/settler-location';
 import type { TowerGarrisonManager } from '../tower-garrison-manager';
 import { dispatchUnitToGarrison } from './garrison-dispatch';
 import { getGarrisonCapacity, getGarrisonRole } from './garrison-capacity';

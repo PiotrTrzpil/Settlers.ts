@@ -31,17 +31,11 @@ import { TickScheduler } from './systems/tick-scheduler';
 
 // Feature definitions
 import { WorkAreaFeature, type WorkAreaExports } from './features/work-areas/work-areas-feature';
-import {
-    ProductionControlFeature,
-    type ProductionControlExports,
-} from './features/production-control/production-control-feature';
+import { ProductionControlFeature, type ProductionControlExports } from './features/production-control';
 import { CarrierFeature, type CarrierFeatureExports } from './features/carriers';
 import { DemandQueueFeature, type DemandQueueExports } from './features/logistics';
 import { BuildingOverlayFeature, type BuildingOverlayFeatureExports } from './features/building-overlays';
-import {
-    BuildingConstructionFeature,
-    type BuildingConstructionExports,
-} from './features/building-construction/building-construction-feature';
+import { BuildingConstructionFeature, type BuildingConstructionExports } from './features/building-construction';
 import { MaterialRequestFeature } from './features/material-requests';
 import { TreeFeature, type TreeFeatureExports } from './features/trees';
 import { StoneFeature, type StoneFeatureExports } from './features/stones';
@@ -49,7 +43,7 @@ import { CropFeature } from './features/crops';
 import { CombatFeature, type CombatExports } from './features/combat';
 import { OreSignFeature, type OreSignExports } from './features/ore-veins';
 import { MaterialTransferFeature } from './features/material-transfer/material-transfer-feature';
-import { SettlerTaskFeature, type SettlerTaskExports } from './features/settler-tasks/settler-tasks-feature';
+import { SettlerTaskFeature, type SettlerTaskExports } from './features/settler-tasks';
 import { RecruitFeature, type RecruitExports } from './features/recruit';
 import { BuildingDemandFeature } from './features/building-demand/building-demand-feature';
 import { ConstructionDemandFeature } from './features/building-construction/construction-demand-feature';
@@ -64,9 +58,9 @@ import {
 import { BarracksFeature, type BarracksExports } from './features/barracks/barracks-feature';
 import { TowerGarrisonFeature, type TowerGarrisonExports } from './features/tower-garrison';
 import { SettlerLocationFeature } from './features/settler-location';
-import type { SettlerLocationExports } from './features/settler-location/types';
+import type { SettlerLocationExports } from './features/settler-location';
 import { FreePilesFeature } from './features/inventory/free-piles-feature';
-import { TerritoryFeature, type TerritoryExports } from './features/territory/territory-feature';
+import { TerritoryFeature, type TerritoryExports } from './features/territory';
 import { VictoryConditionsFeature, type VictoryConditionsExports } from './features/victory-conditions';
 import { BuildingSiegeFeature, type BuildingSiegeExports } from './features/building-siege';
 import type { BuildingSiegeSystem } from './features/building-siege/building-siege-system';
@@ -94,7 +88,7 @@ import type { StoneSystem } from './features/stones';
 import type { CombatSystem } from './features/combat';
 import type { OreVeinData, ResourceSignSystem } from './features/ore-veins';
 import type { SettlerTaskSystem } from './features/settler-tasks';
-import type { ISettlerBuildingLocationManager } from './features/settler-location/types';
+import type { ISettlerBuildingLocationManager } from './features/settler-location';
 import type { VictoryConditionsSystem } from './features/victory-conditions';
 import type { AiPlayerSystem } from './features/ai-player/types';
 

@@ -14,8 +14,9 @@ import { createLogger } from '@/utilities/logger';
 import { SettlerState } from './types';
 import type { UnitRuntime } from './unit-state-machine';
 import { relocateUnitsFromFootprints } from './initial-worker-assignment';
-import { SettlerBuildingStatus, type ISettlerBuildingLocationManager } from '../settler-location/types';
+import { SettlerBuildingStatus, type ISettlerBuildingLocationManager } from '../settler-location';
 import type { IndexedMap, Index } from '@/game/utils/indexed-map';
+import { distSq } from '@/game/core/distance';
 
 const log = createLogger('BuildingWorkerTracker');
 
@@ -144,11 +145,9 @@ export class BuildingWorkerTracker {
                 continue;
             }
 
-            const dx = entity.x - nearX;
-            const dy = entity.y - nearY;
-            const distSq = dx * dx + dy * dy;
-            if (distSq < bestDistSq) {
-                bestDistSq = distSq;
+            const d = distSq(entity.x, nearX, entity.y, nearY);
+            if (d < bestDistSq) {
+                bestDistSq = d;
                 bestId = entityId;
             }
         }

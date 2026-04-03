@@ -13,8 +13,8 @@
  */
 
 import type { FeatureDefinition, FeatureContext } from '../feature';
-import type { SettlerTaskExports } from '../settler-tasks/settler-tasks-feature';
-import type { TerritoryExports } from '../territory/territory-feature';
+import type { SettlerTaskExports } from '../settler-tasks';
+import type { TerritoryExports } from '../territory';
 import type { TerrainData } from '../../terrain';
 import { SearchType } from '../settler-tasks';
 import { ChoreoTaskType, type ChoreoJob } from '../../systems/choreo';

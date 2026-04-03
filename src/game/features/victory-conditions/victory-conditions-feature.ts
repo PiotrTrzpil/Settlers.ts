@@ -7,7 +7,7 @@
  */
 
 import type { FeatureDefinition, FeatureContext, FeatureDiagnostics } from '../feature';
-import type { BuildingConstructionExports } from '../building-construction/building-construction-feature';
+import type { BuildingConstructionExports } from '../building-construction';
 import { VictoryConditionsSystem } from './victory-conditions-system';
 import type { GameResult } from './victory-conditions-system';
 import { EntityType } from '../../entity';

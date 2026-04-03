@@ -6,6 +6,7 @@
 import { LogHandler } from '@/utilities/log-handler';
 import type { LuaRuntime } from '../lua-runtime';
 import type { IMapLandscape } from '@/resources/map/imap-landscape';
+import { isInMapBounds } from '@/game/core/coordinates';
 import { isPassable, isBuildable } from '@/game/systems/placement';
 
 const log = new LogHandler('MapAPI');
@@ -41,7 +42,7 @@ export function registerMapAPI(runtime: LuaRuntime, context: MapAPIContext): voi
     // Map.GetHeight(x, y) - Returns terrain height at position
     runtime.registerFunction('Map', 'GetHeight', (x: number, y: number) => {
         // Bounds check
-        if (x < 0 || x >= context.mapWidth || y < 0 || y >= context.mapHeight) {
+        if (!isInMapBounds(x, y, context.mapWidth, context.mapHeight)) {
             return 0;
         }
 
@@ -64,7 +65,7 @@ export function registerMapAPI(runtime: LuaRuntime, context: MapAPIContext): voi
     // Map.SetHeight(x, y, height) - Set terrain height at position
     runtime.registerFunction('Map', 'SetHeight', (x: number, y: number, height: number) => {
         // Bounds check
-        if (x < 0 || x >= context.mapWidth || y < 0 || y >= context.mapHeight) {
+        if (!isInMapBounds(x, y, context.mapWidth, context.mapHeight)) {
             return false;
         }
 
@@ -81,7 +82,7 @@ export function registerMapAPI(runtime: LuaRuntime, context: MapAPIContext): voi
     // Map.GetTerrainType(x, y) - Returns terrain type at position
     runtime.registerFunction('Map', 'GetTerrainType', (x: number, y: number) => {
         // Bounds check
-        if (x < 0 || x >= context.mapWidth || y < 0 || y >= context.mapHeight) {
+        if (!isInMapBounds(x, y, context.mapWidth, context.mapHeight)) {
             return 0;
         }
 
@@ -106,7 +107,7 @@ export function registerMapAPI(runtime: LuaRuntime, context: MapAPIContext): voi
     // but the map file format may store resource data here. Returns raw byte value.
     runtime.registerFunction('Map', 'GetResourceAt', (x: number, y: number) => {
         // Bounds check
-        if (x < 0 || x >= context.mapWidth || y < 0 || y >= context.mapHeight) {
+        if (!isInMapBounds(x, y, context.mapWidth, context.mapHeight)) {
             return 0;
         }
 
@@ -127,7 +128,7 @@ export function registerMapAPI(runtime: LuaRuntime, context: MapAPIContext): voi
     // Map.IsWalkable(x, y) - Check if a tile is walkable (units can traverse)
     runtime.registerFunction('Map', 'IsWalkable', (x: number, y: number) => {
         // Bounds check
-        if (x < 0 || x >= context.mapWidth || y < 0 || y >= context.mapHeight) {
+        if (!isInMapBounds(x, y, context.mapWidth, context.mapHeight)) {
             return false;
         }
 
@@ -149,7 +150,7 @@ export function registerMapAPI(runtime: LuaRuntime, context: MapAPIContext): voi
     // Map.IsBuildable(x, y) - Check if a tile can have buildings placed on it
     runtime.registerFunction('Map', 'IsBuildable', (x: number, y: number) => {
         // Bounds check
-        if (x < 0 || x >= context.mapWidth || y < 0 || y >= context.mapHeight) {
+        if (!isInMapBounds(x, y, context.mapWidth, context.mapHeight)) {
             return false;
         }
 

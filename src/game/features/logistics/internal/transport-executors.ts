@@ -15,7 +15,7 @@ import { type Entity, clearCarrying } from '../../../entity';
 import { createLogger } from '@/utilities/logger';
 import { TaskResult, framesToSeconds, tickDuration } from '../../../systems/choreo/types';
 import type { ChoreoJobState, ChoreoNode, TransportData } from '../../../systems/choreo/types';
-import type { MovementContext } from '../../settler-tasks/choreo-types';
+import type { MovementContext } from '../../settler-tasks';
 import type { TransportExecutorContext } from './transport-executor-context';
 import { moveToPosition } from '../../settler-tasks/internal/movement-executors';
 

@@ -8,6 +8,8 @@
 import type { GameState } from '../game-state';
 import type { Entity, Tile } from '../entity';
 import type { SeededRng } from '../core/rng';
+import { distSq } from '../core/distance';
+import { CARDINAL_OFFSETS } from '../core/coordinates';
 
 // ─────────────────────────────────────────────────────────────
 // Ring iteration
@@ -51,11 +53,9 @@ export function findNearestEntity(
         if (!filter(entity)) {
             continue;
         }
-        const dx = entity.x - x;
-        const dy = entity.y - y;
-        const distSq = dx * dx + dy * dy;
-        if (distSq < radiusSq && distSq < minDistSq) {
-            minDistSq = distSq;
+        const d = distSq(entity.x, x, entity.y, y);
+        if (d < radiusSq && d < minDistSq) {
+            minDistSq = d;
             nearest = { entityId: entity.id, x: entity.x, y: entity.y };
         }
     }
@@ -131,9 +131,7 @@ function collectCandidates(cx: number, cy: number, config: FindEmptySpotConfig):
             if (!isValidSpot(tile, config)) {
                 continue;
             }
-            const dx = tile.x - cx;
-            const dy = tile.y - cy;
-            candidates.push({ x: tile.x, y: tile.y, distSq: dx * dx + dy * dy });
+            candidates.push({ x: tile.x, y: tile.y, distSq: distSq(tile.x, cx, tile.y, cy) });
         }
 
         // Early exit: ring corners (distSq = 2r²) can be farther than next ring's
@@ -200,24 +198,15 @@ function isTooClose(
             continue;
         }
 
-        const dx = entity.x - x;
-        const dy = entity.y - y;
-        if (dx * dx + dy * dy < minDistanceSq) {
+        if (distSq(entity.x, x, entity.y, y) < minDistanceSq) {
             return true;
         }
     }
     return false;
 }
 
-const CARDINAL_OFFSETS = [
-    { dx: 1, dy: 0 },
-    { dx: -1, dy: 0 },
-    { dx: 0, dy: 1 },
-    { dx: 0, dy: -1 },
-];
-
 function hasFreNeighbors(gameState: GameState, x: number, y: number): boolean {
-    for (const { dx, dy } of CARDINAL_OFFSETS) {
+    for (const [dx, dy] of CARDINAL_OFFSETS) {
         if (gameState.getGroundEntityAt(x + dx, y + dy)) {
             return false;
         }

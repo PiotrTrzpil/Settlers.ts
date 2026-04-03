@@ -11,6 +11,8 @@
 import { spiralSearch } from '../../utils/spiral-search';
 import { WorkHandlerType, type PositionWorkHandler } from './types';
 import type { Tile } from '@/game/core/coordinates';
+import { distSq } from '@/game/core/distance';
+import { scanRect } from '@/game/core/tile-search';
 
 /** Configuration for the activated position handler factory. */
 export interface ActivatedPositionHandlerConfig {
@@ -33,12 +35,6 @@ export interface ActivatedPositionHandlerConfig {
     shouldActivate?: (targetX: number, targetY: number) => boolean;
 }
 
-function distSq(ax: number, ay: number, bx: number, by: number): number {
-    const dx = ax - bx;
-    const dy = ay - by;
-    return dx * dx + dy * dy;
-}
-
 const DEFAULT_LOCAL_RADIUS = 5;
 
 /**
@@ -52,31 +48,23 @@ function findLocalCandidate(
     oy: number,
     cfg: ActivatedPositionHandlerConfig
 ): Tile | null {
-    const localRadius = cfg.localRadius ?? DEFAULT_LOCAL_RADIUS;
     const maxOriginDistSq = cfg.searchRadius * cfg.searchRadius;
     let best: Tile | null = null;
     let bestOriginDist = Infinity;
 
-    const x0 = Math.max(0, x - localRadius);
-    const x1 = Math.min(cfg.mapWidth - 1, x + localRadius);
-    const y0 = Math.max(0, y - localRadius);
-    const y1 = Math.min(cfg.mapHeight - 1, y + localRadius);
-
-    for (let ty = y0; ty <= y1; ty++) {
-        for (let tx = x0; tx <= x1; tx++) {
-            if (!cfg.tilePredicate(tx, ty)) {
-                continue;
-            }
-            const originDist = distSq(tx, ty, ox, oy);
-            if (originDist > maxOriginDistSq) {
-                continue;
-            }
-            if (originDist < bestOriginDist) {
-                bestOriginDist = originDist;
-                best = { x: tx, y: ty };
-            }
+    scanRect(x, y, cfg.localRadius ?? DEFAULT_LOCAL_RADIUS, cfg.mapWidth, cfg.mapHeight, (tx, ty) => {
+        if (!cfg.tilePredicate(tx, ty)) {
+            return;
         }
-    }
+        const originDist = distSq(tx, ty, ox, oy);
+        if (originDist > maxOriginDistSq) {
+            return;
+        }
+        if (originDist < bestOriginDist) {
+            bestOriginDist = originDist;
+            best = { x: tx, y: ty };
+        }
+    });
     return best;
 }
 

@@ -4,7 +4,7 @@
  */
 
 import type { MapSize } from '@/utilities/map-size';
-import type { Tile } from '../../core/coordinates';
+import { CARDINAL_OFFSETS, isInMapBounds, type Tile } from '../../core/coordinates';
 import { PlacementStatus } from './types';
 
 /**
@@ -12,14 +12,6 @@ import { PlacementStatus } from './types';
  * Empirically derived from 374 original maps: all buildings have adjacent diffs ≤ 12.
  */
 export const MAX_SLOPE_DIFF = 12;
-
-/** Cardinal direction offsets for neighbor checking */
-const CARDINAL_OFFSETS: ReadonlyArray<[number, number]> = [
-    [1, 0],
-    [-1, 0],
-    [0, 1],
-    [0, -1],
-];
 
 /**
  * Compute slope difficulty rating for a set of tiles using per-tile gradient.
@@ -59,7 +51,7 @@ export function computeSlopeDifficulty(tiles: Tile[], groundHeight: Uint8Array, 
             const ny = tile.y + dy;
 
             // Skip out-of-bounds neighbors
-            if (nx < 0 || nx >= mapSize.width || ny < 0 || ny >= mapSize.height) {
+            if (!isInMapBounds(nx, ny, mapSize.width, mapSize.height)) {
                 continue;
             }
 
@@ -122,7 +114,7 @@ export function computeHeightRange(tiles: Tile[], groundHeight: Uint8Array, mapS
         for (const [dx, dy] of CARDINAL_OFFSETS) {
             const nx = tile.x + dx;
             const ny = tile.y + dy;
-            if (nx < 0 || nx >= mapSize.width || ny < 0 || ny >= mapSize.height) {
+            if (!isInMapBounds(nx, ny, mapSize.width, mapSize.height)) {
                 continue;
             }
             const nIdx = mapSize.toIndex(nx, ny);

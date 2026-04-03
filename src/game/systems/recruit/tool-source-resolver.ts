@@ -3,6 +3,7 @@ import { EntityType } from '../../entity';
 import type { EMaterialType } from '../../economy/material-type';
 import { SlotKind } from '../../core/pile-kind';
 import type { BuildingInventoryManager } from '../../systems/inventory/building-inventory';
+import { distSq } from '../../core/distance';
 
 export interface ToolSource {
     pileEntityId: number;
@@ -43,12 +44,10 @@ export class ToolSourceResolver {
                 continue;
             }
 
-            const dx = entity.x - nearX;
-            const dy = entity.y - nearY;
-            const distSq = dx * dx + dy * dy;
+            const d = distSq(entity.x, nearX, entity.y, nearY);
 
-            if (distSq < bestDistSq) {
-                bestDistSq = distSq;
+            if (d < bestDistSq) {
+                bestDistSq = d;
                 bestSource = { pileEntityId: entity.id, x: entity.x, y: entity.y };
             }
         }

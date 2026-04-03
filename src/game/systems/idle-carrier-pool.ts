@@ -16,6 +16,7 @@ import type { GameState } from '../game-state';
 import type { CarrierRegistry } from './carrier-registry';
 import type { UnitReservationRegistry } from './unit-reservation';
 import { query } from '../ecs';
+import { distSq } from '../core/distance';
 
 /** Optional caller-specific filter (e.g. territory check). */
 export type CarrierEligibilityFilter = (entityId: number) => boolean;
@@ -81,12 +82,10 @@ export class IdleCarrierPool {
                 continue;
             }
 
-            const dx = entity.x - nearX;
-            const dy = entity.y - nearY;
-            const distSq = dx * dx + dy * dy;
+            const d = distSq(entity.x, nearX, entity.y, nearY);
 
-            if (distSq < bestDistSq) {
-                bestDistSq = distSq;
+            if (d < bestDistSq) {
+                bestDistSq = d;
                 bestId = id;
             }
         }

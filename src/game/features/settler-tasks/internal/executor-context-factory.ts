@@ -22,7 +22,7 @@ import type {
     TriggerSystem,
     JobPartResolver,
 } from '../choreo-types';
-import type { ISettlerBuildingLocationManager } from '../../settler-location/types';
+import type { ISettlerBuildingLocationManager } from '../../settler-location';
 
 /** All dependencies needed to build the 4 executor context objects. */
 export interface ExecutorContextDeps {

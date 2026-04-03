@@ -21,7 +21,7 @@ import { getConstructionInventoryConfig } from '../inventory';
 import type { GameState } from '../../game-state';
 import type { EntityCleanupRegistry } from '../../systems/entity-cleanup-registry';
 import type { PilePositionResolver } from '../inventory/pile-position-resolver';
-import type { Entity } from '../../entity';
+import { tileKey, type Entity } from '../../entity';
 import type { EMaterialType } from '../../economy/material-type';
 import { SlotKind } from '../../core/pile-kind';
 import type { LinkedSlotKind } from '../../core/pile-kind';
@@ -87,7 +87,7 @@ export class BuildingLifecycleHandler {
                     pileIndex,
                 });
                 if (position) {
-                    usedPositions.add(`${position.x},${position.y}`);
+                    usedPositions.add(tileKey(position.x, position.y));
                 }
                 return position;
             });

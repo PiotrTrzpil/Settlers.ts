@@ -1,4 +1,4 @@
-import { EntityType } from '../entity';
+import { EntityType, isInMapBounds } from '../entity';
 import { MapObjectCategory, MapObjectType } from '@/game/types/map-object-types';
 import { GameState } from '../game-state';
 import { isBuildable } from '../terrain';
@@ -223,7 +223,7 @@ function addMapObject(
     darkFixup: boolean
 ): 'tree' | 'deco' | null {
     const { mapSize, groundType } = terrain;
-    if (x < 0 || x >= mapSize.width || y < 0 || y >= mapSize.height) {
+    if (!isInMapBounds(x, y, mapSize.width, mapSize.height)) {
         return null;
     }
     if (state.getGroundEntityAt(x, y)) {

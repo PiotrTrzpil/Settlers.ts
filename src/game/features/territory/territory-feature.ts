@@ -15,9 +15,11 @@
 import type { FeatureDefinition, FeatureContext, FeatureDiagnostics } from '../feature';
 import { getBuildingFootprint, type BuildingType } from '../../buildings/types';
 import type { TerrainData } from '../../terrain';
-import { EntityType, Tile } from '../../entity';
+import { EntityType } from '../../entity';
+import type { Tile } from '../../core/coordinates';
+import { bfsFind } from '../../core/tile-search';
 import { isUnitTypeMilitary, UnitCategory, getUnitCategory, type UnitType } from '../../core/unit-types';
-import type { SettlerTaskExports } from '../settler-tasks/settler-tasks-feature';
+import type { SettlerTaskExports } from '../settler-tasks';
 import { TerritoryManager, type TerritoryChange } from './territory-manager';
 import { TerritoryPersistence } from './territory-persistence';
 import { SpatialGrid } from '../../spatial-grid';
@@ -285,28 +287,5 @@ function findNearestFriendlyTile(
     player: number,
     maxSearch = 2000
 ): Tile | null {
-    const MAX_SEARCH = maxSearch;
-    const visited = new Set<number>();
-    const queue: Tile[] = [{ x: startX, y: startY }];
-    visited.add(startY * 10000 + startX);
-
-    const GRID_DX = [1, -1, 0, 0, 1, -1];
-    const GRID_DY = [0, 0, 1, -1, 1, -1];
-
-    for (let i = 0; i < queue.length && i < MAX_SEARCH; i++) {
-        const { x, y } = queue[i]!;
-        if (tm.isInTerritory(x, y, player)) {
-            return { x, y };
-        }
-        for (let d = 0; d < 6; d++) {
-            const nx = x + GRID_DX[d]!;
-            const ny = y + GRID_DY[d]!;
-            const key = ny * 10000 + nx;
-            if (!visited.has(key)) {
-                visited.add(key);
-                queue.push({ x: nx, y: ny });
-            }
-        }
-    }
-    return null;
+    return bfsFind(startX, startY, (x, y) => tm.isInTerritory(x, y, player), maxSearch);
 }

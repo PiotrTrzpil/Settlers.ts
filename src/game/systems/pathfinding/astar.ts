@@ -14,7 +14,7 @@
  *   // Returns array of waypoints from start (exclusive) to goal (inclusive)
  */
 
-import { tileKey, Tile } from '../../entity';
+import { tileKey, Tile, isInMapBounds } from '../../entity';
 import { isPassable } from '../../terrain';
 import { GRID_DELTAS, NUMBER_OF_DIRECTIONS, hexDistance, getDirectionToward } from '../hex-directions';
 import { BucketPriorityQueue } from './bucket-priority-queue';
@@ -250,7 +250,7 @@ function processNeighbor(cx: number, cy: number, currentIdx: number, direction: 
 
     // Bounds check
     const { mapWidth, mapHeight } = ctx.terrain;
-    if (nx < 0 || nx >= mapWidth || ny < 0 || ny >= mapHeight) {
+    if (!isInMapBounds(nx, ny, mapWidth, mapHeight)) {
         return;
     }
 
@@ -320,7 +320,7 @@ function diagnoseNeighbor(
     const nx = startX + dx;
     const ny = startY + dy;
     const pos = `d${d}(${nx},${ny})`;
-    if (nx < 0 || nx >= mapWidth || ny < 0 || ny >= mapHeight) {
+    if (!isInMapBounds(nx, ny, mapWidth, mapHeight)) {
         return pos + ':OOB';
     }
     const nIdx = nx + ny * mapWidth;

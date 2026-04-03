@@ -7,6 +7,7 @@ import type { OreVeinData } from './ore-vein-data';
 import type { ResourceSignSystem } from './resource-sign-system';
 import type { PositionWorkHandler } from '../settler-tasks/types';
 import { createActivatedPositionHandler } from '../settler-tasks/activated-position-handler';
+import { scanRect } from '../../core/tile-search';
 
 const GEOLOGIST_SEARCH_RADIUS = 20;
 
@@ -15,18 +16,7 @@ const MOUNTAIN_PROXIMITY = 5;
 
 /** Check if there is any rock tile within MOUNTAIN_PROXIMITY of (x, y). */
 function isNearMountain(x: number, y: number, terrain: TerrainData): boolean {
-    const x0 = Math.max(0, x - MOUNTAIN_PROXIMITY);
-    const x1 = Math.min(terrain.width - 1, x + MOUNTAIN_PROXIMITY);
-    const y0 = Math.max(0, y - MOUNTAIN_PROXIMITY);
-    const y1 = Math.min(terrain.height - 1, y + MOUNTAIN_PROXIMITY);
-    for (let ty = y0; ty <= y1; ty++) {
-        for (let tx = x0; tx <= x1; tx++) {
-            if (terrain.isRock(tx, ty)) {
-                return true;
-            }
-        }
-    }
-    return false;
+    return scanRect(x, y, MOUNTAIN_PROXIMITY, terrain.width, terrain.height, (tx, ty) => terrain.isRock(tx, ty));
 }
 
 /**

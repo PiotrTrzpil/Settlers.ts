@@ -15,7 +15,7 @@ export interface CarryingState {
 
 // === Re-export coordinates (base types with no dependencies) ===
 export type { Tile } from './core/coordinates';
-export { tileKey, CARDINAL_OFFSETS, EXTENDED_OFFSETS } from './core/coordinates';
+export { tileKey, CARDINAL_OFFSETS, EXTENDED_OFFSETS, isInMapBounds } from './core/coordinates';
 
 // === Core Types (defined here) ===
 

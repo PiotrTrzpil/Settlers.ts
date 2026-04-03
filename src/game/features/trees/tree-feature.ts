@@ -15,7 +15,7 @@ import { EntityType } from '../../entity';
 import { MapObjectType } from '@/game/types/map-object-types';
 import type { PlantTreeCommand, PlantTreesAreaCommand } from '../../commands/command-types';
 import { executePlantTree, executePlantTreesArea } from '../../commands/handlers/system-handlers';
-import type { SettlerTaskExports } from '../settler-tasks/settler-tasks-feature';
+import type { SettlerTaskExports } from '../settler-tasks';
 import { SearchType } from '../settler-tasks/types';
 import { createWoodcuttingHandler, createForesterHandler } from './work-handlers';
 

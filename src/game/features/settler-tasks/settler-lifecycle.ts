@@ -14,7 +14,7 @@ import { createLogger } from '@/utilities/logger';
 import { sortedEntries } from '@/utilities/collections';
 import { SettlerState, type SettlerConfig } from './types';
 import type { BuildingInventoryManager } from '../inventory';
-import type { ISettlerBuildingLocationManager } from '../settler-location/types';
+import type { ISettlerBuildingLocationManager } from '../settler-location';
 import { BuildingWorkerTracker } from './building-worker-tracker';
 import type { UnitStateMachine, UnitRuntime } from './unit-state-machine';
 import type { IndexedMap } from '@/game/utils/indexed-map';

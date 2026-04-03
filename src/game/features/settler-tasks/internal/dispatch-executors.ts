@@ -9,7 +9,7 @@
 
 import type { ChoreoExecutor } from '../../../systems/choreo';
 import { TaskResult } from '../../../systems/choreo';
-import type { ISettlerBuildingLocationManager } from '../../settler-location/types';
+import type { ISettlerBuildingLocationManager } from '../../settler-location';
 import { createLogger } from '@/utilities/logger';
 
 const log = createLogger('DispatchExecutors');

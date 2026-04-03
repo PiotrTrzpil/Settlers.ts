@@ -21,6 +21,11 @@ export const CARDINAL_OFFSETS: ReadonlyArray<readonly [number, number]> = [
     [0, -1],
 ];
 
+/** Check if tile coordinates are within map bounds. */
+export function isInMapBounds(x: number, y: number, mapWidth: number, mapHeight: number): boolean {
+    return x >= 0 && x < mapWidth && y >= 0 && y < mapHeight;
+}
+
 /** 6-directional neighbor offsets (cardinal + two diagonals) */
 export const EXTENDED_OFFSETS: ReadonlyArray<readonly [number, number]> = [
     [1, 0],

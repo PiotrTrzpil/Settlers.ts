@@ -14,7 +14,8 @@ export {
     type TaskDispatcher,
     type WorkerStateQuery,
 } from './types';
-export type { ChoreoJobState } from './choreo-types';
+export type { ChoreoJobState, MovementContext, TriggerSystem } from './choreo-types';
+export { choreo } from './choreo-types';
 export type { ChoreoSystem } from '../../systems/choreo';
 
 // Dispatch executors (used by building-demand feature)

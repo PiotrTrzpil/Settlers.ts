@@ -19,7 +19,7 @@ import type { EventBus } from '@/game/event-bus';
 import { type Race } from '@/game/core/race';
 import { BuildingType } from '@/game/buildings/building-type';
 import { getBuildingDoorPos } from '@/game/data/game-data-access';
-import { choreo, type ChoreoJobState } from '@/game/features/settler-tasks/choreo-types';
+import { choreo, type ChoreoJobState } from '@/game/features/settler-tasks';
 import { getTrainingRecipeSet, getTrainingRecipes } from './training-recipes';
 import type { TrainingRecipe, BarracksTrainingState } from './types';
 import { createLogger } from '@/utilities/logger';
