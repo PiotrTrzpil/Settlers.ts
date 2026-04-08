@@ -378,13 +378,13 @@ function spikesToData(groups: JobGroup[]): CorrectionData {
     return data;
 }
 
-function ensureNested(obj: Record<number, any>, ...keys: number[]): Record<number, any> {
-    let current = obj;
+function ensureNested(obj: Record<number, Record<number, unknown>>, ...keys: number[]): Record<number, unknown> {
+    let current: Record<number, unknown> = obj;
     for (const key of keys) {
         if (!current[key]) {
             current[key] = {};
         }
-        current = current[key];
+        current = current[key] as Record<number, unknown>;
     }
     return current;
 }
@@ -416,19 +416,27 @@ function serializeYaml(data: CorrectionData): string {
         '# Manual edits (via JIL viewer Save) are preserved on re-generation.',
     ];
 
-    const sortedFiles = Object.keys(data).map(Number).sort((a, b) => a - b);
+    const sortedFiles = Object.keys(data)
+        .map(Number)
+        .sort((a, b) => a - b);
     for (const fileId of sortedFiles) {
         lines.push(`${fileId}:`);
         const jobs = data[fileId]!;
-        const sortedJobs = Object.keys(jobs).map(Number).sort((a, b) => a - b);
+        const sortedJobs = Object.keys(jobs)
+            .map(Number)
+            .sort((a, b) => a - b);
         for (const job of sortedJobs) {
             lines.push(`  ${job}:`);
             const dirs = jobs[job]!;
-            const sortedDirs = Object.keys(dirs).map(Number).sort((a, b) => a - b);
+            const sortedDirs = Object.keys(dirs)
+                .map(Number)
+                .sort((a, b) => a - b);
             for (const dir of sortedDirs) {
                 lines.push(`    ${dir}:`);
                 const frames = dirs[dir]!;
-                const sortedFrames = Object.keys(frames).map(Number).sort((a, b) => a - b);
+                const sortedFrames = Object.keys(frames)
+                    .map(Number)
+                    .sort((a, b) => a - b);
                 for (const frame of sortedFrames) {
                     const [dx, dy] = frames[frame]!;
                     lines.push(`      ${frame}: [${dx}, ${dy}]`);
