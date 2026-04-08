@@ -17,7 +17,7 @@ import { parseIndexFilesInWorker } from '@/resources/gfx/parse-index-files';
 import { GfxImage } from '@/resources/gfx/gfx-image';
 import { EntityTextureAtlas, AtlasRegion } from './entity-texture-atlas';
 import { SpriteEntry, PIXELS_TO_WORLD } from './sprite-metadata';
-import { CORRECTIONS_BY_FILE } from './sprite-metadata/jil-frame-corrections';
+import { CORRECTIONS_BY_FILE } from './sprite-metadata/frame-corrections';
 import { getDecoderPool } from './sprite-decoder-pool';
 import type { BatchSpriteDescriptor, BatchSpriteResult } from './sprite-batch-decode-worker';
 

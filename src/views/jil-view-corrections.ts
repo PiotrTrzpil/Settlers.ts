@@ -3,7 +3,7 @@
  * from the auto-generated correction data when previewing sprites.
  */
 
-import { CORRECTIONS_BY_FILE } from '@/game/renderer/sprite-metadata/jil-frame-corrections';
+import { CORRECTIONS_BY_FILE } from '@/game/renderer/sprite-metadata/frame-corrections';
 import type { IGfxImage } from '@/resources/gfx/igfx-image';
 
 export interface PixelShift {

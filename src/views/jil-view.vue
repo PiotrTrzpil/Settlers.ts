@@ -13,6 +13,11 @@
             <button :class="{ active: viewMode === 'single' }" @click="viewMode = 'single'">Single</button>
             <button :class="{ active: viewMode === 'grid' }" @click="switchToGrid(() => {})">Grid</button>
             <Checkbox v-model="doAnimation" label="Animate" />
+            <template v-if="!doAnimation && totalFrameCount > 0 && !(viewMode === 'grid' && gridDirection === 'all')">
+                <button class="frame-btn" @click="stepFrame(-1)" title="Previous frame (←)">◀</button>
+                <span class="frame-counter">{{ currentFrameDisplay + 1 }}/{{ totalFrameCount }}</span>
+                <button class="frame-btn" @click="stepFrame(1)" title="Next frame (→)">▶</button>
+            </template>
             <Checkbox v-model="magentaBg" label="Magenta BG" />
             <Checkbox v-model="withCorrections" label="With corrections" />
             <template v-if="viewMode === 'grid'">
@@ -137,15 +142,23 @@
                 <span>Offset: ({{ currentImageInfo.left }}, {{ currentImageInfo.top }})</span>
             </div>
 
-            <div class="canvas-wrapper">
-                <canvas ref="ghCav" class="main-canvas"> Sorry! Your browser does not support HTML5 Canvas. </canvas>
+            <div class="canvas-area">
+                <div class="canvas-wrapper">
+                    <canvas ref="ghCav" class="main-canvas"> Sorry! Your browser does not support HTML5 Canvas. </canvas>
+                </div>
+                <div v-if="!doAnimation && selectedGil && withCorrections" class="shift-controls">
+                    <span class="shift-label">Shift (WASD):</span>
+                    <span class="shift-display">dx: {{ pixelShift.dx }}, dy: {{ pixelShift.dy }}</span>
+                    <button @click="saveCorrection" title="Save correction to YAML">Save</button>
+                    <button @click="resetShift" title="Reset shift">Reset</button>
+                </div>
             </div>
         </div>
     </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, nextTick, onMounted, onUnmounted, useTemplateRef } from 'vue';
+import { ref, reactive, computed, watch, nextTick, onMounted, onUnmounted, useTemplateRef } from 'vue';
 import { Path } from '@/utilities/path';
 import { GfxFileReader } from '@/resources/gfx/gfx-file-reader';
 import { GilFileReader } from '@/resources/gfx/gil-file-reader';
@@ -161,6 +174,10 @@ import {
 } from '@/utilities/view-helpers';
 import type { IGfxImage } from '@/resources/gfx/igfx-image';
 import { getFrameCorrection, renderCorrectedImage } from './jil-view-corrections';
+import { setCorrection, serializeCorrections, CORRECTIONS_YAML_PATH } from '@/game/renderer/sprite-metadata/frame-corrections';
+import { writeDevFile } from '@/utilities/dev-file-writer';
+import { getSavedState, loadSavedState, saveJilState, restoreScrollOffset } from './jil-view-persistence';
+import { renderGridFrame as renderGridFrameImpl, renderJobSprite as renderJobSpriteImpl, type GridRenderContext } from './jil-view-grid-render';
 import { useCompositeGridView } from '@/composables/useGridView';
 import {
     isSettlerFile as isSettlerFileCheck,
@@ -185,12 +202,11 @@ const props = defineProps<{
 const ghCav = useTemplateRef<HTMLCanvasElement>('ghCav');
 const virtualGridRef = ref<{ getScrollOffset(): number; setScrollOffset(offset: number): void } | null>(null);
 
-// Use composable for grid view functionality (composite keys: "jobIndex-dirIndex")
 const { viewMode, setCanvasRef, clearRefs, canvasRefs, switchToGrid } = useCompositeGridView('grid');
-
 const doAnimation = ref(true);
 const magentaBg = ref(false);
 const withCorrections = ref(false);
+const pixelShift = reactive({ dx: 0, dy: 0 });
 
 function renderImageToCanvas(img: IGfxImage, canvas: HTMLCanvasElement, correction?: { dx: number; dy: number }): void {
     const bg = magentaBg.value ? '#ff00ff' : undefined;
@@ -204,88 +220,134 @@ function lookupCorrection(jobIndex: number, dirIndex: number, frameIndex: number
 
 const clearCanvas = (c: HTMLCanvasElement) => c.getContext('2d')?.clearRect(0, 0, c.width, c.height);
 const gridDirection = ref<'all' | number>(0);
+
+const manualFrameIndex = ref(0);
+function currentFrameIdx(): number {
+    return gilList.value.length > 0 ? gilList.value.indexOf(selectedGil.value!) : 0;
+}
+const currentFrameDisplay = computed(() => viewMode.value === 'single' ? currentFrameIdx() : manualFrameIndex.value);
+const totalFrameCount = computed(() => viewMode.value === 'single' ? gilList.value.length : gridMaxFrameCount());
+
+function gridMaxFrameCount(): number {
+    if (!dilFileReader.value || !gilFileReader.value) {
+        return 0;
+    }
+    const dir = getSelectedDirection();
+    let max = 0;
+    for (const item of jilList.value) {
+        const dirItems = dilFileReader.value.getItems(item.offset, item.length);
+        if (dir < dirItems.length) {
+            const count = gilFileReader.value.getItems(dirItems[dir]!.offset, dirItems[dir]!.length).length;
+            if (count > max) {
+                max = count;
+            }
+        }
+    }
+    return max;
+}
+
+function stepFrame(delta: number): void {
+    if (viewMode.value === 'single') {
+        if (gilList.value.length === 0) {
+            return;
+        }
+        const currentIdx = selectedGil.value ? gilList.value.indexOf(selectedGil.value) : 0;
+        const next = (currentIdx + delta + gilList.value.length) % gilList.value.length;
+        selectedGil.value = gilList.value[next]!;
+        animFrameIndex = next;
+        loadPixelShift();
+        renderFrame(selectedGil.value);
+    } else {
+        const max = gridMaxFrameCount();
+        if (max === 0) {
+            return;
+        }
+        manualFrameIndex.value = (manualFrameIndex.value + delta + max) % max;
+        renderGridFrame(manualFrameIndex.value);
+    }
+}
+
+function buildGridCtx(): GridRenderContext | null {
+    if (!gfxFileReader.value || !dilFileReader.value || !gilFileReader.value) {
+        return null;
+    }
+    return {
+        gfxReader: gfxFileReader.value, dilReader: dilFileReader.value, gilReader: gilFileReader.value,
+        jilList: jilList.value, visibleStart: gridVisibleStart, visibleEnd: gridVisibleEnd,
+        getCanvas: key => canvasRefs.get(key), clearCanvas, renderImage: renderImageToCanvas,
+        lookupCorrection,
+    };
+}
+
+function renderGridFrame(globalFrame: number): void {
+    const ctx = buildGridCtx();
+    if (ctx) {
+        renderGridFrameImpl(ctx, getSelectedDirection(), globalFrame);
+    }
+}
+
+/** Load existing correction into pixelShift for the current single-view frame. */
+function loadPixelShift(): void {
+    if (!withCorrections.value || !selectedJil.value || !selectedDil.value || !selectedGil.value) {
+        pixelShift.dx = 0;
+        pixelShift.dy = 0;
+        return;
+    }
+    const c = getFrameCorrection(
+        getCurrentFileId(), selectedJil.value.index,
+        dilList.value.indexOf(selectedDil.value), gilList.value.indexOf(selectedGil.value)
+    );
+    // eslint-disable-next-line no-restricted-syntax -- c is undefined when no correction exists for this frame
+    pixelShift.dx = c?.dx ?? 0;
+    // eslint-disable-next-line no-restricted-syntax -- c is undefined when no correction exists for this frame
+    pixelShift.dy = c?.dy ?? 0;
+}
+
+function shiftPixels(ddx: number, ddy: number): void {
+    pixelShift.dx += ddx;
+    pixelShift.dy += ddy;
+    if (selectedGil.value) {
+        renderFrame(selectedGil.value);
+    }
+}
+
+function resetShift(): void {
+    pixelShift.dx = 0;
+    pixelShift.dy = 0;
+    if (selectedGil.value) {
+        renderFrame(selectedGil.value);
+    }
+}
+
+function saveCorrection(): void {
+    const fileId = getCurrentFileId();
+    if (!fileId || !selectedJil.value || !selectedDil.value || !selectedGil.value) {
+        return;
+    }
+    const dirIdx = dilList.value.indexOf(selectedDil.value);
+    const frameIdx = gilList.value.indexOf(selectedGil.value);
+    setCorrection(fileId, selectedJil.value.index, dirIdx, frameIdx, pixelShift.dx, pixelShift.dy);
+    writeDevFile(CORRECTIONS_YAML_PATH, serializeCorrections());
+}
+
 let animationTimer = 0;
 let scrollSaveTimer = 0;
 let pendingScrollRestore = false;
 
-// ─── LocalStorage persistence ─────────────────────────────────────────────────
-const STORAGE_KEY = 'jil_view_state';
+const viewRefs = { viewMode, doAnimation, magentaBg, withCorrections, gridDirection };
+const saveCtx = {
+    refs: viewRefs,
+    pendingScrollRestore: () => pendingScrollRestore,
+    getScrollOffset: () => virtualGridRef.value?.getScrollOffset(),
+    getSelection: () => ({
+        jobIndex: selectedJil.value?.index,
+        dirIndex: selectedDil.value ? dilList.value.indexOf(selectedDil.value) : undefined,
+        frameIndex: selectedGil.value ? gilList.value.indexOf(selectedGil.value) : undefined,
+    }),
+};
+const saveState = () => saveJilState(saveCtx);
 
-interface SavedJilState {
-    viewMode?: string;
-    doAnimation?: boolean;
-    magentaBg?: boolean;
-    withCorrections?: boolean;
-    gridDirection?: 'all' | number;
-    scrollOffset?: number;
-    jobIndex?: number;
-    dirIndex?: number;
-    frameIndex?: number;
-}
-
-function getSavedState(): SavedJilState | null {
-    try {
-        const raw = localStorage.getItem(STORAGE_KEY);
-        return raw ? JSON.parse(raw) : null;
-    } catch {
-        return null;
-    }
-}
-
-function loadSavedState(): void {
-    try {
-        const s = getSavedState();
-        if (!s) {
-            return;
-        }
-        if (s.viewMode === 'single' || s.viewMode === 'grid') {
-            viewMode.value = s.viewMode;
-        }
-        if (typeof s.doAnimation === 'boolean') {
-            doAnimation.value = s.doAnimation;
-        }
-        if (typeof s.magentaBg === 'boolean') {
-            magentaBg.value = s.magentaBg;
-        }
-        if (typeof s.withCorrections === 'boolean') {
-            withCorrections.value = s.withCorrections;
-        }
-        if (s.gridDirection === 'all' || typeof s.gridDirection === 'number') {
-            gridDirection.value = s.gridDirection;
-        }
-    } catch {
-        /* ignore corrupt data */
-    }
-}
-
-function saveState(): void {
-    // eslint-disable-next-line no-restricted-syntax -- saved state may not exist in localStorage; 0 is correct initial scroll offset
-    const prev = getSavedState()?.scrollOffset ?? 0;
-    const scrollOffset = pendingScrollRestore ? prev : (virtualGridRef.value?.getScrollOffset() ?? prev);
-    localStorage.setItem(
-        STORAGE_KEY,
-        JSON.stringify({
-            viewMode: viewMode.value,
-            doAnimation: doAnimation.value,
-            magentaBg: magentaBg.value,
-            withCorrections: withCorrections.value,
-            gridDirection: gridDirection.value,
-            scrollOffset,
-            jobIndex: selectedJil.value?.index,
-            dirIndex: selectedDil.value ? dilList.value.indexOf(selectedDil.value) : undefined,
-            frameIndex: selectedGil.value ? gilList.value.indexOf(selectedGil.value) : undefined,
-        } satisfies SavedJilState)
-    );
-}
-
-function restoreScrollOffset(): void {
-    const saved = getSavedState();
-    if (saved && typeof saved.scrollOffset === 'number' && saved.scrollOffset > 0) {
-        virtualGridRef.value?.setScrollOffset(saved.scrollOffset);
-    }
-}
-
-loadSavedState();
+loadSavedState(viewRefs);
 
 const fileName = ref<string | null>(null);
 const jilList = ref<IndexFileItem[]>([]);
@@ -300,6 +362,13 @@ const selectedGil = ref<IndexFileItem | null>(null);
 watch([viewMode, doAnimation, magentaBg, withCorrections, gridDirection, selectedJil, selectedDil, selectedGil], () =>
     saveState()
 );
+
+watch(withCorrections, () => {
+    if (!doAnimation.value && viewMode.value === 'single' && selectedGil.value) {
+        loadPixelShift();
+        renderFrame(selectedGil.value);
+    }
+});
 
 const gfxFileReader = ref<GfxFileReader | null>(null);
 const dilFileReader = ref<DilFileReader | null>(null);
@@ -506,7 +575,13 @@ function renderFrame(gilItem: IndexFileItem): void {
 
     const dirIdx = selectedDil.value ? dilList.value.indexOf(selectedDil.value) : 0;
     const frameIdx = gilList.value.indexOf(gilItem);
-    renderImageToCanvas(gfx, cavEl, lookupCorrection(selectedJil.value.index, dirIdx, frameIdx));
+    let correction: { dx: number; dy: number } | undefined;
+    if (doAnimation.value) {
+        correction = lookupCorrection(selectedJil.value.index, dirIdx, frameIdx);
+    } else if (pixelShift.dx || pixelShift.dy) {
+        correction = pixelShift;
+    }
+    renderImageToCanvas(gfx, cavEl, correction);
 }
 
 function onSelectGil() {
@@ -514,6 +589,7 @@ function onSelectGil() {
         return;
     }
     animFrameIndex = gilList.value.indexOf(selectedGil.value);
+    loadPixelShift();
     renderFrame(selectedGil.value);
 }
 
@@ -540,7 +616,7 @@ function onAnimate() {
         renderFrame(gilList.value[animFrameIndex]!);
     } else {
         gridAnimFrame++;
-        renderGridAnimFrame();
+        renderGridFrame(gridAnimFrame);
     }
 }
 
@@ -549,105 +625,11 @@ function getSelectedDirection(): number {
     return typeof gridDirection.value === 'number' ? gridDirection.value : 0;
 }
 
-/** Render current animation frame for all visible grid items. */
-function renderGridAnimFrame(): void {
-    if (!gfxFileReader.value || !dilFileReader.value || !gilFileReader.value) {
-        return;
-    }
-    const dir = getSelectedDirection();
-
-    for (let i = gridVisibleStart; i < gridVisibleEnd; i++) {
-        const item = jilList.value[i];
-        if (!item) {
-            continue;
-        }
-
-        const canvas = canvasRefs.get(`${item.index}-anim`);
-        if (!canvas) {
-            continue;
-        }
-
-        const dirItems = dilFileReader.value.getItems(item.offset, item.length);
-        if (dir >= dirItems.length || dirItems.length === 0) {
-            clearCanvas(canvas);
-            continue;
-        }
-
-        const frameItems = gilFileReader.value.getItems(dirItems[dir]!.offset, dirItems[dir]!.length);
-        if (frameItems.length === 0) {
-            clearCanvas(canvas);
-            continue;
-        }
-
-        const frameIndex = gridAnimFrame % frameItems.length;
-        const offset = gilFileReader.value.getImageOffset(frameItems[frameIndex]!.index);
-        const gfx = gfxFileReader.value.readImage(offset, item.index);
-        renderImageToCanvas(gfx, canvas, lookupCorrection(item.index, dir, frameIndex));
-    }
-}
-
-/** Render frame 0 of the selected direction for all visible grid items (static single-direction mode). */
-function renderGridStaticDirection(): void {
-    if (!gfxFileReader.value || !dilFileReader.value || !gilFileReader.value) {
-        return;
-    }
-    const dir = getSelectedDirection();
-
-    for (let i = gridVisibleStart; i < gridVisibleEnd; i++) {
-        const item = jilList.value[i];
-        if (!item) {
-            continue;
-        }
-
-        const canvas = canvasRefs.get(`${item.index}-anim`);
-        if (!canvas) {
-            continue;
-        }
-
-        const dirItems = dilFileReader.value.getItems(item.offset, item.length);
-        if (dir >= dirItems.length || dirItems.length === 0) {
-            clearCanvas(canvas);
-            continue;
-        }
-
-        const frameItems = gilFileReader.value.getItems(dirItems[dir]!.offset, dirItems[dir]!.length);
-        if (frameItems.length === 0) {
-            clearCanvas(canvas);
-            continue;
-        }
-
-        const offset = gilFileReader.value.getImageOffset(frameItems[0]!.index);
-        const gfx = gfxFileReader.value.readImage(offset, item.index);
-        renderImageToCanvas(gfx, canvas, lookupCorrection(item.index, dir, 0));
-    }
-}
 
 function renderJobSprite(item: IndexFileItem) {
-    if (!gfxFileReader.value || !dilFileReader.value || !gilFileReader.value) {
-        return;
-    }
-
-    const dirItems = dilFileReader.value.getItems(item.offset, item.length);
-    if (dirItems.length === 0) {
-        return;
-    }
-
-    const maxDirs = Math.min(8, dirItems.length);
-    for (let dirIdx = 0; dirIdx < maxDirs; dirIdx++) {
-        const canvas = canvasRefs.get(`${item.index}-${dirIdx}`);
-        if (!canvas) {
-            continue;
-        }
-
-        const frameItems = gilFileReader.value.getItems(dirItems[dirIdx]!.offset, dirItems[dirIdx]!.length);
-        if (frameItems.length === 0) {
-            continue;
-        }
-
-        const offset = gilFileReader.value.getImageOffset(frameItems[0]!.index);
-        const gfx = gfxFileReader.value.readImage(offset, item.index);
-
-        renderImageToCanvas(gfx, canvas, lookupCorrection(item.index, dirIdx, 0));
+    const ctx = buildGridCtx();
+    if (ctx) {
+        renderJobSpriteImpl(ctx, item);
     }
 }
 
@@ -655,7 +637,7 @@ function onGridVisible(startIndex: number, endIndex: number) {
     // Restore saved scroll position on first render after file load
     if (pendingScrollRestore) {
         pendingScrollRestore = false;
-        restoreScrollOffset();
+        restoreScrollOffset(() => virtualGridRef.value);
         // Scroll change will trigger another onGridVisible — but still render this range
         // in case the saved offset is 0 or absent (no second call would happen)
     }
@@ -664,9 +646,9 @@ function onGridVisible(startIndex: number, endIndex: number) {
     gridVisibleEnd = endIndex;
 
     if (doAnimation.value) {
-        renderGridAnimFrame();
+        renderGridFrame(gridAnimFrame);
     } else if (gridDirection.value !== 'all') {
-        renderGridStaticDirection();
+        renderGridFrame(manualFrameIndex.value);
     } else {
         for (let i = startIndex; i < endIndex; i++) {
             const item = jilList.value[i];
@@ -685,9 +667,9 @@ function onGridDirectionChange(): void {
     }
     void nextTick(() => {
         if (doAnimation.value) {
-            renderGridAnimFrame();
+            renderGridFrame(gridAnimFrame);
         } else if (gridDirection.value !== 'all') {
-            renderGridStaticDirection();
+            renderGridFrame(manualFrameIndex.value);
         } else {
             for (let i = gridVisibleStart; i < gridVisibleEnd; i++) {
                 const item = jilList.value[i];
@@ -730,9 +712,9 @@ watch(doAnimation, animating => {
         // Template switches between anim/static canvases — re-render after DOM update
         void nextTick(() => {
             if (animating) {
-                renderGridAnimFrame();
+                renderGridFrame(gridAnimFrame);
             } else if (gridDirection.value !== 'all') {
-                renderGridStaticDirection();
+                renderGridFrame(manualFrameIndex.value);
             } else {
                 for (let i = gridVisibleStart; i < gridVisibleEnd; i++) {
                     const item = jilList.value[i];
@@ -745,14 +727,39 @@ watch(doAnimation, animating => {
     }
 });
 
+function onKeyDown(e: KeyboardEvent): void {
+    if (doAnimation.value) {
+        return;
+    }
+    if (e.key === 'ArrowLeft') {
+        e.preventDefault();
+        stepFrame(-1);
+    } else if (e.key === 'ArrowRight') {
+        e.preventDefault();
+        stepFrame(1);
+    }
+    if (viewMode.value !== 'single' || !withCorrections.value) {
+        return;
+    }
+    const step = e.shiftKey ? 5 : 1;
+    switch (e.key.toLowerCase()) {
+        case 'w': e.preventDefault(); shiftPixels(0, -step); break;
+        case 's': e.preventDefault(); shiftPixels(0, step); break;
+        case 'a': e.preventDefault(); shiftPixels(-step, 0); break;
+        case 'd': e.preventDefault(); shiftPixels(step, 0); break;
+    }
+}
+
 onMounted(() => {
     animationTimer = window.setInterval(() => onAnimate(), 100);
     scrollSaveTimer = window.setInterval(() => saveState(), 500);
+    window.addEventListener('keydown', onKeyDown);
 });
 
 onUnmounted(() => {
     window.clearInterval(animationTimer);
     window.clearInterval(scrollSaveTimer);
+    window.removeEventListener('keydown', onKeyDown);
     saveState();
 });
 </script>
@@ -762,6 +769,63 @@ onUnmounted(() => {
 <style scoped>
 .dir-select {
     width: 60px;
+}
+
+.frame-btn {
+    padding: 2px 8px;
+    font-size: 12px;
+    min-width: 28px;
+    cursor: pointer;
+}
+
+.frame-counter {
+    font-size: 12px;
+    min-width: 40px;
+    text-align: center;
+    font-variant-numeric: tabular-nums;
+}
+
+.canvas-area {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.shift-controls {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 10px;
+    margin-top: 8px;
+    font-size: 12px;
+    background: var(--bg-darkest);
+    border: 1px solid var(--border-soft);
+    border-radius: 4px;
+}
+
+.shift-controls .shift-label {
+    color: var(--text-secondary);
+}
+
+.shift-controls .shift-display {
+    font-family: 'Consolas', monospace;
+    font-variant-numeric: tabular-nums;
+    color: var(--text);
+    min-width: 80px;
+}
+
+.shift-controls button {
+    padding: 3px 10px;
+    background: var(--bg-raised);
+    color: var(--text);
+    border: 1px solid var(--border-strong);
+    border-radius: 3px;
+    cursor: pointer;
+    font-size: 11px;
+}
+
+.shift-controls button:hover {
+    background: var(--border-mid);
 }
 
 /* Job mapping labels */
