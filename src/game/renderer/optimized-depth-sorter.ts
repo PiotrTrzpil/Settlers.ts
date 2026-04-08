@@ -22,8 +22,11 @@ import {
     DEPTH_FACTOR_UNIT,
     DEPTH_FACTOR_PILE,
     FLAT_SPRITE_DEPTH_BIAS,
+    DEPTH_X_SKEW,
 } from './entity-renderer-constants';
 import { isFlatSprite } from './depth-trait-defaults';
+import { getBuildingInfo } from '../data/game-data-access';
+import type { Race } from '../core/race';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // CONFIGURATION
@@ -51,6 +54,33 @@ export interface OptimizedSortContext {
 // ═══════════════════════════════════════════════════════════════════════════
 // IMPLEMENTATION
 // ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * Cache for building door-based depth bias.
+ * Key: `${buildingType}_${race}`, value: depth bias from door position.
+ * Static per building type+race — computed once and reused.
+ */
+const buildingDepthBiasCache = new Map<string, number>();
+
+function getBuildingFootprintDepthBias(buildingType: BuildingType, race: Race): number {
+    const key = `${buildingType}_${race}`;
+    let bias = buildingDepthBiasCache.get(key);
+    if (bias !== undefined) {
+        return bias;
+    }
+
+    const info = getBuildingInfo(race, buildingType);
+    if (info) {
+        // Anchor depth at the door position — where units transition from
+        // "in front of" to "inside" the building. Adapts to each building's
+        // layout regardless of where the door is placed in the footprint.
+        bias = (info.door.xOffset + info.door.yOffset) * DEPTH_X_SKEW;
+    } else {
+        bias = 0;
+    }
+    buildingDepthBiasCache.set(key, bias);
+    return bias;
+}
 
 /**
  * Optimized depth sorter with pre-allocated buffers.
@@ -140,12 +170,17 @@ export class OptimizedDepthSorter {
         spriteEntry: SpriteEntry | null,
         ctx: OptimizedSortContext
     ): number {
-        let depth = worldPos.worldY;
+        let depth = worldPos.worldY + worldPos.worldX * DEPTH_X_SKEW;
 
         if (spriteEntry) {
             const { offsetY, heightWorld } = spriteEntry;
             const depthFactor = this.getDepthFactor(entity.type);
             depth = depth + offsetY + heightWorld * depthFactor;
+        }
+
+        // Buildings span multiple tiles — anchor depth at the front corner of the footprint
+        if (entity.type === EntityType.Building) {
+            depth += getBuildingFootprintDepthBias(entity.subType as BuildingType, entity.race);
         }
 
         if (isFlatSprite(entity.type, entity.subType, ctx.getVariation(entity.id))) {

@@ -13,6 +13,11 @@
             <button :class="{ active: viewMode === 'single' }" @click="viewMode = 'single'">Single</button>
             <button :class="{ active: viewMode === 'grid' }" @click="switchToGrid(() => {})">Grid</button>
             <Checkbox v-model="doAnimation" label="Animate" />
+            <template v-if="!doAnimation && totalFrameCount > 0 && !(viewMode === 'grid' && gridDirection === 'all')">
+                <button class="frame-btn" @click="stepFrame(-1)" title="Previous frame (←)">◀</button>
+                <span class="frame-counter">{{ currentFrameDisplay + 1 }}/{{ totalFrameCount }}</span>
+                <button class="frame-btn" @click="stepFrame(1)" title="Next frame (→)">▶</button>
+            </template>
             <Checkbox v-model="magentaBg" label="Magenta BG" />
             <Checkbox v-model="withCorrections" label="With corrections" />
             <template v-if="viewMode === 'grid'">
@@ -204,6 +209,101 @@ function lookupCorrection(jobIndex: number, dirIndex: number, frameIndex: number
 
 const clearCanvas = (c: HTMLCanvasElement) => c.getContext('2d')?.clearRect(0, 0, c.width, c.height);
 const gridDirection = ref<'all' | number>(0);
+
+/** Manual frame index for stepping through frames when animation is off. */
+const manualFrameIndex = ref(0);
+
+const currentFrameDisplay = computed(() => {
+    if (viewMode.value === 'single') {
+        return gilList.value.length > 0 ? gilList.value.indexOf(selectedGil.value!) : 0;
+    }
+    return manualFrameIndex.value;
+});
+
+const totalFrameCount = computed(() => {
+    if (viewMode.value === 'single') {
+        return gilList.value.length;
+    }
+    // In grid mode, report max frame count across visible jobs for the selected direction
+    return gridMaxFrameCount();
+});
+
+function gridMaxFrameCount(): number {
+    if (!dilFileReader.value || !gilFileReader.value) {
+        return 0;
+    }
+    const dir = getSelectedDirection();
+    let maxFrames = 0;
+    for (const item of jilList.value) {
+        const dirItems = dilFileReader.value.getItems(item.offset, item.length);
+        if (dir >= dirItems.length) {
+            continue;
+        }
+        const frameItems = gilFileReader.value.getItems(dirItems[dir]!.offset, dirItems[dir]!.length);
+        if (frameItems.length > maxFrames) {
+            maxFrames = frameItems.length;
+        }
+    }
+    return maxFrames;
+}
+
+function stepFrame(delta: number): void {
+    if (viewMode.value === 'single') {
+        if (gilList.value.length === 0) {
+            return;
+        }
+        const currentIdx = selectedGil.value ? gilList.value.indexOf(selectedGil.value) : 0;
+        const next = (currentIdx + delta + gilList.value.length) % gilList.value.length;
+        selectedGil.value = gilList.value[next]!;
+        animFrameIndex = next;
+        renderFrame(selectedGil.value);
+    } else {
+        const max = gridMaxFrameCount();
+        if (max === 0) {
+            return;
+        }
+        manualFrameIndex.value = (manualFrameIndex.value + delta + max) % max;
+        renderGridManualFrame();
+    }
+}
+
+/** Render the manual frame index for all visible grid items. */
+function renderGridManualFrame(): void {
+    if (!gfxFileReader.value || !dilFileReader.value || !gilFileReader.value) {
+        return;
+    }
+    const dir = getSelectedDirection();
+
+    for (let i = gridVisibleStart; i < gridVisibleEnd; i++) {
+        const item = jilList.value[i];
+        if (!item) {
+            continue;
+        }
+
+        const canvas = canvasRefs.get(`${item.index}-anim`);
+        if (!canvas) {
+            continue;
+        }
+
+        const dirItems = dilFileReader.value.getItems(item.offset, item.length);
+        if (dir >= dirItems.length || dirItems.length === 0) {
+            clearCanvas(canvas);
+            continue;
+        }
+
+        const frameItems = gilFileReader.value.getItems(dirItems[dir]!.offset, dirItems[dir]!.length);
+        if (frameItems.length === 0) {
+            clearCanvas(canvas);
+            continue;
+        }
+
+        const frameIndex = manualFrameIndex.value % frameItems.length;
+        const offset = gilFileReader.value.getImageOffset(frameItems[frameIndex]!.index);
+        const gfx = gfxFileReader.value.readImage(offset, item.index);
+        renderImageToCanvas(gfx, canvas, lookupCorrection(item.index, dir, frameIndex));
+    }
+}
+
 let animationTimer = 0;
 let scrollSaveTimer = 0;
 let pendingScrollRestore = false;
@@ -586,40 +686,9 @@ function renderGridAnimFrame(): void {
     }
 }
 
-/** Render frame 0 of the selected direction for all visible grid items (static single-direction mode). */
+/** Render the manual frame of the selected direction for all visible grid items (static single-direction mode). */
 function renderGridStaticDirection(): void {
-    if (!gfxFileReader.value || !dilFileReader.value || !gilFileReader.value) {
-        return;
-    }
-    const dir = getSelectedDirection();
-
-    for (let i = gridVisibleStart; i < gridVisibleEnd; i++) {
-        const item = jilList.value[i];
-        if (!item) {
-            continue;
-        }
-
-        const canvas = canvasRefs.get(`${item.index}-anim`);
-        if (!canvas) {
-            continue;
-        }
-
-        const dirItems = dilFileReader.value.getItems(item.offset, item.length);
-        if (dir >= dirItems.length || dirItems.length === 0) {
-            clearCanvas(canvas);
-            continue;
-        }
-
-        const frameItems = gilFileReader.value.getItems(dirItems[dir]!.offset, dirItems[dir]!.length);
-        if (frameItems.length === 0) {
-            clearCanvas(canvas);
-            continue;
-        }
-
-        const offset = gilFileReader.value.getImageOffset(frameItems[0]!.index);
-        const gfx = gfxFileReader.value.readImage(offset, item.index);
-        renderImageToCanvas(gfx, canvas, lookupCorrection(item.index, dir, 0));
-    }
+    renderGridManualFrame();
 }
 
 function renderJobSprite(item: IndexFileItem) {
@@ -745,14 +814,29 @@ watch(doAnimation, animating => {
     }
 });
 
+function onKeyDown(e: KeyboardEvent): void {
+    if (doAnimation.value) {
+        return;
+    }
+    if (e.key === 'ArrowLeft') {
+        e.preventDefault();
+        stepFrame(-1);
+    } else if (e.key === 'ArrowRight') {
+        e.preventDefault();
+        stepFrame(1);
+    }
+}
+
 onMounted(() => {
     animationTimer = window.setInterval(() => onAnimate(), 100);
     scrollSaveTimer = window.setInterval(() => saveState(), 500);
+    window.addEventListener('keydown', onKeyDown);
 });
 
 onUnmounted(() => {
     window.clearInterval(animationTimer);
     window.clearInterval(scrollSaveTimer);
+    window.removeEventListener('keydown', onKeyDown);
     saveState();
 });
 </script>
@@ -762,6 +846,20 @@ onUnmounted(() => {
 <style scoped>
 .dir-select {
     width: 60px;
+}
+
+.frame-btn {
+    padding: 2px 8px;
+    font-size: 12px;
+    min-width: 28px;
+    cursor: pointer;
+}
+
+.frame-counter {
+    font-size: 12px;
+    min-width: 40px;
+    text-align: center;
+    font-variant-numeric: tabular-nums;
 }
 
 /* Job mapping labels */

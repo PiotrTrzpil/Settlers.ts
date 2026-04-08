@@ -65,6 +65,25 @@ export const DEPTH_FACTOR_UNIT = 1.0; // At feet (units stand on ground)
 export const DEPTH_FACTOR_PILE = 1.0; // On ground
 
 /**
+ * Isometric X-axis skew for depth sorting.
+ *
+ * The tile parallelogram in world space (after the ×0.5 Y scaling in the vertex shader):
+ *
+ *     (0, 0)───────(1, 0)          back ← top-left vertex
+ *       /            /             front ← bottom-right vertex (0.5, 0.5)
+ *      /            /              side vertices (1,0) and (−0.5, 0.5) at equal depth
+ *   (−0.5, 0.5)──(0.5, 0.5)
+ *
+ * The iso-depth contour must pass through the two side vertices:
+ *   depth(1, 0) = depth(−0.5, 0.5)
+ *   0 + 1·k     = 0.5 − 0.5·k   →   k = 1/3
+ *
+ * Result: depth = worldY + worldX/3 = ⅓·(tileX + tileY).
+ * Both tile axes contribute equally; the front of each tile is its bottom-right corner.
+ */
+export const DEPTH_X_SKEW = 1 / 3;
+
+/**
  * Depth bias subtracted from "flat" sprites — entities that sit on terrain but should
  * render behind standing trees, units, and buildings at the same tile.
  * Applies to: fallen/cut tree stages, StorageArea building.
