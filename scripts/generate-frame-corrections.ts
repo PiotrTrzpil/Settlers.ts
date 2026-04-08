@@ -24,7 +24,6 @@ import { SETTLER_JOB_INDICES } from '../src/game/renderer/sprite-metadata/jil-in
 
 const GFX_DIR = 'public/Siedler4/Gfx';
 const OUTPUT_PATH = 'src/game/renderer/sprite-metadata/frame-corrections.yaml';
-const DIRECTION_NAMES = ['SE', 'E', 'SW', 'NW', 'W', 'NE'] as const;
 const SETTLER_FILES = ['20', '21', '22', '23', '24'];
 const BORDER_WIDTH = 3;
 
@@ -379,23 +378,26 @@ function spikesToData(groups: JobGroup[]): CorrectionData {
     return data;
 }
 
+function ensureNested(obj: Record<number, any>, ...keys: number[]): Record<number, any> {
+    let current = obj;
+    for (const key of keys) {
+        if (!current[key]) {
+            current[key] = {};
+        }
+        current = current[key];
+    }
+    return current;
+}
+
 /** Deep merge: entries from `override` take priority over `base`. */
 function mergeData(base: CorrectionData, override: CorrectionData): CorrectionData {
     const result = structuredClone(base);
     for (const [fileId, jobs] of Object.entries(override)) {
-        if (!result[Number(fileId)]) {
-            result[Number(fileId)] = {};
-        }
         for (const [job, dirs] of Object.entries(jobs)) {
-            if (!result[Number(fileId)]![Number(job)]) {
-                result[Number(fileId)]![Number(job)] = {};
-            }
             for (const [dir, frames] of Object.entries(dirs)) {
-                if (!result[Number(fileId)]![Number(job)]![Number(dir)]) {
-                    result[Number(fileId)]![Number(job)]![Number(dir)] = {};
-                }
+                const target = ensureNested(result, Number(fileId), Number(job), Number(dir));
                 for (const [frame, shift] of Object.entries(frames)) {
-                    result[Number(fileId)]![Number(job)]![Number(dir)]![Number(frame)] = shift as [number, number];
+                    target[Number(frame)] = shift;
                 }
             }
         }
