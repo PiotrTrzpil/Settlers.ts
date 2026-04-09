@@ -2,50 +2,49 @@
  * Detect displaced animation frames and generate frame-corrections.yaml.
  *
  * Scans GFX files via JIL→DIL→GIL pipeline, detects frames where pixel
- * content is shifted (border-pixel anomaly), and writes a YAML data file
- * with per-frame offset corrections.
+ * content is shifted, and writes a YAML data file with per-frame offset
+ * corrections.
  *
  * Usage:
- *   npx tsx scripts/generate-frame-corrections.ts                # All settler files, dev >= 8px
- *   npx tsx scripts/generate-frame-corrections.ts --min-dev 6    # Lower threshold
- *   npx tsx scripts/generate-frame-corrections.ts --files 20     # Roman only
- *   npx tsx scripts/generate-frame-corrections.ts --dry-run      # Print to stdout
+ *   npx tsx scripts/frame-corrections/generate.ts                # All settler files, dev >= 8px
+ *   npx tsx scripts/frame-corrections/generate.ts --min-dev 6    # Lower threshold
+ *   npx tsx scripts/frame-corrections/generate.ts --files 20     # Roman only
+ *   npx tsx scripts/frame-corrections/generate.ts --dry-run      # Print to stdout
  */
-import './lib/node-image-data-polyfill';
-import { DilFileReader } from '../src/resources/gfx/dil-file-reader';
-import { GfxFileReader } from '../src/resources/gfx/gfx-file-reader';
-import { GilFileReader } from '../src/resources/gfx/gil-file-reader';
-import { JilFileReader } from '../src/resources/gfx/jil-file-reader';
-import { PaletteCollection } from '../src/resources/gfx/palette-collection';
-import { PilFileReader } from '../src/resources/gfx/pil-file-reader';
-import { NodeFileSystem } from '../src/resources/gfx/exporter/file-system';
-import type { GfxImage } from '../src/resources/gfx/gfx-image';
-import { SETTLER_JOB_INDICES } from '../src/game/renderer/sprite-metadata/jil-indices';
+import '../lib/node-image-data-polyfill';
+import { DilFileReader } from '../../src/resources/gfx/dil-file-reader';
+import { GfxFileReader } from '../../src/resources/gfx/gfx-file-reader';
+import { GilFileReader } from '../../src/resources/gfx/gil-file-reader';
+import { JilFileReader } from '../../src/resources/gfx/jil-file-reader';
+import { PaletteCollection } from '../../src/resources/gfx/palette-collection';
+import { PilFileReader } from '../../src/resources/gfx/pil-file-reader';
+import { NodeFileSystem } from '../../src/resources/gfx/exporter/file-system';
+import { SETTLER_JOB_INDICES } from '../../src/game/renderer/sprite-metadata/jil-indices';
+import { parse } from 'yaml';
+import {
+    type FrameInfo, computeFrameInfo, measureFrame, phaseCorrelationShift, median,
+} from './frame-analysis';
 
 const GFX_DIR = 'public/Siedler4/Gfx';
 const OUTPUT_PATH = 'src/game/renderer/sprite-metadata/frame-corrections.yaml';
 const SETTLER_FILES = ['20', '21', '22', '23', '24'];
-const BORDER_WIDTH = 3;
 
 /**
  * Job indices to exclude from correction detection.
  * These animations have intentional large movement (miner cart entering/exiting/tipping)
- * that the border-pixel detector would incorrectly flag as displacement bugs.
+ * that the detector would incorrectly flag as displacement bugs.
  */
 const EXCLUDED_JOBS: Set<number> = new Set([
-    // Miner push-in animations (cart entering mine)
     SETTLER_JOB_INDICES.miner.M_PUSHIN_COAL,
     SETTLER_JOB_INDICES.miner.M_PUSHIN_IRONORE,
     SETTLER_JOB_INDICES.miner.M_PUSHIN_GOLDORE,
     SETTLER_JOB_INDICES.miner.M_PUSHIN_STONE,
     SETTLER_JOB_INDICES.miner.M_PUSHIN_SULFUR,
-    // Miner push-out animations (cart exiting mine)
     SETTLER_JOB_INDICES.miner.M_PUSHOUT_COAL,
     SETTLER_JOB_INDICES.miner.M_PUSHOUT_IRONORE,
     SETTLER_JOB_INDICES.miner.M_PUSHOUT_GOLDORE,
     SETTLER_JOB_INDICES.miner.M_PUSHOUT_STONE,
     SETTLER_JOB_INDICES.miner.M_PUSHOUT_SULFUR,
-    // Miner tip animations (dumping cart)
     SETTLER_JOB_INDICES.miner.M_TIP_COAL,
     SETTLER_JOB_INDICES.miner.M_TIP_IRONORE,
     SETTLER_JOB_INDICES.miner.M_TIP_GOLDORE,
@@ -77,26 +76,8 @@ function parseArgs(): Args {
 }
 
 // ---------------------------------------------------------------------------
-// Frame analysis
+// Detection
 // ---------------------------------------------------------------------------
-
-interface FrameInfo {
-    index: number;
-    width: number;
-    opaquePixels: number;
-    /** Column pixel counts — columnDensity[x] = number of opaque pixels in column x */
-    columnDensity: number[];
-    /** First column with >= EDGE_MIN_PIXELS opaque pixels (left edge of sprite mass) */
-    leftEdge: number;
-    /** Last column with >= EDGE_MIN_PIXELS opaque pixels (right edge of sprite mass) */
-    rightEdge: number;
-    leftBorderPixels: number;
-    rightBorderPixels: number;
-    centroidY: number;
-}
-
-/** Minimum opaque pixels in a column to count as a real edge (filters stray lines) */
-const EDGE_MIN_PIXELS = 3;
 
 interface Spike {
     file: string;
@@ -108,108 +89,62 @@ interface Spike {
     deviation: number;
 }
 
-/** Find leftmost/rightmost columns with enough opaque pixels to count as a real edge. */
-function findSpriteEdges(columnDensity: number[], width: number): { leftEdge: number; rightEdge: number } {
-    let leftEdge = 0;
-    for (let x = 0; x < width; x++) {
-        if (columnDensity[x]! >= EDGE_MIN_PIXELS) {
-            leftEdge = x;
-            break;
-        }
-    }
-    let rightEdge = width - 1;
-    for (let x = width - 1; x >= 0; x--) {
-        if (columnDensity[x]! >= EDGE_MIN_PIXELS) {
-            rightEdge = x;
-            break;
-        }
-    }
-    return { leftEdge, rightEdge };
-}
-
-function computeFrameInfo(image: GfxImage, frameIndex: number): FrameInfo {
-    const imgData = image.getImageData();
-    const pixels = new Uint32Array(imgData.data.buffer);
-    const { width, height } = image;
-    const columnDensity = new Array<number>(width).fill(0);
-    let sumY = 0,
-        count = 0,
-        leftBorder = 0,
-        rightBorder = 0;
-
-    for (let y = 0; y < height; y++) {
-        for (let x = 0; x < width; x++) {
-            if (pixels[y * width + x]! >>> 24 > 0) {
-                columnDensity[x]!++;
-                sumY += y;
-                count++;
-                if (x < BORDER_WIDTH) leftBorder++;
-                if (x >= width - BORDER_WIDTH) rightBorder++;
-            }
-        }
-    }
-
-    const { leftEdge, rightEdge } = findSpriteEdges(columnDensity, width);
-
-    return {
-        index: frameIndex,
-        width,
-        opaquePixels: count,
-        columnDensity,
-        leftEdge,
-        rightEdge,
-        leftBorderPixels: leftBorder,
-        rightBorderPixels: rightBorder,
-        centroidY: count > 0 ? sumY / count : 0,
-    };
-}
-
-/**
- * Compute the horizontal displacement between baseline and current frame.
- * Uses the edge shift from the side where the border spike appeared, since
- * ghost pixels keep the opposite edge in place.
- */
-function computeDisplacementDx(
-    f0: FrameInfo,
-    curr: FrameInfo,
-    leftExcess: number,
-    rightExcess: number,
-    threshold: number
-): number {
-    const leftShift = f0.leftEdge - curr.leftEdge; // positive = curr shifted left
-    const rightShift = f0.rightEdge - curr.rightEdge; // positive = curr shifted left
-    if (leftExcess >= threshold && rightExcess >= threshold) {
-        return Math.abs(leftShift) >= Math.abs(rightShift) ? leftShift : rightShift;
-    }
-    return leftExcess >= threshold ? leftShift : rightShift;
-}
-
 function detectSpikes(frames: FrameInfo[], file: string, job: number, dir: number): Spike[] {
     const spikes: Spike[] = [];
     if (frames.length < 3) return spikes;
 
-    // Baseline = frame 0 (assumed correct).
     const f0 = frames[0]!;
     if (f0.opaquePixels < 50) return spikes;
 
-    const MIN_BORDER_SPIKE = 8;
+    const medianHGap = median(frames.map(f => f.hGap));
+    const medianCentroidY = median(frames.map(f => f.centroidY));
+
+    // First pass: detect frames with strong phase correlation against f0
+    const detected = new Map<number, Spike>();
+    const weakDetections: number[] = []; // indices with evidence but weak phase correlation
 
     for (let i = 1; i < frames.length; i++) {
         const curr = frames[i]!;
-        if (curr.opaquePixels < 50) continue;
+        const result = measureFrame(f0, curr, medianHGap, medianCentroidY);
+        if (!result) continue;
 
-        const leftExcess = curr.leftBorderPixels - f0.leftBorderPixels;
-        const rightExcess = curr.rightBorderPixels - f0.rightBorderPixels;
-        if (leftExcess < MIN_BORDER_SPIKE && rightExcess < MIN_BORDER_SPIKE) continue;
-
-        const dx = computeDisplacementDx(f0, curr, leftExcess, rightExcess, MIN_BORDER_SPIKE);
-        const dy = Math.round(f0.centroidY - curr.centroidY);
-        const deviation = Math.round(Math.sqrt(dx * dx + dy * dy) * 10) / 10;
-        if (deviation < 3) continue;
-
-        spikes.push({ file, job, direction: dir, frame: curr.index, dx, dy, deviation });
+        const deviation = Math.round(Math.sqrt(result.dx * result.dx + result.dy * result.dy) * 10) / 10;
+        if (deviation >= 3) {
+            const spike = { file, job, direction: dir, frame: curr.index, dx: result.dx, dy: result.dy, deviation };
+            detected.set(i, spike);
+        } else {
+            weakDetections.push(i);
+        }
     }
 
+    // Second pass: for frames with evidence but weak phase correlation against f0,
+    // try phase correlation against a nearby detected frame. If the shift relative to
+    // that neighbor is small, the frame has the same displacement — adopt the neighbor's dx.
+    for (const i of weakDetections) {
+        const curr = frames[i]!;
+        let adoptedSpike: Spike | null = null;
+        for (let radius = 1; radius < frames.length; radius++) {
+            for (const neighbor of [i - radius, i + radius]) {
+                const neighborSpike = detected.get(neighbor);
+                if (!neighborSpike) continue;
+                const neighborFrame = frames[neighbor]!;
+                const relDx = phaseCorrelationShift(neighborFrame.colGray, curr.colGray);
+                if (Math.abs(relDx) <= 3) {
+                    const dy = Math.round(medianCentroidY - curr.centroidY);
+                    const dx = neighborSpike.dx;
+                    const deviation = Math.round(Math.sqrt(dx * dx + dy * dy) * 10) / 10;
+                    if (deviation >= 3) {
+                        adoptedSpike = { file, job, direction: dir, frame: curr.index, dx, dy, deviation };
+                    }
+                    break;
+                }
+            }
+            if (adoptedSpike) break;
+        }
+        if (adoptedSpike) detected.set(i, adoptedSpike);
+    }
+
+    spikes.push(...detected.values());
     return spikes;
 }
 
@@ -243,7 +178,7 @@ async function loadFileSet(baseName: string, nodeFs: NodeFileSystem) {
 function readDirectionFrames(
     fileSet: { gfxReader: GfxFileReader; gilReader: GilFileReader; dilReader: DilFileReader },
     jobIndex: number,
-    dilOffset: number
+    dilOffset: number,
 ): FrameInfo[] {
     const dilItem = fileSet.dilReader.getItem(dilOffset);
     if (!dilItem || dilItem.length <= 0) return [];
@@ -307,10 +242,9 @@ async function scanFiles(filesToProcess: string[], minDev: number): Promise<Spik
 // YAML generation
 // ---------------------------------------------------------------------------
 
-import { parse } from 'yaml';
-
-/** Nested YAML data: fileId → jobIndex → direction → frame → [dx, dy] */
-type CorrectionData = Record<number, Record<number, Record<number, Record<number, [number, number]>>>>;
+/** Nested YAML data: fileId → jobIndex → direction → frame → [dx, dy] or [dx, dy, true] */
+type YamlShift = [number, number] | [number, number, true];
+type CorrectionData = Record<number, Record<number, Record<number, Record<number, YamlShift>>>>;
 
 interface DirGroup {
     direction: number;
@@ -389,15 +323,17 @@ function ensureNested(obj: Record<number, Record<number, unknown>>, ...keys: num
     return current;
 }
 
-/** Deep merge: entries from `override` take priority over `base`. */
-function mergeData(base: CorrectionData, override: CorrectionData): CorrectionData {
-    const result = structuredClone(base);
-    for (const [fileId, jobs] of Object.entries(override)) {
+/** Merge manual entries from existing YAML into freshly generated data. */
+function mergeManualEntries(generated: CorrectionData, existing: CorrectionData): CorrectionData {
+    const result = structuredClone(generated);
+    for (const [fileId, jobs] of Object.entries(existing)) {
         for (const [job, dirs] of Object.entries(jobs)) {
             for (const [dir, frames] of Object.entries(dirs)) {
-                const target = ensureNested(result, Number(fileId), Number(job), Number(dir));
                 for (const [frame, shift] of Object.entries(frames)) {
-                    target[Number(frame)] = shift;
+                    if (shift[2] === true) {
+                        const target = ensureNested(result, Number(fileId), Number(job), Number(dir));
+                        target[Number(frame)] = shift;
+                    }
                 }
             }
         }
@@ -409,10 +345,10 @@ function serializeYaml(data: CorrectionData): string {
     const lines: string[] = [
         '# JIL frame offset corrections — fixes mispositioned frames in original game art.',
         '#',
-        '# Structure: fileId → jobIndex → direction → frame: [dx, dy]',
+        '# Structure: fileId → jobIndex → direction → frame: [dx, dy] or [dx, dy, true] for manual',
         '# Directions: 0=SE, 1=E, 2=SW, 3=NW, 4=W, 5=NE',
         '#',
-        '# Auto-generated by: npx tsx scripts/generate-frame-corrections.ts',
+        '# Auto-generated by: npx tsx scripts/frame-corrections/generate.ts',
         '# Manual edits (via JIL viewer Save) are preserved on re-generation.',
     ];
 
@@ -438,8 +374,9 @@ function serializeYaml(data: CorrectionData): string {
                     .map(Number)
                     .sort((a, b) => a - b);
                 for (const frame of sortedFrames) {
-                    const [dx, dy] = frames[frame]!;
-                    lines.push(`      ${frame}: [${dx}, ${dy}]`);
+                    const shift = frames[frame]!;
+                    const suffix = shift[2] === true ? ', true' : '';
+                    lines.push(`      ${frame}: [${shift[0]}, ${shift[1]}${suffix}]`);
                 }
             }
         }
@@ -472,7 +409,7 @@ async function main() {
         /* no existing file — start fresh */
     }
 
-    const merged = mergeData(generated, existing);
+    const merged = mergeManualEntries(generated, existing);
     const finalYaml = serializeYaml(merged);
 
     if (args.dryRun) {

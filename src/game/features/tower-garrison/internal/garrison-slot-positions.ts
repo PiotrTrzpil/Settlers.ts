@@ -9,7 +9,7 @@ export interface GarrisonSlotPosition {
     readonly offsetX: number;
     /** Pixel offset Y from building anchor */
     readonly offsetY: number;
-    /** Default facing direction (0-7) from XML */
+    /** Default facing direction — sprite direction index (0-5) from XML */
     readonly direction: number;
 }
 
