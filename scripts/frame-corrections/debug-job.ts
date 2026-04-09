@@ -15,8 +15,9 @@ import { execSync } from 'child_process';
 import { writeBmp } from './frame-analysis';
 
 const GFX_DIR = 'public/Siedler4/Gfx';
-const OUT_DIR = '/tmp/debug-job';
+const OUT_DIR = '/tmp/debug-job'; // eslint-disable-line sonarjs/publicly-writable-directories -- debug script temp output
 
+// eslint-disable-next-line sonarjs/cognitive-complexity -- debug script with nested frame iteration
 async function main() {
     const fileId = process.argv[2] ?? '20';
     const jobId = Number(process.argv[3] ?? '250');
@@ -28,8 +29,10 @@ async function main() {
     const hasPa6 = await nodeFs.exists(resolve('pa6'));
     const hasPi4 = await nodeFs.exists(resolve('pi4'));
     const [gfxData, gilData, jilData, dilData, paletteData, pilData] = await Promise.all([
-        nodeFs.readFile(resolve('gfx')), nodeFs.readFile(resolve('gil')),
-        nodeFs.readFile(resolve('jil')), nodeFs.readFile(resolve('dil')),
+        nodeFs.readFile(resolve('gfx')),
+        nodeFs.readFile(resolve('gil')),
+        nodeFs.readFile(resolve('jil')),
+        nodeFs.readFile(resolve('dil')),
         nodeFs.readFile(hasPa6 ? resolve('pa6') : resolve('p46')),
         nodeFs.readFile(hasPi4 ? resolve('pi4') : resolve('pil')),
     ]);
@@ -41,7 +44,10 @@ async function main() {
     const gfxReader = new GfxFileReader(gfxData, gilReader, jilReader, dilReader, palettes);
 
     const jilItem = jilReader.getItem(jobId)!;
-    if (!jilItem) { console.error(`Job ${jobId} not found`); return; }
+    if (!jilItem) {
+        console.error(`Job ${jobId} not found`);
+        return;
+    }
 
     console.log(`File ${fileId}, Job ${jobId}: ${jilItem.length} directions`);
 
@@ -63,7 +69,9 @@ async function main() {
                 writeBmp(bmpPath, imgData.data, image.width, image.height);
 
                 const rgba = imgData.data;
-                let opaque = 0, leftBorder = 0, rightBorder = 0;
+                let opaque = 0,
+                    leftBorder = 0,
+                    rightBorder = 0;
                 for (let y = 0; y < image.height; y++) {
                     for (let x = 0; x < image.width; x++) {
                         const i = (y * image.width + x) * 4;
@@ -74,7 +82,9 @@ async function main() {
                         }
                     }
                 }
-                console.log(`    f${f}: ${image.width}x${image.height} opaque=${opaque} left=${leftBorder} right=${rightBorder}`);
+                console.log(
+                    `    f${f}: ${image.width}x${image.height} opaque=${opaque} left=${leftBorder} right=${rightBorder}`
+                );
 
                 const pngPath = bmpPath.replace('.bmp', '.png');
                 execSync(`magick "${bmpPath}" -scale 400% "${pngPath}"`);

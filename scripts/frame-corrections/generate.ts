@@ -21,9 +21,7 @@ import { PilFileReader } from '../../src/resources/gfx/pil-file-reader';
 import { NodeFileSystem } from '../../src/resources/gfx/exporter/file-system';
 import { SETTLER_JOB_INDICES } from '../../src/game/renderer/sprite-metadata/jil-indices';
 import { parse } from 'yaml';
-import {
-    type FrameInfo, computeFrameInfo, measureFrame, phaseCorrelationShift, median,
-} from './frame-analysis';
+import { type FrameInfo, computeFrameInfo, measureFrame, phaseCorrelationShift, median } from './frame-analysis';
 
 const GFX_DIR = 'public/Siedler4/Gfx';
 const OUTPUT_PATH = 'src/game/renderer/sprite-metadata/frame-corrections.yaml';
@@ -89,6 +87,7 @@ interface Spike {
     deviation: number;
 }
 
+// eslint-disable-next-line sonarjs/cognitive-complexity -- two-pass detection with neighbor propagation
 function detectSpikes(frames: FrameInfo[], file: string, job: number, dir: number): Spike[] {
     const spikes: Spike[] = [];
     if (frames.length < 3) return spikes;
@@ -178,7 +177,7 @@ async function loadFileSet(baseName: string, nodeFs: NodeFileSystem) {
 function readDirectionFrames(
     fileSet: { gfxReader: GfxFileReader; gilReader: GilFileReader; dilReader: DilFileReader },
     jobIndex: number,
-    dilOffset: number,
+    dilOffset: number
 ): FrameInfo[] {
     const dilItem = fileSet.dilReader.getItem(dilOffset);
     if (!dilItem || dilItem.length <= 0) return [];

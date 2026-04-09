@@ -21,14 +21,19 @@ import { mkdirSync, readFileSync } from 'fs';
 import { execSync } from 'child_process';
 import { parse } from 'yaml';
 import {
-    type FrameInfo, computeFrameInfo, measureFrame, phaseCorrelationShift,
-    writeBmp, median, MIN_BORDER_SPIKE, MIN_SPLIT_GAP_EXCESS,
+    type FrameInfo,
+    computeFrameInfo,
+    measureFrame,
+    phaseCorrelationShift,
+    writeBmp,
+    median,
 } from './frame-analysis';
 
 const GFX_DIR = 'public/Siedler4/Gfx';
-const OUT_DIR = '/tmp/debug-frame';
+const OUT_DIR = '/tmp/debug-frame'; // eslint-disable-line sonarjs/publicly-writable-directories -- debug script temp output
 const YAML_PATH = 'src/game/renderer/sprite-metadata/frame-corrections.yaml';
 
+// eslint-disable-next-line sonarjs/cognitive-complexity -- debug script with detailed per-frame analysis output
 async function main() {
     const fileId = process.argv[2];
     const jobId = Number(process.argv[3]);
@@ -46,8 +51,10 @@ async function main() {
     const hasPa6 = await nodeFs.exists(resolve('pa6'));
     const hasPi4 = await nodeFs.exists(resolve('pi4'));
     const [gfxData, gilData, jilData, dilData, paletteData, pilData] = await Promise.all([
-        nodeFs.readFile(resolve('gfx')), nodeFs.readFile(resolve('gil')),
-        nodeFs.readFile(resolve('jil')), nodeFs.readFile(resolve('dil')),
+        nodeFs.readFile(resolve('gfx')),
+        nodeFs.readFile(resolve('gil')),
+        nodeFs.readFile(resolve('jil')),
+        nodeFs.readFile(resolve('dil')),
         nodeFs.readFile(hasPa6 ? resolve('pa6') : resolve('p46')),
         nodeFs.readFile(hasPi4 ? resolve('pi4') : resolve('pil')),
     ]);
@@ -59,11 +66,20 @@ async function main() {
     const gfxReader = new GfxFileReader(gfxData, gilReader, jilReader, dilReader, palettes);
 
     const jilItem = jilReader.getItem(jobId);
-    if (!jilItem) { console.error(`Job ${jobId} not found`); return; }
-    if (dirId >= jilItem.length) { console.error(`Direction ${dirId} out of range (0-${jilItem.length - 1})`); return; }
+    if (!jilItem) {
+        console.error(`Job ${jobId} not found`);
+        return;
+    }
+    if (dirId >= jilItem.length) {
+        console.error(`Direction ${dirId} out of range (0-${jilItem.length - 1})`);
+        return;
+    }
 
     const dilItem = dilReader.getItem(jilItem.offset + dirId)!;
-    if (!dilItem) { console.error(`DIL item not found`); return; }
+    if (!dilItem) {
+        console.error(`DIL item not found`);
+        return;
+    }
 
     // Load existing YAML corrections
     let yamlCorrections: Record<number, [number, number]> = {};
@@ -71,7 +87,9 @@ async function main() {
         const yamlData = parse(readFileSync(YAML_PATH, 'utf-8')) ?? {};
         const jobData = yamlData[Number(fileId)]?.[jobId]?.[dirId];
         if (jobData) yamlCorrections = jobData;
-    } catch { /* no corrections */ }
+    } catch {
+        /* no corrections */
+    }
 
     console.log(`\n=== File ${fileId}, Job ${jobId}, Direction ${dirId}: ${dilItem.length} frames ===\n`);
 
@@ -99,7 +117,10 @@ async function main() {
         }
     }
 
-    if (frames.length === 0) { console.error('No frames found'); return; }
+    if (frames.length === 0) {
+        console.error('No frames found');
+        return;
+    }
 
     const f0 = frames[0]!;
     const medianHGap = median(frames.map(f => f.hGap));
@@ -108,8 +129,8 @@ async function main() {
     // Print header
     console.log(
         `  f0 ref: ${f0.width}x${f0.height} opaque=${f0.opaquePixels}` +
-        ` L=${f0.leftBorderPixels} R=${f0.rightBorderPixels} T=${f0.topBorderPixels} B=${f0.bottomBorderPixels}` +
-        ` hGap=${f0.hGap}`,
+            ` L=${f0.leftBorderPixels} R=${f0.rightBorderPixels} T=${f0.topBorderPixels} B=${f0.bottomBorderPixels}` +
+            ` hGap=${f0.hGap}`
     );
     console.log(`  medians: hGap=${medianHGap} centroidY=${medianCentroidY.toFixed(1)}`);
     console.log();
@@ -142,7 +163,7 @@ async function main() {
         const yamlStr = yamlEntry ? ` YAML=[${yamlEntry[0]},${yamlEntry[1]}]` : '';
 
         // Status
-        let status = '';
+        let status: string;
         if (!result) {
             status = '  (no detection)';
         } else {
@@ -157,11 +178,12 @@ async function main() {
 
         console.log(
             `  f${curr.index}: ${curr.width}x${curr.height} opaque=${curr.opaquePixels} ` +
-            `L=${curr.leftBorderPixels} R=${curr.rightBorderPixels} T=${curr.topBorderPixels} B=${curr.bottomBorderPixels} ` +
-            `hGap=${curr.hGap} cY=${curr.centroidY.toFixed(1)} ` +
-            `rawDx=${rawDx} rawDy=${rawDy} centDy=${centroidDy}` +
-            `${triggers.length > 0 ? '  ' + triggers.join('+') : ''}` +
-            status + yamlStr,
+                `L=${curr.leftBorderPixels} R=${curr.rightBorderPixels} T=${curr.topBorderPixels} B=${curr.bottomBorderPixels} ` +
+                `hGap=${curr.hGap} cY=${curr.centroidY.toFixed(1)} ` +
+                `rawDx=${rawDx} rawDy=${rawDy} centDy=${centroidDy}` +
+                `${triggers.length > 0 ? '  ' + triggers.join('+') : ''}` +
+                status +
+                yamlStr
         );
     }
 

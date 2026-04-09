@@ -57,9 +57,10 @@ export interface MeasureResult {
 
 // ── Frame analysis ────────────────────────────────────────────────────
 
+// eslint-disable-next-line sonarjs/cognitive-complexity -- pixel-level analysis with multiple metrics
 export function computeFrameInfo(
     image: { width: number; height: number; getImageData(): ImageData },
-    frameIndex: number,
+    frameIndex: number
 ): FrameInfo {
     const imgData = image.getImageData();
     const rgba = imgData.data;
@@ -67,8 +68,13 @@ export function computeFrameInfo(
     const colGray = new Array<number>(width).fill(0);
     const rowGray = new Array<number>(height).fill(0);
     const colHasOpaque = new Uint8Array(width);
-    let count = 0, sumX = 0, sumY = 0;
-    let leftBorder = 0, rightBorder = 0, topBorder = 0, bottomBorder = 0;
+    let count = 0,
+        sumX = 0,
+        sumY = 0;
+    let leftBorder = 0,
+        rightBorder = 0,
+        topBorder = 0,
+        bottomBorder = 0;
 
     for (let y = 0; y < height; y++) {
         for (let x = 0; x < width; x++) {
@@ -92,10 +98,16 @@ export function computeFrameInfo(
     const hGap = findLargestInteriorGap(colHasOpaque);
 
     return {
-        index: frameIndex, width, height, opaquePixels: count,
-        colGray, rowGray,
-        leftBorderPixels: leftBorder, rightBorderPixels: rightBorder,
-        topBorderPixels: topBorder, bottomBorderPixels: bottomBorder,
+        index: frameIndex,
+        width,
+        height,
+        opaquePixels: count,
+        colGray,
+        rowGray,
+        leftBorderPixels: leftBorder,
+        rightBorderPixels: rightBorder,
+        topBorderPixels: topBorder,
+        bottomBorderPixels: bottomBorder,
         hGap,
         centroidX: count > 0 ? sumX / count : 0,
         centroidY: count > 0 ? sumY / count : 0,
@@ -105,7 +117,8 @@ export function computeFrameInfo(
 /** Find the largest interior transparent gap in a 1D occupancy array. */
 function findLargestInteriorGap(occupancy: Uint8Array): number {
     const n = occupancy.length;
-    let first = -1, last = -1;
+    let first = -1,
+        last = -1;
     for (let i = 0; i < n; i++) {
         if (occupancy[i]!) {
             if (first < 0) first = i;
@@ -114,7 +127,8 @@ function findLargestInteriorGap(occupancy: Uint8Array): number {
     }
     if (first < 0 || first === last) return 0;
 
-    let maxGap = 0, gapStart = -1;
+    let maxGap = 0,
+        gapStart = -1;
     for (let i = first; i <= last; i++) {
         if (!occupancy[i]!) {
             if (gapStart < 0) gapStart = i;
@@ -132,7 +146,8 @@ function findLargestInteriorGap(occupancy: Uint8Array): number {
 function dft(signal: number[]): { re: number; im: number }[] {
     const N = signal.length;
     return Array.from({ length: N }, (_, k) => {
-        let re = 0, im = 0;
+        let re = 0,
+            im = 0;
         for (let n = 0; n < N; n++) {
             const angle = (-2 * Math.PI * k * n) / N;
             re += signal[n]! * Math.cos(angle);
@@ -186,7 +201,10 @@ export function phaseCorrelationShift(a: number[], b: number[]): number {
  * Returns null if the frame shows no evidence of displacement.
  */
 export function measureFrame(
-    f0: FrameInfo, curr: FrameInfo, medianHGap: number, medianCentroidY: number,
+    f0: FrameInfo,
+    curr: FrameInfo,
+    medianHGap: number,
+    medianCentroidY: number
 ): MeasureResult | null {
     if (curr.opaquePixels < 50) return null;
 
@@ -194,13 +212,11 @@ export function measureFrame(
     const rightExcess = curr.rightBorderPixels - f0.rightBorderPixels;
     // Large opaque pixel increase means new content (spell effects, etc.) — not displacement
     const opaqueRatio = curr.opaquePixels / f0.opaquePixels;
-    const hasBorderAnomaly = opaqueRatio < 1.5
-        && (leftExcess >= MIN_BORDER_SPIKE || rightExcess >= MIN_BORDER_SPIKE);
+    const hasBorderAnomaly = opaqueRatio < 1.5 && (leftExcess >= MIN_BORDER_SPIKE || rightExcess >= MIN_BORDER_SPIKE);
     const hasHSplit = curr.hGap > medianHGap + MIN_SPLIT_GAP_EXCESS;
     // Gap collapse: gap shrinking dramatically signals wrap-around filling the gap.
-    const hasGapCollapse = medianHGap > MIN_SPLIT_GAP_EXCESS
-        && curr.hGap < medianHGap - MIN_SPLIT_GAP_EXCESS
-        && opaqueRatio < 1.5;
+    const hasGapCollapse =
+        medianHGap > MIN_SPLIT_GAP_EXCESS && curr.hGap < medianHGap - MIN_SPLIT_GAP_EXCESS && opaqueRatio < 1.5;
     const hasEvidence = hasBorderAnomaly || hasHSplit || hasGapCollapse;
     if (!hasEvidence) return null;
 
@@ -215,8 +231,10 @@ export function measureFrame(
     let signFlipped = false;
     if (hasBorderAnomaly && Math.abs(dx) >= 5) {
         const netBorderShift = leftExcess - rightExcess;
-        if (netBorderShift > 0 && dx < 0) { dx = -dx; signFlipped = true; }
-        else if (netBorderShift < 0 && dx > 0) { dx = -dx; signFlipped = true; }
+        if ((netBorderShift > 0 && dx < 0) || (netBorderShift < 0 && dx > 0)) {
+            dx = -dx;
+            signFlipped = true;
+        }
     }
 
     // dy: phase correlation on row profiles is UNRELIABLE when the frame has a
@@ -246,18 +264,28 @@ export function median(values: number[]): number {
 // ── BMP writer ────────────────────────────────────────────────────────
 
 export function writeBmp(path: string, rgba: Uint8ClampedArray, w: number, h: number): void {
-    const pixelSize = w * 4 * h, headerSize = 54;
+    const pixelSize = w * 4 * h,
+        headerSize = 54;
     const buf = Buffer.alloc(headerSize + pixelSize);
-    buf.write('BM', 0); buf.writeUInt32LE(buf.length, 2); buf.writeUInt32LE(headerSize, 10);
-    buf.writeUInt32LE(40, 14); buf.writeInt32LE(w, 18); buf.writeInt32LE(h, 22);
-    buf.writeUInt16LE(1, 26); buf.writeUInt16LE(32, 28); buf.writeUInt32LE(pixelSize, 34);
+    buf.write('BM', 0);
+    buf.writeUInt32LE(buf.length, 2);
+    buf.writeUInt32LE(headerSize, 10);
+    buf.writeUInt32LE(40, 14);
+    buf.writeInt32LE(w, 18);
+    buf.writeInt32LE(h, 22);
+    buf.writeUInt16LE(1, 26);
+    buf.writeUInt16LE(32, 28);
+    buf.writeUInt32LE(pixelSize, 34);
     for (let y = 0; y < h; y++) {
         const bmpRow = h - 1 - y;
         for (let x = 0; x < w; x++) {
-            const si = (y * w + x) * 4, di = headerSize + (bmpRow * w + x) * 4;
+            const si = (y * w + x) * 4,
+                di = headerSize + (bmpRow * w + x) * 4;
             const a = rgba[si + 3]!;
-            buf[di] = a > 0 ? rgba[si + 2]! : 255; buf[di + 1] = a > 0 ? rgba[si + 1]! : 0;
-            buf[di + 2] = a > 0 ? rgba[si]! : 255; buf[di + 3] = 255;
+            buf[di] = a > 0 ? rgba[si + 2]! : 255;
+            buf[di + 1] = a > 0 ? rgba[si + 1]! : 0;
+            buf[di + 2] = a > 0 ? rgba[si]! : 255;
+            buf[di + 3] = 255;
         }
     }
     writeFileSync(path, buf);
