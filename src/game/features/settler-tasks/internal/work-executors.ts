@@ -13,6 +13,7 @@ import { createLogger } from '@/utilities/logger';
 import { TaskResult } from '../types';
 import { framesToSeconds, tickDuration, type ChoreoJobState, type ChoreoNode, type WorkContext } from '../choreo-types';
 import type { Entity } from '../../../entity';
+import type { EDirection } from '../../../systems/hex-directions';
 import type { EntityWorkHandler } from '../types';
 import { safeCall } from '../safe-call';
 
@@ -43,7 +44,7 @@ function resolveDurationSeconds(node: ChoreoNode): number {
 function applyDirectionConstraint(settler: Entity, node: ChoreoNode, job: ChoreoJobState, ctx: WorkContext): void {
     if (node.dir !== -1 && job.progress === 0) {
         const controller = ctx.gameState.movement.getController(settler.id);
-        controller?.setDirection(node.dir);
+        controller?.setDirection(node.dir as EDirection);
     }
 }
 

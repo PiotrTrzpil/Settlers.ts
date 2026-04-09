@@ -151,17 +151,9 @@ export const TowerGarrisonFeature: FeatureDefinition = {
                 garrisonManager: manager,
                 towerCombatSystem,
             } satisfies TowerGarrisonExports,
+            // Swordsmen are rendered via overlay-resolution.ts (AboveBuilding layer)
+            // so they appear between the building's back and front wall sprites.
             renderPasses: [
-                {
-                    id: 'tower-swordsman',
-                    layer: RenderLayer.BehindEntities,
-                    needs: { sprites: true },
-                    create: () =>
-                        new TowerGarrisonRenderPass(manager, ctx.gameState, {
-                            getSlots: g => g.swordsmanSlots,
-                            top: false,
-                        }),
-                },
                 {
                     id: 'tower-bowman',
                     layer: RenderLayer.AboveEntities,

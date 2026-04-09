@@ -10,6 +10,7 @@ import { EntityType, isUnitTypeMilitary, UnitType } from '../../entity';
 import { UnitCategory, getUnitCategory } from '../../core/unit-types';
 import { xmlKey } from '../../animation/animation';
 import { UNIT_XML_PREFIX } from '../../renderer/sprite-metadata';
+import { EDirection } from '../../systems/hex-directions';
 import { CombatSystem } from './combat-system';
 import { DeathAngelSystem } from './death-angel-system';
 import { createLogger } from '@/utilities/logger';
@@ -80,7 +81,7 @@ export const CombatFeature: FeatureDefinition = {
             }
             ctx.visualService.play(angel.id, xmlKey(prefix, 'WALK'), {
                 loop: false,
-                direction: 0,
+                direction: EDirection.SOUTH_EAST,
                 hideOnComplete: true,
             });
 

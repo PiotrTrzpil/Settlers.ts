@@ -111,8 +111,8 @@ export class CombatVisuals {
      * Set direction on both controller (source of truth) and visual service.
      * Combat units are skipped by the per-tick sync, so we propagate directly.
      */
-    private setDirection(entityId: number, direction: number): void {
-        this.gameState.movement.getController(entityId)!.setDirection(direction as EDirection);
+    private setDirection(entityId: number, direction: EDirection): void {
+        this.gameState.movement.getController(entityId)!.setDirection(direction);
         this.visualService.setDirection(entityId, direction);
     }
 }

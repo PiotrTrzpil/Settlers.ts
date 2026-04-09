@@ -1,5 +1,6 @@
 import { BuildingType } from '@/game/buildings/building-type';
 import { Race } from '@/game/core/race';
+import type { JilDirection } from '@/game/animation/entity-visual-service';
 import { getBuildingInfo } from '@/game/data/game-data-access';
 import { isGarrisonBuildingType } from './garrison-capacity';
 
@@ -9,8 +10,8 @@ export interface GarrisonSlotPosition {
     readonly offsetX: number;
     /** Pixel offset Y from building anchor */
     readonly offsetY: number;
-    /** Default facing direction — sprite direction index (0-5) from XML */
-    readonly direction: number;
+    /** Default facing direction — JIL direction index (0-5) from XML */
+    readonly direction: JilDirection;
 }
 
 /**

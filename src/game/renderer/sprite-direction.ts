@@ -6,29 +6,37 @@
  * This module provides the conversion between the two.
  */
 
-import { EDirection } from '../systems/hex-directions';
+import type { EDirection } from '../systems/hex-directions';
 
-/** Sprite direction indices as stored in JIL/DIL files (clockwise from right). */
-export enum SpriteDirection {
-    RIGHT = 0,
-    RIGHT_BOTTOM = 1,
-    LEFT_BOTTOM = 2,
-    LEFT = 3,
-    LEFT_TOP = 4,
-    RIGHT_TOP = 5,
-}
+declare const SpriteDirBrand: unique symbol;
 
-/** EDirection → SpriteDirection mapping. Names match so this is straightforward. */
-const EDIRECTION_TO_SPRITE: Record<EDirection, SpriteDirection> = {
-    [EDirection.SOUTH_EAST]: SpriteDirection.RIGHT_BOTTOM,
-    [EDirection.EAST]: SpriteDirection.RIGHT,
-    [EDirection.SOUTH_WEST]: SpriteDirection.LEFT_BOTTOM,
-    [EDirection.NORTH_WEST]: SpriteDirection.LEFT_TOP,
-    [EDirection.WEST]: SpriteDirection.LEFT,
-    [EDirection.NORTH_EAST]: SpriteDirection.RIGHT_TOP,
-};
+/**
+ * Branded numeric type for sprite direction indices (JIL/DIL file ordering, clockwise from right).
+ * Prevents accidental interchange with EDirection or plain number.
+ */
+export type SpriteDirection = number & { readonly [SpriteDirBrand]: true };
 
-/** Convert EDirection value to sprite direction index. */
-export function toSpriteDirection(eDirection: number): number {
-    return EDIRECTION_TO_SPRITE[eDirection as EDirection];
+/** Sprite direction constants (companion object for SpriteDirection type). */
+export const SpriteDirection = {
+    RIGHT: 0 as SpriteDirection,
+    RIGHT_BOTTOM: 1 as SpriteDirection,
+    LEFT_BOTTOM: 2 as SpriteDirection,
+    LEFT: 3 as SpriteDirection,
+    LEFT_TOP: 4 as SpriteDirection,
+    RIGHT_TOP: 5 as SpriteDirection,
+} as const;
+
+/** EDirection → SpriteDirection mapping. */
+const EDIRECTION_TO_SPRITE: readonly SpriteDirection[] = [
+    SpriteDirection.RIGHT_BOTTOM, // SOUTH_EAST = 0
+    SpriteDirection.RIGHT, // EAST = 1
+    SpriteDirection.LEFT_BOTTOM, // SOUTH_WEST = 2
+    SpriteDirection.LEFT_TOP, // NORTH_WEST = 3
+    SpriteDirection.LEFT, // WEST = 4
+    SpriteDirection.RIGHT_TOP, // NORTH_EAST = 5
+];
+
+/** Convert EDirection to sprite direction index. */
+export function toSpriteDirection(eDirection: EDirection): SpriteDirection {
+    return EDIRECTION_TO_SPRITE[eDirection]!;
 }

@@ -15,7 +15,8 @@ import type { EntityVisualState, AnimationPlayback, DirectionTransition } from '
 import type { BuildingRenderState, PlacementEntityType } from './render-context';
 import type { LayerVisibility } from './layer-visibility';
 import { resolveAnimationFrame, getAnimatedSpriteForDirection } from './animation-helpers';
-import { toSpriteDirection } from './sprite-direction';
+import { SpriteDirection, toSpriteDirection } from './sprite-direction';
+import { EDirection } from '../systems/hex-directions';
 
 // ============================================================================
 // Result types (replaces sentinel string 'transitioning')
@@ -221,7 +222,7 @@ export class EntitySpriteResolver {
             const newSprite = this.getUnitSpriteForDirection(
                 unitType,
                 vs.animation,
-                toSpriteDirection(vs.animation.direction),
+                toSpriteDirection(vs.animation.direction as EDirection),
                 entity.race
             );
             if (oldSprite && newSprite) {
@@ -235,8 +236,7 @@ export class EntitySpriteResolver {
             }
         }
 
-        // eslint-disable-next-line no-restricted-syntax -- animation direction is optional; 0 (south) is the correct standing default
-        const spriteDir = toSpriteDirection(vs.animation?.direction ?? 0);
+        const spriteDir = toSpriteDirection((vs.animation?.direction ?? EDirection.SOUTH_EAST) as EDirection);
         const unitType = entity.subType as UnitType;
         const entry = this.sprites.registry.getUnit(unitType, spriteDir, entity.race);
         if (!entry) {
@@ -261,7 +261,7 @@ export class EntitySpriteResolver {
     getUnitSpriteForDirection(
         unitType: UnitType,
         playback: AnimationPlayback,
-        spriteDir: number,
+        spriteDir: SpriteDirection,
         race?: number
     ): SpriteEntry | null {
         if (!this.sprites) {
@@ -366,16 +366,15 @@ export class EntitySpriteResolver {
     }
 
     /** Get static unit sprite for a specific direction (frame 0 of walk — the standing pose). */
-    getStaticUnitSprite(unitType: UnitType, spriteDir: number, race?: number): SpriteEntry | null {
-        if (!this.sprites) {
+    getStaticUnitSprite(unitType: UnitType, spriteDir: SpriteDirection, race?: number): SpriteEntry | null {
+        if (!this.sprites || race === undefined || !this.sprites.registry.isUnitRaceLoaded(race)) {
             return null;
         }
-        // eslint-disable-next-line no-restricted-syntax -- optional chaining; null when source is absent
-        return this.sprites.registry.getUnit(unitType, spriteDir, race)?.staticSprite ?? null;
+        return this.sprites.registry.getUnitDirectionSprite(unitType, spriteDir, race);
     }
 
     /** Get unit preview sprite — each leveled UnitType has its own registered sprites. */
     private getUnitPreviewSprite(unitType: UnitType, race?: number, _level?: number): SpriteEntry | null {
-        return this.getStaticUnitSprite(unitType, 0, race);
+        return this.getStaticUnitSprite(unitType, SpriteDirection.RIGHT, race);
     }
 }

@@ -27,6 +27,7 @@ import { UnitType } from '@/game/core/unit-types';
 import { getRenderEntityWorldPos } from '@/game/renderer/world-position';
 import { toSpriteDirection } from '@/game/renderer/sprite-direction';
 import { getDirectionToward } from '@/game/systems/hex-directions';
+import type { JilDirection } from '@/game/animation/entity-visual-service';
 import { TINT_NEUTRAL } from '@/game/renderer/tint-utils';
 import { PALETTE_TEXTURE_WIDTH } from '@/game/renderer/palette-texture';
 import { scaleSprite, ENTITY_SCALE } from '@/game/renderer/entity-renderer-constants';
@@ -111,22 +112,22 @@ export class TowerGarrisonRenderPass implements PluggableRenderPass {
     }
 
     /**
-     * Resolve sprite direction index (0-5) for a garrisoned unit.
-     * Default: XML direction (already a sprite direction index).
-     * With target: compute EDirection toward target, convert to sprite direction.
+     * Resolve JIL direction index (0-5) for a garrisoned unit.
+     * Default: XML direction is already a JIL direction index.
+     * With target: compute EDirection toward target, convert to JIL direction.
      */
-    private resolveDirection(unitId: number, buildingId: number, defaultSpriteDir: number): number {
+    private resolveDirection(unitId: number, buildingId: number, defaultDir: JilDirection): JilDirection {
         const { targets } = this.config;
         if (!targets) {
-            return defaultSpriteDir;
+            return defaultDir;
         }
         const targetId = targets.get(unitId);
         if (targetId === undefined) {
-            return defaultSpriteDir;
+            return defaultDir;
         }
         const target = this.gameState.getEntity(targetId);
         if (!target) {
-            return defaultSpriteDir;
+            return defaultDir;
         }
         const tower = this.gameState.getEntityOrThrow(buildingId, 'TowerGarrisonRenderPass.dir');
         return toSpriteDirection(getDirectionToward(tower.x, tower.y, target.x, target.y));
@@ -140,7 +141,7 @@ export class TowerGarrisonRenderPass implements PluggableRenderPass {
     private resolveSprite(
         unitId: number,
         unitType: UnitType,
-        spriteDir: number,
+        spriteDir: JilDirection,
         race: number,
         hasTarget: boolean
     ): SpriteEntry | null {
@@ -153,13 +154,14 @@ export class TowerGarrisonRenderPass implements PluggableRenderPass {
                 return frame;
             }
         }
-        return this.ctx.spriteResolver.getStaticUnitSprite(unitType, spriteDir, race);
+        // eslint-disable-next-line no-restricted-syntax -- spriteManager is nullable-by-design during init
+        return this.ctx.spriteManager?.registry.getUnitDirectionSprite(unitType, spriteDir, race) ?? null;
     }
 
     /** Look up the current animation frame for the given unit type, direction, and action. */
     private resolveAnimationFrame(
         unitType: UnitType,
-        spriteDir: number,
+        spriteDir: JilDirection,
         race: number,
         action: string
     ): SpriteEntry | null {

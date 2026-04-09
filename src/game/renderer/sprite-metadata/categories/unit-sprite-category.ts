@@ -46,7 +46,7 @@ export class UnitSpriteCategory implements SerializableSpriteCategory {
     /**
      * Look up the sprite entry for a unit type, direction, and race.
      * Throws if the race is loaded but the unit type is missing.
-     * @param direction Sprite direction index (see SpriteDirection enum) (defaults to 0)
+     * @param direction Sprite direction index (see SpriteDirection enum) (defaults to RIGHT)
      */
     get(type: UnitType, direction: number = 0, race: number): SpriteEntry {
         const dirMap = this.byRace.get(race)?.get(type);

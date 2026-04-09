@@ -76,9 +76,9 @@ function resolveConstructionOverlay(
 }
 
 /**
- * Resolve garrisoned swordsman sprites as BehindBuilding overlays.
+ * Resolve garrisoned swordsman sprites as building overlays.
  * Uses `top === false` settler positions from buildingInfo.xml — swordsmen visible through windows.
- * Static standing pose (frame 0 of walk) at the XML pixel offset, scaled like other overlays.
+ * Static standing pose at the XML pixel offset, scaled like other overlays.
  */
 function resolveGarrisonOverlays(
     entityId: number,
@@ -101,6 +101,10 @@ function resolveGarrisonOverlays(
         return;
     }
 
+    if (!er.spriteManager.registry.isUnitRaceLoaded(entity.race)) {
+        return;
+    }
+
     for (let i = 0; i < garrison.swordsmanSlots.unitIds.length; i++) {
         const slot = slotPositions[i];
         if (!slot) {
@@ -112,13 +116,14 @@ function resolveGarrisonOverlays(
             continue;
         }
 
-        const rawEntry = er.spriteManager.registry.getUnit(unit.subType as UnitType, slot.direction, unit.race);
-        if (!rawEntry) {
-            continue;
-        }
+        const sprite = er.spriteManager.registry.getUnitDirectionSprite(
+            unit.subType as UnitType,
+            slot.direction,
+            unit.race
+        );
 
         out.push({
-            sprite: scaleSprite(rawEntry.staticSprite, ENTITY_SCALE),
+            sprite: scaleSprite(sprite, ENTITY_SCALE),
             worldOffsetX: slot.offsetX * PIXELS_TO_WORLD,
             worldOffsetY: slot.offsetY * PIXELS_TO_WORLD,
             layer: OverlayRenderLayer.AboveBuilding,

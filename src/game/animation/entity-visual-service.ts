@@ -38,6 +38,15 @@
  */
 
 import { ANIMATION_DEFAULTS } from './animation';
+import type { EDirection } from '../systems/hex-directions';
+
+/**
+ * JIL direction/variant index — raw numeric index into JIL sprite direction slots.
+ * For units: set via toSpriteDirection(EDirection). For trees/buildings: variant index.
+ * Plain number alias for documentation — no branding, since it's polymorphic across entity types.
+ */
+// eslint-disable-next-line sonarjs/redundant-type-aliases -- intentional semantic alias for documentation
+export type JilDirection = number;
 /** What animation should play on an entity */
 export interface AnimationIntent {
     /** Sequence key (XML name, e.g., 'WC_WALK', 'SML01_FIGHT') */
@@ -65,7 +74,8 @@ export interface EntityVisualState {
 /** Tracks playback position within a named animation sequence. */
 export interface AnimationPlayback {
     sequenceKey: string;
-    direction: number;
+    /** JIL direction/variant index — for units this is set via toSpriteDirection(EDirection) */
+    direction: JilDirection;
     currentFrame: number;
     elapsedMs: number;
     loop: boolean;
@@ -76,7 +86,7 @@ export interface AnimationPlayback {
 
 /** Unit-only: smooth direction change. Stored separately because most entities never use it. */
 export interface DirectionTransition {
-    previousDirection: number;
+    previousDirection: EDirection;
     /** 0.0 = old direction, 1.0 = new direction */
     progress: number;
 }
@@ -230,7 +240,7 @@ export class EntityVisualService {
     /**
      * Update animation direction. Throws if there is no active animation.
      */
-    setDirection(entityId: number, direction: number): void {
+    setDirection(entityId: number, direction: JilDirection): void {
         const state = this.getStateOrThrow(entityId, 'setDirection');
         if (!state.animation) {
             throw new Error(
@@ -305,7 +315,7 @@ export class EntityVisualService {
     /**
      * Begin a smooth direction transition for a unit.
      */
-    startDirectionTransition(entityId: number, from: number, to: number): void {
+    startDirectionTransition(entityId: number, from: EDirection, to: EDirection): void {
         const state = this.getStateOrThrow(entityId, 'startDirectionTransition');
         this.transitions.set(entityId, { previousDirection: from, progress: 0 });
         if (state.animation) {

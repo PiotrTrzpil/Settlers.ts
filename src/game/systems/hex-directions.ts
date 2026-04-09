@@ -24,14 +24,23 @@ import { Tile } from '../entity';
  *
  */
 
-export enum EDirection {
-    SOUTH_EAST = 0,
-    EAST = 1,
-    SOUTH_WEST = 2,
-    NORTH_WEST = 3,
-    WEST = 4,
-    NORTH_EAST = 5,
-}
+declare const EDirBrand: unique symbol;
+
+/**
+ * Branded numeric type for game directions.
+ * Prevents accidental interchange with SpriteDirection or plain number.
+ */
+export type EDirection = number & { readonly [EDirBrand]: true };
+
+/** Game direction constants (companion object for EDirection type). */
+export const EDirection = {
+    SOUTH_EAST: 0 as EDirection,
+    EAST: 1 as EDirection,
+    SOUTH_WEST: 2 as EDirection,
+    NORTH_WEST: 3 as EDirection,
+    WEST: 4 as EDirection,
+    NORTH_EAST: 5 as EDirection,
+} as const;
 
 export const NUMBER_OF_DIRECTIONS = 6;
 

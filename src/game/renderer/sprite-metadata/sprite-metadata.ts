@@ -479,7 +479,11 @@ export class SpriteMetadataRegistry {
      * Get loaded overlay sprite frames.
      * Returns null if the overlay hasn't been loaded.
      */
-    public getOverlayFrames(gfxFile: number, jobIndex: number, directionIndex: number): readonly SpriteEntry[] | undefined {
+    public getOverlayFrames(
+        gfxFile: number,
+        jobIndex: number,
+        directionIndex: number
+    ): readonly SpriteEntry[] | undefined {
         return this.overlays.get(gfxFile, jobIndex, directionIndex);
     }
 
@@ -533,6 +537,19 @@ export class SpriteMetadataRegistry {
             return animEntry;
         }
         return staticEntry(this.units.get(type, direction, race));
+    }
+
+    /** Whether unit sprites for a given race have been loaded. */
+    public isUnitRaceLoaded(race: number): boolean {
+        return this.units.isRaceLoaded(race);
+    }
+
+    /**
+     * Get the per-direction static sprite for a unit (frame 0 of walk for that direction).
+     * Unlike getUnit(), this always returns the direction-specific sprite, not the shared animated entry.
+     */
+    public getUnitDirectionSprite(type: UnitType, direction: number, race: number): SpriteEntry {
+        return this.units.get(type, direction, race);
     }
 
     // ========================================================================

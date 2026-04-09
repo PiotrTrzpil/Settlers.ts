@@ -89,7 +89,7 @@ export interface BuildingSettlerPos {
     xOffset: number;
     /** Pixel Y offset from building anchor */
     yOffset: number;
-    /** Direction the settler faces — sprite direction index (0-5) */
+    /** Direction the settler faces — JIL direction index (0-5) */
     direction: number;
     /** Whether the settler renders on top of the building sprite */
     top: boolean;

@@ -37,7 +37,7 @@ export class MovementController {
     // --- Interpolation & movement ---
     private _progress: number = 0;
     private _speed: number;
-    private _direction: number = EDirection.EAST;
+    private _direction: EDirection = EDirection.EAST;
     private _distanceFactor: number = 1.0;
 
     // --- Busy state (pick/put animation — unbumpable) ---
@@ -134,7 +134,7 @@ export class MovementController {
         return pathIndex < path.length ? path[pathIndex] : undefined;
     }
 
-    get direction(): number {
+    get direction(): EDirection {
         return this._direction;
     }
 

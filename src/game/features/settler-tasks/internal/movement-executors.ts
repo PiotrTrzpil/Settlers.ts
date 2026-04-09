@@ -11,7 +11,7 @@
 
 import { EntityType, BuildingType, tileKey, type Entity, Tile } from '../../../entity';
 import { getBuildingDoorPos } from '../../../data/game-data-access';
-import { hexDistance } from '../../../systems/hex-directions';
+import { hexDistance, type EDirection } from '../../../systems/hex-directions';
 import { createLogger } from '@/utilities/logger';
 import { TaskResult } from '../types';
 import type { ChoreoNode, MovementExecutorFn, ChoreoJobState, MovementContext } from '../choreo-types';
@@ -111,7 +111,7 @@ export function moveToPosition(
 
     if (hexDistance(settler.x, settler.y, targetX, targetY) <= arrivalDist && controller.state === 'idle') {
         if (node.dir !== -1) {
-            controller.setDirection(node.dir);
+            controller.setDirection(node.dir as EDirection);
         }
         return TaskResult.DONE;
     }
