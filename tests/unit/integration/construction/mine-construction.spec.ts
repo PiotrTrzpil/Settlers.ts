@@ -107,7 +107,7 @@ describe('Mine construction: full flow without digger', { timeout: 60_000 }, () 
     });
 
     it('mine completes construction without ever dispatching a digger', () => {
-        sim = createSimulation({ mapWidth: 256, mapHeight: 256 });
+        sim = createSimulation();
 
         // Infrastructure: residence + storage with materials
         sim.placeBuilding(BuildingType.ResidenceSmall);
