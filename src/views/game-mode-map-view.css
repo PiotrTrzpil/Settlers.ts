@@ -344,6 +344,16 @@
     background: #48944a;
 }
 
+.game-end-btn--stats {
+    background: #3a5a8a;
+    color: #fff;
+    border-color: #4a7aaa;
+}
+
+.game-end-btn--stats:hover {
+    background: #4a7aaa;
+}
+
 .game-end-btn--quit {
     background: #c84040;
     color: #fff;

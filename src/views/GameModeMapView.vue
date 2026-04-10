@@ -61,7 +61,7 @@
             <renderer-viewer ref="rendererRef" :game="game" :layerVisibility="layerVisibility" class="gm-canvas" />
 
             <!-- Game end overlay -->
-            <div v-if="gameEndResult" class="game-end-backdrop">
+            <div v-if="gameEndResult && !showStats" class="game-end-backdrop">
                 <div class="game-end-dialog">
                     <h2
                         class="game-end-title"
@@ -80,10 +80,19 @@
                         <button class="game-end-btn game-end-btn--continue" @click="gameEndResult = null">
                             Continue
                         </button>
-                        <button class="game-end-btn game-end-btn--quit" @click="$router.push('/')">Quit</button>
+                        <button class="game-end-btn game-end-btn--stats" @click="showStats = true">View Stats</button>
                     </div>
                 </div>
             </div>
+
+            <!-- Post-game stats screen -->
+            <game-stats-screen
+                v-if="showStats && gameEndResult"
+                :game="game"
+                :won="gameEndResult.won"
+                :stats-tracker="statsTracker"
+                @quit="$router.push('/')"
+            />
 
             <!-- Stale save warning -->
             <div v-if="staleSnapshotWarning" class="game-end-backdrop">
@@ -181,10 +190,12 @@ import SelectionPanel from '@/components/selection-panel.vue';
 import SpecialistsPanel from '@/components/SpecialistsPanel.vue';
 import GameMinimap from '@/components/game-minimap.vue';
 import SaveLoadDialog from '@/components/SaveLoadDialog.vue';
+import GameStatsScreen from '@/components/GameStatsScreen.vue';
 
 import { createModeToggler, createGameActions, setupIconLoading } from './use-map-view-helpers';
 import type { IconEntry } from './sprite-icon-loader';
 import type { GameModeSaveManager } from '@/game/state/game-mode-saves';
+import type { GameModeStatsTracker } from '@/game/state/game-mode-stats-tracker';
 
 const SPEED_OPTIONS = [0.5, 1, 2, 3] as const;
 
@@ -193,6 +204,7 @@ const props = defineProps<{
     fileManager: import('@/utilities/file-manager').FileManager;
     staleSnapshotWarning: boolean;
     saveManager: GameModeSaveManager;
+    statsTracker: GameModeStatsTracker;
 }>();
 
 defineEmits<{
@@ -277,7 +289,8 @@ function doRestartMap(): void {
     gameEndResult.value = null;
 }
 
-// Game end overlay
+// Game end overlay + stats screen
+const showStats = ref(false);
 const gameEndResult = ref<{ won: boolean; reason: GameEndReason } | null>(null);
 
 function onGameEnded({ winner, reason }: { winner: number | null; reason: string }): void {
