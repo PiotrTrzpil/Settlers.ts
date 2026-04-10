@@ -21,7 +21,7 @@ function assertOccupancyConsistent(state: GameState, entityIds: number[]): void 
     for (const id of entityIds) {
         const e = state.getEntity(id);
         if (!e) continue;
-        const key = tileKey(e.x, e.y);
+        const key = tileKey(e);
         const occupant = state.unitOccupancy.get(key);
         expect(occupant, `tile (${e.x},${e.y}) should be occupied by ${id}`).toBe(id);
     }
@@ -30,7 +30,7 @@ function assertOccupancyConsistent(state: GameState, entityIds: number[]): void 
     for (const id of entityIds) {
         const e = state.getEntity(id);
         if (!e) continue;
-        const key = tileKey(e.x, e.y);
+        const key = tileKey(e);
         expect(positions.has(key), `duplicate entity at ${key}`).toBe(false);
         positions.add(key);
     }
@@ -52,7 +52,7 @@ describe('Pile arrival – basic bump behavior', () => {
         const { entity: idleUnit } = addUnit(state, PILE_TILE.x, PILE_TILE.y);
         expect(carrier.id).toBeLessThan(idleUnit.id);
 
-        state.movement.moveUnit(carrier.id, PILE_TILE.x, PILE_TILE.y);
+        state.movement.moveUnit(carrier.id, PILE_TILE);
 
         for (let i = 0; i < 40; i++) {
             state.movement.update(0.1);
@@ -93,7 +93,7 @@ describe('Pile arrival – basic bump behavior', () => {
         const busyController = state.movement.getController(busyUnit.id)!;
         busyController.busy = true;
 
-        state.movement.moveUnit(carrier.id, PILE_TILE.x, PILE_TILE.y);
+        state.movement.moveUnit(carrier.id, PILE_TILE);
 
         for (let i = 0; i < 10; i++) {
             state.movement.update(0.1);
@@ -120,11 +120,11 @@ describe('Pile arrival – basic bump behavior', () => {
         const { entity: c3 } = addUnit(state, 18, 10);
         const { entity: c1 } = addUnit(state, PILE_TILE.x, PILE_TILE.y);
 
-        state.movement.moveUnit(c2.id, PILE_TILE.x, PILE_TILE.y);
-        state.movement.moveUnit(c3.id, PILE_TILE.x, PILE_TILE.y);
+        state.movement.moveUnit(c2.id, PILE_TILE);
+        state.movement.moveUnit(c3.id, PILE_TILE);
 
         const pileOccupants: number[] = [];
-        const pileKey = tileKey(PILE_TILE.x, PILE_TILE.y);
+        const pileKey = tileKey(PILE_TILE);
 
         for (let i = 0; i < 60; i++) {
             state.movement.update(0.1);
@@ -160,7 +160,7 @@ describe('Pile arrival – door bump behavior', () => {
         const { entity: doorUnit } = addUnit(state, DOOR.x, DOOR.y);
         expect(worker.id).toBeLessThan(doorUnit.id);
 
-        state.movement.moveUnit(worker.id, DOOR.x, DOOR.y);
+        state.movement.moveUnit(worker.id, DOOR);
 
         for (let i = 0; i < 40; i++) {
             state.movement.update(0.1);
@@ -180,7 +180,7 @@ describe('Pile arrival – door bump behavior', () => {
         const { entity: doorUnit } = addUnit(state, DOOR.x, DOOR.y);
         expect(worker.id).toBeLessThan(doorUnit.id);
 
-        state.movement.moveUnit(worker.id, DOOR.x, DOOR.y);
+        state.movement.moveUnit(worker.id, DOOR);
 
         for (let i = 0; i < 60; i++) {
             state.movement.update(0.1);
@@ -200,7 +200,7 @@ describe('Pile arrival – door bump behavior', () => {
             { x: 14, y: 10 },
         ];
         for (const t of blocked) {
-            state.buildingOccupancy.add(tileKey(t.x, t.y));
+            state.buildingOccupancy.add(tileKey(t));
         }
 
         const DOOR: Tile = { x: 15, y: 10 };
@@ -210,7 +210,7 @@ describe('Pile arrival – door bump behavior', () => {
         const { entity: doorUnit } = addUnit(state, DOOR.x, DOOR.y);
         expect(worker.id).toBeLessThan(doorUnit.id);
 
-        state.movement.moveUnit(worker.id, DOOR.x, DOOR.y);
+        state.movement.moveUnit(worker.id, DOOR);
 
         for (let i = 0; i < 40; i++) {
             state.movement.update(0.1);
@@ -219,7 +219,7 @@ describe('Pile arrival – door bump behavior', () => {
         expect(worker.x).toBe(DOOR.x);
         expect(worker.y).toBe(DOOR.y);
         expect(doorUnit.x !== DOOR.x || doorUnit.y !== DOOR.y).toBe(true);
-        expect(state.buildingOccupancy.has(tileKey(doorUnit.x, doorUnit.y))).toBe(false);
+        expect(state.buildingOccupancy.has(tileKey(doorUnit))).toBe(false);
         assertOccupancyConsistent(state, [worker.id, doorUnit.id]);
     });
 

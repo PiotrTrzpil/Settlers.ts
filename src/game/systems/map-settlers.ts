@@ -34,16 +34,16 @@ export function populateMapSettlers(state: GameState, settlers: MapSettlerData[]
 
         // Skip if tile is occupied by another unit.
         // Settlers placed inside building footprints are valid — they become workers.
-        if (state.getUnitAt(settlerData.x, settlerData.y)) {
+        if (state.getUnitAt(settlerData)) {
             log.debug(`Skipping settler at occupied tile (${settlerData.x}, ${settlerData.y})`);
             skipped++;
             continue;
         }
 
         // If placed on a building footprint, skip unit occupancy to preserve building's tile ownership
-        const groundEntity = state.getGroundEntityAt(settlerData.x, settlerData.y);
+        const groundEntity = state.getGroundEntityAt(settlerData);
         const onBuilding = groundEntity?.type === EntityType.Building;
-        const entity = state.addUnit(unitType, settlerData.x, settlerData.y, settlerData.player, {
+        const entity = state.addUnit(unitType, settlerData, settlerData.player, {
             occupancy: !onBuilding,
         });
         entity.level = getUnitLevel(unitType);

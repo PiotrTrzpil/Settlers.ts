@@ -72,7 +72,7 @@ describe('Carriers, Inventory & Service Areas (simulation)', { timeout: 5000 }, 
             sim = createSimulation();
             sim.placeBuilding(BuildingType.ResidenceSmall);
 
-            const carrierId = sim.spawnUnit(30, 30, UnitType.Carrier);
+            const carrierId = sim.spawnUnit({ x: 30, y: 30 }, UnitType.Carrier);
             // Carrier may already be auto-registered by the simulation; ensure it is
             if (!sim.services.carrierRegistry.has(carrierId)) {
                 sim.services.carrierRegistry.register(carrierId);
@@ -128,7 +128,7 @@ describe('Carriers, Inventory & Service Areas (simulation)', { timeout: 5000 }, 
             expect(sim.services.inventoryManager.hasSlots(woodcutterId)).toBe(true);
 
             // 2. Carrier registration
-            const carrierId = sim.spawnUnit(30, 30, UnitType.Carrier);
+            const carrierId = sim.spawnUnit({ x: 30, y: 30 }, UnitType.Carrier);
             if (!sim.services.carrierRegistry.has(carrierId)) {
                 sim.services.carrierRegistry.register(carrierId);
             }

@@ -8,7 +8,8 @@
 
 import type { CliArgs, CliCommand, CliContext, CliResult } from '../types';
 import type { LogEntry } from '../cli';
-import { Race } from '@/game/core/race';
+import { getGameDataLoader } from '@/resources/game-data';
+
 import { EntityType, type Entity } from '@/game/entity';
 import { UnitType, isUnitTypeMilitary } from '@/game/core/unit-types';
 import { EMaterialType } from '@/game/economy/material-type';
@@ -340,6 +341,7 @@ function buildJsScope(ctx: CliContext): Record<string, unknown> {
         demands: s.demandQueue,
         carriers: s.carrierRegistry,
         storage: s.storageFilterManager,
+        gameData: getGameDataLoader(),
     };
 }
 
@@ -402,7 +404,7 @@ function playerCommand(cli: PlayerAccessor): CliCommand {
                 if (playerRace === undefined) {
                     throw new Error(`No race for player ${ctx.game.currentPlayer} in player command`);
                 }
-                const race = Race[playerRace];
+                const race = playerRace;
                 return ok(`player=${ctx.game.currentPlayer} (${race}) [default]`);
             }
 
@@ -421,7 +423,7 @@ function playerCommand(cli: PlayerAccessor): CliCommand {
                 if (nRace === undefined) {
                     throw new Error(`No race for player ${n} in player command`);
                 }
-                const race = Race[nRace];
+                const race = nRace;
                 return ok(`player=${n} (${race}) [override]`);
             }
 
@@ -431,7 +433,7 @@ function playerCommand(cli: PlayerAccessor): CliCommand {
             if (pRace === undefined) {
                 throw new Error(`No race for player ${p} in player command`);
             }
-            const race = Race[pRace];
+            const race = pRace;
             const tag = cli.isPlayerOverride ? 'override' : 'default';
             return ok(`player=${p} (${race}) [${tag}]`);
         },

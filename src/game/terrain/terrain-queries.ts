@@ -15,8 +15,8 @@ export function isPassable(groundTypeValue: number): boolean {
     if (groundTypeValue <= 8) {
         return false;
     }
-    // Snow: 128, 129 - not passable
-    if (groundTypeValue === 128 || groundTypeValue === 129) {
+    // Snow: 128 - not passable (SNOW_ROCK 129 is a transition and IS passable)
+    if (groundTypeValue === 128) {
         return false;
     }
     // Everything else (including rock, river 96-99) is passable

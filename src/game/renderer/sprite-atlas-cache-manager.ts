@@ -97,7 +97,7 @@ export interface CacheRestoreResult {
 export function computeLayerPriority(
     registry: SpriteMetadataRegistry,
     nearbyEntities: Entity[],
-    playerRace: number,
+    playerRace: Race,
     totalLayers: number
 ): { layerOrder: number[]; essentialCount: number } {
     // Count entity subtypes by entity type
@@ -182,20 +182,20 @@ export class SpriteAtlasCacheManager {
         const earlyHandle = consumeEarlyPrefetch();
         if (earlyHandle) {
             if (earlyHandle.race === race) {
-                console.log(`[${performance.now().toFixed(0)}ms] [cache] adopting early prefetch for ${Race[race]}`);
+                console.log(`[${performance.now().toFixed(0)}ms] [cache] adopting early prefetch for ${race}`);
                 adoptEarlyPrefetch(earlyHandle);
                 return;
             }
             // Race mismatch — discard early prefetch, start fresh
             console.log(
                 `[${performance.now().toFixed(0)}ms] [cache] early prefetch race mismatch ` +
-                    `(early=${Race[earlyHandle.race]}, need=${Race[race]}), starting fresh`
+                    `(early=${earlyHandle.race}, need=${race}), starting fresh`
             );
             earlyHandle.worker.terminate();
         }
 
         // No early prefetch or race mismatch — start fresh
-        console.log(`[${performance.now().toFixed(0)}ms] [cache] prefetch started for ${Race[race]}`);
+        console.log(`[${performance.now().toFixed(0)}ms] [cache] prefetch started for ${race}`);
 
         let paletteCb: (paletteData: Uint8Array | null) => void = () => {};
         let layerCb: (index: number, buffer: ArrayBuffer) => void = () => {};
@@ -239,7 +239,7 @@ export class SpriteAtlasCacheManager {
         paletteManager: PaletteTextureManager,
         onEssentialReady: EssentialSpritesCallback,
         nearbyEntities: Entity[],
-        playerRace: number
+        playerRace: Race
     ): Promise<CacheRestoreResult | null> {
         if (isCacheDisabled()) {
             log.debug('Cache disabled via settings, loading from files');
@@ -365,7 +365,7 @@ export class SpriteAtlasCacheManager {
         paletteManager: PaletteTextureManager,
         onEssentialReady: EssentialSpritesCallback,
         nearbyEntities: Entity[],
-        playerRace: number
+        playerRace: Race
     ): Promise<CacheRestoreResult | null> {
         const t0 = performance.now();
 
@@ -389,7 +389,8 @@ export class SpriteAtlasCacheManager {
             if (prefetchMetaPromise && prefetchRace !== race) {
                 console.log(
                     `[${performance.now().toFixed(0)}ms] [cache] prefetch race mismatch ` +
-                        `(prefetched=${prefetchRace !== null ? Race[prefetchRace] : 'none'}, need=${Race[race]}), starting fresh`
+                        // eslint-disable-next-line no-restricted-syntax -- prefetchRace is nullable-by-design; 'none' is correct for debug log
+                        `(prefetched=${prefetchRace ?? 'none'}, need=${race}), starting fresh`
                 );
                 invalidatePrefetch();
             }

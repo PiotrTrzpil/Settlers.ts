@@ -7,6 +7,7 @@
 
 import { MapSize } from '@/utilities/map-size';
 import { TerrainData } from '@/game/terrain';
+import type { Tile } from '@/game/core/coordinates';
 
 // ─── Terrain type constants ─────────────────────────────────────────
 // Replaces magic numbers scattered across test files.
@@ -70,13 +71,13 @@ export function createTestMap(
 // ─── Terrain manipulation helpers ───────────────────────────────────
 
 /** Set terrain type at a specific tile. */
-export function setTerrainAt(map: TestMap, x: number, y: number, type: number): void {
-    map.groundType[map.mapSize.toIndex(x, y)] = type;
+export function setTerrainAt(map: TestMap, tile: Tile, type: number): void {
+    map.groundType[map.mapSize.toIndex(tile)] = type;
 }
 
 /** Set height at a specific tile. */
-export function setHeightAt(map: TestMap, x: number, y: number, height: number): void {
-    map.groundHeight[map.mapSize.toIndex(x, y)] = height;
+export function setHeightAt(map: TestMap, tile: Tile, height: number): void {
+    map.groundHeight[map.mapSize.toIndex(tile)] = height;
 }
 
 /** Block an entire column with the given terrain type (for pathfinding walls). */
@@ -112,7 +113,7 @@ export function createSlope(
             else if (endY > startY) progress = (y - startY) / (endY - startY);
             else progress = 0;
             const h = Math.round(startHeight + (endHeight - startHeight) * progress);
-            map.groundHeight[map.mapSize.toIndex(x, y)] = Math.min(255, Math.max(0, h));
+            map.groundHeight[map.mapSize.toIndex({ x, y })] = Math.min(255, Math.max(0, h));
         }
     }
 }

@@ -25,7 +25,7 @@ installRealGameData();
 /** Assert no visited tile appears in buildingOccupancy. */
 function assertAvoidedFootprints(visited: Tile[], buildingOccupancy: Set<string>): void {
     for (const tile of visited) {
-        const key = tileKey(tile.x, tile.y);
+        const key = tileKey(tile);
         expect(buildingOccupancy.has(key), `unit stepped on building tile (${tile.x}, ${tile.y})`).toBe(false);
     }
 }
@@ -51,7 +51,7 @@ function spawnGroup(
     const { count, x, startY, spacing = 2, unitType = UnitType.Swordsman1 } = opts;
     const ids: number[] = [];
     for (let i = 0; i < count; i++) {
-        ids.push(s.spawnUnit(x, startY + i * spacing, unitType));
+        ids.push(s.spawnUnit({ x: x, y: startY + i * spacing }, unitType));
     }
     return ids;
 }
@@ -67,7 +67,7 @@ function moveGroupTo(s: Simulation, ids: number[], targetX: number) {
         targets.push({ x: targetX, y: e.y });
     }
     for (let i = 0; i < ids.length; i++) {
-        expect(s.moveUnit(ids[i]!, targets[i]!.x, targets[i]!.y)).toBe(true);
+        expect(s.moveUnit(ids[i]!, targets[i]!)).toBe(true);
     }
     return { ids, targets };
 }
@@ -91,7 +91,7 @@ function spawnOpposingGroups(
     }
 
     for (let i = 0; i < ids.length; i++) {
-        expect(s.moveUnit(ids[i]!, targets[i]!.x, targets[i]!.y)).toBe(true);
+        expect(s.moveUnit(ids[i]!, targets[i]!)).toBe(true);
     }
     return { ids, targets };
 }
@@ -218,7 +218,7 @@ function assertAllArrived(s: Simulation, ids: number[], targets: Tile[]) {
         const e = s.state.getEntityOrThrow(ids[i]!, 'verify');
         expect(e.x, `unit #${e.id} x`).toBe(targets[i]!.x);
         expect(e.y, `unit #${e.id} y`).toBe(targets[i]!.y);
-        const key = tileKey(e.x, e.y);
+        const key = tileKey(e);
         expect(occupied.has(key), `duplicate occupancy at (${e.x},${e.y})`).toBe(false);
         occupied.add(key);
     }
@@ -237,9 +237,9 @@ describe('Single-unit pathfinding (real game data)', { timeout: 5000 }, () => {
     it('unit moves to target on open terrain', () => {
         sim = createSimulation();
 
-        const unitId = sim.spawnUnit(20, 60);
+        const unitId = sim.spawnUnit({ x: 20, y: 60 });
         const target = { x: 30, y: 60 };
-        expect(sim.moveUnit(unitId, target.x, target.y)).toBe(true);
+        expect(sim.moveUnit(unitId, target)).toBe(true);
 
         const visited = sim.simulateMovement(unitId, { target });
 
@@ -251,16 +251,16 @@ describe('Single-unit pathfinding (real game data)', { timeout: 5000 }, () => {
     it('tile occupancy is consistent after movement', () => {
         sim = createSimulation();
 
-        const unitId = sim.spawnUnit(20, 60);
-        const startKey = tileKey(20, 60);
+        const unitId = sim.spawnUnit({ x: 20, y: 60 });
+        const startKey = tileKey({ x: 20, y: 60 });
         expect(sim.state.unitOccupancy.get(startKey)).toBe(unitId);
 
         const target = { x: 30, y: 60 };
-        sim.moveUnit(unitId, target.x, target.y);
+        sim.moveUnit(unitId, target);
         sim.simulateMovement(unitId, { target });
 
         const unit = sim.state.getEntityOrThrow(unitId, 'test');
-        const endKey = tileKey(unit.x, unit.y);
+        const endKey = tileKey(unit);
 
         expect(sim.state.unitOccupancy.has(startKey)).toBe(false);
         expect(sim.state.unitOccupancy.get(endKey)).toBe(unitId);
@@ -282,8 +282,8 @@ describe('Single-unit pathfinding (real game data)', { timeout: 5000 }, () => {
         sim.runTicks(60);
 
         const target = { x: 60, y: 30 };
-        const unitId = sim.spawnUnit(10, 30);
-        expect(sim.moveUnit(unitId, target.x, target.y)).toBe(true);
+        const unitId = sim.spawnUnit({ x: 10, y: 30 });
+        expect(sim.moveUnit(unitId, target)).toBe(true);
 
         const visited = sim.simulateMovement(unitId, { target, maxTicks: 1200 });
 
@@ -296,14 +296,14 @@ describe('Single-unit pathfinding (real game data)', { timeout: 5000 }, () => {
 
         const buildingId = sim.placeBuilding(BuildingType.WoodcutterHut);
         const building = sim.state.getEntityOrThrow(buildingId, 'test');
-        const door = getBuildingDoorPos(building.x, building.y, Race.Roman, BuildingType.WoodcutterHut);
+        const door = getBuildingDoorPos(building, Race.Roman, BuildingType.WoodcutterHut);
 
-        expect(sim.state.buildingOccupancy.has(tileKey(door.x, door.y))).toBe(false);
+        expect(sim.state.buildingOccupancy.has(tileKey(door))).toBe(false);
         sim.runTicks(60);
 
         const target = { x: door.x, y: door.y };
-        const unitId = sim.spawnUnit(door.x - 10, door.y);
-        expect(sim.moveUnit(unitId, target.x, target.y)).toBe(true);
+        const unitId = sim.spawnUnit({ x: door.x - 10, y: door.y });
+        expect(sim.moveUnit(unitId, target)).toBe(true);
 
         const visited = sim.simulateMovement(unitId, { target, maxTicks: 1200 });
 
@@ -322,8 +322,8 @@ describe('Single-unit pathfinding (real game data)', { timeout: 5000 }, () => {
         sim.runTicks(60);
 
         const target = { x: 70, y: 50 };
-        const unitId = sim.spawnUnit(10, 30);
-        expect(sim.moveUnit(unitId, target.x, target.y)).toBe(true);
+        const unitId = sim.spawnUnit({ x: 10, y: 30 });
+        expect(sim.moveUnit(unitId, target)).toBe(true);
 
         const visited = sim.simulateMovement(unitId, { target, maxTicks: 1200 });
 
@@ -337,8 +337,8 @@ describe('Single-unit pathfinding (real game data)', { timeout: 5000 }, () => {
         blockColumnWithGap(sim.map, 60, 50);
 
         const target = { x: 65, y: 55 };
-        const unitId = sim.spawnUnit(55, 55);
-        expect(sim.moveUnit(unitId, target.x, target.y)).toBe(true);
+        const unitId = sim.spawnUnit({ x: 55, y: 55 });
+        expect(sim.moveUnit(unitId, target)).toBe(true);
 
         const visited = sim.simulateMovement(unitId, { target });
 
@@ -355,13 +355,13 @@ describe('Single-unit pathfinding (real game data)', { timeout: 5000 }, () => {
 
         for (let x = 58; x <= 68; x++) {
             for (let y = 60; y <= 64; y++) {
-                setTerrainAt(sim.map, x, y, TERRAIN.WATER);
+                setTerrainAt(sim.map, { x: x, y: y }, TERRAIN.WATER);
             }
         }
 
         const target = { x: 72, y: 62 };
-        const unitId = sim.spawnUnit(55, 62);
-        expect(sim.moveUnit(unitId, target.x, target.y)).toBe(true);
+        const unitId = sim.spawnUnit({ x: 55, y: 62 });
+        expect(sim.moveUnit(unitId, target)).toBe(true);
 
         const visited = sim.simulateMovement(unitId, { target, maxTicks: 1200 });
 
@@ -373,8 +373,8 @@ describe('Single-unit pathfinding (real game data)', { timeout: 5000 }, () => {
         sim = createSimulation({ mapWidth: 128, mapHeight: 128 });
 
         for (let x = 35; x <= 50; x++) {
-            setTerrainAt(sim.map, x, 45, TERRAIN.WATER);
-            setTerrainAt(sim.map, x, 46, TERRAIN.WATER);
+            setTerrainAt(sim.map, { x: x, y: 45 }, TERRAIN.WATER);
+            setTerrainAt(sim.map, { x: x, y: 46 }, TERRAIN.WATER);
         }
 
         sim.placeBuilding(BuildingType.ResidenceSmall);
@@ -383,8 +383,8 @@ describe('Single-unit pathfinding (real game data)', { timeout: 5000 }, () => {
         sim.runTicks(60);
 
         const target = { x: 60, y: 40 };
-        const unitId = sim.spawnUnit(20, 40);
-        expect(sim.moveUnit(unitId, target.x, target.y)).toBe(true);
+        const unitId = sim.spawnUnit({ x: 20, y: 40 });
+        expect(sim.moveUnit(unitId, target)).toBe(true);
 
         const visited = sim.simulateMovement(unitId, { target, maxTicks: 1200 });
 
@@ -399,8 +399,8 @@ describe('Single-unit pathfinding (real game data)', { timeout: 5000 }, () => {
         sim.placeBuilding(BuildingType.Sawmill);
         sim.placeBuilding(BuildingType.StorageArea);
 
-        const unitId = sim.spawnUnit(10, 30);
-        expect(sim.moveUnit(unitId, 60, 30)).toBe(true);
+        const unitId = sim.spawnUnit({ x: 10, y: 30 });
+        expect(sim.moveUnit(unitId, { x: 60, y: 30 })).toBe(true);
     });
 });
 
@@ -422,10 +422,14 @@ describe('Construction site & multi-unit pathfinding (real game data)', { timeou
 
         sim.state.clearBuildingFootprintBlock(siteId);
 
-        const footprint = getBuildingFootprint(building.x, building.y, building.subType as BuildingType, building.race);
+        const footprint = getBuildingFootprint(
+            { x: building.x, y: building.y },
+            building.subType as BuildingType,
+            building.race
+        );
         const leaked: string[] = [];
         for (const tile of footprint) {
-            if (sim.state.buildingOccupancy.has(tileKey(tile.x, tile.y))) {
+            if (sim.state.buildingOccupancy.has(tileKey(tile))) {
                 leaked.push(`(${tile.x},${tile.y})`);
             }
         }
@@ -439,34 +443,34 @@ describe('Construction site & multi-unit pathfinding (real game data)', { timeou
         const siteId = sim.placeBuilding(BuildingType.WoodcutterHut, 0, false);
 
         const site = sim.state.getEntityOrThrow(siteId, 'test');
-        const door = getBuildingDoorPos(site.x, site.y, site.race, site.subType as BuildingType);
+        const door = getBuildingDoorPos(site, site.race, site.subType as BuildingType);
 
-        const unitId = sim.spawnUnit(10, 30);
-        expect(sim.moveUnit(unitId, door.x, door.y)).toBe(true);
+        const unitId = sim.spawnUnit({ x: 10, y: 30 });
+        expect(sim.moveUnit(unitId, door)).toBe(true);
     });
 
     it('pathfinding fails for unreachable target', () => {
         sim = createSimulation();
 
         for (let y = 0; y < sim.map.mapSize.height; y++) {
-            setTerrainAt(sim.map, 60, y, TERRAIN.WATER);
-            setTerrainAt(sim.map, 61, y, TERRAIN.WATER);
+            setTerrainAt(sim.map, { x: 60, y: y }, TERRAIN.WATER);
+            setTerrainAt(sim.map, { x: 61, y: y }, TERRAIN.WATER);
         }
 
-        const unitId = sim.spawnUnit(50, 50);
-        expect(sim.moveUnit(unitId, 70, 50)).toBe(false);
+        const unitId = sim.spawnUnit({ x: 50, y: 50 });
+        expect(sim.moveUnit(unitId, { x: 70, y: 50 })).toBe(false);
     });
 
     it('two units moving to different targets both arrive', () => {
         sim = createSimulation();
 
-        const u1 = sim.spawnUnit(20, 50);
-        const u2 = sim.spawnUnit(20, 70);
+        const u1 = sim.spawnUnit({ x: 20, y: 50 });
+        const u2 = sim.spawnUnit({ x: 20, y: 70 });
 
         const t1 = { x: 40, y: 50 };
         const t2 = { x: 40, y: 70 };
-        sim.moveUnit(u1, t1.x, t1.y);
-        sim.moveUnit(u2, t2.x, t2.y);
+        sim.moveUnit(u1, t1);
+        sim.moveUnit(u2, t2);
 
         sim.runUntil(
             () => {
@@ -485,8 +489,8 @@ describe('Construction site & multi-unit pathfinding (real game data)', { timeou
         expect(entity2.x).toBe(40);
         expect(entity2.y).toBe(70);
 
-        expect(sim.state.unitOccupancy.get(tileKey(40, 50))).toBe(u1);
-        expect(sim.state.unitOccupancy.get(tileKey(40, 70))).toBe(u2);
+        expect(sim.state.unitOccupancy.get(tileKey({ x: 40, y: 50 }))).toBe(u1);
+        expect(sim.state.unitOccupancy.get(tileKey({ x: 40, y: 70 }))).toBe(u2);
     });
 });
 
@@ -524,8 +528,8 @@ describe('Group collision pathfinding (real game data)', { timeout: 5000 }, () =
         sim = createSimulation();
 
         for (let x = 30; x <= 70; x++) {
-            for (let dy = -3; dy >= -6; dy--) setTerrainAt(sim.map, x, 50 + dy, TERRAIN.WATER);
-            for (let dy = 5; dy <= 8; dy++) setTerrainAt(sim.map, x, 50 + dy, TERRAIN.WATER);
+            for (let dy = -3; dy >= -6; dy--) setTerrainAt(sim.map, { x: x, y: 50 + dy }, TERRAIN.WATER);
+            for (let dy = 5; dy <= 8; dy++) setTerrainAt(sim.map, { x: x, y: 50 + dy }, TERRAIN.WATER);
         }
 
         const { ids, targets } = spawnOpposingGroups(sim, {

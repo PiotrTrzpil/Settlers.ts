@@ -18,7 +18,7 @@ import { BuildingType } from '@/game/entity';
 /** Settler files (20-24.jil) contain carrier sprites with materials */
 export const SETTLER_FILE_IDS = new Set(Object.values(SETTLER_FILE_NUMBERS));
 
-/** Building files are race-specific: 10=Roman, 11=Viking, 12=Mayan, 14=Trojan */
+/** Building files are race-specific: 10=Roman, 11=Viking, 12=Mayan, 13=DarkTribe, 14=Trojan */
 export const BUILDING_FILE_IDS = new Set([10, 11, 12, 14]);
 
 // Build reverse lookup from job index to building name

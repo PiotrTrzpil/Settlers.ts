@@ -87,16 +87,16 @@ export class BuildingPositionResolverImpl implements BuildingPositionResolver {
     }
 
     /**
-     * Resolve (buildingId, x, y, useWork) → world hex tile position.
+     * Resolve (buildingId, offset, useWork) → world hex tile position.
      *
      * Throws if the building entity does not exist (contract violation).
      *
      * @param buildingId  Entity ID of the building
-     * @param x           Tile X offset from anchor (useWork=false) or work center (useWork=true)
-     * @param y           Tile Y offset from anchor (useWork=false) or work center (useWork=true)
+     * @param offset      Tile offset from anchor (useWork=false) or work center (useWork=true)
      * @param useWork     When true, apply offset from the building's work-area center
      */
-    resolvePosition(buildingId: number, x: number, y: number, useWork: boolean): Tile {
+    resolvePosition(buildingId: number, offset: Tile, useWork: boolean): Tile {
+        const { x, y } = offset;
         const building = this.gameState.getEntityOrThrow(buildingId, 'BuildingPositionResolver.resolvePosition');
         assertIsBuilding(building, buildingId);
 
@@ -152,13 +152,27 @@ export class BuildingPositionResolverImpl implements BuildingPositionResolver {
         return this.resolvePileFromRegistry(buildingId, materialType, SlotKind.Output);
     }
 
+    hasWorkArea(buildingId: number): boolean {
+        const building = this.gameState.getEntityOrThrow(buildingId, 'hasWorkArea');
+        assertIsBuilding(building, buildingId);
+        return this.workAreaStore.hasWorkArea(building.subType as BuildingType, building.race);
+    }
+
+    getWorkAreaCenter(buildingId: number): Tile {
+        return this.resolvePosition(buildingId, { x: 0, y: 0 }, true);
+    }
+
     getWorkAreaRadius(buildingId: number): number {
         const building = this.gameState.getEntityOrThrow(buildingId, 'getWorkAreaRadius');
         assertIsBuilding(building, buildingId);
-        if (!this.workAreaStore.hasWorkArea(building.subType as BuildingType, building.race)) {
-            return 0;
+        const buildingType = building.subType as BuildingType;
+        if (!this.workAreaStore.hasWorkArea(buildingType, building.race)) {
+            throw new Error(
+                `getWorkAreaRadius: no work area for ${String(buildingType)} / race ${building.race} ` +
+                    `(building ${buildingId})`
+            );
         }
-        return this.workAreaStore.getRadius(building.subType as BuildingType, building.race);
+        return this.workAreaStore.getRadius(buildingType, building.race);
     }
 
     /**

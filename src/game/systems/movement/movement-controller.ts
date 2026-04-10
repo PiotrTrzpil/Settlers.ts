@@ -1,4 +1,4 @@
-import { Tile } from '../../entity';
+import { Tile, type Coords } from '../../entity';
 import { getStepDirection, EDirection, getStepDistanceFactor } from '../hex-directions';
 
 /**
@@ -51,15 +51,15 @@ export class MovementController {
     private _lastVisualY = 0;
     private _stepsTakenThisTick = 0;
 
-    constructor(entityId: number, x: number, y: number, speed: number) {
+    constructor(entityId: number, tile: Tile, speed: number) {
         this.entityId = entityId;
-        this._tileX = x;
-        this._tileY = y;
-        this._prevTileX = x;
-        this._prevTileY = y;
+        this._tileX = tile.x;
+        this._tileY = tile.y;
+        this._prevTileX = tile.x;
+        this._prevTileY = tile.y;
         this._speed = speed;
-        this._lastVisualX = x;
-        this._lastVisualY = y;
+        this._lastVisualX = tile.x;
+        this._lastVisualY = tile.y;
     }
 
     // =====================================================================
@@ -339,14 +339,14 @@ export class MovementController {
     // =====================================================================
 
     /** Sync position from external state (spawn, teleport, editor). */
-    syncPosition(x: number, y: number): void {
-        this._tileX = x;
-        this._tileY = y;
-        this._prevTileX = x;
-        this._prevTileY = y;
+    syncPosition(tile: Tile): void {
+        this._tileX = tile.x;
+        this._tileY = tile.y;
+        this._prevTileX = tile.x;
+        this._prevTileY = tile.y;
         this._progress = 0;
-        this._lastVisualX = x;
-        this._lastVisualY = y;
+        this._lastVisualX = tile.x;
+        this._lastVisualY = tile.y;
     }
 
     /**
@@ -396,7 +396,7 @@ export class MovementController {
     // Internal helpers
     // =====================================================================
 
-    private computeVisualPosition(): { x: number; y: number } {
+    private computeVisualPosition(): Coords {
         const t = Math.max(0, Math.min(this._progress, 1));
         return {
             x: this._prevTileX + (this._tileX - this._prevTileX) * t,
@@ -412,7 +412,7 @@ export class MovementController {
         return this._phase;
     }
 
-    private warnIfTeleported(visualBefore: { x: number; y: number }, label: string): void {
+    private warnIfTeleported(visualBefore: Coords, label: string): void {
         const visualAfter = this.computeVisualPosition();
         const dx = visualAfter.x - visualBefore.x;
         const dy = visualAfter.y - visualBefore.y;

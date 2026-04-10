@@ -50,16 +50,51 @@ export interface JobPartResolver {
     resolve(jobPart: string, settler: Entity): JobPartResolution;
 }
 
-/** Converts building-relative (x, y) to world hex coordinates. */
+/** Converts building-relative tile offset to world hex coordinates. */
 export interface BuildingPositionResolver {
-    /** Resolve (buildingId, x, y, useWork) → world hex position. */
-    resolvePosition(buildingId: number, x: number, y: number, useWork: boolean): Tile;
+    /** Resolve (buildingId, offset, useWork) → world hex position. */
+    resolvePosition(buildingId: number, offset: Tile, useWork: boolean): Tile;
     /** Get the source (input) pile position for a material at a building. */
     getSourcePilePosition(buildingId: number, material: string): Tile | null;
     /** Get the destination (output) pile position for a material at a building. */
     getDestinationPilePosition(buildingId: number, material: string): Tile | null;
-    /** Get the work area radius (in tiles) for a building. Returns 0 if no work area. */
+    /** Check whether this building type has a work area. */
+    hasWorkArea(buildingId: number): boolean;
+    /** Get the work area center (absolute world tile) for a building. */
+    getWorkAreaCenter(buildingId: number): Tile;
+    /** Get the work area radius (in tiles) for a building. */
     getWorkAreaRadius(buildingId: number): number;
+}
+
+// ─────────────────────────────────────────────────────────────
+// Search area resolution
+// ─────────────────────────────────────────────────────────────
+
+/** Resolved search area: center tile + optional radius constraint. */
+export interface SearchArea {
+    center: Tile;
+    radius: number | undefined;
+}
+
+/**
+ * Resolve the search area for a work handler.
+ *
+ * When the settler has a home building with a work area, returns the
+ * building's work-area center + radius. Otherwise returns the settler's
+ * position with no radius constraint.
+ */
+export function resolveSearchArea(
+    settler: Tile,
+    homeBuildingId: number | null,
+    resolver: BuildingPositionResolver
+): SearchArea {
+    if (homeBuildingId !== null && resolver.hasWorkArea(homeBuildingId)) {
+        return {
+            center: resolver.getWorkAreaCenter(homeBuildingId),
+            radius: resolver.getWorkAreaRadius(homeBuildingId),
+        };
+    }
+    return { center: settler, radius: undefined };
 }
 
 /** Fires building overlay animations from trigger IDs. */

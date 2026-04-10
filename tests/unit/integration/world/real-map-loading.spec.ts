@@ -146,7 +146,7 @@ describe('Real map: free pile player assignment', () => {
         // Every free pile in a player's territory should belong to that player
         const misassigned: string[] = [];
         for (const pile of piles) {
-            const owner = game.services.territoryManager.getOwner(pile.x, pile.y);
+            const owner = game.services.territoryManager.getOwner(pile);
             if (owner > 0 && pile.player !== owner) {
                 misassigned.push(
                     `pile #${pile.id} (${pile.subType}) at (${pile.x},${pile.y}): player=${pile.player}, territory=${owner}`

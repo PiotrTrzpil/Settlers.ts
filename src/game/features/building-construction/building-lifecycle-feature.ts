@@ -87,7 +87,7 @@ export class BuildingLifecycleHandler {
                     pileIndex,
                 });
                 if (position) {
-                    usedPositions.add(tileKey(position.x, position.y));
+                    usedPositions.add(tileKey(position));
                 }
                 return position;
             });

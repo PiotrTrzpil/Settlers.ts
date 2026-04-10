@@ -9,7 +9,7 @@
 import type { GameState } from '../../game-state';
 import type { BuildingType } from '../../buildings/types';
 import type { EventBus } from '../../event-bus';
-import { UnitType } from '../../entity';
+import { UnitType, type Tile } from '../../entity';
 import { createLogger } from '@/utilities/logger';
 import { SettlerState } from './types';
 import type { UnitRuntime } from './unit-state-machine';
@@ -20,11 +20,15 @@ import { distSq } from '@/game/core/distance';
 
 const log = createLogger('BuildingWorkerTracker');
 
+/** Checks if two territory tiles are reachable through contiguous same-player territory. */
+export type TerritoryConnectivityCheck = (a: Tile, b: Tile, player: number) => boolean;
+
 export class BuildingWorkerTracker {
     /** Tracks how many workers are assigned to each building (for occupancy limits). */
     readonly occupants = new Map<number, number>();
 
     private readonly byBuilding: Index<number, number>;
+    private territoryCheck: TerritoryConnectivityCheck | null = null;
 
     constructor(
         private readonly runtimes: IndexedMap<number, UnitRuntime>,
@@ -35,6 +39,11 @@ export class BuildingWorkerTracker {
         byBuilding: Index<number, number>
     ) {
         this.byBuilding = byBuilding;
+    }
+
+    /** Inject territory connectivity check (called by TerritoryFeature after load). */
+    setTerritoryCheck(check: TerritoryConnectivityCheck): void {
+        this.territoryCheck = check;
     }
 
     /** Get the assigned building ID for a settler, or null if unassigned. */
@@ -127,25 +136,11 @@ export class BuildingWorkerTracker {
         let bestDistSq = Infinity;
 
         for (const [entityId, runtime] of this.runtimes) {
-            if (runtime.state !== SettlerState.IDLE) {
+            if (!this.isEligibleSpecialist(entityId, runtime, unitType, player, nearX, nearY)) {
                 continue;
             }
-            if (runtime.homeAssignment !== null) {
-                continue;
-            }
-
-            const entity = this.gameState.getEntity(entityId);
-            if (!entity) {
-                continue;
-            }
-            if (entity.subType !== unitType) {
-                continue;
-            }
-            if (entity.player !== player) {
-                continue;
-            }
-
-            const d = distSq(entity.x, nearX, entity.y, nearY);
+            const entity = this.gameState.getEntity(entityId)!;
+            const d = distSq(entity, { x: nearX, y: nearY });
             if (d < bestDistSq) {
                 bestDistSq = d;
                 bestId = entityId;
@@ -153,6 +148,27 @@ export class BuildingWorkerTracker {
         }
 
         return bestId;
+    }
+
+    private isEligibleSpecialist(
+        entityId: number,
+        runtime: UnitRuntime,
+        unitType: UnitType,
+        player: number,
+        nearX: number,
+        nearY: number
+    ): boolean {
+        if (runtime.state !== SettlerState.IDLE || runtime.homeAssignment !== null) {
+            return false;
+        }
+        const entity = this.gameState.getEntity(entityId);
+        if (!entity || entity.subType !== unitType || entity.player !== player) {
+            return false;
+        }
+        if (this.territoryCheck && !this.territoryCheck(entity, { x: nearX, y: nearY }, player)) {
+            return false;
+        }
+        return true;
     }
 
     /** Assign a settler to a building externally (from recruit system). */

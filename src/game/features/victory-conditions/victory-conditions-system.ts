@@ -44,6 +44,8 @@ export interface VictoryConditionsConfig {
 /** Buildings that count toward a player's survival — losing all of these means elimination. */
 const MILITARY_BUILDINGS: ReadonlySet<BuildingType> = new Set([
     BuildingType.Castle,
+    BuildingType.Fortress,
+    BuildingType.DarkTemple,
     BuildingType.GuardTowerSmall,
     BuildingType.GuardTowerBig,
 ]);

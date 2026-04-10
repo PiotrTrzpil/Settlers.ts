@@ -9,6 +9,7 @@
  */
 
 import { EntityType } from '@/game/entity';
+import { Race } from '@/game/core/race';
 import { AnimationData, AnimationSequence, ANIMATION_DEFAULTS } from '@/game/animation/animation';
 import type { SpriteEntry, AnimatedSpriteEntry, SerializableSpriteCategory } from '../types';
 import { mapToArray, arrayToMap } from '../sprite-metadata-helpers';
@@ -58,7 +59,7 @@ function deserializeAnimEntry(entryData: SerializedAnimEntry): AnimatedSpriteEnt
 type SerializedSubTypeMap = Array<[number | string, SerializedAnimEntry]>;
 type SerializedEntityTypeMap = Array<[EntityType, SerializedSubTypeMap]>;
 
-type SerializedByRace = Array<[number, SerializedEntityTypeMap]>;
+type SerializedByRace = Array<[Race, SerializedEntityTypeMap]>;
 
 // ============================================================
 // AnimatedEntityCategory
@@ -91,7 +92,7 @@ export class AnimatedEntityCategory implements SerializableSpriteCategory {
      * Per-race animated entities (buildings and units).
      * Maps Race -> EntityType -> subType -> AnimatedSpriteEntry
      */
-    private readonly byRace: Map<number, Map<EntityType, Map<number | string, AnimatedSpriteEntry>>> = new Map();
+    private readonly byRace: Map<Race, Map<EntityType, Map<number | string, AnimatedSpriteEntry>>> = new Map();
 
     /**
      * Register an animated entity with multiple directions and frames.
@@ -113,7 +114,7 @@ export class AnimatedEntityCategory implements SerializableSpriteCategory {
         directionFrames: Map<number, SpriteEntry[]>,
         frameDurationMs: number = ANIMATION_DEFAULTS.FRAME_DURATION_MS,
         loop: boolean = true,
-        race?: number,
+        race?: Race,
         walkSequenceKey?: string
     ): void {
         if (directionFrames.size === 0) {
@@ -206,7 +207,7 @@ export class AnimatedEntityCategory implements SerializableSpriteCategory {
         directionFrames: Map<number, SpriteEntry[]>,
         frameDurationMs: number = ANIMATION_DEFAULTS.FRAME_DURATION_MS,
         loop: boolean = true,
-        race?: number
+        race?: Race
     ): void {
         const entry =
             race !== undefined
@@ -233,7 +234,7 @@ export class AnimatedEntityCategory implements SerializableSpriteCategory {
      * Get animated entity data. Checks race-specific storage first (for buildings/units),
      * then falls back to shared storage (for map objects, resources).
      */
-    getEntry(entityType: EntityType, subType: number | string, race?: number): AnimatedSpriteEntry | undefined {
+    getEntry(entityType: EntityType, subType: number | string, race?: Race): AnimatedSpriteEntry | undefined {
         if (race !== undefined) {
             const raceEntry = this.byRace.get(race)?.get(entityType)?.get(subType);
             if (raceEntry) {
@@ -246,7 +247,7 @@ export class AnimatedEntityCategory implements SerializableSpriteCategory {
     /**
      * Check if an entity type/subtype has animation data.
      */
-    hasAnimation(entityType: EntityType, subType: number | string, race?: number): boolean {
+    hasAnimation(entityType: EntityType, subType: number | string, race?: Race): boolean {
         // eslint-disable-next-line no-restricted-syntax -- entry may not exist for this entity type/subtype; false is correct for "no animation"
         return this.getEntry(entityType, subType, race)?.isAnimated ?? false;
     }

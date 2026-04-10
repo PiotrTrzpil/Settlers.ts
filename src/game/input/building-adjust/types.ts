@@ -45,11 +45,8 @@ export interface AdjustableItem {
 // Position types
 // ============================================================================
 
-/** Tile offset relative to building anchor. */
-export interface TileOffset {
-    dx: number;
-    dy: number;
-}
+import type { TileOffset } from '@/game/core/coordinates';
+export type { TileOffset };
 
 /** Pixel offset relative to building sprite anchor. */
 export interface PixelOffset {

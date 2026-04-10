@@ -16,8 +16,10 @@
 import type { GameStateSnapshot } from '../state/game-state-persistence';
 import type { Keyframe } from './replay-types';
 
-/** Default interval between keyframes in simulation ticks (~10 seconds at 30 tps). */
-export const DEFAULT_KEYFRAME_INTERVAL = 300;
+import { seconds } from '../core/tick-rate';
+
+/** Default interval between keyframes in simulation ticks (10 seconds). */
+export const DEFAULT_KEYFRAME_INTERVAL = seconds(10);
 
 /** Maximum keyframes retained in memory. Oldest is evicted when limit is exceeded. */
 const MAX_KEYFRAMES = 3;

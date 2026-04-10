@@ -46,7 +46,7 @@ describe('A* occupancy cost penalty', () => {
         addUnit(state, 13, 10);
 
         const { entity: mover } = addUnit(state, 10, 10);
-        expect(state.movement.moveUnit(mover.id, 15, 10)).toBe(true);
+        expect(state.movement.moveUnit(mover.id, { x: 15, y: 10 })).toBe(true);
 
         // Path should exist — penalty only increases cost, never blocks
         const ctrl = state.movement.getController(mover.id)!;
@@ -63,7 +63,7 @@ describe('A* occupancy cost penalty', () => {
 
         const hook = captureRawPath();
         const { entity: mover } = addUnit(state, 50, 50);
-        state.movement.moveUnit(mover.id, 70, 50);
+        state.movement.moveUnit(mover.id, { x: 70, y: 50 });
 
         const rawPath = hook.getRaw();
         expect(rawPath.length).toBeGreaterThan(0);
@@ -77,7 +77,7 @@ describe('A* occupancy cost penalty', () => {
         // Without crowd
         const hookA = captureRawPath();
         const { entity: mover1 } = addUnit(state, 50, 60);
-        state.movement.moveUnit(mover1.id, 70, 60);
+        state.movement.moveUnit(mover1.id, { x: 70, y: 60 });
         const rawNoCrowd = hookA.getRaw();
         state.movement.removeController(mover1.id);
 
@@ -88,7 +88,7 @@ describe('A* occupancy cost penalty', () => {
 
         const hookB = captureRawPath();
         const { entity: mover2 } = addUnit(state, 50, 60);
-        state.movement.moveUnit(mover2.id, 70, 60);
+        state.movement.moveUnit(mover2.id, { x: 70, y: 60 });
         const rawWithCrowd = hookB.getRaw();
 
         // Raw paths should differ — crowd penalty causes A* to explore differently
@@ -102,7 +102,7 @@ describe('A* occupancy cost penalty', () => {
         addUnit(state, 15, 10);
         const { entity: mover } = addUnit(state, 10, 10);
 
-        expect(state.movement.moveUnit(mover.id, 15, 10)).toBe(true);
+        expect(state.movement.moveUnit(mover.id, { x: 15, y: 10 })).toBe(true);
 
         const ctrl = state.movement.getController(mover.id)!;
         expect(ctrl.goal).toEqual({ x: 15, y: 10 });
@@ -115,7 +115,7 @@ describe('A* occupancy cost penalty', () => {
         addUnit(state, 10, 11);
         addUnit(state, 9, 10);
 
-        expect(state.movement.moveUnit(mover.id, 15, 10)).toBe(true);
+        expect(state.movement.moveUnit(mover.id, { x: 15, y: 10 })).toBe(true);
 
         const ctrl = state.movement.getController(mover.id)!;
         expect(ctrl.path.length).toBeGreaterThan(0);
@@ -128,7 +128,7 @@ describe('A* occupancy cost penalty', () => {
 
         const hook = captureRawPath();
         const { entity: mover } = addUnit(state, 10, 10);
-        state.movement.moveUnit(mover.id, 16, 10);
+        state.movement.moveUnit(mover.id, { x: 16, y: 10 });
         const rawPath = hook.getRaw();
 
         // With only 2 crowded tiles, the direct path should still be preferred

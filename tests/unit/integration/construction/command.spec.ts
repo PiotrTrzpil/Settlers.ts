@@ -23,14 +23,14 @@ describe('Command System – edge cases', () => {
 
     describe('place_building', () => {
         it('should reject building on water', () => {
-            setTerrainAt(sim.map, 10, 10, TERRAIN.WATER);
+            setTerrainAt(sim.map, { x: 10, y: 10 }, TERRAIN.WATER);
             const result = sim.execute({
                 type: 'place_building',
                 buildingType: BuildingType.WoodcutterHut,
                 x: 10,
                 y: 10,
                 player: 0,
-                race: 10,
+                race: Race.Roman,
             });
 
             expect(result.success).toBe(false);
@@ -56,7 +56,7 @@ describe('Command System – edge cases', () => {
                 x: 5,
                 y: 5,
                 player: 0,
-                race: 10,
+                race: Race.Roman,
             });
 
             blockColumn(sim.map, 15);
@@ -86,7 +86,7 @@ describe('Command System – edge cases', () => {
         it('should restore terrain when removing a building with modified terrain', () => {
             for (let dy = -1; dy <= 2; dy++) {
                 for (let dx = -1; dx <= 2; dx++) {
-                    const idx = sim.map.mapSize.toIndex(10 + dx, 10 + dy);
+                    const idx = sim.map.mapSize.toIndex({ x: 10 + dx, y: 10 + dy });
                     sim.map.groundHeight[idx] = 100 + dy * 5;
                 }
             }
@@ -94,7 +94,7 @@ describe('Command System – edge cases', () => {
             const originalGroundType = new Uint8Array(sim.map.groundType);
             const originalGroundHeight = new Uint8Array(sim.map.groundHeight);
 
-            const building = sim.state.addEntity(EntityType.Building, BuildingType.WoodcutterHut, 10, 10, 1, {
+            const building = sim.state.addEntity(EntityType.Building, BuildingType.WoodcutterHut, { x: 10, y: 10 }, 1, {
                 race: Race.Roman,
             });
             const csm = sim.services.constructionSiteManager;
@@ -124,7 +124,7 @@ describe('Command System – edge cases', () => {
                 site.terrain.originalTerrain
             );
 
-            expect(sim.map.groundType[sim.map.mapSize.toIndex(10, 10)]).toBe(CONSTRUCTION_SITE_GROUND_TYPE);
+            expect(sim.map.groundType[sim.map.mapSize.toIndex({ x: 10, y: 10 })]).toBe(CONSTRUCTION_SITE_GROUND_TYPE);
 
             sim.execute({
                 type: 'remove_entity',
@@ -133,7 +133,7 @@ describe('Command System – edge cases', () => {
 
             for (let dy = -1; dy <= 2; dy++) {
                 for (let dx = -1; dx <= 2; dx++) {
-                    const idx = sim.map.mapSize.toIndex(10 + dx, 10 + dy);
+                    const idx = sim.map.mapSize.toIndex({ x: 10 + dx, y: 10 + dy });
                     expect(sim.map.groundType[idx]).toBe(originalGroundType[idx]);
                     expect(sim.map.groundHeight[idx]).toBe(originalGroundHeight[idx]);
                 }

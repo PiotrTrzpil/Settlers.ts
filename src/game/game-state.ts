@@ -6,6 +6,7 @@ import {
     BuildingType,
     getBuildingFootprint,
     type CarryingState,
+    type Tile,
 } from './entity';
 import { Race } from './core/race';
 import { getBuildingBlockArea, getBuildingPassableTiles } from './buildings/types';
@@ -137,8 +138,7 @@ export class GameState {
     public addEntity(
         type: EntityType,
         subType: number | string,
-        x: number,
-        y: number,
+        tile: Tile,
         player: number,
         opts?: AddEntityOptions
     ): Entity {
@@ -166,8 +166,8 @@ export class GameState {
         const entity: Entity = {
             id: this.nextId++,
             type,
-            x,
-            y,
+            x: tile.x,
+            y: tile.y,
             player,
             subType,
             race: entityRace,
@@ -180,7 +180,7 @@ export class GameState {
         this.entityIndex.add(entity.id, type, player);
 
         if (occupancy) {
-            this.addSpatialAndOccupancy(entity, type, subType, x, y, completed);
+            this.addSpatialAndOccupancy(entity, type, subType, tile, completed);
         }
 
         // Emit generic lifecycle event — subscribers handle type-specific initialization
@@ -189,8 +189,8 @@ export class GameState {
             entityId: entity.id,
             entityType: type,
             subType,
-            x,
-            y,
+            x: tile.x,
+            y: tile.y,
             player,
             // eslint-disable-next-line no-restricted-syntax -- variation is optional in AddEntityOptions; 0 is the correct default sprite variation
             variation: variation ?? 0,
@@ -249,7 +249,7 @@ export class GameState {
             this.nextId = data.id + 1;
         }
 
-        this.addSpatialAndOccupancy(entity, data.type, data.subType, data.x, data.y);
+        this.addSpatialAndOccupancy(entity, data.type, data.subType, data);
 
         return entity;
     }
@@ -259,13 +259,12 @@ export class GameState {
         entity: Entity,
         type: EntityType,
         subType: number | string,
-        x: number,
-        y: number,
+        tile: Tile,
         completed?: boolean
     ): void {
         // Add to spatial grid for map objects and stacked piles
         if (type === EntityType.MapObject || type === EntityType.StackedPile) {
-            this.spatialIndex.add(entity.id, x, y);
+            this.spatialIndex.add(entity.id, tile);
         }
 
         // Route to correct occupancy layer.
@@ -275,27 +274,21 @@ export class GameState {
         }
 
         if (type === EntityType.Building) {
-            this.addBuildingOccupancy(entity, subType, x, y, completed);
+            this.addBuildingOccupancy(entity, subType, tile, completed);
         } else if (type === EntityType.Unit) {
-            this.unitOccupancy.set(tileKey(x, y), entity.id);
+            this.unitOccupancy.set(tileKey(tile), entity.id);
         } else {
-            this.addGroundEntityOccupancy(entity.id, type, subType, x, y);
+            this.addGroundEntityOccupancy(entity.id, type, subType, tile);
         }
     }
 
     /** Register building footprint in ground occupancy. */
-    private addBuildingOccupancy(
-        entity: Entity,
-        subType: number | string,
-        x: number,
-        y: number,
-        completed?: boolean
-    ): void {
+    private addBuildingOccupancy(entity: Entity, subType: number | string, tile: Tile, completed?: boolean): void {
         // buildingOccupancy is NOT set here by default — construction sites start walkable.
         // Completed buildings set it via restoreBuildingFootprintBlock (excludes door tiles).
-        const footprint = getBuildingFootprint(x, y, subType as BuildingType, entity.race);
-        for (const tile of footprint) {
-            const key = tileKey(tile.x, tile.y);
+        const footprint = getBuildingFootprint(tile, subType as BuildingType, entity.race);
+        for (const footprintTile of footprint) {
+            const key = tileKey(footprintTile);
             this.groundOccupancy.set(key, entity.id);
             this.buildingFootprint.add(key);
         }
@@ -305,14 +298,8 @@ export class GameState {
     }
 
     /** Register a non-building, non-unit entity (MapObject, StackedPile) in ground occupancy. */
-    private addGroundEntityOccupancy(
-        entityId: number,
-        type: EntityType,
-        subType: number | string,
-        x: number,
-        y: number
-    ): void {
-        const key = tileKey(x, y);
+    private addGroundEntityOccupancy(entityId: number, type: EntityType, subType: number | string, tile: Tile): void {
+        const key = tileKey(tile);
         if (type === EntityType.MapObject) {
             const occupantId = this.groundOccupancy.get(key);
             if (occupantId !== undefined) {
@@ -323,7 +310,7 @@ export class GameState {
                         : // eslint-disable-next-line no-restricted-syntax -- occupant type may be unknown when building an error description; 0 gives a safe enum fallback for display only
                           `${EntityType[occupant?.type ?? 0]} #${occupantId}`;
                 throw new Error(
-                    `addEntity: cannot place MapObject (subType=${subType}) at (${x},${y}) — tile occupied by ${desc}`
+                    `addEntity: cannot place MapObject (subType=${subType}) at (${tile.x},${tile.y}) — tile occupied by ${desc}`
                 );
             }
         }
@@ -331,19 +318,13 @@ export class GameState {
     }
 
     /** Spawn a unit. Race is required (throws if missing). */
-    public addUnit(unitType: UnitType, x: number, y: number, player: number, opts?: AddUnitOptions): Entity {
-        return this.addEntity(EntityType.Unit, unitType, x, y, player, opts);
+    public addUnit(unitType: UnitType, tile: Tile, player: number, opts?: AddUnitOptions): Entity {
+        return this.addEntity(EntityType.Unit, unitType, tile, player, opts);
     }
 
     /** Place a building. Race is required (throws if missing). */
-    public addBuilding(
-        buildingType: BuildingType,
-        x: number,
-        y: number,
-        player: number,
-        opts?: AddBuildingOptions
-    ): Entity {
-        return this.addEntity(EntityType.Building, buildingType, x, y, player, opts);
+    public addBuilding(buildingType: BuildingType, tile: Tile, player: number, opts?: AddBuildingOptions): Entity {
+        return this.addEntity(EntityType.Building, buildingType, tile, player, opts);
     }
 
     /**
@@ -355,9 +336,9 @@ export class GameState {
         if (!entity || entity.type !== EntityType.Building) {
             return;
         }
-        const blockArea = getBuildingBlockArea(entity.x, entity.y, entity.subType as BuildingType, entity.race);
+        const blockArea = getBuildingBlockArea(entity, entity.subType as BuildingType, entity.race);
         for (const tile of blockArea) {
-            this.buildingOccupancy.delete(tileKey(tile.x, tile.y));
+            this.buildingOccupancy.delete(tileKey(tile));
         }
     }
 
@@ -370,16 +351,10 @@ export class GameState {
         if (!entity || entity.type !== EntityType.Building) {
             return;
         }
-        const blockArea = getBuildingBlockArea(entity.x, entity.y, entity.subType as BuildingType, entity.race);
-        const passableKeys = getBuildingPassableTiles(
-            entity.x,
-            entity.y,
-            entity.subType as BuildingType,
-            entity.race,
-            blockArea
-        );
+        const blockArea = getBuildingBlockArea(entity, entity.subType as BuildingType, entity.race);
+        const passableKeys = getBuildingPassableTiles(entity, entity.subType as BuildingType, entity.race, blockArea);
         for (const tile of blockArea) {
-            const key = tileKey(tile.x, tile.y);
+            const key = tileKey(tile);
             if (!passableKeys.has(key)) {
                 this.buildingOccupancy.add(key);
             }
@@ -407,20 +382,20 @@ export class GameState {
 
         // Remove occupancy from the correct layer
         if (entity.type === EntityType.Building) {
-            const footprint = getBuildingFootprint(entity.x, entity.y, entity.subType as BuildingType, entity.race);
+            const footprint = getBuildingFootprint(entity, entity.subType as BuildingType, entity.race);
             for (const tile of footprint) {
-                const key = tileKey(tile.x, tile.y);
+                const key = tileKey(tile);
                 this.groundOccupancy.delete(key);
                 this.buildingOccupancy.delete(key);
                 this.buildingFootprint.delete(key);
             }
         } else if (entity.type === EntityType.Unit) {
-            const key = tileKey(entity.x, entity.y);
+            const key = tileKey(entity);
             if (this.unitOccupancy.get(key) === id) {
                 this.unitOccupancy.delete(key);
             }
         } else {
-            this.groundOccupancy.delete(tileKey(entity.x, entity.y));
+            this.groundOccupancy.delete(tileKey(entity));
         }
 
         // Emit event for system cleanup (movement controllers, carrier state, inventory, etc.)
@@ -450,8 +425,8 @@ export class GameState {
     }
 
     /** Get the ground entity (building/map-object/pile) at a tile, or undefined. */
-    public getGroundEntityAt(x: number, y: number): Entity | undefined {
-        const id = this.groundOccupancy.get(tileKey(x, y));
+    public getGroundEntityAt(tile: Tile): Entity | undefined {
+        const id = this.groundOccupancy.get(tileKey(tile));
         if (id === undefined) {
             return undefined;
         }
@@ -459,8 +434,8 @@ export class GameState {
     }
 
     /** Get the unit at a tile, or undefined. */
-    public getUnitAt(x: number, y: number): Entity | undefined {
-        const id = this.unitOccupancy.get(tileKey(x, y));
+    public getUnitAt(tile: Tile): Entity | undefined {
+        const id = this.unitOccupancy.get(tileKey(tile));
         if (id === undefined) {
             return undefined;
         }
@@ -471,16 +446,16 @@ export class GameState {
      * Get any entity at a tile. Checks ground first, then unit layer.
      * Most callers should use getGroundEntityAt() or getUnitAt() instead.
      */
-    public getEntityAt(x: number, y: number): Entity | undefined {
-        return this.getGroundEntityAt(x, y) ?? this.getUnitAt(x, y);
+    public getEntityAt(tile: Tile): Entity | undefined {
+        return this.getGroundEntityAt(tile) ?? this.getUnitAt(tile);
     }
 
-    public getEntitiesInRadius(x: number, y: number, radius: number): Entity[] {
+    public getEntitiesInRadius(center: Tile, radius: number): Entity[] {
         const result: Entity[] = [];
         const r2 = radius * radius;
         for (const entity of this.entities) {
-            const dx = entity.x - x;
-            const dy = entity.y - y;
+            const dx = entity.x - center.x;
+            const dy = entity.y - center.y;
             if (dx * dx + dy * dy <= r2) {
                 result.push(entity);
             }
@@ -489,11 +464,11 @@ export class GameState {
     }
 
     /** Get all entities within a rectangular tile region */
-    public getEntitiesInRect(x1: number, y1: number, x2: number, y2: number): Entity[] {
-        const minX = Math.min(x1, x2);
-        const maxX = Math.max(x1, x2);
-        const minY = Math.min(y1, y2);
-        const maxY = Math.max(y1, y2);
+    public getEntitiesInRect(topLeft: Tile, bottomRight: Tile): Entity[] {
+        const minX = Math.min(topLeft.x, bottomRight.x);
+        const maxX = Math.max(topLeft.x, bottomRight.x);
+        const minY = Math.min(topLeft.y, bottomRight.y);
+        const maxY = Math.max(topLeft.y, bottomRight.y);
 
         return this.entities.filter(e => e.x >= minX && e.x <= maxX && e.y >= minY && e.y <= maxY);
     }
@@ -538,7 +513,7 @@ export class GameState {
         if (!entity) {
             return;
         }
-        const key = tileKey(entity.x, entity.y);
+        const key = tileKey(entity);
         if (this.unitOccupancy.get(key) === entityId) {
             this.unitOccupancy.delete(key);
         }
@@ -552,24 +527,24 @@ export class GameState {
         if (!entity) {
             return;
         }
-        const key = tileKey(entity.x, entity.y);
+        const key = tileKey(entity);
         this.unitOccupancy.set(key, entityId);
     }
 
     /** Update occupancy when a unit moves. Only units move, so always uses unitOccupancy. */
-    public updateEntityPosition(id: number, newX: number, newY: number): void {
+    public updateEntityPosition(id: number, newPos: Tile): void {
         const entity = this.entityMap.get(id);
         if (!entity) {
             return;
         }
 
         // Clear old occupancy if this entity still owns the tile
-        const oldKey = tileKey(entity.x, entity.y);
+        const oldKey = tileKey(entity);
         if (this.unitOccupancy.get(oldKey) === id) {
             this.unitOccupancy.delete(oldKey);
         }
-        entity.x = newX;
-        entity.y = newY;
-        this.unitOccupancy.set(tileKey(newX, newY), id);
+        entity.x = newPos.x;
+        entity.y = newPos.y;
+        this.unitOccupancy.set(tileKey(newPos), id);
     }
 }

@@ -43,7 +43,7 @@ async function loadOneBuildingSprites(
 
     const dirCount = ctx.spriteLoader.getDirectionCount(fileSet, constructionJobIndex);
     if (dirCount === 0) {
-        log.warn(`No sprite directions for ${buildingType} (job ${constructionJobIndex}) in ${Race[race]} file`);
+        log.warn(`No sprite directions for ${buildingType} (job ${constructionJobIndex}) in ${race} file`);
         return null;
     }
 

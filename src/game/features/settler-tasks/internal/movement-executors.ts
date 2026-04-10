@@ -9,13 +9,13 @@
  * Each executor matches the MovementExecutorFn signature defined in choreo-types.ts.
  */
 
-import { EntityType, BuildingType, tileKey, type Entity, Tile } from '../../../entity';
+import { EntityType, BuildingType, tileKey, type Entity } from '../../../entity';
 import { getBuildingDoorPos } from '../../../data/game-data-access';
 import { hexDistance, type EDirection } from '../../../systems/hex-directions';
 import { createLogger } from '@/utilities/logger';
 import { TaskResult } from '../types';
 import type { ChoreoNode, MovementExecutorFn, ChoreoJobState, MovementContext } from '../choreo-types';
-import { ChoreoTaskType } from '../choreo-types';
+import { ChoreoTaskType, resolveSearchArea } from '../choreo-types';
 import { safeCall } from '../safe-call';
 
 const log = createLogger('MovementExecutors');
@@ -36,8 +36,10 @@ const PATH_RETRY_COOLDOWN = 10;
 /** Maximum number of consecutive pathfinding retries before giving up. */
 const PATH_MAX_RETRIES = 6;
 
+import { seconds } from '../../../core/tick-rate';
+
 /** Maximum cooldown ticks (caps exponential backoff). */
-const PATH_MAX_COOLDOWN = 300;
+const PATH_MAX_COOLDOWN = seconds(10);
 
 // ─────────────────────────────────────────────────────────────
 // Shared movement helper
@@ -69,7 +71,7 @@ function tryIssuePath(
         job.pathRetryCountdown--;
         return 'waiting';
     }
-    const moved = ctx.gameState.movement.moveUnit(settler.id, targetX, targetY);
+    const moved = ctx.gameState.movement.moveUnit(settler.id, { x: targetX, y: targetY });
     if (!moved) {
         if (job) {
             job.pathRetryCount++;
@@ -192,7 +194,7 @@ function makeGoToTarget(arrivalDist: number): MovementExecutorFn {
             const target = ctx.gameState.getEntityOrThrow(job.targetId, 'GO_TO_TARGET target');
 
             if (target.type === EntityType.Building) {
-                const door = getBuildingDoorPos(target.x, target.y, target.race, target.subType as BuildingType);
+                const door = getBuildingDoorPos(target, target.race, target.subType as BuildingType);
                 return moveToPosition(settler, door.x, door.y, node, ctx, arrivalDist, job);
             }
 
@@ -216,7 +218,11 @@ function makeGoToPos(arrivalDist: number): MovementExecutorFn {
     return (settler, job, node, _dt, ctx) => {
         if (!job.targetPos) {
             const buildingId = resolveAssignedBuildingId(settler, ctx);
-            job.targetPos = ctx.buildingPositionResolver.resolvePosition(buildingId, node.x, node.y, node.useWork);
+            job.targetPos = ctx.buildingPositionResolver.resolvePosition(
+                buildingId,
+                { x: node.x, y: node.y },
+                node.useWork
+            );
         }
 
         return moveToPosition(settler, job.targetPos.x, job.targetPos.y, node, ctx, arrivalDist, job);
@@ -240,7 +246,7 @@ export const executeGoHome: MovementExecutorFn = (settler, job, node, _dt, ctx) 
     }
 
     const building = ctx.gameState.getEntityOrThrow(homeId, 'GO_HOME home building');
-    const door = getBuildingDoorPos(building.x, building.y, building.race, building.subType as BuildingType);
+    const door = getBuildingDoorPos(building, building.race, building.subType as BuildingType);
 
     return moveToPosition(settler, door.x, door.y, node, ctx, ARRIVAL_DIST, job);
 };
@@ -281,9 +287,11 @@ function searchViaEntityHandler(settler: Entity, job: ChoreoJobState, ctx: Movem
         return null;
     }
     const { entityHandler, handlerErrorLogger } = ctx;
+    const homeId = ctx.getWorkerHomeBuilding(settler.id);
+    const area = resolveSearchArea(settler, homeId, ctx.buildingPositionResolver);
 
     const result = safeCall(
-        () => entityHandler.findTarget(settler.x, settler.y, settler.id, settler.player),
+        () => entityHandler.findTarget(area, settler.id, settler.player),
         handlerErrorLogger,
         `SEARCH findTarget failed for settler ${settler.id}`
     );
@@ -305,27 +313,17 @@ function searchViaEntityHandler(settler: Entity, job: ChoreoJobState, ctx: Movem
     return TaskResult.FAILED;
 }
 
-/** Get the search center for a position handler — work area center or settler position. */
-function getPositionSearchCenter(settler: Entity, ctx: MovementContext): Tile {
-    if (ctx.positionHandler?.useWorkAreaCenter) {
-        const homeId = ctx.getWorkerHomeBuilding(settler.id);
-        if (homeId !== null) {
-            return ctx.buildingPositionResolver.resolvePosition(homeId, 0, 0, true);
-        }
-    }
-    return settler;
-}
-
 /** Try position handler search. Returns null when positionHandler is absent. */
 function searchViaPositionHandler(settler: Entity, job: ChoreoJobState, ctx: MovementContext): TaskResult | null {
     if (!ctx.positionHandler) {
         return null;
     }
     const { positionHandler, handlerErrorLogger } = ctx;
-    const center = getPositionSearchCenter(settler, ctx);
+    const homeId = ctx.getWorkerHomeBuilding(settler.id);
+    const area = resolveSearchArea(settler, homeId, ctx.buildingPositionResolver);
 
     const pos = safeCall(
-        () => positionHandler.findPosition(center.x, center.y, settler.id),
+        () => positionHandler.findPosition(area, settler.id),
         handlerErrorLogger,
         `SEARCH findPosition failed for settler ${settler.id}`
     );
@@ -398,7 +396,7 @@ export const executeGoVirtual: MovementExecutorFn = (settler, job, node, _dt, ct
         }
         // If the resolved position is inside a building footprint, it's unreachable via pathfinding.
         // Skip movement entirely — the exact sub-position around the work target is cosmetic.
-        if (ctx.gameState.buildingOccupancy.has(tileKey(job.targetPos.x, job.targetPos.y))) {
+        if (ctx.gameState.buildingOccupancy.has(tileKey(job.targetPos))) {
             return TaskResult.DONE;
         }
         return moveToPosition(settler, job.targetPos.x, job.targetPos.y, node, ctx, ARRIVAL_DIST, job);
@@ -407,7 +405,7 @@ export const executeGoVirtual: MovementExecutorFn = (settler, job, node, _dt, ct
     // No target entity — interior/building teleport (original behavior)
     // Visibility is handled by prepareNodeTick via the location manager (enterBuilding removes
     // the movement controller and clears tile occupancy). We just teleport the position.
-    const pos = ctx.buildingPositionResolver.resolvePosition(buildingId, node.x, node.y, node.useWork);
+    const pos = ctx.buildingPositionResolver.resolvePosition(buildingId, { x: node.x, y: node.y }, node.useWork);
     job.visible = false;
 
     settler.x = pos.x;
@@ -419,7 +417,7 @@ export const executeGoVirtual: MovementExecutorFn = (settler, job, node, _dt, ct
     // at the correct building-interior position rather than stuck at the door.
     const controller = ctx.gameState.movement.getController(settler.id);
     if (controller) {
-        controller.syncPosition(pos.x, pos.y);
+        controller.syncPosition(pos);
     }
 
     log.debug(`executeGoVirtual: settler ${settler.id} moved to (${pos.x}, ${pos.y}) inside building ${buildingId}`);

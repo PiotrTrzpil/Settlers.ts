@@ -14,7 +14,7 @@ export interface CarryingState {
 }
 
 // === Re-export coordinates (base types with no dependencies) ===
-export type { Tile } from './core/coordinates';
+export type { Tile, Coords, TileOffset, Offset, TileWithEntity } from './core/coordinates';
 export { tileKey, CARDINAL_OFFSETS, EXTENDED_OFFSETS, isInMapBounds } from './core/coordinates';
 
 // === Core Types (defined here) ===
@@ -71,7 +71,7 @@ export interface Entity {
     selectable?: boolean;
 
     /**
-     * Race/civilization this entity belongs to (matches Race enum values: 10=Roman, 11=Viking, etc.).
+     * Race/civilization this entity belongs to.
      * Determines which sprite set is used for rendering.
      * Set from the owning player's tribe when loading from map, or from the UI selection when placing.
      * Required for buildings and units; unused for map objects and stacked piles.

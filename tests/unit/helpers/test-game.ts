@@ -44,8 +44,8 @@ export function createGameState(): GameState {
 
     const movement = new MovementSystem({
         eventBus,
-        updatePosition: (id, x, y) => {
-            state.updateEntityPosition(id, x, y);
+        updatePosition: (id, newPos) => {
+            state.updateEntityPosition(id, newPos);
             return true;
         },
         getEntity: id => state.getEntity(id),
@@ -73,7 +73,7 @@ function wireEntityLifecycleEvents(eventBus: EventBus, movement: MovementSystem,
     eventBus.on('entity:created', ({ entityId, entityType: type, subType, x, y }) => {
         if (type === EntityType.Unit) {
             const speed = getUnitTypeSpeed(subType as UnitType);
-            movement.createController(entityId, x, y, speed);
+            movement.createController(entityId, { x, y }, speed);
         }
     });
     eventBus.on('entity:removed', ({ entityId }) => {
@@ -90,9 +90,15 @@ export function addUnit(
     y: number,
     options: { player?: number; subType?: UnitType; race?: Race } = {}
 ): { entity: Entity; unitState: UnitStateView } {
-    const entity = state.addEntity(EntityType.Unit, options.subType ?? UnitType.Carrier, x, y, options.player ?? 0, {
-        race: options.race ?? Race.Roman,
-    });
+    const entity = state.addEntity(
+        EntityType.Unit,
+        options.subType ?? UnitType.Carrier,
+        { x, y },
+        options.player ?? 0,
+        {
+            race: options.race ?? Race.Roman,
+        }
+    );
     const unitState = state.unitStates.get(entity.id);
     if (!unitState) throw new Error(`UnitState not created for unit ${entity.id}`);
     return { entity, unitState };
@@ -107,7 +113,7 @@ export function addBuilding(
     player = 0,
     race = Race.Roman
 ): Entity {
-    return state.addEntity(EntityType.Building, buildingType, x, y, player, { race });
+    return state.addEntity(EntityType.Building, buildingType, { x, y }, player, { race });
 }
 
 /** Set up a unit with a pre-assigned path for movement testing. */

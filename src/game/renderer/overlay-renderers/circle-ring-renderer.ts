@@ -24,7 +24,7 @@ export class CircleRingRenderer {
         const lineWidth = 0.3;
 
         for (const area of circles) {
-            const centerIdx = s.ctx.mapSize.toIndex(Math.round(area.centerX), Math.round(area.centerY));
+            const centerIdx = s.ctx.mapSize.toIndex({ x: Math.round(area.centerX), y: Math.round(area.centerY) });
             const baseH = heightToWorld(s.ctx.groundHeight[centerIdx]!);
 
             const points = this.generateCirclePoints(
@@ -47,7 +47,7 @@ export class CircleRingRenderer {
         const radius = 0.5;
         const lineWidth = 0.15;
 
-        const idx = s.ctx.mapSize.toIndex(Math.round(tileX), Math.round(tileY));
+        const idx = s.ctx.mapSize.toIndex({ x: Math.round(tileX), y: Math.round(tileY) });
         const hWorld = heightToWorld(s.ctx.groundHeight[idx]!);
 
         const points: { worldX: number; worldY: number }[] = [];
@@ -95,7 +95,9 @@ export class CircleRingRenderer {
             const sampleY = Math.round(ty);
             const inBounds =
                 sampleX >= 0 && sampleX < s.ctx.mapSize.width && sampleY >= 0 && sampleY < s.ctx.mapSize.height;
-            const h = inBounds ? heightToWorld(s.ctx.groundHeight[s.ctx.mapSize.toIndex(sampleX, sampleY)]!) : baseH;
+            const h = inBounds
+                ? heightToWorld(s.ctx.groundHeight[s.ctx.mapSize.toIndex({ x: sampleX, y: sampleY })]!)
+                : baseH;
             points.push(tileToWorld(tx, ty, h, s.ctx.viewPoint.x, s.ctx.viewPoint.y));
         }
         return points;

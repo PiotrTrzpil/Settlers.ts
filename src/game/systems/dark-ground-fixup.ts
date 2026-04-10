@@ -8,6 +8,7 @@
  */
 
 import { MapObjectType } from '@/game/types/map-object-types';
+import type { Tile } from '@/game/core/coordinates';
 
 /**
  * Mapping from normal tree types to dark tree variants.
@@ -55,9 +56,9 @@ function isNormalTree(type: MapObjectType): boolean {
  * @param x     Tile x (used for deterministic dark tree variant selection)
  * @param y     Tile y (used for deterministic dark tree variant selection)
  */
-export function toDarkVariant(type: MapObjectType, x: number, y: number): MapObjectType {
+export function toDarkVariant(type: MapObjectType, tile: Tile): MapObjectType {
     if (isNormalTree(type)) {
-        return DARK_TREE_VARIANTS[(x * 7 + y * 13) % DARK_TREE_VARIANTS.length]!;
+        return DARK_TREE_VARIANTS[(tile.x * 7 + tile.y * 13) % DARK_TREE_VARIANTS.length]!;
     }
     return BUSH_TO_DARK[type] ?? MUSHROOM_TO_DARK[type] ?? type;
 }

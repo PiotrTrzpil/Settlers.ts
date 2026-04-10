@@ -18,8 +18,9 @@ import { EconomyPlanner } from './economy-planner';
 import { MilitaryPlanner } from './military-planner';
 import { getBuildOrder } from './build-orders';
 import { createAiDecisionTree } from './ai-decision-tree';
+import { seconds } from '@/game/core/tick-rate';
 
-const DEFAULT_EVALUATION_INTERVAL = 30;
+const DEFAULT_EVALUATION_INTERVAL = seconds(1);
 
 export class AiPlayerController {
     readonly player: number;

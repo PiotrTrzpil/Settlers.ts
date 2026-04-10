@@ -79,15 +79,15 @@ export class ResidenceSpawnerSystem implements TickSystem {
     private spawnOne(buildingEntityId: number, config: BuildingSpawnConfig): void {
         const building = this.gameState.getEntityOrThrow(buildingEntityId, 'residence building for carrier spawn');
 
-        const door = getBuildingDoorPos(building.x, building.y, building.race, building.subType as BuildingType);
+        const door = getBuildingDoorPos(building, building.race, building.subType as BuildingType);
 
         // Push any unit blocking the door
-        this.gameState.movement.pushUnitAt(door.x, door.y);
+        this.gameState.movement.pushUnitAt(door);
 
         // Spawn directly at the door. The building owns this tile in tileOccupancy,
         // so we use occupancy:false to avoid overwriting it. The movement controller
         // created by entity:created tracks the unit in unitPositions instead.
-        const entity = this.gameState.addUnit(config.unitType, door.x, door.y, building.player, {
+        const entity = this.gameState.addUnit(config.unitType, door, building.player, {
             occupancy: false,
         });
         entity.level = getUnitLevel(config.unitType);

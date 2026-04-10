@@ -21,6 +21,7 @@ import type { WorkerTaskExecutor, WorkerRuntimeState } from './worker-task-execu
 import type { GameState } from '../../game-state';
 import type { EntityVisualService } from '../../animation/entity-visual-service';
 import type { TickScheduler } from '../../systems/tick-scheduler';
+import { seconds } from '../../core/tick-rate';
 
 /** Settler configs keyed by UnitType (from settler-data-access.ts). */
 type SettlerConfigs = Map<UnitType, SettlerConfig>;
@@ -30,8 +31,8 @@ const log = createLogger('UnitStateMachine');
 /** Ticks between idle work searches when no work is found. */
 const IDLE_SEARCH_COOLDOWN = 10;
 
-/** Ticks to rest after completing a job before searching for new work (~1 second at 30 tps). */
-const POST_JOB_REST_TICKS = 30;
+/** Ticks to rest after completing a job before searching for new work. */
+const POST_JOB_REST_TICKS = seconds(5);
 
 /** Simple move task state (for user-initiated movement) */
 export interface MoveTaskState {

@@ -37,7 +37,7 @@ export function executeSelectAtTile(deps: SelectionDeps, cmd: SelectAtTileComman
     const { state } = deps;
     const sel = state.selection;
     const debugAll = debugStats.state.selectAllUnits;
-    const rawEntity = state.getEntityAt(cmd.x, cmd.y);
+    const rawEntity = state.getEntityAt(cmd);
     const entity = sel.canSelect(rawEntity, debugAll) ? rawEntity : undefined;
 
     if (cmd.addToSelection) {
@@ -69,7 +69,7 @@ export function executeToggleSelection(deps: SelectionDeps, cmd: ToggleSelection
 
 export function executeSelectArea(deps: SelectionDeps, cmd: SelectAreaCommand): CommandResult {
     const { state } = deps;
-    const allEntities = state.getEntitiesInRect(cmd.x1, cmd.y1, cmd.x2, cmd.y2);
+    const allEntities = state.getEntitiesInRect({ x: cmd.x1, y: cmd.y1 }, { x: cmd.x2, y: cmd.y2 });
     state.selection.selectArea(allEntities, debugStats.state.selectAllUnits);
     return COMMAND_OK;
 }

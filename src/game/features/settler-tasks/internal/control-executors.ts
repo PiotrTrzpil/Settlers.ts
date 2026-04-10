@@ -127,8 +127,8 @@ export function executeChangeTypeAtBarracks(
     // Uses the same ringTiles pattern as spawnUnitsNear for building completion.
     let spawnPos: Tile | null = null;
     for (let r = 1; r <= 4 && !spawnPos; r++) {
-        for (const tile of ringTiles(settler.x, settler.y, r)) {
-            if (!ctx.gameState.getGroundEntityAt(tile.x, tile.y)) {
+        for (const tile of ringTiles(settler, r)) {
+            if (!ctx.gameState.getGroundEntityAt(tile)) {
                 spawnPos = tile;
                 break;
             }

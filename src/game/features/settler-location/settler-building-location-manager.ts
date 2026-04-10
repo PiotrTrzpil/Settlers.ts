@@ -146,7 +146,7 @@ export class SettlerBuildingLocationManager implements ISettlerBuildingLocationM
 
         const building = this.ctx.gameState.getEntityOrThrow(buildingId, 'SettlerBuildingLocationManager.exitBuilding');
         const entity = this.ctx.gameState.getEntityOrThrow(settlerId, 'SettlerBuildingLocationManager.exitBuilding');
-        const door = getBuildingDoorPos(building.x, building.y, building.race, building.subType as BuildingType);
+        const door = getBuildingDoorPos(building, building.race, building.subType as BuildingType);
         entity.x = door.x;
         entity.y = door.y;
         entity.hidden = false;
@@ -154,7 +154,7 @@ export class SettlerBuildingLocationManager implements ISettlerBuildingLocationM
         // Restore movement controller and unitOccupancy (removed on enterBuilding)
         if (entity.type === EntityType.Unit) {
             const speed = getUnitTypeSpeed(entity.subType as UnitType);
-            this.ctx.gameState.movement.createController(settlerId, door.x, door.y, speed);
+            this.ctx.gameState.movement.createController(settlerId, door, speed);
             this.ctx.gameState.restoreTileOccupancy(settlerId);
         }
 
@@ -231,7 +231,7 @@ export class SettlerBuildingLocationManager implements ISettlerBuildingLocationM
                 // Restore movement controller + unitOccupancy (removed on enterBuilding)
                 if (entity.type === EntityType.Unit) {
                     const speed = getUnitTypeSpeed(entity.subType as UnitType);
-                    this.ctx.gameState.movement.createController(settlerId, entity.x, entity.y, speed);
+                    this.ctx.gameState.movement.createController(settlerId, entity, speed);
                     this.ctx.gameState.restoreTileOccupancy(settlerId);
                 }
             }

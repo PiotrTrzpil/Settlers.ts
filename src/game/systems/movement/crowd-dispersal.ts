@@ -31,14 +31,14 @@ function isValidNeighbor(
     terrainMapHeight: number,
     buildingOccupancy: Set<string>
 ): boolean {
-    if (!isInMapBounds(n.x, n.y, terrainMapWidth, terrainMapHeight)) {
+    if (!isInMapBounds(n, terrainMapWidth, terrainMapHeight)) {
         return false;
     }
     const nIdx = n.x + n.y * terrainMapWidth;
     if (!isPassable(terrainGroundType[nIdx]!)) {
         return false;
     }
-    return !buildingOccupancy.has(tileKey(n.x, n.y));
+    return !buildingOccupancy.has(tileKey(n));
 }
 
 /** Classify valid neighbors into occupied vs free buckets. Returns true if dispersal should trigger. */
@@ -58,7 +58,7 @@ function shouldDisperseAt(
         if (!isValidNeighbor(n, terrainGroundType, terrainMapWidth, terrainMapHeight, buildingOccupancy)) {
             continue;
         }
-        if (unitOccupancy.has(tileKey(n.x, n.y))) {
+        if (unitOccupancy.has(tileKey(n))) {
             occupiedCount++;
         } else {
             outFree.push(n);
@@ -100,7 +100,7 @@ export function runCrowdDispersal(
             continue;
         }
 
-        if (buildingOccupancy.has(tileKey(ctrl.tileX, ctrl.tileY))) {
+        if (buildingOccupancy.has(tileKey({ x: ctrl.tileX, y: ctrl.tileY }))) {
             continue;
         }
 
@@ -122,7 +122,7 @@ export function runCrowdDispersal(
         // Pick a random free neighbor and move there
         // eslint-disable-next-line sonarjs/pseudo-random -- game dispersal, not security-sensitive
         const dest = freeNeighbors[Math.floor(Math.random() * freeNeighbors.length)]!;
-        movementSystem.moveUnit(ctrl.entityId, dest.x, dest.y);
+        movementSystem.moveUnit(ctrl.entityId, dest);
 
         // Set randomized cooldown
         // eslint-disable-next-line sonarjs/pseudo-random -- game dispersal, not security-sensitive

@@ -56,12 +56,12 @@ function evenInterleave(a: Dir, countA: number, b: Dir, countB: number): Dir[] {
  *
  * @returns Array of tile coordinates from start to end (inclusive)
  */
-export function getHexLine(x1: number, y1: number, x2: number, y2: number): Tile[] {
-    const dx = x2 - x1;
-    const dy = y2 - y1;
+export function getHexLine(start: Tile, end: Tile): Tile[] {
+    const dx = end.x - start.x;
+    const dy = end.y - start.y;
 
     if (dx === 0 && dy === 0) {
-        return [{ x: x1, y: y1 }];
+        return [{ x: start.x, y: start.y }];
     }
 
     let dirA: Dir, countA: number, dirB: Dir, countB: number;
@@ -93,7 +93,7 @@ export function getHexLine(x1: number, y1: number, x2: number, y2: number): Tile
     }
 
     const dirs = evenInterleave(dirA, countA, dirB, countB);
-    const tiles = rebuildTilesFromDirs({ x: x1, y: y1 }, dirs);
+    const tiles = rebuildTilesFromDirs(start, dirs);
 
     return groupDirectionRuns(tiles);
 }
@@ -233,18 +233,12 @@ export function groupDirectionRuns(tiles: Tile[], maxRunLength?: number): Tile[]
  * @param isPassableFn Function to check if a tile is passable
  * @returns true if all tiles along the line are passable
  */
-export function isHexLinePassable(
-    startX: number,
-    startY: number,
-    endX: number,
-    endY: number,
-    isPassableFn: (x: number, y: number) => boolean
-): boolean {
-    const tiles = getHexLine(startX, startY, endX, endY);
+export function isHexLinePassable(start: Tile, end: Tile, isPassableFn: (tile: Tile) => boolean): boolean {
+    const tiles = getHexLine(start, end);
 
     // Check all tiles (skip start since we're already there)
     for (let i = 1; i < tiles.length; i++) {
-        if (!isPassableFn(tiles[i]!.x, tiles[i]!.y)) {
+        if (!isPassableFn(tiles[i]!)) {
             return false;
         }
     }

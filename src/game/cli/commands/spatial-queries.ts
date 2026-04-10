@@ -8,6 +8,7 @@ import type { CliArgs, CliCommand, CliContext, CliResult } from '../types';
 import { EntityType, tileKey, Tile } from '@/game/entity';
 import type { GameState } from '@/game/game-state';
 import { isPassable } from '@/game/terrain';
+import type { TerrainData } from '@/game/terrain/terrain-data';
 import { getGroundTypeName } from '@/resources/map/s4-types';
 import { ok, fail, entityTypeName, posText, tableWithLimit } from './helpers';
 
@@ -107,15 +108,11 @@ function formatControllerInfo(state: GameState, entityId: number): string {
     return ' state=' + ctrl.state + ' goal=' + goalStr;
 }
 
-function describeTileInfo(
-    x: number,
-    y: number,
-    state: GameState,
-    terrain: { getType(x: number, y: number): number }
-): string[] {
+function describeTileInfo(x: number, y: number, state: GameState, terrain: TerrainData): string[] {
+    const tile = { x, y };
     const lines: string[] = [];
-    const key = tileKey(x, y);
-    const gt = terrain.getType(x, y);
+    const key = tileKey(tile);
+    const gt = terrain.getType(tile);
     const passable = isPassable(gt);
     const inOccupancy = state.buildingOccupancy.has(key);
     const inFootprint = state.buildingFootprint.has(key);
@@ -134,14 +131,14 @@ function describeTileInfo(
             inFootprint
     );
 
-    const groundEntity = state.getGroundEntityAt(x, y);
+    const groundEntity = state.getGroundEntityAt(tile);
     if (groundEntity) {
         lines.push(
             'ground: ' + entityTypeName(groundEntity) + ' id=' + groundEntity.id + ' at ' + posText(groundEntity)
         );
     }
 
-    const unitEntity = state.getUnitAt(x, y);
+    const unitEntity = state.getUnitAt(tile);
     if (unitEntity) {
         lines.push(
             'unit: ' + entityTypeName(unitEntity) + ' id=' + unitEntity.id + formatControllerInfo(state, unitEntity.id)
@@ -150,9 +147,10 @@ function describeTileInfo(
     return lines;
 }
 
-function describeNearbyEntities(x: number, y: number, searchRadius: number, state: GameState): string[] {
+function describeNearbyEntities(tile: Tile, searchRadius: number, state: GameState): string[] {
+    const { x, y } = tile;
     const lines: string[] = [];
-    const nearby = state.getEntitiesInRadius(x, y, searchRadius);
+    const nearby = state.getEntitiesInRadius(tile, searchRadius);
     const nearbyUnits = nearby.filter(e => e.type === EntityType.Unit && !(e.x === x && e.y === y));
     const nearbyBuildings = nearby.filter(e => e.type === EntityType.Building);
 
@@ -192,7 +190,7 @@ export function atCommand(): CliCommand {
 
             const lines = describeTileInfo(x, y, state, terrain);
             const searchRadius = Math.max(radius, 2);
-            lines.push(...describeNearbyEntities(x, y, searchRadius, state));
+            lines.push(...describeNearbyEntities({ x, y }, searchRadius, state));
 
             return ok(lines.join('\n'));
         },

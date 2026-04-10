@@ -9,7 +9,6 @@ import { createLogger } from '@/utilities/logger';
 import { WorkHandlerType, type EntityWorkHandler } from '../settler-tasks/types';
 import type { StoneSystem } from './stone-system';
 
-const STONECUTTER_SEARCH_RADIUS = 30;
 const stonecuttingLog = createLogger('StonecuttingHandler');
 
 /**
@@ -21,12 +20,14 @@ export function createStonecuttingHandler(gameState: GameState, stoneSystem: Sto
     return {
         type: WorkHandlerType.ENTITY,
 
-        findTarget: (x: number, y: number, _settlerId?: number, player?: number) => {
+        findTarget: ({ center, radius }, _settlerId, player) => {
+            if (radius === undefined) {
+                throw new Error('StonecuttingHandler: work area radius is required');
+            }
             return findNearestEntity(
-                gameState.spatialIndex.nearbyForPlayer(x, y, STONECUTTER_SEARCH_RADIUS, player!),
-                x,
-                y,
-                STONECUTTER_SEARCH_RADIUS,
+                gameState.spatialIndex.nearbyForPlayer(center, radius, player),
+                center,
+                radius,
                 entity => isHarvestableStone(entity.subType as number) && stoneSystem.canMine(entity.id)
             );
         },

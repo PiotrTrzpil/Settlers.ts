@@ -50,8 +50,8 @@ export interface GrowableConfig {
 
 /** Interface for systems that support finding spots and planting entities */
 export interface PlantingCapable {
-    findPlantingSpot(cx: number, cy: number, radius?: number): Tile | null;
-    plantEntity(x: number, y: number, settlerId: number): void;
+    findPlantingSpot(center: Tile, radius?: number): Tile | null;
+    plantEntity(tile: Tile, settlerId: number): void;
 }
 
 /** Mutable map API shared by Map and PersistentMap — used for states storage */
@@ -113,8 +113,8 @@ export abstract class GrowableSystem<TState extends GrowableState = GrowableStat
     /** Advance entity state by dt. Return 'remove' to delete the entity after this tick. */
     protected abstract tickState(entityId: number, state: TState, dt: number): 'keep' | 'remove';
 
-    /** Build the Command object for planting an entity of the given type at (x, y) */
-    protected abstract buildPlantCommand(objectType: MapObjectType, x: number, y: number): Command;
+    /** Build the Command object for planting an entity of the given type at tile */
+    protected abstract buildPlantCommand(objectType: MapObjectType, tile: Tile): Command;
 
     // ── State management ─────────────────────────────────────────
 
@@ -194,47 +194,47 @@ export abstract class GrowableSystem<TState extends GrowableState = GrowableStat
 
     // ── Planting ─────────────────────────────────────────────────
 
-    /** Find an empty tile near (cx, cy) that respects spacing constraints */
-    findPlantingSpot(cx: number, cy: number, radius?: number): Tile | null {
+    /** Find an empty tile near `center` that respects spacing constraints */
+    findPlantingSpot(center: Tile, radius?: number): Tile | null {
         const searchRadius = radius ?? this.config.plantingSearchRadius;
-        return findEmptySpot(cx, cy, {
+        return findEmptySpot(center, {
             gameState: this.gameState,
             searchRadius,
             minDistanceSq: this.config.minDistanceSq,
             requireFreeNeighbors: this.config.requireFreeNeighbors,
             rng: this.gameState.rng,
-            proximityEntities: [...this.gameState.spatialIndex.nearby(cx, cy, searchRadius * 2)],
+            proximityEntities: [...this.gameState.spatialIndex.nearby(center, searchRadius * 2)],
             proximityFilter: entity =>
                 entity.type === EntityType.MapObject &&
                 OBJECT_TYPE_CATEGORY[entity.subType as MapObjectType] === this.config.objectCategory,
         });
     }
 
-    /** Plant a random entity type at (x, y) via the command system */
-    plantEntity(x: number, y: number, settlerId: number): void {
+    /** Plant a random entity type at tile via the command system */
+    plantEntity(tile: Tile, settlerId: number): void {
         const objectType = this.gameState.rng.pick(this.config.plantableTypes);
         if (objectType === undefined) {throw new Error(`GrowableSystem.plantEntity: plantableTypes is empty (${this.constructor.name})`);}
-        const result = this._executeCommand(this.buildPlantCommand(objectType, x, y));
+        const result = this._executeCommand(this.buildPlantCommand(objectType, tile));
 
         if (result.success) {
-            this.log.debug(`Settler ${settlerId} planted ${MapObjectType[objectType]} at (${x}, ${y})`);
+            this.log.debug(`Settler ${settlerId} planted ${MapObjectType[objectType]} at (${tile.x}, ${tile.y})`);
         } else {
-            this.log.debug(`Settler ${settlerId}: cannot plant at (${x}, ${y}): ${result.error}`);
+            this.log.debug(`Settler ${settlerId}: cannot plant at (${tile.x}, ${tile.y}): ${result.error}`);
         }
     }
 
     /** Plant multiple entities near a position. Returns number planted. */
-    plantEntitiesNear(cx: number, cy: number, count: number, radius?: number): number {
+    plantEntitiesNear(center: Tile, count: number, radius?: number): number {
         const searchRadius = radius ?? this.config.plantingSearchRadius;
         let planted = 0;
 
         for (let i = 0; i < count; i++) {
-            const spot = this.findPlantingSpot(cx, cy, searchRadius);
+            const spot = this.findPlantingSpot(center, searchRadius);
             if (!spot) {break;}
 
             const objectType = this.gameState.rng.pick(this.config.plantableTypes);
             if (objectType === undefined) {throw new Error(`GrowableSystem.plantEntitiesNear: plantableTypes is empty (${this.constructor.name})`);}
-            const result = this._executeCommand(this.buildPlantCommand(objectType, spot.x, spot.y));
+            const result = this._executeCommand(this.buildPlantCommand(objectType, spot));
             if (result.success) {planted++;}
         }
 

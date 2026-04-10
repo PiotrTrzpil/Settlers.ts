@@ -14,7 +14,7 @@ export function createRecruitmentJob(
     targetUnitType: UnitType
 ): ChoreoJobState {
     return choreo('AUTO_RECRUIT')
-        .goTo(pileX, pileY, pileEntityId)
+        .goTo({ x: pileX, y: pileY }, pileEntityId)
         .transformRecruit(targetUnitType)
         .target(pileEntityId)
         .build();

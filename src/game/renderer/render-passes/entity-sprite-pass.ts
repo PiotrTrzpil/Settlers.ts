@@ -236,7 +236,7 @@ export class EntitySpritePass implements IRenderPass {
             return;
         }
 
-        const footprint = getBuildingFootprint(entity.x, entity.y, entity.subType as BuildingType, entity.race);
+        const footprint = getBuildingFootprint(entity, entity.subType as BuildingType, entity.race);
         const bounds = calculateFootprintBounds(footprint, ctx.mapSize, ctx.groundHeight, viewPoint.x, viewPoint.y);
 
         const indicator = resolveBuildingSelectionIndicator(bounds, ctx.spriteManager);

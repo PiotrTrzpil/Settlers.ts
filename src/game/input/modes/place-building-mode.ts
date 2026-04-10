@@ -57,7 +57,7 @@ export class PlaceBuildingMode extends BasePlacementMode<BuildingType> {
     }
 
     constructor(
-        validateFn: (x: number, y: number, buildingType: BuildingType) => boolean,
+        validateFn: (tile: Tile, buildingType: BuildingType) => boolean,
         private readonly getCommandContext?: () => Pick<
             BuildingPlacementContext,
             'placeBuildingsCompleted' | 'placeBuildingsWithWorker'
@@ -66,9 +66,9 @@ export class PlaceBuildingMode extends BasePlacementMode<BuildingType> {
         super(validateFn);
     }
 
-    protected override isPositionValid(x: number, y: number, _buildingType: BuildingType): boolean {
+    protected override isPositionValid(tile: Tile, _buildingType: BuildingType): boolean {
         // eslint-disable-next-line no-restricted-syntax -- nullable-by-design: grid is null until setGrid() is called; false (invalid) is correct before grid is ready
-        return this.grid?.isValid(x, y) ?? false;
+        return this.grid?.isValid(tile) ?? false;
     }
 
     protected getCommandType(): string {
@@ -87,17 +87,13 @@ export class PlaceBuildingMode extends BasePlacementMode<BuildingType> {
         return { x: tileX, y: tileY };
     }
 
-    protected createPlacementCommand(
-        x: number,
-        y: number,
-        data: PlacementModeData<BuildingType>
-    ): Record<string, unknown> {
+    protected createPlacementCommand(tile: Tile, data: PlacementModeData<BuildingType>): Record<string, unknown> {
         const settings = this.getCommandContext?.();
         return {
             type: this.getCommandType(),
             buildingType: data.subType,
-            x,
-            y,
+            x: tile.x,
+            y: tile.y,
             player: this.currentPlayer,
             race: data.race!,
             trusted: this.grid !== null,
@@ -126,8 +122,8 @@ export class PlaceBuildingMode extends BasePlacementMode<BuildingType> {
     }
 
     /** Notify the grid that a building was placed so it can update. */
-    notifyPlacement(x: number, y: number, buildingType: BuildingType, race: Race): void {
-        this.grid?.patchAfterPlacement(x, y, buildingType, race);
+    notifyPlacement(tile: Tile, buildingType: BuildingType, race: Race): void {
+        this.grid?.patchAfterPlacement(tile.x, tile.y, buildingType, race);
     }
 
     /**

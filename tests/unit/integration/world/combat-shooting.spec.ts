@@ -40,8 +40,8 @@ describe('Combat – bowman shooting at range', { timeout: 30_000 }, () => {
         sim.establishTerritory(1);
 
         // Place bowman and enemy 5 tiles apart (within SHOOT_RANGE=8, beyond RANGED_MELEE_THRESHOLD=2)
-        const bowman = sim.spawnUnit(50, 50, UnitType.Bowman1, 0);
-        const enemy = sim.spawnUnit(55, 50, UnitType.Swordsman1, 1);
+        const bowman = sim.spawnUnit({ x: 50, y: 50 }, UnitType.Bowman1, 0);
+        const enemy = sim.spawnUnit({ x: 55, y: 50 }, UnitType.Swordsman1, 1);
 
         sim.runUntil(() => combatStatus(sim, bowman) === CombatStatus.Shooting, {
             maxTicks: 500,
@@ -59,8 +59,8 @@ describe('Combat – bowman shooting at range', { timeout: 30_000 }, () => {
         sim.establishTerritory(0);
         sim.establishTerritory(1);
 
-        const bowman = sim.spawnUnit(50, 50, UnitType.Bowman1, 0);
-        const enemy = sim.spawnUnit(55, 50, UnitType.Swordsman1, 1);
+        const bowman = sim.spawnUnit({ x: 50, y: 50 }, UnitType.Bowman1, 0);
+        const enemy = sim.spawnUnit({ x: 55, y: 50 }, UnitType.Swordsman1, 1);
 
         const initialHealth = health(sim, enemy);
 
@@ -83,8 +83,8 @@ describe('Combat – bowman shooting at range', { timeout: 30_000 }, () => {
         sim.establishTerritory(1);
 
         // Use L3 bowman (high damage) against L1 swordsman for a faster kill
-        const bowman = sim.spawnUnit(50, 50, UnitType.Bowman3, 0);
-        const enemy = sim.spawnUnit(55, 50, UnitType.Swordsman1, 1);
+        const bowman = sim.spawnUnit({ x: 50, y: 50 }, UnitType.Bowman3, 0);
+        const enemy = sim.spawnUnit({ x: 55, y: 50 }, UnitType.Swordsman1, 1);
 
         sim.runUntil(() => sim.state.getEntity(enemy) === undefined, {
             maxTicks: 5_000,
@@ -103,8 +103,8 @@ describe('Combat – bowman shooting at range', { timeout: 30_000 }, () => {
         sim.establishTerritory(1);
 
         // Place enemy 12 tiles away — beyond SHOOT_RANGE=8 but within DETECTION_RANGE=17
-        const bowman = sim.spawnUnit(50, 50, UnitType.Bowman1, 0);
-        sim.spawnUnit(62, 50, UnitType.Swordsman1, 1);
+        const bowman = sim.spawnUnit({ x: 50, y: 50 }, UnitType.Bowman1, 0);
+        sim.spawnUnit({ x: 62, y: 50 }, UnitType.Swordsman1, 1);
 
         // Let the combat system scan
         sim.runUntil(() => combatStatus(sim, bowman) !== CombatStatus.Idle, {
@@ -134,8 +134,8 @@ describe('Combat – bowman melee when adjacent', { timeout: 30_000 }, () => {
         sim.establishTerritory(1);
 
         // Place bowman and enemy adjacent (distance 1)
-        const bowman = sim.spawnUnit(50, 50, UnitType.Bowman1, 0);
-        const enemy = sim.spawnUnit(51, 50, UnitType.Swordsman1, 1);
+        const bowman = sim.spawnUnit({ x: 50, y: 50 }, UnitType.Bowman1, 0);
+        const enemy = sim.spawnUnit({ x: 51, y: 50 }, UnitType.Swordsman1, 1);
 
         sim.runUntil(() => combatStatus(sim, bowman) === CombatStatus.Fighting, {
             maxTicks: 500,
@@ -153,8 +153,8 @@ describe('Combat – bowman melee when adjacent', { timeout: 30_000 }, () => {
         sim.establishTerritory(0);
         sim.establishTerritory(1);
 
-        const bowman = sim.spawnUnit(50, 50, UnitType.Bowman1, 0);
-        const enemy = sim.spawnUnit(51, 50, UnitType.Swordsman1, 1);
+        const bowman = sim.spawnUnit({ x: 50, y: 50 }, UnitType.Bowman1, 0);
+        const enemy = sim.spawnUnit({ x: 51, y: 50 }, UnitType.Swordsman1, 1);
         const initialHealth = health(sim, enemy);
 
         // Wait for melee combat
@@ -187,8 +187,8 @@ describe('Combat – shooting/melee transitions', { timeout: 60_000 }, () => {
         sim.establishTerritory(1);
 
         // Bowman at distance — starts shooting
-        const bowman = sim.spawnUnit(50, 50, UnitType.Bowman1, 0);
-        const enemy = sim.spawnUnit(55, 50, UnitType.Swordsman1, 1);
+        const bowman = sim.spawnUnit({ x: 50, y: 50 }, UnitType.Bowman1, 0);
+        const enemy = sim.spawnUnit({ x: 55, y: 50 }, UnitType.Swordsman1, 1);
 
         sim.runUntil(() => combatStatus(sim, bowman) === CombatStatus.Shooting, {
             maxTicks: 500,
@@ -217,8 +217,8 @@ describe('Combat – shooting/melee transitions', { timeout: 60_000 }, () => {
         sim.establishTerritory(1);
 
         // Swordsman should detect the bowman and pursue
-        const swordsman = sim.spawnUnit(55, 50, UnitType.Swordsman1, 1);
-        sim.spawnUnit(50, 50, UnitType.Bowman1, 0);
+        const swordsman = sim.spawnUnit({ x: 55, y: 50 }, UnitType.Swordsman1, 1);
+        sim.spawnUnit({ x: 50, y: 50 }, UnitType.Bowman1, 0);
 
         sim.runUntil(() => combatStatus(sim, swordsman) === CombatStatus.Fighting, {
             maxTicks: 5_000,
@@ -246,8 +246,8 @@ describe('Combat – bowman vs swordsman full encounter', { timeout: 60_000 }, (
         sim.establishTerritory(1);
 
         // Bowman and swordsman at medium range — bowman shoots while swordsman closes in
-        const bowman = sim.spawnUnit(50, 50, UnitType.Bowman1, 0);
-        const swordsman = sim.spawnUnit(56, 50, UnitType.Swordsman1, 1);
+        const bowman = sim.spawnUnit({ x: 50, y: 50 }, UnitType.Bowman1, 0);
+        const swordsman = sim.spawnUnit({ x: 56, y: 50 }, UnitType.Swordsman1, 1);
 
         // Track that bowman shot at least once before going to melee
         let shotFired = false;
@@ -277,9 +277,9 @@ describe('Combat – bowman vs swordsman full encounter', { timeout: 60_000 }, (
         sim.establishTerritory(0);
         sim.establishTerritory(1);
 
-        const bowman1 = sim.spawnUnit(50, 50, UnitType.Bowman1, 0);
-        const bowman2 = sim.spawnUnit(50, 52, UnitType.Bowman1, 0);
-        const swordsman = sim.spawnUnit(55, 51, UnitType.Swordsman1, 1);
+        const bowman1 = sim.spawnUnit({ x: 50, y: 50 }, UnitType.Bowman1, 0);
+        const bowman2 = sim.spawnUnit({ x: 50, y: 52 }, UnitType.Bowman1, 0);
+        const swordsman = sim.spawnUnit({ x: 55, y: 51 }, UnitType.Swordsman1, 1);
 
         // Both bowmen should start shooting
         sim.runUntil(

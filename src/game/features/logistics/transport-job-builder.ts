@@ -155,6 +155,6 @@ export class TransportJobBuilder {
         if (entity.type !== EntityType.Building) {
             return entity;
         }
-        return getBuildingDoorPos(entity.x, entity.y, entity.race, entity.subType as BuildingType);
+        return getBuildingDoorPos(entity, entity.race, entity.subType as BuildingType);
     }
 }

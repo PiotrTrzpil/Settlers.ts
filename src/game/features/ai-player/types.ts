@@ -16,7 +16,7 @@ export interface BuildStep {
 export interface AiPlayerConfig {
     /** Player index (0-based). */
     readonly player: number;
-    /** Ticks between AI evaluations (throttle). Default: 30 (~1 second). */
+    /** Ticks between AI evaluations (throttle). Default: seconds(1). */
     readonly evaluationInterval?: number;
     /** Override build order. Uses race-appropriate default if not provided. */
     readonly buildOrder?: readonly BuildStep[];

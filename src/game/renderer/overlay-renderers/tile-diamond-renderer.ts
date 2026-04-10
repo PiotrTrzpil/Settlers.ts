@@ -72,14 +72,14 @@ export class TileDiamondRenderer {
                 continue;
             }
             const buildingType = entity.subType as BuildingType;
-            const footprint = getBuildingFootprint(entity.x, entity.y, buildingType, entity.race);
-            const doorPos = getBuildingDoorPos(entity.x, entity.y, entity.race, buildingType);
+            const footprint = getBuildingFootprint(entity, buildingType, entity.race);
+            const doorPos = getBuildingDoorPos(entity, entity.race, buildingType);
 
             const blockKeys = new Set<string>();
             try {
-                const blockArea = getBuildingBlockArea(entity.x, entity.y, buildingType, entity.race);
+                const blockArea = getBuildingBlockArea(entity, buildingType, entity.race);
                 for (const t of blockArea) {
-                    blockKeys.add(tileKey(t.x, t.y));
+                    blockKeys.add(tileKey(t));
                 }
             } catch {
                 /* no block data — treat all as block area */
@@ -89,7 +89,7 @@ export class TileDiamondRenderer {
                 const color = getFootprintTileColor(tile, doorPos, blockKeys);
                 s.gl.vertexAttrib4f(s.aColor, color[0]!, color[1]!, color[2]!, color[3]!);
 
-                const idx = s.ctx.mapSize.toIndex(tile.x, tile.y);
+                const idx = s.ctx.mapSize.toIndex(tile);
                 const hWorld = heightToWorld(s.ctx.groundHeight[idx]!);
 
                 const top = shiftBuildingWorldPos(
@@ -124,7 +124,7 @@ export class TileDiamondRenderer {
         for (const h of highlights) {
             const tx = Math.round(h.x);
             const ty = Math.round(h.y);
-            const idx = s.ctx.mapSize.toIndex(tx, ty);
+            const idx = s.ctx.mapSize.toIndex({ x: tx, y: ty });
             const hWorld = heightToWorld(s.ctx.groundHeight[idx]!);
             // eslint-disable-next-line no-restricted-syntax -- optional value with sensible numeric default
             const alpha = h.alpha ?? 0.5;
@@ -184,7 +184,7 @@ export class TileDiamondRenderer {
 
             const tx = entity.x;
             const ty = entity.y;
-            const idx = s.ctx.mapSize.toIndex(tx, ty);
+            const idx = s.ctx.mapSize.toIndex({ x: tx, y: ty });
             const hWorld = heightToWorld(s.ctx.groundHeight[idx]!);
 
             const top = shiftBuildingWorldPos(tileToWorld(tx, ty, hWorld, s.ctx.viewPoint.x, s.ctx.viewPoint.y));
@@ -280,7 +280,7 @@ function getFootprintTileColor(tile: Tile, doorPos: Tile, blockKeys: Set<string>
     if (tile.x === doorPos.x && tile.y === doorPos.y) {
         return FOOTPRINT_DOOR_COLOR;
     }
-    if (blockKeys.size === 0 || blockKeys.has(tileKey(tile.x, tile.y))) {
+    if (blockKeys.size === 0 || blockKeys.has(tileKey(tile))) {
         return FOOTPRINT_TILE_COLOR;
     }
     return FOOTPRINT_EDGE_COLOR;

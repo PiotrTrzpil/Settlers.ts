@@ -53,22 +53,22 @@ describe('Recruitment optimization (integration)', { timeout: 30_000 }, () => {
     it('selects carrier nearest to tool pile, not nearest to building', () => {
         sim = createSimulation();
 
-        // Layout (1D for clarity):
-        //   carrierA at (30, 64) — far from tool (50,64), close to building (20,64)
-        //   carrierB at (48, 64) — close to tool (50,64), far from building (20,64)
-        //   tool pile at (50, 64)
-        //   building at (20, 64)
+        // Layout (1D for clarity, all within Castle territory at center 64,64):
+        //   carrierA at (50, 64) — far from tool (82,64), close to building (40,64)
+        //   carrierB at (80, 64) — close to tool (82,64), far from building (40,64)
+        //   tool pile at (82, 64)
+        //   building at (40, 64)
         //
-        // carrierA→tool = 20, carrierB→tool = 2
+        // carrierA→tool = 32, carrierB→tool = 2
         // If system picked carrier nearest to building: carrierA (dist=10)
         // Correct: carrierB (closer to tool → shorter total trip)
 
-        const carrierA = sim.spawnUnit(30, 64, UnitType.Carrier);
-        const carrierB = sim.spawnUnit(48, 64, UnitType.Carrier);
-        sim.placeGoodsAt(50, 64, EMaterialType.AXE, 1);
+        const carrierA = sim.spawnUnit({ x: 50, y: 64 }, UnitType.Carrier);
+        const carrierB = sim.spawnUnit({ x: 80, y: 64 }, UnitType.Carrier);
+        sim.placeGoodsAt({ x: 82, y: 64 }, EMaterialType.AXE, 1);
 
         // Place a WoodcutterHut at a known position (no worker spawned)
-        sim.placeBuildingAt(20, 64, BuildingType.WoodcutterHut, 0, true, Race.Roman, false);
+        sim.placeBuildingAt(40, 64, BuildingType.WoodcutterHut, 0, true, Race.Roman, false);
 
         // Run until a Woodcutter appears
         sim.runUntil(() => sim.countEntities(EntityType.Unit, UnitType.Woodcutter) === 1, {
@@ -95,22 +95,20 @@ describe('Recruitment optimization (integration)', { timeout: 30_000 }, () => {
     it('minimizes total carrier→tool + tool→target distance', () => {
         sim = createSimulation();
 
-        // Layout:
-        //   carrierA at (30, 64) — tool at (32, 64) → carrier→tool=2, tool→target(20,64)=12 → total=14
-        //   carrierB at (48, 64) — tool at (50, 64) → carrier→tool=2, tool→target(20,64)=30 → total=32
-        //   Two tool piles: one at (32,64), one at (50,64)
-        //   Building target at (20, 64)
-        //
-        // Both carriers are equally close to their respective tool piles (dist=2),
-        // but carrierA's tool is closer to the target → lower total trip cost.
-        // System should pick carrierA.
+        // Place building first via auto-placer (avoids occupancy conflicts)
+        const buildingId = sim.placeBuilding(BuildingType.WoodcutterHut, 0, true, undefined, false);
+        const building = sim.state.getEntityOrThrow(buildingId, 'building');
 
-        const carrierA = sim.spawnUnit(30, 64, UnitType.Carrier);
-        const carrierB = sim.spawnUnit(48, 64, UnitType.Carrier);
-        sim.placeGoodsAt(32, 64, EMaterialType.AXE, 1);
-        sim.placeGoodsAt(50, 64, EMaterialType.AXE, 1);
-
-        sim.placeBuildingAt(20, 64, BuildingType.WoodcutterHut, 0, true, Race.Roman, false);
+        // Layout relative to building:
+        //   carrierA near building, toolA near carrierA
+        //   carrierB far from building, toolB near carrierB
+        //   Both carriers equidistant from their tools (dist=2),
+        //   but carrierA's tool is closer to the building → lower total trip cost.
+        const bx = building.x;
+        const carrierA = sim.spawnUnit({ x: bx + 5, y: building.y + 10 }, UnitType.Carrier);
+        const carrierB = sim.spawnUnit({ x: bx + 25, y: building.y + 10 }, UnitType.Carrier);
+        sim.placeGoodsAt({ x: bx + 7, y: building.y + 10 }, EMaterialType.AXE, 1);
+        sim.placeGoodsAt({ x: bx + 27, y: building.y + 10 }, EMaterialType.AXE, 1);
 
         sim.runUntil(() => sim.countEntities(EntityType.Unit, UnitType.Woodcutter) === 1, {
             maxTicks: 30_000,
@@ -118,7 +116,7 @@ describe('Recruitment optimization (integration)', { timeout: 30_000 }, () => {
             diagnose: () => diagnose(sim, UnitType.Woodcutter),
         });
 
-        // carrierA should be recruited (lower total trip cost)
+        // carrierA should be recruited (lower total trip cost: tool closer to building)
         const carrierAEntity = sim.state.getEntity(carrierA);
         const carrierBEntity = sim.state.getEntity(carrierB);
 
@@ -132,7 +130,7 @@ describe('Recruitment optimization (integration)', { timeout: 30_000 }, () => {
     it('recruitment fails gracefully when no tool pile exists (carrier stays idle)', () => {
         sim = createSimulation();
 
-        sim.spawnUnit(64, 64, UnitType.Carrier);
+        sim.spawnUnit({ x: 64, y: 64 }, UnitType.Carrier);
         // No AXE pile placed — Woodcutter needs AXE
 
         // Use auto-placement to avoid occupancy conflicts
@@ -171,9 +169,9 @@ describe('Recruitment optimization (integration)', { timeout: 30_000 }, () => {
         //
         // Carrier should pick up from pile A (nearest).
 
-        sim.spawnUnit(40, 64, UnitType.Carrier);
-        const pileA = sim.placeGoodsAt(42, 64, EMaterialType.PICKAXE, 1);
-        sim.placeGoodsAt(60, 64, EMaterialType.PICKAXE, 1);
+        sim.spawnUnit({ x: 40, y: 64 }, UnitType.Carrier);
+        const pileA = sim.placeGoodsAt({ x: 42, y: 64 }, EMaterialType.PICKAXE, 1);
+        sim.placeGoodsAt({ x: 60, y: 64 }, EMaterialType.PICKAXE, 1);
 
         recruitSpecialist(sim, UnitType.Geologist, 1);
 
@@ -198,17 +196,17 @@ describe('Recruitment optimization (integration)', { timeout: 30_000 }, () => {
     it('player-queued recruitment uses camera hint to pick nearest tool pile', () => {
         sim = createSimulation();
 
-        // Layout:
-        //   carrier at (40, 64)
-        //   pickaxe pile A at (20, 64) — near camera hint (18, 64)
-        //   pickaxe pile B at (60, 64) — far from camera hint
+        // Layout (all within Castle territory at center 64,64):
+        //   carrier at (55, 64)
+        //   pickaxe pile A at (36, 64) — near camera hint (34, 64)
+        //   pickaxe pile B at (85, 64) — far from camera hint
         //
-        // With hint at (18, 64), system finds tool nearest to hint (pile A),
+        // With hint at (34, 64), system finds tool nearest to hint (pile A),
         // then carrier nearest to that tool.
 
-        sim.spawnUnit(40, 64, UnitType.Carrier);
-        const pileA = sim.placeGoodsAt(20, 64, EMaterialType.PICKAXE, 1);
-        sim.placeGoodsAt(60, 64, EMaterialType.PICKAXE, 1);
+        sim.spawnUnit({ x: 55, y: 64 }, UnitType.Carrier);
+        const pileA = sim.placeGoodsAt({ x: 36, y: 64 }, EMaterialType.PICKAXE, 1);
+        sim.placeGoodsAt({ x: 85, y: 64 }, EMaterialType.PICKAXE, 1);
 
         // Use recruit_specialist command with camera hint
         sim.execute({
@@ -217,7 +215,7 @@ describe('Recruitment optimization (integration)', { timeout: 30_000 }, () => {
             count: 1,
             player: 0,
             race: Race.Roman,
-            nearX: 18,
+            nearX: 34,
             nearY: 64,
         });
 

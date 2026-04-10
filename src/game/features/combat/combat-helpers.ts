@@ -12,12 +12,12 @@ import { findNearestByHexDistance } from '../../systems/hex-directions';
  * If (x,y) is inside a building footprint, BFS outward to find the nearest
  * tile outside. Searches up to 2 rings (18 tiles) to handle large buildings.
  */
-export function resolveOutsideBuilding(x: number, y: number, buildingOccupancy: ReadonlySet<string>): Tile {
-    if (!buildingOccupancy.has(tileKey(x, y))) {
-        return { x, y };
+export function resolveOutsideBuilding(tile: Tile, buildingOccupancy: ReadonlySet<string>): Tile {
+    if (!buildingOccupancy.has(tileKey(tile))) {
+        return tile;
     }
     // BFS outward to find nearest tile outside any building footprint (max ~54 tiles = 3 rings)
-    return bfsFind(x, y, (nx, ny) => !buildingOccupancy.has(tileKey(nx, ny)), 54) ?? { x, y };
+    return bfsFind(tile, t => !buildingOccupancy.has(tileKey(t)), 54) ?? tile;
 }
 
 /** Detection range: how far a unit scans for enemies (in hex tiles). */
@@ -38,7 +38,7 @@ export const SHOOT_RANGE = 8;
  * while field enemies are present.
  */
 export function hasNearbyThreats(entity: Entity, gameState: GameState, isExcluded: (id: number) => boolean): boolean {
-    const nearby = gameState.getEntitiesInRadius(entity.x, entity.y, DETECTION_RANGE);
+    const nearby = gameState.getEntitiesInRadius(entity, DETECTION_RANGE);
     for (const candidate of nearby) {
         if (candidate.type !== EntityType.Unit || candidate.hidden) {
             continue;
@@ -66,7 +66,7 @@ export function findNearestEnemy(
     gameState: GameState,
     combatStates: ReadonlyMap<number, CombatState>
 ): Entity | null {
-    const nearby = gameState.getEntitiesInRadius(entity.x, entity.y, DETECTION_RANGE);
+    const nearby = gameState.getEntitiesInRadius(entity, DETECTION_RANGE);
     const militaryTargets: Entity[] = [];
     const specialistTargets: Entity[] = [];
 

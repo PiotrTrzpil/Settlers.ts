@@ -2,11 +2,19 @@ import { BuildingType, UnitType, EntityType } from '../../entity';
 import { MapObjectType } from '@/game/types/map-object-types';
 import { EMaterialType } from '../../economy';
 import { ANIMATION_DEFAULTS } from '../../animation/animation';
-import { Race } from '../../core/race';
+import { Race, RACE_GFX_FILE } from '../../core/race';
 import { isUnitAvailableForRace, isBuildingAvailableForRace } from '../../data/race-availability';
 
 // Re-export from canonical locations and new index files
-export { Race, RACE_NAMES, AVAILABLE_RACES, s4TribeToRace, loadSavedRace, saveSavedRace } from '../../core/race';
+export {
+    Race,
+    RACE_GFX_FILE,
+    formatRace,
+    AVAILABLE_RACES,
+    s4TribeToRace,
+    loadSavedRace,
+    saveSavedRace,
+} from '../../core/race';
 export { BUILDING_ICON_INDICES, MAP_OBJECT_SPRITES } from './gil-indices';
 export { GilSpriteManifest } from './gil-sprite-manifest';
 export {
@@ -219,7 +227,7 @@ export function getUnitSpriteMap(race: Race): Partial<Record<UnitType, UnitSprit
  * Returns a map of BuildingType -> { file, index } using the race's GFX file number.
  */
 export function getBuildingSpriteMap(race: Race): Partial<Record<BuildingType, BuildingSpriteInfo>> {
-    const fileNum = race as number;
+    const fileNum = RACE_GFX_FILE[race];
     const result: Partial<Record<BuildingType, BuildingSpriteInfo>> = {};
 
     for (const [typeStr, jobIndex] of Object.entries(BUILDING_JOB_INDICES)) {
@@ -309,10 +317,10 @@ export class SpriteMetadataRegistry {
     private overlays = new OverlaySpriteCategory();
     private animated = new AnimatedEntityCategory();
 
-    private readonly _loadedRaces: Set<number> = new Set();
+    private readonly _loadedRaces: Set<Race> = new Set();
 
     /** Get all races that have sprites loaded */
-    get loadedRaces(): ReadonlySet<number> {
+    get loadedRaces(): ReadonlySet<Race> {
         return this._loadedRaces;
     }
 
@@ -327,7 +335,7 @@ export class SpriteMetadataRegistry {
         type: BuildingType,
         constructionSprite: SpriteEntry,
         completedSprite: SpriteEntry,
-        race: number
+        race: Race
     ): void {
         this.buildings.register(type, completedSprite, race);
         this.construction.register(type, constructionSprite, race);
@@ -338,7 +346,7 @@ export class SpriteMetadataRegistry {
      * Look up the completed building sprite, with animation data if registered.
      * Returns undefined if sprites for this race haven't been loaded yet.
      */
-    public getBuilding(type: BuildingType, race: number): AnimatedSpriteEntry | undefined {
+    public getBuilding(type: BuildingType, race: Race): AnimatedSpriteEntry | undefined {
         if (!this.buildings.isRaceLoaded(race)) {
             return undefined;
         }
@@ -353,7 +361,7 @@ export class SpriteMetadataRegistry {
      * Look up the construction sprite for a building type and race.
      * Returns undefined if construction sprites for this race haven't been loaded yet.
      */
-    public getBuildingConstruction(type: BuildingType, race: number): AnimatedSpriteEntry | undefined {
+    public getBuildingConstruction(type: BuildingType, race: Race): AnimatedSpriteEntry | undefined {
         if (!this.construction.isRaceLoaded(race)) {
             return undefined;
         }
@@ -517,7 +525,7 @@ export class SpriteMetadataRegistry {
      * Register a sprite entry for a unit type and direction.
      * @param direction Sprite direction index (see SpriteDirection enum)
      */
-    public registerUnit(type: UnitType, direction: number, entry: SpriteEntry, race: number): void {
+    public registerUnit(type: UnitType, direction: number, entry: SpriteEntry, race: Race): void {
         this.units.register(type, direction, entry, race);
         this._loadedRaces.add(race);
     }
@@ -527,7 +535,7 @@ export class SpriteMetadataRegistry {
      * Returns undefined if sprites for this race haven't been loaded yet.
      * @param direction Sprite direction index (see SpriteDirection enum) (defaults to 0)
      */
-    public getUnit(type: UnitType, direction: number = 0, race?: number): AnimatedSpriteEntry | undefined {
+    public getUnit(type: UnitType, direction: number = 0, race?: Race): AnimatedSpriteEntry | undefined {
         // Race is always provided by entity lookups; optional only for legacy callers
         if (race === undefined || !this.units.isRaceLoaded(race)) {
             return undefined;
@@ -540,7 +548,7 @@ export class SpriteMetadataRegistry {
     }
 
     /** Whether unit sprites for a given race have been loaded. */
-    public isUnitRaceLoaded(race: number): boolean {
+    public isUnitRaceLoaded(race: Race): boolean {
         return this.units.isRaceLoaded(race);
     }
 
@@ -548,7 +556,7 @@ export class SpriteMetadataRegistry {
      * Get the per-direction static sprite for a unit (frame 0 of walk for that direction).
      * Unlike getUnit(), this always returns the direction-specific sprite, not the shared animated entry.
      */
-    public getUnitDirectionSprite(type: UnitType, direction: number, race: number): SpriteEntry {
+    public getUnitDirectionSprite(type: UnitType, direction: number, race: Race): SpriteEntry {
         return this.units.get(type, direction, race);
     }
 
@@ -573,7 +581,7 @@ export class SpriteMetadataRegistry {
         directionFrames: Map<number, SpriteEntry[]>,
         frameDurationMs: number = ANIMATION_DEFAULTS.FRAME_DURATION_MS,
         loop: boolean = true,
-        race?: number,
+        race?: Race,
         walkSequenceKey?: string
     ): void {
         this.animated.register(entityType, subType, directionFrames, frameDurationMs, loop, race, walkSequenceKey);
@@ -593,7 +601,7 @@ export class SpriteMetadataRegistry {
         directionFrames: Map<number, SpriteEntry[]>,
         frameDurationMs: number = ANIMATION_DEFAULTS.FRAME_DURATION_MS,
         loop: boolean = true,
-        race?: number
+        race?: Race
     ): void {
         this.animated.registerSequence(entityType, subType, sequenceKey, directionFrames, frameDurationMs, loop, race);
     }
@@ -605,7 +613,7 @@ export class SpriteMetadataRegistry {
     public getAnimatedEntity(
         entityType: EntityType,
         subType: number | string,
-        race?: number
+        race?: Race
     ): AnimatedSpriteEntry | undefined {
         return this.animated.getEntry(entityType, subType, race);
     }
@@ -613,7 +621,7 @@ export class SpriteMetadataRegistry {
     /**
      * Check if an entity type/subtype has animation data.
      */
-    public hasAnimation(entityType: EntityType, subType: number | string, race?: number): boolean {
+    public hasAnimation(entityType: EntityType, subType: number | string, race?: Race): boolean {
         return this.animated.hasAnimation(entityType, subType, race);
     }
 
@@ -703,7 +711,7 @@ export class SpriteMetadataRegistry {
     /**
      * Get atlas layers for buildings — only completed sprite (no construction).
      */
-    public getLayersForBuildings(types: Set<BuildingType>, race: number): Set<number> {
+    public getLayersForBuildings(types: Set<BuildingType>, race: Race): Set<number> {
         const layers = new Set<number>();
         const raceMap = this.buildings.getRaceMap().get(race);
         if (!raceMap) {
@@ -720,7 +728,7 @@ export class SpriteMetadataRegistry {
     /**
      * Get atlas layers for units — only direction 0 (right-facing static sprite).
      */
-    public getLayersForUnits(types: Set<UnitType>, race: number): Set<number> {
+    public getLayersForUnits(types: Set<UnitType>, race: Race): Set<number> {
         const layers = new Set<number>();
         const raceMap = this.units.getRaceMap().get(race);
         if (!raceMap) {
@@ -746,7 +754,7 @@ export class SpriteMetadataRegistry {
      * Delegates to each category — the registry never knows category-internal formats.
      */
     /** Cache format version — bump when serialization format changes to invalidate old caches. */
-    static readonly CACHE_VERSION = 2;
+    static readonly CACHE_VERSION = 3;
 
     public serialize(): SerializedRegistryData {
         return {
@@ -784,7 +792,7 @@ export class SpriteMetadataRegistry {
         registry.overlays = OverlaySpriteCategory.deserialize(data.overlays);
         registry.animated = AnimatedEntityCategory.deserialize(data.animatedShared, data.animatedByRace);
         for (const race of data.loadedRaces) {
-            registry._loadedRaces.add(race);
+            registry._loadedRaces.add(race as Race);
         }
         return registry;
     }

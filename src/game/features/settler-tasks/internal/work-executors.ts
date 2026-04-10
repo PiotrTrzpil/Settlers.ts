@@ -68,10 +68,9 @@ function callPositionComplete(settler: Entity, job: ChoreoJobState, ctx: WorkCon
     // Use targetPos if available; fall back to settler's current position
     // (targetPos may have been cleared between nodes, but the settler is already at the target)
     const { positionHandler, handlerErrorLogger } = ctx;
-    const x = job.targetPos?.x ?? settler.x;
-    const y = job.targetPos?.y ?? settler.y;
+    const tile = job.targetPos ?? { x: settler.x, y: settler.y };
     safeCall(
-        () => positionHandler.onWorkAtPositionComplete(x, y, settler.id),
+        () => positionHandler.onWorkAtPositionComplete(tile, settler.id),
         handlerErrorLogger,
         `${label} failed for settler ${settler.id}`
     );

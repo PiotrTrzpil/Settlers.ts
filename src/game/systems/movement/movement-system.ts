@@ -1,4 +1,4 @@
-import { EntityType, tileKey } from '../../entity';
+import { EntityType, tileKey, type Tile } from '../../entity';
 import { MovementController, MovementState } from './movement-controller';
 import { PathfindingService } from './pathfinding-service';
 import type { TickSystem } from '../../core/tick-system';
@@ -11,6 +11,8 @@ import { runCrowdDispersal, clearDispersalCooldown } from './crowd-dispersal';
 
 const log = new LogHandler('MovementSystem');
 
+type TileWithEntityType = Tile & { type: EntityType };
+
 /** After waiting this long, repath to find an alternative route around terrain */
 const REPATH_WAIT_TIMEOUT = 0.5; // seconds
 
@@ -21,12 +23,12 @@ const GIVEUP_WAIT_TIMEOUT = 2.0; // seconds
  * Callback for updating entity position in the game state.
  * Returns true if the update was successful.
  */
-export type UpdatePositionFn = (entityId: number, x: number, y: number) => boolean;
+export type UpdatePositionFn = (entityId: number, newPos: Tile) => boolean;
 
 /**
  * Callback for getting entity information.
  */
-export type GetEntityFn = (entityId: number) => { type: EntityType; x: number; y: number } | undefined;
+export type GetEntityFn = (entityId: number) => TileWithEntityType | undefined;
 
 /**
  * Configuration for MovementSystem dependencies.
@@ -147,10 +149,10 @@ export class MovementSystem implements TickSystem {
     // Controller lifecycle
     // -------------------------------------------------------------------------
 
-    createController(entityId: number, x: number, y: number, speed: number): MovementController {
-        const controller = new MovementController(entityId, x, y, speed);
+    createController(entityId: number, tile: Tile, speed: number): MovementController {
+        const controller = new MovementController(entityId, tile, speed);
         this.controllers.set(entityId, controller);
-        this.unitOccupancy.set(tileKey(x, y), entityId);
+        this.unitOccupancy.set(tileKey(tile), entityId);
         return controller;
     }
 
@@ -161,7 +163,7 @@ export class MovementSystem implements TickSystem {
     removeController(entityId: number): void {
         const ctrl = this.controllers.get(entityId);
         if (ctrl) {
-            const key = tileKey(ctrl.tileX, ctrl.tileY);
+            const key = tileKey({ x: ctrl.tileX, y: ctrl.tileY });
             if (this.unitOccupancy.get(key) === entityId) {
                 this.unitOccupancy.delete(key);
             }
@@ -193,7 +195,7 @@ export class MovementSystem implements TickSystem {
                 continue;
             }
             const remaining = ctrl.path.slice(ctrl.pathIndex);
-            const passesThrough = remaining.some(wp => blockedKeys.has(tileKey(wp.x, wp.y)));
+            const passesThrough = remaining.some(wp => blockedKeys.has(tileKey(wp)));
             if (!passesThrough) {
                 continue;
             }
@@ -224,7 +226,7 @@ export class MovementSystem implements TickSystem {
      * Calculates path and sets up the controller for movement.
      * @returns true if a valid path was found
      */
-    moveUnit(entityId: number, targetX: number, targetY: number): boolean {
+    moveUnit(entityId: number, target: Tile): boolean {
         const controller = this.controllers.get(entityId);
         if (!controller) {
             return false;
@@ -235,12 +237,12 @@ export class MovementSystem implements TickSystem {
 
         setPathfindingEntityContext(entityId);
         this.pathfinder.setPathfindingEntityId(entityId);
-        const path = this.pathfinder.findPath(fromX, fromY, targetX, targetY);
+        const path = this.pathfinder.findPath(fromX, fromY, target.x, target.y);
         setPathfindingEntityContext(undefined);
         this.pathfinder.setPathfindingEntityId(undefined);
 
         if (!path || path.length === 0) {
-            this.emitPathFailed(entityId, fromX, fromY, targetX, targetY);
+            this.emitPathFailed(entityId, fromX, fromY, target.x, target.y);
             return false;
         }
 
@@ -256,8 +258,8 @@ export class MovementSystem implements TickSystem {
                 unitId: entityId,
                 fromX,
                 fromY,
-                toX: targetX,
-                toY: targetY,
+                toX: target.x,
+                toY: target.y,
                 pathLength: path.length,
                 redirect,
             });
@@ -298,8 +300,8 @@ export class MovementSystem implements TickSystem {
      * Used when spawning a unit at a specific tile (e.g. building door).
      * Returns true if the tile is now free (was empty or push succeeded).
      */
-    pushUnitAt(x: number, y: number): boolean {
-        return this.bumpResolver.pushUnitAt(x, y);
+    pushUnitAt(tile: Tile): boolean {
+        return this.bumpResolver.pushUnitAt(tile);
     }
 
     // -------------------------------------------------------------------------
@@ -355,16 +357,16 @@ export class MovementSystem implements TickSystem {
 
             // If next waypoint is building-blocked and the unit is NOT on a blocked tile
             // itself (i.e. it's trying to enter, not escape), repath around it.
-            const wpKey = tileKey(wp.x, wp.y);
+            const wpKey = tileKey(wp);
             if (this.buildingOccupancy.has(wpKey)) {
-                const currentKey = tileKey(controller.tileX, controller.tileY);
+                const currentKey = tileKey({ x: controller.tileX, y: controller.tileY });
                 if (!this.buildingOccupancy.has(currentKey)) {
                     this.repathFromCurrent(controller);
                     break;
                 }
             }
 
-            const occupantId = this.getUnitAt(tileKey(wp.x, wp.y), controller.entityId);
+            const occupantId = this.getUnitAt(tileKey(wp), controller.entityId);
 
             if (occupantId === undefined) {
                 this.stepForward(controller);
@@ -398,14 +400,14 @@ export class MovementSystem implements TickSystem {
     // -------------------------------------------------------------------------
 
     private stepForward(controller: MovementController): void {
-        const oldKey = tileKey(controller.tileX, controller.tileY);
+        const oldKey = tileKey({ x: controller.tileX, y: controller.tileY });
         const newPos = controller.executeMove();
         if (newPos) {
             if (this.unitOccupancy.get(oldKey) === controller.entityId) {
                 this.unitOccupancy.delete(oldKey);
             }
-            this.unitOccupancy.set(tileKey(newPos.x, newPos.y), controller.entityId);
-            this.updatePositionFn(controller.entityId, newPos.x, newPos.y);
+            this.unitOccupancy.set(tileKey(newPos), controller.entityId);
+            this.updatePositionFn(controller.entityId, newPos);
             if (this._verbose) {
                 this.eventBus.emit('movement:step', {
                     unitId: controller.entityId,

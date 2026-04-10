@@ -65,14 +65,14 @@ function getCandidateTiles(
     tileY: number,
     count: number
 ): Tile[] {
-    const door = getBuildingDoorPos(tileX, tileY, race, buildingType);
+    const door = getBuildingDoorPos({ x: tileX, y: tileY }, race, buildingType);
 
     // Exclude tiles inside the building's block area so piles are always
     // accessible without walking onto the (eventually blocked) footprint.
-    const blockArea = getBuildingBlockArea(tileX, tileY, buildingType, race);
+    const blockArea = getBuildingBlockArea({ x: tileX, y: tileY }, buildingType, race);
     const blockedKeys = new Set<string>();
     for (const tile of blockArea) {
-        blockedKeys.add(tileKey(tile.x, tile.y));
+        blockedKeys.add(tileKey(tile));
     }
 
     const allOffsets = [...RING1_OFFSETS, ...RING2_OFFSETS];
@@ -82,11 +82,11 @@ function getCandidateTiles(
             y: door.y + dy,
             dist: Math.abs(dx) + Math.abs(dy),
         }))
-        .filter(({ x, y }) => !blockedKeys.has(tileKey(x, y)));
+        .filter(tile => !blockedKeys.has(tileKey(tile)));
 
     candidates.sort((a, b) => a.dist - b.dist);
 
-    return candidates.slice(0, count).map(({ x, y }) => ({ x, y }));
+    return candidates.slice(0, count);
 }
 
 /**

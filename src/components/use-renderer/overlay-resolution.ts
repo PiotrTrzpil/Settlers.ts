@@ -4,15 +4,24 @@
  */
 
 import type { Game } from '@/game/game';
+import type { GameState } from '@/game/game-state';
+import type { Race } from '@/game/core/race';
 import type { EntityRenderer } from '@/game/renderer/entity-renderer';
 import { OverlayRenderLayer, type BuildingOverlayRenderData } from '@/game/renderer/render-context';
 import { getBuildingVisualState, BuildingConstructionPhase } from '@/game/features/building-construction';
-import { PIXELS_TO_WORLD } from '@/game/renderer/sprite-metadata';
+import { UNIT_XML_PREFIX, type SpriteEntry, type SpriteMetadataRegistry } from '@/game/renderer/sprite-metadata';
 import { BuildingType, EntityType } from '@/game/entity';
 import { UnitType } from '@/game/core/unit-types';
 import { getOverlayFrame } from '@/game/features/building-overlays';
-import { ENTITY_SCALE, scaleSprite } from '@/game/renderer/entity-renderer-constants';
+import { ENTITY_SCALE, scaleSprite, pixelOffsetToWorld } from '@/game/renderer/entity-renderer-constants';
 import { getGarrisonSlotPositions } from '@/game/features/tower-garrison/internal/garrison-slot-positions';
+import {
+    towerBowmanTargets,
+    towerBowmanThrowingStones,
+} from '@/game/features/tower-garrison/internal/tower-combat-system';
+import { toSpriteDirection } from '@/game/renderer/sprite-direction';
+import { getDirectionToward } from '@/game/systems/hex-directions';
+import { ANIMATION_DEFAULTS, xmlKey } from '@/game/animation/animation';
 
 const EMPTY_OVERLAY_DATA: readonly BuildingOverlayRenderData[] = [];
 
@@ -76,28 +85,28 @@ function resolveConstructionOverlay(
 }
 
 /**
- * Resolve garrisoned swordsman sprites as building overlays.
- * Uses `top === false` settler positions from buildingInfo.xml — swordsmen visible through windows.
- * Static standing pose at the XML pixel offset, scaled like other overlays.
+ * Resolve garrisoned soldier sprites as building overlays.
+ * Swordsmen use `top === false` positions — static standing pose.
+ * Bowmen use `top === true` positions — face their attack target and animate SHOOT/THROW_STONE.
  */
+// TODO(debug): remove after castle garrison rendering is confirmed working
+let _garrisonDebugLogged = 0;
+
 function resolveGarrisonOverlays(
     entityId: number,
     g: Game,
     er: EntityRenderer,
     out: BuildingOverlayRenderData[]
 ): void {
-    const garrison = g.services.garrisonManager.getGarrison(entityId);
-    if (!garrison || garrison.swordsmanSlots.unitIds.length === 0) {
-        return;
-    }
-
     const entity = g.state.getEntity(entityId);
     if (!entity || entity.type !== EntityType.Building || !er.spriteManager) {
         return;
     }
 
-    const slotPositions = getGarrisonSlotPositions(entity.subType as BuildingType, entity.race, false);
-    if (!slotPositions) {
+    const buildingType = entity.subType as BuildingType;
+
+    const garrison = g.services.garrisonManager.getGarrison(entityId);
+    if (!garrison) {
         return;
     }
 
@@ -105,32 +114,145 @@ function resolveGarrisonOverlays(
         return;
     }
 
-    for (let i = 0; i < garrison.swordsmanSlots.unitIds.length; i++) {
-        const slot = slotPositions[i];
-        if (!slot) {
-            continue;
-        }
+    const registry = er.spriteManager.registry;
+    const { state } = g;
+    const prevLen = out.length;
+    emitSwordsmanOverlays(buildingType, entity.race, garrison.swordsmanSlots.unitIds, state, registry, out);
+    emitBowmanOverlays(entity, buildingType, garrison.bowmanSlots.unitIds, state, registry, out);
 
-        const unit = g.state.getEntity(garrison.swordsmanSlots.unitIds[i]!);
+    // Debug: log when castle garrison unit count changes
+    if (buildingType === BuildingType.Castle) {
+        const total = garrison.swordsmanSlots.unitIds.length + garrison.bowmanSlots.unitIds.length;
+        if (total !== _garrisonDebugLogged) {
+            const sw = garrison.swordsmanSlots.unitIds.length;
+            const bw = garrison.bowmanSlots.unitIds.length;
+            const added = out.length - prevLen;
+            console.log(
+                `[garrison-debug] Castle id=${entityId}: sw=${sw} bw=${bw} overlaysAdded=${added}`,
+                added > 0 ? out.slice(prevLen) : 'NONE'
+            );
+            _garrisonDebugLogged = total;
+        }
+    }
+}
+
+/** Emit static standing-pose overlays for garrisoned swordsmen. */
+function emitSwordsmanOverlays(
+    buildingType: BuildingType,
+    race: Race,
+    unitIds: readonly number[],
+    state: GameState,
+    registry: SpriteMetadataRegistry,
+    out: BuildingOverlayRenderData[]
+): void {
+    if (unitIds.length === 0) {
+        return;
+    }
+
+    const slotPositions = getGarrisonSlotPositions(buildingType, race, false)!;
+
+    for (let i = 0; i < unitIds.length; i++) {
+        const slot = slotPositions[i]!;
+        const unit = state.getEntity(unitIds[i]!);
         if (!unit) {
             continue;
         }
 
-        const sprite = er.spriteManager.registry.getUnitDirectionSprite(
-            unit.subType as UnitType,
-            slot.direction,
-            unit.race
-        );
-
-        out.push({
-            sprite: scaleSprite(sprite, ENTITY_SCALE),
-            worldOffsetX: slot.offsetX * PIXELS_TO_WORLD,
-            worldOffsetY: slot.offsetY * PIXELS_TO_WORLD,
-            layer: OverlayRenderLayer.AboveBuilding,
-            teamColored: true,
-            verticalProgress: 1.0,
-        });
+        const sprite = registry.getUnitDirectionSprite(unit.subType as UnitType, slot.direction, unit.race);
+        pushGarrisonOverlay(sprite, slot, out);
     }
+}
+
+/**
+ * Emit overlays for garrisoned bowmen.
+ * Bowmen with an active target face toward it and play SHOOT or THROW_STONE animation.
+ * Idle bowmen use the static standing pose at the XML default direction.
+ */
+function emitBowmanOverlays(
+    building: { x: number; y: number; race: Race },
+    buildingType: BuildingType,
+    unitIds: readonly number[],
+    state: GameState,
+    registry: SpriteMetadataRegistry,
+    out: BuildingOverlayRenderData[]
+): void {
+    if (unitIds.length === 0) {
+        return;
+    }
+
+    const slotPositions = getGarrisonSlotPositions(buildingType, building.race, true)!;
+
+    for (let i = 0; i < unitIds.length; i++) {
+        const slot = slotPositions[i]!;
+        const unitId = unitIds[i]!;
+        const unit = state.getEntity(unitId);
+        if (!unit) {
+            continue;
+        }
+
+        const unitType = unit.subType as UnitType;
+        const targetId = towerBowmanTargets.get(unitId);
+        let spriteDir = slot.direction;
+
+        if (targetId !== undefined) {
+            const target = state.getEntity(targetId);
+            if (target) {
+                spriteDir = toSpriteDirection(getDirectionToward(building.x, building.y, target.x, target.y));
+            }
+        }
+
+        const rawSprite =
+            targetId !== undefined
+                ? resolveBowmanAnimationFrame(registry, unitType, spriteDir, unit.race, unitId)
+                : null;
+        const sprite = rawSprite ?? registry.getUnitDirectionSprite(unitType, spriteDir, unit.race);
+        pushGarrisonOverlay(sprite, slot, out);
+    }
+}
+
+/** Push a garrison unit overlay with standard scaling and layer. */
+function pushGarrisonOverlay(
+    rawSprite: SpriteEntry,
+    slot: { offsetX: number; offsetY: number },
+    out: BuildingOverlayRenderData[]
+): void {
+    out.push({
+        sprite: scaleSprite(rawSprite, ENTITY_SCALE),
+        worldOffsetX: pixelOffsetToWorld(slot.offsetX),
+        worldOffsetY: pixelOffsetToWorld(slot.offsetY),
+        layer: OverlayRenderLayer.AboveBuilding,
+        teamColored: true,
+        verticalProgress: 1.0,
+    });
+}
+
+/** Resolve the current SHOOT or THROW_STONE animation frame for a garrisoned bowman. */
+function resolveBowmanAnimationFrame(
+    registry: SpriteMetadataRegistry,
+    unitType: UnitType,
+    spriteDir: number,
+    race: Race,
+    unitId: number
+): SpriteEntry | null {
+    const animEntry = registry.getAnimatedEntity(EntityType.Unit, unitType, race);
+    if (!animEntry) {
+        return null;
+    }
+    const prefix = UNIT_XML_PREFIX[unitType];
+    if (!prefix) {
+        return null;
+    }
+    const action = towerBowmanThrowingStones.has(unitId) ? 'THROW_STONE' : 'SHOOT';
+    const dirMap = animEntry.animationData.sequences.get(xmlKey(prefix, action));
+    if (!dirMap) {
+        return null;
+    }
+    const seq = dirMap.get(spriteDir);
+    if (!seq || seq.frames.length === 0) {
+        return null;
+    }
+    const frameIndex = Math.floor(performance.now() / ANIMATION_DEFAULTS.FRAME_DURATION_MS) % seq.frames.length;
+    return seq.frames[frameIndex]!;
 }
 
 /** Resolve custom overlays (smoke, wheels, flags) from the BuildingOverlayManager. */
@@ -174,8 +296,8 @@ function resolveCustomOverlays(entityId: number, g: Game, er: EntityRenderer, ou
 
         out.push({
             sprite: scaleSprite(sprite, ENTITY_SCALE),
-            worldOffsetX: inst.def.pixelOffsetX * PIXELS_TO_WORLD,
-            worldOffsetY: inst.def.pixelOffsetY * PIXELS_TO_WORLD,
+            worldOffsetX: pixelOffsetToWorld(inst.def.pixelOffsetX),
+            worldOffsetY: pixelOffsetToWorld(inst.def.pixelOffsetY),
             layer: inst.def.layer as number as OverlayRenderLayer,
             // eslint-disable-next-line no-restricted-syntax -- teamColored is an optional overlay property; false (not team-colored) is the correct default
             teamColored: inst.def.teamColored ?? false,

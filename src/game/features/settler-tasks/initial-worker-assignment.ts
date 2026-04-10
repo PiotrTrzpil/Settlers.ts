@@ -27,21 +27,16 @@ export function relocateUnitsFromFootprints(gameState: GameState): void {
         if (entity.type !== EntityType.Unit) {
             continue;
         }
-        const buildingAtTile = gameState.getGroundEntityAt(entity.x, entity.y);
+        const buildingAtTile = gameState.getGroundEntityAt(entity);
         if (!buildingAtTile || buildingAtTile.type !== EntityType.Building) {
             continue;
         }
-        const door = getBuildingDoorPos(
-            buildingAtTile.x,
-            buildingAtTile.y,
-            buildingAtTile.race,
-            buildingAtTile.subType as BuildingType
-        );
+        const door = getBuildingDoorPos(buildingAtTile, buildingAtTile.race, buildingAtTile.subType as BuildingType);
 
-        const target = findFreeTileNear(door.x, door.y, taken, gameState);
+        const target = findFreeTileNear(door, taken, gameState);
         entity.x = target.x;
         entity.y = target.y;
-        taken.add(tileKey(target.x, target.y));
+        taken.add(tileKey(target));
         relocated++;
     }
     if (relocated > 0) {
@@ -50,11 +45,6 @@ export function relocateUnitsFromFootprints(gameState: GameState): void {
 }
 
 /** Find the nearest non-building, non-taken tile using BFS outward from the door. */
-function findFreeTileNear(doorX: number, doorY: number, taken: Set<string>, gameState: GameState): Tile {
-    return (
-        bfsFind(doorX, doorY, (x, y) => !taken.has(tileKey(x, y)) && !gameState.getGroundEntityAt(x, y), 100) ?? {
-            x: doorX,
-            y: doorY,
-        }
-    );
+function findFreeTileNear(door: Tile, taken: Set<string>, gameState: GameState): Tile {
+    return bfsFind(door, tile => !taken.has(tileKey(tile)) && !gameState.getGroundEntityAt(tile), 100) ?? door;
 }

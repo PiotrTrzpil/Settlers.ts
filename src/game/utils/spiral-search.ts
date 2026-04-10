@@ -6,8 +6,7 @@ import { isInMapBounds, type Tile } from '@/game/core/coordinates';
  * Iterates tile coordinates in expanding square perimeters (radius 0, 1, 2, …)
  * and returns the first coordinate where `predicate` returns true.
  *
- * @param cx - Center X coordinate
- * @param cy - Center Y coordinate
+ * @param center - Center tile coordinate
  * @param w - Map width (bounds check)
  * @param h - Map height (bounds check)
  * @param predicate - Returns true for the desired tile
@@ -16,11 +15,10 @@ import { isInMapBounds, type Tile } from '@/game/core/coordinates';
  */
 // eslint-disable-next-line sonarjs/cognitive-complexity -- triple nested loops required for spiral traversal
 export function spiralSearch(
-    cx: number,
-    cy: number,
+    center: Tile,
     w: number,
     h: number,
-    predicate: (x: number, y: number) => boolean,
+    predicate: (tile: Tile) => boolean,
     maxRadius?: number
 ): Tile | null {
     const limit = maxRadius ?? Math.ceil(Math.max(w, h) / 2);
@@ -30,13 +28,12 @@ export function spiralSearch(
                 if (Math.abs(dx) !== r && Math.abs(dy) !== r) {
                     continue;
                 } // perimeter only
-                const x = cx + dx;
-                const y = cy + dy;
-                if (!isInMapBounds(x, y, w, h)) {
+                const tile: Tile = { x: center.x + dx, y: center.y + dy };
+                if (!isInMapBounds(tile, w, h)) {
                     continue;
                 }
-                if (predicate(x, y)) {
-                    return { x, y };
+                if (predicate(tile)) {
+                    return tile;
                 }
             }
         }

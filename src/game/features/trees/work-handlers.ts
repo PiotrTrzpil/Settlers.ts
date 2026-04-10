@@ -12,7 +12,6 @@ import { WorkHandlerType, type EntityWorkHandler, type PositionWorkHandler } fro
 import type { PlantingCapable } from '../../systems/growth';
 import type { TreeSystem } from './tree-system';
 
-const WOODCUTTER_SEARCH_RADIUS = 30;
 const woodcuttingLog = createLogger('WoodcuttingHandler');
 
 /**
@@ -23,12 +22,14 @@ export function createWoodcuttingHandler(gameState: GameState, treeSystem: TreeS
     return {
         type: WorkHandlerType.ENTITY,
 
-        findTarget: (x: number, y: number, _settlerId?: number, player?: number) => {
+        findTarget: ({ center, radius }, _settlerId, player) => {
+            if (radius === undefined) {
+                throw new Error('WoodcuttingHandler: work area radius is required');
+            }
             return findNearestEntity(
-                gameState.spatialIndex.nearbyForPlayer(x, y, WOODCUTTER_SEARCH_RADIUS, player!),
-                x,
-                y,
-                WOODCUTTER_SEARCH_RADIUS,
+                gameState.spatialIndex.nearbyForPlayer(center, radius, player),
+                center,
+                radius,
                 entity => {
                     const category = OBJECT_TYPE_CATEGORY[entity.subType as MapObjectType];
                     return category === MapObjectCategory.Trees && treeSystem.canCut(entity.id);
@@ -66,14 +67,16 @@ export function createWoodcuttingHandler(gameState: GameState, treeSystem: TreeS
 export function createPlantingHandler(system: PlantingCapable): PositionWorkHandler {
     return {
         type: WorkHandlerType.POSITION,
-        useWorkAreaCenter: true,
 
-        findPosition: (x: number, y: number) => {
-            return system.findPlantingSpot(x, y);
+        findPosition: ({ center, radius }) => {
+            if (radius === undefined) {
+                throw new Error('PlantingHandler: work area radius is required');
+            }
+            return system.findPlantingSpot(center, radius);
         },
 
-        onWorkAtPositionComplete: (posX: number, posY: number, settlerId: number) => {
-            system.plantEntity(posX, posY, settlerId);
+        onWorkAtPositionComplete: (tile, settlerId) => {
+            system.plantEntity(tile, settlerId);
         },
     };
 }

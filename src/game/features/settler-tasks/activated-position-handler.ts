@@ -24,45 +24,39 @@ export interface ActivatedPositionHandlerConfig {
     searchRadius: number;
     /** Local scan radius around the settler's current position (default: 5). */
     localRadius?: number;
-    /** Returns true if the tile at (x, y) is a valid work target. */
-    tilePredicate: (x: number, y: number) => boolean;
+    /** Returns true if the given tile is a valid work target. */
+    tilePredicate: (tile: Tile) => boolean;
     /** Called when work completes at the target position. */
-    onWorkComplete: (x: number, y: number, settlerId: number) => void;
+    onWorkComplete: (tile: Tile, settlerId: number) => void;
     /**
      * Optional gate called on move command — return true to activate the settler.
      * When omitted, every move command activates the settler.
      */
-    shouldActivate?: (targetX: number, targetY: number) => boolean;
+    shouldActivate?: (target: Tile) => boolean;
 }
 
 const DEFAULT_LOCAL_RADIUS = 5;
 
 /**
- * Search locally around (x, y) for a tile matching the predicate,
- * picking the candidate closest to the origin (ox, oy).
+ * Search locally around `tile` for a tile matching the predicate,
+ * picking the candidate closest to `origin`.
  */
-function findLocalCandidate(
-    x: number,
-    y: number,
-    ox: number,
-    oy: number,
-    cfg: ActivatedPositionHandlerConfig
-): Tile | null {
+function findLocalCandidate(tile: Tile, origin: Tile, cfg: ActivatedPositionHandlerConfig): Tile | null {
     const maxOriginDistSq = cfg.searchRadius * cfg.searchRadius;
     let best: Tile | null = null;
     let bestOriginDist = Infinity;
 
-    scanRect(x, y, cfg.localRadius ?? DEFAULT_LOCAL_RADIUS, cfg.mapWidth, cfg.mapHeight, (tx, ty) => {
-        if (!cfg.tilePredicate(tx, ty)) {
+    scanRect(tile, cfg.localRadius ?? DEFAULT_LOCAL_RADIUS, cfg.mapWidth, cfg.mapHeight, scanTile => {
+        if (!cfg.tilePredicate(scanTile)) {
             return;
         }
-        const originDist = distSq(tx, ty, ox, oy);
+        const originDist = distSq(scanTile, origin);
         if (originDist > maxOriginDistSq) {
             return;
         }
         if (originDist < bestOriginDist) {
             bestOriginDist = originDist;
-            best = { x: tx, y: ty };
+            best = scanTile;
         }
     });
     return best;
@@ -80,35 +74,34 @@ export function createActivatedPositionHandler(cfg: ActivatedPositionHandlerConf
         type: WorkHandlerType.POSITION,
         shouldWaitForWork: true,
 
-        findPosition: (x: number, y: number, settlerId?: number) => {
-            if (settlerId !== undefined && !activatedSettlers.has(settlerId)) {
+        findPosition: ({ center }, settlerId) => {
+            if (!activatedSettlers.has(settlerId)) {
                 return null;
             }
 
             // Resolve (or record) the fixed origin for this settler
-            let ox = x;
-            let oy = y;
-            if (settlerId !== undefined) {
-                const stored = originBySettler.get(settlerId);
-                if (stored) {
-                    ox = stored.x;
-                    oy = stored.y;
-                } else {
-                    originBySettler.set(settlerId, { x, y });
-                }
+            const origin = originBySettler.get(settlerId) ?? center;
+            if (!originBySettler.has(settlerId)) {
+                originBySettler.set(settlerId, center);
             }
 
             // Phase 1: local search — nearby tile closest to origin
-            const local = findLocalCandidate(x, y, ox, oy, cfg);
+            const local = findLocalCandidate(center, origin, cfg);
             if (local) {
                 return local;
             }
 
             // Phase 2: fallback — spiral from origin
-            const result = spiralSearch(ox, oy, cfg.mapWidth, cfg.mapHeight, cfg.tilePredicate, cfg.searchRadius);
+            const result = spiralSearch(
+                origin,
+                cfg.mapWidth,
+                cfg.mapHeight,
+                tile => cfg.tilePredicate(tile),
+                cfg.searchRadius
+            );
 
             // No more tiles — deactivate so we don't re-search every cooldown
-            if (!result && settlerId !== undefined) {
+            if (!result) {
                 originBySettler.delete(settlerId);
                 activatedSettlers.delete(settlerId);
             }
@@ -121,7 +114,7 @@ export function createActivatedPositionHandler(cfg: ActivatedPositionHandlerConf
         onSettlerRemoved: (settlerId: number, targetX?: number, targetY?: number) => {
             originBySettler.delete(settlerId);
             if (targetX !== undefined && targetY !== undefined) {
-                if (!cfg.shouldActivate || cfg.shouldActivate(targetX, targetY)) {
+                if (!cfg.shouldActivate || cfg.shouldActivate({ x: targetX, y: targetY })) {
                     activatedSettlers.add(settlerId);
                 }
             }

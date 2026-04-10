@@ -45,6 +45,7 @@
 import { provide } from 'vue';
 import { usePersistedRef } from '@/composables/use-persisted-ref';
 import type { Game } from '@/game/game';
+import type { Race } from '@/game/core/race';
 import type { LayerVisibility } from '@/game/renderer/layer-visibility';
 import type { LayerCounts } from '@/views/use-map-view';
 
@@ -60,7 +61,7 @@ provide('overlay-panel-embedded', true);
 defineProps<{
     game: Game;
     paused: boolean;
-    currentRace: number;
+    currentRace: Race;
     counts?: LayerCounts;
 }>();
 

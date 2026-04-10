@@ -103,7 +103,7 @@ export function populateOreVeins(oreVeins: OreVeinData, terrain: TerrainData): v
 
     for (let y = 0; y < terrain.height; y++) {
         for (let x = 0; x < terrain.width; x++) {
-            if (!terrain.isRock(x, y)) {
+            if (!terrain.isRock({ x, y })) {
                 continue;
             }
 
@@ -114,7 +114,7 @@ export function populateOreVeins(oreVeins: OreVeinData, terrain: TerrainData): v
 
             const type = DISTRIBUTED_ORES[rng.nextInt(DISTRIBUTED_ORES.length)]!;
             const level = rng.nextInt(MAX_ORE_LEVEL) + 1;
-            oreVeins.setOre(x, y, type, level);
+            oreVeins.setOre({ x, y }, type, level);
         }
     }
 }

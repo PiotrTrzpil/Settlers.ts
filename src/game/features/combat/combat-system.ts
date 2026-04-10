@@ -26,6 +26,7 @@ import {
 import { hexDistanceTo } from '../../systems/hex-directions';
 import { CombatState, CombatStatus, createCombatState, getCombatStats, isRangedUnitType } from './combat-state';
 import { CombatVisuals } from './combat-animations';
+import { inflictDamage, type CombatDamageContext } from './combat-damage';
 import type { EntityVisualService } from '../../animation/entity-visual-service';
 import { createLogger } from '@/utilities/logger';
 import { sortedEntries } from '@/utilities/collections';
@@ -85,12 +86,24 @@ export class CombatSystem implements TickSystem {
     /** Units whose combat target is externally managed. Locked units skip all retargeting. */
     private readonly lockedTargets = new Map<number, { targetId: number; reason: string }>();
 
+    /** Context object for the extracted damage/death module. */
+    private readonly damageCtx: CombatDamageContext;
+
     constructor(cfg: CombatSystemConfig) {
         this.gameState = cfg.gameState;
         this.eventBus = cfg.eventBus;
         this.visuals = new CombatVisuals(cfg.visualService, cfg.gameState);
         this.executeCommand = cfg.executeCommand;
         this.isUnitReserved = cfg.isUnitReserved;
+        this.damageCtx = {
+            states: this.states,
+            lockedTargets: this.lockedTargets,
+            pursuitTimers: this.pursuitTimers,
+            eventBus: this.eventBus,
+            executeCommand: this.executeCommand,
+            getMovementController: id => this.gameState.movement.getController(id),
+            transitionToIdle: state => this.transitionToIdle(state),
+        };
     }
 
     // ── Registration ──────────────────────────────────────────────────────
@@ -354,8 +367,8 @@ export class CombatSystem implements TickSystem {
                 }
             }
 
-            const dest = resolveOutsideBuilding(target.x, target.y, this.gameState.buildingOccupancy);
-            this.gameState.movement.moveUnit(state.entityId, dest.x, dest.y);
+            const dest = resolveOutsideBuilding(target, this.gameState.buildingOccupancy);
+            this.gameState.movement.moveUnit(state.entityId, dest);
             this.visuals.applyWalkAnimation(entity, target);
         }
     }
@@ -475,67 +488,11 @@ export class CombatSystem implements TickSystem {
         this.tickDamage(state, target, dt);
     }
 
-    // ── Damage & death ────────────────────────────────────────────────────
+    // ── Damage & death (delegated to combat-damage.ts) ─────────────────
 
-    /**
-     * Apply damage to a combat target from an external source (e.g., garrisoned bowman).
-     * Handles health decrement, event emission, and death if health reaches zero.
-     */
+    /** Apply damage from an external source (e.g., garrisoned bowman). */
     applyExternalDamage(attackerId: number, targetId: number, damage: number): void {
-        this.inflictDamage(attackerId, targetId, damage);
-    }
-
-    /** Core damage logic: decrement health, emit event, kill if dead. */
-    private inflictDamage(attackerId: number, targetId: number, damage: number): void {
-        const targetState = this.states.get(targetId)!;
-
-        targetState.health -= damage;
-
-        this.eventBus.emit('combat:unitAttacked', {
-            unitId: attackerId,
-            targetId,
-            damage,
-            remainingHealth: Math.max(0, targetState.health),
-        });
-
-        if (targetState.health <= 0) {
-            this.killUnit(targetState, attackerId);
-        }
-    }
-
-    private killUnit(state: CombatState, killedBy: number): void {
-        log.debug(`Unit ${state.entityId} killed by ${killedBy}`);
-
-        // Emit event FIRST — siege system may re-lock surviving units synchronously
-        this.eventBus.emit('combat:unitDefeated', {
-            unitId: state.entityId,
-            defeatedBy: killedBy,
-            level: 'info',
-        });
-
-        // Auto-clear stale locks pointing to the dead unit (skip units re-locked by event handlers)
-        for (const [id, lock] of this.lockedTargets) {
-            if (lock.targetId === state.entityId) {
-                this.lockedTargets.delete(id);
-            }
-        }
-        this.lockedTargets.delete(state.entityId);
-
-        // Clear non-locked combatants targeting the dead unit (locked ones were re-assigned above)
-        for (const other of this.states.values()) {
-            if (other.targetId === state.entityId && !this.lockedTargets.has(other.entityId)) {
-                other.targetId = null;
-                this.pursuitTimers.delete(other.entityId);
-                const controller = this.gameState.movement.getController(other.entityId);
-                if (controller && controller.state !== 'idle') {
-                    controller.clearPath();
-                }
-                this.transitionToIdle(other);
-            }
-        }
-
-        // Remove entity from game (triggers entity:removed → unregister)
-        this.executeCommand({ type: 'remove_entity', entityId: state.entityId });
+        inflictDamage(this.damageCtx, attackerId, targetId, damage);
     }
 
     // ── Target finding ────────────────────────────────────────────────────
@@ -585,8 +542,8 @@ export class CombatSystem implements TickSystem {
     private transitionToPursue(state: CombatState, entity: Entity, target: Entity): void {
         state.status = CombatStatus.Pursuing;
         this.pursuitTimers.set(state.entityId, 0);
-        const dest = resolveOutsideBuilding(target.x, target.y, this.gameState.buildingOccupancy);
-        this.gameState.movement.moveUnit(state.entityId, dest.x, dest.y);
+        const dest = resolveOutsideBuilding(target, this.gameState.buildingOccupancy);
+        this.gameState.movement.moveUnit(state.entityId, dest);
         this.visuals.applyWalkAnimation(entity, target);
     }
 
@@ -596,7 +553,7 @@ export class CombatSystem implements TickSystem {
         state.attackTimer += dt;
         if (state.attackTimer >= stats.attackCooldown) {
             state.attackTimer -= stats.attackCooldown;
-            this.inflictDamage(state.entityId, target.id, stats.attackPower);
+            inflictDamage(this.damageCtx, state.entityId, target.id, stats.attackPower);
         }
     }
 }

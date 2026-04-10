@@ -22,14 +22,14 @@ function assertOccupancyConsistent(state: GameState, entityIds: number[]): void 
     for (const id of entityIds) {
         const e = state.getEntity(id);
         if (!e) continue;
-        const key = tileKey(e.x, e.y);
+        const key = tileKey(e);
         expect(state.unitOccupancy.get(key), `tile (${e.x},${e.y}) should be occupied by ${id}`).toBe(id);
     }
     const positions = new Set<string>();
     for (const id of entityIds) {
         const e = state.getEntity(id);
         if (!e) continue;
-        const key = tileKey(e.x, e.y);
+        const key = tileKey(e);
         expect(positions.has(key), `duplicate entity at ${key}`).toBe(false);
         positions.add(key);
     }
@@ -49,7 +49,7 @@ describe('Bump priority – ID-based ordering', () => {
         const { entity: unitB } = addUnit(state, 11, 10); // higher ID
         expect(unitA.id).toBeLessThan(unitB.id);
 
-        state.movement.moveUnit(unitA.id, 11, 10);
+        state.movement.moveUnit(unitA.id, { x: 11, y: 10 });
         tickFor(state, 3);
 
         expect(unitA.x).toBe(11);
@@ -59,20 +59,21 @@ describe('Bump priority – ID-based ordering', () => {
         assertOccupancyConsistent(state, [unitA.id, unitB.id]);
     });
 
-    it('higher ID cannot bump lower ID idle unit', () => {
+    it('higher ID CAN bump lower ID idle unit (idle always yields)', () => {
         const { entity: unitA } = addUnit(state, 11, 10); // lower ID, idle at target
         const { entity: unitB } = addUnit(state, 10, 10); // higher ID, wants to move
 
         expect(unitA.id).toBeLessThan(unitB.id);
 
-        state.movement.moveUnit(unitB.id, 11, 10);
+        state.movement.moveUnit(unitB.id, { x: 11, y: 10 });
 
-        // Tick enough for bump attempts and repath
-        tickFor(state, 1);
+        tickFor(state, 3);
 
-        // A should NOT have been bumped — higher ID can't push lower
-        expect(unitA.x).toBe(11);
-        expect(unitA.y).toBe(10);
+        // B should reach the target — A was idle and yielded
+        expect(unitB.x).toBe(11);
+        expect(unitB.y).toBe(10);
+        // A was bumped away
+        expect(unitA.x !== 11 || unitA.y !== 10).toBe(true);
         assertOccupancyConsistent(state, [unitA.id, unitB.id]);
     });
 
@@ -107,7 +108,7 @@ describe('Bump priority – ID-based ordering', () => {
         // Actually, unitB has higher ID here. But let's create a specific scenario:
         // Create a third unit with lowest possible ID... but IDs are auto-incremented.
         // Instead, verify the existing busy guard works:
-        state.movement.moveUnit(unitB.id, 11, 10);
+        state.movement.moveUnit(unitB.id, { x: 11, y: 10 });
         tickFor(state, 1);
 
         // A stays put — busy overrides all
@@ -159,7 +160,7 @@ describe('Bump priority – ID-based ordering', () => {
         tickFor(state, 0.3);
 
         // Now send A toward B's tile
-        state.movement.moveUnit(unitA.id, 12, 10);
+        state.movement.moveUnit(unitA.id, { x: 12, y: 10 });
 
         tickFor(state, 3);
 

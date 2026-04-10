@@ -2,10 +2,11 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { getHexLine, groupDirectionRuns, setDirectionRunLength } from '@/game/systems/pathfinding/hex-line';
 import { hexDistance } from '@/game/systems/hex-directions';
 import type { Tile } from '@/game/entity';
+import type { TileOffset } from '@/game/core/coordinates';
 
 /** Extract direction deltas from a tile sequence */
-function getDirections(tiles: Tile[]): Array<{ dx: number; dy: number }> {
-    const dirs: Array<{ dx: number; dy: number }> = [];
+function getDirections(tiles: Tile[]): TileOffset[] {
+    const dirs: TileOffset[] = [];
     for (let i = 0; i < tiles.length - 1; i++) {
         dirs.push({
             dx: tiles[i + 1]!.x - tiles[i]!.x,
@@ -57,7 +58,7 @@ describe('Hex line grouping', () => {
         ];
 
         for (const [x1, y1, x2, y2] of testCases) {
-            const line = getHexLine(x1, y1, x2, y2);
+            const line = getHexLine({ x: x1, y: y1 }, { x: x2, y: y2 });
             expect(line[0]).toEqual({ x: x1, y: y1 });
             expect(line[line.length - 1]).toEqual({ x: x2, y: y2 });
 
@@ -73,26 +74,26 @@ describe('Hex line grouping', () => {
 
     it('should not change pure cardinal or pure diagonal paths', () => {
         // Pure east
-        const eastLine = getHexLine(0, 0, 5, 0);
+        const eastLine = getHexLine({ x: 0, y: 0 }, { x: 5, y: 0 });
         for (const d of getDirections(eastLine)) {
             expect(d).toEqual({ dx: 1, dy: 0 });
         }
 
         // Pure SE
-        const seLine = getHexLine(0, 0, 0, 5);
+        const seLine = getHexLine({ x: 0, y: 0 }, { x: 0, y: 5 });
         for (const d of getDirections(seLine)) {
             expect(d).toEqual({ dx: 0, dy: 1 });
         }
     });
 
     it('should reduce zigzag for equal-ratio diagonals', () => {
-        const line = getHexLine(0, 0, 3, 3);
+        const line = getHexLine({ x: 0, y: 0 }, { x: 3, y: 3 });
         const changes = countDirectionChanges(line);
         expect(changes).toBeLessThanOrEqual(2);
     });
 
     it('groupDirectionRuns should be idempotent', () => {
-        const line = getHexLine(0, 0, 5, 5);
+        const line = getHexLine({ x: 0, y: 0 }, { x: 5, y: 5 });
         const grouped = groupDirectionRuns(line);
         const doubleGrouped = groupDirectionRuns(grouped);
         expect(doubleGrouped).toEqual(grouped);
@@ -100,7 +101,7 @@ describe('Hex line grouping', () => {
 
     it('run length controls grouping behavior', () => {
         // Use a target that requires mixed directions (different-sign dx/dy)
-        const rawLine = getHexLine(0, 0, 10, -10);
+        const rawLine = getHexLine({ x: 0, y: 0 }, { x: 10, y: -10 });
 
         // maxRunLength=1: no regrouping (raw interpolation order)
         const noGroup = groupDirectionRuns(rawLine, 1);
@@ -111,12 +112,12 @@ describe('Hex line grouping', () => {
         expect(getMaxRunLength(shortRuns)).toBeLessThanOrEqual(2);
 
         // Large run length on a same-sign diagonal: groups all same-direction steps together
-        const longRuns = groupDirectionRuns(getHexLine(0, 0, 5, 5), 50);
+        const longRuns = groupDirectionRuns(getHexLine({ x: 0, y: 0 }, { x: 5, y: 5 }), 50);
         expect(countDirectionChanges(longRuns)).toBe(0); // all steps in one direction
     });
 
     it('should preserve invariants for all run lengths', () => {
-        const rawLine = getHexLine(0, 0, 8, 5);
+        const rawLine = getHexLine({ x: 0, y: 0 }, { x: 8, y: 5 });
         for (const len of [1, 2, 3, 5, 8, 20]) {
             const regrouped = groupDirectionRuns(rawLine, len);
 
@@ -135,11 +136,11 @@ describe('Hex line grouping', () => {
 
     it('module-level setDirectionRunLength affects getHexLine output', () => {
         setDirectionRunLength(2);
-        const lineShort = getHexLine(0, 0, 6, 6);
+        const lineShort = getHexLine({ x: 0, y: 0 }, { x: 6, y: 6 });
         const runShort = getMaxRunLength(lineShort);
 
         setDirectionRunLength(20);
-        const lineLong = getHexLine(0, 0, 6, 6);
+        const lineLong = getHexLine({ x: 0, y: 0 }, { x: 6, y: 6 });
         const runLong = getMaxRunLength(lineLong);
 
         expect(runLong).toBeGreaterThanOrEqual(runShort);
@@ -147,11 +148,11 @@ describe('Hex line grouping', () => {
 
     it('higher run length should produce fewer direction changes', () => {
         setDirectionRunLength(1);
-        const line1 = getHexLine(0, 0, 10, 10);
+        const line1 = getHexLine({ x: 0, y: 0 }, { x: 10, y: 10 });
         const changes1 = countDirectionChanges(line1);
 
         setDirectionRunLength(10);
-        const line10 = getHexLine(0, 0, 10, 10);
+        const line10 = getHexLine({ x: 0, y: 0 }, { x: 10, y: 10 });
         const changes10 = countDirectionChanges(line10);
 
         expect(changes10).toBeLessThanOrEqual(changes1);

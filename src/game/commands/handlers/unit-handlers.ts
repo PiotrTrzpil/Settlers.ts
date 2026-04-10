@@ -35,7 +35,7 @@ export interface MoveUnitDeps {
     /** Whether units in combat can be redirected by player commands. */
     isCombatControllable: () => boolean;
     /** Territory owner lookup — workers cannot move outside their territory. */
-    getOwner: (x: number, y: number) => number;
+    getOwner: (tile: Tile) => number;
 }
 
 export interface MoveSelectedUnitsDeps {
@@ -46,15 +46,14 @@ export interface MoveSelectedUnitsDeps {
     /** Whether units in combat can be redirected by player commands. */
     isCombatControllable: () => boolean;
     /** Territory owner lookup — workers cannot move outside their territory. */
-    getOwner: (x: number, y: number) => number;
+    getOwner: (tile: Tile) => number;
 }
 
-function findValidSpawnTile(x: number, y: number, isValid: (x: number, y: number) => boolean): Tile | null {
+function findValidSpawnTile(tile: Tile, isValid: (tile: Tile) => boolean): Tile | null {
     for (const [dx, dy] of EXTENDED_OFFSETS) {
-        const nx = x + dx;
-        const ny = y + dy;
-        if (isValid(nx, ny)) {
-            return { x: nx, y: ny };
+        const candidate = { x: tile.x + dx, y: tile.y + dy };
+        if (isValid(candidate)) {
+            return candidate;
         }
     }
     return null;
@@ -63,17 +62,17 @@ function findValidSpawnTile(x: number, y: number, isValid: (x: number, y: number
 export function executeSpawnUnit(deps: SpawnUnitDeps, cmd: SpawnUnitCommand): SpawnResult | CommandFailure {
     const { state, terrain } = deps;
 
-    const isTileValid = (x: number, y: number) => {
-        if (!terrain.isInBounds(x, y) || !terrain.isPassable(x, y)) {
+    const isTileValid = (tile: Tile) => {
+        if (!terrain.isInBounds(tile) || !terrain.isPassable(tile)) {
             return false;
         }
         // Units can't overlap other units
-        if (state.getUnitAt(x, y)) {
+        if (state.getUnitAt(tile)) {
             return false;
         }
         // Ground entities block spawning, except construction sites (not yet blocked for movement)
-        const ground = state.getGroundEntityAt(x, y);
-        if (ground && (ground.type !== EntityType.Building || state.buildingOccupancy.has(tileKey(x, y)))) {
+        const ground = state.getGroundEntityAt(tile);
+        if (ground && (ground.type !== EntityType.Building || state.buildingOccupancy.has(tileKey(tile)))) {
             return false;
         }
         return true;
@@ -82,8 +81,8 @@ export function executeSpawnUnit(deps: SpawnUnitDeps, cmd: SpawnUnitCommand): Sp
     let spawnX = cmd.x;
     let spawnY = cmd.y;
 
-    if (!isTileValid(spawnX, spawnY)) {
-        const found = findValidSpawnTile(cmd.x, cmd.y, isTileValid);
+    if (!isTileValid({ x: spawnX, y: spawnY })) {
+        const found = findValidSpawnTile({ x: cmd.x, y: cmd.y }, isTileValid);
         if (!found) {
             return commandFailed(`Cannot spawn unit at (${cmd.x}, ${cmd.y}): no valid tile nearby`);
         }
@@ -91,7 +90,7 @@ export function executeSpawnUnit(deps: SpawnUnitDeps, cmd: SpawnUnitCommand): Sp
         spawnY = found.y;
     }
 
-    const entity = state.addUnit(cmd.unitType, spawnX, spawnY, cmd.player, { race: cmd.race });
+    const entity = state.addUnit(cmd.unitType, { x: spawnX, y: spawnY }, cmd.player, { race: cmd.race });
     entity.level = getUnitLevel(cmd.unitType);
 
     deps.eventBus.emit('unit:spawned', {
@@ -109,23 +108,22 @@ export function executeSpawnUnit(deps: SpawnUnitDeps, cmd: SpawnUnitCommand): Sp
  * If the target tile is inside a building footprint, find the nearest
  * walkable tile outside. Returns the original target if it's already clear.
  */
-function resolveTargetOutsideBuilding(state: GameState, x: number, y: number): Tile {
-    if (!state.buildingOccupancy.has(tileKey(x, y))) {
-        return { x, y };
+function resolveTargetOutsideBuilding(state: GameState, tile: Tile): Tile {
+    if (!state.buildingOccupancy.has(tileKey(tile))) {
+        return tile;
     }
     for (const [dx, dy] of EXTENDED_OFFSETS) {
-        const nx = x + dx;
-        const ny = y + dy;
-        if (!state.buildingOccupancy.has(tileKey(nx, ny))) {
-            return { x: nx, y: ny };
+        const candidate = { x: tile.x + dx, y: tile.y + dy };
+        if (!state.buildingOccupancy.has(tileKey(candidate))) {
+            return candidate;
         }
     }
-    return { x, y }; // fallback — shouldn't happen
+    return tile; // fallback — shouldn't happen
 }
 
 /** Check if there's an enemy military unit within 1 tile of a position. */
 function hasEnemyNearTarget(state: GameState, targetX: number, targetY: number, player: number): boolean {
-    const nearby = state.getEntitiesInRadius(targetX, targetY, 1.5);
+    const nearby = state.getEntitiesInRadius({ x: targetX, y: targetY }, 1.5);
     for (const e of nearby) {
         if (
             e.type === EntityType.Unit &&
@@ -143,12 +141,9 @@ function hasEnemyNearTarget(state: GameState, targetX: number, targetY: number, 
 function isWorkerOutsideTerritory(
     entity: { subType: string | number; player: number },
     target: Tile,
-    getOwner: (x: number, y: number) => number
+    getOwner: (tile: Tile) => number
 ): boolean {
-    return (
-        getUnitCategory(entity.subType as UnitType) === UnitCategory.Worker &&
-        getOwner(target.x, target.y) !== entity.player
-    );
+    return getUnitCategory(entity.subType as UnitType) === UnitCategory.Worker && getOwner(target) !== entity.player;
 }
 
 export function executeMoveUnit(deps: MoveUnitDeps, cmd: MoveUnitCommand): CommandResult {
@@ -170,7 +165,7 @@ export function executeMoveUnit(deps: MoveUnitDeps, cmd: MoveUnitCommand): Comma
     }
 
     // Resolve target outside building footprint
-    const target = resolveTargetOutsideBuilding(deps.state, cmd.targetX, cmd.targetY);
+    const target = resolveTargetOutsideBuilding(deps.state, { x: cmd.targetX, y: cmd.targetY });
 
     if (isWorkerOutsideTerritory(entity, target, deps.getOwner)) {
         return commandFailed(`Worker ${cmd.entityId} cannot move outside territory`);
@@ -184,7 +179,7 @@ export function executeMoveUnit(deps: MoveUnitDeps, cmd: MoveUnitCommand): Comma
         deps.combatSystem.setPassive(cmd.entityId);
     }
 
-    const success = deps.settlerTaskSystem.assignMoveTask(cmd.entityId, target.x, target.y);
+    const success = deps.settlerTaskSystem.assignMoveTask(cmd.entityId, target);
 
     if (!success) {
         return commandFailed(`Cannot move unit ${cmd.entityId} to (${cmd.targetX}, ${cmd.targetY})`);
@@ -202,7 +197,7 @@ export function executeMoveSelectedUnits(deps: MoveSelectedUnitsDeps, cmd: MoveS
     }
 
     const combatControllable = deps.isCombatControllable();
-    const baseTarget = resolveTargetOutsideBuilding(state, cmd.targetX, cmd.targetY);
+    const baseTarget = resolveTargetOutsideBuilding(state, { x: cmd.targetX, y: cmd.targetY });
     const firstUnit = selectedUnits[0]!;
     const passiveMarch = !hasEnemyNearTarget(state, baseTarget.x, baseTarget.y, firstUnit.player);
 
@@ -210,7 +205,10 @@ export function executeMoveSelectedUnits(deps: MoveSelectedUnitsDeps, cmd: MoveS
     for (let i = 0; i < selectedUnits.length; i++) {
         const unit = selectedUnits[i]!;
         const offset = FORMATION_OFFSETS[Math.min(i, FORMATION_OFFSETS.length - 1)]!;
-        const target = resolveTargetOutsideBuilding(state, baseTarget.x + offset[0], baseTarget.y + offset[1]);
+        const target = resolveTargetOutsideBuilding(state, {
+            x: baseTarget.x + offset[0],
+            y: baseTarget.y + offset[1],
+        });
         if (tryMoveSelectedUnit(deps, unit, target, combatControllable, passiveMarch)) {
             movedCount++;
         }
@@ -249,7 +247,7 @@ function tryMoveSelectedUnit(
         deps.combatSystem.setPassive(unit.id);
     }
 
-    return deps.settlerTaskSystem.assignMoveTask(unit.id, target.x, target.y);
+    return deps.settlerTaskSystem.assignMoveTask(unit.id, target);
 }
 
 export interface RecruitSpecialistDeps {

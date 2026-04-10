@@ -164,7 +164,6 @@ export class CarrierAssigner {
         let bestTotal = Infinity;
         let bestBusy: BusyCarrierCandidate | undefined;
 
-        const filter = this.buildFilter();
         for (const candidate of candidates) {
             const source = this.gameState.getEntityOrThrow(
                 candidate.sourceBuilding,
@@ -175,7 +174,8 @@ export class CarrierAssigner {
             const dy2 = source.y - destY;
             const sourceToDestSq = dx2 * dx2 + dy2 * dy2;
 
-            // Check idle carriers
+            // Check idle carriers (filter checks territory connectivity to source)
+            const filter = this.buildFilter(source.x, source.y);
             const idleResult = this.idleCarrierPool.findNearestWithCost(source.x, source.y, candidate.playerId, filter);
             if (idleResult) {
                 const total = idleResult.distSq + sourceToDestSq;
@@ -210,7 +210,7 @@ export class CarrierAssigner {
             sourceBuilding.x,
             sourceBuilding.y,
             match.playerId,
-            this.buildFilter()
+            this.buildFilter(sourceBuilding.x, sourceBuilding.y)
         );
         const busyResult = this.findBestBusyCarrier(sourceBuilding.x, sourceBuilding.y, match.playerId);
 
@@ -381,15 +381,16 @@ export class CarrierAssigner {
 
     /**
      * Adapt the optional CarrierFilter (entity-based) to CarrierEligibilityFilter (id-based).
+     * When nearX/nearY are provided, they're forwarded so filters can check territory connectivity.
      */
-    private buildFilter(): ((entityId: number) => boolean) | undefined {
+    private buildFilter(nearX?: number, nearY?: number): ((entityId: number) => boolean) | undefined {
         if (!this.carrierFilter) {
             return undefined;
         }
         const cf = this.carrierFilter;
         return (entityId: number) => {
             const entity = this.gameState.getEntityOrThrow(entityId, 'carrier filter');
-            return cf(entity, entity.player);
+            return cf(entity, entity.player, nearX, nearY);
         };
     }
 }

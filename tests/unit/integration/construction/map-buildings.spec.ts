@@ -32,12 +32,12 @@ describe('populateMapBuildings', () => {
         expect(result).toHaveLength(2);
         expect(sim.state.entities).toHaveLength(2); // 2 buildings (workers come from map settler data)
 
-        const entity1 = sim.state.getGroundEntityAt(10, 10)!;
+        const entity1 = sim.state.getGroundEntityAt({ x: 10, y: 10 })!;
         expect(entity1.type).toBe(EntityType.Building);
         expect(entity1.subType).toBe(BuildingType.WoodcutterHut);
         expect(entity1.player).toBe(0);
 
-        const entity2 = sim.state.getGroundEntityAt(20, 20)!;
+        const entity2 = sim.state.getGroundEntityAt({ x: 20, y: 20 })!;
         expect(entity2.subType).toBe(BuildingType.Sawmill);
         expect(entity2.player).toBe(1);
 
@@ -46,7 +46,7 @@ describe('populateMapBuildings', () => {
     });
 
     it('should skip unmapped building types and occupied tiles', () => {
-        sim.state.addEntity(EntityType.MapObject, 1, 10, 10, 0); // Pre-occupy
+        sim.state.addEntity(EntityType.MapObject, 1, { x: 10, y: 10 }, 0); // Pre-occupy
 
         const buildings: MapBuildingData[] = [
             { x: 10, y: 10, buildingType: S4BuildingType.WOODCUTTERHUT, player: 0 }, // Occupied
@@ -57,9 +57,9 @@ describe('populateMapBuildings', () => {
         const result = populateMapBuildings(sim.state, buildings, createPopulateOptions(sim));
 
         expect(result).toHaveLength(1);
-        expect(sim.state.getGroundEntityAt(10, 10)!.type).toBe(EntityType.MapObject); // unchanged
-        expect(sim.state.getGroundEntityAt(20, 20)).toBeUndefined();
-        expect(sim.state.getGroundEntityAt(30, 30)).toBeDefined();
+        expect(sim.state.getGroundEntityAt({ x: 10, y: 10 })!.type).toBe(EntityType.MapObject); // unchanged
+        expect(sim.state.getGroundEntityAt({ x: 20, y: 20 })).toBeUndefined();
+        expect(sim.state.getGroundEntityAt({ x: 30, y: 30 })).toBeDefined();
     });
 
     it('should filter by player when specified', () => {
@@ -72,9 +72,9 @@ describe('populateMapBuildings', () => {
         const result = populateMapBuildings(sim.state, buildings, createPopulateOptions(sim, 0));
 
         expect(result).toHaveLength(2);
-        expect(sim.state.getGroundEntityAt(10, 10)).toBeDefined();
-        expect(sim.state.getGroundEntityAt(20, 20)).toBeUndefined();
-        expect(sim.state.getGroundEntityAt(30, 30)).toBeDefined();
+        expect(sim.state.getGroundEntityAt({ x: 10, y: 10 })).toBeDefined();
+        expect(sim.state.getGroundEntityAt({ x: 20, y: 20 })).toBeUndefined();
+        expect(sim.state.getGroundEntityAt({ x: 30, y: 30 })).toBeDefined();
     });
 
     it('should return building entries without emitting lifecycle events', () => {

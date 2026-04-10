@@ -24,6 +24,13 @@ for (const m of CONSOLE_METHODS) {
 const origStdoutWrite = process.stdout.write.bind(process.stdout);
 const origStderrWrite = process.stderr.write.bind(process.stderr);
 
+/**
+ * When DEBUG_CONSOLE=1, console output is both captured to timeline DB
+ * AND passed through to the terminal. This makes `console.log` debugging
+ * work as expected without needing to query the timeline DB.
+ */
+const passThrough = process.env['DEBUG_CONSOLE'] === '1';
+
 let writer: ConsoleLogWriter | undefined;
 let hintPrinted = false;
 
@@ -52,20 +59,33 @@ beforeEach(ctx => {
     for (const m of CONSOLE_METHODS) {
         console[m] = (...args: unknown[]) => {
             writer!.record(m, args);
+            if (passThrough) origConsole[m](...args);
         };
     }
 
-    process.stdout.write = ((chunk: string | Uint8Array, ...rest: unknown[]) => {
+    process.stdout.write = ((
+        chunk: string | Uint8Array,
+        encoding?: BufferEncoding | ((err?: Error | null) => void),
+        cb?: (err?: Error | null) => void
+    ) => {
         const text = typeof chunk === 'string' ? chunk : Buffer.from(chunk).toString();
         if (text.trim()) writer!.record('log', [text.trimEnd()]);
-        if (typeof rest[rest.length - 1] === 'function') (rest[rest.length - 1] as () => void)();
+        if (passThrough) origStdoutWrite(chunk, encoding as BufferEncoding, cb);
+        else if (typeof cb === 'function') cb();
+        else if (typeof encoding === 'function') encoding();
         return true;
     }) as typeof process.stdout.write;
 
-    process.stderr.write = ((chunk: string | Uint8Array, ...rest: unknown[]) => {
+    process.stderr.write = ((
+        chunk: string | Uint8Array,
+        encoding?: BufferEncoding | ((err?: Error | null) => void),
+        cb?: (err?: Error | null) => void
+    ) => {
         const text = typeof chunk === 'string' ? chunk : Buffer.from(chunk).toString();
         if (text.trim()) writer!.record('error', [text.trimEnd()]);
-        if (typeof rest[rest.length - 1] === 'function') (rest[rest.length - 1] as () => void)();
+        if (passThrough) origStderrWrite(chunk, encoding as BufferEncoding, cb);
+        else if (typeof cb === 'function') cb();
+        else if (typeof encoding === 'function') encoding();
         return true;
     }) as typeof process.stderr.write;
 });

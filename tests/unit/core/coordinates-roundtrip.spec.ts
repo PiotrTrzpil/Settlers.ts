@@ -113,7 +113,7 @@ describe('round-trip: tile → world → screen → tile', () => {
         const slopedHeight = new Uint8Array(MAP_SIZE.width * MAP_SIZE.height);
         for (let y = 0; y < MAP_SIZE.height; y++) {
             for (let x = 0; x < MAP_SIZE.width; x++) {
-                slopedHeight[MAP_SIZE.toIndex(x, y)] = Math.min(255, Math.floor(y * 0.4));
+                slopedHeight[MAP_SIZE.toIndex({ x: x, y: y })] = Math.min(255, Math.floor(y * 0.4));
             }
         }
         const vp = createViewPoint();
@@ -145,7 +145,7 @@ describe('round-trip: tile → world → screen → tile', () => {
                 const x = 320 + dx,
                     y = 320 + dy;
                 if (x >= 0 && x < 640 && y >= 0 && y < 640) {
-                    hillyHeight[MAP_SIZE.toIndex(x, y)] = h;
+                    hillyHeight[MAP_SIZE.toIndex({ x: x, y: y })] = h;
                 }
             }
         }
@@ -182,7 +182,7 @@ describe('round-trip: tile → world → screen → tile', () => {
                 const x = 320 + dx,
                     y = 320 + dy;
                 if (x >= 0 && x < 640 && y >= 0 && y < 640) {
-                    steepHeight[MAP_SIZE.toIndex(x, y)] = h;
+                    steepHeight[MAP_SIZE.toIndex({ x: x, y: y })] = h;
                 }
             }
         }

@@ -3,6 +3,7 @@
  * Validates single-tile resource placement.
  */
 
+import type { Tile } from '../../../core/coordinates';
 import type { TerrainData } from '../../../terrain';
 import type { PlacementContext, PlacementResult } from '../types';
 import { validateSingleTilePlacement, canPlaceSingleTile } from './single-tile-validator';
@@ -14,13 +15,12 @@ import { validateSingleTilePlacement, canPlaceSingleTile } from './single-tile-v
  * - Must be on passable terrain
  * - Must not be occupied
  *
- * @param x X coordinate
- * @param y Y coordinate
+ * @param tile Tile coordinates
  * @param ctx Game context for validation
  * @returns Placement result with canPlace and detailed status
  */
-export function validateResourcePlacement(x: number, y: number, ctx: PlacementContext): PlacementResult {
-    return validateSingleTilePlacement(x, y, ctx);
+export function validateResourcePlacement(tile: Tile, ctx: PlacementContext): PlacementResult {
+    return validateSingleTilePlacement(tile, ctx);
 }
 
 /**

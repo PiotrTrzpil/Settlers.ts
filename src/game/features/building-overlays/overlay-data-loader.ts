@@ -7,6 +7,7 @@
 
 import { getGameDataLoader, type BuildingPatch, type BuildingInfo } from '@/resources/game-data';
 import { raceIdToRace, getBuildingTypesByXmlId } from '../../data/game-data-access';
+import { RACE_GFX_FILE } from '../../core/race';
 import type { RaceId } from '@/resources/game-data';
 import { OverlayCondition, OverlayLayer, type BuildingOverlayDef, type OverlaySpriteRef } from './types';
 import type { OverlayRegistry } from './overlay-registry';
@@ -172,7 +173,7 @@ function registerRaceOverlays(
     raceBuildingData: { buildings: Map<string, BuildingInfo> }
 ): number {
     const race = raceIdToRace(raceId);
-    const gfxFile = race as number; // Race enum values equal the GFX file number (10=Roman, 11=Viking, etc.)
+    const gfxFile = RACE_GFX_FILE[race];
     let count = 0;
 
     for (const [buildingXmlId, buildingInfo] of raceBuildingData.buildings) {

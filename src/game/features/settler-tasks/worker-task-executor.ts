@@ -5,7 +5,7 @@
  * settlers that use choreography job sequences (XML-defined).
  */
 
-import type { Entity, Tile } from '../../entity';
+import type { Entity, Tile, TileWithEntity } from '../../entity';
 import type { CoreDeps } from '../feature';
 import { UnitType } from '../../entity';
 import type { ThrottledLogger } from '@/utilities/throttled-logger';
@@ -28,6 +28,7 @@ import type {
     TriggerSystem,
     JobPartResolver,
 } from './choreo-types';
+import { resolveSearchArea } from './choreo-types';
 import { ChoreoTaskType } from './choreo-types';
 import { registerCoreExecutors } from './choreo-executors';
 import type { ChoreoSystem } from '../../systems/choreo';
@@ -260,7 +261,7 @@ export class WorkerTaskExecutor {
         entityHandler: EntityWorkHandler | undefined,
         positionHandler: PositionWorkHandler | undefined,
         homeBuilding: Entity | null
-    ): { entity: { entityId: number; x: number; y: number } | null; position: Tile | null } | null {
+    ): { entity: TileWithEntity | null; position: Tile | null } | null {
         const entity = entityHandler ? this.findEntityTarget(entityHandler, settler, homeBuilding) : null;
         if (entity === undefined) {
             return null;
@@ -281,7 +282,7 @@ export class WorkerTaskExecutor {
         homeBuilding: Entity | null,
         job: ChoreoJob,
         entityHandler: EntityWorkHandler | undefined,
-        entityTarget: { entityId: number; x: number; y: number } | null
+        entityTarget: TileWithEntity | null
     ): boolean {
         if (homeBuilding && this.isOutputFull(homeBuilding, job)) {
             this.lifecycle.returnHomeAndWait(settler, homeBuilding, 'output_full');
@@ -365,14 +366,10 @@ export class WorkerTaskExecutor {
         handler: EntityWorkHandler,
         settler: Entity,
         homeBuilding: Entity | null
-    ): { entityId: number; x: number; y: number } | null | undefined {
-        const center = this.getSearchCenter(handler, settler, homeBuilding);
-        const radius =
-            handler.useWorkAreaCenter && homeBuilding
-                ? this.buildingPositionResolver.getWorkAreaRadius(homeBuilding.id)
-                : undefined;
+    ): TileWithEntity | null | undefined {
+        const area = resolveSearchArea(settler, homeBuilding ? homeBuilding.id : null, this.buildingPositionResolver);
         return safeCall(
-            () => handler.findTarget(center.x, center.y, settler.id, settler.player, radius),
+            () => handler.findTarget(area, settler.id, settler.player),
             this.handlerErrorLogger,
             `findTarget failed for settler ${settler.id}`
         );
@@ -387,24 +384,12 @@ export class WorkerTaskExecutor {
         settler: Entity,
         homeBuilding: Entity | null
     ): Tile | null | undefined {
-        const center = this.getSearchCenter(handler, settler, homeBuilding);
+        const area = resolveSearchArea(settler, homeBuilding ? homeBuilding.id : null, this.buildingPositionResolver);
         return safeCall(
-            () => handler.findPosition(center.x, center.y, settler.id),
+            () => handler.findPosition(area, settler.id),
             this.handlerErrorLogger,
             `findPosition failed for settler ${settler.id}`
         );
-    }
-
-    /** Get the search center for a work handler — work area center or settler position. */
-    private getSearchCenter(
-        handler: { useWorkAreaCenter?: boolean },
-        settler: Entity,
-        homeBuilding: Entity | null
-    ): Tile {
-        if (handler.useWorkAreaCenter && homeBuilding) {
-            return this.buildingPositionResolver.resolvePosition(homeBuilding.id, 0, 0, true);
-        }
-        return settler;
     }
 
     // ─────────────────────────────────────────────────────────────

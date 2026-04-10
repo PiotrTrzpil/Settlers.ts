@@ -14,6 +14,7 @@
 
 import { GrowableSystem, type GrowableConfig, type GrowableState } from '../../systems/growth';
 import type { CoreDeps } from '../feature';
+import type { Tile } from '../../entity';
 import { MapObjectCategory, MapObjectType } from '@/game/types/map-object-types';
 import { OBJECT_TYPE_CATEGORY } from '../../systems/map-objects';
 import type { EntityVisualService } from '../../animation/entity-visual-service';
@@ -208,8 +209,8 @@ export class TreeSystem extends GrowableSystem<TreeState> {
         return 'keep';
     }
 
-    protected buildPlantCommand(treeType: MapObjectType, x: number, y: number): Command {
-        return { type: 'plant_tree', treeType, x, y };
+    protected buildPlantCommand(treeType: MapObjectType, tile: Tile): Command {
+        return { type: 'plant_tree', treeType, x: tile.x, y: tile.y };
     }
 
     // ── Tree-specific: queries ───────────────────────────────────
@@ -303,12 +304,12 @@ export class TreeSystem extends GrowableSystem<TreeState> {
 
     // ── Backward-compatible aliases ──────────────────────────────
 
-    plantTree(x: number, y: number, settlerId: number): void {
-        this.plantEntity(x, y, settlerId);
+    plantTree(tile: Tile, settlerId: number): void {
+        this.plantEntity(tile, settlerId);
     }
 
-    plantTreesNear(cx: number, cy: number, count: number, radius = PLANTING_SEARCH_RADIUS): number {
-        return this.plantEntitiesNear(cx, cy, count, radius);
+    plantTreesNear(center: Tile, count: number, radius = PLANTING_SEARCH_RADIUS): number {
+        return this.plantEntitiesNear(center, count, radius);
     }
 
     *getAllTreeStates(): IterableIterator<[number, TreeState]> {

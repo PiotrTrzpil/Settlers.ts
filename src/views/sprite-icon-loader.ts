@@ -12,7 +12,7 @@ import {
     UNIT_BASE_JOB_INDICES,
     SETTLER_FILE_NUMBERS,
 } from '@/game/renderer/sprite-metadata';
-import { Race } from '@/game/core/race';
+import { Race, RACE_GFX_FILE } from '@/game/core/race';
 import { BuildingType, UnitType } from '@/game/entity';
 import { EMaterialType } from '@/game/economy';
 import { FileManager } from '@/utilities/file-manager';
@@ -163,7 +163,7 @@ export async function loadBuildingIcons(
     buildings: { type: BuildingType }[]
 ): Promise<Partial<Record<BuildingType, IconEntry>>> {
     const loader = new SpriteLoader(fileManager);
-    const fileSet = await loader.loadFileSet(String(race as number));
+    const fileSet = await loader.loadFileSet(String(RACE_GFX_FILE[race]));
     if (!fileSet?.jilReader || !fileSet.dilReader) {
         return {};
     }

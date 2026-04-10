@@ -18,7 +18,7 @@ export interface ScriptDeps {
 export function executeScriptAddGoods(deps: ScriptDeps, cmd: ScriptAddGoodsCommand): SpawnResult {
     const { state, eventBus } = deps;
 
-    const entity = state.addEntity(EntityType.StackedPile, cmd.materialType, cmd.x, cmd.y, 0);
+    const entity = state.addEntity(EntityType.StackedPile, cmd.materialType, cmd, 0);
 
     // Register free pile — FreePileHandler creates the inventory slot
     eventBus.emit('pile:freePilePlaced', {
@@ -33,7 +33,7 @@ export function executeScriptAddGoods(deps: ScriptDeps, cmd: ScriptAddGoodsComma
 export function executeScriptAddBuilding(deps: ScriptDeps, cmd: ScriptAddBuildingCommand): SpawnResult {
     const { state } = deps;
 
-    const entity = state.addBuilding(cmd.buildingType, cmd.x, cmd.y, cmd.player, { race: cmd.race });
+    const entity = state.addBuilding(cmd.buildingType, cmd, cmd.player, { race: cmd.race });
 
     return { success: true, entityId: entity.id };
 }
@@ -46,7 +46,7 @@ export function executeScriptAddSettlers(deps: ScriptDeps, cmd: ScriptAddSettler
         const offsetX = cmd.x + (i % 3);
         const offsetY = cmd.y + Math.floor(i / 3);
 
-        const entity = state.addUnit(cmd.unitType, offsetX, offsetY, cmd.player, { race: cmd.race });
+        const entity = state.addUnit(cmd.unitType, { x: offsetX, y: offsetY }, cmd.player, { race: cmd.race });
 
         eventBus.emit('unit:spawned', {
             unitId: entity.id,

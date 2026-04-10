@@ -262,6 +262,19 @@ export interface GarrisonSelectedUnitsCommand {
     tileY: number;
 }
 
+/**
+ * Instantly spawn and garrison units into a garrison building.
+ * Each entry specifies a unit type (must be Swordsman or Bowman variant).
+ * Spawned units are immediately hidden inside — no walking required.
+ * Debug/test command only.
+ */
+export interface FillGarrisonCommand {
+    type: 'fill_garrison';
+    buildingId: number;
+    /** Units to spawn and garrison. Each must map to a valid garrison role. */
+    units: ReadonlyArray<{ unitType: UnitType }>;
+}
+
 // === Selection Commands ===
 
 export interface SelectCommand {
@@ -335,6 +348,7 @@ export type Command =
     | GarrisonUnitsCommand
     | UngarrisonUnitCommand
     | GarrisonSelectedUnitsCommand
+    | FillGarrisonCommand
     | RecruitSpecialistCommand
     | CaptureBuildingCommand;
 

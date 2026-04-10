@@ -169,7 +169,7 @@ export class BarracksTrainingManager {
         this.settlerTaskSystem.assignWorkerToBuilding(carrierId, buildingId);
 
         // 7. Build and assign training choreography job
-        const doorPos = getBuildingDoorPos(barracks.x, barracks.y, barracks.race, BuildingType.Barrack);
+        const doorPos = getBuildingDoorPos(barracks, barracks.race, BuildingType.Barrack);
         const job = buildTrainingJob(buildingId, doorPos.x, doorPos.y, TRAINING_DURATION_FRAMES);
         const assigned = this.settlerTaskSystem.assignJob(carrierId, job, doorPos);
         if (!assigned) {
@@ -295,7 +295,7 @@ export class BarracksTrainingManager {
  */
 function buildTrainingJob(barracksId: number, doorX: number, doorY: number, durationFrames: number): ChoreoJobState {
     return choreo('BARRACKS_TRAINING')
-        .goTo(doorX, doorY)
+        .goTo({ x: doorX, y: doorY })
         .hidden(durationFrames, 'BARRACKS_TRAINING')
         .changeTypeAtBarracks()
         .target(barracksId)

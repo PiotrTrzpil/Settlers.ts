@@ -128,10 +128,10 @@ describe('Construction worker top-up – idle specialist assignment', { timeout:
         sim.placeGoods(EMaterialType.SHOVEL, 8);
         sim.placeGoods(EMaterialType.HAMMER, 8);
 
-        createSlope(sim.map, 20, 20, 50, 50, 0, 40);
+        createSlope(sim.map, 110, 125, 150, 135, 0, 40);
 
-        const site1Id = sim.placeBuildingAt(30, 30, BuildingType.WoodcutterHut, 0, false);
-        const site2Id = sim.placeBuildingAt(40, 40, BuildingType.WoodcutterHut, 0, false);
+        const site1Id = sim.placeBuildingAt(118, 128, BuildingType.WoodcutterHut, 0, false);
+        const site2Id = sim.placeBuildingAt(135, 128, BuildingType.WoodcutterHut, 0, false);
 
         sim.runUntil(() => sim.countEntities(EntityType.Unit, UnitType.Digger) >= 2, {
             maxTicks: 30_000,
@@ -204,10 +204,10 @@ describe('Construction worker top-up – cap enforcement & late arrival', { time
         sim.placeGoods(EMaterialType.SHOVEL, 8);
         sim.placeGoods(EMaterialType.HAMMER, 8);
 
-        createSlope(sim.map, 20, 20, 80, 80, 0, 40);
+        createSlope(sim.map, 110, 125, 155, 135, 0, 40);
 
-        sim.placeBuildingAt(30, 30, BuildingType.ResidenceBig, 0, false);
-        sim.placeBuildingAt(50, 50, BuildingType.ResidenceBig, 0, false);
+        sim.placeBuildingAt(118, 128, BuildingType.ResidenceBig, 0, false);
+        sim.placeBuildingAt(142, 128, BuildingType.ResidenceBig, 0, false);
 
         let maxDiggersSeen = 0;
         for (let i = 0; i < 50; i++) {
@@ -236,10 +236,10 @@ describe('Construction worker top-up – cap enforcement & late arrival', { time
         sim.placeGoods(EMaterialType.SHOVEL, 8);
         sim.placeGoods(EMaterialType.HAMMER, 8);
 
-        createSlope(sim.map, 20, 20, 80, 80, 0, 40);
+        createSlope(sim.map, 110, 125, 155, 135, 0, 40);
 
-        const site1Id = sim.placeBuildingAt(30, 30, BuildingType.ResidenceBig, 0, false);
-        sim.placeBuildingAt(50, 50, BuildingType.ResidenceBig, 0, false);
+        const site1Id = sim.placeBuildingAt(118, 128, BuildingType.ResidenceBig, 0, false);
+        sim.placeBuildingAt(142, 128, BuildingType.ResidenceBig, 0, false);
 
         sim.waitForPhase(site1Id, BuildingConstructionPhase.WaitingForBuilders, 50_000);
 

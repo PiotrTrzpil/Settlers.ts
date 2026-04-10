@@ -38,7 +38,10 @@ export async function initRenderersAsync(
         const startPos = game.findPlayerStartPosition();
         if (startPos) {
             const r = NEARBY_ENTITY_RADIUS;
-            const nearby = game.state.getEntitiesInRect(startPos.x - r, startPos.y - r, startPos.x + r, startPos.y + r);
+            const nearby = game.state.getEntitiesInRect(
+                { x: startPos.x - r, y: startPos.y - r },
+                { x: startPos.x + r, y: startPos.y + r }
+            );
             entityRenderer.spriteManager.setNearbyEntities(nearby);
         }
     }

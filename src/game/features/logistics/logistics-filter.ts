@@ -13,6 +13,7 @@ export type LogisticsMatchFilter = (sourceBuilding: Entity, destBuilding: Entity
 
 /**
  * Optional filter for carrier eligibility beyond basic idle/player checks.
+ * When nearX/nearY are provided, the filter can check connectivity to a destination.
  * Returns true if the carrier can be assigned.
  */
-export type CarrierFilter = (carrier: Entity, playerId: number) => boolean;
+export type CarrierFilter = (carrier: Entity, playerId: number, nearX?: number, nearY?: number) => boolean;

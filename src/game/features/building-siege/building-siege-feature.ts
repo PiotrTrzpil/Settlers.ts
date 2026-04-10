@@ -12,10 +12,13 @@ import type { FeatureDefinition, FeatureContext, FeatureInstance } from '../feat
 import type { TowerGarrisonExports } from '@/game/features/tower-garrison';
 import type { CombatExports } from '@/game/features/combat';
 import type { SettlerTaskExports } from '@/game/features/settler-tasks';
+import { isDarkTribe } from '@/game/core/race';
 import { BuildingSiegeSystem } from './building-siege-system';
+import { TowerAssaultSystem } from './tower-assault-system';
 
 export interface BuildingSiegeExports {
     siegeSystem: BuildingSiegeSystem;
+    towerAssaultSystem: TowerAssaultSystem;
 }
 
 export const BuildingSiegeFeature: FeatureDefinition = {
@@ -37,8 +40,28 @@ export const BuildingSiegeFeature: FeatureDefinition = {
             doorDefenderNotifier: towerCombatSystem,
         });
 
-        // Let combat system defer to siege when a building door is closer than the nearest enemy
-        combatSystem.setEngagementFilter((entityId, enemyDist) => siegeSystem.hasDoorCloserThan(entityId, enemyDist));
+        const towerAssaultSystem = new TowerAssaultSystem({
+            gameState: ctx.gameState,
+            eventBus: ctx.eventBus,
+            combatSystem,
+            unitReservation: ctx.unitReservation,
+            settlerTaskSystem,
+            garrisonManager,
+            executeCommand: ctx.executeCommand,
+        });
+
+        // Wire Dark Tribe tower assault into the siege system
+        siegeSystem.setTowerAssaultSystem(towerAssaultSystem);
+
+        // Let combat system defer to siege when a building door is closer than the nearest enemy.
+        // Dark Tribe never sieges — skip entirely so they freely engage enemies.
+        combatSystem.setEngagementFilter((entityId, enemyDist) => {
+            const unit = ctx.gameState.getEntity(entityId);
+            if (unit && isDarkTribe(unit.race)) {
+                return false;
+            }
+            return siegeSystem.hasDoorCloserThan(entityId, enemyDist);
+        });
 
         // --- Event subscriptions ---
 
@@ -52,6 +75,7 @@ export const BuildingSiegeFeature: FeatureDefinition = {
 
         ctx.on('building:removed', ({ buildingId }) => {
             siegeSystem.cancelSiege(buildingId);
+            towerAssaultSystem.cancelAssault(buildingId);
         });
 
         // Clean up dead attackers from siege state
@@ -60,9 +84,9 @@ export const BuildingSiegeFeature: FeatureDefinition = {
         });
 
         return {
-            systems: [siegeSystem],
+            systems: [siegeSystem, towerAssaultSystem],
             systemGroup: 'Military',
-            exports: { siegeSystem } satisfies BuildingSiegeExports,
+            exports: { siegeSystem, towerAssaultSystem } satisfies BuildingSiegeExports,
             persistence: 'none',
         };
     },

@@ -13,25 +13,24 @@
                         class="garrison-slot"
                         :class="{
                             'garrison-slot-filled': unit.unitId !== null,
-                            'garrison-slot-empty': unit.unitId === null,
+                            'garrison-slot-empty': unit.unitId === null && !unit.enRoute,
+                            'garrison-slot-enroute': unit.enRoute,
                             'garrison-slot-disabled': unit.unitId !== null && !garrison.canEject(unit.unitId!),
                         }"
-                        :title="slotTitle(unit.unitId)"
+                        :title="slotTitle(unit)"
                         :disabled="unit.unitId === null || !garrison.canEject(unit.unitId!)"
                         @click="unit.unitId !== null ? ungarrison(unit.unitId) : undefined"
                     >
-                        <template v-if="unit.unitId !== null">
-                            <img
-                                v-if="unit.iconKey && unitIcons[unit.iconKey]"
-                                :src="unitIcons[unit.iconKey]!.url"
-                                class="garrison-unit-sprite"
-                                :style="{
-                                    width: unitIcons[unit.iconKey]!.size + 'px',
-                                    height: unitIcons[unit.iconKey]!.size + 'px',
-                                }"
-                            />
-                            <span v-else class="garrison-unit-icon">⚔️</span>
-                        </template>
+                        <img
+                            v-if="unit.iconKey && unitIcons[unit.iconKey]"
+                            :src="unitIcons[unit.iconKey]!.url"
+                            class="garrison-unit-sprite"
+                            :style="{
+                                width: unitIcons[unit.iconKey]!.size + 'px',
+                                height: unitIcons[unit.iconKey]!.size + 'px',
+                            }"
+                        />
+                        <span v-else-if="unit.unitId !== null" class="garrison-unit-icon">⚔️</span>
                     </button>
                 </div>
                 <span class="garrison-slots-count"
@@ -49,25 +48,24 @@
                         class="garrison-slot"
                         :class="{
                             'garrison-slot-filled': unit.unitId !== null,
-                            'garrison-slot-empty': unit.unitId === null,
+                            'garrison-slot-empty': unit.unitId === null && !unit.enRoute,
+                            'garrison-slot-enroute': unit.enRoute,
                             'garrison-slot-disabled': unit.unitId !== null && !garrison.canEject(unit.unitId!),
                         }"
-                        :title="slotTitle(unit.unitId)"
+                        :title="slotTitle(unit)"
                         :disabled="unit.unitId === null || !garrison.canEject(unit.unitId!)"
                         @click="unit.unitId !== null ? ungarrison(unit.unitId) : undefined"
                     >
-                        <template v-if="unit.unitId !== null">
-                            <img
-                                v-if="unit.iconKey && unitIcons[unit.iconKey]"
-                                :src="unitIcons[unit.iconKey]!.url"
-                                class="garrison-unit-sprite"
-                                :style="{
-                                    width: unitIcons[unit.iconKey]!.size + 'px',
-                                    height: unitIcons[unit.iconKey]!.size + 'px',
-                                }"
-                            />
-                            <span v-else class="garrison-unit-icon">🏹</span>
-                        </template>
+                        <img
+                            v-if="unit.iconKey && unitIcons[unit.iconKey]"
+                            :src="unitIcons[unit.iconKey]!.url"
+                            class="garrison-unit-sprite"
+                            :style="{
+                                width: unitIcons[unit.iconKey]!.size + 'px',
+                                height: unitIcons[unit.iconKey]!.size + 'px',
+                            }"
+                        />
+                        <span v-else-if="unit.unitId !== null" class="garrison-unit-icon">🏹</span>
                     </button>
                 </div>
                 <span class="garrison-slots-count"
@@ -81,7 +79,7 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import type { Game } from '@/game/game';
-import { useGarrison } from '@/composables/use-garrison';
+import { useGarrison, type GarrisonSlotInfo } from '@/composables/use-garrison';
 import { UnitType } from '@/game/core/unit-types';
 import { ALL_UNITS } from '@/views/palette-data';
 import type { IconEntry } from '@/views/sprite-icon-loader';
@@ -104,47 +102,44 @@ const unitTypeToIconKey = new Map<UnitType, string>(ALL_UNITS.map(u => [u.type, 
 interface GarrisonSlotDisplay {
     slotIndex: number;
     unitId: number | null;
-    level: number;
     iconKey: string | null;
+    enRoute: boolean;
 }
 
-const swordsmanSlots = computed<GarrisonSlotDisplay[]>(() => {
+function buildSlotDisplays(slotInfo: GarrisonSlotInfo): GarrisonSlotDisplay[] {
+    const filledCount = slotInfo.units.length;
+    return Array.from({ length: slotInfo.max }, (_, i) => {
+        const garrisoned = slotInfo.units[i];
+        const enRouteIndex = i - filledCount;
+        const enRouteUnit = enRouteIndex >= 0 ? slotInfo.enRouteUnits[enRouteIndex] : undefined;
+        const unitType = garrisoned?.unitType ?? enRouteUnit?.unitType;
+        return {
+            slotIndex: i,
+            unitId: garrisoned?.unitId ?? null, // eslint-disable-line no-restricted-syntax -- null for empty slot
+            iconKey: unitType ? (unitTypeToIconKey.get(unitType) ?? null) : null, // eslint-disable-line no-restricted-syntax -- Map.get returns undefined
+            enRoute: enRouteUnit !== undefined,
+        };
+    });
+}
+
+const swordsmanSlots = computed(() => {
     const g = garrison.value;
-    if (!g) {
-        return [];
-    }
-    return Array.from({ length: g.swordsmanSlots.max }, (_, i) => ({
-        slotIndex: i,
-        // eslint-disable-next-line no-restricted-syntax -- units[i] is absent for empty slots; null is correct for empty slot
-        unitId: g.swordsmanSlots.units[i]?.unitId ?? null,
-        // eslint-disable-next-line no-restricted-syntax -- units[i] is absent for empty slots; 0 is correct default level
-        level: g.swordsmanSlots.units[i]?.level ?? 0,
-        // eslint-disable-next-line no-restricted-syntax -- Map.get() returns undefined for missing keys
-        iconKey: g.swordsmanSlots.units[i] ? (unitTypeToIconKey.get(g.swordsmanSlots.units[i].unitType) ?? null) : null,
-    }));
+    return g ? buildSlotDisplays(g.swordsmanSlots) : [];
 });
 
-const bowmanSlots = computed<GarrisonSlotDisplay[]>(() => {
+const bowmanSlots = computed(() => {
     const g = garrison.value;
-    if (!g) {
-        return [];
-    }
-    return Array.from({ length: g.bowmanSlots.max }, (_, i) => ({
-        slotIndex: i,
-        // eslint-disable-next-line no-restricted-syntax -- units[i] is absent for empty slots; null is correct for empty slot
-        unitId: g.bowmanSlots.units[i]?.unitId ?? null,
-        // eslint-disable-next-line no-restricted-syntax -- units[i] is absent for empty slots; 0 is correct default level
-        level: g.bowmanSlots.units[i]?.level ?? 0,
-        // eslint-disable-next-line no-restricted-syntax -- Map.get() returns undefined for missing keys
-        iconKey: g.bowmanSlots.units[i] ? (unitTypeToIconKey.get(g.bowmanSlots.units[i].unitType) ?? null) : null,
-    }));
+    return g ? buildSlotDisplays(g.bowmanSlots) : [];
 });
 
-function slotTitle(unitId: number | null): string {
-    if (unitId === null) {
-        return '';
+function slotTitle(slot: GarrisonSlotDisplay): string {
+    if (slot.unitId !== null) {
+        return garrison.value!.canEject(slot.unitId) ? 'Click to release' : 'Last soldier — cannot release';
     }
-    return garrison.value!.canEject(unitId) ? 'Click to release' : 'Last soldier — cannot release';
+    if (slot.enRoute) {
+        return 'Soldier en route';
+    }
+    return '';
 }
 
 function ungarrison(unitId: number): void {
@@ -188,7 +183,7 @@ function ungarrison(unitId: number): void {
     width: 29px;
     height: 29px;
     border-radius: 3px;
-    border: 1px solid rgba(180, 140, 80, 0.3);
+    border: 1px solid rgba(180, 140, 80, 0.5);
     background: rgba(30, 25, 15, 0.4);
     display: flex;
     align-items: center;
@@ -198,6 +193,7 @@ function ungarrison(unitId: number): void {
     padding: 0;
     font-size: 9px;
     flex-direction: column;
+    overflow: hidden;
     transition:
         background 0.15s,
         border-color 0.15s;
@@ -205,27 +201,33 @@ function ungarrison(unitId: number): void {
 
 .garrison-slot-empty {
     cursor: default;
-    opacity: 0.35;
+    opacity: 0.5;
 }
 
 .garrison-slot-filled {
-    border-color: rgba(200, 160, 80, 0.7);
-    background: rgba(60, 45, 20, 0.45);
+    border-color: rgba(210, 170, 80, 0.85);
+    background: rgba(60, 45, 20, 0.5);
 }
 
 .garrison-slot-filled:hover {
     background: rgba(100, 70, 25, 0.6);
-    border-color: rgba(220, 170, 80, 0.85);
+    border-color: rgba(230, 185, 90, 1);
+}
+
+.garrison-slot-enroute {
+    border-color: rgba(180, 160, 80, 0.55);
+    border-style: dashed;
+    background: rgba(50, 40, 15, 0.35);
+    cursor: default;
+    opacity: 0.8;
 }
 
 .garrison-slot-disabled {
-    border-color: transparent;
     cursor: not-allowed;
 }
 
 .garrison-slot-disabled:hover {
-    background: rgba(60, 45, 20, 0.45);
-    border-color: transparent;
+    background: rgba(60, 45, 20, 0.5);
 }
 
 .garrison-unit-sprite {
@@ -239,11 +241,5 @@ function ungarrison(unitId: number): void {
 .garrison-unit-icon {
     font-size: 9px;
     line-height: 1;
-}
-
-.garrison-unit-level {
-    font-size: 7px;
-    line-height: 1;
-    color: var(--text-dim);
 }
 </style>

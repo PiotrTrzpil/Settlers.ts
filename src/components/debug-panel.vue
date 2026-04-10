@@ -109,6 +109,7 @@ import { computed, ref, watch } from 'vue';
 import { debugStats } from '@/game/debug/debug-stats';
 
 import type { Game } from '@/game/game';
+import type { Race } from '@/game/core/race';
 import { EntityType } from '@/game/entity';
 import { isUnitTypeSelectable, UnitType } from '@/game/core/unit-types';
 import { clearSavedTreeState } from '@/game/state/game-state-persistence';
@@ -164,7 +165,7 @@ function partialReload(): void {
 
 const props = defineProps<{
     paused: boolean;
-    currentRace: number; // Race enum
+    currentRace: Race;
     game: Game;
 }>();
 

@@ -5,6 +5,7 @@
 
 import type { MapSize } from '@/utilities/map-size';
 import type { Race } from '../../core/race';
+import type { Tile } from '../../core/coordinates';
 
 /**
  * Placement status indicating why/how placement can or cannot occur.
@@ -82,16 +83,16 @@ export interface PlacementResult {
 /**
  * Validator function signature for placement modes.
  */
-export type PlacementValidator = (x: number, y: number, subType: number) => boolean;
+export type PlacementValidator = (tile: Tile, subType: number) => boolean;
 
 /**
  * Detailed validator that returns status information.
  */
-export type DetailedPlacementValidator = (x: number, y: number, subType: number) => PlacementResult;
+export type DetailedPlacementValidator = (tile: Tile, subType: number) => PlacementResult;
 
 /**
  * Optional filter that rejects placement based on game rules (territory, diplomacy, etc.).
  * Returns a PlacementStatus rejection reason, or null if placement is allowed.
  * Validators call this after bounds check, before terrain/occupancy/slope checks.
  */
-export type PlacementFilter = (x: number, y: number, player: number) => PlacementStatus | null;
+export type PlacementFilter = (tile: Tile, player: number) => PlacementStatus | null;

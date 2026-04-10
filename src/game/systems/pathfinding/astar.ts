@@ -250,7 +250,7 @@ function processNeighbor(cx: number, cy: number, currentIdx: number, direction: 
 
     // Bounds check
     const { mapWidth, mapHeight } = ctx.terrain;
-    if (!isInMapBounds(nx, ny, mapWidth, mapHeight)) {
+    if (!isInMapBounds({ x: nx, y: ny }, mapWidth, mapHeight)) {
         return;
     }
 
@@ -320,7 +320,7 @@ function diagnoseNeighbor(
     const nx = startX + dx;
     const ny = startY + dy;
     const pos = `d${d}(${nx},${ny})`;
-    if (!isInMapBounds(nx, ny, mapWidth, mapHeight)) {
+    if (!isInMapBounds({ x: nx, y: ny }, mapWidth, mapHeight)) {
         return pos + ':OOB';
     }
     const nIdx = nx + ny * mapWidth;
@@ -347,8 +347,8 @@ function logPathfindingFailure(
     mapHeight: number,
     buildingOccupancy: Set<string>
 ): void {
-    const startKey = tileKey(startX, startY);
-    const goalKey = tileKey(goalX, goalY);
+    const startKey = tileKey({ x: startX, y: startY });
+    const goalKey = tileKey({ x: goalX, y: goalY });
     const startInBuilding = buildingOccupancy.has(startKey);
     const goalInBuilding = buildingOccupancy.has(goalKey);
     const startPassable = isPassable(groundType[startIdx]!);
@@ -399,7 +399,11 @@ function buildFinalPath(
     buildingOccupancy: Set<string>
 ): Tile[] {
     const rawPath = reconstructPath(goalIdx, parent, mapWidth);
-    const smoothed = smoothPath(rawPath, startX, startY, { groundType, mapWidth, mapHeight, buildingOccupancy });
+    const smoothed = smoothPath(
+        rawPath,
+        { x: startX, y: startY },
+        { groundType, mapWidth, mapHeight, buildingOccupancy }
+    );
     if (_debugPathCallback) {
         _debugPathCallback(rawPath, smoothed);
     }

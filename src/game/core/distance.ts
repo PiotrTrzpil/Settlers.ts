@@ -6,9 +6,14 @@
  * For isometric screen-space distance, use `isoDistSq` from systems/boundary-ring.
  */
 
+interface XY {
+    readonly x: number;
+    readonly y: number;
+}
+
 /** Squared Euclidean distance between two points. Use for proximity comparisons. */
-export function distSq(x1: number, y1: number, x2: number, y2: number): number {
-    const dx = x1 - x2;
-    const dy = y1 - y2;
+export function distSq(a: XY, b: XY): number {
+    const dx = a.x - b.x;
+    const dy = a.y - b.y;
     return dx * dx + dy * dy;
 }

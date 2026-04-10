@@ -58,7 +58,7 @@ describe('Farmer movement after construction', { timeout: 60_000 }, () => {
         sim.waitForConstructionComplete(s.siteId, 80_000);
 
         const farm = sim.state.getEntity(s.siteId)!;
-        const door = getBuildingDoorPos(farm.x, farm.y, farm.race, BuildingType.GrainFarm);
+        const door = getBuildingDoorPos(farm, farm.race, BuildingType.GrainFarm);
         const workCenter = sim.services.workAreaStore.getAbsoluteCenter(
             s.siteId,
             farm.x,
@@ -103,7 +103,7 @@ describe('Farmer movement after construction', { timeout: 60_000 }, () => {
         sim.waitForConstructionComplete(s.siteId, 80_000);
 
         const farm = sim.state.getEntity(s.siteId)!;
-        const door = getBuildingDoorPos(farm.x, farm.y, farm.race, BuildingType.GrainFarm);
+        const door = getBuildingDoorPos(farm, farm.race, BuildingType.GrainFarm);
 
         // NOW spawn many carriers near the farm door to simulate a busy economy
         // The farmer is inside the building at this point — carriers crowd the exit
@@ -112,7 +112,7 @@ describe('Farmer movement after construction', { timeout: 60_000 }, () => {
             for (let dy = -2; dy <= 2; dy++) {
                 if (dx === 0 && dy === 0) continue;
                 try {
-                    sim.spawnUnit(door.x + dx, door.y + dy, UnitType.Carrier);
+                    sim.spawnUnit({ x: door.x + dx, y: door.y + dy }, UnitType.Carrier);
                     spawned++;
                 } catch {
                     // tile occupied — skip
@@ -163,7 +163,7 @@ describe('Farmer movement after construction', { timeout: 60_000 }, () => {
         sim.waitForConstructionComplete(s.siteId, 80_000);
 
         const farm = sim.state.getEntity(s.siteId)!;
-        const door = getBuildingDoorPos(farm.x, farm.y, farm.race, BuildingType.GrainFarm);
+        const door = getBuildingDoorPos(farm, farm.race, BuildingType.GrainFarm);
 
         const plantedPositions: Tile[] = [];
         sim.eventBus.on('crop:planted', e => plantedPositions.push({ x: e.x, y: e.y }));

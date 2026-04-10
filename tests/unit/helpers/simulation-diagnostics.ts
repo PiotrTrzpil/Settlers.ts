@@ -18,8 +18,8 @@ export type TileCandidate = { x: number; y: number; distSq: number };
 export function scanFreeTiles(state: GameState, center: Tile, maxRadius: number, limit: number): TileCandidate[] {
     const candidates: TileCandidate[] = [];
     for (let r = 0; r <= maxRadius && candidates.length < limit; r++) {
-        for (const tile of ringTiles(center.x, center.y, r)) {
-            if (state.getGroundEntityAt(tile.x, tile.y)) continue;
+        for (const tile of ringTiles(center, r)) {
+            if (state.getGroundEntityAt(tile)) continue;
             const dx = tile.x - center.x;
             const dy = tile.y - center.y;
             candidates.push({ x: tile.x, y: tile.y, distSq: dx * dx + dy * dy });
@@ -37,7 +37,7 @@ export function printBuildingDiagnosticMap(
     center: Tile,
     candidates: TileCandidate[]
 ): void {
-    const door = getBuildingDoorPos(building.x, building.y, race, buildingType);
+    const door = getBuildingDoorPos(building, race, buildingType);
     console.log(`\n  Building anchor: (${building.x}, ${building.y})`);
     console.log(`  Door:            (${door.x}, ${door.y})  anchor+(${door.x - building.x},${door.y - building.y})`);
     console.log(
@@ -45,10 +45,10 @@ export function printBuildingDiagnosticMap(
     );
 
     const fullFootprint = new Set(
-        getBuildingFootprint(building.x, building.y, buildingType, race).map(t => `${t.x},${t.y}`)
+        getBuildingFootprint({ x: building.x, y: building.y }, buildingType, race).map(t => `${t.x},${t.y}`)
     );
     const blockArea = new Set(
-        getBuildingBlockArea(building.x, building.y, buildingType, race).map(t => `${t.x},${t.y}`)
+        getBuildingBlockArea({ x: building.x, y: building.y }, buildingType, race).map(t => `${t.x},${t.y}`)
     );
     console.log(`  Full footprint: ${fullFootprint.size} tiles, block area: ${blockArea.size} tiles`);
 

@@ -72,7 +72,7 @@ describe('Building worker auto-recruitment (integration)', { timeout: 30_000 }, 
     it('WoodcutterHut: carrier walks to AXE pile and transforms into Woodcutter', () => {
         sim = createSimulation();
 
-        sim.spawnUnit(64, 60, UnitType.Carrier);
+        sim.spawnUnit({ x: 64, y: 60 }, UnitType.Carrier);
         sim.placeGoods(EMaterialType.AXE, 1);
 
         placeCompletedNoWorker(BuildingType.WoodcutterHut);
@@ -93,7 +93,7 @@ describe('Building worker auto-recruitment (integration)', { timeout: 30_000 }, 
     it('Bakery: carrier transforms into Baker in place (no tool needed)', () => {
         sim = createSimulation();
 
-        sim.spawnUnit(64, 60, UnitType.Carrier);
+        sim.spawnUnit({ x: 64, y: 60 }, UnitType.Carrier);
 
         placeCompletedNoWorker(BuildingType.Bakery);
 
@@ -113,7 +113,7 @@ describe('Building worker auto-recruitment (integration)', { timeout: 30_000 }, 
     it('GrainFarm: carrier walks to SCYTHE pile and transforms into Farmer', () => {
         sim = createSimulation();
 
-        sim.spawnUnit(64, 60, UnitType.Carrier);
+        sim.spawnUnit({ x: 64, y: 60 }, UnitType.Carrier);
         sim.placeGoods(EMaterialType.SCYTHE, 1);
 
         placeCompletedNoWorker(BuildingType.GrainFarm);
@@ -141,7 +141,7 @@ describe('Building worker auto-recruitment (integration)', { timeout: 30_000 }, 
         expect(sim.countEntities(EntityType.Unit, UnitType.Baker)).toBe(0);
 
         // Now spawn a carrier — demand should be fulfilled on next drain
-        sim.spawnUnit(64, 60, UnitType.Carrier);
+        sim.spawnUnit({ x: 64, y: 60 }, UnitType.Carrier);
 
         sim.runUntil(() => sim.countEntities(EntityType.Unit, UnitType.Baker) === 1, {
             maxTicks: 3_000,
@@ -168,7 +168,7 @@ describe('Building worker auto-recruitment (integration)', { timeout: 30_000 }, 
         sim.execute({ type: 'remove_entity', entityId: buildingId });
 
         // Now spawn a carrier — demand should be discarded (building gone)
-        sim.spawnUnit(64, 60, UnitType.Carrier);
+        sim.spawnUnit({ x: 64, y: 60 }, UnitType.Carrier);
         sim.runTicks(200);
 
         expect(sim.countEntities(EntityType.Unit, UnitType.Baker)).toBe(0);
@@ -182,7 +182,7 @@ describe('Building worker auto-recruitment (integration)', { timeout: 30_000 }, 
         sim = createSimulation();
 
         // Spawn an idle woodcutter (no home assignment)
-        sim.spawnUnit(64, 60, UnitType.Woodcutter);
+        sim.spawnUnit({ x: 64, y: 60 }, UnitType.Woodcutter);
 
         // Place a completed WoodcutterHut — triggers building:completed demand
         placeCompletedNoWorker(BuildingType.WoodcutterHut);
@@ -214,7 +214,7 @@ describe('Building worker auto-recruitment (integration)', { timeout: 30_000 }, 
 
         // Place building + carrier for initial baker
         const buildingId = placeCompletedNoWorker(BuildingType.Bakery);
-        sim.spawnUnit(64, 60, UnitType.Carrier);
+        sim.spawnUnit({ x: 64, y: 60 }, UnitType.Carrier);
 
         // Wait for initial baker to be recruited
         sim.runUntil(() => sim.countEntities(EntityType.Unit, UnitType.Baker) === 1, {
@@ -226,7 +226,7 @@ describe('Building worker auto-recruitment (integration)', { timeout: 30_000 }, 
         expect(sim.services.settlerTaskSystem.getAssignedBuilding(bakerId)).toBe(buildingId);
 
         // Spawn a spare carrier for re-recruitment
-        sim.spawnUnit(64, 60, UnitType.Carrier);
+        sim.spawnUnit({ x: 64, y: 60 }, UnitType.Carrier);
 
         // Remove the baker entity — triggers the full release flow:
         // entity:removed → settlerTaskSystem.onEntityRemoved → release → building:workerLost

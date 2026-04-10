@@ -23,8 +23,8 @@ function garrisonUnits(sim: Simulation, buildingId: number, unitIds: number[]) {
     return sim.execute({ type: 'garrison_units', buildingId, unitIds });
 }
 
-function moveUnit(sim: Simulation, entityId: number, targetX: number, targetY: number) {
-    return sim.execute({ type: 'move_unit', entityId, targetX, targetY });
+function moveUnit(sim: Simulation, entityId: number, target: Tile) {
+    return sim.execute({ type: 'move_unit', entityId, targetX: target.x, targetY: target.y });
 }
 
 function garrisonedCount(sim: Simulation, buildingId: number): number {
@@ -97,8 +97,8 @@ describe('Building siege – combat', { timeout: 60_000 }, () => {
         garrisonUnits(sim, towerId, defenders);
         waitForGarrisoned(sim, towerId, 3, 'defenders garrisoned');
 
-        const attacker1 = sim.spawnUnit(tower.x + 15, tower.y, UnitType.Swordsman1, 1);
-        moveUnit(sim, attacker1, tower.x, tower.y);
+        const attacker1 = sim.spawnUnit({ x: tower.x + 15, y: tower.y }, UnitType.Swordsman1, 1);
+        moveUnit(sim, attacker1, tower);
 
         waitForSiegeStarted(sim, towerId, 'siege started');
 
@@ -114,14 +114,14 @@ describe('Building siege – combat', { timeout: 60_000 }, () => {
 
         const towerId = sim.placeBuilding(BuildingType.GuardTowerBig, 0);
         const tower = sim.state.getEntityOrThrow(towerId, 'tower');
-        const door = getBuildingDoorPos(tower.x, tower.y, tower.race, tower.subType as BuildingType);
+        const door = getBuildingDoorPos(tower, tower.race, tower.subType as BuildingType);
 
         const [def1, def2] = sim.spawnUnitNear(towerId, UnitType.Swordsman1, 2, 0);
         garrisonUnits(sim, towerId, [def1!, def2!]);
         waitForGarrisoned(sim, towerId, 2, 'defenders garrisoned');
 
-        const attackerId = sim.spawnUnit(tower.x + 5, tower.y, UnitType.Swordsman1, 1);
-        moveUnit(sim, attackerId, tower.x, tower.y);
+        const attackerId = sim.spawnUnit({ x: tower.x + 5, y: tower.y }, UnitType.Swordsman1, 1);
+        moveUnit(sim, attackerId, tower);
 
         waitForSiegeStarted(sim, towerId, 'siege reached fighting phase');
 
@@ -150,10 +150,10 @@ describe('Building siege – combat', { timeout: 60_000 }, () => {
         garrisonUnits(sim, towerId, defenders);
         waitForGarrisoned(sim, towerId, 3, 'defenders garrisoned');
 
-        const atk1 = sim.spawnUnit(tower.x + 5, tower.y, UnitType.Swordsman3, 1);
-        const atk2 = sim.spawnUnit(tower.x + 6, tower.y, UnitType.Swordsman3, 1);
-        moveUnit(sim, atk1, tower.x, tower.y);
-        moveUnit(sim, atk2, tower.x, tower.y);
+        const atk1 = sim.spawnUnit({ x: tower.x + 5, y: tower.y }, UnitType.Swordsman3, 1);
+        const atk2 = sim.spawnUnit({ x: tower.x + 6, y: tower.y }, UnitType.Swordsman3, 1);
+        moveUnit(sim, atk1, tower);
+        moveUnit(sim, atk2, tower);
 
         waitForSiegeStarted(sim, towerId, 'fighting started');
 
@@ -187,13 +187,13 @@ describe('Building siege – combat', { timeout: 60_000 }, () => {
         waitForGarrisoned(sim, towerId, 2, 'defenders garrisoned');
 
         const attackers = [
-            sim.spawnUnit(tower.x + 5, tower.y, UnitType.Swordsman3, 1),
-            sim.spawnUnit(tower.x + 6, tower.y, UnitType.Swordsman3, 1),
-            sim.spawnUnit(tower.x + 7, tower.y, UnitType.Swordsman3, 1),
+            sim.spawnUnit({ x: tower.x + 5, y: tower.y }, UnitType.Swordsman3, 1),
+            sim.spawnUnit({ x: tower.x + 6, y: tower.y }, UnitType.Swordsman3, 1),
+            sim.spawnUnit({ x: tower.x + 7, y: tower.y }, UnitType.Swordsman3, 1),
         ];
 
         for (const atkId of attackers) {
-            moveUnit(sim, atkId, tower.x, tower.y);
+            moveUnit(sim, atkId, tower);
         }
 
         waitForSiegeStarted(sim, towerId, 'siege started');
@@ -233,10 +233,10 @@ describe('Building siege – edge cases', { timeout: 60_000 }, () => {
         waitForGarrisoned(sim, towerId, 3, 'defenders garrisoned');
 
         // Send two strong attackers — combat system handles the fighting
-        const atk1 = sim.spawnUnit(tower.x + 5, tower.y, UnitType.Swordsman3, 1);
-        const atk2 = sim.spawnUnit(tower.x + 6, tower.y, UnitType.Swordsman3, 1);
-        moveUnit(sim, atk1, tower.x, tower.y);
-        moveUnit(sim, atk2, tower.x, tower.y);
+        const atk1 = sim.spawnUnit({ x: tower.x + 5, y: tower.y }, UnitType.Swordsman3, 1);
+        const atk2 = sim.spawnUnit({ x: tower.x + 6, y: tower.y }, UnitType.Swordsman3, 1);
+        moveUnit(sim, atk1, tower);
+        moveUnit(sim, atk2, tower);
 
         waitForSiegeStarted(sim, towerId, 'siege started');
         waitForBuildingCaptured(sim, towerId, 1, 'tower captured');
@@ -258,8 +258,8 @@ describe('Building siege – edge cases', { timeout: 60_000 }, () => {
         garrisonUnits(sim, towerId, [defId]);
         waitForGarrisoned(sim, towerId, 1, 'defender garrisoned');
 
-        const atkId = sim.spawnUnit(tower.x + 5, tower.y, UnitType.Swordsman1, 1);
-        moveUnit(sim, atkId, tower.x, tower.y);
+        const atkId = sim.spawnUnit({ x: tower.x + 5, y: tower.y }, UnitType.Swordsman1, 1);
+        moveUnit(sim, atkId, tower);
         waitForSiegeStarted(sim, towerId, 'siege started');
 
         sim.execute({ type: 'remove_entity', entityId: towerId });
@@ -280,8 +280,8 @@ describe('Building siege – edge cases', { timeout: 60_000 }, () => {
         garrisonUnits(sim, towerId, [defId]);
         waitForGarrisoned(sim, towerId, 1, 'defender garrisoned');
 
-        const bowmanId = sim.spawnUnit(tower.x + 5, tower.y, UnitType.Bowman1, 1);
-        moveUnit(sim, bowmanId, tower.x, tower.y);
+        const bowmanId = sim.spawnUnit({ x: tower.x + 5, y: tower.y }, UnitType.Bowman1, 1);
+        moveUnit(sim, bowmanId, tower);
         sim.runTicks(500);
 
         expect(getSiege(sim, towerId)).toBeUndefined();
@@ -295,14 +295,14 @@ describe('Building siege – edge cases', { timeout: 60_000 }, () => {
 
         const towerId = sim.placeBuilding(BuildingType.GuardTowerSmall, 0);
         const tower = sim.state.getEntityOrThrow(towerId, 'tower');
-        const door = getBuildingDoorPos(tower.x, tower.y, tower.race, tower.subType as BuildingType);
+        const door = getBuildingDoorPos(tower, tower.race, tower.subType as BuildingType);
 
         const defId = sim.spawnUnitNear(towerId, UnitType.Swordsman1, 1, 0)[0]!;
         garrisonUnits(sim, towerId, [defId]);
         waitForGarrisoned(sim, towerId, 1, 'defender garrisoned');
 
         // Place attacker exactly 1 tile from door (adjacent) — should trigger siege
-        sim.spawnUnit(door.x + 1, door.y, UnitType.Swordsman1, 1);
+        sim.spawnUnit({ x: door.x + 1, y: door.y }, UnitType.Swordsman1, 1);
 
         waitForSiegeStarted(sim, towerId, 'siege started from adjacent tile');
         expect(sim.errors).toHaveLength(0);
@@ -315,7 +315,7 @@ describe('Building siege – edge cases', { timeout: 60_000 }, () => {
 
         const towerId = sim.placeBuilding(BuildingType.GuardTowerSmall, 0);
         const tower = sim.state.getEntityOrThrow(towerId, 'tower');
-        const door = getBuildingDoorPos(tower.x, tower.y, tower.race, tower.subType as BuildingType);
+        const door = getBuildingDoorPos(tower, tower.race, tower.subType as BuildingType);
 
         const defId = sim.spawnUnitNear(towerId, UnitType.Swordsman1, 1, 0)[0]!;
         garrisonUnits(sim, towerId, [defId]);
@@ -323,7 +323,7 @@ describe('Building siege – edge cases', { timeout: 60_000 }, () => {
 
         // Place attacker 2 tiles from door — outside DOOR_ARRIVAL_DISTANCE
         expect(DOOR_ARRIVAL_DISTANCE).toBe(1);
-        const atkId = sim.spawnUnit(door.x + 2, door.y, UnitType.Swordsman1, 1);
+        const atkId = sim.spawnUnit({ x: door.x + 2, y: door.y }, UnitType.Swordsman1, 1);
 
         // Run a few tick cycles — siege should NOT start yet (unit is too far)
         sim.runTicks(50);
@@ -347,14 +347,14 @@ describe('Building siege – edge cases', { timeout: 60_000 }, () => {
 
         const towerId = sim.placeBuilding(BuildingType.GuardTowerSmall, 0);
         const tower = sim.state.getEntityOrThrow(towerId, 'tower');
-        const door = getBuildingDoorPos(tower.x, tower.y, tower.race, tower.subType as BuildingType);
+        const door = getBuildingDoorPos(tower, tower.race, tower.subType as BuildingType);
 
         const defId = sim.spawnUnitNear(towerId, UnitType.Swordsman1, 1, 0)[0]!;
         garrisonUnits(sim, towerId, [defId]);
         waitForGarrisoned(sim, towerId, 1, 'defender garrisoned');
 
-        const atkId = sim.spawnUnit(tower.x + 5, tower.y, UnitType.Swordsman1, 1);
-        moveUnit(sim, atkId, tower.x, tower.y);
+        const atkId = sim.spawnUnit({ x: tower.x + 5, y: tower.y }, UnitType.Swordsman1, 1);
+        moveUnit(sim, atkId, tower);
 
         waitForSiegeStarted(sim, towerId, 'siege started');
 
@@ -380,7 +380,7 @@ describe('Building siege – edge cases', { timeout: 60_000 }, () => {
         garrisonUnits(sim, towerId, [defId]);
         waitForGarrisoned(sim, towerId, 1, 'defender garrisoned');
 
-        sim.spawnUnit(tower.x + 3, tower.y, UnitType.Swordsman1, 1);
+        sim.spawnUnit({ x: tower.x + 3, y: tower.y }, UnitType.Swordsman1, 1);
 
         waitForSiegeStarted(sim, towerId, 'idle swordsman auto-detected');
 
@@ -407,7 +407,7 @@ describe('Building siege – territory update on capture', { timeout: 60_000 }, 
         const tower = sim.state.getEntityOrThrow(towerId, 'tower');
 
         const tm = sim.services.territoryManager;
-        expect(tm.getOwner(tower.x, tower.y)).toBe(0);
+        expect(tm.getOwner({ x: tower.x, y: tower.y })).toBe(0);
 
         // Garrison a weak defender, send strong attackers to capture
         const defId = sim.spawnUnitNear(towerId, UnitType.Swordsman1, 1, 0)[0]!;
@@ -415,11 +415,11 @@ describe('Building siege – territory update on capture', { timeout: 60_000 }, 
         waitForGarrisoned(sim, towerId, 1, 'defender garrisoned');
 
         const attackers = [
-            sim.spawnUnit(tower.x + 5, tower.y, UnitType.Swordsman3, 1),
-            sim.spawnUnit(tower.x + 6, tower.y, UnitType.Swordsman3, 1),
+            sim.spawnUnit({ x: tower.x + 5, y: tower.y }, UnitType.Swordsman3, 1),
+            sim.spawnUnit({ x: tower.x + 6, y: tower.y }, UnitType.Swordsman3, 1),
         ];
         for (const atkId of attackers) {
-            moveUnit(sim, atkId, tower.x, tower.y);
+            moveUnit(sim, atkId, tower);
         }
 
         waitForSiegeStarted(sim, towerId, 'siege started');
@@ -430,7 +430,7 @@ describe('Building siege – territory update on capture', { timeout: 60_000 }, 
         expect(capturedTower.player).toBe(1);
 
         // Territory near the tower should now belong to player 1
-        expect(tm.getOwner(tower.x, tower.y)).toBe(1);
+        expect(tm.getOwner({ x: tower.x, y: tower.y })).toBe(1);
 
         expect(sim.errors).toHaveLength(0);
     });
@@ -449,7 +449,7 @@ describe('Building siege – territory update on capture', { timeout: 60_000 }, 
             for (let dy = -60; dy <= 60; dy++) {
                 const tx = tower0.x + dx;
                 const ty = tower0.y + dy;
-                if (tm.isInTerritory(tx, ty, 0)) {
+                if (tm.isInTerritory({ x: tx, y: ty }, 0)) {
                     player0TilesBefore.push({ x: tx, y: ty });
                 }
             }
@@ -462,12 +462,12 @@ describe('Building siege – territory update on capture', { timeout: 60_000 }, 
         expect(sim.state.getEntity(tower1Id)).toBeDefined();
 
         // Player 1 should have territory near their own tower
-        expect(tm.isInTerritory(tower0.x + 30, tower0.y, 1)).toBe(true);
+        expect(tm.isInTerritory({ x: tower0.x + 30, y: tower0.y }, 1)).toBe(true);
 
         // Every tile that was player 0's territory must still belong to player 0
-        const lost: { x: number; y: number; nowOwner: number }[] = [];
+        const lost: (Tile & { nowOwner: number })[] = [];
         for (const tile of player0TilesBefore) {
-            const owner = tm.getOwner(tile.x, tile.y);
+            const owner = tm.getOwner(tile);
             if (owner !== 0) {
                 lost.push({ ...tile, nowOwner: owner });
             }

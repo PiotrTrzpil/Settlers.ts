@@ -14,7 +14,7 @@ import { TERRITORY_RADIUS, type TerritoryDot } from './territory-types';
 import type { BuildingType } from '../../buildings/types';
 import { thinDotsInScreenSpace, isoDistSq } from '../../systems/boundary-ring';
 import { type ComponentStore, mapStore } from '../../ecs';
-import type { Tile } from '@/game/core/coordinates';
+import type { Tile, Offset } from '@/game/core/coordinates';
 
 // ── Types ────────────────────────────────────────────────────────────
 
@@ -46,6 +46,8 @@ export class TerritoryManager {
     private readonly territoryGrid: Uint8Array;
     /** Per-tile squared isometric distance to the owning building */
     private readonly distanceGrid: Float32Array;
+    /** Per-tile connected component ID (0 = unclaimed/unlabeled). */
+    private readonly componentGrid: Uint32Array;
     private readonly mapWidth: number;
     private readonly mapHeight: number;
 
@@ -58,8 +60,11 @@ export class TerritoryManager {
     /** Whether boundary dots need recomputation (without full grid recompute) */
     private boundaryDirty = false;
 
+    /** Whether connected components need recomputation */
+    private componentDirty = true;
+
     /** Callback for single-tile ownership changes (pioneer expansion) */
-    onTileChanged?: (x: number, y: number, oldOwner: number, newOwner: number) => void;
+    onTileChanged?: (tile: Tile, oldOwner: number, newOwner: number) => void;
 
     /** Callback after full recomputation (tower build/destroy) */
     onRecomputed?: () => void;
@@ -81,6 +86,7 @@ export class TerritoryManager {
         this.mapHeight = mapHeight;
         this.territoryGrid = new Uint8Array(mapWidth * mapHeight);
         this.distanceGrid = new Float32Array(mapWidth * mapHeight);
+        this.componentGrid = new Uint32Array(mapWidth * mapHeight);
     }
 
     // ─────────────────────────────────────────────────────────────
@@ -103,6 +109,7 @@ export class TerritoryManager {
         this.rebuildDistanceGrid();
         this.dirty = false;
         this.boundaryDirty = true;
+        this.componentDirty = true;
         this.onRecomputed?.();
     }
 
@@ -140,20 +147,22 @@ export class TerritoryManager {
     // ─────────────────────────────────────────────────────────────
 
     /** Register a territory-generating building */
-    addBuilding(entityId: number, x: number, y: number, player: number, buildingType: BuildingType): void {
+    addBuilding(entityId: number, tile: Tile, player: number, buildingType: BuildingType): void {
         const radius = TERRITORY_RADIUS[buildingType];
         if (radius === undefined) {
             return;
         }
 
-        this.buildings.set(entityId, { x, y, player, radius });
+        this.buildings.set(entityId, { x: tile.x, y: tile.y, player, radius });
         this.dirty = true;
+        this.componentDirty = true;
     }
 
     /** Remove a territory-generating building */
     removeBuilding(entityId: number): boolean {
         if (this.buildings.delete(entityId)) {
             this.dirty = true;
+            this.componentDirty = true;
             return true;
         }
         return false;
@@ -169,14 +178,15 @@ export class TerritoryManager {
      * Does NOT trigger full recompute — only marks boundary dots dirty
      * and notifies the spatial index via onTileChanged.
      */
-    claimTile(x: number, y: number, player: number): void {
+    claimTile(tile: Tile, player: number): void {
         this.recomputeIfDirty(); // ensure grid is up to date before mutating
-        const idx = y * this.mapWidth + x;
+        const idx = tile.y * this.mapWidth + tile.x;
         const oldValue = this.territoryGrid[idx]!;
         const oldOwner = oldValue === 0 ? -1 : oldValue - 1;
         this.territoryGrid[idx] = player + 1;
-        this.onTileChanged?.(x, y, oldOwner, player);
+        this.onTileChanged?.(tile, oldOwner, player);
         this.boundaryDirty = true;
+        this.componentDirty = true;
     }
 
     /**
@@ -193,10 +203,11 @@ export class TerritoryManager {
             if (oldOwner !== player) {
                 this.territoryGrid[idx] = ownerValue;
                 this.distanceGrid[idx] = 0;
-                this.onTileChanged?.(x, y, oldOwner, player);
+                this.onTileChanged?.({ x, y }, oldOwner, player);
             }
         }
         this.boundaryDirty = true;
+        this.componentDirty = true;
     }
 
     // ─────────────────────────────────────────────────────────────
@@ -204,31 +215,50 @@ export class TerritoryManager {
     // ─────────────────────────────────────────────────────────────
 
     /** Check if a tile is within a specific player's territory */
-    isInTerritory(x: number, y: number, player: number): boolean {
+    isInTerritory(tile: Tile, player: number): boolean {
         this.recomputeIfDirty();
-        if (x < 0 || y < 0 || x >= this.mapWidth || y >= this.mapHeight) {
+        if (tile.x < 0 || tile.y < 0 || tile.x >= this.mapWidth || tile.y >= this.mapHeight) {
             return false;
         }
-        return this.territoryGrid[y * this.mapWidth + x] === player + 1;
+        return this.territoryGrid[tile.y * this.mapWidth + tile.x] === player + 1;
     }
 
     /** Check if a tile is within any player's territory */
-    isInAnyTerritory(x: number, y: number): boolean {
+    isInAnyTerritory(tile: Tile): boolean {
         this.recomputeIfDirty();
-        if (x < 0 || y < 0 || x >= this.mapWidth || y >= this.mapHeight) {
+        if (tile.x < 0 || tile.y < 0 || tile.x >= this.mapWidth || tile.y >= this.mapHeight) {
             return false;
         }
-        return this.territoryGrid[y * this.mapWidth + x] !== 0;
+        return this.territoryGrid[tile.y * this.mapWidth + tile.x] !== 0;
     }
 
     /** Get the owning player of a tile (-1 if unclaimed) */
-    getOwner(x: number, y: number): number {
+    getOwner(tile: Tile): number {
         this.recomputeIfDirty();
-        if (x < 0 || y < 0 || x >= this.mapWidth || y >= this.mapHeight) {
+        if (tile.x < 0 || tile.y < 0 || tile.x >= this.mapWidth || tile.y >= this.mapHeight) {
             return -1;
         }
-        const value = this.territoryGrid[y * this.mapWidth + x]!;
+        const value = this.territoryGrid[tile.y * this.mapWidth + tile.x]!;
         return value === 0 ? -1 : value - 1;
+    }
+
+    /**
+     * Check if two tiles in the same player's territory are connected
+     * (reachable through contiguous same-player territory tiles).
+     * Returns false if either tile is not owned by the given player.
+     */
+    areConnected(a: Tile, b: Tile, player: number): boolean {
+        this.recomputeIfDirty();
+        this.ensureComponentsComputed();
+        const ownerValue = player + 1;
+        const idx1 = a.y * this.mapWidth + a.x;
+        const idx2 = b.y * this.mapWidth + b.x;
+        if (this.territoryGrid[idx1] !== ownerValue || this.territoryGrid[idx2] !== ownerValue) {
+            return false;
+        }
+        const c1 = this.componentGrid[idx1];
+        const c2 = this.componentGrid[idx2];
+        return c1 === c2 && c1 !== 0;
     }
 
     /** Get boundary dots for rendering (cached, recomputed when dirty) */
@@ -254,6 +284,67 @@ export class TerritoryManager {
         this.onRecomputed?.();
     }
 
+    /** Recompute connected components if dirty. */
+    private ensureComponentsComputed(): void {
+        if (!this.componentDirty) {
+            return;
+        }
+        this.componentDirty = false;
+        this.computeComponents();
+    }
+
+    /**
+     * Flood-fill connected components over the territory grid.
+     * Each contiguous region of same-player tiles gets a unique component ID.
+     */
+    private computeComponents(): void {
+        const comp = this.componentGrid;
+        const grid = this.territoryGrid;
+        const len = this.mapWidth * this.mapHeight;
+        comp.fill(0);
+
+        let nextId = 0;
+        const queue: number[] = [];
+
+        for (let i = 0; i < len; i++) {
+            if (grid[i] === 0 || comp[i] !== 0) {
+                continue;
+            }
+            nextId++;
+            comp[i] = nextId;
+            queue.length = 0;
+            queue.push(i);
+            this.bfsFloodComponent(nextId, grid[i]!, queue, comp);
+        }
+    }
+
+    /** BFS flood-fill a single component from the seeded queue. */
+    private bfsFloodComponent(componentId: number, owner: number, queue: number[], comp: Uint32Array): void {
+        const grid = this.territoryGrid;
+        const w = this.mapWidth;
+        const h = this.mapHeight;
+        let head = 0;
+
+        while (head < queue.length) {
+            const idx = queue[head++]!;
+            const cx = idx % w;
+            const cy = (idx - cx) / w;
+
+            for (let d = 0; d < NUMBER_OF_DIRECTIONS; d++) {
+                const nx = cx + GRID_DELTA_X[d]!;
+                const ny = cy + GRID_DELTA_Y[d]!;
+                if (nx < 0 || ny < 0 || nx >= w || ny >= h) {
+                    continue;
+                }
+                const nIdx = ny * w + nx;
+                if (grid[nIdx] === owner && comp[nIdx] === 0) {
+                    comp[nIdx] = componentId;
+                    queue.push(nIdx);
+                }
+            }
+        }
+    }
+
     private recompute(): void {
         // Snapshot old grid to detect changes
         const hasChangeListener = this.onTerritoryChanged !== undefined;
@@ -265,7 +356,7 @@ export class TerritoryManager {
 
         // Fill territory circles for each building — closest tower wins
         for (const building of this.buildings.values()) {
-            this.fillCircle(building.x, building.y, building.radius, building.player + 1);
+            this.fillCircle(building, building.radius, building.player + 1);
         }
 
         // Notify about changed tiles
@@ -286,7 +377,8 @@ export class TerritoryManager {
      * player's closer tower, the existing claim is kept. This creates equidistant
      * borders between overlapping territories.
      */
-    private fillCircle(cx: number, cy: number, radius: number, ownerValue: number): void {
+    private fillCircle(center: Tile, radius: number, ownerValue: number): void {
+        const { x: cx, y: cy } = center;
         const screenR = radius * 0.5;
         const rSq = screenR * screenR;
 
@@ -366,9 +458,9 @@ export class TerritoryManager {
                 if (owner === 0) {
                     continue;
                 }
-                const offset = this.getBoundaryOffset(x, y, owner);
+                const offset = this.getBoundaryOffset({ x, y }, owner);
                 if (offset) {
-                    dots.push({ x, y, player: owner - 1, offsetX: offset.ox, offsetY: offset.oy });
+                    dots.push({ x, y, player: owner - 1, offsetX: offset.dx, offsetY: offset.dy });
                 }
             }
         }
@@ -382,15 +474,15 @@ export class TerritoryManager {
      * no offset is applied.
      * Returns null if the tile is not a boundary tile.
      */
-    private getBoundaryOffset(x: number, y: number, owner: number): { ox: number; oy: number } | null {
+    private getBoundaryOffset(tile: Tile, owner: number): Offset | null {
         let isBoundary = false;
         let enemyDx = 0;
         let enemyDy = 0;
         let enemyCount = 0;
 
         for (let d = 0; d < NUMBER_OF_DIRECTIONS; d++) {
-            const nx = x + GRID_DELTA_X[d]!;
-            const ny = y + GRID_DELTA_Y[d]!;
+            const nx = tile.x + GRID_DELTA_X[d]!;
+            const ny = tile.y + GRID_DELTA_Y[d]!;
 
             if (nx < 0 || ny < 0 || nx >= this.mapWidth || ny >= this.mapHeight) {
                 isBoundary = true;
@@ -414,11 +506,11 @@ export class TerritoryManager {
             return null;
         }
         if (enemyCount === 0) {
-            return { ox: 0, oy: 0 };
+            return { dx: 0, dy: 0 };
         }
         // Normalize and pull inward (away from enemy neighbors)
         const len = Math.sqrt(enemyDx * enemyDx + enemyDy * enemyDy);
         const INWARD_OFFSET = 0.35;
-        return { ox: (-enemyDx / len) * INWARD_OFFSET, oy: (-enemyDy / len) * INWARD_OFFSET };
+        return { dx: (-enemyDx / len) * INWARD_OFFSET, dy: (-enemyDy / len) * INWARD_OFFSET };
     }
 }

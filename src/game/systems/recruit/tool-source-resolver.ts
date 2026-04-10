@@ -4,6 +4,9 @@ import type { EMaterialType } from '../../economy/material-type';
 import { SlotKind } from '../../core/pile-kind';
 import type { BuildingInventoryManager } from '../../systems/inventory/building-inventory';
 import { distSq } from '../../core/distance';
+import { createLogger } from '@/utilities/logger';
+
+const log = createLogger('ToolSourceResolver');
 
 export interface ToolSource {
     pileEntityId: number;
@@ -39,12 +42,18 @@ export class ToolSourceResolver {
                 continue;
             }
 
-            const kind = this.inventoryManager.getPileKind(entity.id);
-            if (kind.kind !== SlotKind.Free) {
+            const slot = this.inventoryManager.getSlotByEntityId(entity.id);
+            if (!slot) {
+                log.warn(
+                    `Orphan pile entity ${entity.id} (${entity.subType}) at (${entity.x},${entity.y}) — no inventory slot`
+                );
+                continue;
+            }
+            if (slot.kind !== SlotKind.Free) {
                 continue;
             }
 
-            const d = distSq(entity.x, nearX, entity.y, nearY);
+            const d = distSq(entity, { x: nearX, y: nearY });
 
             if (d < bestDistSq) {
                 bestDistSq = d;

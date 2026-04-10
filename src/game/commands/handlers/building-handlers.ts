@@ -12,6 +12,7 @@ import {
 import { canPlaceBuildingFootprint } from '../../systems/placement';
 import type { PlacementFilter } from '../../systems/placement';
 import { BuildingType, isMineBuilding } from '../../buildings/types';
+import { TERRITORY_BUILDINGS } from '../../features/territory/territory-types';
 import { isNonBlockingMapObject } from '../../data/game-data-access';
 import { BUILDING_SPAWN_ON_COMPLETE } from '../../features/building-construction/spawn-units';
 import { getBuildingWorkerInfo, getBuildingDoorPos } from '../../data/game-data-access';
@@ -33,6 +34,8 @@ export interface PlaceBuildingDeps {
     settings: GameSettings;
     constructionSiteManager: ConstructionSiteManager;
     placementFilter: PlacementFilter | null;
+    /** Territory owner lookup — rejects placement outside player's territory. */
+    getOwner: (tile: Tile) => number;
 }
 
 export interface RemoveEntityDeps {
@@ -46,12 +49,12 @@ export interface SpawnBuildingUnitsDeps {
     eventBus: EventBus;
 }
 
-function isSpawnableTile(deps: SpawnBuildingUnitsDeps, x: number, y: number): boolean {
+function isSpawnableTile(deps: SpawnBuildingUnitsDeps, tile: Tile): boolean {
     return (
-        deps.terrain.isInBounds(x, y) &&
-        deps.terrain.isPassable(x, y) &&
-        !deps.state.getGroundEntityAt(x, y) &&
-        !deps.state.buildingOccupancy.has(tileKey(x, y))
+        deps.terrain.isInBounds(tile) &&
+        deps.terrain.isPassable(tile) &&
+        !deps.state.getGroundEntityAt(tile) &&
+        !deps.state.buildingOccupancy.has(tileKey(tile))
     );
 }
 
@@ -67,15 +70,15 @@ function spawnUnitsNear(
     const { state, eventBus } = deps;
     let spawned = 0;
     for (let radius = 1; radius <= 4 && spawned < count; radius++) {
-        for (const tile of ringTiles(bx, by, radius)) {
+        for (const tile of ringTiles({ x: bx, y: by }, radius)) {
             if (spawned >= count) {
                 break;
             }
-            if (!isSpawnableTile(deps, tile.x, tile.y)) {
+            if (!isSpawnableTile(deps, tile)) {
                 continue;
             }
 
-            const spawnedEntity = state.addUnit(unitType, tile.x, tile.y, player, { selectable });
+            const spawnedEntity = state.addUnit(unitType, tile, player, { selectable });
 
             eventBus.emit('unit:spawned', {
                 unitId: spawnedEntity.id,
@@ -90,7 +93,7 @@ function spawnUnitsNear(
     }
 }
 
-function spawnWorkerInsideBuilding(deps: SpawnBuildingUnitsDeps, entity: Entity, bx: number, by: number): void {
+function spawnWorkerInsideBuilding(deps: SpawnBuildingUnitsDeps, entity: Entity, tile: Tile): void {
     const { state, eventBus } = deps;
     const buildingType = entity.subType as BuildingType;
     const workerInfo = getBuildingWorkerInfo(entity.race, buildingType);
@@ -101,8 +104,8 @@ function spawnWorkerInsideBuilding(deps: SpawnBuildingUnitsDeps, entity: Entity,
     // Spawn the worker at the door tile but hidden (already inside the building).
     // No occupancy — the building owns the door tile. The task system will assign
     // the worker and the normal work cycle handles walking out via exitBuilding.
-    const door = getBuildingDoorPos(bx, by, entity.race, buildingType);
-    const workerEntity = state.addUnit(workerInfo.unitType, door.x, door.y, entity.player, { occupancy: false });
+    const door = getBuildingDoorPos(tile, entity.race, buildingType);
+    const workerEntity = state.addUnit(workerInfo.unitType, door, entity.player, { occupancy: false });
 
     eventBus.emit('unit:spawned', {
         unitId: workerEntity.id,
@@ -129,11 +132,44 @@ function isReplaceableOccupant(state: GameState, entityId: number): boolean {
 /** Remove replaceable map objects from footprint tiles before placing a building. */
 function removeReplaceableMapObjects(state: GameState, footprint: ReadonlyArray<Tile>): void {
     for (const tile of footprint) {
-        const occupantId = state.groundOccupancy.get(tileKey(tile.x, tile.y));
+        const occupantId = state.groundOccupancy.get(tileKey(tile));
         if (occupantId !== undefined && isReplaceableOccupant(state, occupantId)) {
             state.removeEntity(occupantId);
         }
     }
+}
+
+/**
+ * Check that every footprint tile is inside the player's territory.
+ * The only exception is the player's very first territory building (castle/tower)
+ * which bootstraps territory from unclaimed land.
+ */
+function validateTerritoryPlacement(
+    deps: PlaceBuildingDeps,
+    state: GameState,
+    cmd: PlaceBuildingCommand,
+    footprint: ReadonlyArray<Tile>
+): CommandFailure | undefined {
+    const playerHasTerritory = deps.getOwner({ x: cmd.x, y: cmd.y }) === cmd.player;
+    const isBootstrap =
+        !playerHasTerritory &&
+        TERRITORY_BUILDINGS.has(cmd.buildingType) &&
+        !state.entities.some(
+            e =>
+                e.type === EntityType.Building &&
+                e.player === cmd.player &&
+                TERRITORY_BUILDINGS.has(e.subType as BuildingType)
+        );
+    if (isBootstrap) {return undefined;}
+
+    for (const tile of footprint) {
+        if (deps.getOwner(tile) !== cmd.player) {
+            return commandFailed(
+                `Cannot place building at (${cmd.x}, ${cmd.y}): tile (${tile.x}, ${tile.y}) outside player ${cmd.player}'s territory`
+            );
+        }
+    }
+    return undefined;
 }
 
 export function executePlaceBuilding(deps: PlaceBuildingDeps, cmd: PlaceBuildingCommand): SpawnResult | CommandFailure {
@@ -165,10 +201,15 @@ export function executePlaceBuilding(deps: PlaceBuildingDeps, cmd: PlaceBuilding
     }
 
     // Remove small decorative map objects from the footprint before placing the building
-    const footprint = getBuildingFootprint(cmd.x, cmd.y, cmd.buildingType, race);
+    const footprint = getBuildingFootprint(cmd, cmd.buildingType, race);
+
+    if (!cmd.trusted) {
+        const territoryError = validateTerritoryPlacement(deps, state, cmd, footprint);
+        if (territoryError) {return territoryError;}
+    }
     removeReplaceableMapObjects(state, footprint);
 
-    const entity = state.addBuilding(cmd.buildingType, cmd.x, cmd.y, cmd.player, { race: cmd.race });
+    const entity = state.addBuilding(cmd.buildingType, cmd, cmd.player, { race: cmd.race });
     const isMine = isMineBuilding(cmd.buildingType);
 
     // Mines skip terrain modification — mountain stays as rock
@@ -261,7 +302,7 @@ export function executeSpawnBuildingUnits(deps: SpawnBuildingUnitsDeps, cmd: Spa
     }
 
     if (cmd.spawnWorker && !spawnDef) {
-        spawnWorkerInsideBuilding(deps, entity, bx, by);
+        spawnWorkerInsideBuilding(deps, entity, entity);
     }
 
     return COMMAND_OK;

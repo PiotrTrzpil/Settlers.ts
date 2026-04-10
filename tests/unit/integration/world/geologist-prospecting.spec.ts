@@ -27,7 +27,7 @@ function countProspected(sim: Simulation, cx: number, cy: number, radius: number
     let count = 0;
     for (let dy = -radius; dy <= radius; dy++) {
         for (let dx = -radius; dx <= radius; dx++) {
-            if (sim.services.oreVeinData.isProspected(cx + dx, cy + dy)) count++;
+            if (sim.services.oreVeinData.isProspected({ x: cx + dx, y: cy + dy })) count++;
         }
     }
     return count;
@@ -38,7 +38,7 @@ function getProspectedTiles(sim: Simulation, cx: number, cy: number, radius: num
     const tiles: Tile[] = [];
     for (let dy = -radius; dy <= radius; dy++) {
         for (let dx = -radius; dx <= radius; dx++) {
-            if (sim.services.oreVeinData.isProspected(cx + dx, cy + dy)) {
+            if (sim.services.oreVeinData.isProspected({ x: cx + dx, y: cy + dy })) {
                 tiles.push({ x: cx + dx, y: cy + dy });
             }
         }
@@ -88,8 +88,8 @@ function geoPos(sim: Simulation): string {
         .join(' ');
 }
 
-function moveUnit(sim: Simulation, entityId: number, x: number, y: number) {
-    return sim.execute({ type: 'move_unit', entityId, targetX: x, targetY: y });
+function moveUnit(sim: Simulation, entityId: number, tile: Tile) {
+    return sim.execute({ type: 'move_unit', entityId, targetX: tile.x, targetY: tile.y });
 }
 
 /**
@@ -98,8 +98,8 @@ function moveUnit(sim: Simulation, entityId: number, x: number, y: number) {
  */
 function spawnAndSend(sim: Simulation, mx: number, my: number, radius: number, offsetX = 0): number {
     const spawnY = my + radius + 2; // grass below the rock region
-    const id = sim.spawnUnit(mx + offsetX, spawnY, UnitType.Geologist);
-    expect(moveUnit(sim, id, mx + offsetX, my).success).toBe(true);
+    const id = sim.spawnUnit({ x: mx + offsetX, y: spawnY }, UnitType.Geologist);
+    expect(moveUnit(sim, id, { x: mx + offsetX, y: my }).success).toBe(true);
     return id;
 }
 
@@ -121,14 +121,14 @@ describe('Geologist prospecting (integration)', { timeout: 60_000 }, () => {
         const mx = 70,
             my = 64;
         sim.fillTerrain(mx, my, 6, TERRAIN.ROCK);
-        const id = sim.spawnUnit(mx, my + 10, UnitType.Geologist); // spawn on grass
+        const id = sim.spawnUnit({ x: mx, y: my + 10 }, UnitType.Geologist); // spawn on grass
 
         // Run for a while — geologist should NOT prospect anything
         sim.runTicks(3_000);
         expect(countProspected(sim, mx, my, 6)).toBe(0);
 
         // Now send it to the mountain — should start prospecting
-        moveUnit(sim, id, mx, my);
+        moveUnit(sim, id, { x: mx, y: my });
         sim.runUntil(() => countProspected(sim, mx, my, 6) > 0, {
             maxTicks: 15_000,
             label: 'geologist prospects after move command',
@@ -147,14 +147,14 @@ describe('Geologist prospecting (integration)', { timeout: 60_000 }, () => {
         sim.fillTerrain(mx, my, 6, TERRAIN.ROCK);
         // Spawn on grass and move to grass >5 tiles from nearest rock edge
         const grassTarget = my + 6 + 7; // rock edge is my+6, so +7 more = 13 tiles from mountain center
-        const id = sim.spawnUnit(mx, my + 10, UnitType.Geologist);
-        moveUnit(sim, id, mx, grassTarget);
+        const id = sim.spawnUnit({ x: mx, y: my + 10 }, UnitType.Geologist);
+        moveUnit(sim, id, { x: mx, y: grassTarget });
 
         sim.runTicks(5_000);
         expect(countProspected(sim, mx, my, 6)).toBe(0);
 
         // Now move to the mountain — should start prospecting
-        moveUnit(sim, id, mx, my);
+        moveUnit(sim, id, { x: mx, y: my });
         sim.runUntil(() => countProspected(sim, mx, my, 6) > 0, {
             maxTicks: 20_000,
             label: 'geologist prospects after move to mountain',
@@ -230,7 +230,7 @@ describe('Geologist move commands (integration)', { timeout: 60_000 }, () => {
         });
 
         const prospectedAtABeforeMove = countProspected(sim, ax, ay, 6);
-        expect(moveUnit(sim, geologistId, bx, by).success).toBe(true);
+        expect(moveUnit(sim, geologistId, { x: bx, y: by }).success).toBe(true);
 
         sim.runUntil(() => countProspected(sim, bx, by, 6) > 0, {
             maxTicks: 20_000,
@@ -264,13 +264,13 @@ describe('Geologist move commands (integration)', { timeout: 60_000 }, () => {
             label: 'geologist starts on Mountain A',
         });
 
-        moveUnit(sim, geologistId, bx, by);
+        moveUnit(sim, geologistId, { x: bx, y: by });
         sim.runUntil(() => countProspected(sim, bx, by, 5) > 0, {
             maxTicks: 20_000,
             label: 'geologist reaches Mountain B',
         });
 
-        moveUnit(sim, geologistId, cx, cy);
+        moveUnit(sim, geologistId, { x: cx, y: cy });
         sim.runUntil(() => countProspected(sim, cx, cy, 5) > 0, {
             maxTicks: 20_000,
             label: 'geologist reaches Mountain C',
@@ -332,9 +332,9 @@ describe('Geologist group behavior (integration)', { timeout: 60_000 }, () => {
 
         const prospectedAtABeforeMove = countProspected(sim, ax, ay, 6);
 
-        moveUnit(sim, id1, bx - 1, by);
-        moveUnit(sim, id2, bx, by);
-        moveUnit(sim, id3, bx + 1, by);
+        moveUnit(sim, id1, { x: bx - 1, y: by });
+        moveUnit(sim, id2, { x: bx, y: by });
+        moveUnit(sim, id3, { x: bx + 1, y: by });
 
         sim.runUntil(() => countProspected(sim, bx, by, 6) >= 3, {
             maxTicks: 30_000,

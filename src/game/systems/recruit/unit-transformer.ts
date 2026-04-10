@@ -41,6 +41,7 @@ import type { UnitReservationRegistry } from '../unit-reservation';
 import { createLogger } from '@/utilities/logger';
 import { createDirectTransformJob } from './recruitment-job';
 import { ToolSourceResolver } from './tool-source-resolver';
+import type { TileWithPile } from './recruit-system';
 
 const log = createLogger('UnitTransformer');
 
@@ -99,7 +100,7 @@ export class UnitTransformer {
         job: ChoreoJobState,
         targetUnitType: UnitType,
         toolMaterial: EMaterialType,
-        toolPile: { pileEntityId: number; x: number; y: number }
+        toolPile: TileWithPile
     ): boolean {
         const assigned = this.assignJob(carrierId, job, { x: toolPile.x, y: toolPile.y });
         if (!assigned) {
@@ -243,10 +244,10 @@ export class UnitTransformer {
         for (const [dx, dy] of EXTENDED_OFFSETS) {
             const tx = nearX + dx;
             const ty = nearY + dy;
-            if (this.gameState.getEntityAt(tx, ty)) {
+            if (this.gameState.getEntityAt({ x: tx, y: ty })) {
                 continue;
             }
-            const pile = this.gameState.addEntity(EntityType.StackedPile, toolMaterial, tx, ty, 0);
+            const pile = this.gameState.addEntity(EntityType.StackedPile, toolMaterial, { x: tx, y: ty }, 0);
             this.eventBus.emit('pile:freePilePlaced', { entityId: pile.id, materialType: toolMaterial, quantity: 1 });
             log.debug(`Dropped ${toolMaterial} at (${tx}, ${ty})`);
             return;

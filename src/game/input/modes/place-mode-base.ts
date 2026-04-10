@@ -67,8 +67,8 @@ export abstract class BasePlacementMode<TSubType = number> extends BaseInputMode
     private lastPlacedTileY = -1;
 
     constructor(
-        private readonly validatePlacement: (x: number, y: number, subType: TSubType) => boolean,
-        private readonly onTileHover?: (x: number, y: number) => void
+        private readonly validatePlacement: (tile: Tile, subType: TSubType) => boolean,
+        private readonly onTileHover?: (tile: Tile) => void
     ) {
         super();
     }
@@ -100,16 +100,11 @@ export abstract class BasePlacementMode<TSubType = number> extends BaseInputMode
     /**
      * Create the placement command to execute.
      *
-     * @param x Anchor X position
-     * @param y Anchor Y position
+     * @param tile Anchor position
      * @param data Current mode data
      * @returns Command object for game.execute()
      */
-    protected abstract createPlacementCommand(
-        x: number,
-        y: number,
-        data: PlacementModeData<TSubType>
-    ): Record<string, unknown>;
+    protected abstract createPlacementCommand(tile: Tile, data: PlacementModeData<TSubType>): Record<string, unknown>;
 
     /**
      * Initialize mode data from enter data.
@@ -160,8 +155,8 @@ export abstract class BasePlacementMode<TSubType = number> extends BaseInputMode
      * Default: delegates to the validatePlacement callback.
      * PlaceBuildingMode overrides to use the precomputed grid.
      */
-    protected isPositionValid(x: number, y: number, subType: TSubType): boolean {
-        return this.validatePlacement(x, y, subType);
+    protected isPositionValid(tile: Tile, subType: TSubType): boolean {
+        return this.validatePlacement(tile, subType);
     }
 
     // ─────────────────────────────────────────────────────────────────
@@ -304,10 +299,10 @@ export abstract class BasePlacementMode<TSubType = number> extends BaseInputMode
             return;
         }
 
-        this.onTileHover?.(tileX, tileY);
+        this.onTileHover?.({ x: tileX, y: tileY });
         modeData.previewX = anchor.x;
         modeData.previewY = anchor.y;
-        modeData.previewValid = this.isPositionValid(anchor.x, anchor.y, modeData.subType);
+        modeData.previewValid = this.isPositionValid(anchor, modeData.subType);
         context.setModeData(modeData);
 
         if (this.dragging && (anchor.x !== this.lastPlacedTileX || anchor.y !== this.lastPlacedTileY)) {
@@ -326,7 +321,7 @@ export abstract class BasePlacementMode<TSubType = number> extends BaseInputMode
             return;
         }
 
-        const command = this.createPlacementCommand(modeData.previewX, modeData.previewY, modeData);
+        const command = this.createPlacementCommand({ x: modeData.previewX, y: modeData.previewY }, modeData);
         const result = context.executeCommand(command);
 
         if (result.success) {
@@ -337,7 +332,10 @@ export abstract class BasePlacementMode<TSubType = number> extends BaseInputMode
                 return;
             }
             // Re-validate current tile (now occupied) so preview updates
-            modeData.previewValid = this.isPositionValid(modeData.previewX, modeData.previewY, modeData.subType);
+            modeData.previewValid = this.isPositionValid(
+                { x: modeData.previewX, y: modeData.previewY },
+                modeData.subType
+            );
             context.setModeData(modeData);
         } else {
             this.logPlacement(modeData, false, result.error);

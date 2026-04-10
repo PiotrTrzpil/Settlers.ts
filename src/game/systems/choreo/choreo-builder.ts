@@ -10,7 +10,7 @@ import type { TerrainData } from '@/game/terrain';
 import { findBuildingApproachTile } from '@/game/buildings/approach';
 import { ChoreoTaskType, createChoreoJobState, type ChoreoNode, type ChoreoJobState } from './types';
 import type { UnitType } from '@/game/core/unit-types';
-import type { Tile } from '@/game/core/coordinates';
+import type { Tile, TileWithEntityOpt } from '@/game/core/coordinates';
 
 // ─────────────────────────────────────────────────────────────
 // Context injection for building-aware helpers
@@ -53,7 +53,7 @@ export function node(task: ChoreoTaskType, overrides?: Partial<ChoreoNode>): Cho
 
 export class ChoreoBuilder {
     private readonly nodes: ChoreoNode[] = [];
-    private readonly waypoints: Array<{ x: number; y: number; entityId?: number }> = [];
+    private readonly waypoints: Array<TileWithEntityOpt> = [];
     private _targetId: number | null = null;
     private _targetPos: Tile | null = null;
     private _metadata: Record<string, number | string> | undefined;
@@ -71,15 +71,15 @@ export class ChoreoBuilder {
     constructor(private readonly jobId: string) {}
 
     /** Add a GO_TO_TARGET node. First call sets targetPos; subsequent calls push waypoints. */
-    goTo(x: number, y: number, entityId?: number): this {
+    goTo(tile: Tile, entityId?: number): this {
         this.nodes.push(node(ChoreoTaskType.GO_TO_TARGET));
         if (this._goToCount === 0) {
-            this._targetPos = { x, y };
+            this._targetPos = tile;
             if (entityId !== undefined) {
                 this._targetId = entityId;
             }
         }
-        this.waypoints.push(entityId !== undefined ? { x, y, entityId } : { x, y });
+        this.waypoints.push(entityId !== undefined ? { x: tile.x, y: tile.y, entityId } : { x: tile.x, y: tile.y });
         this._goToCount++;
         return this;
     }
@@ -110,7 +110,7 @@ export class ChoreoBuilder {
         }
         const building = _context.gameState.getEntityOrThrow(buildingId, 'ChoreoBuilder.goToDoor');
         const tile = findBuildingApproachTile(building, _context.terrain, _context.gameState);
-        return this.goTo(tile.x, tile.y, buildingId);
+        return this.goTo(tile, buildingId);
     }
 
     /**

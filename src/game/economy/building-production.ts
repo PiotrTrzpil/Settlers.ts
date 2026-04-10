@@ -149,7 +149,7 @@ function buildingInfoToCosts(info: BuildingInfo): readonly ConstructionCost[] {
 export function getConstructionCosts(buildingType: BuildingType, race: Race): readonly ConstructionCost[] {
     const info = getBuildingInfo(race, buildingType);
     if (!info) {
-        throw new Error(`No BuildingInfo for ${buildingType} / ${Race[race]}`);
+        throw new Error(`No BuildingInfo for ${buildingType} / ${race}`);
     }
     return buildingInfoToCosts(info);
 }

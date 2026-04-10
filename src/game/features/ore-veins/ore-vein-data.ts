@@ -5,6 +5,7 @@
  * Mountain tiles can hold ore levels 0-16 (0 = empty).
  */
 
+import type { Tile } from '@/game/core/coordinates';
 import { OreType } from './ore-type';
 
 export class OreVeinData {
@@ -26,37 +27,38 @@ export class OreVeinData {
         this.mapHeight = height;
     }
 
-    private toIndex(x: number, y: number): number {
+    private toIndex({ x, y }: Tile): number {
         return (x % this.mapWidth) + (y % this.mapHeight) * this.mapWidth;
     }
 
-    getOreType(x: number, y: number): OreType {
-        return this.oreType[this.toIndex(x, y)]! as OreType;
+    getOreType(tile: Tile): OreType {
+        return this.oreType[this.toIndex(tile)]! as OreType;
     }
 
-    getOreLevel(x: number, y: number): number {
-        return this.oreLevel[this.toIndex(x, y)]!;
+    getOreLevel(tile: Tile): number {
+        return this.oreLevel[this.toIndex(tile)]!;
     }
 
-    setOre(x: number, y: number, type: OreType, level: number): void {
-        const idx = this.toIndex(x, y);
+    setOre(tile: Tile, type: OreType, level: number): void {
+        const idx = this.toIndex(tile);
         this.oreType[idx] = type;
         this.oreLevel[idx] = level;
     }
 
-    isProspected(x: number, y: number): boolean {
-        return this.prospected[this.toIndex(x, y)]! !== 0;
+    isProspected(tile: Tile): boolean {
+        return this.prospected[this.toIndex(tile)]! !== 0;
     }
 
-    setProspected(x: number, y: number): void {
-        this.prospected[this.toIndex(x, y)] = 1;
+    setProspected(tile: Tile): void {
+        this.prospected[this.toIndex(tile)] = 1;
     }
 
     /**
-     * Check if any tile within a Chebyshev radius of (cx, cy) has
+     * Check if any tile within a Chebyshev radius of center has
      * the required ore type with level > 0.
      */
-    hasOreInRadius(cx: number, cy: number, radius: number, requiredType: OreType): boolean {
+    hasOreInRadius(center: Tile, radius: number, requiredType: OreType): boolean {
+        const { x: cx, y: cy } = center;
         const x0 = Math.max(0, cx - radius);
         const x1 = Math.min(this.mapWidth - 1, cx + radius);
         const y0 = Math.max(0, cy - radius);
@@ -64,7 +66,7 @@ export class OreVeinData {
 
         for (let y = y0; y <= y1; y++) {
             for (let x = x0; x <= x1; x++) {
-                const idx = this.toIndex(x, y);
+                const idx = this.toIndex({ x, y });
                 if (this.oreType[idx] === requiredType && this.oreLevel[idx]! > 0) {
                     return true;
                 }
@@ -79,12 +81,12 @@ export class OreVeinData {
      * Uses the provided `pickIndex(count)` to select among candidates.
      */
     consumeOreInRadius(
-        cx: number,
-        cy: number,
+        center: Tile,
         radius: number,
         requiredType: OreType,
         pickIndex: (count: number) => number
     ): boolean {
+        const { x: cx, y: cy } = center;
         const x0 = Math.max(0, cx - radius);
         const x1 = Math.min(this.mapWidth - 1, cx + radius);
         const y0 = Math.max(0, cy - radius);
@@ -94,7 +96,7 @@ export class OreVeinData {
         const candidates: number[] = [];
         for (let y = y0; y <= y1; y++) {
             for (let x = x0; x <= x1; x++) {
-                const idx = this.toIndex(x, y);
+                const idx = this.toIndex({ x, y });
                 if (this.oreType[idx] === requiredType && this.oreLevel[idx]! > 0) {
                     candidates.push(idx);
                 }

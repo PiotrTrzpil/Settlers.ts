@@ -39,7 +39,7 @@ export const OreSignFeature: FeatureDefinition = {
     create(ctx: FeatureContext) {
         const signSystem = new ResourceSignSystem({
             executeCommand: ctx.executeCommand,
-            getGroundEntityAt: (x, y) => ctx.gameState.getGroundEntityAt(x, y),
+            getGroundEntityAt: tile => ctx.gameState.getGroundEntityAt(tile),
         });
 
         ctx.cleanupRegistry.onEntityRemoved(signSystem.onEntityRemoved.bind(signSystem));

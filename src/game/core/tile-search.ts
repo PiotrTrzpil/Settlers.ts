@@ -29,31 +29,29 @@ const BFS_OFFSETS = EXTENDED_OFFSETS;
  * @returns The first matching tile, or null if not found within maxTiles
  */
 export function bfsFind(
-    startX: number,
-    startY: number,
-    goal: (x: number, y: number) => boolean,
+    start: Tile,
+    goal: (tile: Tile) => boolean,
     maxTiles = 2000,
-    passable?: (x: number, y: number) => boolean
+    passable?: (tile: Tile) => boolean
 ): Tile | null {
     const visited = new Set<number>();
-    const queue: Tile[] = [{ x: startX, y: startY }];
-    visited.add(startY * 10000 + startX);
+    const queue: Tile[] = [{ x: start.x, y: start.y }];
+    visited.add(start.y * 10000 + start.x);
 
     for (let i = 0; i < queue.length && i < maxTiles; i++) {
-        const { x, y } = queue[i]!;
-        if (goal(x, y)) {
-            return { x, y };
+        const tile = queue[i]!;
+        if (goal(tile)) {
+            return tile;
         }
         for (const [dx, dy] of BFS_OFFSETS) {
-            const nx = x + dx;
-            const ny = y + dy;
-            const key = ny * 10000 + nx;
+            const neighbor: Tile = { x: tile.x + dx, y: tile.y + dy };
+            const key = neighbor.y * 10000 + neighbor.x;
             if (visited.has(key)) {
                 continue;
             }
             visited.add(key);
-            if (!passable || passable(nx, ny)) {
-                queue.push({ x: nx, y: ny });
+            if (!passable || passable(neighbor)) {
+                queue.push(neighbor);
             }
         }
     }
@@ -74,22 +72,21 @@ export function bfsFind(
  * @returns true if the callback returned true (early exit), false otherwise.
  */
 export function scanRect(
-    cx: number,
-    cy: number,
+    center: Tile,
     radius: number,
     mapWidth: number,
     mapHeight: number,
     // eslint-disable-next-line @typescript-eslint/no-invalid-void-type -- void is intentional: callbacks that don't return early simply return nothing
-    callback: (x: number, y: number) => boolean | void
+    callback: (tile: Tile) => boolean | void
 ): boolean {
-    const x0 = Math.max(0, cx - radius);
-    const x1 = Math.min(mapWidth - 1, cx + radius);
-    const y0 = Math.max(0, cy - radius);
-    const y1 = Math.min(mapHeight - 1, cy + radius);
+    const x0 = Math.max(0, center.x - radius);
+    const x1 = Math.min(mapWidth - 1, center.x + radius);
+    const y0 = Math.max(0, center.y - radius);
+    const y1 = Math.min(mapHeight - 1, center.y + radius);
 
     for (let y = y0; y <= y1; y++) {
         for (let x = x0; x <= x1; x++) {
-            if (callback(x, y) === true) {
+            if (callback({ x, y }) === true) {
                 return true;
             }
         }

@@ -38,7 +38,7 @@ describe('GameState – edge cases', () => {
 
     it('should update entity coordinates and occupancy', () => {
         const { entity } = addUnit(state, 5, 5);
-        state.updateEntityPosition(entity.id, 10, 10);
+        state.updateEntityPosition(entity.id, { x: 10, y: 10 });
 
         expect(entity.x).toBe(10);
         expect(entity.y).toBe(10);

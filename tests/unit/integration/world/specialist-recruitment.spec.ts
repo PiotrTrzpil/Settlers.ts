@@ -42,7 +42,7 @@ describe('Specialist recruitment – basic transforms', { timeout: 30_000 }, () 
     it('Thief: carrier transforms in place without a tool pile', () => {
         sim = createSimulation();
 
-        sim.spawnUnit(64, 64, UnitType.Carrier);
+        sim.spawnUnit({ x: 64, y: 64 }, UnitType.Carrier);
         expect(sim.countEntities(EntityType.Unit, UnitType.Carrier)).toBe(1);
 
         const result = recruitSpecialist(sim, UnitType.Thief, 1);
@@ -68,7 +68,7 @@ describe('Specialist recruitment – basic transforms', { timeout: 30_000 }, () 
     it('Geologist: carrier walks to pickaxe pile and transforms', () => {
         sim = createSimulation();
 
-        sim.spawnUnit(64, 64, UnitType.Carrier);
+        sim.spawnUnit({ x: 64, y: 64 }, UnitType.Carrier);
         sim.placeGoods(EMaterialType.PICKAXE, 1);
 
         const result = recruitSpecialist(sim, UnitType.Geologist, 1);
@@ -104,7 +104,7 @@ describe('Specialist recruitment – queue decrement & dismissal', { timeout: 30
     it('decrement before drain cancels queued request — no specialist created', () => {
         sim = createSimulation();
 
-        sim.spawnUnit(64, 64, UnitType.Carrier);
+        sim.spawnUnit({ x: 64, y: 64 }, UnitType.Carrier);
 
         recruitSpecialist(sim, UnitType.Thief, 2);
         expect(sim.services.recruitSystem.getQueuedCount(UnitType.Thief)).toBe(2);
@@ -126,7 +126,7 @@ describe('Specialist recruitment – queue decrement & dismissal', { timeout: 30
     it('decrement to zero clears queue entirely — no specialist created', () => {
         sim = createSimulation();
 
-        sim.spawnUnit(64, 64, UnitType.Carrier);
+        sim.spawnUnit({ x: 64, y: 64 }, UnitType.Carrier);
         sim.placeGoods(EMaterialType.PICKAXE, 1);
 
         recruitSpecialist(sim, UnitType.Geologist, 3);
@@ -144,8 +144,8 @@ describe('Specialist recruitment – queue decrement & dismissal', { timeout: 30
     it('decrement drains queue before dismissing live specialist', () => {
         sim = createSimulation();
 
-        sim.spawnUnit(64, 64, UnitType.Carrier);
-        sim.spawnUnit(65, 64, UnitType.Carrier);
+        sim.spawnUnit({ x: 64, y: 64 }, UnitType.Carrier);
+        sim.spawnUnit({ x: 65, y: 64 }, UnitType.Carrier);
 
         recruitSpecialist(sim, UnitType.Thief, 2);
         recruitSpecialist(sim, UnitType.Thief, -1);
@@ -165,7 +165,7 @@ describe('Specialist recruitment – queue decrement & dismissal', { timeout: 30
     it('dismiss live specialist returns them to carrier pool', () => {
         sim = createSimulation();
 
-        sim.spawnUnit(64, 64, UnitType.Carrier);
+        sim.spawnUnit({ x: 64, y: 64 }, UnitType.Carrier);
         recruitSpecialist(sim, UnitType.Thief, 1);
 
         sim.runUntil(() => sim.countEntities(EntityType.Unit, UnitType.Thief) === 1, {
@@ -186,7 +186,7 @@ describe('Specialist recruitment – queue decrement & dismissal', { timeout: 30
     it('dismiss live Geologist drops pickaxe on the ground', () => {
         sim = createSimulation();
 
-        sim.spawnUnit(64, 64, UnitType.Carrier);
+        sim.spawnUnit({ x: 64, y: 64 }, UnitType.Carrier);
         sim.placeGoods(EMaterialType.PICKAXE, 1);
 
         recruitSpecialist(sim, UnitType.Geologist, 1);
@@ -219,7 +219,7 @@ describe('Specialist recruitment – reserved carriers & batch', { timeout: 30_0
     it('reserved carrier is skipped — queue stays full until carrier is free', () => {
         sim = createSimulation();
 
-        const carrierId = sim.spawnUnit(64, 64, UnitType.Carrier);
+        const carrierId = sim.spawnUnit({ x: 64, y: 64 }, UnitType.Carrier);
         sim.services.unitReservation.reserve(carrierId, { purpose: 'test' });
 
         recruitSpecialist(sim, UnitType.Thief, 1);
@@ -246,9 +246,9 @@ describe('Specialist recruitment – reserved carriers & batch', { timeout: 30_0
     it('queue partially drains when only some carriers are idle', () => {
         sim = createSimulation();
 
-        const reservedId = sim.spawnUnit(62, 64, UnitType.Carrier);
-        sim.spawnUnit(63, 64, UnitType.Carrier);
-        sim.spawnUnit(64, 64, UnitType.Carrier);
+        const reservedId = sim.spawnUnit({ x: 62, y: 64 }, UnitType.Carrier);
+        sim.spawnUnit({ x: 63, y: 64 }, UnitType.Carrier);
+        sim.spawnUnit({ x: 64, y: 64 }, UnitType.Carrier);
         sim.services.unitReservation.reserve(reservedId, { purpose: 'test' });
 
         recruitSpecialist(sim, UnitType.Thief, 3);
@@ -269,8 +269,8 @@ describe('Specialist recruitment – reserved carriers & batch', { timeout: 30_0
     it('queue stays full when all carriers are reserved', () => {
         sim = createSimulation();
 
-        const id1 = sim.spawnUnit(63, 64, UnitType.Carrier);
-        const id2 = sim.spawnUnit(64, 64, UnitType.Carrier);
+        const id1 = sim.spawnUnit({ x: 63, y: 64 }, UnitType.Carrier);
+        const id2 = sim.spawnUnit({ x: 64, y: 64 }, UnitType.Carrier);
         sim.services.unitReservation.reserve(id1, { purpose: 'test' });
         sim.services.unitReservation.reserve(id2, { purpose: 'test' });
 
@@ -288,7 +288,7 @@ describe('Specialist recruitment – reserved carriers & batch', { timeout: 30_0
         sim = createSimulation();
 
         for (let i = 0; i < 5; i++) {
-            sim.spawnUnit(60 + i, 64, UnitType.Carrier);
+            sim.spawnUnit({ x: 60 + i, y: 64 }, UnitType.Carrier);
         }
         expect(sim.countEntities(EntityType.Unit, UnitType.Carrier)).toBe(5);
 

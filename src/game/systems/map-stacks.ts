@@ -3,7 +3,7 @@
  * Maps S4GoodType to internal EMaterialType and creates stacked resource entities.
  */
 
-import { EntityType } from '../entity';
+import { EntityType, type Tile } from '../entity';
 import { GameState } from '../game-state';
 import { S4_TO_MATERIAL_TYPE } from '../data/game-data-access';
 import { LogHandler } from '@/utilities/log-handler';
@@ -25,7 +25,7 @@ export function populateMapStacks(
     state: GameState,
     stacks: MapStackData[],
     eventBus?: EventBus,
-    getOwner?: (x: number, y: number) => number
+    getOwner?: (tile: Tile) => number
 ): number {
     let created = 0;
     let skipped = 0;
@@ -45,14 +45,14 @@ export function populateMapStacks(
             continue;
         }
 
-        if (state.getGroundEntityAt(stackData.x, stackData.y)) {
+        if (state.getGroundEntityAt(stackData)) {
             log.debug(`Skipping stack at occupied tile (${stackData.x}, ${stackData.y})`);
             skipped++;
             continue;
         }
 
-        const owner = getOwner ? Math.max(0, getOwner(stackData.x, stackData.y)) : 0;
-        const entity = state.addEntity(EntityType.StackedPile, materialType, stackData.x, stackData.y, owner);
+        const owner = getOwner ? Math.max(0, getOwner(stackData)) : 0;
+        const entity = state.addEntity(EntityType.StackedPile, materialType, stackData, owner);
 
         // Register free pile — FreePileHandler creates the inventory slot
         eventBus?.emit('pile:freePilePlaced', {

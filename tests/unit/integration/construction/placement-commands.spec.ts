@@ -51,7 +51,7 @@ describe('Resource Placement Commands', () => {
     it('place_pile fails on water terrain', () => {
         const cx = Math.floor(sim.map.mapSize.width / 2);
         const cy = Math.floor(sim.map.mapSize.height / 2);
-        sim.map.groundType[sim.map.mapSize.toIndex(cx, cy)] = TERRAIN.WATER;
+        sim.map.groundType[sim.map.mapSize.toIndex({ x: cx, y: cy })] = TERRAIN.WATER;
 
         const result = sim.execute({
             type: 'place_pile',
@@ -106,9 +106,9 @@ describe('Building Placement Terrain Modification', () => {
         const tile = { x: 32, y: 32 };
 
         // Verify ground is grass before placement
-        const footprint = getBuildingFootprint(tile.x, tile.y, BuildingType.WoodcutterHut, Race.Roman);
+        const footprint = getBuildingFootprint(tile, BuildingType.WoodcutterHut, Race.Roman);
         for (const ft of footprint) {
-            expect(sim.map.groundType[sim.map.mapSize.toIndex(ft.x, ft.y)]).toBe(TERRAIN.GRASS);
+            expect(sim.map.groundType[sim.map.mapSize.toIndex(ft)]).toBe(TERRAIN.GRASS);
         }
 
         const result = sim.execute({
@@ -117,13 +117,13 @@ describe('Building Placement Terrain Modification', () => {
             x: tile.x,
             y: tile.y,
             player: 0,
-            race: 10,
+            race: Race.Roman,
         });
         expect(result.success).toBe(true);
 
         // Ground type should be raw (DustyWay) immediately after placement - no tick needed
         for (const ft of footprint) {
-            expect(sim.map.groundType[sim.map.mapSize.toIndex(ft.x, ft.y)]).toBe(CONSTRUCTION_SITE_GROUND_TYPE);
+            expect(sim.map.groundType[sim.map.mapSize.toIndex(ft)]).toBe(CONSTRUCTION_SITE_GROUND_TYPE);
         }
     });
 
@@ -136,7 +136,7 @@ describe('Building Placement Terrain Modification', () => {
             x: tile.x,
             y: tile.y,
             player: 0,
-            race: 10,
+            race: Race.Roman,
         });
         expect(result.success).toBe(true);
 
@@ -151,10 +151,10 @@ describe('Building Placement Terrain Modification', () => {
         const tile = { x: 32, y: 32 };
 
         // Set varying heights within slope tolerance (MAX_SLOPE_DIFF = 12)
-        setHeightAt(sim.map, tile.x, tile.y, 10);
-        setHeightAt(sim.map, tile.x + 1, tile.y, 14);
-        setHeightAt(sim.map, tile.x, tile.y + 1, 12);
-        setHeightAt(sim.map, tile.x + 1, tile.y + 1, 8);
+        setHeightAt(sim.map, { x: tile.x, y: tile.y }, 10);
+        setHeightAt(sim.map, { x: tile.x + 1, y: tile.y }, 14);
+        setHeightAt(sim.map, { x: tile.x, y: tile.y + 1 }, 12);
+        setHeightAt(sim.map, { x: tile.x + 1, y: tile.y + 1 }, 8);
 
         const result = sim.execute({
             type: 'place_building',
@@ -162,20 +162,20 @@ describe('Building Placement Terrain Modification', () => {
             x: tile.x,
             y: tile.y,
             player: 0,
-            race: 10,
+            race: Race.Roman,
             completed: true,
             trusted: true, // bypass slope check — footprint extends beyond the 4 tiles with set heights
         });
         expect(result.success).toBe(true);
 
         // Ground type should be raw
-        const footprint = getBuildingFootprint(tile.x, tile.y, BuildingType.WoodcutterHut, Race.Roman);
+        const footprint = getBuildingFootprint(tile, BuildingType.WoodcutterHut, Race.Roman);
         for (const ft of footprint) {
-            expect(sim.map.groundType[sim.map.mapSize.toIndex(ft.x, ft.y)]).toBe(CONSTRUCTION_SITE_GROUND_TYPE);
+            expect(sim.map.groundType[sim.map.mapSize.toIndex(ft)]).toBe(CONSTRUCTION_SITE_GROUND_TYPE);
         }
 
         // Heights should be leveled (all the same target height)
-        const heights = footprint.map(ft => sim.map.groundHeight[sim.map.mapSize.toIndex(ft.x, ft.y)]);
+        const heights = footprint.map(ft => sim.map.groundHeight[sim.map.mapSize.toIndex(ft)]);
         const uniqueHeights = new Set(heights);
         expect(uniqueHeights.size).toBe(1);
 
@@ -199,11 +199,11 @@ describe('Building Placement Over Replaceable Map Objects', () => {
     it('should allow placing a building on tiles occupied by grass', () => {
         const bx = 32;
         const by = 32;
-        const footprint = getBuildingFootprint(bx, by, BuildingType.WoodcutterHut, Race.Roman);
+        const footprint = getBuildingFootprint({ x: bx, y: by }, BuildingType.WoodcutterHut, Race.Roman);
 
         // Place grass on every footprint tile
         for (const tile of footprint) {
-            sim.state.addEntity(EntityType.MapObject, MapObjectType.Grass1, tile.x, tile.y, 0);
+            sim.state.addEntity(EntityType.MapObject, MapObjectType.Grass1, tile, 0);
         }
 
         const result = sim.execute({
@@ -220,11 +220,11 @@ describe('Building Placement Over Replaceable Map Objects', () => {
     it('should remove replaceable map objects from footprint when placing a building', () => {
         const bx = 32;
         const by = 32;
-        const footprint = getBuildingFootprint(bx, by, BuildingType.WoodcutterHut, Race.Roman);
+        const footprint = getBuildingFootprint({ x: bx, y: by }, BuildingType.WoodcutterHut, Race.Roman);
 
         // Place a flower on every footprint tile
         for (const tile of footprint) {
-            sim.state.addEntity(EntityType.MapObject, MapObjectType.Bush1, tile.x, tile.y, 0);
+            sim.state.addEntity(EntityType.MapObject, MapObjectType.Bush1, tile, 0);
         }
 
         const mapObjectsBefore = sim.state.entities.filter(e => e.type === EntityType.MapObject).length;
@@ -247,7 +247,7 @@ describe('Building Placement Over Replaceable Map Objects', () => {
     it('should NOT allow placing a building on tiles occupied by trees', () => {
         const bx = 32;
         const by = 32;
-        sim.state.addEntity(EntityType.MapObject, MapObjectType.TreeOak, bx, by, 0);
+        sim.state.addEntity(EntityType.MapObject, MapObjectType.TreeOak, { x: bx, y: by }, 0);
 
         const result = sim.execute({
             type: 'place_building',
@@ -263,10 +263,10 @@ describe('Building Placement Over Replaceable Map Objects', () => {
     it('should handle mixed tiles — some with replaceable objects, some empty', () => {
         const bx = 32;
         const by = 32;
-        const footprint = getBuildingFootprint(bx, by, BuildingType.WoodcutterHut, Race.Roman);
+        const footprint = getBuildingFootprint({ x: bx, y: by }, BuildingType.WoodcutterHut, Race.Roman);
 
         // Place grass on only the first tile
-        sim.state.addEntity(EntityType.MapObject, MapObjectType.Grass3, footprint[0]!.x, footprint[0]!.y, 0);
+        sim.state.addEntity(EntityType.MapObject, MapObjectType.Grass3, footprint[0]!, 0);
 
         const result = sim.execute({
             type: 'place_building',
@@ -286,10 +286,10 @@ describe('Building Placement Over Replaceable Map Objects', () => {
     it('should correctly update groundOccupancy after replacing map objects', () => {
         const bx = 32;
         const by = 32;
-        const footprint = getBuildingFootprint(bx, by, BuildingType.WoodcutterHut, Race.Roman);
+        const footprint = getBuildingFootprint({ x: bx, y: by }, BuildingType.WoodcutterHut, Race.Roman);
 
         // Place foliage on the first tile
-        sim.state.addEntity(EntityType.MapObject, MapObjectType.Bush1, footprint[0]!.x, footprint[0]!.y, 0);
+        sim.state.addEntity(EntityType.MapObject, MapObjectType.Bush1, footprint[0]!, 0);
 
         sim.execute({
             type: 'place_building',
@@ -303,7 +303,7 @@ describe('Building Placement Over Replaceable Map Objects', () => {
         // Every footprint tile should now be occupied by the building, not the old map object
         const building = sim.state.entities.find(e => e.type === EntityType.Building)!;
         for (const tile of footprint) {
-            expect(sim.state.groundOccupancy.get(tileKey(tile.x, tile.y))).toBe(building.id);
+            expect(sim.state.groundOccupancy.get(tileKey(tile))).toBe(building.id);
         }
     });
 });

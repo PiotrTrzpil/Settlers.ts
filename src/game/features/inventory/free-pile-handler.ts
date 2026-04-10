@@ -47,7 +47,7 @@ export class FreePileHandler {
 
         // Assign ownership based on territory — free piles belong to whoever controls the land.
         if (entity.player === 0) {
-            const owner = this.getTerritoryManager().getOwner(entity.x, entity.y);
+            const owner = this.getTerritoryManager().getOwner(entity);
             if (owner >= 0) {
                 entity.player = owner;
             }

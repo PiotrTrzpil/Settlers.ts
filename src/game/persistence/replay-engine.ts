@@ -13,8 +13,10 @@
 import type { GameCore } from '../game-core';
 import type { JournalEntry, ReplayResult } from './replay-types';
 
-/** Maximum ticks that can be replayed in a single call (~5 minutes at 30 tps). */
-const MAX_REPLAY_TICKS = 9_000;
+import { seconds } from '../core/tick-rate';
+
+/** Maximum ticks that can be replayed in a single call (5 minutes). */
+const MAX_REPLAY_TICKS = seconds(300);
 
 /**
  * Replay journal entries against a GameCore that has been restored from a keyframe.

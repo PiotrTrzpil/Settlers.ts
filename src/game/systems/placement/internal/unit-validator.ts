@@ -5,6 +5,7 @@
  */
 
 import { tileKey } from '../../../entity';
+import type { Tile } from '../../../core/coordinates';
 import type { TerrainData } from '../../../terrain';
 import type { PlacementContext, PlacementResult } from '../types';
 import { PlacementStatus } from '../types';
@@ -23,20 +24,19 @@ export interface UnitPlacementContext extends PlacementContext {
  * Units must pass all single-tile checks (bounds, terrain, ground occupancy)
  * AND must not overlap another unit.
  *
- * @param x X coordinate
- * @param y Y coordinate
+ * @param tile Tile coordinates
  * @param ctx Game context including both ground and unit occupancy
  * @returns Placement result with canPlace and detailed status
  */
-export function validateUnitPlacement(x: number, y: number, ctx: UnitPlacementContext): PlacementResult {
+export function validateUnitPlacement(tile: Tile, ctx: UnitPlacementContext): PlacementResult {
     // Check ground-layer occupancy (bounds, terrain, ground entities)
-    const groundResult = validateSingleTilePlacement(x, y, ctx);
+    const groundResult = validateSingleTilePlacement(tile, ctx);
     if (!groundResult.canPlace) {
         return groundResult;
     }
 
     // Check unit-layer occupancy
-    if (ctx.unitOccupancy.has(tileKey(x, y))) {
+    if (ctx.unitOccupancy.has(tileKey(tile))) {
         return { canPlace: false, status: PlacementStatus.Occupied };
     }
 
@@ -61,5 +61,5 @@ export function canPlaceUnit(
         groundOccupancy,
         unitOccupancy,
     };
-    return validateUnitPlacement(x, y, ctx).canPlace;
+    return validateUnitPlacement({ x, y }, ctx).canPlace;
 }

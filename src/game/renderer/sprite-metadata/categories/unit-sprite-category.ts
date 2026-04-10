@@ -7,20 +7,21 @@
  */
 
 import { UnitType } from '@/game/entity';
+import { Race } from '@/game/core/race';
 import type { SpriteEntry, SerializableSpriteCategory } from '../types';
 import { mapToArray, arrayToMap } from '../sprite-metadata-helpers';
 
 export class UnitSpriteCategory implements SerializableSpriteCategory {
     /** Unit sprites keyed by race → unitType → direction */
-    private readonly byRace: Map<number, Map<UnitType, Map<number, SpriteEntry>>> = new Map();
-    private readonly _loadedRaces: Set<number> = new Set();
+    private readonly byRace: Map<Race, Map<UnitType, Map<number, SpriteEntry>>> = new Map();
+    private readonly _loadedRaces: Set<Race> = new Set();
 
-    get loadedRaces(): ReadonlySet<number> {
+    get loadedRaces(): ReadonlySet<Race> {
         return this._loadedRaces;
     }
 
     /** Whether sprites have been loaded for a given race. */
-    isRaceLoaded(race: number): boolean {
+    isRaceLoaded(race: Race): boolean {
         return this._loadedRaces.has(race);
     }
 
@@ -28,7 +29,7 @@ export class UnitSpriteCategory implements SerializableSpriteCategory {
      * Register a sprite entry for a unit type and direction.
      * @param direction Sprite direction index (see SpriteDirection enum)
      */
-    register(type: UnitType, direction: number, entry: SpriteEntry, race: number): void {
+    register(type: UnitType, direction: number, entry: SpriteEntry, race: Race): void {
         let raceMap = this.byRace.get(race);
         if (!raceMap) {
             raceMap = new Map();
@@ -48,7 +49,7 @@ export class UnitSpriteCategory implements SerializableSpriteCategory {
      * Throws if the race is loaded but the unit type is missing.
      * @param direction Sprite direction index (see SpriteDirection enum) (defaults to RIGHT)
      */
-    get(type: UnitType, direction: number = 0, race: number): SpriteEntry {
+    get(type: UnitType, direction: number = 0, race: Race): SpriteEntry {
         const dirMap = this.byRace.get(race)?.get(type);
         if (!dirMap) {
             throw new Error(`[UnitSpriteCategory] No sprite for unit ${type} (race=${race})`);
@@ -76,7 +77,7 @@ export class UnitSpriteCategory implements SerializableSpriteCategory {
     /**
      * Expose the internal map for SpriteMetadataRegistry.getLayersForUnits().
      */
-    getRaceMap(): Map<number, Map<UnitType, Map<number, SpriteEntry>>> {
+    getRaceMap(): Map<Race, Map<UnitType, Map<number, SpriteEntry>>> {
         return this.byRace;
     }
 
@@ -97,7 +98,7 @@ export class UnitSpriteCategory implements SerializableSpriteCategory {
 
     static deserialize(data: unknown): UnitSpriteCategory {
         const category = new UnitSpriteCategory();
-        const raceEntries = data as Array<[number, Array<[UnitType, Array<[number, SpriteEntry]>]>]>;
+        const raceEntries = data as Array<[Race, Array<[UnitType, Array<[number, SpriteEntry]>]>]>;
         for (const [race, typeEntries] of raceEntries) {
             const typeMap = arrayToMap(
                 typeEntries.map(

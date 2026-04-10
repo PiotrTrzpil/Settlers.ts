@@ -33,7 +33,7 @@ describe('initial unit relocation from footprints (map load)', () => {
         const unit = sim.state.entities.find(e => e.type === EntityType.Unit && e.subType === UnitType.Woodcutter)!;
 
         // Unit should not be on any building footprint tile
-        const groundEntity = sim.state.getGroundEntityAt(unit.x, unit.y);
+        const groundEntity = sim.state.getGroundEntityAt(unit);
         expect(groundEntity?.type).not.toBe(EntityType.Building);
 
         sim.destroy();
@@ -51,7 +51,7 @@ describe('initial unit relocation from footprints (map load)', () => {
 
         const carrier = sim.state.entities.find(e => e.type === EntityType.Unit && e.subType === UnitType.Carrier)!;
 
-        const groundEntity = sim.state.getGroundEntityAt(carrier.x, carrier.y);
+        const groundEntity = sim.state.getGroundEntityAt(carrier);
         expect(groundEntity?.type).not.toBe(EntityType.Building);
 
         sim.destroy();
@@ -62,7 +62,7 @@ describe('initial unit relocation from footprints (map load)', () => {
         const cx = sim.mapWidth >> 1;
         const cy = sim.mapHeight >> 1;
 
-        const footprint = getBuildingFootprint(cx, cy, BuildingType.WoodcutterHut, Race.Roman);
+        const footprint = getBuildingFootprint({ x: cx, y: cy }, BuildingType.WoodcutterHut, Race.Roman);
         const tile2 = footprint.length > 1 ? footprint[1]! : footprint[0]!;
 
         sim.populateMapData(
@@ -82,7 +82,7 @@ describe('initial unit relocation from footprints (map load)', () => {
 
         // Neither should be on a building footprint tile
         for (const unit of units) {
-            const groundEntity = sim.state.getGroundEntityAt(unit.x, unit.y);
+            const groundEntity = sim.state.getGroundEntityAt(unit);
             expect(groundEntity?.type, `unit ${unit.id} at ${unit.x},${unit.y} is still on a building`).not.toBe(
                 EntityType.Building
             );

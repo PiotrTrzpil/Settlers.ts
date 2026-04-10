@@ -109,13 +109,30 @@ export class Renderer {
 
         // eslint-disable-next-line no-restricted-syntax -- optional config/prop with sensible default
         const antialias = options?.antialias ?? true;
+        // Debug: log canvas state before attempting WebGL2 context
+        // NOTE: Do NOT call canvas.getContext('2d') here — it locks the canvas to 2D and prevents webgl2
+        Renderer.log.debug(`Requesting WebGL2 context: canvas=${canvas.width}x${canvas.height}, id="${canvas.id}"`);
+
         let newGl = canvas.getContext('webgl2', {
             antialias,
             preserveDrawingBuffer: true,
             powerPreference: 'high-performance',
         });
         if (!newGl) {
-            Renderer.log.error('Unable to initialize WebGL2. Your browser may not support it.');
+            // Try to diagnose why
+            const testCanvas = document.createElement('canvas');
+            const testGl = testCanvas.getContext('webgl2');
+            const hasWebGL2Support = !!testGl;
+            testGl?.getExtension('WEBGL_lose_context')?.loseContext();
+
+            Renderer.log.error(
+                `Unable to initialize WebGL2. ` +
+                    `Browser supports WebGL2: ${hasWebGL2Support}. ` +
+                    `Canvas size: ${canvas.width}x${canvas.height}. ` +
+                    `Canvas in DOM: ${canvas.isConnected}. ` +
+                    // eslint-disable-next-line no-restricted-syntax -- non-standard canvas debug property; 'unknown' is the correct fallback when absent
+                    `Existing context type: ${(canvas as any).__contextType ?? 'unknown'}.`
+            );
             return;
         }
 
@@ -144,6 +161,9 @@ export class Renderer {
         }
         // Clean up all child renderers first
         this.clear();
+        // Explicitly release the WebGL context so the browser can reclaim it
+        // (prevents context exhaustion during HMR hot reloads)
+        this._gl?.getExtension('WEBGL_lose_context')?.loseContext();
         this._gl = null;
         this.viewPoint.destroy();
     }

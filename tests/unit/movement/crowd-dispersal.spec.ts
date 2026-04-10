@@ -25,7 +25,7 @@ function countOccupiedNeighbors(state: GameState, entityId: number): number {
     const neighbors = getAllNeighbors({ x: e.x, y: e.y });
     let count = 0;
     for (const n of neighbors) {
-        const occupant = state.unitOccupancy.get(tileKey(n.x, n.y));
+        const occupant = state.unitOccupancy.get(tileKey(n));
         if (occupant !== undefined && occupant !== entityId) {
             count++;
         }
@@ -94,7 +94,7 @@ describe('Crowd dispersal', () => {
         const ids = createCluster(state, 30, 30);
 
         // Give the center unit a movement goal
-        state.movement.moveUnit(ids[0]!, 40, 30);
+        state.movement.moveUnit(ids[0]!, { x: 40, y: 30 });
         const ctrl = state.movement.getController(ids[0]!)!;
         expect(ctrl.goal).toBeDefined();
 
@@ -128,7 +128,7 @@ describe('Crowd dispersal', () => {
         const ids = createCluster(state, 30, 30);
 
         // Mark center tile as a building
-        state.buildingOccupancy.add(tileKey(30, 30));
+        state.buildingOccupancy.add(tileKey({ x: 30, y: 30 }));
 
         tickFor(state, 3);
 
@@ -150,7 +150,7 @@ describe('Crowd dispersal', () => {
             for (const id of ids) {
                 const e = state.getEntity(id);
                 if (!e) continue;
-                const key = tileKey(e.x, e.y);
+                const key = tileKey(e);
                 expect(positions.has(key), `duplicate entity at ${key} on tick ${i}`).toBe(false);
                 positions.add(key);
 

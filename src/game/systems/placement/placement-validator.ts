@@ -4,6 +4,7 @@
  */
 
 import type { BuildingType } from '../../entity';
+import type { Tile } from '../../core/coordinates';
 import type {
     PlacementContext,
     PlacementResult,
@@ -35,19 +36,18 @@ export { canPlaceBuildingFootprint, canPlaceBuilding, canPlaceResource, canPlace
 export function validatePlacement(
     entityType: PlacementEntityType,
     subType: number | string,
-    x: number,
-    y: number,
+    tile: Tile,
     ctx: PlacementContext | UnitPlacementContext
 ): PlacementResult {
     switch (entityType) {
         case 'building':
-            return validateBuildingPlacement(x, y, subType as BuildingType, ctx);
+            return validateBuildingPlacement(tile.x, tile.y, subType as BuildingType, ctx);
 
         case 'pile':
-            return validateResourcePlacement(x, y, ctx);
+            return validateResourcePlacement(tile, ctx);
 
         case 'unit':
-            return validateUnitPlacement(x, y, ctx as UnitPlacementContext);
+            return validateUnitPlacement(tile, ctx as UnitPlacementContext);
 
         default:
             // Unknown entity type - reject
@@ -62,11 +62,10 @@ export function validatePlacement(
 export function canPlaceEntity(
     entityType: PlacementEntityType,
     subType: number,
-    x: number,
-    y: number,
+    tile: Tile,
     ctx: PlacementContext
 ): boolean {
-    return validatePlacement(entityType, subType, x, y, ctx).canPlace;
+    return validatePlacement(entityType, subType, tile, ctx).canPlace;
 }
 
 /**
@@ -81,12 +80,12 @@ export function createPlacementValidator(
     entityType: PlacementEntityType,
     getContext: () => PlacementContext | null
 ): PlacementValidator {
-    return (x: number, y: number, subType: number) => {
+    return (tile: Tile, subType: number) => {
         const ctx = getContext();
         if (!ctx) {
             return false;
         }
-        return canPlaceEntity(entityType, subType, x, y, ctx);
+        return canPlaceEntity(entityType, subType, tile, ctx);
     };
 }
 
@@ -102,11 +101,11 @@ export function createDetailedPlacementValidator(
     entityType: PlacementEntityType,
     getContext: () => PlacementContext | null
 ): DetailedPlacementValidator {
-    return (x: number, y: number, subType: number) => {
+    return (tile: Tile, subType: number) => {
         const ctx = getContext();
         if (!ctx) {
             return { canPlace: false, status: PlacementStatus.InvalidTerrain };
         }
-        return validatePlacement(entityType, subType, x, y, ctx);
+        return validatePlacement(entityType, subType, tile, ctx);
     };
 }

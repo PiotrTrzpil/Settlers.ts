@@ -178,7 +178,7 @@ function restoreMoveTask(entityId: number, target: Tile, ctx: RestoreContext): v
         return;
     }
 
-    const moveSuccess = ctx.gameState.movement.moveUnit(entityId, target.x, target.y);
+    const moveSuccess = ctx.gameState.movement.moveUnit(entityId, target);
     if (!moveSuccess) {
         log.debug(`Move task restore failed for unit ${entityId} (pathfinding blocked), leaving IDLE`);
         runtime.state = SettlerState.IDLE;

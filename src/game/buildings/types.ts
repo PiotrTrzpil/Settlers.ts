@@ -56,7 +56,7 @@ export function isMineBuilding(buildingType: BuildingType): boolean {
 export function getBuildingHotspot(buildingType: BuildingType, race: Race): Tile {
     const info = getBuildingInfo(race, buildingType);
     if (!info) {
-        throw new Error(`No BuildingInfo for ${buildingType} / race ${Race[race]}`);
+        throw new Error(`No BuildingInfo for ${buildingType} / race ${race}`);
     }
     return { x: info.hotSpotX, y: info.hotSpotY };
 }
@@ -71,18 +71,18 @@ export function getBuildingHotspot(buildingType: BuildingType, race: Race): Tile
  * @param buildingType Type of building
  * @param race Race of the owning player (required — throws for wrong race/building combo)
  */
-export function getBuildingFootprint(x: number, y: number, buildingType: BuildingType, race: Race): Tile[] {
+export function getBuildingFootprint(tile: Tile, buildingType: BuildingType, race: Race): Tile[] {
     const info = getBuildingInfo(race, buildingType);
     if (!info) {
-        throw new Error(`No BuildingInfo for ${buildingType} / race ${Race[race]}`);
+        throw new Error(`No BuildingInfo for ${buildingType} / race ${race}`);
     }
     if (info.buildingPosLines.length === 0) {
         throw new Error(
-            `No footprint bitmask data for ${buildingType} / race ${Race[race]}. ` +
+            `No footprint bitmask data for ${buildingType} / race ${race}. ` +
                 `All buildings must have buildingPosLines in their XML definition.`
         );
     }
-    return getBuildingFootprintAt(info, x, y);
+    return getBuildingFootprintAt(info, tile.x, tile.y);
 }
 
 /**
@@ -92,15 +92,15 @@ export function getBuildingFootprint(x: number, y: number, buildingType: Buildin
  * Uses blockPosLines (not buildingPosLines). The door is at the edge of this area,
  * so no corridor carving is needed.
  */
-export function getBuildingBlockArea(x: number, y: number, buildingType: BuildingType, race: Race): Tile[] {
+export function getBuildingBlockArea(tile: Tile, buildingType: BuildingType, race: Race): Tile[] {
     const info = getBuildingInfo(race, buildingType);
     if (!info) {
-        throw new Error(`No BuildingInfo for ${buildingType} / race ${Race[race]}`);
+        throw new Error(`No BuildingInfo for ${buildingType} / race ${race}`);
     }
     if (info.blockPosLines.length === 0) {
         return [];
     }
-    return getBuildingBlockAreaAt(info, x, y);
+    return getBuildingBlockAreaAt(info, tile.x, tile.y);
 }
 
 /**
@@ -112,8 +112,7 @@ export function getBuildingBlockArea(x: number, y: number, buildingType: Buildin
  * Returns an empty set when game data is not loaded (e.g. lightweight tests).
  */
 export function getBuildingPassableTiles(
-    x: number,
-    y: number,
+    tile: Tile,
     buildingType: BuildingType,
     race: Race,
     blockArea: Tile[]
@@ -129,17 +128,17 @@ export function getBuildingPassableTiles(
         return passable;
     }
 
-    const blockKeys = new Set(blockArea.map(t => tileKey(t.x, t.y)));
+    const blockKeys = new Set(blockArea.map(t => tileKey(t)));
 
     // Door: anchor-relative offset
-    const doorKey = tileKey(x + info.door.xOffset, y + info.door.yOffset);
+    const doorKey = tileKey({ x: tile.x + info.door.xOffset, y: tile.y + info.door.yOffset });
     if (blockKeys.has(doorKey)) {
         passable.add(doorKey);
     }
 
     // Piles: anchor-relative offsets — mark as passable if inside block area
     for (const pile of info.piles) {
-        const pileKey = tileKey(x + pile.xOffset, y + pile.yOffset);
+        const pileKey = tileKey({ x: tile.x + pile.xOffset, y: tile.y + pile.yOffset });
         if (blockKeys.has(pileKey)) {
             passable.add(pileKey);
         }

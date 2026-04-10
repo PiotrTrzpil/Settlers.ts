@@ -7,6 +7,7 @@
  */
 
 import { Entity, EntityType, BuildingType, UnitType, type StackedPileState } from '../entity';
+import type { Race } from '../core/race';
 import { MapObjectType } from '@/game/types/map-object-types';
 import { EMaterialType } from '../economy';
 import type { SpriteEntry } from './sprite-metadata/sprite-metadata';
@@ -262,7 +263,7 @@ export class EntitySpriteResolver {
         unitType: UnitType,
         playback: AnimationPlayback,
         spriteDir: SpriteDirection,
-        race?: number
+        race?: Race
     ): SpriteEntry | null {
         if (!this.sprites) {
             return null;
@@ -335,7 +336,7 @@ export class EntitySpriteResolver {
         entityType: PlacementEntityType,
         subType: number | string,
         variation?: number,
-        race?: number,
+        race?: Race,
         level?: number
     ): SpriteEntry | null {
         if (!this.sprites) {
@@ -366,7 +367,7 @@ export class EntitySpriteResolver {
     }
 
     /** Get static unit sprite for a specific direction (frame 0 of walk — the standing pose). */
-    getStaticUnitSprite(unitType: UnitType, spriteDir: SpriteDirection, race?: number): SpriteEntry | null {
+    getStaticUnitSprite(unitType: UnitType, spriteDir: SpriteDirection, race?: Race): SpriteEntry | null {
         if (!this.sprites || race === undefined || !this.sprites.registry.isUnitRaceLoaded(race)) {
             return null;
         }
@@ -374,7 +375,7 @@ export class EntitySpriteResolver {
     }
 
     /** Get unit preview sprite — each leveled UnitType has its own registered sprites. */
-    private getUnitPreviewSprite(unitType: UnitType, race?: number, _level?: number): SpriteEntry | null {
+    private getUnitPreviewSprite(unitType: UnitType, race?: Race, _level?: number): SpriteEntry | null {
         return this.getStaticUnitSprite(unitType, SpriteDirection.RIGHT, race);
     }
 }

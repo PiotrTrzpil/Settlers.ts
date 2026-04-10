@@ -10,6 +10,7 @@ import type { AnimationPlayback } from '../animation/entity-visual-service';
 import type { AnimationData } from '../animation/animation';
 import type { SpriteEntry } from './sprite-metadata';
 import { EntityType } from '../entity';
+import type { Race } from '../core/race';
 import { createLogger } from '@/utilities/logger';
 
 const log = createLogger('AnimationHelpers');
@@ -44,8 +45,8 @@ function entityLabel(entityType: EntityType, subType: number | string): string {
  * Decouples animation consumers from the sprite loading/management implementation.
  */
 export interface AnimationDataProvider {
-    getAnimationData(entityType: EntityType, subType: number | string, race: number): AnimationData | null;
-    hasAnimation(entityType: EntityType, subType: number | string, race: number): boolean;
+    getAnimationData(entityType: EntityType, subType: number | string, race: Race): AnimationData | null;
+    hasAnimation(entityType: EntityType, subType: number | string, race: Race): boolean;
 }
 
 /**

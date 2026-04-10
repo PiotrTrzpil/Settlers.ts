@@ -13,18 +13,19 @@ import { CombatStatus } from '../combat/combat-state';
 import { isGarrisonBuildingType } from '../tower-garrison';
 import { getBuildingDoorPos } from '../../data/game-data-access';
 import { DOOR_ARRIVAL_DISTANCE } from './siege-types';
+import type { TileWithPlayer } from '../ai-player/internal/ai-world-queries';
+
+export type BuildingLike = Tile & { race: Race; subType: number | string };
+export type OwnedBuildingLike = BuildingLike & { player: number };
 
 /** Returns walkable tiles adjacent to the building's door (not inside building footprint). */
-export function findDoorAdjacentTiles(
-    building: { x: number; y: number; race: Race; subType: number | string },
-    gameState: GameState
-): Tile[] {
-    const door = getBuildingDoorPos(building.x, building.y, building.race, building.subType as BuildingType);
+export function findDoorAdjacentTiles(building: BuildingLike, gameState: GameState): Tile[] {
+    const door = getBuildingDoorPos(building, building.race, building.subType as BuildingType);
     const tiles: Tile[] = [];
     for (const [dx, dy] of EXTENDED_OFFSETS) {
         const x = door.x + dx;
         const y = door.y + dy;
-        if (!gameState.buildingOccupancy.has(tileKey(x, y))) {
+        if (!gameState.buildingOccupancy.has(tileKey({ x, y }))) {
             tiles.push({ x, y });
         }
     }
@@ -38,11 +39,11 @@ export function isSwordsman(unitType: UnitType): boolean {
 
 /** Find the closest enemy garrison building (by door distance) within the given radius. */
 export function findNearbyEnemyGarrison(
-    unit: { x: number; y: number; player: number },
+    unit: TileWithPlayer,
     radius: number,
     gameState: GameState
 ): Entity | undefined {
-    const nearby = gameState.getEntitiesInRadius(unit.x, unit.y, radius);
+    const nearby = gameState.getEntitiesInRadius(unit, radius);
     let best: Entity | undefined;
     let bestDist = Infinity;
 
@@ -58,7 +59,7 @@ export function findNearbyEnemyGarrison(
         }
 
         // Measure distance to the door, not the building center
-        const door = getBuildingDoorPos(candidate.x, candidate.y, candidate.race, candidate.subType as BuildingType);
+        const door = getBuildingDoorPos(candidate, candidate.race, candidate.subType as BuildingType);
         const dx = door.x - unit.x;
         const dy = door.y - unit.y;
         const dist = dx * dx + dy * dy;
@@ -75,12 +76,12 @@ export function findNearbyEnemyGarrison(
  * and not hidden. Used to find a unit to dispatch for capture.
  */
 export function findSwordsmanAtDoor(
-    building: { x: number; y: number; race: Race; subType: number | string; player: number },
+    building: OwnedBuildingLike,
     gameState: GameState,
     isReserved: (id: number) => boolean
 ): Entity | undefined {
-    const door = getBuildingDoorPos(building.x, building.y, building.race, building.subType as BuildingType);
-    const nearby = gameState.getEntitiesInRadius(door.x, door.y, DOOR_ARRIVAL_DISTANCE);
+    const door = getBuildingDoorPos(building, building.race, building.subType as BuildingType);
+    const nearby = gameState.getEntitiesInRadius(door, DOOR_ARRIVAL_DISTANCE);
     for (const unit of nearby) {
         if (unit.type !== EntityType.Unit || unit.hidden) {
             continue;
@@ -100,12 +101,9 @@ export function findSwordsmanAtDoor(
 }
 
 /** Check if any enemy swordsman is within door arrival distance of the building. */
-export function hasEnemyAtDoor(
-    building: { x: number; y: number; race: Race; subType: number | string; player: number },
-    gameState: GameState
-): boolean {
-    const door = getBuildingDoorPos(building.x, building.y, building.race, building.subType as BuildingType);
-    const nearby = gameState.getEntitiesInRadius(door.x, door.y, DOOR_ARRIVAL_DISTANCE);
+export function hasEnemyAtDoor(building: OwnedBuildingLike, gameState: GameState): boolean {
+    const door = getBuildingDoorPos(building, building.race, building.subType as BuildingType);
+    const nearby = gameState.getEntitiesInRadius(door, DOOR_ARRIVAL_DISTANCE);
     for (const unit of nearby) {
         if (unit.type !== EntityType.Unit || unit.hidden) {
             continue;

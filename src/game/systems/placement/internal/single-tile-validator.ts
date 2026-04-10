@@ -4,6 +4,7 @@
  */
 
 import { tileKey, isInMapBounds } from '../../../entity';
+import type { Tile } from '../../../core/coordinates';
 import type { TerrainData } from '../../../terrain';
 import type { PlacementContext, PlacementResult } from '../types';
 import { PlacementStatus } from '../types';
@@ -16,26 +17,25 @@ import { isPassable } from './terrain';
  * - Must be on passable terrain
  * - Must not be occupied
  *
- * @param x X coordinate
- * @param y Y coordinate
+ * @param tile Tile coordinates
  * @param ctx Game context for validation
  * @returns Placement result with canPlace and detailed status
  */
-export function validateSingleTilePlacement(x: number, y: number, ctx: PlacementContext): PlacementResult {
+export function validateSingleTilePlacement(tile: Tile, ctx: PlacementContext): PlacementResult {
     // Bounds check
-    if (!isInMapBounds(x, y, ctx.mapSize.width, ctx.mapSize.height)) {
+    if (!isInMapBounds(tile, ctx.mapSize.width, ctx.mapSize.height)) {
         return { canPlace: false, status: PlacementStatus.InvalidTerrain };
     }
 
     // Policy filter (territory, diplomacy, etc.) — fail fast before terrain checks
     if (ctx.placementFilter && ctx.player !== undefined) {
-        const rejection = ctx.placementFilter(x, y, ctx.player);
+        const rejection = ctx.placementFilter(tile, ctx.player);
         if (rejection !== null) {
             return { canPlace: false, status: rejection };
         }
     }
 
-    const idx = ctx.mapSize.toIndex(x, y);
+    const idx = ctx.mapSize.toIndex(tile);
 
     // Must be passable terrain (not water, rock)
     if (!isPassable(ctx.groundType[idx]!)) {
@@ -43,7 +43,7 @@ export function validateSingleTilePlacement(x: number, y: number, ctx: Placement
     }
 
     // Must not be occupied
-    if (ctx.groundOccupancy.has(tileKey(x, y))) {
+    if (ctx.groundOccupancy.has(tileKey(tile))) {
         return { canPlace: false, status: PlacementStatus.Occupied };
     }
 
@@ -67,5 +67,5 @@ export function canPlaceSingleTile(
         mapSize: terrain.mapSize,
         groundOccupancy,
     };
-    return validateSingleTilePlacement(x, y, ctx).canPlace;
+    return validateSingleTilePlacement({ x, y }, ctx).canPlace;
 }

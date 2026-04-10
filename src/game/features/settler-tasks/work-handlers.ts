@@ -16,7 +16,7 @@ import { MINE_ORE_TYPE, MINE_SEARCH_RADIUS } from '../ore-veins/ore-type';
 import { isMineBuilding } from '../../buildings/types';
 import { WorkHandlerType, type EntityWorkHandler, type PositionWorkHandler } from './types';
 import { ProductionMode } from '../production-control';
-import { spiralSearch } from '../../utils/spiral-search';
+import { findNearestTile } from '../../systems/spatial-search';
 import type { TerrainData } from '../../terrain';
 import type { ProductionControlManager } from '../production-control';
 import type { Recipe } from '@/game/economy/building-production';
@@ -70,11 +70,7 @@ export function createWorkplaceHandler(
         type: WorkHandlerType.ENTITY,
         shouldWaitForWork: true,
 
-        findTarget: (_x: number, _y: number, settlerId?: number) => {
-            if (settlerId === undefined) {
-                return null;
-            }
-
+        findTarget: (_area, settlerId) => {
             // Use pre-assigned building (set by occupancy tracking in SettlerTaskSystem)
             const workplace = getAssignedBuilding(settlerId);
             if (!workplace) {
@@ -102,7 +98,11 @@ export function createWorkplaceHandler(
                     if (!oreType) {
                         return false;
                     }
-                    return oreDataForCanWork.hasOreInRadius(building.x, building.y, MINE_SEARCH_RADIUS, oreType);
+                    return oreDataForCanWork.hasOreInRadius(
+                        { x: building.x, y: building.y },
+                        MINE_SEARCH_RADIUS,
+                        oreType
+                    );
                 }
             }
             return true;
@@ -139,8 +139,11 @@ export function createWorkplaceHandler(
                 if (isMineBuilding(bt)) {
                     const oreType = MINE_ORE_TYPE.get(bt);
                     if (oreType) {
-                        oreDataForConsume.consumeOreInRadius(building.x, building.y, MINE_SEARCH_RADIUS, oreType, n =>
-                            gameState.rng.nextInt(n)
+                        oreDataForConsume.consumeOreInRadius(
+                            { x: building.x, y: building.y },
+                            MINE_SEARCH_RADIUS,
+                            oreType,
+                            n => gameState.rng.nextInt(n)
                         );
                     }
                 }
@@ -169,7 +172,7 @@ export function createCarrierHandler(): EntityWorkHandler {
         type: WorkHandlerType.ENTITY,
         shouldWaitForWork: true,
 
-        findTarget: () => null,
+        findTarget: () => null, // carriers get jobs assigned externally by LogisticsDispatcher
         canWork: () => false,
         onWorkTick: () => false,
     };
@@ -179,7 +182,6 @@ export function createCarrierHandler(): EntityWorkHandler {
 // Water handler (waterworker — draws water from river tiles)
 // ─────────────────────────────────────────────────────────────
 
-const WATER_SEARCH_RADIUS = 20;
 /** River ground types (S4GroundType.RIVER1–RIVER4) */
 const RIVER_TYPE_MIN = 96;
 const RIVER_TYPE_MAX = 99;
@@ -197,13 +199,15 @@ export function createWaterHandler(terrain: TerrainData): PositionWorkHandler {
     return {
         type: WorkHandlerType.POSITION,
 
-        findPosition: (x: number, y: number) => {
-            return spiralSearch(x, y, terrain.width, terrain.height, (tx, ty) => {
-                if (Math.abs(tx - x) > WATER_SEARCH_RADIUS || Math.abs(ty - y) > WATER_SEARCH_RADIUS) {
-                    return false;
-                }
-                return isRiverTile(terrain.groundType[terrain.toIndex(tx, ty)]!);
-            });
+        findPosition: ({ center, radius }) => {
+            if (radius === undefined) {
+                throw new Error('WaterHandler: work area radius is required');
+            }
+            return findNearestTile(
+                center,
+                radius,
+                tile => terrain.isInBounds(tile) && isRiverTile(terrain.groundType[terrain.toIndex(tile)]!)
+            );
         },
 
         onWorkAtPositionComplete: () => {

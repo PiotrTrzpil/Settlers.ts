@@ -27,7 +27,7 @@ export function updateTileDebugStats(
 
     const game = getGame();
     if (game) {
-        const idx = game.terrain.toIndex(tileX, tileY);
+        const idx = game.terrain.toIndex({ x: tileX, y: tileY });
         debugStats.state.tileGroundType = game.terrain.groundType[idx]!;
         debugStats.state.tileGroundHeight = game.terrain.groundHeight[idx]!;
     }

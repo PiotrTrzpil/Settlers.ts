@@ -11,6 +11,7 @@ import { createSimulation, cleanupSimulation, type Simulation } from '../../help
 import { installRealGameData } from '../../helpers/test-game-data';
 import { BuildingType } from '@/game/buildings/building-type';
 import { EntityType, UnitType } from '@/game/entity';
+import type { Tile } from '@/game/core/coordinates';
 import { EMaterialType } from '@/game/economy/material-type';
 import { Race } from '@/game/core/race';
 import { OreType } from '@/game/features/ore-veins/ore-type';
@@ -150,7 +151,11 @@ describe('Economy – gatherer & production chains', { timeout: 5000 }, () => {
         let treesPlanted = 0;
         let treesMatured = 0;
         let treesCut = 0;
-        sim.eventBus.on('tree:planted', () => treesPlanted++);
+        const plantedPositions: Tile[] = [];
+        sim.eventBus.on('tree:planted', e => {
+            treesPlanted++;
+            plantedPositions.push({ x: e.x, y: e.y });
+        });
         sim.eventBus.on('tree:matured', () => treesMatured++);
         sim.eventBus.on('tree:cut', () => treesCut++);
 
@@ -168,6 +173,22 @@ describe('Economy – gatherer & production chains', { timeout: 5000 }, () => {
         expect(treesCut).toBeGreaterThanOrEqual(2);
         expect(treesMatured).toBeGreaterThanOrEqual(treesCut);
         expect(treesPlanted).toBeGreaterThanOrEqual(treesMatured);
+
+        // Trees must respect minimum spacing (minDistanceSq=4 → distance >= 2 tiles)
+        const MIN_DIST_SQ = 4;
+        for (let i = 0; i < plantedPositions.length; i++) {
+            for (let j = i + 1; j < plantedPositions.length; j++) {
+                const a = plantedPositions[i]!;
+                const b = plantedPositions[j]!;
+                const dx = a.x - b.x;
+                const dy = a.y - b.y;
+                const dSq = dx * dx + dy * dy;
+                expect(
+                    dSq,
+                    `Trees at (${a.x},${a.y}) and (${b.x},${b.y}) are too close (distSq=${dSq}, min=${MIN_DIST_SQ})`
+                ).toBeGreaterThanOrEqual(MIN_DIST_SQ);
+            }
+        }
     });
 });
 

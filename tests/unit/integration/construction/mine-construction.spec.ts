@@ -22,9 +22,9 @@ import { MAX_SLOPE_DIFF } from '@/game/systems/placement/slope';
 installRealGameData();
 
 // ─── Test coordinates ─────────────────────────────────────────────────────
-// Fixed region used across tests: rock square at (50, 50) with steep slope
-const ROCK_CX = 50;
-const ROCK_CY = 50;
+// Fixed region used across tests: rock square near map center (within territory)
+const ROCK_CX = 60;
+const ROCK_CY = 60;
 const ROCK_RADIUS = 8;
 // Slope from height 0 to height > MAX_SLOPE_DIFF within 2 adjacent tiles
 const STEEP_START_HEIGHT = 0;
@@ -164,7 +164,7 @@ describe('Mine construction: cancellation does not restore terrain', { timeout: 
 
         // Capture terrain type at mine location before removal
         const mineEntity = sim.state.getEntityOrThrow(mineId, 'test');
-        const idx = sim.map.mapSize.toIndex(mineEntity.x, mineEntity.y);
+        const idx = sim.map.mapSize.toIndex(mineEntity);
         const terrainBefore = sim.map.groundType[idx];
 
         sim.removeBuilding(mineId);

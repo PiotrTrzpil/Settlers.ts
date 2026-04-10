@@ -882,9 +882,9 @@ export const GFX_FILES = {
     /** Mayan building/unit sprites */
     MAYAN: 12,
     /** Trojan building/unit sprites */
-    TROJAN: 13,
+    TROJAN: 14,
     /** Dark Tribe building/unit sprites */
-    DARK_TRIBE: 14,
+    DARK_TRIBE: 13,
     /** Landscape textures */
     LANDSCAPE: 2,
     /** Map objects (trees, stones, resources) - typically file 5 */

@@ -6,7 +6,7 @@
 import type { Entity } from '../entity';
 import { EntityType } from '../entity';
 import { MapObjectType, isHarvestableStone } from '@/game/types/map-object-types';
-import type { SpriteEntry } from './sprite-metadata';
+import { PIXELS_TO_WORLD, type SpriteEntry } from './sprite-metadata';
 
 // Color shader constants (for non-textured rendering)
 export const SELECTED_COLOR = [1.0, 1.0, 1.0, 1.0]; // White highlight
@@ -180,6 +180,15 @@ export function scaleSprite(sprite: SpriteEntry, scale: number = ENTITY_SCALE): 
         offsetX: sprite.offsetX * scale,
         offsetY: sprite.offsetY * scale,
     };
+}
+
+/**
+ * Convert a pixel offset (from XML building data) to a scaled world-space offset.
+ * XML pixel offsets are authored at 1x scale; since buildings render at ENTITY_SCALE,
+ * the offset must be scaled to match.
+ */
+export function pixelOffsetToWorld(pixelOffset: number): number {
+    return pixelOffset * PIXELS_TO_WORLD * ENTITY_SCALE;
 }
 
 /** Get sprite scale for an entity: trees/stones ENTITY_SCALE, other map objects DECORATION_SCALE. */

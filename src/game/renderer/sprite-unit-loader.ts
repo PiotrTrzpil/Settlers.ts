@@ -99,7 +99,7 @@ export async function loadUnitSpritesForRace(race: Race, ctx: SpriteLoadContext)
     const animCount = await loadAllWorkerAnimations(fc);
 
     if (unitCount > 0 || carrierCount > 0 || animCount > 0) {
-        log.debug(`${Race[race]}: ${unitCount} units, ${carrierCount} carriers, ${animCount} animation sequences`);
+        log.debug(`${race}: ${unitCount} units, ${carrierCount} carriers, ${animCount} animation sequences`);
     }
 
     return unitCount > 0;

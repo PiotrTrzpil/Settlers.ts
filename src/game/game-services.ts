@@ -62,7 +62,7 @@ import type { SettlerLocationExports } from './features/settler-location';
 import { FreePilesFeature } from './features/inventory/free-piles-feature';
 import { TerritoryFeature, type TerritoryExports } from './features/territory';
 import { VictoryConditionsFeature, type VictoryConditionsExports } from './features/victory-conditions';
-import { BuildingSiegeFeature, type BuildingSiegeExports } from './features/building-siege';
+import { BuildingSiegeFeature, type BuildingSiegeExports, TowerAssaultSystem } from './features/building-siege';
 import type { BuildingSiegeSystem } from './features/building-siege/building-siege-system';
 import { AiPlayerFeature, type AiPlayerExports } from './features/ai-player';
 import { PioneerFeature } from './features/pioneer';
@@ -119,6 +119,7 @@ export class GameServices {
     public readonly stoneSystem: StoneSystem;
     public readonly combatSystem: CombatSystem;
     public readonly siegeSystem: BuildingSiegeSystem;
+    public readonly towerAssaultSystem: TowerAssaultSystem;
     public readonly signSystem: ResourceSignSystem;
     public readonly locationManager: ISettlerBuildingLocationManager;
 
@@ -203,8 +204,8 @@ export class GameServices {
         // 3a. Movement system — instantiated directly (not a feature).
         this.movement = new MovementSystem({
             eventBus,
-            updatePosition: (id, x, y) => {
-                gameState.updateEntityPosition(id, x, y);
+            updatePosition: (id, newPos) => {
+                gameState.updateEntityPosition(id, newPos);
                 return true;
             },
             getEntity: gameState.getEntity.bind(gameState),
@@ -218,7 +219,7 @@ export class GameServices {
         this.subscriptions.subscribe(eventBus, 'entity:created', ({ entityId, entityType: type, subType, x, y }) => {
             if (type === EntityType.Unit && !isAngelUnitType(subType as UnitType)) {
                 const speed = getUnitTypeSpeed(subType as UnitType);
-                this.movement.createController(entityId, x, y, speed);
+                this.movement.createController(entityId, { x, y }, speed);
             }
         });
 
@@ -292,6 +293,7 @@ export class GameServices {
         this.stoneSystem = this.feat<StoneFeatureExports>('stones').stoneSystem;
         this.combatSystem = this.feat<CombatExports>('combat').combatSystem;
         this.siegeSystem = this.feat<BuildingSiegeExports>('building-siege').siegeSystem;
+        this.towerAssaultSystem = this.feat<BuildingSiegeExports>('building-siege').towerAssaultSystem;
         this.signSystem = this.feat<OreSignExports>('ore-signs').signSystem;
         this.locationManager = this.feat<SettlerLocationExports>('settler-location').locationManager;
         this.victorySystem = this.feat<VictoryConditionsExports>('victory-conditions').victorySystem;

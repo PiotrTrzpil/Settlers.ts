@@ -12,6 +12,7 @@ import { EntityType } from '@/game/entity';
 import { Race } from '@/game/core/race';
 import type { Entity } from '@/game/entity';
 import type { PileKind } from '@/game/core/pile-kind';
+import type { Tile } from '@/game/core/coordinates';
 import { SlotKind } from '@/game/core/pile-kind';
 import type { PileKindProvider } from '@/game/systems/inventory/pile-registry';
 
@@ -23,12 +24,12 @@ function makeKey(buildingId: number, material: EMaterialType, slotKind: PileSlot
     return { buildingId, material, slotKind };
 }
 
-function makeStackedResourceEntity(id: number, x: number, y: number, material: EMaterialType): Entity {
+function makeStackedResourceEntity(id: number, tile: Tile, material: EMaterialType): Entity {
     return {
         id,
         type: EntityType.StackedPile,
-        x,
-        y,
+        x: tile.x,
+        y: tile.y,
         player: 0,
         subType: material,
         race: Race.Roman,
@@ -118,9 +119,9 @@ describe('PileRegistry', () => {
         // Pre-populate with stale data
         registry.register(1, makeKey(99, EMaterialType.STONE, SlotKind.Output), { x: 1, y: 1 });
 
-        const entA = makeStackedResourceEntity(1, 5, 3, EMaterialType.LOG);
-        const entB = makeStackedResourceEntity(2, 6, 4, EMaterialType.STONE);
-        const entC = makeStackedResourceEntity(3, 7, 8, EMaterialType.BOARD);
+        const entA = makeStackedResourceEntity(1, { x: 5, y: 3 }, EMaterialType.LOG);
+        const entB = makeStackedResourceEntity(2, { x: 6, y: 4 }, EMaterialType.STONE);
+        const entC = makeStackedResourceEntity(3, { x: 7, y: 8 }, EMaterialType.BOARD);
         // Non-resource entity should be skipped
         const unit: Entity = {
             id: 4,
@@ -133,7 +134,7 @@ describe('PileRegistry', () => {
             operational: true,
         };
         // Free pile should be skipped
-        const freeEnt = makeStackedResourceEntity(5, 9, 9, EMaterialType.STONE);
+        const freeEnt = makeStackedResourceEntity(5, { x: 9, y: 9 }, EMaterialType.STONE);
 
         const kindMap = new Map<number, PileKind>([
             [1, { kind: SlotKind.Input, buildingId: 10 }],

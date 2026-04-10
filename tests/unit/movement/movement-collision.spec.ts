@@ -52,14 +52,14 @@ function assertOccupancyConsistent(state: GameState, entityIds: number[]): void 
     for (const id of entityIds) {
         const e = state.getEntity(id);
         if (!e) continue;
-        const key = tileKey(e.x, e.y);
+        const key = tileKey(e);
         expect(state.unitOccupancy.get(key), `tile (${e.x},${e.y}) should be occupied by ${id}`).toBe(id);
     }
     const positions = new Set<string>();
     for (const id of entityIds) {
         const e = state.getEntity(id);
         if (!e) continue;
-        const key = tileKey(e.x, e.y);
+        const key = tileKey(e);
         expect(positions.has(key), `duplicate entity at ${key}`).toBe(false);
         positions.add(key);
     }
@@ -80,10 +80,10 @@ function assertNoVisualTeleportBack(trail: Trail, entityId: number): void {
 }
 
 function blockNeighbors(state: GameState, tile: Tile, except?: Tile[]): void {
-    const skip = new Set(except?.map(p => tileKey(p.x, p.y)) ?? []);
+    const skip = new Set(except?.map(p => tileKey(p)) ?? []);
     for (const n of getAllNeighbors(tile)) {
-        if (!skip.has(tileKey(n.x, n.y))) {
-            state.buildingOccupancy.add(tileKey(n.x, n.y));
+        if (!skip.has(tileKey(n))) {
+            state.buildingOccupancy.add(tileKey(n));
         }
     }
 }
@@ -116,8 +116,8 @@ describe('Movement collision – basic bump mechanics', () => {
     it('head-on: both units eventually reach their destinations', () => {
         const { entity: unitA } = addUnit(state, 10, 10);
         const { entity: unitB } = addUnit(state, 14, 10);
-        state.movement.moveUnit(unitA.id, 14, 10);
-        state.movement.moveUnit(unitB.id, 10, 10);
+        state.movement.moveUnit(unitA.id, { x: 14, y: 10 });
+        state.movement.moveUnit(unitB.id, { x: 10, y: 10 });
 
         // 6s is well past the repath timeout — both must still resolve
         tickFor(state, 6);
@@ -525,7 +525,7 @@ describe('Movement collision – swap & deadlock', () => {
 
         const { entity: unitA } = addUnitWithPath(state, 10, 10, [pos(11, 10)]);
         const { entity: unitB } = addUnit(state, 11, 10);
-        state.movement.moveUnit(unitB.id, 20, 10);
+        state.movement.moveUnit(unitB.id, { x: 20, y: 10 });
 
         tickFor(state, 2);
 

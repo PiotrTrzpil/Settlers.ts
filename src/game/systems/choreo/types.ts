@@ -8,7 +8,7 @@
  */
 
 import { EMaterialType } from '../../economy';
-import type { Tile } from '@/game/core/coordinates';
+import type { Tile, TileWithEntityOpt } from '@/game/core/coordinates';
 
 // ─────────────────────────────────────────────────────────────
 // ChoreoTaskType — 1:1 mapping from jobInfo.xml
@@ -214,7 +214,7 @@ export interface ChoreoJobState {
     /** Number of consecutive pathfinding failures (for exponential backoff). */
     pathRetryCount: number;
     /** Per-node waypoints for multi-destination jobs. Each GO_TO_TARGET consumes the next entry. */
-    waypoints?: Array<{ x: number; y: number; entityId?: number }>;
+    waypoints?: Array<TileWithEntityOpt>;
     /** Typed metadata bag — replaces carryingGood hacks for stashing domain data. */
     metadata?: Record<string, number | string>;
     /** Called when the job is interrupted/cancelled. Feature-provided cleanup hook. */

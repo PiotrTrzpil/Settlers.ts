@@ -5,7 +5,7 @@
  * the max-lines limit while preserving the same logic.
  */
 
-import { type Entity, UnitType, Tile } from '../../../entity';
+import { type Entity, UnitType, Tile, type TileWithEntity } from '../../../entity';
 import { createLogger } from '@/utilities/logger';
 import { hexDistance } from '../../../systems/hex-directions';
 import { TaskResult, SettlerState, type SettlerConfig } from '../types';
@@ -96,7 +96,7 @@ export class WorkerJobLifecycle {
         settler: Entity,
         runtime: WorkerRuntimeState,
         selected: ChoreoJob,
-        entityTarget: { entityId: number; x: number; y: number } | null,
+        entityTarget: TileWithEntity | null,
         homeBuilding: Entity | null,
         positionTarget?: Tile | null
     ): void {
@@ -179,7 +179,7 @@ export class WorkerJobLifecycle {
         if (runtime.homeAssignment) {
             const home = this.gameState.getEntity(runtime.homeAssignment.buildingId);
             if (home) {
-                const door = getBuildingDoorPos(home.x, home.y, home.race, home.subType as BuildingType);
+                const door = getBuildingDoorPos(home, home.race, home.subType as BuildingType);
                 if (hexDistance(settler.x, settler.y, door.x, door.y) <= 1) {
                     this.locationManager.enterBuilding(settler.id, home.id);
                 }
@@ -268,12 +268,7 @@ export class WorkerJobLifecycle {
             return;
         }
 
-        const door = getBuildingDoorPos(
-            homeBuilding.x,
-            homeBuilding.y,
-            homeBuilding.race,
-            homeBuilding.subType as BuildingType
-        );
+        const door = getBuildingDoorPos(homeBuilding, homeBuilding.race, homeBuilding.subType as BuildingType);
         const dist = hexDistance(settler.x, settler.y, door.x, door.y);
 
         if (dist <= 1) {
@@ -289,7 +284,7 @@ export class WorkerJobLifecycle {
             if (this.verbose && reason) {
                 this.emitWaitingAtHome(settler, homeBuilding, reason);
             }
-            this.gameState.movement.moveUnit(settler.id, door.x, door.y);
+            this.gameState.movement.moveUnit(settler.id, door);
             this.animController.startWalkAnimation(settler);
         }
     }

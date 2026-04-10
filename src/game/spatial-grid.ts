@@ -12,7 +12,7 @@
  * (tower build/destroy), rebuildAllCells (game load).
  */
 
-import type { Entity } from './entity';
+import type { Entity, Tile } from './entity';
 
 // ── Cell ownership ──────────────────────────────────────────────
 
@@ -40,7 +40,7 @@ export class SpatialGrid {
     private readonly mapWidth: number;
     private readonly mapHeight: number;
     private readonly resolve: (id: number) => Entity | undefined;
-    private readonly getOwner: (x: number, y: number) => number;
+    private readonly getOwner: (tile: Tile) => number;
 
     /** cellKey → entity IDs in that cell */
     private readonly cells = new Map<number, Set<number>>();
@@ -57,7 +57,7 @@ export class SpatialGrid {
         mapHeight: number,
         cellShift: number,
         resolve: (id: number) => Entity | undefined,
-        getOwner: (x: number, y: number) => number
+        getOwner: (tile: Tile) => number
     ) {
         this.mapWidth = mapWidth;
         this.mapHeight = mapHeight;
@@ -71,14 +71,14 @@ export class SpatialGrid {
 
     // ── Cell key ────────────────────────────────────────────────
 
-    private cellKey(x: number, y: number): number {
-        return (y >> this.cellShift) * this.maxCols + (x >> this.cellShift);
+    private cellKey(tile: Tile): number {
+        return (tile.y >> this.cellShift) * this.maxCols + (tile.x >> this.cellShift);
     }
 
     // ── Entity lifecycle ────────────────────────────────────────
 
-    add(entityId: number, x: number, y: number): void {
-        const ck = this.cellKey(x, y);
+    add(entityId: number, tile: Tile): void {
+        const ck = this.cellKey(tile);
         let set = this.cells.get(ck);
         if (!set) {
             set = new Set();
@@ -105,14 +105,14 @@ export class SpatialGrid {
 
     // ── Queries ─────────────────────────────────────────────────
 
-    /** Compute cell-coordinate range for a radius around (cx, cy). */
-    private cellRange(cx: number, cy: number, radius: number) {
+    /** Compute cell-coordinate range for a radius around center. */
+    private cellRange(center: Tile, radius: number) {
         const shift = this.cellShift;
         return {
-            minCol: Math.max(0, (cx - radius) >> shift),
-            maxCol: Math.min(this.maxCols - 1, (cx + radius) >> shift),
-            minRow: Math.max(0, (cy - radius) >> shift),
-            maxRow: Math.min(this.maxRows - 1, (cy + radius) >> shift),
+            minCol: Math.max(0, (center.x - radius) >> shift),
+            maxCol: Math.min(this.maxCols - 1, (center.x + radius) >> shift),
+            minRow: Math.max(0, (center.y - radius) >> shift),
+            maxRow: Math.min(this.maxRows - 1, (center.y + radius) >> shift),
         };
     }
 
@@ -130,15 +130,15 @@ export class SpatialGrid {
     private *yieldCellForPlayer(set: Set<number>, player: number): IterableIterator<Entity> {
         for (const id of set) {
             const entity = this.resolve(id);
-            if (entity && this.getOwner(entity.x, entity.y) === player) {
+            if (entity && this.getOwner(entity) === player) {
                 yield entity;
             }
         }
     }
 
     /** Iterate all entities within radius — no ownership filter. */
-    *nearby(cx: number, cy: number, radius: number): IterableIterator<Entity> {
-        const { minCol, maxCol, minRow, maxRow } = this.cellRange(cx, cy, radius);
+    *nearby(center: Tile, radius: number): IterableIterator<Entity> {
+        const { minCol, maxCol, minRow, maxRow } = this.cellRange(center, radius);
 
         for (let row = minRow; row <= maxRow; row++) {
             for (let col = minCol; col <= maxCol; col++) {
@@ -169,8 +169,8 @@ export class SpatialGrid {
     }
 
     /** Iterate entities within radius that belong to a specific player's territory. */
-    *nearbyForPlayer(cx: number, cy: number, radius: number, player: number): IterableIterator<Entity> {
-        const { minCol, maxCol, minRow, maxRow } = this.cellRange(cx, cy, radius);
+    *nearbyForPlayer(center: Tile, radius: number, player: number): IterableIterator<Entity> {
+        const { minCol, maxCol, minRow, maxRow } = this.cellRange(center, radius);
         const owned = this.playerCells.get(player);
         if (!owned) {
             return;
@@ -189,8 +189,8 @@ export class SpatialGrid {
     // ── Territory updates ───────────────────────────────────────
 
     /** Called when a single tile changes ownership (pioneer expansion). */
-    onTileOwnerChanged(x: number, y: number, oldOwner: number, newOwner: number): void {
-        const ck = this.cellKey(x, y);
+    onTileOwnerChanged(tile: Tile, oldOwner: number, newOwner: number): void {
+        const ck = this.cellKey(tile);
         const state = this.cellState.get(ck);
 
         if (!state || state.ownership === CellOwnership.UNCLAIMED) {
@@ -275,7 +275,7 @@ export class SpatialGrid {
         const owners = new Set<number>();
         for (let y = startY; y < endY; y++) {
             for (let x = startX; x < endX; x++) {
-                owners.add(this.getOwner(x, y));
+                owners.add(this.getOwner({ x, y }));
             }
         }
 

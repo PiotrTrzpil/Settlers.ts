@@ -13,6 +13,7 @@ import { describe, it, expect, afterEach } from 'vitest';
 import { Simulation, createSimulation, cleanupSimulation } from '../../helpers/test-simulation';
 import { installRealGameData } from '../../helpers/test-game-data';
 import { UnitType } from '@/game/entity';
+import type { Tile } from '@/game/core/coordinates';
 
 installRealGameData();
 
@@ -24,7 +25,7 @@ function countPlayerTiles(sim: Simulation, cx: number, cy: number, radius: numbe
     let count = 0;
     for (let dy = -radius; dy <= radius; dy++) {
         for (let dx = -radius; dx <= radius; dx++) {
-            if (tm.isInTerritory(cx + dx, cy + dy, player)) count++;
+            if (tm.isInTerritory({ x: cx + dx, y: cy + dy }, player)) count++;
         }
     }
     return count;
@@ -36,14 +37,14 @@ function countUnclaimedTiles(sim: Simulation, cx: number, cy: number, radius: nu
     let count = 0;
     for (let dy = -radius; dy <= radius; dy++) {
         for (let dx = -radius; dx <= radius; dx++) {
-            if (!tm.isInAnyTerritory(cx + dx, cy + dy)) count++;
+            if (!tm.isInAnyTerritory({ x: cx + dx, y: cy + dy })) count++;
         }
     }
     return count;
 }
 
-function moveUnit(sim: Simulation, entityId: number, x: number, y: number) {
-    return sim.execute({ type: 'move_unit', entityId, targetX: x, targetY: y });
+function moveUnit(sim: Simulation, entityId: number, tile: Tile) {
+    return sim.execute({ type: 'move_unit', entityId, targetX: tile.x, targetY: tile.y });
 }
 
 // ─── tests ───────────────────────────────────────────────────────────────────
@@ -57,11 +58,11 @@ describe('Pioneer territory claiming (integration)', { timeout: 60_000 }, () => 
     });
 
     it('idles after spawn until given a move command', () => {
-        sim = createSimulation();
+        sim = createSimulation({ skipTerritory: true });
 
         const tx = 70,
             ty = 64;
-        sim.spawnUnit(tx, ty + 10, UnitType.Pioneer);
+        sim.spawnUnit({ x: tx, y: ty + 10 }, UnitType.Pioneer);
 
         // Run for a while — pioneer should NOT claim anything
         sim.runTicks(3_000);
@@ -69,14 +70,14 @@ describe('Pioneer territory claiming (integration)', { timeout: 60_000 }, () => 
     });
 
     it('claims unclaimed tiles after being sent to a location', () => {
-        sim = createSimulation();
+        sim = createSimulation({ skipTerritory: true });
 
         const tx = 70,
             ty = 64;
-        const id = sim.spawnUnit(tx, ty + 10, UnitType.Pioneer);
+        const id = sim.spawnUnit({ x: tx, y: ty + 10 }, UnitType.Pioneer);
 
         // Send pioneer to the target area
-        expect(moveUnit(sim, id, tx, ty).success).toBe(true);
+        expect(moveUnit(sim, id, { x: tx, y: ty }).success).toBe(true);
 
         // Wait until pioneer claims at least one tile
         sim.runUntil(() => countPlayerTiles(sim, tx, ty, 15, 0) > 0, {
@@ -89,13 +90,13 @@ describe('Pioneer territory claiming (integration)', { timeout: 60_000 }, () => 
     });
 
     it('claims multiple tiles in sequence', () => {
-        sim = createSimulation();
+        sim = createSimulation({ skipTerritory: true });
 
         const tx = 70,
             ty = 64;
-        const id = sim.spawnUnit(tx, ty + 10, UnitType.Pioneer);
+        const id = sim.spawnUnit({ x: tx, y: ty + 10 }, UnitType.Pioneer);
 
-        expect(moveUnit(sim, id, tx, ty).success).toBe(true);
+        expect(moveUnit(sim, id, { x: tx, y: ty }).success).toBe(true);
 
         // Wait until pioneer claims several tiles
         sim.runUntil(() => countPlayerTiles(sim, tx, ty, 20, 0) >= 3, {
@@ -108,14 +109,14 @@ describe('Pioneer territory claiming (integration)', { timeout: 60_000 }, () => 
     });
 
     it('claimed tiles belong to the correct player', () => {
-        sim = createSimulation();
+        sim = createSimulation({ skipTerritory: true });
 
         const tx = 70,
             ty = 64;
         const player = 1;
-        const id = sim.spawnUnit(tx, ty + 10, UnitType.Pioneer, player);
+        const id = sim.spawnUnit({ x: tx, y: ty + 10 }, UnitType.Pioneer, player);
 
-        expect(moveUnit(sim, id, tx, ty).success).toBe(true);
+        expect(moveUnit(sim, id, { x: tx, y: ty }).success).toBe(true);
 
         sim.runUntil(() => countPlayerTiles(sim, tx, ty, 15, player) > 0, {
             maxTicks: 20_000,
@@ -128,7 +129,7 @@ describe('Pioneer territory claiming (integration)', { timeout: 60_000 }, () => 
     });
 
     it('claims tiles not adjacent to existing territory', () => {
-        sim = createSimulation();
+        sim = createSimulation({ skipTerritory: true });
 
         // Establish territory for player 0 far from where the pioneer will work
         sim.establishTerritory(0);
@@ -139,8 +140,8 @@ describe('Pioneer territory claiming (integration)', { timeout: 60_000 }, () => 
         const initialUnclaimed = countUnclaimedTiles(sim, tx, ty, 5);
         expect(initialUnclaimed).toBeGreaterThan(0);
 
-        const id = sim.spawnUnit(tx, ty + 10, UnitType.Pioneer);
-        expect(moveUnit(sim, id, tx, ty).success).toBe(true);
+        const id = sim.spawnUnit({ x: tx, y: ty + 10 }, UnitType.Pioneer);
+        expect(moveUnit(sim, id, { x: tx, y: ty }).success).toBe(true);
 
         sim.runUntil(() => countPlayerTiles(sim, tx, ty, 10, 0) > 0, {
             maxTicks: 20_000,

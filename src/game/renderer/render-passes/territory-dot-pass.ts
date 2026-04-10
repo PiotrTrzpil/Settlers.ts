@@ -64,7 +64,7 @@ export class TerritoryDotPass implements IRenderPass {
                 continue;
             }
             // Use integer coords for height lookup, apply fractional offset to world position
-            const idx = mapSize.toIndex(dot.x, dot.y);
+            const idx = mapSize.toIndex(dot);
             const hWorld = heightToWorld(groundHeight[idx]!);
             // eslint-disable-next-line no-restricted-syntax -- offsetX/offsetY are optional sub-tile position offsets; 0 is the correct default (no offset)
             const tileX = dot.x + (dot.offsetX ?? 0);

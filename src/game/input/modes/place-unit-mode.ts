@@ -51,12 +51,12 @@ export class PlaceUnitMode extends BasePlacementMode<UnitType> {
         return { x: tileX, y: tileY };
     }
 
-    protected createPlacementCommand(x: number, y: number, data: PlacementModeData<UnitType>): Record<string, unknown> {
+    protected createPlacementCommand(tile: Tile, data: PlacementModeData<UnitType>): Record<string, unknown> {
         return {
             type: this.getCommandType(),
             unitType: data.subType,
-            x,
-            y,
+            x: tile.x,
+            y: tile.y,
             player: this.currentPlayer,
             race: data.race!,
         };

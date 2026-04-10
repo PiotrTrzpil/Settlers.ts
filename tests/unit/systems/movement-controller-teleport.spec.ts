@@ -27,7 +27,7 @@ function simulateTick(ctrl: MovementController, dt: number) {
 
 describe('MovementController teleport detection', () => {
     it('multi-step tick: stepsTakenThisTick tracks correctly', () => {
-        const ctrl = new MovementController(1, 20, 60, 60);
+        const ctrl = new MovementController(1, { x: 20, y: 60 }, 60);
         ctrl.startPath(diagonalPath);
 
         // startPath sets progress=1 — first step is immediate
@@ -37,7 +37,7 @@ describe('MovementController teleport detection', () => {
     });
 
     it('multi-step tick does not cause false teleport at scaled threshold', () => {
-        const ctrl = new MovementController(1, 20, 60, 60);
+        const ctrl = new MovementController(1, { x: 20, y: 60 }, 60);
         ctrl.startPath(diagonalPath);
 
         // Tick 1: take first step, record visual
@@ -58,7 +58,7 @@ describe('MovementController teleport detection', () => {
     });
 
     it('handlePush mid-transit logs warning via warnIfTeleported', () => {
-        const ctrl = new MovementController(1, 20, 60, 2);
+        const ctrl = new MovementController(1, { x: 20, y: 60 }, 2);
         ctrl.startPath(diagonalPath);
 
         // Take first step, advance partway into transit
@@ -81,7 +81,7 @@ describe('MovementController teleport detection', () => {
     });
 
     it('replacePath mid-transit logs warning via warnIfTeleported', () => {
-        const ctrl = new MovementController(1, 20, 60, 2);
+        const ctrl = new MovementController(1, { x: 20, y: 60 }, 2);
         ctrl.startPath(diagonalPath);
 
         // Take first step, advance partway
@@ -109,7 +109,7 @@ describe('MovementController teleport detection', () => {
     });
 
     it('stepsTakenThisTick resets on advanceProgress', () => {
-        const ctrl = new MovementController(1, 20, 60, 60);
+        const ctrl = new MovementController(1, { x: 20, y: 60 }, 60);
         ctrl.startPath(diagonalPath);
 
         simulateTick(ctrl, 1 / 20);

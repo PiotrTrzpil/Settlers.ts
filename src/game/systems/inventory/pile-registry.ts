@@ -18,6 +18,9 @@ import type { Entity } from '../../entity';
 import { EntityType } from '../../entity';
 import type { PileKind, LinkedSlotKind } from '../../core/pile-kind';
 import { isLinkedPile } from '../../core/pile-kind';
+import { createLogger } from '@/utilities/logger';
+
+const log = createLogger('PileRegistry');
 
 /**
  * Identifies the exact inventory slot that a pile entity represents.
@@ -97,7 +100,7 @@ export class PileRegistry {
 
         this.forward.set(s, entityId);
         this.reverse.set(entityId, s);
-        this.entityPosition.set(entityId, tileKey(position.x, position.y));
+        this.entityPosition.set(entityId, tileKey(position));
 
         // Update linked index
         let buildingLinked = this.linked.get(key.buildingId);
@@ -113,7 +116,7 @@ export class PileRegistry {
             buildingPositions = new Set<string>();
             this.positions.set(key.buildingId, buildingPositions);
         }
-        buildingPositions.add(tileKey(position.x, position.y));
+        buildingPositions.add(tileKey(position));
     }
 
     /**
@@ -227,7 +230,13 @@ export class PileRegistry {
                 continue;
             }
 
-            const kind = resources.getPileKind(entity.id);
+            let kind: PileKind;
+            try {
+                kind = resources.getPileKind(entity.id);
+            } catch {
+                log.warn(`Skipping orphan pile entity ${entity.id} (${entity.subType}) — no inventory slot`);
+                continue;
+            }
             if (!isLinkedPile(kind)) {
                 continue;
             }

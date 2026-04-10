@@ -5,6 +5,7 @@
 
 import type { Entity, EntityProvider } from '@/game/entity';
 import { EntityType, UnitType } from '@/game/entity';
+import { Race } from '@/game/core/race';
 
 /**
  * Mock entity provider that auto-creates entities when accessed.
@@ -29,7 +30,7 @@ export class MockEntityProvider implements EntityProvider {
                 x: 0,
                 y: 0,
                 player: 0,
-                race: 10,
+                race: Race.Roman,
                 operational: true,
             };
             this.entityMap.set(id, entity);

@@ -139,7 +139,7 @@ export class GameCore {
             getPlacementFilter: () => this._placementFilter,
             recruitSystem: this.services.recruitSystem,
             unitTransformer: this.services.unitTransformer,
-            getOwner: (x, y) => this.services.territoryManager.getOwner(x, y),
+            getOwner: tile => this.services.territoryManager.getOwner(tile),
         });
     }
 
@@ -202,7 +202,7 @@ export class GameCore {
             if (entity.type !== EntityType.StackedPile) {
                 continue;
             }
-            const owner = tm.getOwner(entity.x, entity.y);
+            const owner = tm.getOwner(entity);
             if (owner >= 0) {
                 entity.player = owner;
             }
@@ -264,7 +264,7 @@ export class GameCore {
         this._territoryEnabled = enabled;
         const tm = this.services.territoryManager;
         const dispatcher = this.services.logisticsDispatcher;
-        this._placementFilter = enabled ? createTerritoryPlacementFilter(tm) : null;
+        this._placementFilter = enabled ? createTerritoryPlacementFilter(tm, this.playerRaces) : null;
         dispatcher.setMatchFilter(enabled ? createTerritoryMatchFilter(tm) : null);
         dispatcher.setCarrierFilter(enabled ? createTerritoryCarrierFilter(tm) : null);
     }
@@ -289,7 +289,7 @@ export class GameCore {
         const { width: w, height: h } = this.terrain;
         const cx = Math.floor(w / 2);
         const cy = Math.floor(h / 2);
-        return spiralSearch(cx, cy, w, h, (x, y) => this.terrain.isBuildable(x, y));
+        return spiralSearch({ x: cx, y: cy }, w, h, tile => this.terrain.isBuildable(tile));
     }
 
     // ─── Lifecycle ──────────────────────────────────────────────

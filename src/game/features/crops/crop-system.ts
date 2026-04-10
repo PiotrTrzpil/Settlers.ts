@@ -191,8 +191,8 @@ export class CropSystem extends GrowableSystem<CropState> {
         return 'keep';
     }
 
-    protected buildPlantCommand(objectType: MapObjectType, x: number, y: number): Command {
-        return { type: 'plant_crop', cropType: objectType, x, y };
+    protected buildPlantCommand(objectType: MapObjectType, tile: Tile): Command {
+        return { type: 'plant_crop', cropType: objectType, x: tile.x, y: tile.y };
     }
 
     // ── Crop-specific: queries ────────────────────────────────────
@@ -270,8 +270,8 @@ export class CropSystem extends GrowableSystem<CropState> {
      */
     getCropPlanter(cropType: MapObjectType): PlantingCapable {
         return {
-            findPlantingSpot: (cx, cy, radius?) => this.findPlantingSpotForType(cx, cy, cropType, radius),
-            plantEntity: (x, y, settlerId) => this.plantCropType(x, y, cropType, settlerId),
+            findPlantingSpot: (center, radius?) => this.findPlantingSpotForType(center, cropType, radius),
+            plantEntity: (tile, settlerId) => this.plantCropType(tile, cropType, settlerId),
         };
     }
 
@@ -279,28 +279,27 @@ export class CropSystem extends GrowableSystem<CropState> {
      * Find a planting spot with per-type proximity filtering.
      * Only same-type crops count for minimum distance.
      */
-    findPlantingSpotForType(cx: number, cy: number, cropType: MapObjectType, radius?: number): Tile | null {
+    findPlantingSpotForType(center: Tile, cropType: MapObjectType, radius?: number): Tile | null {
         const searchRadius = radius ?? this.config.plantingSearchRadius;
-        return findEmptySpot(cx, cy, {
+        return findEmptySpot(center, {
             gameState: this.gameState,
             searchRadius,
-            minRadius: 0,
             minDistanceSq: this.config.minDistanceSq,
             rng: this.gameState.rng,
-            proximityEntities: [...this.gameState.spatialIndex.nearby(cx, cy, searchRadius * 2)],
+            proximityEntities: [...this.gameState.spatialIndex.nearby(center, searchRadius * 2)],
             proximityFilter: entity => entity.type === EntityType.MapObject && entity.subType === cropType,
         });
     }
 
     /**
-     * Plant a specific crop type at (x, y) via the command system.
+     * Plant a specific crop type at tile via the command system.
      */
-    plantCropType(x: number, y: number, cropType: MapObjectType, settlerId: number): void {
-        const result = this._executeCommand(this.buildPlantCommand(cropType, x, y));
+    plantCropType(tile: Tile, cropType: MapObjectType, settlerId: number): void {
+        const result = this._executeCommand(this.buildPlantCommand(cropType, tile));
         if (result.success) {
-            this.log.debug(`Settler ${settlerId} planted ${MapObjectType[cropType]} at (${x}, ${y})`);
+            this.log.debug(`Settler ${settlerId} planted ${MapObjectType[cropType]} at (${tile.x}, ${tile.y})`);
         } else {
-            this.log.debug(`Settler ${settlerId}: cannot plant at (${x}, ${y}): ${result.error}`);
+            this.log.debug(`Settler ${settlerId}: cannot plant at (${tile.x}, ${tile.y}): ${result.error}`);
         }
     }
 

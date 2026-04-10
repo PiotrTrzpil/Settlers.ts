@@ -36,15 +36,24 @@ const emit = defineEmits<{
 const cav = useTemplateRef<HTMLCanvasElement>('cav');
 const overlayCanvas = useTemplateRef<HTMLCanvasElement>('overlayCanvas');
 
-const { setRace, getRace, getInputManager, getCamera, centerOnPlayerStart, getDecoLabels, selectionBox, hintMessage } =
-    useRenderer({
-        canvas: cav,
-        getGame: () => props.game,
-        getLayerVisibility: () => props.layerVisibility ?? DEFAULT_LAYER_VISIBILITY,
-        onTileClick: tile => emit('tileClick', tile),
-        // eslint-disable-next-line no-restricted-syntax -- optional config/prop with sensible default
-        getInitialCamera: () => props.initialCamera ?? null,
-    });
+const {
+    setRace,
+    getRace,
+    getInputManager,
+    getCamera,
+    setCameraPosition,
+    centerOnPlayerStart,
+    getDecoLabels,
+    selectionBox,
+    hintMessage,
+} = useRenderer({
+    canvas: cav,
+    getGame: () => props.game,
+    getLayerVisibility: () => props.layerVisibility ?? DEFAULT_LAYER_VISIBILITY,
+    onTileClick: tile => emit('tileClick', tile),
+    // eslint-disable-next-line no-restricted-syntax -- optional config/prop with sensible default
+    getInitialCamera: () => props.initialCamera ?? null,
+});
 
 // Draw debug decoration labels on the 2D overlay canvas
 let overlayRafId = 0;
@@ -142,7 +151,7 @@ const selectionBoxStyle = computed(() => {
 });
 
 // Expose race switching, input manager, and camera for parent components
-defineExpose({ setRace, getRace, getInputManager, getCamera, centerOnPlayerStart, Race });
+defineExpose({ setRace, getRace, getInputManager, getCamera, setCameraPosition, centerOnPlayerStart, Race });
 </script>
 
 <style scoped>

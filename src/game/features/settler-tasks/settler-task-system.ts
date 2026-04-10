@@ -35,7 +35,7 @@ import { TriggerSystemImpl } from '../building-overlays/trigger-system';
 import { getGameDataLoader } from '@/resources/game-data';
 import type { OreVeinData } from '../ore-veins/ore-vein-data';
 import type { ISettlerBuildingLocationManager } from '../settler-location';
-import { BuildingWorkerTracker } from './building-worker-tracker';
+import { BuildingWorkerTracker, type TerritoryConnectivityCheck } from './building-worker-tracker';
 import { IndexedMap } from '@/game/utils/indexed-map';
 import type { TickScheduler } from '../../systems/tick-scheduler';
 import { type SettlerTaskSystemConfig, type SettlerDebugEntry } from './settler-task-config';
@@ -276,6 +276,11 @@ export class SettlerTaskSystem implements TickSystem, TaskDispatcher, WorkerStat
         this.workerTracker.relocateFromFootprints();
     }
 
+    /** Inject territory connectivity check (called by TerritoryFeature after load). */
+    setTerritoryCheck(check: TerritoryConnectivityCheck): void {
+        this.workerTracker.setTerritoryCheck(check);
+    }
+
     findIdleSpecialist(unitType: UnitType, player: number, nearX: number, nearY: number): number | null {
         return this.workerTracker.findIdleSpecialist(unitType, player, nearX, nearY);
     }
@@ -297,30 +302,22 @@ export class SettlerTaskSystem implements TickSystem, TaskDispatcher, WorkerStat
         this.workerTracker.releaseAssignment(settlerId);
     }
 
-    assignMoveTask(entityId: number, targetX: number, targetY: number): boolean {
+    assignMoveTask(entityId: number, target: Tile): boolean {
         const entity = this.gameState.getEntity(entityId);
         if (!entity || entity.type !== EntityType.Unit) {
             return false;
         }
 
         // When target is inside a building footprint, reroute to the building's door tile.
-        let moveX = targetX;
-        let moveY = targetY;
-        if (this.gameState.buildingOccupancy.has(tileKey(targetX, targetY))) {
-            const building = this.gameState.getGroundEntityAt(targetX, targetY);
+        let moveTo: Tile = target;
+        if (this.gameState.buildingOccupancy.has(tileKey(moveTo))) {
+            const building = this.gameState.getGroundEntityAt(moveTo);
             if (building && building.type === EntityType.Building) {
-                const door = getBuildingDoorPos(
-                    building.x,
-                    building.y,
-                    building.race,
-                    building.subType as BuildingType
-                );
-                moveX = door.x;
-                moveY = door.y;
+                moveTo = getBuildingDoorPos(building, building.race, building.subType as BuildingType);
             }
         }
 
-        const moveSuccess = this.gameState.movement.moveUnit(entityId, moveX, moveY);
+        const moveSuccess = this.gameState.movement.moveUnit(entityId, moveTo);
         if (!moveSuccess) {
             return false;
         }
@@ -337,18 +334,18 @@ export class SettlerTaskSystem implements TickSystem, TaskDispatcher, WorkerStat
 
         if (unitConfig) {
             const posHandler = this.handlerRegistry.getPositionHandler(unitConfig.plantSearch ?? unitConfig.search);
-            posHandler?.onSettlerRemoved?.(entityId, targetX, targetY);
+            posHandler?.onSettlerRemoved?.(entityId, target.x, target.y);
         }
 
         this.workerTracker.release(entityId, runtime);
 
         // Location manager is the sole owner of entity.hidden — no direct sets here.
-        runtime.moveTask = { type: 'move', targetX, targetY };
+        runtime.moveTask = { type: 'move', targetX: target.x, targetY: target.y };
         runtime.state = SettlerState.WORKING;
 
         this.animController.startWalkAnimation(entity);
 
-        log.debug(`Unit ${entityId} assigned move task to (${targetX}, ${targetY})`);
+        log.debug(`Unit ${entityId} assigned move task to (${target.x}, ${target.y})`);
         return true;
     }
 
@@ -372,7 +369,7 @@ export class SettlerTaskSystem implements TickSystem, TaskDispatcher, WorkerStat
         }
 
         if (moveTo) {
-            const moveSuccess = this.gameState.movement.moveUnit(entityId, moveTo.x, moveTo.y);
+            const moveSuccess = this.gameState.movement.moveUnit(entityId, moveTo);
             if (!moveSuccess) {
                 return false;
             }

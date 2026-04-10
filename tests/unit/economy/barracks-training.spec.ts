@@ -13,7 +13,7 @@ describe('Training Recipes', () => {
     it('each playable race has 10 recipes (7 common + 3 specialist), DarkTribe has 0', () => {
         for (const race of [Race.Roman, Race.Viking, Race.Mayan, Race.Trojan]) {
             const recipes = getTrainingRecipes(race);
-            expect(recipes.length, `${Race[race]}`).toBe(10);
+            expect(recipes.length, `${race}`).toBe(10);
         }
         expect(getTrainingRecipes(Race.DarkTribe).length).toBe(0);
     });
@@ -27,7 +27,7 @@ describe('Training Recipes', () => {
             const commonBlock = recipes.slice(0, 7);
             expect(
                 commonBlock.every(r => r.unitType !== specialistType),
-                `${Race[race]} common block`
+                `${race} common block`
             ).toBe(true);
             expect(commonBlock.map(r => r.unitType)).toContain(UnitType.Swordsman1);
             expect(commonBlock.map(r => r.unitType)).toContain(UnitType.Bowman1);
@@ -37,7 +37,7 @@ describe('Training Recipes', () => {
             const specialistBlock = recipes.slice(7);
             expect(
                 specialistBlock.every(r => r.unitType === specialistType),
-                `${Race[race]} specialist block`
+                `${race} specialist block`
             ).toBe(true);
             expect(specialistBlock.map(r => r.soldierLevel).sort((a, b) => a - b)).toEqual([1, 2, 3]);
         }
@@ -69,13 +69,13 @@ describe('Training Recipes', () => {
         ];
 
         for (const [race, unitType, weapon] of expected) {
-            expect(getSpecialistUnitType(race), `${Race[race]} specialist`).toBe(unitType);
-            expect(getSpecialistWeapon(race), `${Race[race]} weapon`).toBe(weapon);
+            expect(getSpecialistUnitType(race), `${race} specialist`).toBe(unitType);
+            expect(getSpecialistWeapon(race), `${race} weapon`).toBe(weapon);
 
             // Verify L1 recipe uses the weapon
             const recipes = getTrainingRecipes(race);
             const l1 = recipes.find(r => r.unitType === unitType && r.soldierLevel === 1)!;
-            expect(l1.inputs[0]!.material, `${Race[race]} L1 weapon`).toBe(weapon);
+            expect(l1.inputs[0]!.material, `${race} L1 weapon`).toBe(weapon);
         }
 
         expect(getSpecialistUnitType(Race.DarkTribe)).toBeUndefined();

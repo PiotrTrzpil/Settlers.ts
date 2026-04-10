@@ -17,8 +17,8 @@ const STORAGE_KEY = 'settlers_game_state';
 const INITIAL_STATE_KEY = 'settlers_initial_state';
 const LAST_MAP_KEY = 'settlers_last_map';
 const AUTO_SAVE_INTERVAL_MS = 5000; // Save every 5 seconds
-// Bumped: added unit runtime persistence (settler tasks, prospected tiles)
-const SNAPSHOT_VERSION = 15;
+// Bumped: Race enum changed from numeric (10-14) to string ('roman', 'viking', etc.)
+const SNAPSHOT_VERSION = 16;
 
 /**
  * Snapshot format: metadata + entity table + terrain + dynamic feature data.
@@ -335,7 +335,7 @@ function restoreEntities(game: GameCore, snapshot: GameStateSnapshot): void {
     for (const e of snapshot.entities) {
         state.nextId = e.id; // ensure addEntity produces the correct ID
         const completed = e.type === EntityType.Building && !constructionSiteIds.has(e.id);
-        const entity = state.addEntity(e.type, e.subType, e.x, e.y, e.player, { race: e.race, completed });
+        const entity = state.addEntity(e.type, e.subType, e, e.player, { race: e.race, completed });
         if (e.carrying) {
             entity.carrying = e.carrying;
         }

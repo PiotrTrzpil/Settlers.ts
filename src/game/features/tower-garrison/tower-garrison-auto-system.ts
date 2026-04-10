@@ -26,8 +26,10 @@ import { getGarrisonRole, isGarrisonBuildingType } from './internal/garrison-cap
 
 const log = createLogger('AutoGarrison');
 
+import { seconds } from '@/game/core/tick-rate';
+
 /** Number of ticks between auto-garrison scans. */
-const SCAN_INTERVAL_TICKS = 30;
+const SCAN_INTERVAL_TICKS = seconds(1);
 
 export interface AutoGarrisonSystemConfig {
     manager: TowerGarrisonManager;
@@ -105,7 +107,7 @@ export class AutoGarrisonSystem implements TickSystem {
         }
 
         const building = this.gameState.getEntityOrThrow(buildingId, 'AutoGarrisonSystem.scanBuilding');
-        const door = getBuildingDoorPos(building.x, building.y, building.race, building.subType as BuildingType);
+        const door = getBuildingDoorPos(building, building.race, building.subType as BuildingType);
 
         const candidateId = this.findNearestIdleSoldier(building.player, door.x, door.y, buildingId);
         if (candidateId === null) {
@@ -153,6 +155,9 @@ export class AutoGarrisonSystem implements TickSystem {
         let bestBowmanDist = Infinity;
 
         for (const entity of this.gameState.entityIndex.ofTypeAndPlayer(EntityType.Unit, player)) {
+            if (entity.hidden) {
+                continue;
+            }
             if (!this.isEligibleCandidate(entity.id, entity.subType as UnitType, buildingId)) {
                 continue;
             }

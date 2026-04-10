@@ -25,12 +25,12 @@ function isFootprintInBounds(footprint: Tile[], ctx: PlacementContext): boolean 
  * Returns the blocking status or null if tile is OK.
  */
 function checkTileBasics(tile: Tile, ctx: PlacementContext, isMine: boolean): PlacementStatus | null {
-    const idx = ctx.mapSize.toIndex(tile.x, tile.y);
+    const idx = ctx.mapSize.toIndex(tile);
     const terrainOk = isMine ? isMineBuildable(ctx.groundType[idx]!) : isBuildable(ctx.groundType[idx]!);
     if (!terrainOk) {
         return PlacementStatus.InvalidTerrain;
     }
-    const occupantId = ctx.groundOccupancy.get(tileKey(tile.x, tile.y));
+    const occupantId = ctx.groundOccupancy.get(tileKey(tile));
     if (occupantId !== undefined) {
         if (!ctx.isReplaceableOccupant?.(occupantId)) {
             return PlacementStatus.Occupied;
@@ -48,7 +48,7 @@ function checkPlacementFilter(footprint: Tile[], ctx: PlacementContext): Placeme
         return null;
     }
     for (const tile of footprint) {
-        const rejection = ctx.placementFilter(tile.x, tile.y, ctx.player);
+        const rejection = ctx.placementFilter(tile, ctx.player);
         if (rejection !== null) {
             return rejection;
         }
@@ -74,7 +74,7 @@ export function validateBuildingPlacement(
     if (ctx.race === undefined) {
         throw new Error(`validateBuildingPlacement: ctx.race is required for building placement (${buildingType})`);
     }
-    const footprint = getBuildingFootprint(x, y, buildingType, ctx.race);
+    const footprint = getBuildingFootprint({ x, y }, buildingType, ctx.race);
     const isMine = isMineBuilding(buildingType);
 
     // Check bounds
@@ -104,7 +104,7 @@ export function validateBuildingPlacement(
     // Check slope across the block area (actual building body), not the full footprint.
     // The outer ring of buildingPosLines is just a spacing buffer — terrain leveling
     // during construction smooths those tiles, so slope there is irrelevant.
-    const blockArea = getBuildingBlockArea(x, y, buildingType, ctx.race);
+    const blockArea = getBuildingBlockArea({ x, y }, buildingType, ctx.race);
     const slopeStatus = computeSlopeDifficulty(blockArea, ctx.groundHeight, ctx.mapSize);
     if (slopeStatus === PlacementStatus.TooSteep) {
         return { canPlace: false, status: PlacementStatus.TooSteep };
@@ -155,13 +155,13 @@ export function canPlaceBuilding(
     x: number,
     y: number
 ): boolean {
-    const idx = terrain.toIndex(x, y);
+    const idx = terrain.toIndex({ x, y });
 
     if (!isBuildable(terrain.groundType[idx]!)) {
         return false;
     }
 
-    const occupantId = groundOccupancy.get(tileKey(x, y));
+    const occupantId = groundOccupancy.get(tileKey({ x, y }));
     if (occupantId !== undefined) {
         return false;
     }

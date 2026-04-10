@@ -10,7 +10,7 @@ import { LogHandler } from '@/utilities/log-handler';
 import { Race } from '../../core/race';
 import type { LuaRuntime } from '../lua-runtime';
 import type { GameState } from '@/game/game-state';
-import { EntityType, UnitType } from '@/game/entity';
+import { EntityType, UnitType, type Tile } from '@/game/entity';
 import type { ExecuteCommand } from '@/game/commands';
 
 const log = new LogHandler('SettlersAPI');
@@ -119,7 +119,7 @@ export interface SettlersAPIContext {
     /** Per-player race mapping (player index → Race) */
     playerRaces?: Map<number, Race>;
     /** Optional: move a unit to a target position (uses pathfinding) */
-    moveUnit?: (entityId: number, targetX: number, targetY: number) => boolean;
+    moveUnit?: (entityId: number, target: Tile) => boolean;
     executeCommand?: ExecuteCommand;
 }
 
@@ -227,7 +227,7 @@ export function registerSettlersAPI(runtime: LuaRuntime, context: SettlersAPICon
 
         if (context.moveUnit) {
             log.debug(`MoveTo: moving ${entityId} to (${x}, ${y})`);
-            return context.moveUnit(entityId, x, y);
+            return context.moveUnit(entityId, { x, y });
         }
 
         log.debug(`MoveTo: movement system not available`);

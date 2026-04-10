@@ -11,6 +11,7 @@
 import { getGameDataLoader, type RaceId, type BuildingInfo, type ObjectInfo } from '@/resources/game-data';
 import { S4SettlerType, S4GoodType } from '@/resources/map/s4-types';
 import { Race } from '../core/race';
+import type { TileOffset } from '../core/coordinates';
 import { BuildingType } from '../buildings/building-type';
 import { UnitType } from '../core/unit-types';
 import { EMaterialType } from '../economy/material-type';
@@ -212,10 +213,10 @@ export function getBuildingInfo(race: Race, buildingType: BuildingType): Buildin
  * Returns null if the building has a zero door offset (building anchor is the door).
  * Throws if game data is not yet loaded or the building type has no XML mapping.
  */
-export function getBuildingDoorOffset(race: Race, buildingType: BuildingType): { dx: number; dy: number } | null {
+export function getBuildingDoorOffset(race: Race, buildingType: BuildingType): TileOffset | null {
     const info = getBuildingInfo(race, buildingType);
     if (!info) {
-        throw new Error(`No BuildingInfo found for ${buildingType} / race ${Race[race]}`);
+        throw new Error(`No BuildingInfo found for ${buildingType} / race ${race}`);
     }
     const { xOffset, yOffset } = info.door;
     if (xOffset === 0 && yOffset === 0) {
@@ -229,9 +230,9 @@ export function getBuildingDoorOffset(race: Race, buildingType: BuildingType): {
  * Combines building position with door offset. When the offset is zero,
  * the building anchor itself is the door.
  */
-export function getBuildingDoorPos(bx: number, by: number, race: Race, buildingType: BuildingType): Tile {
+export function getBuildingDoorPos(tile: Tile, race: Race, buildingType: BuildingType): Tile {
     const door = getBuildingDoorOffset(race, buildingType);
-    return door ? { x: bx + door.dx, y: by + door.dy } : { x: bx, y: by };
+    return door ? { x: tile.x + door.dx, y: tile.y + door.dy } : tile;
 }
 
 /**

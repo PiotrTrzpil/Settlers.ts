@@ -199,8 +199,9 @@ export class SpriteRenderManager {
      * Returns true if sprites were loaded successfully.
      */
     public async setRace(race: Race): Promise<boolean> {
-        const currentLabel = this._currentRace !== null ? Race[this._currentRace] : 'none';
-        SpriteRenderManager.log.debug(`setRace called: ${Race[race]} (current: ${currentLabel})`);
+        // eslint-disable-next-line no-restricted-syntax -- _currentRace is nullable-by-design; 'none' is correct for debug log
+        const currentLabel = this._currentRace ?? 'none';
+        SpriteRenderManager.log.debug(`setRace called: ${race} (current: ${currentLabel})`);
 
         if (race === this._currentRace) {
             return true;
@@ -222,10 +223,10 @@ export class SpriteRenderManager {
         if (loaded) {
             SpriteRenderManager.log.debug(
                 // eslint-disable-next-line no-restricted-syntax -- _spriteRegistry may be null during race switch; 0 is correct for debug log
-                `Switched to ${Race[race]}: ${this._spriteRegistry?.getBuildingCount() ?? 0} building sprites loaded`
+                `Switched to ${race}: ${this._spriteRegistry?.getBuildingCount() ?? 0} building sprites loaded`
             );
         } else {
-            SpriteRenderManager.log.debug(`Failed to load sprites for ${Race[race]}, using color fallback`);
+            SpriteRenderManager.log.debug(`Failed to load sprites for ${race}, using color fallback`);
         }
 
         return loaded;
@@ -237,12 +238,12 @@ export class SpriteRenderManager {
      */
     public asAnimationProvider(): AnimationDataProvider {
         return {
-            getAnimationData: (entityType: EntityType, subType: number | string, race?: number) => {
+            getAnimationData: (entityType: EntityType, subType: number | string, race?: Race) => {
                 const entry = this.registry.getAnimatedEntity(entityType, subType, race);
                 // eslint-disable-next-line no-restricted-syntax -- optional chaining; null when source is absent
                 return entry?.animationData ?? null;
             },
-            hasAnimation: (entityType: EntityType, subType: number | string, race?: number) =>
+            hasAnimation: (entityType: EntityType, subType: number | string, race?: Race) =>
                 this.registry.hasAnimation(entityType, subType, race),
         };
     }
@@ -430,7 +431,7 @@ export class SpriteRenderManager {
             if (await loadUnitSpritesForRace(r, ctx)) {
                 unitsLoaded = true;
             }
-            unitRaceTimings[Race[r]] = Math.round(performance.now() - raceStart);
+            unitRaceTimings[r] = Math.round(performance.now() - raceStart);
             await yieldToEventLoop();
         }
         const units = t.lap();

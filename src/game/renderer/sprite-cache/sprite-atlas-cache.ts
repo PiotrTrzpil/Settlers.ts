@@ -27,7 +27,7 @@ declare const __BUILD_TIME__: string;
  * Schema version for cache invalidation.
  * Bump this when animation sequence names or sprite data format changes.
  */
-const CACHE_SCHEMA_VERSION = 21; // v21: per-category serialize/deserialize — SpriteMetadataSerializer removed
+const CACHE_SCHEMA_VERSION = 22; // v22: Race enum changed from numeric to string — cache keys invalidated
 
 /** Current build version for cache invalidation */
 const BUILD_VERSION =
@@ -108,9 +108,7 @@ export function getAtlasCache(race: Race): CachedAtlasData | null {
 
     // Version check - invalidate if schema changed
     if (entry.version !== BUILD_VERSION) {
-        log.debug(
-            `Module cache: version mismatch for ${Race[race]} (cached: ${entry.version}, current: ${BUILD_VERSION})`
-        );
+        log.debug(`Module cache: version mismatch for ${race} (cached: ${entry.version}, current: ${BUILD_VERSION})`);
         moduleCache.delete(race);
         return null;
     }
@@ -122,13 +120,13 @@ export function getAtlasCache(race: Race): CachedAtlasData | null {
 export function setAtlasCache(race: Race, data: CachedAtlasData): void {
     moduleCache.set(race, { version: BUILD_VERSION, data });
     const totalMB = data.layerBuffers.reduce((sum, b) => sum + b.byteLength, 0) / 1024 / 1024;
-    log.debug(`Module cache: stored ${Race[race]} (${data.layerCount} layers, ${totalMB.toFixed(1)}MB)`);
+    log.debug(`Module cache: stored ${race} (${data.layerCount} layers, ${totalMB.toFixed(1)}MB)`);
 }
 
 /** Clear cached atlas from module cache */
 export function clearAtlasCache(race: Race): void {
     if (moduleCache.delete(race)) {
-        log.debug(`Module cache: cleared ${Race[race]}`);
+        log.debug(`Module cache: cleared ${race}`);
     }
 }
 
@@ -154,15 +152,15 @@ const MAX_CLEAR_LAYERS = 64;
 const MAX_LAYER_URLS = 64;
 
 function metaUrl(race: Race): string {
-    return `/_settlers_atlas_/${Race[race]}/meta?v=${BUILD_VERSION}`;
+    return `/_settlers_atlas_/${race}/meta?v=${BUILD_VERSION}`;
 }
 
 function layerUrl(race: Race, index: number): string {
-    return `/_settlers_atlas_/${Race[race]}/L${index}?v=${BUILD_VERSION}`;
+    return `/_settlers_atlas_/${race}/L${index}?v=${BUILD_VERSION}`;
 }
 
 function paletteUrl(race: Race): string {
-    return `/_settlers_atlas_/${Race[race]}/pal?v=${BUILD_VERSION}`;
+    return `/_settlers_atlas_/${race}/pal?v=${BUILD_VERSION}`;
 }
 
 const encoder = new TextEncoder();
@@ -235,7 +233,7 @@ export function startStreamingRead(
             const t = msg.timings;
             const metaKB = Math.round(t.metaBytes / 1024);
             console.log(
-                `[${tMeta.toFixed(0)}ms] [cache] meta for ${Race[race]} in ${Math.round(tMeta - t0)}ms ` +
+                `[${tMeta.toFixed(0)}ms] [cache] meta for ${race} in ${Math.round(tMeta - t0)}ms ` +
                     `(worker: open=${t.cacheOpen}ms match=${t.metaMatch}ms metaRead=${t.metaRead}ms ` +
                     `layerKickoff=${t.layerKickoff}ms) meta=${metaKB}KB layers=${t.layerCount}`
             );
@@ -245,7 +243,7 @@ export function startStreamingRead(
             const paletteData = msg.paletteBuffer ? new Uint8Array(msg.paletteBuffer) : null;
             const palKB = Math.round(msg.paletteBytes / 1024);
             console.log(
-                `[${performance.now().toFixed(0)}ms] [cache] palette for ${Race[race]}: ${palKB}KB in ${msg.readMs}ms`
+                `[${performance.now().toFixed(0)}ms] [cache] palette for ${race}: ${palKB}KB in ${msg.readMs}ms`
             );
             gotPalette = true;
             onPalette(paletteData);
@@ -315,7 +313,7 @@ export async function getIndexedDBCache(race: Race): Promise<CachedAtlasData | n
                 // Validate all layers arrived
                 for (let i = 0; i < layerCount; i++) {
                     if (!layerBuffers[i]) {
-                        log.debug(`Cache API: missing layer ${i} for ${Race[race]}`);
+                        log.debug(`Cache API: missing layer ${i} for ${race}`);
                         resolve(null);
                         return;
                     }
@@ -356,7 +354,7 @@ export async function getIndexedDBCache(race: Race): Promise<CachedAtlasData | n
 export async function setIndexedDBCache(race: Race, data: CachedAtlasData): Promise<void> {
     const totalMB = data.layerBuffers.reduce((sum, b) => sum + b.byteLength, 0) / 1024 / 1024;
     console.log(
-        `[${performance.now().toFixed(0)}ms] [cache] save started: ${Race[race]} ` +
+        `[${performance.now().toFixed(0)}ms] [cache] save started: ${race} ` +
             `${data.layerCount} layers, ${totalMB.toFixed(1)}MB, version=${BUILD_VERSION}`
     );
 
@@ -428,7 +426,7 @@ export async function clearIndexedDBCache(race: Race): Promise<void> {
             deletes.push(cache.delete(layerUrl(race, i)));
         }
         await Promise.all(deletes);
-        log.debug(`Cache API: cleared ${Race[race]}`);
+        log.debug(`Cache API: cleared ${race}`);
     } catch (e) {
         log.debug(`Cache API clear failed: ${String(e)}`);
     }
@@ -491,7 +489,7 @@ export function getAtlasCacheStats(): { races: string[]; totalMemoryMB: number }
     let totalBytes = 0;
 
     for (const [race, entry] of moduleCache) {
-        races.push(Race[race]);
+        races.push(race);
         totalBytes += entry.data.layerBuffers.reduce((sum, b) => sum + b.byteLength, 0);
     }
 

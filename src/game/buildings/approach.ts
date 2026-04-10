@@ -29,32 +29,26 @@ import { BuildingType } from './building-type';
  * Falls back to the door position only if all adjacent tiles are blocked.
  */
 export function findBuildingApproachTile(building: Entity, terrain: TerrainData, gameState: GameState): Tile {
-    const door = getBuildingDoorPos(building.x, building.y, building.race, building.subType as BuildingType);
-    return findAdjacentWalkableTile(door.x, door.y, terrain, gameState) ?? door;
+    const door = getBuildingDoorPos(building, building.race, building.subType as BuildingType);
+    return findAdjacentWalkableTile(door, terrain, gameState) ?? door;
 }
 
 /**
- * Find the nearest walkable tile adjacent to (x, y) — never returns (x, y) itself.
+ * Find the nearest walkable tile adjacent to `tile` — never returns `tile` itself.
  * Searches EXTENDED_OFFSETS (6 hex neighbors) in order.
  * Returns null if no adjacent tile is walkable.
  */
-export function findAdjacentWalkableTile(
-    x: number,
-    y: number,
-    terrain: TerrainData,
-    gameState: GameState
-): Tile | null {
+export function findAdjacentWalkableTile(tile: Tile, terrain: TerrainData, gameState: GameState): Tile | null {
     for (const [dx, dy] of EXTENDED_OFFSETS) {
-        const nx = x + dx;
-        const ny = y + dy;
-        if (isWalkable(nx, ny, terrain, gameState)) {
-            return { x: nx, y: ny };
+        const neighbor = { x: tile.x + dx, y: tile.y + dy };
+        if (isWalkable(neighbor, terrain, gameState)) {
+            return neighbor;
         }
     }
 
     return null;
 }
 
-function isWalkable(x: number, y: number, terrain: TerrainData, gameState: GameState): boolean {
-    return terrain.isInBounds(x, y) && terrain.isPassable(x, y) && !gameState.buildingOccupancy.has(tileKey(x, y));
+function isWalkable(tile: Tile, terrain: TerrainData, gameState: GameState): boolean {
+    return terrain.isInBounds(tile) && terrain.isPassable(tile) && !gameState.buildingOccupancy.has(tileKey(tile));
 }

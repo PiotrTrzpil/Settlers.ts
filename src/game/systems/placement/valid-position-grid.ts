@@ -83,7 +83,7 @@ export class ValidPositionGrid {
         // Compute block area size once — same for every position of this building type.
         // Reference size = 4 (a 2×2 building). Exponent 0.3 gives gentle scaling:
         //   4 tiles → 1.0×,  20 tiles → 1.6×,  100 tiles → 2.6×
-        const refBlockArea = getBuildingBlockArea(0, 0, request.buildingType, request.race);
+        const refBlockArea = getBuildingBlockArea({ x: 0, y: 0 }, request.buildingType, request.race);
         this.sizeWeight = refBlockArea.length > 0 ? (refBlockArea.length / 4) ** 0.3 : 1;
 
         this.ctx = {
@@ -113,7 +113,7 @@ export class ValidPositionGrid {
         while (processed < maxTiles) {
             if (this.ring === 0 && this.ringPos === 0) {
                 // Ring 0: evaluate center tile only
-                this.evaluateTile(this.request.centerX, this.request.centerY);
+                this.evaluateTile({ x: this.request.centerX, y: this.request.centerY });
                 processed++;
                 this.ring = 1;
                 this.ringPos = 0;
@@ -127,8 +127,7 @@ export class ValidPositionGrid {
             }
 
             // Evaluate tiles along the current ring
-            const { x, y } = this.getRingTile(this.ring, this.ringPos);
-            this.evaluateTile(x, y);
+            this.evaluateTile(this.getRingTile(this.ring, this.ringPos));
             processed++;
             this.ringPos++;
 
@@ -149,13 +148,13 @@ export class ValidPositionGrid {
     }
 
     /** O(1) check if position is valid. */
-    isValid(x: number, y: number): boolean {
-        return this.validSet.has(this.mapSizeRef.toIndex(x, y));
+    isValid(tile: Tile): boolean {
+        return this.validSet.has(this.mapSizeRef.toIndex(tile));
     }
 
     /** Get entry with height range for rendering. Returns null if not valid. */
-    getEntry(x: number, y: number): ValidPositionEntry | null {
-        const idx = this.mapSizeRef.toIndex(x, y);
+    getEntry(tile: Tile): ValidPositionEntry | null {
+        const idx = this.mapSizeRef.toIndex(tile);
         const posIdx = this.positionIndexByTile.get(idx);
         if (posIdx === undefined) {
             return null;
@@ -173,12 +172,12 @@ export class ValidPositionGrid {
      * Placing a building never creates new valid spots nearby, so only removals are needed.
      */
     patchAfterPlacement(placedX: number, placedY: number, placedType: BuildingType, race: Race): void {
-        const footprint = getBuildingFootprint(placedX, placedY, placedType, race);
+        const footprint = getBuildingFootprint({ x: placedX, y: placedY }, placedType, race);
 
         // Collect all tiles that could be affected: footprint tiles + their neighbors
         const affectedKeys = new Set<number>();
         for (const tile of footprint) {
-            addTileAndNeighborsToSet(tile.x, tile.y, this.mapSizeRef, affectedKeys);
+            addTileAndNeighborsToSet(tile, this.mapSizeRef, affectedKeys);
         }
 
         // Expand by checking positions within a wider radius (~5 tiles for large footprints).
@@ -219,25 +218,25 @@ export class ValidPositionGrid {
     // ---- Private helpers ----
 
     /** Evaluate a single tile and add to valid set if placement succeeds. */
-    private evaluateTile(x: number, y: number): void {
-        if (!isInMapBounds(x, y, this.mapWidth, this.mapHeight)) {
+    private evaluateTile(tile: Tile): void {
+        if (!isInMapBounds(tile, this.mapWidth, this.mapHeight)) {
             return;
         }
 
-        const result = validateBuildingPlacement(x, y, this.request.buildingType, this.ctx);
+        const result = validateBuildingPlacement(tile.x, tile.y, this.request.buildingType, this.ctx);
         if (!result.canPlace) {
             return;
         }
 
         // Use block area (inner building body) for height range — consistent with slope check.
         // Weight by building size so larger buildings show more orange/red at the same raw slope.
-        const blockArea = getBuildingBlockArea(x, y, this.request.buildingType, this.request.race);
+        const blockArea = getBuildingBlockArea(tile, this.request.buildingType, this.request.race);
         const heightRange = computeHeightRange(blockArea, this.groundHeightRef, this.mapSizeRef) * this.sizeWeight;
 
-        const idx = this.mapSizeRef.toIndex(x, y);
+        const idx = this.mapSizeRef.toIndex(tile);
         this.validSet.add(idx);
         this.positionIndexByTile.set(idx, this.positions.length);
-        this.positions.push({ x, y, heightRange });
+        this.positions.push({ x: tile.x, y: tile.y, heightRange });
     }
 
     /**
@@ -257,7 +256,7 @@ export class ValidPositionGrid {
             // Swap with last element
             const lastEntry = this.positions[lastIdx]!;
             this.positions[posIdx] = lastEntry;
-            const lastTileIdx = this.mapSizeRef.toIndex(lastEntry.x, lastEntry.y);
+            const lastTileIdx = this.mapSizeRef.toIndex(lastEntry);
             this.positionIndexByTile.set(lastTileIdx, posIdx);
         }
         this.positions.pop();
@@ -281,8 +280,8 @@ export class ValidPositionGrid {
                 for (let dx = -5; dx <= 5; dx++) {
                     const nx = tx + dx;
                     const ny = ty + dy;
-                    if (isInMapBounds(nx, ny, this.mapWidth, this.mapHeight)) {
-                        expandedZone.add(this.mapSizeRef.toIndex(nx, ny));
+                    if (isInMapBounds({ x: nx, y: ny }, this.mapWidth, this.mapHeight)) {
+                        expandedZone.add(this.mapSizeRef.toIndex({ x: nx, y: ny }));
                     }
                 }
             }
@@ -348,13 +347,13 @@ function computeRingPerimeter(r: number): number {
 }
 
 /** Add a tile and all its hex neighbors to a set (by tile index). */
-function addTileAndNeighborsToSet(x: number, y: number, mapSize: MapSize, set: Set<number>): void {
-    if (isInMapBounds(x, y, mapSize.width, mapSize.height)) {
-        set.add(mapSize.toIndex(x, y));
+function addTileAndNeighborsToSet(tile: Tile, mapSize: MapSize, set: Set<number>): void {
+    if (isInMapBounds(tile, mapSize.width, mapSize.height)) {
+        set.add(mapSize.toIndex(tile));
     }
-    for (const n of getAllNeighbors({ x, y })) {
-        if (isInMapBounds(n.x, n.y, mapSize.width, mapSize.height)) {
-            set.add(mapSize.toIndex(n.x, n.y));
+    for (const n of getAllNeighbors(tile)) {
+        if (isInMapBounds(n, mapSize.width, mapSize.height)) {
+            set.add(mapSize.toIndex(n));
         }
     }
 }

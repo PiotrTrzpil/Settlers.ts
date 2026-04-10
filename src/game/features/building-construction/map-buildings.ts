@@ -140,14 +140,14 @@ export function populateMapBuildings(
         }
 
         // Skip if tile is already occupied
-        if (state.getEntityAt(buildingData.x, buildingData.y)) {
+        if (state.getEntityAt(buildingData)) {
             log.debug(`Skipping building at occupied tile (${buildingData.x}, ${buildingData.y})`);
             skipped++;
             continue;
         }
 
         // Create the building entity — race is derived from playerRaces[player] in GameState
-        const entity = state.addBuilding(buildingType, buildingData.x, buildingData.y, buildingData.player);
+        const entity = state.addBuilding(buildingType, buildingData, buildingData.player);
 
         // Apply instant terrain modification — mines skip this (mountain stays as rock).
         if (!isMineBuilding(buildingType)) {

@@ -8,11 +8,19 @@ import { computed, type ComputedRef, type Ref } from 'vue';
 import type { Game } from '@/game/game';
 import { EntityType, BuildingType } from '@/game/entity';
 import { UnitType, getUnitLevel } from '@/game/core/unit-types';
-import { getGarrisonCapacity } from '@/game/features/tower-garrison/internal/garrison-capacity';
+import { getGarrisonCapacity, getGarrisonRole } from '@/game/features/tower-garrison/internal/garrison-capacity';
+
+export interface GarrisonUnitInfo {
+    unitId: number;
+    level: number;
+    unitType: UnitType;
+}
 
 export interface GarrisonSlotInfo {
     max: number;
-    units: Array<{ unitId: number; level: number; unitType: UnitType }>;
+    units: GarrisonUnitInfo[];
+    /** Units currently walking to this building for this role. */
+    enRouteUnits: GarrisonUnitInfo[];
 }
 
 export interface GarrisonInfo {
@@ -72,11 +80,24 @@ export function useGarrison(
             return { unitId, level: getUnitLevel(unitType), unitType };
         });
 
+        const enRouteSwordsmen: GarrisonUnitInfo[] = [];
+        const enRouteBowmen: GarrisonUnitInfo[] = [];
+        for (const unitId of g.services.locationManager.getApproaching(id)) {
+            const unitType = g.state.getEntityOrThrow(unitId, 'useGarrison:enRoute').subType as UnitType;
+            const role = getGarrisonRole(unitType);
+            const info = { unitId, level: getUnitLevel(unitType), unitType };
+            if (role === 'swordsman') {
+                enRouteSwordsmen.push(info);
+            } else if (role === 'bowman') {
+                enRouteBowmen.push(info);
+            }
+        }
+
         const totalGarrisoned = swordsmanUnits.length + bowmanUnits.length;
 
         return {
-            swordsmanSlots: { max: garrison.swordsmanSlots.max, units: swordsmanUnits },
-            bowmanSlots: { max: garrison.bowmanSlots.max, units: bowmanUnits },
+            swordsmanSlots: { max: garrison.swordsmanSlots.max, units: swordsmanUnits, enRouteUnits: enRouteSwordsmen },
+            bowmanSlots: { max: garrison.bowmanSlots.max, units: bowmanUnits, enRouteUnits: enRouteBowmen },
             canEject: (_unitId: number) => totalGarrisoned !== 1,
         };
     });

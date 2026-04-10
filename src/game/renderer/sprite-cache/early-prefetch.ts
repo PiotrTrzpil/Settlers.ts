@@ -12,13 +12,13 @@
 
 import CacheReadWorker from './cache-read-worker?worker';
 import type { WorkerOutboundMessage, CacheStreamRequest, CacheSetPriorityRequest } from './cache-read-worker';
-import { Race, RACE_NAMES, loadSavedRace } from '@/game/core/race';
+import { type Race, loadSavedRace, formatRace } from '@/game/core/race';
 
 // ── Constants (must match sprite-atlas-cache.ts) ──
 
 declare const __BUILD_TIME__: string;
 
-const CACHE_SCHEMA_VERSION = 21;
+const CACHE_SCHEMA_VERSION = 22;
 const BUILD_VERSION =
     typeof __BUILD_TIME__ !== 'undefined'
         ? `${__BUILD_TIME__}-v${CACHE_SCHEMA_VERSION}`
@@ -28,13 +28,13 @@ const CACHE_NAME = 'settlers-atlas-v7';
 const MAX_LAYER_URLS = 64;
 
 function metaUrl(race: Race): string {
-    return `/_settlers_atlas_/${RACE_NAMES[race]}/meta?v=${BUILD_VERSION}`;
+    return `/_settlers_atlas_/${race}/meta?v=${BUILD_VERSION}`;
 }
 function layerUrl(race: Race, i: number): string {
-    return `/_settlers_atlas_/${RACE_NAMES[race]}/L${i}?v=${BUILD_VERSION}`;
+    return `/_settlers_atlas_/${race}/L${i}?v=${BUILD_VERSION}`;
 }
 function paletteUrl(race: Race): string {
-    return `/_settlers_atlas_/${RACE_NAMES[race]}/pal?v=${BUILD_VERSION}`;
+    return `/_settlers_atlas_/${race}/pal?v=${BUILD_VERSION}`;
 }
 
 // ── Check if cache is disabled ──
@@ -83,7 +83,7 @@ export function getEarlyPrefetchRace(): Race | null {
 
 if (!isCacheDisabled()) {
     const race = loadSavedRace();
-    console.log(`[${performance.now().toFixed(0)}ms] [cache] early prefetch started for ${RACE_NAMES[race]}`);
+    console.log(`[${performance.now().toFixed(0)}ms] [cache] early prefetch started for ${formatRace(race)}`);
 
     const worker = new CacheReadWorker();
     const layerUrls: string[] = [];
@@ -125,7 +125,7 @@ if (!isCacheDisabled()) {
         }
         const t = msg.timings;
         console.log(
-            `[${performance.now().toFixed(0)}ms] [cache] meta for ${RACE_NAMES[race]} ` +
+            `[${performance.now().toFixed(0)}ms] [cache] meta for ${formatRace(race)} ` +
                 `(worker: open=${t.cacheOpen}ms match=${t.metaMatch}ms metaRead=${t.metaRead}ms ` +
                 `layerKickoff=${t.layerKickoff}ms) meta=${Math.round(t.metaBytes / 1024)}KB layers=${t.layerCount}`
         );

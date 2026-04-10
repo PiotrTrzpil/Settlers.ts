@@ -13,7 +13,7 @@
 import { describe, it, expect, afterEach } from 'vitest';
 import { Simulation, createSimulation, cleanupSimulation } from '../../helpers/test-simulation';
 import { installRealGameData } from '../../helpers/test-game-data';
-import { UnitType, tileKey } from '@/game/entity';
+import { UnitType, tileKey, type Tile } from '@/game/entity';
 import { BuildingType } from '@/game/buildings';
 import { CombatStatus } from '@/game/features/combat/combat-state';
 import { getBuildingDoorPos } from '@/game/data/game-data-access';
@@ -22,8 +22,8 @@ installRealGameData();
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
-function moveUnit(sim: Simulation, entityId: number, targetX: number, targetY: number) {
-    return sim.execute({ type: 'move_unit', entityId, targetX, targetY });
+function moveUnit(sim: Simulation, entityId: number, target: Tile) {
+    return sim.execute({ type: 'move_unit', entityId, targetX: target.x, targetY: target.y });
 }
 
 function selectUnit(sim: Simulation, entityId: number) {
@@ -75,7 +75,7 @@ describe('Combat – right-click enemy tower', { timeout: 30_000 }, () => {
         waitForGarrisoned(sim, towerId, 1, 'defender garrisoned');
 
         // Select a player-1 swordsman and try to garrison into player-0's tower
-        const atkId = sim.spawnUnit(tower.x + 10, tower.y, UnitType.Swordsman1, 1);
+        const atkId = sim.spawnUnit({ x: tower.x + 10, y: tower.y }, UnitType.Swordsman1, 1);
         selectUnit(sim, atkId);
 
         // Find a tile the tower occupies via ground occupancy scan
@@ -83,7 +83,7 @@ describe('Combat – right-click enemy tower', { timeout: 30_000 }, () => {
         let tileY = tower.y;
         for (let dx = -3; dx <= 3; dx++) {
             for (let dy = -3; dy <= 3; dy++) {
-                const e = sim.state.getGroundEntityAt(tower.x + dx, tower.y + dy);
+                const e = sim.state.getGroundEntityAt({ x: tower.x + dx, y: tower.y + dy });
                 if (e?.id === towerId) {
                     tileX = tower.x + dx;
                     tileY = tower.y + dy;
@@ -108,7 +108,7 @@ describe('Combat – right-click enemy tower', { timeout: 30_000 }, () => {
         const towerId = sim.placeBuilding(BuildingType.GuardTowerSmall, 0);
         const tower = sim.state.getEntityOrThrow(towerId, 'tower');
 
-        const unitId = sim.spawnUnit(tower.x + 3, tower.y, UnitType.Swordsman1, 0);
+        const unitId = sim.spawnUnit({ x: tower.x + 3, y: tower.y }, UnitType.Swordsman1, 0);
         selectUnit(sim, unitId);
 
         const result = garrisonSelected(sim, tower.x, tower.y);
@@ -145,7 +145,7 @@ describe('Combat – hidden unit handling', { timeout: 30_000 }, () => {
 
         // Place an enemy BOWMAN far enough that siege won't trigger (bowmen can't siege)
         // but close enough that combat detection would pick up the hidden unit if not filtered
-        const atkId = sim.spawnUnit(tower.x + 5, tower.y, UnitType.Bowman1, 1);
+        const atkId = sim.spawnUnit({ x: tower.x + 5, y: tower.y }, UnitType.Bowman1, 1);
         sim.runTicks(200); // let the combat system scan
 
         // The bowman should NOT be pursuing the hidden defender
@@ -173,7 +173,7 @@ describe('Combat – field enemies block siege', { timeout: 60_000 }, () => {
 
         const towerId = sim.placeBuilding(BuildingType.GuardTowerSmall, 0);
         const tower = sim.state.getEntityOrThrow(towerId, 'tower');
-        const door = getBuildingDoorPos(tower.x, tower.y, tower.race, tower.subType as BuildingType);
+        const door = getBuildingDoorPos(tower, tower.race, tower.subType as BuildingType);
 
         // Garrison a defender
         const defId = sim.spawnUnitNear(towerId, UnitType.Swordsman1, 1, 0)[0]!;
@@ -181,11 +181,11 @@ describe('Combat – field enemies block siege', { timeout: 60_000 }, () => {
         waitForGarrisoned(sim, towerId, 1, 'defender garrisoned');
 
         // Place a field enemy near the door (not garrisoned)
-        const fieldEnemy = sim.spawnUnit(door.x + 1, door.y, UnitType.Swordsman1, 0);
+        const fieldEnemy = sim.spawnUnit({ x: door.x + 1, y: door.y }, UnitType.Swordsman1, 0);
 
         // Send an attacker
-        const atkId = sim.spawnUnit(tower.x + 5, tower.y, UnitType.Swordsman3, 1);
-        moveUnit(sim, atkId, tower.x, tower.y);
+        const atkId = sim.spawnUnit({ x: tower.x + 5, y: tower.y }, UnitType.Swordsman3, 1);
+        moveUnit(sim, atkId, tower);
         sim.runTicks(500);
 
         // Siege should NOT have started while the field enemy is alive
@@ -220,8 +220,8 @@ describe('Combat – attacker freedom during siege', { timeout: 60_000 }, () => 
         garrisonUnits(sim, towerId, defenders);
         waitForGarrisoned(sim, towerId, 3, 'defenders garrisoned');
 
-        const atkId = sim.spawnUnit(tower.x + 5, tower.y, UnitType.Swordsman1, 1);
-        moveUnit(sim, atkId, tower.x, tower.y);
+        const atkId = sim.spawnUnit({ x: tower.x + 5, y: tower.y }, UnitType.Swordsman1, 1);
+        moveUnit(sim, atkId, tower);
 
         sim.runUntil(() => sim.services.siegeSystem.getSiege(towerId) !== undefined, {
             maxTicks: 10_000,
@@ -230,7 +230,7 @@ describe('Combat – attacker freedom during siege', { timeout: 60_000 }, () => 
 
         // Attacker is NOT reserved — player can move it
         expect(sim.services.unitReservation.isReserved(atkId)).toBe(false);
-        const moveResult = moveUnit(sim, atkId, tower.x + 30, tower.y);
+        const moveResult = moveUnit(sim, atkId, { x: tower.x + 30, y: tower.y });
         expect(moveResult.success).toBe(true);
 
         expect(sim.errors).toHaveLength(0);
@@ -254,8 +254,8 @@ describe('Combat – combatControllable setting', { timeout: 30_000 }, () => {
         sim.settings.state.combatControllable = false;
 
         // Spawn two enemies near each other so combat starts
-        const unit0 = sim.spawnUnit(50, 50, UnitType.Swordsman1, 0);
-        sim.spawnUnit(51, 50, UnitType.Swordsman1, 1);
+        const unit0 = sim.spawnUnit({ x: 50, y: 50 }, UnitType.Swordsman1, 0);
+        sim.spawnUnit({ x: 51, y: 50 }, UnitType.Swordsman1, 1);
 
         // Wait for combat to start
         sim.runUntil(() => sim.services.combatSystem.isInCombat(unit0), {
@@ -263,7 +263,7 @@ describe('Combat – combatControllable setting', { timeout: 30_000 }, () => {
             label: 'unit0 in combat',
         });
 
-        const result = moveUnit(sim, unit0, 70, 50);
+        const result = moveUnit(sim, unit0, { x: 70, y: 50 });
         expect(result.success).toBe(false);
         expect(sim.errors).toHaveLength(0);
     });
@@ -274,15 +274,15 @@ describe('Combat – combatControllable setting', { timeout: 30_000 }, () => {
         sim.establishTerritory(1);
         // combatControllable is true by default
 
-        const unit0 = sim.spawnUnit(50, 50, UnitType.Swordsman1, 0);
-        sim.spawnUnit(51, 50, UnitType.Swordsman1, 1);
+        const unit0 = sim.spawnUnit({ x: 50, y: 50 }, UnitType.Swordsman1, 0);
+        sim.spawnUnit({ x: 51, y: 50 }, UnitType.Swordsman1, 1);
 
         sim.runUntil(() => sim.services.combatSystem.isInCombat(unit0), {
             maxTicks: 500,
             label: 'unit0 in combat',
         });
 
-        const result = moveUnit(sim, unit0, 70, 50);
+        const result = moveUnit(sim, unit0, { x: 70, y: 50 });
         expect(result.success).toBe(true);
         expect(sim.errors).toHaveLength(0);
     });
@@ -304,11 +304,11 @@ describe('Combat – passive march', { timeout: 60_000 }, () => {
         sim.establishTerritory(1);
 
         // Place enemy swordsman in the path between start and destination
-        const unit0 = sim.spawnUnit(50, 50, UnitType.Swordsman1, 0);
-        sim.spawnUnit(55, 50, UnitType.Swordsman1, 1); // enemy in the way
+        const unit0 = sim.spawnUnit({ x: 50, y: 50 }, UnitType.Swordsman1, 0);
+        sim.spawnUnit({ x: 55, y: 50 }, UnitType.Swordsman1, 1); // enemy in the way
 
         // Move to empty ground far from enemies
-        moveUnit(sim, unit0, 70, 50);
+        moveUnit(sim, unit0, { x: 70, y: 50 });
         sim.runTicks(100);
 
         // The unit should be passive (not engaging the enemy it walks past)
@@ -322,11 +322,11 @@ describe('Combat – passive march', { timeout: 60_000 }, () => {
         sim.establishTerritory(0);
         sim.establishTerritory(1);
 
-        const unit0 = sim.spawnUnit(50, 50, UnitType.Swordsman1, 0);
-        sim.spawnUnit(55, 50, UnitType.Swordsman1, 1);
+        const unit0 = sim.spawnUnit({ x: 50, y: 50 }, UnitType.Swordsman1, 0);
+        sim.spawnUnit({ x: 55, y: 50 }, UnitType.Swordsman1, 1);
 
         // Move directly to the enemy's tile — should engage
-        moveUnit(sim, unit0, 55, 50);
+        moveUnit(sim, unit0, { x: 55, y: 50 });
 
         sim.runUntil(() => sim.services.combatSystem.isInCombat(unit0), {
             maxTicks: 2000,
@@ -354,7 +354,7 @@ describe('Combat – winner auto-siege', { timeout: 60_000 }, () => {
 
         const towerId = sim.placeBuilding(BuildingType.GuardTowerSmall, 0);
         const tower = sim.state.getEntityOrThrow(towerId, 'tower');
-        const door = getBuildingDoorPos(tower.x, tower.y, tower.race, tower.subType as BuildingType);
+        const door = getBuildingDoorPos(tower, tower.race, tower.subType as BuildingType);
 
         // Garrison a defender inside
         const defId = sim.spawnUnitNear(towerId, UnitType.Swordsman1, 1, 0)[0]!;
@@ -362,8 +362,8 @@ describe('Combat – winner auto-siege', { timeout: 60_000 }, () => {
         waitForGarrisoned(sim, towerId, 1, 'defender garrisoned');
 
         // Place a field enemy near the door and a strong attacker next to it
-        const fieldEnemy = sim.spawnUnit(door.x + 1, door.y, UnitType.Swordsman1, 0);
-        const attacker = sim.spawnUnit(door.x + 2, door.y, UnitType.Swordsman3, 1);
+        const fieldEnemy = sim.spawnUnit({ x: door.x + 1, y: door.y }, UnitType.Swordsman1, 0);
+        const attacker = sim.spawnUnit({ x: door.x + 2, y: door.y }, UnitType.Swordsman3, 1);
 
         // Wait for the attacker to kill the field enemy
         sim.runUntil(() => sim.state.getEntity(fieldEnemy) === undefined, {
@@ -410,18 +410,18 @@ describe('Combat – attackers stay outside building footprint', { timeout: 60_0
 
         // Send strong attackers to the tower
         const atkIds = [
-            sim.spawnUnit(tower.x + 8, tower.y, UnitType.Swordsman3, 1),
-            sim.spawnUnit(tower.x + 9, tower.y, UnitType.Swordsman3, 1),
+            sim.spawnUnit({ x: tower.x + 8, y: tower.y }, UnitType.Swordsman3, 1),
+            sim.spawnUnit({ x: tower.x + 9, y: tower.y }, UnitType.Swordsman3, 1),
         ];
         for (const id of atkIds) {
-            moveUnit(sim, id, tower.x, tower.y);
+            moveUnit(sim, id, tower);
         }
 
         // Collect building footprint tiles for this tower
         const buildingTiles = new Set<string>();
         for (const key of sim.state.buildingOccupancy) {
             const [kx, ky] = key.split(',').map(Number);
-            const entity = sim.state.getGroundEntityAt(kx!, ky!);
+            const entity = sim.state.getGroundEntityAt({ x: kx!, y: ky! });
             if (entity?.id === towerId) {
                 buildingTiles.add(key);
             }
@@ -435,7 +435,7 @@ describe('Combat – attackers stay outside building footprint', { timeout: 60_0
                 for (const atkId of atkIds) {
                     const unit = sim.state.getEntity(atkId);
                     if (!unit || unit.hidden) continue;
-                    const key = tileKey(unit.x, unit.y);
+                    const key = tileKey(unit);
                     if (buildingTiles.has(key)) {
                         violations.push({ unitId: atkId, x: unit.x, y: unit.y });
                     }

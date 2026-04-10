@@ -24,6 +24,8 @@ import { BuildingConstructionPhase, type CapturedTerrainTile, type ConstructionS
 import { PersistentMap } from '@/game/persistence/persistent-store';
 import type { Tile } from '../../core/coordinates';
 import { assignConstructionPilePositions } from '../../systems/inventory/construction-pile-positions';
+
+export type IndexedTile = Tile & { tileIndex: number };
 import type { BuildingInventoryManager } from '../../systems/inventory/building-inventory';
 import { SlotKind } from '../../core/pile-kind';
 import {
@@ -284,7 +286,7 @@ export class ConstructionSiteManager {
      * Among tiles with similar deviation (within 2 units), a random one
      * is picked so multiple diggers don't all cluster on the same spot.
      */
-    reserveUnleveledTile(buildingId: number): { tileIndex: number; x: number; y: number } | null {
+    reserveUnleveledTile(buildingId: number): IndexedTile | null {
         const site = this.getSiteOrThrow(buildingId, 'reserveUnleveledTile');
         if (!site.terrain.unleveledTiles || site.terrain.unleveledTiles.size === 0) {
             return null;
@@ -408,7 +410,7 @@ export class ConstructionSiteManager {
      */
     getRandomBuilderWorkPos(buildingId: number): Tile {
         const site = this.getSiteOrThrow(buildingId, 'getRandomBuilderWorkPos');
-        const footprint = getBuildingFootprint(site.tileX, site.tileY, site.buildingType, site.race);
+        const footprint = getBuildingFootprint({ x: site.tileX, y: site.tileY }, site.buildingType, site.race);
 
         // Find the maximum Y (lower border)
         let maxY = -Infinity;

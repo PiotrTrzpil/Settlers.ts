@@ -23,34 +23,28 @@ export interface PathSmoothingParams {
  * Check if we can walk in a straight line from start to end.
  * Uses hex grid line drawing to check all tiles along the path.
  */
-function hasLineOfSight(
-    startX: number,
-    startY: number,
-    endX: number,
-    endY: number,
-    params: PathSmoothingParams
-): boolean {
-    const tiles = getHexLine(startX, startY, endX, endY);
+function hasLineOfSight(start: Tile, end: Tile, params: PathSmoothingParams): boolean {
+    const tiles = getHexLine(start, end);
     const { groundType, mapWidth, mapHeight, buildingOccupancy } = params;
 
     // Check each intermediate tile (skip start, include end)
     for (let i = 1; i < tiles.length; i++) {
-        const { x, y } = tiles[i]!;
+        const tile = tiles[i]!;
 
         // Bounds check
-        if (!isInMapBounds(x, y, mapWidth, mapHeight)) {
+        if (!isInMapBounds(tile, mapWidth, mapHeight)) {
             return false;
         }
 
         // Terrain check
-        const idx = x + y * mapWidth;
+        const idx = tile.x + tile.y * mapWidth;
         if (!isPassable(groundType[idx]!)) {
             return false;
         }
 
         // Building footprints block line-of-sight (end tile allowed for building interaction)
-        const isEnd = x === endX && y === endY;
-        if (!isEnd && buildingOccupancy.has(tileKey(x, y))) {
+        const isEnd = tile.x === end.x && tile.y === end.y;
+        if (!isEnd && buildingOccupancy.has(tileKey(tile))) {
             return false;
         }
     }
@@ -62,16 +56,10 @@ function hasLineOfSight(
  * Find the furthest waypoint visible from the current position.
  * Uses binary-search-like optimization for long paths.
  */
-function findFurthestVisible(
-    currentX: number,
-    currentY: number,
-    path: Tile[],
-    startIdx: number,
-    params: PathSmoothingParams
-): number {
+function findFurthestVisible(current: Tile, path: Tile[], startIdx: number, params: PathSmoothingParams): number {
     // Try from the end backwards to find the furthest visible point
     for (let j = path.length - 1; j > startIdx; j--) {
-        if (hasLineOfSight(currentX, currentY, path[j]!.x, path[j]!.y, params)) {
+        if (hasLineOfSight(current, path[j]!, params)) {
             return j;
         }
     }
@@ -90,41 +78,37 @@ function findFurthestVisible(
  * @param params Smoothing parameters (terrain, occupancy, etc.)
  * @returns Smoothed path as tile-by-tile waypoints
  */
-export function smoothPath(path: Tile[], startX: number, startY: number, params: PathSmoothingParams): Tile[] {
+export function smoothPath(path: Tile[], start: Tile, params: PathSmoothingParams): Tile[] {
     if (path.length <= 1) {
         return path;
     }
 
     // First pass: find key waypoints using line-of-sight
     const keyWaypoints: Tile[] = [];
-    let currentX = startX;
-    let currentY = startY;
+    let current: Tile = start;
     let i = 0;
 
     while (i < path.length) {
-        const furthest = findFurthestVisible(currentX, currentY, path, i, params);
+        const furthest = findFurthestVisible(current, path, i, params);
 
         keyWaypoints.push(path[furthest]!);
-        currentX = path[furthest]!.x;
-        currentY = path[furthest]!.y;
+        current = path[furthest]!;
         i = furthest + 1;
     }
 
     // Second pass: expand key waypoints into tile-by-tile path
     const smoothed: Tile[] = [];
-    currentX = startX;
-    currentY = startY;
+    current = start;
 
     for (const waypoint of keyWaypoints) {
-        const lineTiles = getHexLine(currentX, currentY, waypoint.x, waypoint.y);
+        const lineTiles = getHexLine(current, waypoint);
 
         // Add all tiles except the first (which is current position)
         for (let k = 1; k < lineTiles.length; k++) {
             smoothed.push(lineTiles[k]!);
         }
 
-        currentX = waypoint.x;
-        currentY = waypoint.y;
+        current = waypoint;
     }
 
     return smoothed;

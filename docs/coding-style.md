@@ -4,6 +4,39 @@ TypeScript and Vue patterns for this project.
 
 ## TypeScript
 
+### Coordinate Types — Use `Tile` and `Coords`, Not Raw Numbers
+
+**Never pass raw `x: number, y: number` for coordinates.** Use the typed interfaces instead:
+
+- **`Tile`** (`{ x: number; y: number }`) — for tile-space grid coordinates (map positions, entity positions, pathfinding, terrain queries). Import from `@/game/core/coordinates` or `../entity`.
+- **`Coords`** (`{ x: number; y: number }`) — for non-tile coordinate spaces (world/screen/pixel positions). Import from `@/game/core/coordinates`.
+- **`TileOffset`** (`{ dx: number; dy: number }`) — for relative tile-space deltas (building door offset, footprint offsets). Import from `@/game/core/coordinates`.
+- **`Offset`** (`{ dx: number; dy: number }`) — for non-tile-space deltas (sub-tile rendering offsets, pixel nudges). Import from `@/game/core/coordinates`.
+
+```typescript
+// BAD — raw x, y for tile coordinates
+function isWalkable(x: number, y: number, terrain: TerrainData): boolean { ... }
+terrain.getHeight(entity.x, entity.y);
+tileKey(x, y);
+
+// GOOD — Tile type
+function isWalkable(tile: Tile, terrain: TerrainData): boolean { ... }
+terrain.getHeight(entity);  // Entity satisfies Tile
+tileKey(entity);
+```
+
+This also applies to callback signatures:
+
+```typescript
+// BAD
+predicate: (x: number, y: number) => boolean
+
+// GOOD
+predicate: (tile: Tile) => boolean
+```
+
+The only exceptions are external API boundaries (Lua scripting bridge) and low-level renderer internals (texture UV coords, pixel operations) where the coordinate space is not tile-based.
+
 ### Error Handling
 
 **Never swallow exceptions.** Every layer has a strategy:

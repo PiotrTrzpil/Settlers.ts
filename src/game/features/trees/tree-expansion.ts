@@ -6,6 +6,7 @@
  */
 
 import { EntityType } from '../../entity';
+import type { Tile } from '@/game/core/coordinates';
 import { MapObjectCategory, MapObjectType } from '@/game/types/map-object-types';
 import { GameState } from '../../game-state';
 import { MapSize } from '@/utilities/map-size';
@@ -16,6 +17,8 @@ import { S4GroundType } from '@/resources/map/s4-types';
 import { OBJECT_TYPE_CATEGORY } from '../../systems/map-objects';
 
 const log = createLogger('TreeExpansion');
+
+type TileWithObjectType = Tile & { type: MapObjectType };
 
 /** Palm tree types (allowed on beach/sand) */
 const PALM_TREES = new Set([MapObjectType.TreeCoconut, MapObjectType.TreeDate]);
@@ -70,8 +73,8 @@ function isTreeAllowedOnTerrain(treeType: MapObjectType, terrain: number): boole
 }
 
 /** Simple hash for deterministic randomness */
-function hash(x: number, y: number, seed: number): number {
-    let h = seed + x * 374761393 + y * 668265263;
+function hash(tile: Tile, seed: number): number {
+    let h = seed + tile.x * 374761393 + tile.y * 668265263;
     h = (h ^ (h >> 13)) * 1274126177;
     return h ^ (h >> 16);
 }
@@ -89,13 +92,13 @@ export interface ExpandTreesOptions {
 }
 
 /** Check if position has nearby trees (for spacing) */
-function hasNearbyTree(x: number, y: number, occupied: Set<number>, mapSize: MapSize): boolean {
+function hasNearbyTree(tile: Tile, occupied: Set<number>, mapSize: MapSize): boolean {
     for (let cy = -1; cy <= 1; cy++) {
         for (let cx = -1; cx <= 1; cx++) {
             if (cx === 0 && cy === 0) {
                 continue;
             }
-            if (occupied.has(mapSize.toIndex(x + cx, y + cy))) {
+            if (occupied.has(mapSize.toIndex({ x: tile.x + cx, y: tile.y + cy }))) {
                 return true;
             }
         }
@@ -131,7 +134,7 @@ function shouldPlaceTree(
     // Smooth fade: 1.0 at center, 0.0 at edge
     const distFactor = smoothstep(1 - dist / radius);
 
-    const randVal = (Math.abs(hash(nx, ny, seed)) % 1000) / 1000;
+    const randVal = (Math.abs(hash({ x: nx, y: ny }, seed)) % 1000) / 1000;
 
     return randVal <= density * distFactor;
 }
@@ -141,16 +144,16 @@ function collectSeedTrees(
     state: GameState,
     mapSize: MapSize
 ): {
-    seeds: Array<{ x: number; y: number; type: MapObjectType }>;
+    seeds: Array<TileWithObjectType>;
     occupied: Set<number>;
 } {
-    const seeds: Array<{ x: number; y: number; type: MapObjectType }> = [];
+    const seeds: Array<TileWithObjectType> = [];
     const occupied = new Set<number>();
 
     for (const entity of state.entities) {
         // Track ALL ground-layer entities as occupied (MapObjects, StackedPiles, Buildings)
         // so tree expansion never tries to place on an occupied tile.
-        occupied.add(mapSize.toIndex(entity.x, entity.y));
+        occupied.add(mapSize.toIndex(entity));
 
         if (entity.type !== EntityType.MapObject) {
             continue;
@@ -180,7 +183,7 @@ function tryPlaceTreeAt(
     seed: number,
     minSpacing: number
 ): boolean {
-    const idx = mapSize.toIndex(nx, ny);
+    const idx = mapSize.toIndex({ x: nx, y: ny });
     if (occupied.has(idx)) {
         return false;
     }
@@ -192,7 +195,7 @@ function tryPlaceTreeAt(
     if (!shouldPlaceTree(dx, dy, nx, ny, radius, density, seed)) {
         return false;
     }
-    if (minSpacing > 0 && hasNearbyTree(nx, ny, occupied, mapSize)) {
+    if (minSpacing > 0 && hasNearbyTree({ x: nx, y: ny }, occupied, mapSize)) {
         return false;
     }
 
@@ -201,7 +204,7 @@ function tryPlaceTreeAt(
         return false;
     }
 
-    state.addEntity(EntityType.MapObject, treeType, nx, ny, 0);
+    state.addEntity(EntityType.MapObject, treeType, { x: nx, y: ny }, 0);
     occupied.add(idx);
     return true;
 }

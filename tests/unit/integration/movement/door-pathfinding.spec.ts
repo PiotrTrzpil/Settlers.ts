@@ -41,7 +41,7 @@ const FUNCTIONAL_BUILDINGS: BuildingType[] = Object.values(BuildingType).filter(
 
 function hasBuildingBlockData(race: Race, buildingType: BuildingType): boolean {
     try {
-        return getBuildingBlockArea(60, 60, buildingType, race).length > 0;
+        return getBuildingBlockArea({ x: 60, y: 60 }, buildingType, race).length > 0;
     } catch {
         return false;
     }
@@ -51,12 +51,12 @@ function hasBuildingBlockData(race: Race, buildingType: BuildingType): boolean {
 function checkDoorAtEdge(race: Race, bt: BuildingType): string | null {
     const bx = 60,
         by = 60;
-    const label = `${bt}/${Race[race]}`;
-    const blockArea = getBuildingBlockArea(bx, by, bt, race);
-    const blockKeys = new Set(blockArea.map(t => tileKey(t.x, t.y)));
-    const passable = getBuildingPassableTiles(bx, by, bt, race, blockArea);
-    const door = getBuildingDoorPos(bx, by, race, bt);
-    const doorKey = tileKey(door.x, door.y);
+    const label = `${bt}/${race}`;
+    const blockArea = getBuildingBlockArea({ x: bx, y: by }, bt, race);
+    const blockKeys = new Set(blockArea.map(t => tileKey(t)));
+    const passable = getBuildingPassableTiles({ x: bx, y: by }, bt, race, blockArea);
+    const door = getBuildingDoorPos({ x: bx, y: by }, race, bt);
+    const doorKey = tileKey(door);
 
     // Door must be passable (either outside block area, or marked passable)
     if (blockKeys.has(doorKey) && !passable.has(doorKey)) {
@@ -65,7 +65,7 @@ function checkDoorAtEdge(race: Race, bt: BuildingType): string | null {
 
     // Check all 6 neighbors — at least one must be free (not blocked, or marked passable)
     const hasFreeAdjacent = getAllNeighbors(door).some(n => {
-        const nk = tileKey(n.x, n.y);
+        const nk = tileKey(n);
         return !blockKeys.has(nk) || passable.has(nk);
     });
     if (!hasFreeAdjacent) {
@@ -80,7 +80,7 @@ const VERBOSE = !!process.env['VERBOSE_MOVEMENT'];
 function diagnosePathfindFailure(sim: Simulation, door: Tile, label: string): string {
     const neighbors = getAllNeighbors(door);
     const tileInfo = neighbors.map(t => {
-        const k = tileKey(t.x, t.y);
+        const k = tileKey(t);
         return `(${t.x},${t.y}):block=${sim.state.buildingOccupancy.has(k)}`;
     });
     return `${label}: A* failed to door (${door.x},${door.y})\n  neighbors: ${tileInfo.join(', ')}`;
@@ -89,7 +89,7 @@ function diagnosePathfindFailure(sim: Simulation, door: Tile, label: string): st
 /** Check if any visited tile is in buildingOccupancy. */
 function checkVisitedForBlocked(visited: Tile[], occupancy: Set<string>, label: string): string | null {
     for (const tile of visited) {
-        if (occupancy.has(tileKey(tile.x, tile.y))) {
+        if (occupancy.has(tileKey(tile))) {
             return `${label}: stepped on blocked tile (${tile.x},${tile.y})`;
         }
     }
@@ -98,12 +98,12 @@ function checkVisitedForBlocked(visited: Tile[], occupancy: Set<string>, label: 
 
 /** Check one building's door is reachable via pathfinding in a simulation. */
 function checkDoorPathfinding(sim: Simulation, race: Race, bt: BuildingType): string | null {
-    const label = `${bt}/${Race[race]}`;
+    const label = `${bt}/${race}`;
     const buildingId = sim.placeBuilding(bt, 0, true, race, false);
     const building = sim.state.getEntityOrThrow(buildingId, 'test');
-    const door = getBuildingDoorPos(building.x, building.y, race, bt);
+    const door = getBuildingDoorPos(building, race, bt);
 
-    if (sim.state.buildingOccupancy.has(tileKey(door.x, door.y))) {
+    if (sim.state.buildingOccupancy.has(tileKey(door))) {
         return `${label}: door (${door.x},${door.y}) blocked in buildingOccupancy`;
     }
 
@@ -120,7 +120,7 @@ function checkDoorPathfinding(sim: Simulation, race: Race, bt: BuildingType): st
         });
     }
 
-    const canMove = sim.moveUnit(unitId, door.x, door.y);
+    const canMove = sim.moveUnit(unitId, door);
     if (VERBOSE) setPathDebugHook(undefined);
 
     if (!canMove) {
@@ -183,9 +183,17 @@ describe('Door pathfinding — every building, every race', { timeout: 15000 }, 
         });
 
         for (const race of AVAILABLE_RACES) {
-            it(`${Race[race]}: unit reaches every building door`, () => {
+            it(`${race}: unit reaches every building door`, () => {
                 sim = createSimulation({ mapWidth: 512, mapHeight: 512 });
                 (sim.state.playerRaces as Map<number, Race>).set(0, race);
+
+                // Extend territory coverage — many buildings are placed, auto-placer spirals outward.
+                // Place towers within existing Castle territory (radius ~32 tiles from center)
+                // to create additional territory for buildings placed further out.
+                sim.placeBuildingAt(230, 256, BuildingType.GuardTowerBig);
+                sim.placeBuildingAt(282, 256, BuildingType.GuardTowerBig);
+                sim.placeBuildingAt(256, 230, BuildingType.GuardTowerBig);
+                sim.placeBuildingAt(256, 282, BuildingType.GuardTowerBig);
 
                 const failures: string[] = [];
                 for (const bt of FUNCTIONAL_BUILDINGS) {

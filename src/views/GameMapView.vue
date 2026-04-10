@@ -226,8 +226,13 @@
                 </div>
             </div>
 
-            <!-- Left panel container (selection info) -->
+            <!-- Left panel container (minimap + selection info) -->
             <div class="left-panels">
+                <game-minimap
+                    :game="game"
+                    :get-camera="() => rendererRef?.getCamera?.() ?? null"
+                    :navigate-to-tile="(x: number, y: number) => rendererRef?.setCameraPosition?.(x, y)"
+                />
                 <selection-panel :game="game" :unit-icons="unitIcons" />
             </div>
 
@@ -251,7 +256,7 @@
 import { ref, computed, useTemplateRef, watch, onMounted, onBeforeUnmount, nextTick } from 'vue';
 import type { Game } from '@/game/game';
 import { FileManager, IFileSource } from '@/utilities/file-manager';
-import { Race, RACE_NAMES, AVAILABLE_RACES, loadSavedRace, saveSavedRace } from '@/game/renderer/sprite-metadata';
+import { Race, formatRace, AVAILABLE_RACES, loadSavedRace, saveSavedRace } from '@/game/renderer/sprite-metadata';
 import { SoundManager } from '@/game/audio/sound-manager';
 import { saveCameraState, clearCameraState } from '@/game/renderer/camera-persistence';
 import { getCurrentMapId } from '@/game/state/game-state-persistence';
@@ -268,6 +273,7 @@ import SelectionPanel from '@/components/selection-panel.vue';
 import TabbedPanel from '@/components/TabbedPanel.vue';
 import Checkbox from '@/components/Checkbox.vue';
 import SpecialistsPanel from '@/components/SpecialistsPanel.vue';
+import GameMinimap from '@/components/game-minimap.vue';
 
 import { setupUIState, setupComputedState } from './use-map-view-state';
 import { createModeToggler, createGameActions, setupIconLoading } from './use-map-view-helpers';
@@ -401,7 +407,7 @@ const placeBuildingsWithWorker = computed({
 
 const availableRaces = AVAILABLE_RACES.map(race => ({
     value: race,
-    name: RACE_NAMES[race],
+    name: formatRace(race),
 }));
 
 const availablePlayers = ref(buildPlayerList(game));
@@ -412,7 +418,7 @@ function buildPlayerList(g: Game): { index: number; label: string }[] {
     }
     const players: { index: number; label: string }[] = [];
     for (const [idx, race] of g.playerRaces) {
-        players.push({ index: idx, label: `P${idx} ${RACE_NAMES[race]}` });
+        players.push({ index: idx, label: `P${idx} ${formatRace(race)}` });
     }
     players.sort((a, b) => a.index - b.index);
     return players;

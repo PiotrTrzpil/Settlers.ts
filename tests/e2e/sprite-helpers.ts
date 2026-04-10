@@ -5,6 +5,7 @@
  * GamePage delegates to these; tests can also import them directly.
  */
 import type { Page } from '@playwright/test';
+import type { Race } from '@/game/core/race';
 
 // ── Return types ────────────────────────────────────────────────
 
@@ -99,7 +100,7 @@ export async function testJilLookup(page: Page, fileId: string, jobIndices: numb
  * Switch the sprite renderer to a different race, reloading all sprites.
  * Returns true if sprites loaded successfully for the new race.
  */
-export async function switchSpriteRace(page: Page, race: number): Promise<boolean> {
+export async function switchSpriteRace(page: Page, race: Race): Promise<boolean> {
     return page.evaluate(async r => {
         const sm = window.__settlers__?.entityRenderer?.spriteManager;
         if (!sm) return false;
@@ -115,7 +116,7 @@ export interface MissingSpriteInfo {
     entityTypeName: string;
     subType: number | string;
     subTypeName: string;
-    race: number;
+    race: Race;
 }
 
 /**
@@ -153,7 +154,7 @@ export async function getEntitiesWithoutSprites(page: Page): Promise<MissingSpri
             entityTypeName: string;
             subType: number | string;
             subTypeName: string;
-            race: number;
+            race: Race;
         }> = [];
 
         const spriteCheckers: Record<number, (e: any) => boolean> = {

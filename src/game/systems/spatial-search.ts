@@ -6,7 +6,7 @@
  */
 
 import type { GameState } from '../game-state';
-import type { Entity, Tile } from '../entity';
+import type { Entity, Tile, TileWithEntity } from '../entity';
 import type { SeededRng } from '../core/rng';
 import { distSq } from '../core/distance';
 import { CARDINAL_OFFSETS } from '../core/coordinates';
@@ -19,11 +19,11 @@ import { CARDINAL_OFFSETS } from '../core/coordinates';
  * Generate tiles on the perimeter of a square ring at the given radius.
  * Yields positions in a deterministic order (top-left to bottom-right along edges).
  */
-export function* ringTiles(cx: number, cy: number, radius: number): Generator<Tile> {
+export function* ringTiles(center: Tile, radius: number): Generator<Tile> {
     for (let dy = -radius; dy <= radius; dy++) {
         for (let dx = -radius; dx <= radius; dx++) {
             if (Math.abs(dx) === radius || Math.abs(dy) === radius) {
-                yield { x: cx + dx, y: cy + dy };
+                yield { x: center.x + dx, y: center.y + dy };
             }
         }
     }
@@ -40,12 +40,11 @@ export function* ringTiles(cx: number, cy: number, radius: number): Generator<Ti
  */
 export function findNearestEntity(
     entities: Iterable<Entity>,
-    x: number,
-    y: number,
+    center: Tile,
     radius: number,
     filter: (entity: Entity) => boolean
-): { entityId: number; x: number; y: number } | null {
-    let nearest: { entityId: number; x: number; y: number } | null = null;
+): TileWithEntity | null {
+    let nearest: TileWithEntity | null = null;
     let minDistSq = Infinity;
     const radiusSq = radius * radius;
 
@@ -53,13 +52,51 @@ export function findNearestEntity(
         if (!filter(entity)) {
             continue;
         }
-        const d = distSq(entity.x, x, entity.y, y);
-        if (d < radiusSq && d < minDistSq) {
+        const d = distSq(entity, center);
+        if (d <= radiusSq && d < minDistSq) {
             minDistSq = d;
             nearest = { entityId: entity.id, x: entity.x, y: entity.y };
         }
     }
     return nearest;
+}
+
+// ─────────────────────────────────────────────────────────────
+// Nearest tile search (terrain-predicate)
+// ─────────────────────────────────────────────────────────────
+
+/**
+ * Find the nearest tile matching a predicate within a search radius.
+ * Uses expanding rings with euclidean distance, same as findEmptySpot.
+ */
+export function findNearestTile(center: Tile, radius: number, predicate: (tile: Tile) => boolean): Tile | null {
+    type Candidate = Tile & { distSq: number };
+    const radiusSq = radius * radius;
+    const candidates: Candidate[] = [];
+
+    for (let r = 0; r <= radius; r++) {
+        for (const tile of ringTiles(center, r)) {
+            const d = distSq(tile, center);
+            if (d > radiusSq || !predicate(tile)) {
+                continue;
+            }
+            candidates.push({ x: tile.x, y: tile.y, distSq: d });
+        }
+
+        if (candidates.length > 0) {
+            const nextMinDistSq = (r + 1) * (r + 1);
+            const maxCandidateDistSq = candidates.reduce((max, c) => Math.max(max, c.distSq), 0);
+            if (nextMinDistSq > maxCandidateDistSq) {
+                break;
+            }
+        }
+    }
+
+    if (candidates.length === 0) {
+        return null;
+    }
+    candidates.sort((a, b) => a.distSq - b.distSq);
+    return { x: candidates[0]!.x, y: candidates[0]!.y };
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -75,8 +112,6 @@ export interface FindEmptySpotConfig {
     gameState: GameState;
     /** Search radius in tiles */
     searchRadius: number;
-    /** Minimum starting radius (default: 2) */
-    minRadius?: number;
     /** Minimum squared distance to similar entities. 0 to skip proximity check. */
     minDistanceSq: number;
     /** Filter for entities that count as "too close". Only checked when minDistanceSq > 0. */
@@ -97,18 +132,17 @@ function isValidSpot(tile: Tile, config: FindEmptySpotConfig): boolean {
     if (tile.x < 0 || tile.y < 0) {
         return false;
     }
-    if (config.gameState.getGroundEntityAt(tile.x, tile.y)) {
+    if (config.gameState.getGroundEntityAt(tile)) {
         return false;
     }
-    if (config.requireFreeNeighbors && !hasFreNeighbors(config.gameState, tile.x, tile.y)) {
+    if (config.requireFreeNeighbors && !hasFreNeighbors(config.gameState, tile)) {
         return false;
     }
     if (
         config.minDistanceSq > 0 &&
         isTooClose(
             config.proximityEntities ?? config.gameState.entities,
-            tile.x,
-            tile.y,
+            tile,
             config.minDistanceSq,
             config.proximityFilter
         )
@@ -118,20 +152,20 @@ function isValidSpot(tile: Tile, config: FindEmptySpotConfig): boolean {
     return true;
 }
 
-type SpotCandidate = { x: number; y: number; distSq: number };
+type SpotCandidate = Tile & { distSq: number };
 
 /** Collect valid spots in expanding rings, stopping once no closer spots are possible. */
-function collectCandidates(cx: number, cy: number, config: FindEmptySpotConfig): SpotCandidate[] {
-    // eslint-disable-next-line no-restricted-syntax -- optional config/prop with sensible default
-    const minRadius = config.minRadius ?? 2;
+function collectCandidates(center: Tile, config: FindEmptySpotConfig): SpotCandidate[] {
+    const searchRadiusSq = config.searchRadius * config.searchRadius;
     const candidates: SpotCandidate[] = [];
 
-    for (let radius = minRadius; radius <= config.searchRadius; radius++) {
-        for (const tile of ringTiles(cx, cy, radius)) {
-            if (!isValidSpot(tile, config)) {
+    for (let radius = 0; radius <= config.searchRadius; radius++) {
+        for (const tile of ringTiles(center, radius)) {
+            const d = distSq(tile, center);
+            if (d > searchRadiusSq || !isValidSpot(tile, config)) {
                 continue;
             }
-            candidates.push({ x: tile.x, y: tile.y, distSq: distSq(tile.x, cx, tile.y, cy) });
+            candidates.push({ x: tile.x, y: tile.y, distSq: d });
         }
 
         // Early exit: ring corners (distSq = 2r²) can be farther than next ring's
@@ -172,24 +206,19 @@ function pickClosest(candidates: SpotCandidate[], rng?: SeededRng): SpotCandidat
  * then picks the closest one. When multiple spots share the minimum distance, RNG breaks the tie
  * for natural-looking variation.
  */
-export function findEmptySpot(
-    cx: number,
-    cy: number,
-    config: FindEmptySpotConfig
-): { entityId: null; x: number; y: number } | null {
-    const candidates = collectCandidates(cx, cy, config);
+export function findEmptySpot(center: Tile, config: FindEmptySpotConfig): Tile | null {
+    const candidates = collectCandidates(center, config);
     if (candidates.length === 0) {
         return null;
     }
 
     const pick = pickClosest(candidates, config.rng);
-    return { entityId: null, x: pick.x, y: pick.y };
+    return { x: pick.x, y: pick.y };
 }
 
 function isTooClose(
     entities: Iterable<Entity>,
-    x: number,
-    y: number,
+    tile: Tile,
     minDistanceSq: number,
     filter: (entity: Entity) => boolean
 ): boolean {
@@ -198,16 +227,16 @@ function isTooClose(
             continue;
         }
 
-        if (distSq(entity.x, x, entity.y, y) < minDistanceSq) {
+        if (distSq(entity, tile) < minDistanceSq) {
             return true;
         }
     }
     return false;
 }
 
-function hasFreNeighbors(gameState: GameState, x: number, y: number): boolean {
+function hasFreNeighbors(gameState: GameState, tile: Tile): boolean {
     for (const [dx, dy] of CARDINAL_OFFSETS) {
-        if (gameState.getGroundEntityAt(x + dx, y + dy)) {
+        if (gameState.getGroundEntityAt({ x: tile.x + dx, y: tile.y + dy })) {
             return false;
         }
     }

@@ -82,7 +82,7 @@ export class IdleCarrierPool {
                 continue;
             }
 
-            const d = distSq(entity.x, nearX, entity.y, nearY);
+            const d = distSq(entity, { x: nearX, y: nearY });
 
             if (d < bestDistSq) {
                 bestDistSq = d;

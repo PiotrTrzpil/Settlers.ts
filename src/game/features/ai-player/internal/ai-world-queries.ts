@@ -11,6 +11,8 @@ import type { GameState } from '@/game/game-state';
 import type { GameServices } from '@/game/game-services';
 import { TERRITORY_BUILDINGS } from '@/game/features/territory';
 
+export type TileWithPlayer = Tile & { player: number };
+
 // ── Building queries ─────────────────────────────────────────────────────────
 
 /**
@@ -112,9 +114,9 @@ export function findNearestEnemyBase(
     player: number,
     fromX: number,
     fromY: number
-): { x: number; y: number; player: number } | null {
+): TileWithPlayer | null {
     let bestDist = Infinity;
-    let bestResult: { x: number; y: number; player: number } | null = null;
+    let bestResult: TileWithPlayer | null = null;
 
     const allBuildingIds = state.entityIndex.idsOfType(EntityType.Building);
     const sorted = [...allBuildingIds].sort((a, b) => a - b);

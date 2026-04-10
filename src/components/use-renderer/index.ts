@@ -137,7 +137,7 @@ function buildInputManager(deps: InputManagerDeps): InputManager {
     const { getGame, onTileClick, getRenderer, onPlacementGridChange } = deps;
 
     const placeBuildingMode = new PlaceBuildingMode(
-        (x, y, buildingType) => canPlaceBuilding(getGame, x, y, buildingType),
+        (tile, buildingType) => canPlaceBuilding(getGame, tile.x, tile.y, buildingType),
         () => {
             const game = getGame();
             return {
@@ -189,20 +189,20 @@ function buildInputManager(deps: InputManagerDeps): InputManager {
         },
     });
 
-    const tileHover = (x: number, y: number) => updateTileDebugStats(x, y, getGame, onTileClick);
+    const tileHover = (tile: Tile) => updateTileDebugStats(tile.x, tile.y, getGame, onTileClick);
     manager.registerMode(new SelectMode());
     manager.registerMode(placeBuildingMode);
     manager.registerMode(
-        new PlaceResourceMode((x, y) => {
+        new PlaceResourceMode(tile => {
             const game = getGame();
-            return game ? canPlaceResource(game.terrain, game.state.groundOccupancy, x, y) : false;
+            return game ? canPlaceResource(game.terrain, game.state.groundOccupancy, tile.x, tile.y) : false;
         }, tileHover)
     );
     manager.registerMode(
-        new PlaceUnitMode((x, y) => {
+        new PlaceUnitMode(tile => {
             const game = getGame();
             return game
-                ? canPlaceUnit(game.terrain, game.state.groundOccupancy, game.state.unitOccupancy, x, y)
+                ? canPlaceUnit(game.terrain, game.state.groundOccupancy, game.state.unitOccupancy, tile.x, tile.y)
                 : false;
         }, tileHover)
     );
@@ -234,7 +234,7 @@ function executeGameCommand(
             debugStats.state.hasTile = true;
             debugStats.state.tileX = x;
             debugStats.state.tileY = y;
-            const idx = game.terrain.toIndex(x, y);
+            const idx = game.terrain.toIndex({ x, y });
             debugStats.state.tileGroundType = game.terrain.groundType[idx]!;
             debugStats.state.tileGroundHeight = game.terrain.groundHeight[idx]!;
         }
@@ -544,7 +544,7 @@ export function useRenderer({
 
     const getInputManager = (): InputManager | null => state.inputManager;
 
-    function getCamera(): { x: number; y: number; zoom: number } | null {
+    function getCamera(): { x: number; y: number; zoom: number; aspect: number } | null {
         if (!state.renderer) {
             return null;
         }
@@ -552,7 +552,16 @@ export function useRenderer({
             x: state.renderer.viewPoint.x,
             y: state.renderer.viewPoint.y,
             zoom: state.renderer.viewPoint.zoomValue,
+            aspect: state.renderer.viewPoint.aspectRatio,
         };
+    }
+
+    /** Center camera on a specific tile coordinate. */
+    function setCameraPosition(tileX: number, tileY: number): void {
+        if (!state.renderer) {
+            return;
+        }
+        state.renderer.viewPoint.setPosition(tileX, tileY);
     }
 
     /** Center camera on the current player's start position (Castle), or first land tile, with standard zoom. */
@@ -580,6 +589,7 @@ export function useRenderer({
         getRace,
         getInputManager,
         getCamera,
+        setCameraPosition,
         centerOnPlayerStart,
         getDecoLabels,
         selectionBox,

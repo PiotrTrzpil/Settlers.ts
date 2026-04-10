@@ -5,6 +5,7 @@
  */
 import type { Page } from '@playwright/test';
 import type { BuildingType } from '@/game/buildings/building-type';
+import type { Tile } from '@/game/core/coordinates';
 
 // ── Return types ────────────────────────────────────────────────
 
@@ -66,7 +67,7 @@ export interface PlacementPreview {
 
 export interface BatchPlacementResult {
     placedCount: number;
-    positions: Array<{ x: number; y: number }>;
+    positions: Tile[];
     totalEntities: number;
 }
 
@@ -140,7 +141,7 @@ export async function getEntities(page: Page, filter?: EntityFilter | null): Pro
 }
 
 /** Get the map center coordinates. */
-export async function getMapCenter(page: Page): Promise<{ x: number; y: number }> {
+export async function getMapCenter(page: Page): Promise<Tile> {
     return page.evaluate(() => {
         const game = window.__settlers__!.game!;
         return {
@@ -151,12 +152,12 @@ export async function getMapCenter(page: Page): Promise<{ x: number; y: number }
 }
 
 /** Check if a tile is passable terrain (not water, not blocked). */
-export async function isTerrainPassable(page: Page, x: number, y: number): Promise<TerrainInfo | null> {
+export async function isTerrainPassable(page: Page, tile: Tile): Promise<TerrainInfo | null> {
     return page.evaluate(
         ({ tx, ty }) => {
             const game = window.__settlers__?.game;
             if (!game) return null;
-            const idx = game.terrain.mapSize.toIndex(tx, ty);
+            const idx = game.terrain.mapSize.toIndex({ x: tx, y: ty });
             const gt = game.terrain.groundType[idx]!;
             return {
                 groundType: gt,
@@ -164,7 +165,7 @@ export async function isTerrainPassable(page: Page, x: number, y: number): Promi
                 isWater: gt <= 8,
             };
         },
-        { tx: x, ty: y }
+        { tx: tile.x, ty: tile.y }
     );
 }
 

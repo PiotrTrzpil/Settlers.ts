@@ -19,7 +19,7 @@ const availableResources = ALL_RESOURCES;
 /** Create mode toggle handler. Game is guaranteed non-null. */
 export function createModeToggler(game: Game, getInputManager: () => InputManager | null) {
     return {
-        setPlaceMode(buildingType: BuildingType, race: number): void {
+        setPlaceMode(buildingType: BuildingType, race: Race): void {
             const inputManager = getInputManager();
             if (!inputManager) {
                 return;

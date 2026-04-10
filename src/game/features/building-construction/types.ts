@@ -162,7 +162,7 @@ export interface BuildingSpawnConfig {
 export interface TerrainContext {
     terrain: TerrainData;
     /** Callback to notify that terrain has changed and needs re-upload to GPU */
-    onTerrainModified?: (reason: 'leveling' | 'restore', x: number, y: number) => void;
+    onTerrainModified?: (reason: 'leveling' | 'restore', tile: Tile) => void;
 }
 
 /**

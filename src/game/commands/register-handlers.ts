@@ -11,6 +11,7 @@ import type { PlacementFilter } from '../systems/placement';
 import type { UnitReservationRegistry } from '../systems/unit-reservation';
 import type { RecruitSystem } from '../systems/recruit/recruit-system';
 import type { UnitTransformer } from '../systems/recruit/unit-transformer';
+import type { Tile } from '../entity';
 import { CommandHandlerRegistry } from './handler-registry';
 
 import {
@@ -58,7 +59,7 @@ export interface CommandRegistrationDeps {
     recruitSystem: RecruitSystem;
     unitTransformer: UnitTransformer;
     /** Territory owner lookup for assigning player to free piles */
-    getOwner: (x: number, y: number) => number;
+    getOwner: (tile: Tile) => number;
 }
 
 /**
@@ -114,7 +115,15 @@ export function registerAllHandlers(registry: CommandHandlerRegistry, deps: Comm
     // placementFilter is mutable — re-read via getter on each call
     registry.register('place_building', cmd =>
         executePlaceBuilding(
-            { state, terrain, eventBus, settings, constructionSiteManager, placementFilter: getPlacementFilter() },
+            {
+                state,
+                terrain,
+                eventBus,
+                settings,
+                constructionSiteManager,
+                placementFilter: getPlacementFilter(),
+                getOwner,
+            },
             cmd
         )
     );

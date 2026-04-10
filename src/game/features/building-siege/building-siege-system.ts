@@ -18,6 +18,7 @@ import type { TickSystem } from '../../core/tick-system';
 import type { GameState } from '../../game-state';
 import type { EventBus } from '../../event-bus';
 import { EntityType, UnitType, BuildingType, type Entity, type Tile, tileKey } from '../../entity';
+import { isDarkTribe } from '../../core/race';
 import { hexDistanceTo } from '../../systems/hex-directions';
 import { dispatchUnitToGarrison } from '../tower-garrison/internal/garrison-dispatch';
 import { getBuildingDoorPos } from '../../data/game-data-access';
@@ -27,6 +28,7 @@ import type { TowerGarrisonManager } from '../tower-garrison/tower-garrison-mana
 import type { CombatSystem } from '../combat/combat-system';
 import type { UnitReservationRegistry } from '../../systems/unit-reservation';
 import type { SettlerTaskSystem } from '../settler-tasks';
+import type { TowerAssaultSystem } from './tower-assault-system';
 import {
     type BuildingSiegeSystemConfig,
     type SiegeState,
@@ -58,6 +60,9 @@ export class BuildingSiegeSystem implements TickSystem {
     private readonly settlerTaskSystem: SettlerTaskSystem;
     private readonly doorDefenderNotifier: DoorDefenderNotifier;
 
+    /** Tower assault system for Dark Tribe direct-destruction attacks. Set after construction. */
+    private towerAssaultSystem: TowerAssaultSystem | null = null;
+
     private tickCounter = 0;
 
     constructor(cfg: BuildingSiegeSystemConfig) {
@@ -68,6 +73,11 @@ export class BuildingSiegeSystem implements TickSystem {
         this.unitReservation = cfg.unitReservation;
         this.settlerTaskSystem = cfg.settlerTaskSystem;
         this.doorDefenderNotifier = cfg.doorDefenderNotifier;
+    }
+
+    /** Wire the tower assault system so Dark Tribe units are routed to it instead of sieging. */
+    setTowerAssaultSystem(system: TowerAssaultSystem): void {
+        this.towerAssaultSystem = system;
     }
 
     // ── Public API ──────────────────────────
@@ -93,7 +103,7 @@ export class BuildingSiegeSystem implements TickSystem {
         if (!target) {
             return false;
         }
-        const door = getBuildingDoorPos(target.x, target.y, target.race, target.subType as BuildingType);
+        const door = getBuildingDoorPos(target, target.race, target.subType as BuildingType);
         return hexDistanceTo(unit, door) < enemyDist;
     }
 
@@ -314,7 +324,7 @@ export class BuildingSiegeSystem implements TickSystem {
             if (siege.doorAttackerIds.length >= MAX_DOOR_ATTACKERS) {
                 break;
             }
-            const occupantId = this.gameState.unitOccupancy.get(tileKey(tile.x, tile.y));
+            const occupantId = this.gameState.unitOccupancy.get(tileKey(tile));
             if (occupantId === undefined || siege.doorAttackerIds.includes(occupantId)) {
                 continue;
             }
@@ -348,6 +358,12 @@ export class BuildingSiegeSystem implements TickSystem {
     // ── Siege initiation ──────────────────────────
 
     private tryStartSiege(unit: Entity): void {
+        // Dark Tribe cannot siege — they assault towers directly (destroy instead of capture)
+        if (isDarkTribe(unit.race)) {
+            this.towerAssaultSystem?.tryStartAssault(unit);
+            return;
+        }
+
         const target = findNearbyEnemyGarrison(unit, BUILDING_SEARCH_RADIUS, this.gameState);
         if (!target) {
             return;
@@ -357,7 +373,7 @@ export class BuildingSiegeSystem implements TickSystem {
             return;
         }
 
-        const door = getBuildingDoorPos(target.x, target.y, target.race, target.subType as BuildingType);
+        const door = getBuildingDoorPos(target, target.race, target.subType as BuildingType);
         const doorDist = hexDistanceTo(unit, door);
 
         // If field enemies are nearby, only proceed if the door is strictly closer
@@ -373,7 +389,7 @@ export class BuildingSiegeSystem implements TickSystem {
         if (doorDist === 0 || doorDist > DOOR_ARRIVAL_DISTANCE) {
             if (!this.combatSystem.isInCombat(unit.id)) {
                 const tile = this.garrisonManager.getApproachTile(target);
-                this.settlerTaskSystem.assignMoveTask(unit.id, tile.x, tile.y);
+                this.settlerTaskSystem.assignMoveTask(unit.id, tile);
                 if (hasThreats) {
                     // Mark passive so the combat system won't divert to farther enemies en route
                     this.combatSystem.setPassive(unit.id);

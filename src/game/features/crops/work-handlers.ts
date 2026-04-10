@@ -10,7 +10,6 @@ import { createLogger } from '@/utilities/logger';
 import { WorkHandlerType, type EntityWorkHandler } from '../settler-tasks/types';
 import type { CropSystem } from './crop-system';
 
-const CROP_HARVEST_SEARCH_RADIUS = 20;
 const cropLog = createLogger('CropHandler');
 
 /**
@@ -24,14 +23,14 @@ export function createCropHarvestHandler(
 ): EntityWorkHandler {
     return {
         type: WorkHandlerType.ENTITY,
-        useWorkAreaCenter: true,
 
-        findTarget: (x: number, y: number, _settlerId?: number, player?: number, searchRadius?: number) => {
-            const radius = searchRadius ?? CROP_HARVEST_SEARCH_RADIUS;
+        findTarget: ({ center, radius }, _settlerId, player) => {
+            if (radius === undefined) {
+                throw new Error(`CropHarvestHandler: searchRadius is required (crop=${MapObjectType[cropType]})`);
+            }
             return findNearestEntity(
-                gameState.spatialIndex.nearbyForPlayer(x, y, radius, player!),
-                x,
-                y,
+                gameState.spatialIndex.nearbyForPlayer(center, radius, player),
+                center,
                 radius,
                 entity => entity.subType === cropType && cropSystem.canHarvest(entity.id)
             );

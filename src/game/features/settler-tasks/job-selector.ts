@@ -6,7 +6,7 @@
  * making selectability criteria easy to read and test in isolation.
  */
 
-import type { Entity, Tile } from '../../entity';
+import type { Entity, Tile, TileWithEntity } from '../../entity';
 import type { BuildingType } from '../../buildings/building-type';
 import { raceToRaceId } from '../../data/game-data-access';
 import { ChoreoTaskType, type ChoreoJob, type ChoreoNode } from './choreo-types';
@@ -57,7 +57,7 @@ export function jobHasEntityWork(job: ChoreoJob): boolean {
 export function isJobSelectable(
     firstNode: ChoreoNode,
     job: ChoreoJob,
-    target: { entityId: number; x: number; y: number } | null,
+    target: TileWithEntity | null,
     hasHome: boolean,
     positionTarget: Tile | null
 ): boolean {
@@ -95,7 +95,7 @@ export class JobSelector {
     selectJob(
         settler: Entity,
         config: SettlerConfig,
-        target: { entityId: number; x: number; y: number } | null,
+        target: TileWithEntity | null,
         homeBuilding: Entity | null,
         positionTarget?: Tile | null
     ): ChoreoJob | null {

@@ -3,7 +3,7 @@ import { EntityType } from '@/game/entity';
 import { BuildingType } from '@/game/buildings/building-type';
 import { UnitType } from '@/game/core/unit-types';
 import { EMaterialType } from '@/game/economy/material-type';
-import { RACE_NAMES, AVAILABLE_RACES } from '@/game/core/race';
+import { AVAILABLE_RACES, formatRace } from '@/game/core/race';
 import { isUnitAvailableForRace, isBuildingAvailableForRace } from '@/game/data/race-availability';
 import type { Locator } from '@playwright/test';
 
@@ -48,7 +48,7 @@ async function hideUI(page: import('@playwright/test').Page): Promise<void> {
 
 test.describe('Entity Rendering Catalog', { tag: ['@requires-assets', '@screenshot'] }, () => {
     for (const race of AVAILABLE_RACES) {
-        const raceName = RACE_NAMES[race];
+        const raceName = formatRace(race);
 
         test(`${raceName} units render with real sprites`, async ({ gpEmptyMap }) => {
             const page = gpEmptyMap.page;
@@ -139,7 +139,7 @@ test.describe('Entity Rendering Catalog', { tag: ['@requires-assets', '@screensh
 
                     for (const bt of types) {
                         try {
-                            search(cx, cy, w, h, (tx, ty) => {
+                            search({ x: cx, y: cy }, w, h, ({ x: tx, y: ty }) => {
                                 const result = game.execute({
                                     type: 'place_building',
                                     buildingType: bt,

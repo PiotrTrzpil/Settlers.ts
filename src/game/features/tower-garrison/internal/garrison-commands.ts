@@ -2,15 +2,20 @@ import type {
     GarrisonUnitsCommand,
     UngarrisonUnitCommand,
     GarrisonSelectedUnitsCommand,
+    FillGarrisonCommand,
+    SpawnResult,
+    CommandFailure,
 } from '@/game/commands/command-types';
-import { EntityType } from '@/game/entity';
+import { commandFailed } from '@/game/commands/command-types';
+import { EntityType, getUnitLevel } from '@/game/entity';
 import type { GameState } from '@/game/game-state';
+import type { EventBus } from '@/game/event-bus';
 import type { SettlerTaskSystem } from '@/game/features/settler-tasks';
 import { BuildingType } from '@/game/buildings/building-type';
 import { UnitType } from '@/game/core/unit-types';
 import { createLogger } from '@/utilities/logger';
 import type { UnitReservationRegistry } from '@/game/systems/unit-reservation';
-import type { ISettlerBuildingLocationManager } from '@/game/features/settler-location';
+import { type ISettlerBuildingLocationManager, SettlerBuildingStatus } from '@/game/features/settler-location';
 import type { TowerGarrisonManager } from '../tower-garrison-manager';
 import { dispatchUnitToGarrison } from './garrison-dispatch';
 import { getGarrisonCapacity, getGarrisonRole } from './garrison-capacity';
@@ -153,7 +158,12 @@ export function executeGarrisonUnitsCommand(cmd: GarrisonUnitsCommand, ctx: Garr
             anyDispatched = true;
         } else {
             // Blacklist so auto-garrison doesn't retry the same pair.
-            locationManager.cancelApproach(unitId);
+            // The unit may already be Inside if the choreo entered the building
+            // before dispatch failed — cancelApproach only handles Approaching.
+            const loc = locationManager.getLocation(unitId);
+            if (!loc || loc.status !== SettlerBuildingStatus.Inside) {
+                locationManager.cancelApproach(unitId);
+            }
             manager.recordDispatchFailure(unitId, cmd.buildingId);
         }
     }
@@ -182,7 +192,7 @@ export function executeGarrisonSelectedUnitsCommand(
     ctx: GarrisonCommandContext
 ): GarrisonSelectedResult {
     // Silent: user right-clicks on any tile — most won't be garrison buildings.
-    const building = ctx.gameState.getGroundEntityAt(cmd.tileX, cmd.tileY);
+    const building = ctx.gameState.getGroundEntityAt({ x: cmd.tileX, y: cmd.tileY });
     if (!building || building.type !== EntityType.Building) {
         return 'not_garrison_building';
     }
@@ -248,4 +258,82 @@ export function executeUngarrisonUnitCommand(
 
     manager.ejectUnit(cmd.unitId, cmd.buildingId);
     return true;
+}
+
+// ── Instant fill (debug/test) ───────────────────────────────────
+
+/** Dependencies for fill_garrison — separate from normal garrison commands. */
+export interface FillGarrisonContext {
+    manager: TowerGarrisonManager;
+    gameState: GameState;
+    eventBus: EventBus;
+    locationManager: ISettlerBuildingLocationManager;
+}
+
+/**
+ * Handle a `fill_garrison` command.
+ *
+ * Spawns the requested units and immediately garrisons them — no walking.
+ * Each unit is created via addUnit, hidden via locationManager.enterBuilding
+ * (which triggers finalizeGarrison through the settler-location:entered event).
+ *
+ * Returns the number of units actually garrisoned.
+ */
+export function executeFillGarrisonCommand(
+    cmd: FillGarrisonCommand,
+    ctx: FillGarrisonContext
+): SpawnResult | CommandFailure {
+    const { manager, gameState, eventBus, locationManager } = ctx;
+    const building = gameState.getEntity(cmd.buildingId);
+    if (!building) {
+        return commandFailed(`fill_garrison: building ${cmd.buildingId} not found`);
+    }
+
+    const buildingType = building.subType as BuildingType;
+    if (!getGarrisonCapacity(buildingType)) {
+        return commandFailed(`fill_garrison: ${buildingType} has no garrison capacity`);
+    }
+
+    const garrison = manager.getGarrison(cmd.buildingId);
+    if (!garrison) {
+        return commandFailed(`fill_garrison: building ${cmd.buildingId} not registered — was initTower called?`);
+    }
+
+    let garrisoned = 0;
+
+    for (const entry of cmd.units) {
+        const role = getGarrisonRole(entry.unitType);
+        if (!role) {
+            continue;
+        }
+
+        const slots = role === 'swordsman' ? garrison.swordsmanSlots : garrison.bowmanSlots;
+        if (slots.unitIds.length >= slots.max) {
+            continue;
+        }
+
+        const entity = gameState.addUnit(entry.unitType, { x: building.x, y: building.y }, building.player, {
+            race: building.race,
+        });
+        entity.level = getUnitLevel(entry.unitType);
+
+        eventBus.emit('unit:spawned', {
+            unitId: entity.id,
+            unitType: entry.unitType,
+            x: building.x,
+            y: building.y,
+            player: building.player,
+        });
+
+        // enterBuilding hides the unit and emits settler-location:entered,
+        // which triggers finalizeGarrison in the manager.
+        locationManager.enterBuilding(entity.id, cmd.buildingId);
+        garrisoned++;
+    }
+
+    if (garrisoned === 0) {
+        return commandFailed('fill_garrison: no units could be garrisoned (wrong roles or slots full)');
+    }
+
+    return { success: true, entityId: cmd.buildingId };
 }

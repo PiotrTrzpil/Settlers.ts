@@ -49,14 +49,14 @@ export function captureOriginalTerrain(
     const captured = new Set<number>();
 
     // Get all tiles in the building footprint
-    const footprint = getBuildingFootprint(params.tileX, params.tileY, params.buildingType, params.race);
+    const footprint = getBuildingFootprint({ x: params.tileX, y: params.tileY }, params.buildingType, params.race);
 
     // Capture all footprint tiles
     for (const tile of footprint) {
         if (tile.x < 0 || tile.x >= mapSize.width || tile.y < 0 || tile.y >= mapSize.height) {
             continue;
         }
-        const idx = mapSize.toIndex(tile.x, tile.y);
+        const idx = mapSize.toIndex(tile);
         captured.add(idx);
         tiles.push({
             x: tile.x,
@@ -75,7 +75,7 @@ export function captureOriginalTerrain(
             if (nx < 0 || nx >= mapSize.width || ny < 0 || ny >= mapSize.height) {
                 continue;
             }
-            const nIdx = mapSize.toIndex(nx, ny);
+            const nIdx = mapSize.toIndex({ x: nx, y: ny });
             if (captured.has(nIdx)) {
                 continue;
             }
@@ -127,7 +127,7 @@ export function applyTerrainLeveling(
     let modified = false;
 
     for (const tile of originalTerrain.tiles) {
-        const idx = mapSize.toIndex(tile.x, tile.y);
+        const idx = mapSize.toIndex(tile);
 
         // Interpolate height from original toward target
         const newHeight = Math.round(
@@ -174,7 +174,7 @@ export function applySingleTileLeveling(
     groundHeight: Uint8Array,
     mapSize: MapSize
 ): boolean {
-    const idx = mapSize.toIndex(tileX, tileY);
+    const idx = mapSize.toIndex({ x: tileX, y: tileY });
     let modified = false;
 
     if (groundHeight[idx] !== targetHeight) {
@@ -212,7 +212,7 @@ export function setConstructionSiteGroundType(
         if (!tile.isFootprint) {
             continue;
         }
-        const idx = mapSize.toIndex(tile.x, tile.y);
+        const idx = mapSize.toIndex(tile);
         if (groundType[idx] !== CONSTRUCTION_SITE_GROUND_TYPE) {
             groundType[idx] = CONSTRUCTION_SITE_GROUND_TYPE;
             modified = true;
@@ -240,7 +240,7 @@ export function restoreOriginalTerrain(
     let modified = false;
 
     for (const tile of originalTerrain.tiles) {
-        const idx = mapSize.toIndex(tile.x, tile.y);
+        const idx = mapSize.toIndex(tile);
 
         if (groundType[idx] !== tile.originalGroundType) {
             groundType[idx] = tile.originalGroundType;

@@ -23,26 +23,26 @@ import { BuildingType } from '../../buildings/building-type';
 import { TowerGarrisonManager } from './tower-garrison-manager';
 import { AutoGarrisonSystem } from './tower-garrison-auto-system';
 import { TowerCombatSystem } from './internal/tower-combat-system';
-import { towerBowmanTargets, towerBowmanThrowingStones } from './internal/tower-combat-system';
-import { TowerGarrisonRenderPass } from './internal/tower-garrison-render-pass';
 import { isGarrisonBuildingType } from './internal/garrison-capacity';
 import { choreo } from '@/game/systems/choreo/choreo-builder';
 import {
     executeGarrisonUnitsCommand,
     executeUngarrisonUnitCommand,
     executeGarrisonSelectedUnitsCommand,
+    executeFillGarrisonCommand,
     type GarrisonSelectedResult,
     type GarrisonCommandContext,
+    type FillGarrisonContext,
 } from './internal/garrison-commands';
 import type {
     GarrisonUnitsCommand,
     UngarrisonUnitCommand,
     GarrisonSelectedUnitsCommand,
+    FillGarrisonCommand,
     CaptureBuildingCommand,
 } from '@/game/commands/command-types';
 import { COMMAND_OK, commandFailed } from '@/game/commands/command-types';
 import { createLogger } from '@/utilities/logger';
-import { RenderLayer } from '@/game/renderer/render-passes/types';
 
 const log = createLogger('TowerGarrisonFeature');
 
@@ -85,6 +85,7 @@ export const TowerGarrisonFeature: FeatureDefinition = {
 
         ctx.on('building:completed', ({ buildingId, buildingType }) => {
             if (isGarrisonBuildingType(buildingType)) {
+                log.debug(`initTower for ${buildingType} id=${buildingId}`);
                 manager.initTower(buildingId, buildingType);
             }
         });
@@ -151,22 +152,9 @@ export const TowerGarrisonFeature: FeatureDefinition = {
                 garrisonManager: manager,
                 towerCombatSystem,
             } satisfies TowerGarrisonExports,
-            // Swordsmen are rendered via overlay-resolution.ts (AboveBuilding layer)
-            // so they appear between the building's back and front wall sprites.
-            renderPasses: [
-                {
-                    id: 'tower-bowman',
-                    layer: RenderLayer.AboveEntities,
-                    needs: { sprites: true },
-                    create: () =>
-                        new TowerGarrisonRenderPass(manager, ctx.gameState, {
-                            getSlots: g => g.bowmanSlots,
-                            top: true,
-                            targets: towerBowmanTargets,
-                            throwingStones: towerBowmanThrowingStones,
-                        }),
-                },
-            ],
+            // Both swordsmen and bowmen are rendered via overlay-resolution.ts
+            // (AboveBuilding layer) as static standing poses.
+            renderPasses: [],
             persistence: [],
             onRestoreComplete() {
                 for (const e of ctx.gameState.entities) {
@@ -244,6 +232,15 @@ export const TowerGarrisonFeature: FeatureDefinition = {
                     executeUngarrisonUnitCommand(cmd as UngarrisonUnitCommand, manager, ctx.gameState)
                         ? COMMAND_OK
                         : commandFailed('unit cannot be ungarrisoned'),
+                fill_garrison: cmd => {
+                    const fillCtx: FillGarrisonContext = {
+                        manager,
+                        gameState: ctx.gameState,
+                        eventBus: ctx.eventBus,
+                        locationManager,
+                    };
+                    return executeFillGarrisonCommand(cmd as FillGarrisonCommand, fillCtx);
+                },
                 capture_building: cmd => {
                     const capture = cmd as CaptureBuildingCommand;
                     ctx.gameState.getEntityOrThrow(capture.buildingId, 'capture_building command target');

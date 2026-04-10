@@ -69,7 +69,7 @@ export const CombatFeature: FeatureDefinition = {
         ctx.on('combat:unitDefeated', ({ unitId }) => {
             const entity = ctx.gameState.getEntityOrThrow(unitId, 'defeated unit for death angel spawn');
 
-            const angel = ctx.gameState.addUnit(UnitType.Angel, entity.x, entity.y, entity.player, {
+            const angel = ctx.gameState.addUnit(UnitType.Angel, entity, entity.player, {
                 race: entity.race,
                 selectable: false,
                 occupancy: false,

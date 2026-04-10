@@ -20,7 +20,7 @@ test.describe('Animation During Movement', { tag: '@slow' }, () => {
 
         // Use longer distance (15 tiles) so movement is still in progress during assertions
         const targetX = unit!.x + 15;
-        await gs.actions.moveUnit(unit!.id, targetX, unit!.y);
+        await gs.actions.moveUnit(unit!.id, { x: targetX, y: unit!.y });
         await gs.wait.waitForUnitsMoving(1, 5000);
 
         await test.step('animation is playing with walk sequence', async () => {
@@ -66,7 +66,7 @@ test.describe('Animation During Movement', { tag: '@slow' }, () => {
         const unit = await gs.actions.spawnUnit('Builder');
         expect(unit).not.toBeNull();
 
-        await gs.actions.moveUnit(unit!.id, unit!.x + 15, unit!.y);
+        await gs.actions.moveUnit(unit!.id, { x: unit!.x + 15, y: unit!.y });
         await gs.wait.waitForUnitsMoving(1, 5000);
 
         // Sample animation state multiple times during movement
@@ -88,7 +88,7 @@ test.describe('Animation During Movement', { tag: '@slow' }, () => {
         expect(unit).not.toBeNull();
 
         // Move east first
-        await gs.actions.moveUnit(unit!.id, unit!.x + 5, unit!.y);
+        await gs.actions.moveUnit(unit!.id, { x: unit!.x + 5, y: unit!.y });
         await gs.wait.waitForUnitsMoving(1, 5000);
         await gs.wait.waitForUnitToMove(unit!.id, unit!.x, unit!.y, 5000);
 
@@ -98,7 +98,7 @@ test.describe('Animation During Movement', { tag: '@slow' }, () => {
         // Get current position and redirect south
         const entities = await gs.actions.getEntities({ type: 1 });
         const current = entities.find(e => e.id === unit!.id)!;
-        await gs.actions.moveUnit(unit!.id, current.x, current.y + 5);
+        await gs.actions.moveUnit(unit!.id, { x: current.x, y: current.y + 5 });
         await gs.wait.waitForTicks(10, 3000);
 
         // Direction should still be valid after path change
@@ -117,7 +117,7 @@ test.describe('Movement Events', { tag: '@slow' }, () => {
         expect(unit).not.toBeNull();
 
         const targetX = unit!.x + 2;
-        await gs.actions.moveUnit(unit!.id, targetX, unit!.y);
+        await gs.actions.moveUnit(unit!.id, { x: targetX, y: unit!.y });
 
         await gs.wait.waitForUnitAtDestination(unit!.id, targetX, unit!.y, 10000);
         await gs.wait.waitForMovementIdle(unit!.id, 5000);

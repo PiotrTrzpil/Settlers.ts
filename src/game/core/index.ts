@@ -8,3 +8,4 @@ export { bfsFind, scanRect } from './tile-search';
 export { Race } from './race';
 export type { SeededRng } from './rng';
 export type { TickSystem } from './tick-system';
+export { TICK_RATE, seconds } from './tick-rate';

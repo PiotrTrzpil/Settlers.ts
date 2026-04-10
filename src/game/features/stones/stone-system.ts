@@ -17,6 +17,7 @@ import { createLogger } from '@/utilities/logger';
 import { findEmptySpot } from '../../systems/spatial-search';
 import type { CommandExecutor } from '../../commands';
 import { PersistentMap } from '@/game/persistence/persistent-store';
+import type { Tile } from '@/game/core/coordinates';
 
 const log = createLogger('StoneSystem');
 
@@ -197,10 +198,10 @@ export class StoneSystem {
      * Spawns at full depletion level (ResourceStone12).
      * @returns Number of stones successfully spawned.
      */
-    spawnStonesNear(cx: number, cy: number, count: number, radius = 15): number {
+    spawnStonesNear(center: Tile, count: number, radius = 15): number {
         let placed = 0;
         for (let i = 0; i < count; i++) {
-            const spot = findEmptySpot(cx, cy, {
+            const spot = findEmptySpot(center, {
                 gameState: this.gameState,
                 searchRadius: radius,
                 minDistanceSq: 0,

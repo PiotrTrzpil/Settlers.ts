@@ -16,7 +16,8 @@ import type { FrameRenderTiming } from './renderer/renderer';
 import { EntityVisualService } from './animation/entity-visual-service';
 import { toastError, toastClearThrottle } from './ui/toast-notifications';
 
-const TICK_RATE = 30;
+import { TICK_RATE } from './core/tick-rate';
+
 const TICK_DURATION = 1 / TICK_RATE;
 
 /**

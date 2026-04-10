@@ -1,4 +1,5 @@
 import { LogHandler } from './log-handler';
+import type { Tile } from '@/game/core/coordinates';
 
 /**
  * Stores height and width of the map
@@ -23,9 +24,9 @@ export class MapSize {
         }
     }
 
-    /** Get the map index position from x,y coordinates */
-    public toIndex(x: number, y: number): number {
-        return (x % this.width) + (y % this.height) * this.width;
+    /** Get the map index position from tile coordinates */
+    public toIndex(tile: Tile): number {
+        return (tile.x % this.width) + (tile.y % this.height) * this.width;
     }
 
     public toString(): string {

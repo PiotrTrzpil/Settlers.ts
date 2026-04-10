@@ -16,7 +16,7 @@ import type { ChoreoJobState } from '../../systems/choreo/types';
 import { UnitType } from '../../core/unit-types';
 import { EntityType, Tile } from '../../entity';
 import type { DispatchRecruitmentOpts } from '../../systems/recruit/recruit-system';
-import type { ConstructionSiteManager } from './construction-site-manager';
+import type { ConstructionSiteManager, IndexedTile } from './construction-site-manager';
 import { buildDigTileJob, buildBuildStepJob, buildRecruitDiggerJob, buildRecruitBuilderJob } from './construction-jobs';
 import { createLogger } from '@/utilities/logger';
 
@@ -138,12 +138,10 @@ export class ConstructionSiteDemandSystem implements TickSystem {
             }
         }
 
-        // Create builder demands if materials are available
-        if (!this.siteManager.hasAvailableMaterials(siteId)) {
-            this.demands.delete(siteId);
-            return;
-        }
-
+        // Always create builder demands — even if input slots are empty right now.
+        // On flat terrain, leveling completes instantly before carriers deliver anything.
+        // The drain loop's tryFulfill already checks hasAvailableMaterials before
+        // dispatching, so builders won't be sent until materials arrive.
         const count = site.building.slots.required;
         const player = site.player;
 
@@ -367,7 +365,7 @@ export class ConstructionSiteDemandSystem implements TickSystem {
 
         // Pre-reserve work resources before dispatching — if no work is available,
         // skip recruitment entirely.
-        let reservedTile: { tileIndex: number; x: number; y: number } | null = null;
+        let reservedTile: IndexedTile | null = null;
         if (demand.role === 'digger') {
             reservedTile = this.siteManager.reserveUnleveledTile(demand.siteId);
             if (!reservedTile) {

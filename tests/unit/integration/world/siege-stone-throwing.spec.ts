@@ -9,7 +9,7 @@
 import { describe, it, expect, afterEach } from 'vitest';
 import { Simulation, createSimulation, cleanupSimulation } from '../../helpers/test-simulation';
 import { installRealGameData } from '../../helpers/test-game-data';
-import { UnitType } from '@/game/entity';
+import { UnitType, type Tile } from '@/game/entity';
 import { BuildingType } from '@/game/buildings';
 import { CombatStatus } from '@/game/features/combat/combat-state';
 import {
@@ -25,8 +25,8 @@ function garrisonUnits(sim: Simulation, buildingId: number, unitIds: number[]) {
     return sim.execute({ type: 'garrison_units', buildingId, unitIds });
 }
 
-function moveUnit(sim: Simulation, entityId: number, targetX: number, targetY: number) {
-    return sim.execute({ type: 'move_unit', entityId, targetX, targetY });
+function moveUnit(sim: Simulation, entityId: number, target: Tile) {
+    return sim.execute({ type: 'move_unit', entityId, targetX: target.x, targetY: target.y });
 }
 
 function garrisonedCount(sim: Simulation, buildingId: number): number {
@@ -67,8 +67,8 @@ describe('Siege – garrisoned bowmen throw stones', { timeout: 60_000 }, () => 
         waitForGarrisoned(sim, towerId, 3, 'tower fully garrisoned');
 
         // Send an attacker to the tower to trigger siege
-        const atkId = sim.spawnUnit(tower.x + 8, tower.y, UnitType.Swordsman3, 1);
-        moveUnit(sim, atkId, tower.x, tower.y);
+        const atkId = sim.spawnUnit({ x: tower.x + 8, y: tower.y }, UnitType.Swordsman3, 1);
+        moveUnit(sim, atkId, tower);
 
         // Wait for siege to start and defender to be ejected
         sim.runUntil(() => sim.services.siegeSystem.getSiege(towerId) !== undefined, {
@@ -118,11 +118,11 @@ describe('Siege – garrisoned bowmen throw stones', { timeout: 60_000 }, () => 
 
         // Place a bystander enemy within tower range but not at door — use a bowman
         // so it doesn't walk to the door and start siege-related combat
-        const bystander = sim.spawnUnit(tower.x + 6, tower.y, UnitType.Bowman1, 1);
+        const bystander = sim.spawnUnit({ x: tower.x + 6, y: tower.y }, UnitType.Bowman1, 1);
 
         // Send a door attacker (swordsman walks to door and fights)
-        const doorAttacker = sim.spawnUnit(tower.x + 10, tower.y, UnitType.Swordsman3, 1);
-        moveUnit(sim, doorAttacker, tower.x, tower.y);
+        const doorAttacker = sim.spawnUnit({ x: tower.x + 10, y: tower.y }, UnitType.Swordsman3, 1);
+        moveUnit(sim, doorAttacker, tower);
 
         // Wait for siege + door combat
         sim.runUntil(
@@ -165,7 +165,7 @@ describe('Siege – garrisoned bowmen throw stones', { timeout: 60_000 }, () => 
         waitForGarrisoned(sim, towerId, 2, 'bowmen garrisoned');
 
         // Place an enemy within tower attack range but no siege (no garrison swordsmen to eject)
-        const enemy = sim.spawnUnit(tower.x + 5, tower.y, UnitType.Swordsman1, 1);
+        const enemy = sim.spawnUnit({ x: tower.x + 5, y: tower.y }, UnitType.Swordsman1, 1);
 
         // Let the tower combat system scan
         sim.runTicks(30);
@@ -194,8 +194,8 @@ describe('Siege – garrisoned bowmen throw stones', { timeout: 60_000 }, () => 
         garrisonUnits(sim, towerId, [defId, bowmanId]);
         waitForGarrisoned(sim, towerId, 2, 'garrisoned');
 
-        const atkId = sim.spawnUnit(tower.x + 8, tower.y, UnitType.Swordsman3, 1);
-        moveUnit(sim, atkId, tower.x, tower.y);
+        const atkId = sim.spawnUnit({ x: tower.x + 8, y: tower.y }, UnitType.Swordsman3, 1);
+        moveUnit(sim, atkId, tower);
 
         // Wait for siege + fighting
         sim.runUntil(

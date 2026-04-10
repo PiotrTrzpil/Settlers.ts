@@ -18,7 +18,7 @@ test.describe('Unit Movement', { tag: '@smoke' }, () => {
         const targetX = unit!.x + 10;
         const targetY = unit!.y;
 
-        const ok = await gs.actions.moveUnit(unit!.id, targetX, targetY);
+        const ok = await gs.actions.moveUnit(unit!.id, { x: targetX, y: targetY });
         expect(ok).toBe(true);
 
         await test.step('path is computed immediately', async () => {
@@ -51,7 +51,7 @@ test.describe('Unit Movement', { tag: '@smoke' }, () => {
         expect(unit).not.toBeNull();
 
         // Move 5 tiles east
-        const ok = await gs.actions.moveUnit(unit!.id, unit!.x + 5, unit!.y);
+        const ok = await gs.actions.moveUnit(unit!.id, { x: unit!.x + 5, y: unit!.y });
         expect(ok).toBe(true);
 
         // Wait for movement to start
@@ -84,7 +84,7 @@ test.describe('Unit Movement', { tag: '@smoke' }, () => {
         // Issue simultaneous move commands
         const targetX = center.x + 10;
         for (const u of units) {
-            await gs.actions.moveUnit(u.id, targetX, center.y);
+            await gs.actions.moveUnit(u.id, { x: targetX, y: center.y });
         }
 
         // Wait for all units to start moving
@@ -123,7 +123,7 @@ test.describe('Unit Movement', { tag: '@smoke' }, () => {
         expect(unit).not.toBeNull();
 
         await test.step('start initial movement east', async () => {
-            await gs.actions.moveUnit(unit!.id, unit!.x + 10, unit!.y);
+            await gs.actions.moveUnit(unit!.id, { x: unit!.x + 10, y: unit!.y });
             await gs.wait.waitForUnitToMove(unit!.id, unit!.x, unit!.y, 8000);
         });
 
@@ -133,7 +133,7 @@ test.describe('Unit Movement', { tag: '@smoke' }, () => {
 
         await test.step('redirect south and verify new path', async () => {
             const newTargetY = unit!.y + 5;
-            await gs.actions.moveUnit(unit!.id, posBeforeRedirect.x, newTargetY);
+            await gs.actions.moveUnit(unit!.id, { x: posBeforeRedirect.x, y: newTargetY });
 
             const unitState = await gs.queries.getUnitState(unit!.id);
             expect(unitState).not.toBeNull();
@@ -160,7 +160,7 @@ test.describe('Unit Movement', { tag: '@smoke' }, () => {
         // Use longer distance (15 tiles) so movement is still in progress when we check
         const unit = await gs.actions.spawnUnit('Builder');
         expect(unit).not.toBeNull();
-        await gs.actions.moveUnit(unit!.id, unit!.x + 15, unit!.y);
+        await gs.actions.moveUnit(unit!.id, { x: unit!.x + 15, y: unit!.y });
 
         // Wait for unitsMoving to be at least 1
         await gs.wait.waitForUnitsMoving(1, 5000);

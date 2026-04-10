@@ -285,7 +285,7 @@ export class MusicController {
         );
 
         if (tracks.length === 0) {
-            MusicController.log.warn(`No music found for race: ${Race[race]}`);
+            MusicController.log.warn(`No music found for race: ${race}`);
             return;
         }
 

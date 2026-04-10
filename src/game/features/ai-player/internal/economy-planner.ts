@@ -22,11 +22,15 @@ import { getPlayerBuildings, getPlayerBasePosition } from './ai-world-queries';
 /** Maximum spiral search radius when looking for a valid building position. */
 const MAX_SEARCH_RADIUS = 50;
 
+type TileWithBuildingType = Tile & { buildingType: BuildingType };
+
+import { seconds } from '@/game/core/tick-rate';
+
 /**
  * Minimum ticks between expensive placement searches.
  * Prevents hammering spiralSearch every single evaluation tick.
  */
-const SEARCH_COOLDOWN = 30;
+const SEARCH_COOLDOWN = seconds(1);
 
 export class EconomyPlanner {
     private readonly state: GameState;
@@ -41,7 +45,7 @@ export class EconomyPlanner {
     private placedForCurrentStep = 0;
 
     /** Cached placement result from last search. Cleared on placement or failure. */
-    private cachedPosition: { x: number; y: number; buildingType: BuildingType } | null = null;
+    private cachedPosition: TileWithBuildingType | null = null;
     /** Ticks remaining before next search is allowed. */
     private searchCooldown = 0;
 
@@ -165,16 +169,15 @@ export class EconomyPlanner {
             return e?.type === EntityType.MapObject && isNonBlockingMapObject(e.subType as number);
         };
         return spiralSearch(
-            basePos.x,
-            basePos.y,
+            basePos,
             this.terrain.width,
             this.terrain.height,
-            (x, y) =>
+            tile =>
                 canPlaceBuildingFootprint(
                     this.terrain,
                     this.state.groundOccupancy,
-                    x,
-                    y,
+                    tile.x,
+                    tile.y,
                     buildingType,
                     this.race,
                     this.state.buildingFootprint,

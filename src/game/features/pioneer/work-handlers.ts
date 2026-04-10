@@ -29,10 +29,10 @@ export function createPioneerHandler(
         mapWidth: terrain.width,
         mapHeight: terrain.height,
         searchRadius: PIONEER_SEARCH_RADIUS,
-        tilePredicate: (tx, ty) => !territoryManager.isInAnyTerritory(tx, ty),
-        onWorkComplete: (posX, posY, settlerId) => {
+        tilePredicate: tile => !territoryManager.isInAnyTerritory(tile),
+        onWorkComplete: (tile, settlerId) => {
             const entity = gameState.getEntityOrThrow(settlerId, 'pioneer:claimTile');
-            territoryManager.claimTile(posX, posY, entity.player);
+            territoryManager.claimTile(tile, entity.player);
         },
     });
 }

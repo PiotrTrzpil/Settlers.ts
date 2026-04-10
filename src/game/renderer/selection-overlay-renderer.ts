@@ -35,7 +35,7 @@ function shiftBuildingWorldPos(pos: { worldX: number; worldY: number }): { world
  */
 export function calculateFootprintBounds(
     footprint: Tile[],
-    mapSize: { toIndex(x: number, y: number): number },
+    mapSize: { toIndex(tile: Tile): number },
     groundHeight: Uint8Array,
     viewPointX: number,
     viewPointY: number
@@ -53,7 +53,7 @@ export function calculateFootprintBounds(
     ];
 
     for (const tile of footprint) {
-        const idx = mapSize.toIndex(tile.x, tile.y);
+        const idx = mapSize.toIndex(tile);
         const hWorld = heightToWorld(groundHeight[idx]!);
         for (const offset of cornerOffsets) {
             const worldPos = shiftBuildingWorldPos(

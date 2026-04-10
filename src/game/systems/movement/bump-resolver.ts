@@ -84,8 +84,8 @@ export class BumpResolver {
      * Push any unit standing at (x, y) to a free passable neighbor tile.
      * Returns true if the tile is now free (was empty or push succeeded).
      */
-    pushUnitAt(x: number, y: number): boolean {
-        const key = tileKey(x, y);
+    pushUnitAt(tile: Tile): boolean {
+        const key = tileKey(tile);
         const occupantId = this.deps.unitOccupancy.get(key);
         if (occupantId === undefined) {
             return true;
@@ -96,22 +96,22 @@ export class BumpResolver {
             return true;
         }
 
-        const neighbors = getAllNeighbors({ x, y });
+        const neighbors = getAllNeighbors(tile);
         for (const n of neighbors) {
-            if (!this.isTilePassableForBump(n.x, n.y)) {
+            if (!this.isTilePassableForBump(n)) {
                 continue;
             }
-            if (this.getUnitAt(tileKey(n.x, n.y), occupantId) !== undefined) {
+            if (this.getUnitAt(tileKey(n), occupantId) !== undefined) {
                 continue;
             }
 
-            const oldKey = tileKey(occupant.tileX, occupant.tileY);
+            const oldKey = tileKey({ x: occupant.tileX, y: occupant.tileY });
             if (this.deps.unitOccupancy.get(oldKey) === occupantId) {
                 this.deps.unitOccupancy.delete(oldKey);
             }
             occupant.handlePush(n.x, n.y);
-            this.deps.unitOccupancy.set(tileKey(n.x, n.y), occupantId);
-            this.deps.updatePositionFn(occupantId, n.x, n.y);
+            this.deps.unitOccupancy.set(tileKey(n), occupantId);
+            this.deps.updatePositionFn(occupantId, n);
             this.repathBumpedOccupant(occupant, n);
             return true;
         }
@@ -122,17 +122,17 @@ export class BumpResolver {
      * Check if a tile is passable for bump destination:
      * in bounds, passable terrain, not blocked by a completed building.
      */
-    isTilePassableForBump(x: number, y: number): boolean {
-        if (!isInMapBounds(x, y, this.deps.terrainMapWidth, this.deps.terrainMapHeight)) {
+    isTilePassableForBump(tile: Tile): boolean {
+        if (!isInMapBounds(tile, this.deps.terrainMapWidth, this.deps.terrainMapHeight)) {
             return false;
         }
         if (this.deps.terrainGroundType) {
-            const idx = x + y * this.deps.terrainMapWidth;
+            const idx = tile.x + tile.y * this.deps.terrainMapWidth;
             if (!isPassable(this.deps.terrainGroundType[idx]!)) {
                 return false;
             }
         }
-        if (this.deps.buildingOccupancy.has(tileKey(x, y))) {
+        if (this.deps.buildingOccupancy.has(tileKey(tile))) {
             return false;
         }
         return true;
@@ -156,7 +156,13 @@ export class BumpResolver {
         if (occupant.state === 'moving' && occupant.waitTime === 0) {
             return false;
         }
-        // jsettlers-style: lower entity ID always wins — prevents mutual push loops
+        // Idle units always yield — they're not going anywhere, so blocking a
+        // moving unit is never useful.
+        if (occupant.state === 'idle') {
+            return true;
+        }
+        // For non-idle occupants (waiting/blocked): lower entity ID wins to
+        // prevent mutual push loops between two moving units.
         if (bumper.entityId >= occupant.entityId) {
             return false;
         }
@@ -209,19 +215,19 @@ export class BumpResolver {
                 toY: dest.y,
             });
         }
-        const oldKey = tileKey(occupant.tileX, occupant.tileY);
+        const oldKey = tileKey({ x: occupant.tileX, y: occupant.tileY });
         if (this.deps.unitOccupancy.get(oldKey) === occupantId) {
             this.deps.unitOccupancy.delete(oldKey);
         }
         occupant.handlePush(dest.x, dest.y);
-        this.deps.unitOccupancy.set(tileKey(dest.x, dest.y), occupantId);
-        this.deps.updatePositionFn(occupantId, dest.x, dest.y);
+        this.deps.unitOccupancy.set(tileKey(dest), occupantId);
+        this.deps.updatePositionFn(occupantId, dest);
         this.repathBumpedOccupant(occupant, dest);
     }
 
     private trySwap(bumper: MovementController, occupant: MovementController, occupantId: number): boolean {
         const bumperTile: Tile = { x: bumper.tileX, y: bumper.tileY };
-        if (!this.isTilePassableForBump(bumperTile.x, bumperTile.y)) {
+        if (!this.isTilePassableForBump(bumperTile)) {
             return false;
         }
         this.executeBump(bumper.entityId, occupant, occupantId, bumperTile);
@@ -255,7 +261,7 @@ export class BumpResolver {
     }
 
     private clearTileForBump(bumper: MovementController, dest: Tile, depth: number): boolean {
-        const destOccupantId = this.getUnitAt(tileKey(dest.x, dest.y), bumper.entityId);
+        const destOccupantId = this.getUnitAt(tileKey(dest), bumper.entityId);
         if (destOccupantId === undefined) {
             return true;
         }
@@ -274,10 +280,10 @@ export class BumpResolver {
             if (n.x === bumper.tileX && n.y === bumper.tileY) {
                 continue;
             }
-            if (!this.isTilePassableForBump(n.x, n.y)) {
+            if (!this.isTilePassableForBump(n)) {
                 continue;
             }
-            const nOccupant = this.getUnitAt(tileKey(n.x, n.y), occupant.entityId);
+            const nOccupant = this.getUnitAt(tileKey(n), occupant.entityId);
             if (nOccupant === undefined) {
                 free.push(n);
             } else if (depth < MAX_BUMP_DEPTH && this.isBumpableOccupant(nOccupant)) {

@@ -223,24 +223,25 @@ function addMapObject(
     darkFixup: boolean
 ): 'tree' | 'deco' | null {
     const { mapSize, groundType } = terrain;
-    if (!isInMapBounds(x, y, mapSize.width, mapSize.height)) {
+    const tile = { x, y };
+    if (!isInMapBounds(tile, mapSize.width, mapSize.height)) {
         return null;
     }
-    if (state.getGroundEntityAt(x, y)) {
+    if (state.getGroundEntityAt(tile)) {
         return null;
     }
 
     const entry = lookupRawObject(rawType);
     if (entry?.type != null) {
-        if (entry.category === MapObjectCategory.Trees && !isBuildable(groundType[mapSize.toIndex(x, y)]!)) {
+        if (entry.category === MapObjectCategory.Trees && !isBuildable(groundType[mapSize.toIndex(tile)]!)) {
             return null;
         }
-        const type = darkFixup && terrain.isDarkLand(x, y) ? toDarkVariant(entry.type, x, y) : entry.type;
-        state.addEntity(EntityType.MapObject, type, x, y, 0, { variation: entry.variation });
+        const type = darkFixup && terrain.isDarkLand(tile) ? toDarkVariant(entry.type, tile) : entry.type;
+        state.addEntity(EntityType.MapObject, type, tile, 0, { variation: entry.variation });
         return isTreeType(type) ? 'tree' : 'deco';
     }
 
-    state.addEntity(EntityType.MapObject, rawType, x, y, 0);
+    state.addEntity(EntityType.MapObject, rawType, tile, 0);
     return 'deco';
 }
 
@@ -296,19 +297,20 @@ export function spawnTestObjects(
         // Deterministic pseudo-random positions
         const x = (i * 31 + 17) % w;
         const y = (i * 37 + 23) % h;
-        const idx = mapSize.toIndex(x, y);
+        const tile = { x, y };
+        const idx = mapSize.toIndex(tile);
 
         // Skip unbuildable or occupied
         if (!isBuildable(groundType[idx]!)) {
             continue;
         }
-        if (state.getGroundEntityAt(x, y)) {
+        if (state.getGroundEntityAt(tile)) {
             continue;
         }
 
         // Cycle through types in category
         const objectType = types[i % types.length]!;
-        state.addEntity(EntityType.MapObject, objectType, x, y, 0);
+        state.addEntity(EntityType.MapObject, objectType, tile, 0);
         spawned++;
     }
 

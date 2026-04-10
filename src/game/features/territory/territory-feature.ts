@@ -20,10 +20,12 @@ import type { Tile } from '../../core/coordinates';
 import { bfsFind } from '../../core/tile-search';
 import { isUnitTypeMilitary, UnitCategory, getUnitCategory, type UnitType } from '../../core/unit-types';
 import type { SettlerTaskExports } from '../settler-tasks';
+import type { RecruitExports } from '../recruit';
 import { TerritoryManager, type TerritoryChange } from './territory-manager';
 import { TerritoryPersistence } from './territory-persistence';
 import { SpatialGrid } from '../../spatial-grid';
 import { TERRITORY_BUILDINGS } from './territory-types';
+import { isDarkTribe } from '../../core/race';
 import { createLogger } from '@/utilities/logger';
 
 const log = createLogger('Territory');
@@ -40,7 +42,7 @@ export interface TerritoryExports {
 
 export const TerritoryFeature: FeatureDefinition = {
     id: 'territory',
-    dependencies: ['settler-tasks'],
+    dependencies: ['settler-tasks', 'recruit'],
 
     create(ctx: FeatureContext) {
         const exports: TerritoryExports = { territoryManager: null };
@@ -54,19 +56,29 @@ export const TerritoryFeature: FeatureDefinition = {
                 exports.territoryManager = territoryManager;
                 persistence.setManager(territoryManager);
 
+                // Inject territory connectivity check into worker assignment and recruitment.
+                // Workers/carriers in disconnected territory pockets must not be assigned
+                // to buildings in a different pocket — they can never reach them.
+                const connectivityCheck = (a: Tile, b: Tile, player: number) =>
+                    territoryManager.areConnected(a, b, player);
+                const { settlerTaskSystem } = ctx.getFeature<SettlerTaskExports>('settler-tasks');
+                settlerTaskSystem.setTerritoryCheck(connectivityCheck);
+                const { recruitSystem } = ctx.getFeature<RecruitExports>('recruit');
+                recruitSystem.setTerritoryCheck(connectivityCheck);
+
                 // Create SpatialGrid and wire it into GameState
                 const spatialIndex = new SpatialGrid(
                     terrain.width,
                     terrain.height,
                     4,
                     id => ctx.gameState.getEntity(id),
-                    (x, y) => territoryManager.getOwner(x, y)
+                    tile => territoryManager.getOwner(tile)
                 );
                 ctx.gameState.initSpatialIndex(spatialIndex);
 
                 // Wire territory → spatial grid callbacks
-                territoryManager.onTileChanged = (x, y, oldOwner, newOwner) => {
-                    spatialIndex.onTileOwnerChanged(x, y, oldOwner, newOwner);
+                territoryManager.onTileChanged = (tile, oldOwner, newOwner) => {
+                    spatialIndex.onTileOwnerChanged(tile, oldOwner, newOwner);
                 };
                 territoryManager.onRecomputed = () => {
                     spatialIndex.rebuildAllCells();
@@ -82,19 +94,26 @@ export const TerritoryFeature: FeatureDefinition = {
                 };
 
                 // Register territory when buildings complete construction
+                // Dark Tribe never generates territory — their towers exist but create no zones.
                 ctx.on('building:completed', ({ buildingId, buildingType }) => {
                     if (TERRITORY_BUILDINGS.has(buildingType)) {
                         const entity = ctx.gameState.getEntityOrThrow(buildingId, 'territory:building:completed');
-                        territoryManager.addBuilding(buildingId, entity.x, entity.y, entity.player, buildingType);
+                        if (isDarkTribe(entity.race)) {
+                            return;
+                        }
+                        territoryManager.addBuilding(buildingId, entity, entity.player, buildingType);
                     }
                 });
 
                 // On game load, buildings are created already operational — register those immediately
-                ctx.on('entity:created', ({ entityId, entityType: type, subType, x, y, player }) => {
+                ctx.on('entity:created', ({ entityId, entityType: type, subType, player }) => {
                     if (type === EntityType.Building && TERRITORY_BUILDINGS.has(subType as BuildingType)) {
                         const entity = ctx.gameState.getEntityOrThrow(entityId, 'territory:entity:created');
+                        if (isDarkTribe(entity.race)) {
+                            return;
+                        }
                         if (entity.operational) {
-                            territoryManager.addBuilding(entityId, x, y, player, subType as BuildingType);
+                            territoryManager.addBuilding(entityId, entity, player, subType as BuildingType);
                         }
                     }
                 });
@@ -104,16 +123,20 @@ export const TerritoryFeature: FeatureDefinition = {
                     if (TERRITORY_BUILDINGS.has(buildingType)) {
                         const entity = ctx.gameState.getEntityOrThrow(buildingId, 'territory:building:ownerChanged');
                         territoryManager.removeBuilding(buildingId);
-                        territoryManager.addBuilding(buildingId, entity.x, entity.y, newPlayer, buildingType);
+                        // Dark Tribe captures don't generate territory
+                        if (isDarkTribe(entity.race)) {
+                            return;
+                        }
+                        territoryManager.addBuilding(buildingId, entity, newPlayer, buildingType);
                         // The building footprint itself must belong to the new owner immediately,
                         // even if surrounding tiles are still contested by the old owner's other towers.
-                        const footprint = getBuildingFootprint(entity.x, entity.y, buildingType, entity.race);
+                        const footprint = getBuildingFootprint(entity, buildingType, entity.race);
                         territoryManager.claimTiles(footprint, newPlayer);
                     }
                 });
 
-                // Remove territory when buildings are destroyed
-                ctx.cleanupRegistry.onEntityRemoved(territoryManager.removeBuilding.bind(territoryManager));
+                // Territory persists when towers are destroyed — only ownership
+                // changes (siege capture) trigger territory recomputation.
             },
             renderContributions: {
                 // eslint-disable-next-line no-restricted-syntax -- territoryManager is nullable before feature init; [] is correct when not yet loaded
@@ -175,7 +198,7 @@ function isBuildingOnLostTerritory(ctx: FeatureContext, tm: TerritoryManager, id
     if (TERRITORY_BUILDINGS.has(entity.subType as BuildingType)) {
         return false;
     }
-    return !tm.isInTerritory(entity.x, entity.y, player);
+    return !tm.isInTerritory(entity, player);
 }
 
 /**
@@ -213,7 +236,7 @@ function isUnitOnLostTerritory(ctx: FeatureContext, tm: TerritoryManager, id: nu
     if (isUnitTypeMilitary(entity.subType as UnitType)) {
         return false;
     }
-    return !tm.isInTerritory(entity.x, entity.y, player);
+    return !tm.isInTerritory(entity, player);
 }
 
 /**
@@ -287,5 +310,5 @@ function findNearestFriendlyTile(
     player: number,
     maxSearch = 2000
 ): Tile | null {
-    return bfsFind(startX, startY, (x, y) => tm.isInTerritory(x, y, player), maxSearch);
+    return bfsFind({ x: startX, y: startY }, tile => tm.isInTerritory(tile, player), maxSearch);
 }

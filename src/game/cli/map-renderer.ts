@@ -85,9 +85,10 @@ function renderNormalGrid(terrain: TerrainData, state: GameState, layers: MapLay
                 row += '+';
                 continue;
             }
-            const unit = state.getUnitAt(x, y);
-            const ground = state.getGroundEntityAt(x, y);
-            const sym = renderTileSymbol(unit, ground, terrain.getType(x, y), terrain.getHeight(x, y), layers);
+            const tile = { x, y };
+            const unit = state.getUnitAt(tile);
+            const ground = state.getGroundEntityAt(tile);
+            const sym = renderTileSymbol(unit, ground, terrain.getType(tile), terrain.getHeight(tile), layers);
             usedSymbols.add(sym);
             row += sym;
         }
@@ -111,7 +112,7 @@ function renderPlacementGrid(grid: ValidPositionGrid, bounds: GridBounds): strin
             if (x === bounds.cx && y === bounds.cy) {
                 row += '+';
             } else {
-                row += grid.isValid(x, y) ? 'o' : '.';
+                row += grid.isValid({ x, y }) ? 'o' : '.';
             }
         }
         lines.push(`${String(y).padStart(yLabelWidth)} ${row}`);

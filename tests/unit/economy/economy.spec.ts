@@ -92,11 +92,11 @@ describe('Construction Costs (XML)', () => {
             const raceMap = getConstructionCostRaceMap(bt)!;
             expect(raceMap.size, `${bt} has no race data`).toBeGreaterThan(0);
             for (const [race, costs] of raceMap) {
-                expect(costs.length, `${bt} (${Race[race]})`).toBeGreaterThan(0);
+                expect(costs.length, `${bt} (${race})`).toBeGreaterThan(0);
                 const materials = costs.map(c => c.material);
                 const usesBuildingMaterials =
                     materials.includes(EMaterialType.BOARD) || materials.includes(EMaterialType.STONE);
-                expect(usesBuildingMaterials, `${bt} (${Race[race]}) needs BOARD or STONE`).toBe(true);
+                expect(usesBuildingMaterials, `${bt} (${race}) needs BOARD or STONE`).toBe(true);
                 for (const cost of costs) {
                     expect(MATERIAL_CONFIGS.has(cost.material)).toBe(true);
                     expect(cost.count).toBeGreaterThan(0);

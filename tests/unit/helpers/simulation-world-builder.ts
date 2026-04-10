@@ -69,6 +69,8 @@ export interface SimulationOptions {
     mapHeight?: number;
     /** Race for player 0 (defaults to Roman). */
     race?: Race;
+    /** Race for player 1 (defaults to Roman). */
+    race1?: Race;
     /** Skip automatic territory establishment for player 0. Use placeGuardTower() to set up territory manually. */
     skipTerritory?: boolean;
 }
@@ -107,7 +109,7 @@ export class SmartBuildingPlacer {
 
     /** Find the closest valid position to center. */
     findBuildingPosition(buildingType: BuildingType, race = Race.Roman): Tile {
-        const result = spiralSearch(this.centerX, this.centerY, this.mapWidth, this.mapHeight, (x, y) => {
+        const result = spiralSearch({ x: this.centerX, y: this.centerY }, this.mapWidth, this.mapHeight, ({ x, y }) => {
             if (
                 !canPlaceBuildingFootprint(
                     this.terrain,
@@ -122,8 +124,8 @@ export class SmartBuildingPlacer {
                 return false;
             // In tests, buildings are often placed as instantly completed.
             // Avoid footprint tiles occupied by units to prevent trapping them.
-            const fp = getBuildingFootprint(x, y, buildingType, race);
-            return fp.every(t => !this.state.unitOccupancy.has(tileKey(t.x, t.y)));
+            const fp = getBuildingFootprint({ x, y }, buildingType, race);
+            return fp.every(t => !this.state.unitOccupancy.has(tileKey(t)));
         });
         if (!result) throw new Error(`SmartBuildingPlacer: no valid position for ${buildingType}`);
         return result;
@@ -132,11 +134,10 @@ export class SmartBuildingPlacer {
     /** Find any non-occupied tile near center (for goods piles). */
     findOpenPosition(): Tile {
         const result = spiralSearch(
-            this.centerX,
-            this.centerY,
+            { x: this.centerX, y: this.centerY },
             this.mapWidth,
             this.mapHeight,
-            (x, y) => !this.state.groundOccupancy.has(tileKey(x, y)) && !this.state.unitOccupancy.has(tileKey(x, y))
+            t => !this.state.groundOccupancy.has(tileKey(t)) && !this.state.unitOccupancy.has(tileKey(t))
         );
         if (!result) throw new Error('SmartBuildingPlacer: no open position found');
         return result;
@@ -144,12 +145,12 @@ export class SmartBuildingPlacer {
 
     /** Find a position with enough clearance for a mine. */
     findMinePosition(clearance = 8): Tile {
-        const result = spiralSearch(this.centerX, this.centerY, this.mapWidth, this.mapHeight, (x, y) => {
+        const result = spiralSearch({ x: this.centerX, y: this.centerY }, this.mapWidth, this.mapHeight, ({ x, y }) => {
             if (x - clearance < 0 || x + clearance >= this.mapWidth) return false;
             if (y - clearance < 0 || y + clearance >= this.mapHeight) return false;
             for (let dy = -clearance; dy <= clearance; dy++) {
                 for (let dx = -clearance; dx <= clearance; dx++) {
-                    const k = tileKey(x + dx, y + dy);
+                    const k = tileKey({ x: x + dx, y: y + dy });
                     if (this.state.groundOccupancy.has(k) || this.state.unitOccupancy.has(k)) return false;
                 }
             }
@@ -258,7 +259,7 @@ export function tilesNearBuilding(
 /** Chebyshev radius of a building's footprint from its anchor. */
 function footprintRadius(b: import('@/game/entity').Entity): number {
     try {
-        const fp = getBuildingFootprint(b.x, b.y, b.subType as BuildingType, b.race);
+        const fp = getBuildingFootprint({ x: b.x, y: b.y }, b.subType as BuildingType, b.race);
         return Math.max(...fp.map(t => Math.max(Math.abs(t.x - b.x), Math.abs(t.y - b.y))));
     } catch {
         return 2;
@@ -278,9 +279,9 @@ function findEmptyTiles(
     const placed = new Set<string>();
     const results: Tile[] = [];
     for (let i = 0; i < count; i++) {
-        const pos = spiralSearch(cx, cy, mapWidth, mapHeight, (x, y) => {
+        const pos = spiralSearch({ x: cx, y: cy }, mapWidth, mapHeight, ({ x, y }) => {
             const dist = Math.max(Math.abs(x - cx), Math.abs(y - cy));
-            return dist >= skipRadius && !state.getEntityAt(x, y) && !placed.has(`${x},${y}`);
+            return dist >= skipRadius && !state.getEntityAt({ x, y }) && !placed.has(`${x},${y}`);
         });
         if (!pos) break;
         placed.add(`${pos.x},${pos.y}`);
@@ -291,14 +292,14 @@ function findEmptyTiles(
 
 export function placeTreeEntities(state: GameState, services: GameServices, tiles: Tile[]): void {
     for (const pos of tiles) {
-        const tree = state.addEntity(EntityType.MapObject, MapObjectType.TreePine, pos.x, pos.y, 0);
+        const tree = state.addEntity(EntityType.MapObject, MapObjectType.TreePine, pos, 0);
         services.treeSystem.register(tree.id, MapObjectType.TreePine, false);
     }
 }
 
 export function placeStoneEntities(state: GameState, services: GameServices, tiles: Tile[]): void {
     for (const pos of tiles) {
-        const stone = state.addEntity(EntityType.MapObject, MapObjectType.ResourceStone12, pos.x, pos.y, 0);
+        const stone = state.addEntity(EntityType.MapObject, MapObjectType.ResourceStone12, pos, 0);
         services.stoneSystem.register(stone.id, MapObjectType.ResourceStone12);
     }
 }
@@ -318,7 +319,7 @@ export function fillTerrain(
             const tx = cx + dx;
             const ty = cy + dy;
             if (tx >= 0 && tx < mapWidth && ty >= 0 && ty < mapHeight) {
-                map.groundType[map.mapSize.toIndex(tx, ty)] = terrain;
+                map.groundType[map.mapSize.toIndex({ x: tx, y: ty })] = terrain;
             }
         }
     }
@@ -350,7 +351,7 @@ export function fillOreSquare(
             const tx = cx + dx;
             const ty = cy + dy;
             if (tx >= 0 && tx < mapWidth && ty >= 0 && ty < mapHeight) {
-                services.oreVeinData.setOre(tx, ty, oreType, oreLevel);
+                services.oreVeinData.setOre({ x: tx, y: ty }, oreType, oreLevel);
             }
         }
     }

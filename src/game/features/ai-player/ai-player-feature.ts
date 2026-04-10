@@ -32,7 +32,7 @@ export const AiPlayerFeature: FeatureDefinition = {
         aiSystem.setHasSite(id => constructionExports.constructionSiteManager.hasSite(id));
         aiSystem.setPlacementFilter(() => {
             const tm = territoryExports.territoryManager;
-            return tm ? createTerritoryPlacementFilter(tm) : null;
+            return tm ? createTerritoryPlacementFilter(tm, ctx.gameState.playerRaces) : null;
         });
 
         const exports: AiPlayerExports = { aiSystem };

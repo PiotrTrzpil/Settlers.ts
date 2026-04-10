@@ -90,7 +90,7 @@ export class Simulation {
     private tickCount = 0;
 
     constructor(opts: SimulationOptions = {}) {
-        const { mapWidth = 128, mapHeight = 128, race = Race.Roman } = opts;
+        const { mapWidth = 128, mapHeight = 128, race = Race.Roman, race1 = Race.Roman } = opts;
         this.mapWidth = mapWidth;
         this.mapHeight = mapHeight;
         this.testId = nextSimulationId();
@@ -110,7 +110,7 @@ export class Simulation {
         this.state = new GameState(this.eventBus, () => 0);
         this.state.playerRaces = new Map([
             [0, race],
-            [1, Race.Roman],
+            [1, race1],
         ]);
 
         // Subscribe timeline FIRST — before any other system registers handlers,
@@ -144,7 +144,7 @@ export class Simulation {
             recruitSystem: this.services.recruitSystem,
             unitTransformer: this.services.unitTransformer,
             getPlacementFilter: () => null,
-            getOwner: (x, y) => this.services.territoryManager.getOwner(x, y),
+            getOwner: tile => this.services.territoryManager.getOwner(tile),
         });
 
         this.services.residenceSpawner.immediateMode = true;
@@ -345,17 +345,17 @@ export class Simulation {
         return result.entityId;
     }
 
-    placeGoodsAt(x: number, y: number, material: EMaterialType, amount: number): number {
+    placeGoodsAt(tile: Tile, material: EMaterialType, amount: number): number {
         if (amount > 8) throw new Error(`placeGoodsAt: amount ${amount} exceeds max pile size of 8`);
         const result = this.execute({
             type: 'place_pile',
             materialType: material,
             amount,
-            x,
-            y,
+            x: tile.x,
+            y: tile.y,
         });
         if (!result.success) {
-            throw new Error(`Failed to place ${material} at (${x}, ${y}): ${result.error}`);
+            throw new Error(`Failed to place ${material} at (${tile.x}, ${tile.y}): ${result.error}`);
         }
         return result.entityId;
     }
@@ -428,7 +428,7 @@ export class Simulation {
 
     placeRiverNear(buildingId: number, count: number) {
         for (const pos of this.tilesNear(buildingId, count)) {
-            this.map.groundType[this.map.mapSize.toIndex(pos.x, pos.y)] = TERRAIN.RIVER_MIN;
+            this.map.groundType[this.map.mapSize.toIndex(pos)] = TERRAIN.RIVER_MIN;
         }
     }
 
@@ -474,27 +474,27 @@ export class Simulation {
 
     // ─── Unit management ──────────────────────────────────────────
 
-    spawnUnit(x: number, y: number, unitType = UnitType.Carrier, player = 0): number {
+    spawnUnit(tile: Tile, unitType = UnitType.Carrier, player = 0, race?: Race): number {
         const result = this.execute({
             type: 'spawn_unit',
             unitType,
-            x,
-            y,
+            x: tile.x,
+            y: tile.y,
             player,
-            race: Race.Roman,
+            race: race ?? this.state.playerRaces.get(player) ?? Race.Roman,
         });
         if (!result.success) {
-            throw new Error(`Failed to spawn ${unitType} at (${x}, ${y}): ${result.error}`);
+            throw new Error(`Failed to spawn ${unitType} at (${tile.x}, ${tile.y}): ${result.error}`);
         }
         return result.entityId;
     }
 
     spawnUnitNear(buildingId: number, unitType: UnitType, count = 1, player = 0): number[] {
-        return this.tilesNear(buildingId, count).map(pos => this.spawnUnit(pos.x, pos.y, unitType, player));
+        return this.tilesNear(buildingId, count).map(pos => this.spawnUnit(pos, unitType, player));
     }
 
-    moveUnit(entityId: number, targetX: number, targetY: number): boolean {
-        return this.state.movement.moveUnit(entityId, targetX, targetY);
+    moveUnit(entityId: number, target: Tile): boolean {
+        return this.state.movement.moveUnit(entityId, target);
     }
 
     simulateMovement(entityId: number, opts: { maxTicks?: number; target?: Tile } = {}): Tile[] {
@@ -567,8 +567,8 @@ export class Simulation {
      */
     establishTerritory(player: number): void {
         const tm = this.services.territoryManager;
-        tm.addBuilding(-1 - player, this.mapWidth >> 1, this.mapHeight >> 1, player, BuildingType.Castle);
-        tm.getOwner(0, 0);
+        tm.addBuilding(-1 - player, { x: this.mapWidth >> 1, y: this.mapHeight >> 1 }, player, BuildingType.Castle);
+        tm.getOwner({ x: 0, y: 0 });
     }
 
     /** Fill a square region with a terrain type. */

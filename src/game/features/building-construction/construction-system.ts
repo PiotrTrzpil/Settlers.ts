@@ -249,7 +249,7 @@ export class BuildingConstructionSystem implements TickSystem {
                     mapSize
                 );
                 if (modified && this.terrainContext.onTerrainModified) {
-                    this.terrainContext.onTerrainModified('leveling', x, y);
+                    this.terrainContext.onTerrainModified('leveling', { x, y });
                 }
             }
         );
@@ -280,10 +280,10 @@ export class BuildingConstructionSystem implements TickSystem {
 
             // 4. Repath any in-flight units whose paths go through the now-blocked footprint
             //    (exclude evacuating units — they have valid escape paths calculated before blocking)
-            const blockArea = getBuildingBlockArea(site.tileX, site.tileY, site.buildingType, site.race);
+            const blockArea = getBuildingBlockArea({ x: site.tileX, y: site.tileY }, site.buildingType, site.race);
             const blockKeys = new Set<string>();
             for (const tile of blockArea) {
-                blockKeys.add(tileKey(tile.x, tile.y));
+                blockKeys.add(tileKey(tile));
             }
             this.state.movement.repathUnitsThrough(blockKeys, unitsOnFootprint);
 
@@ -365,10 +365,10 @@ export class BuildingConstructionSystem implements TickSystem {
      */
     private findUnitsOnFootprint(buildingId: number): Set<number> {
         const entity = this.state.getEntityOrThrow(buildingId, 'findUnitsOnFootprint');
-        const blockArea = getBuildingBlockArea(entity.x, entity.y, entity.subType as BuildingType, entity.race);
+        const blockArea = getBuildingBlockArea(entity, entity.subType as BuildingType, entity.race);
         const blockKeys = new Set<string>();
         for (const tile of blockArea) {
-            blockKeys.add(tileKey(tile.x, tile.y));
+            blockKeys.add(tileKey(tile));
         }
 
         // Scan all entities — tileOccupancy only stores one entity per tile and the
@@ -379,7 +379,7 @@ export class BuildingConstructionSystem implements TickSystem {
             if (e.type !== EntityType.Unit) {
                 continue;
             }
-            if (blockKeys.has(tileKey(e.x, e.y))) {
+            if (blockKeys.has(tileKey(e))) {
                 unitIds.add(e.id);
             }
         }
@@ -392,15 +392,15 @@ export class BuildingConstructionSystem implements TickSystem {
      */
     private evacuateUnits(buildingId: number, unitIds: Set<number>): void {
         const building = this.state.getEntityOrThrow(buildingId, 'evacuateUnits');
-        const footprint = getBuildingFootprint(building.x, building.y, building.subType as BuildingType, building.race);
+        const footprint = getBuildingFootprint(building, building.subType as BuildingType, building.race);
         const footprintKeys = new Set<string>();
         for (const tile of footprint) {
-            footprintKeys.add(tileKey(tile.x, tile.y));
+            footprintKeys.add(tileKey(tile));
         }
 
         for (const unitId of unitIds) {
             const unit = this.state.getEntityOrThrow(unitId, 'evacuateUnits');
-            const target = this.findNearestFreeOutside(unit.x, unit.y, footprintKeys);
+            const target = this.findNearestFreeOutside(unit, footprintKeys);
             if (target) {
                 this.executeCommand({ type: 'move_unit', entityId: unitId, targetX: target.x, targetY: target.y });
             }
@@ -410,17 +410,17 @@ export class BuildingConstructionSystem implements TickSystem {
     /**
      * Find the nearest free tile that is NOT part of the given footprint.
      */
-    private findNearestFreeOutside(cx: number, cy: number, footprintKeys: Set<string>): Tile | null {
+    private findNearestFreeOutside(center: Tile, footprintKeys: Set<string>): Tile | null {
         for (let radius = 1; radius <= 10; radius++) {
-            for (const tile of ringTiles(cx, cy, radius)) {
-                const key = tileKey(tile.x, tile.y);
+            for (const tile of ringTiles(center, radius)) {
+                const key = tileKey(tile);
                 if (footprintKeys.has(key)) {
                     continue;
                 }
                 // Check ground occupancy — buildings own footprint tiles in groundOccupancy
                 // but those are filtered by footprintKeys above, so any remaining
                 // ground occupant (map object, pile) is a real blocker.
-                if (this.state.getGroundEntityAt(tile.x, tile.y)) {
+                if (this.state.getGroundEntityAt(tile)) {
                     continue;
                 }
                 return tile;
@@ -448,16 +448,16 @@ export class BuildingConstructionSystem implements TickSystem {
         }
 
         // Build block area keys
-        const blockArea = getBuildingBlockArea(building.x, building.y, building.subType as BuildingType, building.race);
+        const blockArea = getBuildingBlockArea(building, building.subType as BuildingType, building.race);
         const blockKeys = new Set<string>();
         for (const tile of blockArea) {
-            blockKeys.add(tileKey(tile.x, tile.y));
+            blockKeys.add(tileKey(tile));
         }
 
         // Remove units that have cleared the footprint or died
         for (const unitId of Array.from(tracked)) {
             const unit = this.state.getEntity(unitId);
-            if (!unit || !blockKeys.has(tileKey(unit.x, unit.y))) {
+            if (!unit || !blockKeys.has(tileKey(unit))) {
                 tracked.delete(unitId);
             }
         }
@@ -481,7 +481,7 @@ export class BuildingConstructionSystem implements TickSystem {
         const { groundType, groundHeight, mapSize } = this.terrainContext.terrain;
         const modified = restoreOriginalTerrain(site.terrain.originalTerrain, groundType, groundHeight, mapSize);
         if (modified && this.terrainContext.onTerrainModified) {
-            this.terrainContext.onTerrainModified('restore', site.tileX, site.tileY);
+            this.terrainContext.onTerrainModified('restore', { x: site.tileX, y: site.tileY });
         }
     }
 }

@@ -41,8 +41,8 @@ describe('Combat – pursuit re-targeting', { timeout: 60_000 }, () => {
         sim.establishTerritory(1);
 
         // Strong soldier so it survives long enough to demonstrate retargeting
-        const soldier = sim.spawnUnit(50, 50, UnitType.Swordsman3, 0);
-        const farEnemy = sim.spawnUnit(65, 50, UnitType.Swordsman1, 1);
+        const soldier = sim.spawnUnit({ x: 50, y: 50 }, UnitType.Swordsman3, 0);
+        const farEnemy = sim.spawnUnit({ x: 65, y: 50 }, UnitType.Swordsman1, 1);
 
         // Wait for the soldier to start pursuing the far enemy
         sim.runUntil(() => combatStatus(sim, soldier) === CombatStatus.Pursuing, {
@@ -56,7 +56,7 @@ describe('Combat – pursuit re-targeting', { timeout: 60_000 }, () => {
 
         // Spawn a much closer enemy — should trigger re-targeting
         const pos = sim.state.getEntityOrThrow(soldier, 'soldier');
-        const closeEnemy = sim.spawnUnit(pos.x + 2, pos.y, UnitType.Swordsman1, 1);
+        const closeEnemy = sim.spawnUnit({ x: pos.x + 2, y: pos.y }, UnitType.Swordsman1, 1);
 
         // The soldier should eventually switch to the closer enemy
         sim.runUntil(() => combatTarget(sim, soldier) === closeEnemy, {
@@ -79,9 +79,9 @@ describe('Combat – pursuit re-targeting', { timeout: 60_000 }, () => {
         sim.establishTerritory(1);
 
         // Two enemies at similar distances — soldier should stick with one
-        const soldier = sim.spawnUnit(50, 50, UnitType.Swordsman1, 0);
-        sim.spawnUnit(57, 50, UnitType.Swordsman1, 1);
-        sim.spawnUnit(56, 50, UnitType.Swordsman1, 1);
+        const soldier = sim.spawnUnit({ x: 50, y: 50 }, UnitType.Swordsman1, 0);
+        sim.spawnUnit({ x: 57, y: 50 }, UnitType.Swordsman1, 1);
+        sim.spawnUnit({ x: 56, y: 50 }, UnitType.Swordsman1, 1);
 
         sim.runUntil(() => combatStatus(sim, soldier) === CombatStatus.Pursuing, {
             maxTicks: 500,
@@ -127,8 +127,8 @@ describe('Combat – stuck soldier recovery', { timeout: 60_000 }, () => {
         sim.establishTerritory(1);
 
         // Place soldier and enemy with some distance
-        const soldier = sim.spawnUnit(50, 50, UnitType.Swordsman3, 0);
-        const enemy = sim.spawnUnit(55, 50, UnitType.Swordsman1, 1);
+        const soldier = sim.spawnUnit({ x: 50, y: 50 }, UnitType.Swordsman3, 0);
+        const enemy = sim.spawnUnit({ x: 55, y: 50 }, UnitType.Swordsman1, 1);
 
         // Wait for pursuit to start
         sim.runUntil(() => combatStatus(sim, soldier) === CombatStatus.Pursuing, {
@@ -177,9 +177,9 @@ describe('Combat – fighting re-target', { timeout: 60_000 }, () => {
         sim.establishTerritory(1);
 
         // Strong soldier vs two weak enemies side by side
-        const soldier = sim.spawnUnit(50, 50, UnitType.Swordsman3, 0);
-        const enemy1 = sim.spawnUnit(51, 50, UnitType.Swordsman1, 1);
-        const enemy2 = sim.spawnUnit(50, 51, UnitType.Swordsman1, 1);
+        const soldier = sim.spawnUnit({ x: 50, y: 50 }, UnitType.Swordsman3, 0);
+        const enemy1 = sim.spawnUnit({ x: 51, y: 50 }, UnitType.Swordsman1, 1);
+        const enemy2 = sim.spawnUnit({ x: 50, y: 51 }, UnitType.Swordsman1, 1);
 
         // Wait for the soldier to start fighting one of them
         sim.runUntil(() => combatStatus(sim, soldier) === CombatStatus.Fighting, {
@@ -212,9 +212,9 @@ describe('Combat – fighting re-target', { timeout: 60_000 }, () => {
         sim.establishTerritory(1);
 
         // Two enemies: one adjacent, one further out
-        const soldier = sim.spawnUnit(50, 50, UnitType.Swordsman1, 0);
-        const nearEnemy = sim.spawnUnit(51, 50, UnitType.Swordsman1, 1);
-        sim.spawnUnit(55, 50, UnitType.Swordsman1, 1);
+        const soldier = sim.spawnUnit({ x: 50, y: 50 }, UnitType.Swordsman1, 0);
+        const nearEnemy = sim.spawnUnit({ x: 51, y: 50 }, UnitType.Swordsman1, 1);
+        sim.spawnUnit({ x: 55, y: 50 }, UnitType.Swordsman1, 1);
 
         // Wait for soldier to engage (should pick the adjacent one first)
         sim.runUntil(() => combatStatus(sim, soldier) === CombatStatus.Fighting, {
@@ -244,11 +244,11 @@ describe('Combat – multiple soldiers engage closest enemies', { timeout: 60_00
         sim.establishTerritory(1);
 
         // Two soldiers, two enemies — each soldier should pick the nearest
-        const soldier1 = sim.spawnUnit(50, 50, UnitType.Swordsman1, 0);
-        const soldier2 = sim.spawnUnit(50, 55, UnitType.Swordsman1, 0);
+        const soldier1 = sim.spawnUnit({ x: 50, y: 50 }, UnitType.Swordsman1, 0);
+        const soldier2 = sim.spawnUnit({ x: 50, y: 55 }, UnitType.Swordsman1, 0);
 
-        const enemy1 = sim.spawnUnit(53, 50, UnitType.Swordsman1, 1); // closer to soldier1
-        const enemy2 = sim.spawnUnit(53, 55, UnitType.Swordsman1, 1); // closer to soldier2
+        const enemy1 = sim.spawnUnit({ x: 53, y: 50 }, UnitType.Swordsman1, 1); // closer to soldier1
+        const enemy2 = sim.spawnUnit({ x: 53, y: 55 }, UnitType.Swordsman1, 1); // closer to soldier2
 
         sim.runUntil(
             () =>
@@ -271,9 +271,9 @@ describe('Combat – multiple soldiers engage closest enemies', { timeout: 60_00
         sim.establishTerritory(0);
         sim.establishTerritory(1);
 
-        const soldier1 = sim.spawnUnit(50, 50, UnitType.Swordsman1, 0);
-        const soldier2 = sim.spawnUnit(52, 50, UnitType.Swordsman1, 0);
-        const enemy = sim.spawnUnit(55, 50, UnitType.Swordsman1, 1);
+        const soldier1 = sim.spawnUnit({ x: 50, y: 50 }, UnitType.Swordsman1, 0);
+        const soldier2 = sim.spawnUnit({ x: 52, y: 50 }, UnitType.Swordsman1, 0);
+        const enemy = sim.spawnUnit({ x: 55, y: 50 }, UnitType.Swordsman1, 1);
 
         sim.runUntil(
             () =>
@@ -306,8 +306,8 @@ describe('Combat – pursuit responsiveness', { timeout: 60_000 }, () => {
         sim.establishTerritory(0);
         sim.establishTerritory(1);
 
-        const soldier = sim.spawnUnit(50, 50, UnitType.Swordsman1, 0);
-        const enemy = sim.spawnUnit(58, 50, UnitType.Swordsman1, 1);
+        const soldier = sim.spawnUnit({ x: 50, y: 50 }, UnitType.Swordsman1, 0);
+        const enemy = sim.spawnUnit({ x: 58, y: 50 }, UnitType.Swordsman1, 1);
 
         const startPos = sim.state.getEntityOrThrow(soldier, 'soldier');
         const dist = hexDistanceTo(startPos, sim.state.getEntityOrThrow(enemy, 'enemy'));

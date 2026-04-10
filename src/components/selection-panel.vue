@@ -13,6 +13,7 @@
                     {{ selectedEntity.player }}
                 </span>
             </StatRow>
+            <StatRow label="ID" :value="'#' + selectedEntity.id" />
 
             <!-- Unit-specific info -->
             <template v-if="isUnit">

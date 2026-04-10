@@ -36,14 +36,14 @@ export function computeSlopeDifficulty(tiles: Tile[], groundHeight: Uint8Array, 
     // Build a set of footprint tile indices for quick lookup
     const footprintSet = new Set<number>();
     for (const tile of tiles) {
-        footprintSet.add(mapSize.toIndex(tile.x, tile.y));
+        footprintSet.add(mapSize.toIndex(tile));
     }
 
     let maxGradient = 0;
 
     // Check each tile's gradient against its cardinal neighbors WITHIN the footprint
     for (const tile of tiles) {
-        const idx = mapSize.toIndex(tile.x, tile.y);
+        const idx = mapSize.toIndex(tile);
         const h = groundHeight[idx]!;
 
         for (const [dx, dy] of CARDINAL_OFFSETS) {
@@ -51,11 +51,11 @@ export function computeSlopeDifficulty(tiles: Tile[], groundHeight: Uint8Array, 
             const ny = tile.y + dy;
 
             // Skip out-of-bounds neighbors
-            if (!isInMapBounds(nx, ny, mapSize.width, mapSize.height)) {
+            if (!isInMapBounds({ x: nx, y: ny }, mapSize.width, mapSize.height)) {
                 continue;
             }
 
-            const nIdx = mapSize.toIndex(nx, ny);
+            const nIdx = mapSize.toIndex({ x: nx, y: ny });
 
             // Only check neighbors that are also in the footprint
             // External neighbors are handled by terrain leveling during construction
@@ -104,20 +104,20 @@ export function computeHeightRange(tiles: Tile[], groundHeight: Uint8Array, mapS
 
     const footprintSet = new Set<number>();
     for (const tile of tiles) {
-        footprintSet.add(mapSize.toIndex(tile.x, tile.y));
+        footprintSet.add(mapSize.toIndex(tile));
     }
 
     let maxGradient = 0;
 
     for (const tile of tiles) {
-        const h = groundHeight[mapSize.toIndex(tile.x, tile.y)]!;
+        const h = groundHeight[mapSize.toIndex(tile)]!;
         for (const [dx, dy] of CARDINAL_OFFSETS) {
             const nx = tile.x + dx;
             const ny = tile.y + dy;
-            if (!isInMapBounds(nx, ny, mapSize.width, mapSize.height)) {
+            if (!isInMapBounds({ x: nx, y: ny }, mapSize.width, mapSize.height)) {
                 continue;
             }
-            const nIdx = mapSize.toIndex(nx, ny);
+            const nIdx = mapSize.toIndex({ x: nx, y: ny });
             if (!footprintSet.has(nIdx)) {
                 continue;
             }

@@ -2,7 +2,7 @@
  * Resource Sign System — places and expires ore resource sign entities.
  *
  * Public API:
- * - `placeSign(x, y)` — reads ore data at (x, y) and creates a sign entity with
+ * - `placeSign(tile)` — reads ore data at tile and creates a sign entity with
  *   the appropriate MapObjectType and variation; tracks it for auto-expiry
  * - `tick(dt)` — removes signs whose lifetime has elapsed
  * - `onEntityRemoved(id)` — cleans up tracking if a sign is removed externally
@@ -13,12 +13,14 @@ import type { TickSystem } from '../../core/tick-system';
 import type { OreVeinData } from './ore-vein-data';
 import { OreType } from './ore-type';
 import { MapObjectType } from '@/game/types/map-object-types';
-import { EntityType, type Entity } from '../../entity';
+import { EntityType, type Entity, type Tile } from '../../entity';
 import { createLogger } from '@/utilities/logger';
 import type { ExecuteCommand } from '../../commands';
 import { sortedEntries } from '@/utilities/collections';
 
 const log = createLogger('ResourceSignSystem');
+
+type SignEntry = Tile & { expiresAt: number };
 
 /** Signs remain visible for 15 minutes of game time. */
 const SIGN_LIFETIME = 900;
@@ -45,16 +47,16 @@ const ORE_TYPE_TO_MAP_OBJECT: Partial<Record<OreType, MapObjectType>> = {
 
 export interface ResourceSignSystemConfig {
     executeCommand: ExecuteCommand;
-    getGroundEntityAt: (x: number, y: number) => Entity | undefined;
+    getGroundEntityAt: (tile: Tile) => Entity | undefined;
 }
 
 export class ResourceSignSystem implements TickSystem {
     /** Maps sign entity ID to its position and game-time expiry. */
-    private readonly signs = new Map<number, { x: number; y: number; expiresAt: number }>();
+    private readonly signs = new Map<number, SignEntry>();
     private elapsed = 0;
     private oreVeinData!: OreVeinData; // OK: genuinely deferred — set via setOreVeinData() after terrain loads
     private readonly executeCommand: ExecuteCommand;
-    private readonly getGroundEntityAt: (x: number, y: number) => Entity | undefined;
+    private readonly getGroundEntityAt: (tile: Tile) => Entity | undefined;
 
     constructor(cfg: ResourceSignSystemConfig) {
         this.executeCommand = cfg.executeCommand;
@@ -80,9 +82,10 @@ export class ResourceSignSystem implements TickSystem {
      * 1-5 → variation 0 (LOW), 6-10 → variation 1 (MED), 11-16 → variation 2 (RICH).
      * For empty tiles (OreType.None or level 0) the sign type is `ResEmpty`.
      */
-    placeSign(x: number, y: number): void {
-        const oreType = this.oreVeinData.getOreType(x, y);
-        const oreLevel = this.oreVeinData.getOreLevel(x, y);
+    placeSign(tile: Tile): void {
+        const { x, y } = tile;
+        const oreType = this.oreVeinData.getOreType(tile);
+        const oreLevel = this.oreVeinData.getOreLevel(tile);
 
         let signType: MapObjectType;
         let variation = 0;
@@ -95,7 +98,7 @@ export class ResourceSignSystem implements TickSystem {
         }
 
         // Clear any existing map object at this position (trees, stones, expired signs)
-        const existing = this.getGroundEntityAt(x, y);
+        const existing = this.getGroundEntityAt(tile);
         if (existing) {
             if (existing.type === EntityType.Building) {
                 return; // never remove buildings

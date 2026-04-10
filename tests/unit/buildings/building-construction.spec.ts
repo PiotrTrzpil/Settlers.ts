@@ -37,8 +37,8 @@ describe('Terrain Leveling', () => {
 
     it('should capture footprint + neighbor tiles with correct heights and no duplicates', () => {
         const map = createTestMap();
-        map.groundHeight[map.mapSize.toIndex(10, 10)] = 100;
-        map.groundHeight[map.mapSize.toIndex(11, 10)] = 120;
+        map.groundHeight[map.mapSize.toIndex({ x: 10, y: 10 })] = 100;
+        map.groundHeight[map.mapSize.toIndex({ x: 11, y: 10 })] = 120;
 
         const params = makeTerrainParams(10, 10, BuildingType.WoodcutterHut);
         const captured = captureOriginalTerrain(params, map.groundType, map.groundHeight, map.mapSize);
@@ -64,10 +64,10 @@ describe('Terrain Leveling', () => {
 
     it('should interpolate heights toward target and level fully at progress 1.0', () => {
         const map = createTestMap();
-        map.groundHeight[map.mapSize.toIndex(10, 10)] = 200;
-        map.groundHeight[map.mapSize.toIndex(11, 10)] = 0;
-        map.groundHeight[map.mapSize.toIndex(10, 11)] = 0;
-        map.groundHeight[map.mapSize.toIndex(11, 11)] = 0;
+        map.groundHeight[map.mapSize.toIndex({ x: 10, y: 10 })] = 200;
+        map.groundHeight[map.mapSize.toIndex({ x: 11, y: 10 })] = 0;
+        map.groundHeight[map.mapSize.toIndex({ x: 10, y: 11 })] = 0;
+        map.groundHeight[map.mapSize.toIndex({ x: 11, y: 11 })] = 0;
 
         const params = makeTerrainParams(10, 10, BuildingType.WoodcutterHut);
         const originalTerrain = captureOriginalTerrain(params, map.groundType, map.groundHeight, map.mapSize);
@@ -77,39 +77,39 @@ describe('Terrain Leveling', () => {
         expect(applyTerrainLeveling(params, map.groundType, map.groundHeight, map.mapSize, 0, originalTerrain)).toBe(
             false
         );
-        expect(map.groundType[map.mapSize.toIndex(10, 10)]).toBe(TERRAIN.GRASS);
+        expect(map.groundType[map.mapSize.toIndex({ x: 10, y: 10 })]).toBe(TERRAIN.GRASS);
 
         // Progress 0.5 - interpolated
         applyTerrainLeveling(params, map.groundType, map.groundHeight, map.mapSize, 0.5, originalTerrain);
-        const h1010 = map.groundHeight[map.mapSize.toIndex(10, 10)];
+        const h1010 = map.groundHeight[map.mapSize.toIndex({ x: 10, y: 10 })];
         expect(h1010).toBe(Math.round(200 + (target - 200) * 0.5));
 
         // Progress 1.0 - fully leveled with construction ground type
         applyTerrainLeveling(params, map.groundType, map.groundHeight, map.mapSize, 1.0, originalTerrain);
-        for (const tile of getBuildingFootprint(10, 10, BuildingType.WoodcutterHut, Race.Roman)) {
-            expect(map.groundHeight[map.mapSize.toIndex(tile.x, tile.y)]).toBe(target);
-            expect(map.groundType[map.mapSize.toIndex(tile.x, tile.y)]).toBe(CONSTRUCTION_SITE_GROUND_TYPE);
+        for (const tile of getBuildingFootprint({ x: 10, y: 10 }, BuildingType.WoodcutterHut, Race.Roman)) {
+            expect(map.groundHeight[map.mapSize.toIndex(tile)]).toBe(target);
+            expect(map.groundType[map.mapSize.toIndex(tile)]).toBe(CONSTRUCTION_SITE_GROUND_TYPE);
         }
 
         // Neighbors should NOT have construction ground type
-        expect(map.groundType[map.mapSize.toIndex(9, 10)]).toBe(TERRAIN.GRASS);
+        expect(map.groundType[map.mapSize.toIndex({ x: 9, y: 10 })]).toBe(TERRAIN.GRASS);
     });
 
     it('should restore original terrain after leveling', () => {
         const map = createTestMap();
-        map.groundHeight[map.mapSize.toIndex(10, 10)] = 100;
-        map.groundHeight[map.mapSize.toIndex(11, 10)] = 120;
+        map.groundHeight[map.mapSize.toIndex({ x: 10, y: 10 })] = 100;
+        map.groundHeight[map.mapSize.toIndex({ x: 11, y: 10 })] = 120;
 
         const params = makeTerrainParams(10, 10, BuildingType.WoodcutterHut);
         const originalTerrain = captureOriginalTerrain(params, map.groundType, map.groundHeight, map.mapSize);
 
         applyTerrainLeveling(params, map.groundType, map.groundHeight, map.mapSize, 1.0, originalTerrain);
-        expect(map.groundType[map.mapSize.toIndex(10, 10)]).toBe(CONSTRUCTION_SITE_GROUND_TYPE);
+        expect(map.groundType[map.mapSize.toIndex({ x: 10, y: 10 })]).toBe(CONSTRUCTION_SITE_GROUND_TYPE);
 
         const modified = restoreOriginalTerrain(originalTerrain, map.groundType, map.groundHeight, map.mapSize);
         expect(modified).toBe(true);
-        expect(map.groundType[map.mapSize.toIndex(10, 10)]).toBe(TERRAIN.GRASS);
-        expect(map.groundHeight[map.mapSize.toIndex(10, 10)]).toBe(100);
-        expect(map.groundHeight[map.mapSize.toIndex(11, 10)]).toBe(120);
+        expect(map.groundType[map.mapSize.toIndex({ x: 10, y: 10 })]).toBe(TERRAIN.GRASS);
+        expect(map.groundHeight[map.mapSize.toIndex({ x: 10, y: 10 })]).toBe(100);
+        expect(map.groundHeight[map.mapSize.toIndex({ x: 11, y: 10 })]).toBe(120);
     });
 });

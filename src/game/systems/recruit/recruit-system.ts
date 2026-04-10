@@ -33,10 +33,12 @@ const QUEUE_DRAIN_INTERVAL = 0.5; // seconds
 
 // ─── Public types ─────────────────────────────────────────────────────
 
+export type TileWithPile = Tile & { pileEntityId: number };
+
 /** Result of findRecruitmentCandidate — carrier + optional tool pile. */
 export interface RecruitmentCandidate {
     carrierId: number;
-    toolPile: { pileEntityId: number; x: number; y: number } | null;
+    toolPile: TileWithPile | null;
 }
 
 /** Options for dispatchRecruitment. */
@@ -85,6 +87,7 @@ export class RecruitSystem implements TickSystem {
     private readonly toolSourceResolver: ToolSourceResolver;
     private readonly assignJob: RecruitSystemConfig['assignJob'];
     private readonly subscriptions = new EventSubscriptionManager();
+    private territoryCheck: ((a: Tile, b: Tile, player: number) => boolean) | null = null;
 
     private readonly queue = new Map<UnitType, QueueEntry>();
     private queueTimer = 0;
@@ -96,6 +99,31 @@ export class RecruitSystem implements TickSystem {
         this.unitTransformer = config.unitTransformer;
         this.toolSourceResolver = config.toolSourceResolver;
         this.assignJob = config.assignJob;
+    }
+
+    /** Inject territory connectivity check (called by TerritoryFeature after load). */
+    setTerritoryCheck(check: (a: Tile, b: Tile, player: number) => boolean): void {
+        this.territoryCheck = check;
+    }
+
+    /**
+     * Build a carrier eligibility filter that rejects carriers in disconnected
+     * territory pockets. Returns undefined if no territory check is configured
+     * or no reference point is available.
+     */
+    private buildTerritoryFilter(ref: Tile | undefined, player: number): ((entityId: number) => boolean) | undefined {
+        if (!this.territoryCheck || !ref) {
+            return undefined;
+        }
+        const check = this.territoryCheck;
+        const gs = this.gameState;
+        return (entityId: number) => {
+            const e = gs.getEntity(entityId);
+            if (!e) {
+                return false;
+            }
+            return check(e, ref, player);
+        };
     }
 
     // =====================================================================
@@ -128,18 +156,20 @@ export class RecruitSystem implements TickSystem {
         const toolMaterial = SPECIALIST_TOOL_MAP[unitType] ?? null;
 
         if (toolMaterial !== null) {
-            return this.findToolBasedCandidate(toolMaterial, player, opts);
+            const ref = opts?.target ?? opts?.hint;
+            return this.findToolBasedCandidate(toolMaterial, player, opts, this.buildTerritoryFilter(ref, player));
         }
 
         // No tool needed — find nearest idle carrier
         const ref = opts?.target ?? opts?.hint;
+        const filter = this.buildTerritoryFilter(ref, player);
         if (ref) {
-            const carrierId = this.idleCarrierPool.findNearest(ref.x, ref.y, player);
+            const carrierId = this.idleCarrierPool.findNearest(ref.x, ref.y, player, filter);
             return carrierId !== null ? { carrierId, toolPile: null } : null;
         }
 
         // No reference point — find any idle carrier
-        const carrierId = this.idleCarrierPool.findNearest(0, 0, player);
+        const carrierId = this.idleCarrierPool.findNearest(0, 0, player, filter);
         return carrierId !== null ? { carrierId, toolPile: null } : null;
     }
 
@@ -322,23 +352,29 @@ export class RecruitSystem implements TickSystem {
     private findToolBasedCandidate(
         toolMaterial: EMaterialType,
         player: number,
-        opts?: { target?: Tile; hint?: Tile }
+        opts?: { target?: Tile; hint?: Tile },
+        carrierFilter?: (entityId: number) => boolean
     ): RecruitmentCandidate | null {
         // Hint mode: find tool nearest to hint, then carrier nearest to tool
         if (opts?.hint) {
-            return this.resolveToolWithHint(toolMaterial, opts.hint, player);
+            return this.resolveToolWithHint(toolMaterial, opts.hint, player, carrierFilter);
         }
 
         // Iterate carriers, find best (carrier, tool) pair
-        return this.resolveToolByScan(toolMaterial, player, opts?.target);
+        return this.resolveToolByScan(toolMaterial, player, opts?.target, carrierFilter);
     }
 
-    private resolveToolWithHint(toolMaterial: EMaterialType, hint: Tile, player: number): RecruitmentCandidate | null {
+    private resolveToolWithHint(
+        toolMaterial: EMaterialType,
+        hint: Tile,
+        player: number,
+        carrierFilter?: (entityId: number) => boolean
+    ): RecruitmentCandidate | null {
         const toolPile = this.toolSourceResolver.findNearestToolPile(toolMaterial, hint.x, hint.y, player);
         if (!toolPile) {
             return null;
         }
-        const carrierId = this.idleCarrierPool.findNearest(toolPile.x, toolPile.y, player);
+        const carrierId = this.idleCarrierPool.findNearest(toolPile.x, toolPile.y, player, carrierFilter);
         if (carrierId === null) {
             return null;
         }
@@ -349,7 +385,12 @@ export class RecruitSystem implements TickSystem {
      * Scan all idle carriers. For each, find the nearest tool pile and compute
      * total trip cost: carrier→tool + (tool→target if target given).
      */
-    private resolveToolByScan(toolMaterial: EMaterialType, player: number, target?: Tile): RecruitmentCandidate | null {
+    private resolveToolByScan(
+        toolMaterial: EMaterialType,
+        player: number,
+        target?: Tile,
+        carrierFilter?: (entityId: number) => boolean
+    ): RecruitmentCandidate | null {
         let best: RecruitmentCandidate | null = null;
         let bestCost = Infinity;
 
@@ -360,6 +401,9 @@ export class RecruitSystem implements TickSystem {
                 continue;
             }
             if (!this.idleCarrierPool.isIdle(id)) {
+                continue;
+            }
+            if (carrierFilter && !carrierFilter(id)) {
                 continue;
             }
 

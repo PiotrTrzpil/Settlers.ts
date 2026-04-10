@@ -243,7 +243,7 @@ export class LandscapeRenderer extends RendererBase implements IRenderer {
         const buf = new ShaderDataTexture(this.mapSize.width, this.mapSize.height, 1, TEXTURE_UNIT_LAND_HEIGHT);
         for (let y = 0; y < this.mapSize.height; y++) {
             for (let x = 0; x < this.mapSize.width; x++) {
-                buf.update(x, y, this.groundHeightMap[this.mapSize.toIndex(x, y)]!);
+                buf.update(x, y, this.groundHeightMap[this.mapSize.toIndex({ x, y })]!);
             }
         }
         return buf;
@@ -259,7 +259,7 @@ export class LandscapeRenderer extends RendererBase implements IRenderer {
         const buf = new ShaderDataTexture(this.mapSize.width, this.mapSize.height, 2, TEXTURE_UNIT_DARKNESS);
         for (let y = 0; y < this.mapSize.height; y++) {
             for (let x = 0; x < this.mapSize.width; x++) {
-                const i = this.mapSize.toIndex(x, y) * 2;
+                const i = this.mapSize.toIndex({ x, y }) * 2;
                 // eslint-disable-next-line no-restricted-syntax -- Uint8Array indexing returns number|undefined in TS; bounds are guaranteed by mapSize but the type requires a fallback
                 buf.update(x, y, darknessMap[i] ?? 0, darknessMap[i + 1] ?? 0);
             }
@@ -279,10 +279,10 @@ export class LandscapeRenderer extends RendererBase implements IRenderer {
                 //   /  A \\  /
                 //  /------\\/
                 // t2       t3
-                const t1 = this.groundTypeMap[ms.toIndex(x, y)]!;
-                const t2 = this.groundTypeMap[ms.toIndex(x, y + 1)]!;
-                const t3 = this.groundTypeMap[ms.toIndex(x + 1, y + 1)]!;
-                const t4 = this.groundTypeMap[ms.toIndex(x + 1, y)]!;
+                const t1 = this.groundTypeMap[ms.toIndex({ x, y })]!;
+                const t2 = this.groundTypeMap[ms.toIndex({ x, y: y + 1 })]!;
+                const t3 = this.groundTypeMap[ms.toIndex({ x: x + 1, y: y + 1 })]!;
+                const t4 = this.groundTypeMap[ms.toIndex({ x: x + 1, y })]!;
                 const a = map.getTextureA(t1, t2, t3, x, y);
                 const b = map.getTextureB(t1, t3, t4, x, y);
                 buf.update(x, y, a[0], a[1], b[0], b[1]);
@@ -301,7 +301,7 @@ export class LandscapeRenderer extends RendererBase implements IRenderer {
 
         for (let y = 0; y < this.mapSize.height; y++) {
             for (let x = 0; x < this.mapSize.width; x++) {
-                this.landHeightBuffer.update(x, y, this.groundHeightMap[this.mapSize.toIndex(x, y)]!);
+                this.landHeightBuffer.update(x, y, this.groundHeightMap[this.mapSize.toIndex({ x, y })]!);
             }
         }
 
@@ -331,7 +331,7 @@ export class LandscapeRenderer extends RendererBase implements IRenderer {
         const map = this.darknessMap;
         for (let y = 0; y < this.mapSize.height; y++) {
             for (let x = 0; x < this.mapSize.width; x++) {
-                const i = this.mapSize.toIndex(x, y) * 2;
+                const i = this.mapSize.toIndex({ x, y }) * 2;
                 // eslint-disable-next-line no-restricted-syntax -- Uint8Array indexing returns number|undefined in TS; bounds are guaranteed by mapSize but the type requires a fallback
                 this.darknessBuffer.update(x, y, map ? (map[i] ?? 0) : 0, map ? (map[i + 1] ?? 0) : 0);
             }

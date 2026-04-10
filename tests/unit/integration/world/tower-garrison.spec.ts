@@ -263,7 +263,7 @@ describe('Tower garrison – garrison_selected_units', { timeout: 30_000 }, () =
 
     it('fails silently on empty tile', () => {
         sim = createSimulation();
-        const swordsmanId = sim.spawnUnit(64, 64, UnitType.Swordsman1);
+        const swordsmanId = sim.spawnUnit({ x: 64, y: 64 }, UnitType.Swordsman1);
 
         sim.execute({ type: 'select', entityId: swordsmanId });
         const result = sim.execute({ type: 'garrison_selected_units', tileX: 70, tileY: 70 });
@@ -419,7 +419,7 @@ describe('Tower garrison – ungarrison & lifecycle', { timeout: 30_000 }, () =>
         const towerId = sim.placeBuilding(BuildingType.GuardTowerSmall);
 
         const tower = sim.state.getEntityOrThrow(towerId, 'test');
-        const unitId = sim.spawnUnit(tower.x + 20, tower.y, UnitType.Swordsman1);
+        const unitId = sim.spawnUnit({ x: tower.x + 20, y: tower.y }, UnitType.Swordsman1);
 
         const result = garrisonUnits(sim, towerId, [unitId]);
         expect(result.success).toBe(true);
@@ -454,7 +454,7 @@ describe('Tower garrison – garrison edge cases', { timeout: 30_000 }, () => {
             }
         }
 
-        const unitId = sim.spawnUnit(tower.x, wallY + 10, UnitType.Swordsman1);
+        const unitId = sim.spawnUnit({ x: tower.x, y: wallY + 10 }, UnitType.Swordsman1);
 
         garrisonUnits(sim, towerId, [unitId]);
         sim.runTicks(100);
@@ -478,7 +478,7 @@ describe('Tower garrison – garrison edge cases', { timeout: 30_000 }, () => {
             }
         }
 
-        const unitId = sim.spawnUnit(tower.x, wallY + 10, UnitType.Swordsman1);
+        const unitId = sim.spawnUnit({ x: tower.x, y: wallY + 10 }, UnitType.Swordsman1);
 
         let pathFailCount = 0;
         sim.eventBus.on('movement:pathFailed', ({ unitId: id }) => {
@@ -493,18 +493,18 @@ describe('Tower garrison – garrison edge cases', { timeout: 30_000 }, () => {
 
     it('Mayan GuardTowerBig: second soldier from right garrisons (first already inside)', () => {
         sim = createSimulation();
-        (sim.state.playerRaces as Map<number, number>).set(0, Race.Mayan);
+        (sim.state.playerRaces as Map<number, Race>).set(0, Race.Mayan);
 
         const towerId = sim.placeBuilding(BuildingType.GuardTowerBig, 0, true, Race.Mayan);
         const tower = sim.state.getEntityOrThrow(towerId, 'test');
-        const door = getBuildingDoorPos(tower.x, tower.y, tower.race, tower.subType as BuildingType);
+        const door = getBuildingDoorPos(tower, tower.race, tower.subType as BuildingType);
 
         const firstId = sim.spawnUnitNear(towerId, UnitType.Swordsman1)[0]!;
         garrisonUnits(sim, towerId, [firstId]);
         waitForGarrisoned(sim, towerId, 1, 'first soldier garrisoned');
         expect(isHidden(sim, firstId)).toBe(true);
 
-        const secondId = sim.spawnUnit(tower.x + 15, tower.y, UnitType.Swordsman1);
+        const secondId = sim.spawnUnit({ x: tower.x + 15, y: tower.y }, UnitType.Swordsman1);
 
         let stoppedPos: Tile | null = null;
         sim.eventBus.on('unit:movementStopped', ({ unitId }) => {
@@ -526,10 +526,10 @@ describe('Tower garrison – garrison edge cases', { timeout: 30_000 }, () => {
             const sp = stoppedPos as Tile | null;
             console.log(`[DIAG] unit stopped at (${sp?.x},${sp?.y}), now at (${u.x},${u.y})`);
             console.log(`[DIAG] chebyshev from door=${chebyshev}`);
-            console.log(`[DIAG] door in buildingOccupancy=${sim.state.buildingOccupancy.has(tileKey(door.x, door.y))}`);
+            console.log(`[DIAG] door in buildingOccupancy=${sim.state.buildingOccupancy.has(tileKey(door))}`);
             console.log(`[DIAG] isEnRoute=${sim.services.garrisonManager.isEnRoute(secondId)}`);
             console.log(`[DIAG] hidden=${u.hidden}`);
-            const doorOccupant = sim.state.unitOccupancy.get(tileKey(door.x, door.y));
+            const doorOccupant = sim.state.unitOccupancy.get(tileKey(door));
             console.log(`[DIAG] door unitOccupancy=${doorOccupant} (tower=${towerId}, first=${firstId})`);
         }
 
@@ -542,7 +542,7 @@ describe('Tower garrison – garrison edge cases', { timeout: 30_000 }, () => {
         sim = createSimulation();
         const towerId = sim.placeBuilding(BuildingType.GuardTowerSmall);
         const tower = sim.state.getEntityOrThrow(towerId, 'test');
-        const door = getBuildingDoorPos(tower.x, tower.y, tower.race, tower.subType as BuildingType);
+        const door = getBuildingDoorPos(tower, tower.race, tower.subType as BuildingType);
 
         const firstId = sim.spawnUnitNear(towerId, UnitType.Swordsman1)[0]!;
         garrisonUnits(sim, towerId, [firstId]);
@@ -550,7 +550,7 @@ describe('Tower garrison – garrison edge cases', { timeout: 30_000 }, () => {
 
         expect(sim.state.movement.hasController(firstId)).toBe(false);
 
-        const doorOccupant = sim.state.unitOccupancy.get(tileKey(door.x, door.y));
+        const doorOccupant = sim.state.unitOccupancy.get(tileKey(door));
         expect(doorOccupant).not.toBe(firstId);
 
         const bowmanId = sim.spawnUnitNear(towerId, UnitType.Bowman1)[0]!;
@@ -567,9 +567,9 @@ describe('Tower garrison – garrison edge cases', { timeout: 30_000 }, () => {
         const towerId = sim.placeBuilding(BuildingType.GuardTowerSmall);
         const tower = sim.state.getEntityOrThrow(towerId, 'test');
 
-        const door = getBuildingDoorPos(tower.x, tower.y, tower.race, tower.subType as BuildingType);
+        const door = getBuildingDoorPos(tower, tower.race, tower.subType as BuildingType);
 
-        const doorBlocked = sim.state.buildingOccupancy.has(tileKey(door.x, door.y));
+        const doorBlocked = sim.state.buildingOccupancy.has(tileKey(door));
         expect(doorBlocked).toBe(false);
     });
 });

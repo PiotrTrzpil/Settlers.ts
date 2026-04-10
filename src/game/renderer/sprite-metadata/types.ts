@@ -80,5 +80,5 @@ export interface SerializedRegistryData {
     overlays: unknown;
     animatedShared: unknown;
     animatedByRace: unknown;
-    loadedRaces: number[];
+    loadedRaces: string[];
 }

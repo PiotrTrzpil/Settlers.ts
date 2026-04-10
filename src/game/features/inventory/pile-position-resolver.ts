@@ -93,11 +93,11 @@ export class PilePositionResolver {
                     building.y
                 );
                 for (const pos of positions) {
-                    const key = tileKey(pos.x, pos.y);
+                    const key = tileKey(pos);
                     if (usedPositions.has(key)) {
                         continue;
                     }
-                    const occupant = this.gameState.getGroundEntityAt(pos.x, pos.y);
+                    const occupant = this.gameState.getGroundEntityAt(pos);
                     if (occupant?.type === EntityType.StackedPile) {
                         continue;
                     }

@@ -5,6 +5,7 @@
  * GamePage delegates to these; tests can also import them directly.
  */
 import type { Page } from '@playwright/test';
+import type { Tile } from '@/game/core/coordinates';
 
 // ── Return types ────────────────────────────────────────────────
 
@@ -155,11 +156,7 @@ export async function sampleAnimationStates(
  * Sample unit positions over multiple frames to verify smooth movement.
  * Returns position snapshots taken at each animation frame.
  */
-export async function sampleUnitPositions(
-    page: Page,
-    unitId: number,
-    numSamples: number = 10
-): Promise<Array<{ x: number; y: number }>> {
+export async function sampleUnitPositions(page: Page, unitId: number, numSamples: number = 10): Promise<Tile[]> {
     return page.evaluate(
         ({ id, maxSamples }) => {
             return new Promise<Array<{ x: number; y: number }>>(resolve => {

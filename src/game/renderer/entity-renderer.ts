@@ -240,7 +240,7 @@ export class EntityRenderer extends RendererBase implements IRenderer {
                     if (loaded) {
                         EntityRenderer.log.debug(
                             // eslint-disable-next-line no-restricted-syntax -- optional chain on nullable-by-design lazy-loaded manager; 0 is correct fallback for debug log
-                            `Sprite loading complete: ${this.spriteManager?.spriteRegistry?.getBuildingCount() ?? 0} building sprites for ${this.spriteManager?.currentRace != null ? Race[this.spriteManager.currentRace] : 'unknown'}`
+                            `Sprite loading complete: ${this.spriteManager?.spriteRegistry?.getBuildingCount() ?? 0} building sprites for ${this.spriteManager?.currentRace != null ? this.spriteManager.currentRace : 'unknown'}`
                         );
                     }
                     // For cold-load path (no cache): onEssentialSpritesReady was never

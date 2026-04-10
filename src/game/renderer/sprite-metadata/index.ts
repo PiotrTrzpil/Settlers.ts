@@ -6,7 +6,7 @@
  *
  * Public API:
  * - Constants: PIXELS_TO_WORLD, GFX_FILE_NUMBERS, SETTLER_FILE_NUMBERS
- * - Race: Race enum, RACE_NAMES, AVAILABLE_RACES
+ * - Race: Race enum, formatRace, AVAILABLE_RACES
  * - Building sprites: BUILDING_ICON_INDICES, BUILDING_SPRITE_FRAMES, getBuildingSpriteMap, etc.
  * - Unit sprites: SETTLER_JOB_INDICES, UNIT_BASE_JOB_INDICES, getUnitSpriteMap, etc.
  * - Resource sprites: RESOURCE_JOB_INDICES, getResourceSpriteMap, etc.
@@ -21,7 +21,8 @@ export {
 
     // Race enum and data
     Race,
-    RACE_NAMES,
+    RACE_GFX_FILE,
+    formatRace,
     AVAILABLE_RACES,
     s4TribeToRace,
     loadSavedRace,

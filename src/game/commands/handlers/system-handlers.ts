@@ -1,4 +1,4 @@
-import { EntityType } from '../../entity';
+import { EntityType, type Tile } from '../../entity';
 import type { GameState } from '../../game-state';
 import type { TerrainData } from '../../terrain';
 import type { EventBus } from '../../event-bus';
@@ -28,7 +28,7 @@ export interface PlacePileDeps {
     state: GameState;
     terrain: TerrainData;
     eventBus: EventBus;
-    getOwner: (x: number, y: number) => number;
+    getOwner: (tile: Tile) => number;
 }
 
 export interface SpawnPileDeps {
@@ -67,20 +67,20 @@ export interface PlantCropDeps {
 export function executePlacePile(deps: PlacePileDeps, cmd: PlacePileCommand): SpawnResult | CommandFailure {
     const { state, terrain } = deps;
 
-    if (!terrain.isInBounds(cmd.x, cmd.y)) {
+    if (!terrain.isInBounds(cmd)) {
         return commandFailed(`Position (${cmd.x}, ${cmd.y}) is out of bounds`);
     }
 
-    if (!terrain.isPassable(cmd.x, cmd.y)) {
+    if (!terrain.isPassable(cmd)) {
         return commandFailed(`Position (${cmd.x}, ${cmd.y}) is not passable`);
     }
 
-    if (state.getGroundEntityAt(cmd.x, cmd.y)) {
+    if (state.getGroundEntityAt(cmd)) {
         return commandFailed(`Position (${cmd.x}, ${cmd.y}) is already occupied`);
     }
 
-    const owner = Math.max(0, deps.getOwner(cmd.x, cmd.y));
-    const entity = state.addEntity(EntityType.StackedPile, cmd.materialType, cmd.x, cmd.y, owner);
+    const owner = Math.max(0, deps.getOwner(cmd));
+    const entity = state.addEntity(EntityType.StackedPile, cmd.materialType, cmd, owner);
 
     deps.eventBus.emit('pile:freePilePlaced', {
         entityId: entity.id,
@@ -92,7 +92,7 @@ export function executePlacePile(deps: PlacePileDeps, cmd: PlacePileCommand): Sp
 }
 
 export function executeSpawnMapObject(deps: SpawnMapObjectDeps, cmd: SpawnMapObjectCommand): SpawnResult {
-    const entity = deps.state.addEntity(EntityType.MapObject, cmd.objectType, cmd.x, cmd.y, 0, {
+    const entity = deps.state.addEntity(EntityType.MapObject, cmd.objectType, cmd, 0, {
         variation: cmd.variation,
     });
     return { success: true, entityId: entity.id };
@@ -100,10 +100,10 @@ export function executeSpawnMapObject(deps: SpawnMapObjectDeps, cmd: SpawnMapObj
 
 export function executeSpawnPile(deps: SpawnPileDeps, cmd: SpawnPileCommand): SpawnResult {
     const { state, terrain } = deps;
-    if (!terrain.isInBounds(cmd.x, cmd.y)) {
+    if (!terrain.isInBounds(cmd)) {
         throw new Error(`spawn_pile: position (${cmd.x}, ${cmd.y}) out of bounds`);
     }
-    const entity = state.addEntity(EntityType.StackedPile, cmd.materialType, cmd.x, cmd.y, cmd.player);
+    const entity = state.addEntity(EntityType.StackedPile, cmd.materialType, cmd, cmd.player);
 
     if (cmd.kind.kind === 'free') {
         deps.eventBus.emit('pile:freePilePlaced', {
@@ -140,11 +140,11 @@ export function executeSetStorageFilter(deps: SetStorageFilterDeps, cmd: SetStor
 export function executePlantTree(deps: PlantTreeDeps, cmd: PlantTreeCommand): SpawnResult | CommandFailure {
     const { state } = deps;
 
-    if (state.getGroundEntityAt(cmd.x, cmd.y)) {
+    if (state.getGroundEntityAt(cmd)) {
         return commandFailed(`Tile (${cmd.x}, ${cmd.y}) is occupied, cannot plant tree`);
     }
 
-    const entity = state.addEntity(EntityType.MapObject, cmd.treeType, cmd.x, cmd.y, 0);
+    const entity = state.addEntity(EntityType.MapObject, cmd.treeType, cmd, 0);
     entity.operational = false; // Planted trees start growing, not yet harvestable
 
     deps.treeSystem.register(entity.id, cmd.treeType, true);
@@ -157,7 +157,7 @@ export function executePlantTreesArea(
     deps: PlantTreesAreaDeps,
     cmd: PlantTreesAreaCommand
 ): BatchSpawnResult | CommandFailure {
-    const planted = deps.treeSystem.plantTreesNear(cmd.centerX, cmd.centerY, cmd.count, cmd.radius);
+    const planted = deps.treeSystem.plantTreesNear({ x: cmd.centerX, y: cmd.centerY }, cmd.count, cmd.radius);
     if (planted === 0) {
         return commandFailed(`Could not plant any trees near (${cmd.centerX}, ${cmd.centerY})`);
     }
@@ -167,11 +167,11 @@ export function executePlantTreesArea(
 export function executePlantCrop(deps: PlantCropDeps, cmd: PlantCropCommand): SpawnResult | CommandFailure {
     const { state } = deps;
 
-    if (state.getGroundEntityAt(cmd.x, cmd.y)) {
+    if (state.getGroundEntityAt(cmd)) {
         return commandFailed(`Tile (${cmd.x}, ${cmd.y}) is occupied, cannot plant crop`);
     }
 
-    const entity = state.addEntity(EntityType.MapObject, cmd.cropType, cmd.x, cmd.y, 0);
+    const entity = state.addEntity(EntityType.MapObject, cmd.cropType, cmd, 0);
 
     deps.cropSystem.register(entity.id, cmd.cropType, true);
 

@@ -388,7 +388,7 @@ export class TowerGarrisonManager {
     getApproachTile(building: Entity): Tile {
         if (!this.terrain) {
             log.warn(`getApproachTile: terrain not set for building ${building.id} — falling back to door pos`);
-            return getBuildingDoorPos(building.x, building.y, building.race, building.subType as BuildingType);
+            return getBuildingDoorPos(building, building.race, building.subType as BuildingType);
         }
         return findBuildingApproachTile(building, this.terrain, this.gameState);
     }

@@ -18,7 +18,7 @@ function findTileViolations(sim: Simulation, tick: number): string[] {
     for (const e of sim.state.entities) {
         if (e.type !== EntityType.Unit) continue;
         if (e.hidden) continue;
-        const key = tileKey(e.x, e.y);
+        const key = tileKey(e);
         const eType = e.subType as UnitType;
         const existing = tileToUnit.get(key);
         if (existing) {
@@ -52,7 +52,7 @@ describe('Worker entering building with door occupant', { timeout: 30_000 }, () 
 
         // Get the door position of the woodcutter hut
         const wcEntity = sim.state.getEntityOrThrow(wcId, 'test');
-        const door = getBuildingDoorPos(wcEntity.x, wcEntity.y, wcEntity.race, BuildingType.WoodcutterHut);
+        const door = getBuildingDoorPos(wcEntity, wcEntity.race, BuildingType.WoodcutterHut);
 
         // Run until the woodcutter leaves the building (starts walking to a tree)
         let woodcutterLeft = false;
@@ -75,7 +75,7 @@ describe('Worker entering building with door occupant', { timeout: 30_000 }, () 
         if (!woodcutterLeft) return; // skip if woodcutter never left
 
         // Now place an idle carrier on the door tile — the woodcutter will walk through on return
-        sim.state.addUnit(UnitType.Carrier, door.x, door.y, 0);
+        sim.state.addUnit(UnitType.Carrier, door, 0);
 
         const violations: string[] = [];
         let tick = 0;

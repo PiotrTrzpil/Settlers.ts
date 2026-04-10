@@ -22,4 +22,7 @@ export const BUILDING_SPAWN_ON_COMPLETE: Partial<Record<BuildingType, BuildingSp
     [BuildingType.ResidenceSmall]: { unitType: UnitType.Carrier, count: 2, spawnInterval: RESIDENCE_SPAWN_INTERVAL },
     [BuildingType.ResidenceMedium]: { unitType: UnitType.Carrier, count: 4, spawnInterval: RESIDENCE_SPAWN_INTERVAL },
     [BuildingType.ResidenceBig]: { unitType: UnitType.Carrier, count: 6, spawnInterval: RESIDENCE_SPAWN_INTERVAL },
+    // Dark Tribe residences spawn slaved settlers instead of carriers
+    [BuildingType.Fortress]: { unitType: UnitType.SlavedSettler, count: 4, spawnInterval: RESIDENCE_SPAWN_INTERVAL },
+    [BuildingType.DarkTemple]: { unitType: UnitType.SlavedSettler, count: 6, spawnInterval: RESIDENCE_SPAWN_INTERVAL },
 };

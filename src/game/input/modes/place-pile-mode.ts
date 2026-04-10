@@ -55,18 +55,14 @@ export class PlacePileMode extends BasePlacementMode<EMaterialType> {
         return { x: tileX, y: tileY };
     }
 
-    protected createPlacementCommand(
-        x: number,
-        y: number,
-        data: PlacementModeData<EMaterialType>
-    ): Record<string, unknown> {
+    protected createPlacementCommand(tile: Tile, data: PlacementModeData<EMaterialType>): Record<string, unknown> {
         const amount = data.extra['amount'] as number;
         return {
             type: this.getCommandType(),
             materialType: data.subType,
             amount,
-            x,
-            y,
+            x: tile.x,
+            y: tile.y,
         };
     }
 

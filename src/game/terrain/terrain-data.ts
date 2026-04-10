@@ -9,6 +9,7 @@
 
 import { MapSize } from '@/utilities/map-size';
 import { isPassable, isBuildable, isRock, isMineBuildable } from './terrain-queries';
+import type { Tile } from '@/game/core/coordinates';
 
 export class TerrainData {
     constructor(
@@ -19,11 +20,11 @@ export class TerrainData {
     ) {}
 
     /** Check if tile is dark land (bit 6 of terrain attributes). */
-    isDarkLand(x: number, y: number): boolean {
+    isDarkLand(tile: Tile): boolean {
         if (!this.terrainAttributes) {
             return false;
         }
-        return (this.terrainAttributes[this.mapSize.toIndex(x, y)]! & 0x40) !== 0;
+        return (this.terrainAttributes[this.mapSize.toIndex(tile)]! & 0x40) !== 0;
     }
 
     /** Map width in tiles */
@@ -37,42 +38,42 @@ export class TerrainData {
     }
 
     /** Convert tile coordinates to a flat array index */
-    toIndex(x: number, y: number): number {
-        return this.mapSize.toIndex(x, y);
+    toIndex(tile: Tile): number {
+        return this.mapSize.toIndex(tile);
     }
 
     /** Check if coordinates are within map bounds */
-    isInBounds(x: number, y: number): boolean {
-        return x >= 0 && x < this.mapSize.width && y >= 0 && y < this.mapSize.height;
+    isInBounds(tile: Tile): boolean {
+        return tile.x >= 0 && tile.x < this.mapSize.width && tile.y >= 0 && tile.y < this.mapSize.height;
     }
 
     /** Get ground height at tile coordinates */
-    getHeight(x: number, y: number): number {
-        return this.groundHeight[this.mapSize.toIndex(x, y)]!;
+    getHeight(tile: Tile): number {
+        return this.groundHeight[this.mapSize.toIndex(tile)]!;
     }
 
     /** Get ground type value at tile coordinates */
-    getType(x: number, y: number): number {
-        return this.groundType[this.mapSize.toIndex(x, y)]!;
+    getType(tile: Tile): number {
+        return this.groundType[this.mapSize.toIndex(tile)]!;
     }
 
     /** Check if tile is passable (units can walk on it) */
-    isPassable(x: number, y: number): boolean {
-        return isPassable(this.groundType[this.mapSize.toIndex(x, y)]!);
+    isPassable(tile: Tile): boolean {
+        return isPassable(this.groundType[this.mapSize.toIndex(tile)]!);
     }
 
     /** Check if tile is buildable for normal buildings */
-    isBuildable(x: number, y: number): boolean {
-        return isBuildable(this.groundType[this.mapSize.toIndex(x, y)]!);
+    isBuildable(tile: Tile): boolean {
+        return isBuildable(this.groundType[this.mapSize.toIndex(tile)]!);
     }
 
     /** Check if tile is rock/mountain terrain */
-    isRock(x: number, y: number): boolean {
-        return isRock(this.groundType[this.mapSize.toIndex(x, y)]!);
+    isRock(tile: Tile): boolean {
+        return isRock(this.groundType[this.mapSize.toIndex(tile)]!);
     }
 
     /** Check if tile is buildable for mine buildings */
-    isMineBuildable(x: number, y: number): boolean {
-        return isMineBuildable(this.groundType[this.mapSize.toIndex(x, y)]!);
+    isMineBuildable(tile: Tile): boolean {
+        return isMineBuildable(this.groundType[this.mapSize.toIndex(tile)]!);
     }
 }

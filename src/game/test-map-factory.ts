@@ -63,7 +63,7 @@ export function createTestMapLoader(): IMapLoader {
     for (let y = 0; y < MAP_SIZE; y++) {
         const terrainType = getTerrainForRow(y);
         for (let x = 0; x < MAP_SIZE; x++) {
-            const idx = mapSize.toIndex(x, y);
+            const idx = mapSize.toIndex({ x, y });
             groundType[idx] = terrainType;
             // Gentle sine-wave height variation
             groundHeight[idx] = Math.floor(10 + 5 * Math.sin(x * 0.1) + 3 * Math.sin(y * 0.15));

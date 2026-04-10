@@ -111,7 +111,7 @@ export function getDefaultInputConfig(): InputConfig {
         cameraPanSpeed: 40,
         cameraZoomSpeed: 0.1,
         minZoom: 0.25,
-        maxZoom: 4.0,
+        maxZoom: 20.0,
         invertZoom: false,
         invertPan: false,
     };

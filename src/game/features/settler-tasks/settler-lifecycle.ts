@@ -24,7 +24,9 @@ import { buildAllSettlerConfigs } from '../../data/settler-data-access';
 
 const log = createLogger('SettlerLifecycleCoordinator');
 
-const ORPHAN_CHECK_INTERVAL = 60;
+import { seconds } from '../../core/tick-rate';
+
+const ORPHAN_CHECK_INTERVAL = seconds(2);
 const IDLE_SEARCH_COOLDOWN = 10;
 
 /** Callback for interrupting or completing a settler job during cleanup. */
