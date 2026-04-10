@@ -175,6 +175,10 @@ const playerRace = computed(() => game.playerRaces.get(game.currentPlayer) ?? Ra
 // Sidebar tabs — only buildings and specialists in game mode
 const activeTab = ref<'buildings' | 'specialists'>('buildings');
 
+// Force normal construction in game mode (no dev shortcuts)
+game.settings.state.placeBuildingsCompleted = false;
+game.settings.state.placeBuildingsWithWorker = false;
+
 // Layer visibility — use saved defaults, no layer panel to toggle
 const layerVisibility = reactive(loadLayerVisibility());
 
