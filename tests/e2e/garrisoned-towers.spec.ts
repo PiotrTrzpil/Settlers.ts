@@ -62,12 +62,11 @@ const GARRISON_CASES: GarrisonTestCase[] = [
     {
         name: 'Castle',
         buildingType: BuildingType.Castle,
-        // 5 swordsmen + 5 bowmen
+        // 4 swordsmen + 5 bowmen (9 settler positions in XML)
         units: [
             { unitType: UnitType.Swordsman1 },
             { unitType: UnitType.Swordsman1 },
             { unitType: UnitType.Swordsman2 },
-            { unitType: UnitType.Swordsman3 },
             { unitType: UnitType.Swordsman3 },
             { unitType: UnitType.Bowman1 },
             { unitType: UnitType.Bowman1 },

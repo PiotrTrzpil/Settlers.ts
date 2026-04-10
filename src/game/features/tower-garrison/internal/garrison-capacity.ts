@@ -10,7 +10,7 @@ export interface GarrisonCapacity {
 const GARRISON_CAPACITY_MAP: ReadonlyMap<BuildingType, GarrisonCapacity> = new Map([
     [BuildingType.GuardTowerSmall, { swordsmanSlots: 1, bowmanSlots: 2 }],
     [BuildingType.GuardTowerBig, { swordsmanSlots: 3, bowmanSlots: 3 }],
-    [BuildingType.Castle, { swordsmanSlots: 5, bowmanSlots: 5 }],
+    [BuildingType.Castle, { swordsmanSlots: 4, bowmanSlots: 5 }],
 ]);
 
 /** Returns true if this building type can hold a garrison. Single source of truth. */
