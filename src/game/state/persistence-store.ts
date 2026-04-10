@@ -51,3 +51,14 @@ export async function idbDelete(key: string): Promise<void> {
         tx.onerror = () => reject(tx.error);
     });
 }
+
+/** List all keys in the store. */
+export async function idbKeys(): Promise<string[]> {
+    const db = await openDB();
+    return new Promise((resolve, reject) => {
+        const tx = db.transaction(STORE_NAME, 'readonly');
+        const req = tx.objectStore(STORE_NAME).getAllKeys();
+        req.onsuccess = () => resolve(req.result.filter((k): k is string => typeof k === 'string'));
+        req.onerror = () => reject(req.error);
+    });
+}

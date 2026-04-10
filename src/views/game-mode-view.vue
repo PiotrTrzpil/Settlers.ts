@@ -6,6 +6,7 @@
             :game="game"
             :fileManager="fileManager"
             :staleSnapshotWarning="staleSnapshotWarning"
+            :saveManager="saveManager"
             @dismissStaleSnapshot="dismissStaleSnapshot"
         />
 
@@ -16,9 +17,11 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted } from 'vue';
+import { onMounted, watch, onBeforeUnmount } from 'vue';
 import { FileManager } from '@/utilities/file-manager';
 import { useMapView } from './use-map-view';
+import { gameStatePersistence } from '@/game/state/game-state-persistence';
+import { GameModeSaveManager } from '@/game/state/game-mode-saves';
 
 import GameModeMapView from './GameModeMapView.vue';
 
@@ -31,6 +34,21 @@ const { game, gameGeneration, onFileSelect, staleSnapshotWarning, dismissStaleSn
 );
 
 const { fileManager } = props;
+
+// Game mode save manager — replaces the default 5s dev-mode autosave
+const saveManager = new GameModeSaveManager();
+
+// When the game loads, stop default persistence and start game mode saves (60s autosave)
+watch(game, g => {
+    if (g) {
+        gameStatePersistence.stop();
+        saveManager.start(g);
+    }
+});
+
+onBeforeUnmount(() => {
+    saveManager.stop();
+});
 
 // Load map from localStorage selection (set by MapSelectView)
 onMounted(() => {

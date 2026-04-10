@@ -110,7 +110,7 @@
                 <selection-panel :game="game" :unit-icons="unitIcons" />
             </div>
 
-            <!-- Right floating panel: speed controls -->
+            <!-- Right floating panel: speed + save/load controls -->
             <div class="gm-right-panels">
                 <div class="gm-controls-panel">
                     <button class="gm-pause-btn" :class="{ paused: isPaused }" @click="togglePause">
@@ -128,8 +128,18 @@
                             {{ s }}x
                         </button>
                     </div>
+                    <div class="gm-divider" />
+                    <button class="gm-menu-btn" @click="showSaveLoad = true">Save / Load</button>
                 </div>
             </div>
+
+            <!-- Save/Load dialog -->
+            <save-load-dialog
+                v-if="showSaveLoad"
+                :save-manager="saveManager"
+                @close="showSaveLoad = false"
+                @loaded="onSaveLoaded"
+            />
         </div>
     </div>
 </template>
@@ -149,9 +159,11 @@ import RendererViewer from '@/components/renderer-viewer.vue';
 import SelectionPanel from '@/components/selection-panel.vue';
 import SpecialistsPanel from '@/components/SpecialistsPanel.vue';
 import GameMinimap from '@/components/game-minimap.vue';
+import SaveLoadDialog from '@/components/SaveLoadDialog.vue';
 
 import { createModeToggler, createGameActions, setupIconLoading } from './use-map-view-helpers';
 import type { IconEntry } from './sprite-icon-loader';
+import type { GameModeSaveManager } from '@/game/state/game-mode-saves';
 
 const SPEED_OPTIONS = [0.5, 1, 2, 3] as const;
 
@@ -159,11 +171,14 @@ const props = defineProps<{
     game: Game;
     fileManager: import('@/utilities/file-manager').FileManager;
     staleSnapshotWarning: boolean;
+    saveManager: GameModeSaveManager;
 }>();
 
 defineEmits<{
     (e: 'dismissStaleSnapshot'): void;
 }>();
+
+const { saveManager } = props;
 
 const { game, fileManager } = props;
 
@@ -221,6 +236,13 @@ function togglePause(): void {
 function setSpeed(speed: number): void {
     currentSpeed.value = speed;
     game.settings.state.gameSpeed = speed;
+}
+
+// Save/Load dialog
+const showSaveLoad = ref(false);
+
+function onSaveLoaded(): void {
+    gameEndResult.value = null;
 }
 
 // Game end overlay
