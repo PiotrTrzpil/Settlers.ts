@@ -11,13 +11,93 @@ import { ref, onMounted, watch, useTemplateRef } from 'vue';
 import type { IMapLoader } from '@/resources/map/imap-loader';
 import { getGroundTypeColor } from '@/resources/map/s4-types';
 
-const props = defineProps<{
-    mapLoader: IMapLoader | null;
-}>();
+const PLAYER_COLORS: [number, number, number][] = [
+    [200, 50, 50],
+    [50, 80, 200],
+    [50, 180, 50],
+    [220, 200, 50],
+    [160, 60, 180],
+    [220, 140, 40],
+    [50, 190, 200],
+    [210, 210, 210],
+];
+
+const props = withDefaults(
+    defineProps<{
+        mapLoader: IMapLoader | null;
+        maxSize?: number;
+    }>(),
+    { maxSize: 300 }
+);
 
 const canvas = useTemplateRef<HTMLCanvasElement>('canvas');
 const hoveredCoord = ref<{ x: number; y: number } | null>(null);
 const hasPreviewData = ref(false);
+
+function renderTerrainPixels(
+    data: Uint8ClampedArray,
+    groundData: Uint8Array,
+    displayWidth: number,
+    displayHeight: number,
+    mapWidth: number,
+    scale: number
+): void {
+    for (let y = 0; y < displayHeight; y++) {
+        for (let x = 0; x < displayWidth; x++) {
+            const srcIdx = Math.floor(y / scale) * mapWidth + Math.floor(x / scale);
+            const pixelIdx = (y * displayWidth + x) * 4;
+
+            if (srcIdx < groundData.length) {
+                const [r, g, b] = getGroundTypeColor(groundData[srcIdx]!);
+                data[pixelIdx] = r;
+                data[pixelIdx + 1] = g;
+                data[pixelIdx + 2] = b;
+            } else {
+                data[pixelIdx] = 20;
+                data[pixelIdx + 1] = 15;
+                data[pixelIdx + 2] = 10;
+            }
+            data[pixelIdx + 3] = 255;
+        }
+    }
+}
+
+function renderPlayerPositions(ctx: CanvasRenderingContext2D, mapLoader: IMapLoader, scale: number): void {
+    const players = mapLoader.entityData?.players;
+    if (!players) {
+        return;
+    }
+
+    for (const player of players) {
+        if (player.startX == null || player.startY == null) {
+            continue;
+        }
+
+        const px = Math.floor(player.startX * scale);
+        const py = Math.floor(player.startY * scale);
+        const color = PLAYER_COLORS[(player.playerIndex - 1) % PLAYER_COLORS.length]!;
+        const radius = Math.max(4, Math.round(6 * scale));
+
+        // Dark outline
+        ctx.beginPath();
+        ctx.arc(px, py, radius + 1, 0, Math.PI * 2);
+        ctx.fillStyle = '#000';
+        ctx.fill();
+
+        // Colored circle
+        ctx.beginPath();
+        ctx.arc(px, py, radius, 0, Math.PI * 2);
+        ctx.fillStyle = `rgb(${color[0]}, ${color[1]}, ${color[2]})`;
+        ctx.fill();
+
+        // Player number
+        ctx.fillStyle = '#fff';
+        ctx.font = `bold ${Math.max(8, Math.round(10 * scale))}px sans-serif`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(String(player.playerIndex), px, py);
+    }
+}
 
 function renderPreview() {
     const canvasEl = canvas.value;
@@ -31,20 +111,14 @@ function renderPreview() {
     }
 
     try {
-        const landscape = props.mapLoader.landscape;
-
-        const groundData = landscape.getGroundType();
+        const groundData = props.mapLoader.landscape.getGroundType();
         if (groundData.length === 0) {
             hasPreviewData.value = false;
             return;
         }
 
-        const mapSize = props.mapLoader.mapSize;
-        const width = mapSize.width;
-        const height = mapSize.height;
-
-        // Set canvas size with max limit for performance
-        const maxSize = 300;
+        const { width, height } = props.mapLoader.mapSize;
+        const maxSize = props.maxSize;
         const scale = Math.min(maxSize / width, maxSize / height, 1);
         const displayWidth = Math.floor(width * scale);
         const displayHeight = Math.floor(height * scale);
@@ -54,38 +128,12 @@ function renderPreview() {
         canvasEl.style.width = `${displayWidth}px`;
         canvasEl.style.height = `${displayHeight}px`;
 
-        // Create image data
         const imageData = ctx.createImageData(displayWidth, displayHeight);
-        const data = imageData.data;
-
-        // Render the map preview using terrain data
-        for (let y = 0; y < displayHeight; y++) {
-            for (let x = 0; x < displayWidth; x++) {
-                // Map display coordinates to source coordinates
-                const srcX = Math.floor(x / scale);
-                const srcY = Math.floor(y / scale);
-                const srcIdx = srcY * width + srcX;
-
-                const pixelIdx = (y * displayWidth + x) * 4;
-
-                if (srcIdx < groundData.length) {
-                    const terrainType = groundData[srcIdx]!;
-                    const [r, g, b] = getGroundTypeColor(terrainType);
-                    data[pixelIdx] = r;
-                    data[pixelIdx + 1] = g;
-                    data[pixelIdx + 2] = b;
-                    data[pixelIdx + 3] = 255;
-                } else {
-                    // Out of bounds - dark
-                    data[pixelIdx] = 20;
-                    data[pixelIdx + 1] = 15;
-                    data[pixelIdx + 2] = 10;
-                    data[pixelIdx + 3] = 255;
-                }
-            }
-        }
-
+        renderTerrainPixels(imageData.data, groundData, displayWidth, displayHeight, width, scale);
         ctx.putImageData(imageData, 0, 0);
+
+        renderPlayerPositions(ctx, props.mapLoader, scale);
+
         hasPreviewData.value = true;
     } catch (e) {
         console.error('Failed to render map preview:', e);

@@ -147,6 +147,18 @@
                         class="browser"
                     />
                 </div>
+                <div v-if="supportsStartResources" class="map-selector">
+                    <span class="info-label">Resources:</span>
+                    <select
+                        v-model="selectedStartResources"
+                        class="start-resources-select"
+                        @change="onStartResourcesChange"
+                    >
+                        <option :value="1">Few{{ mapDefaultResources === 1 ? ' (default)' : '' }}</option>
+                        <option :value="2">Medium{{ mapDefaultResources === 2 ? ' (default)' : '' }}</option>
+                        <option :value="3">Many{{ mapDefaultResources === 3 ? ' (default)' : '' }}</option>
+                    </select>
+                </div>
                 <div class="mode-indicator" data-testid="mode-indicator" :data-mode="currentMode">
                     Mode: <strong>{{ currentMode }}</strong>
                 </div>
@@ -266,6 +278,8 @@ import type { EMaterialType } from '@/game/economy';
 import { GameEndReason } from '@/game/features/victory-conditions/victory-conditions-system';
 import { toastInfo } from '@/game/ui/toast-notifications';
 import { ALL_RESOURCES } from './palette-data';
+import { MapStartResources } from '@/resources/map/map-start-resources';
+import { readStartResources, saveStartResources, mapNeedsStartResources } from '@/game/state/game-mode-settings';
 
 import FileBrowser from '@/components/file-browser.vue';
 import RendererViewer from '@/components/renderer-viewer.vue';
@@ -434,6 +448,22 @@ function onRaceChange() {
 }
 
 // =========================================================================
+// Start Resources (dev mode)
+// =========================================================================
+
+const selectedStartResources = ref(readStartResources());
+const supportsStartResources = computed(() => mapNeedsStartResources(game.mapLoader));
+
+const mapDefaultResources = computed(() => {
+    const sr = game.mapLoader.general.startResources;
+    return sr >= MapStartResources.low && sr <= MapStartResources.high ? sr : null;
+});
+
+function onStartResourcesChange(): void {
+    saveStartResources(selectedStartResources.value);
+}
+
+// =========================================================================
 // Renderer Camera & Recreation
 // =========================================================================
 
@@ -513,7 +543,7 @@ const dismissGameEnd = () => {
 // =========================================================================
 
 function onResetGameState() {
-    gameActions.resetGameState();
+    game.resetWithStartResources();
     clearCameraState(getCurrentMapId());
     rendererRef.value?.centerOnPlayerStart?.();
 }

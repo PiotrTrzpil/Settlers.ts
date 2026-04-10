@@ -11,6 +11,8 @@ import { LogHandler } from '@/utilities/log-handler';
 import { LuaScriptSystem, type LuaScriptSystemConfig } from './lua-script-system';
 import type { ScriptEventType } from './event-dispatcher';
 import type { TickSystem } from '../core/tick-system';
+import { MapStartResources } from '@/resources/map/map-start-resources';
+import type { MapPlayerInfo } from '@/resources/map/map-entity-data';
 
 const log = new LogHandler('ScriptService');
 
@@ -52,6 +54,13 @@ export function deriveScriptPath(mapFilename: string): string | null {
 
     return `Script/${baseName}.txt`;
 }
+
+/** Map start resources enum to the Lua function name in StartResources.txt */
+const START_RESOURCES_FUNC: Record<number, string> = {
+    [MapStartResources.low]: 'CreateStartResourcesFew',
+    [MapStartResources.medium]: 'CreateStartResourcesMedium',
+    [MapStartResources.high]: 'CreateStartResourcesMany',
+};
 
 /**
  * Script Service
@@ -156,6 +165,88 @@ export class ScriptService implements TickSystem {
         }
 
         return this.loadScriptFromPath(scriptPath);
+    }
+
+    /**
+     * Load and execute Internal/StartResources.txt, then call the appropriate
+     * CreateStartResources* function for each player based on the map's
+     * start resources setting.
+     *
+     * Must be called after initialize() but before loading the map script,
+     * so the start resource functions are available in the Lua environment.
+     */
+    public async loadStartResources(
+        startResources: MapStartResources,
+        players: MapPlayerInfo[]
+    ): Promise<ScriptLoadResult> {
+        if (!this.scriptSystem) {
+            return { success: false, scriptPath: null, error: 'ScriptService not initialized' };
+        }
+
+        if (startResources === MapStartResources.unknown || players.length === 0) {
+            log.info('Skipping start resources: no resource level or no players');
+            return { success: false, scriptPath: null, error: 'No start resources configured' };
+        }
+
+        // Load the StartResources.txt script (defines the functions, doesn't execute them)
+        const scriptPath = 'Script/Internal/StartResources.txt';
+        const result = await this.loadScriptFromPath(scriptPath);
+        if (!result.success) {
+            return result;
+        }
+
+        // Map start resources enum to the Lua function name
+        const funcName = START_RESOURCES_FUNC[startResources];
+        if (!funcName || !this.scriptSystem.hasFunction(funcName)) {
+            log.warn(`Start resources function not found: ${funcName}`);
+            return { success: false, scriptPath, error: `Function ${funcName} not found` };
+        }
+
+        // Call the function for each player with a valid start position
+        for (const player of players) {
+            if (player.startX == null || player.startY == null) {
+                continue;
+            }
+            // AI level: 0 for human (player index matching local), 1+ for AI players
+            // For now pass 0 — AI integration will set this properly later
+            const aiLevel = 0;
+            log.info(`${funcName}(${player.startX}, ${player.startY}, ${player.playerIndex}, ${aiLevel})`);
+            this.scriptSystem.callFunction(funcName, player.startX, player.startY, player.playerIndex, aiLevel);
+        }
+
+        log.info(`Start resources applied: ${funcName} for ${players.length} player(s)`);
+        return { success: true, scriptPath };
+    }
+
+    /**
+     * Re-apply start resources by calling the appropriate CreateStartResources*
+     * function that was previously loaded. Does not re-fetch the script file.
+     */
+    public applyStartResources(startResources: MapStartResources, players: MapPlayerInfo[]): void {
+        if (!this.scriptSystem) {
+            return;
+        }
+
+        if (startResources === MapStartResources.unknown || players.length === 0) {
+            return;
+        }
+
+        const funcName = START_RESOURCES_FUNC[startResources];
+        if (!funcName || !this.scriptSystem.hasFunction(funcName)) {
+            log.warn(`Start resources function not available: ${funcName}`);
+            return;
+        }
+
+        for (const player of players) {
+            if (player.startX == null || player.startY == null) {
+                continue;
+            }
+            const aiLevel = 0;
+            log.info(`${funcName}(${player.startX}, ${player.startY}, ${player.playerIndex}, ${aiLevel})`);
+            this.scriptSystem.callFunction(funcName, player.startX, player.startY, player.playerIndex, aiLevel);
+        }
+
+        log.info(`Start resources re-applied: ${funcName} for ${players.length} player(s)`);
     }
 
     /**

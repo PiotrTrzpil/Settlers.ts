@@ -56,6 +56,20 @@ export function s4TribeToRace(tribe: number): Race {
     return S4_TRIBE_TO_RACE[tribe]!;
 }
 
+/** Reverse lookup from Race to S4Tribe index (0-4). */
+const RACE_TO_S4_TRIBE: Record<Race, number> = {
+    [Race.Roman]: 0,
+    [Race.Viking]: 1,
+    [Race.Mayan]: 2,
+    [Race.DarkTribe]: 3,
+    [Race.Trojan]: 4,
+};
+
+/** Convert Race to S4Tribe index (0-4) for Lua script compatibility. */
+export function raceToS4Tribe(race: Race): number {
+    return RACE_TO_S4_TRIBE[race];
+}
+
 const RACE_STORAGE_KEY = 'settlers_selectedRace';
 
 /** Load saved race from localStorage, falling back to Roman. */

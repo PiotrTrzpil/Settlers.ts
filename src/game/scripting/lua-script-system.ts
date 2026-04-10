@@ -136,6 +136,7 @@ export class LuaScriptSystem {
             difficulty: this.config.difficulty ?? 1,
             mapWidth: this.config.mapWidth,
             mapHeight: this.config.mapHeight,
+            playerRaces: this.config.playerRaces,
             onPlayerWon: player => {
                 log.info(`Player ${player} won!`);
                 // TODO: Trigger victory screen

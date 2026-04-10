@@ -1,8 +1,8 @@
 <template>
     <div class="gss-backdrop">
         <div class="gss-dialog">
-            <h2 class="gss-title" :class="won ? 'gss-title--won' : 'gss-title--lost'">
-                {{ won ? 'Victory!' : 'Defeat' }}
+            <h2 class="gss-title" :class="titleClass">
+                {{ titleText }}
             </h2>
 
             <div class="gss-section">
@@ -63,7 +63,7 @@ import StatsChart from './StatsChart.vue';
 
 const props = defineProps<{
     game: Game;
-    won: boolean;
+    won: boolean | null;
     statsTracker: GameModeStatsTracker;
 }>();
 
@@ -73,11 +73,34 @@ defineEmits<{
 
 const localPlayer = props.game.currentPlayer;
 
+const titleText = computed(() => {
+    if (props.won === true) {
+        return 'Victory!';
+    }
+    if (props.won === false) {
+        return 'Defeat';
+    }
+    return 'Game Stats';
+});
+
+const titleClass = computed(() => {
+    if (props.won === true) {
+        return 'gss-title--won';
+    }
+    if (props.won === false) {
+        return 'gss-title--lost';
+    }
+    return 'gss-title--neutral';
+});
+
 const soldierSeries = computed(() => props.statsTracker.getSoldierSeries());
 const settlerSeries = computed(() => props.statsTracker.getSettlerSeries());
 
+// Snapshot tick count at mount time — game.currentTick is not reactive
+const snapshotTick = props.game.currentTick;
+
 const formattedDuration = computed(() => {
-    const totalSeconds = Math.floor(props.game.currentTick / TICK_RATE);
+    const totalSeconds = Math.floor(snapshotTick / TICK_RATE);
     const hours = Math.floor(totalSeconds / 3600);
     const minutes = Math.floor((totalSeconds % 3600) / 60);
     const seconds = totalSeconds % 60;
@@ -165,6 +188,10 @@ const playerStats = computed<PlayerStat[]>(() => {
 
 .gss-title--lost {
     color: #c84040;
+}
+
+.gss-title--neutral {
+    color: #e8c87e;
 }
 
 .gss-section {

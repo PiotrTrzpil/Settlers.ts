@@ -117,9 +117,10 @@ function resolveInventoryDuration(node: ChoreoNode): number {
  * Used when a worker needs to pick up an input material before performing a task
  * (e.g., a baker fetching flour from the input pile before baking bread).
  *
- * The inventory transfer happens on the first tick. The node then continues
- * for the animation duration (duration=0 → one full animation cycle) so the
- * pickup animation plays before advancing to the next node.
+ * The pickup animation plays first for the full duration (duration=0 → one
+ * full animation cycle). The actual inventory withdrawal happens when the
+ * animation completes, so the goods visually appear in the settler's hands
+ * at the end of the bend-down motion.
  *
  * Carrier transport uses TRANSPORT_PICKUP instead.
  */
@@ -132,7 +133,11 @@ export const executeGetGood: InventoryExecutorFn = (
 ): TaskResult => {
     if (!job.workStarted) {
         job.workStarted = true;
+    }
 
+    const result = tickDuration(job, dt, resolveInventoryDuration(node));
+
+    if (result === TaskResult.DONE) {
         const material = requireMaterial(node, settler.id);
         const buildingId = requireHomeBuilding(settler, ctx);
 
@@ -149,7 +154,7 @@ export const executeGetGood: InventoryExecutorFn = (
         log.debug(`GET_GOOD: settler ${settler.id} withdrew ${material} from building ${buildingId}`);
     }
 
-    return tickDuration(job, dt, resolveInventoryDuration(node));
+    return result;
 };
 
 /**
@@ -158,9 +163,10 @@ export const executeGetGood: InventoryExecutorFn = (
  * Used when a worker has finished producing and needs to place the result into
  * the output pile so carriers can transport it.
  *
- * The inventory deposit happens on the first tick. The node then continues
- * for the animation duration (duration=0 → one full animation cycle) so the
- * dropoff animation plays before advancing to the next node.
+ * The dropoff animation plays first for the full duration (duration=0 → one
+ * full animation cycle). The actual inventory deposit happens when the
+ * animation completes, so the goods visually leave the settler's hands at
+ * the end of the bend-down motion.
  *
  * Carrier transport uses TRANSPORT_DELIVER instead.
  */
@@ -215,10 +221,15 @@ export const executePutGood: InventoryExecutorFn = (
 ): TaskResult => {
     if (!job.workStarted) {
         job.workStarted = true;
+    }
+
+    const result = tickDuration(job, dt, resolveInventoryDuration(node));
+
+    if (result === TaskResult.DONE) {
         depositWorkerGood(settler, job, node, ctx);
     }
 
-    return tickDuration(job, dt, resolveInventoryDuration(node));
+    return result;
 };
 
 /**

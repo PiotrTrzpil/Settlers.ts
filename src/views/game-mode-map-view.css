@@ -162,6 +162,33 @@
     right: 8px;
     z-index: 100;
     pointer-events: none;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 4px;
+}
+
+.gm-panel-toggle {
+    pointer-events: auto;
+    width: 24px;
+    height: 24px;
+    background: rgba(26, 18, 9, 0.92);
+    color: #8a7040;
+    border: 1px solid #5c3d1a;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition:
+        background 0.15s,
+        color 0.15s;
+}
+
+.gm-panel-toggle:hover {
+    background: #3a2810;
+    color: #e8c87e;
 }
 
 .gm-controls-panel {

@@ -85,8 +85,8 @@ export function executeTransportGoToDest(
 /**
  * TRANSPORT_PICKUP — withdraw material from source building.
  *
- * First tick: validates job via td.ops.isValid(), withdraws via materialTransfer, consumes reservation.
- * Subsequent ticks: plays pickup animation.
+ * First tick: validates job via td.ops.isValid() and starts the pickup animation.
+ * Animation end: withdraws via materialTransfer and consumes reservation.
  */
 export function executeTransportPickup(
     settler: Entity,
@@ -99,7 +99,6 @@ export function executeTransportPickup(
         job.workStarted = true;
 
         const td = requireTransportData(job, 'TRANSPORT_PICKUP');
-        const { material, sourceBuildingId, amount: requestedAmount } = td;
 
         if (!td.ops.isValid()) {
             log.debug(`Carrier ${settler.id}: transport job ${td.jobId} no longer exists, aborting pickup`);
@@ -113,6 +112,13 @@ export function executeTransportPickup(
             log.debug(`Carrier ${settler.id}: transport job ${td.jobId} cancelled before pickup`);
             return TaskResult.FAILED;
         }
+    }
+
+    const result = tickDuration(job, dt, resolveInventoryDuration(node));
+
+    if (result === TaskResult.DONE) {
+        const td = requireTransportData(job, 'TRANSPORT_PICKUP');
+        const { material, sourceBuildingId, amount: requestedAmount } = td;
 
         const withdrawn = ctx.materialTransfer.pickUp(settler.id, sourceBuildingId, material, requestedAmount, true);
 
@@ -140,7 +146,7 @@ export function executeTransportPickup(
         });
     }
 
-    return tickDuration(job, dt, resolveInventoryDuration(node));
+    return result;
 }
 
 /**
@@ -176,10 +182,10 @@ function depositIntoSlot(settler: Entity, slotId: number, ctx: TransportExecutor
 /**
  * TRANSPORT_DELIVER — deposit material at destination building.
  *
- * First tick: validates job via td.ops.isValid(), deposits via inventoryManager.deposit(slotId) into the
- * targeted slot from transportData, fulfills the transport job. Emits
- * construction:materialDelivered when delivering to a construction site.
- * Subsequent ticks: plays dropoff animation.
+ * First tick: validates job via td.ops.isValid() and starts the dropoff animation.
+ * Animation end: deposits via inventoryManager.deposit(slotId) into the targeted slot
+ * from transportData, fulfills the transport job. Emits construction:materialDelivered
+ * when delivering to a construction site.
  */
 export function executeTransportDeliver(
     settler: Entity,
@@ -192,7 +198,6 @@ export function executeTransportDeliver(
         job.workStarted = true;
 
         const td = requireTransportData(job, 'TRANSPORT_DELIVER');
-        const { destBuildingId, material, slotId } = td;
 
         if (!td.ops.isValid()) {
             log.debug(`Carrier ${settler.id}: transport job ${td.jobId} no longer exists, dropping material`);
@@ -203,11 +208,18 @@ export function executeTransportDeliver(
         if (!settler.carrying) {
             throw new Error(
                 `Carrier ${settler.id}: TRANSPORT_DELIVER called but settler is not carrying anything ` +
-                    `(job: material=${material})`
+                    `(job: material=${td.material})`
             );
         }
+    }
 
-        const amount = settler.carrying.amount;
+    const result = tickDuration(job, dt, resolveInventoryDuration(node));
+
+    if (result === TaskResult.DONE) {
+        const td = requireTransportData(job, 'TRANSPORT_DELIVER');
+        const { destBuildingId, material, slotId } = td;
+
+        const amount = settler.carrying!.amount;
         const deposited = depositIntoSlot(settler, slotId, ctx);
         td.ops.deliver();
 
@@ -234,8 +246,6 @@ export function executeTransportDeliver(
             overflow,
         });
 
-        // Emit construction delivery event so the demand system knows to re-check
-        // remaining materials. BuildingLifecycleHandler no longer bridges inventory:changed.
         if (deposited > 0 && ctx.constructionSiteManager.getSite(destBuildingId)) {
             ctx.eventBus.emit('construction:materialDelivered', {
                 buildingId: destBuildingId,
@@ -244,5 +254,5 @@ export function executeTransportDeliver(
         }
     }
 
-    return tickDuration(job, dt, resolveInventoryDuration(node));
+    return result;
 }

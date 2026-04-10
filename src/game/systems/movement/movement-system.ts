@@ -241,9 +241,14 @@ export class MovementSystem implements TickSystem {
         setPathfindingEntityContext(undefined);
         this.pathfinder.setPathfindingEntityId(undefined);
 
-        if (!path || path.length === 0) {
+        if (!path) {
             this.emitPathFailed(entityId, fromX, fromY, target.x, target.y);
             return false;
+        }
+
+        // Already at goal — no movement needed, report success
+        if (path.length === 0) {
+            return true;
         }
 
         const redirect = controller.isInTransit;

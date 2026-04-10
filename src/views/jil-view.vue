@@ -24,7 +24,7 @@
                 <span class="label">Direction:</span>
                 <select v-model="gridDirection" class="dir-select" @change="onGridDirectionChange">
                     <option value="all" :disabled="doAnimation">All</option>
-                    <option v-for="d in 8" :key="d - 1" :value="d - 1">D{{ d - 1 }}</option>
+                    <option v-for="d in maxDirectionCount" :key="d - 1" :value="d - 1">D{{ d - 1 }}</option>
                 </select>
             </template>
         </div>
@@ -66,12 +66,8 @@
                         </div>
                     </div>
                     <!-- All directions: show frame 0 of each direction -->
-                    <div v-else class="direction-grid" :class="'dirs-' + Math.min(getDirectionCount(item.index), 8)">
-                        <div
-                            v-for="dir in Math.min(getDirectionCount(item.index), 8)"
-                            :key="dir"
-                            class="direction-cell"
-                        >
+                    <div v-else class="direction-grid" :class="dirGridClass(getDirectionCount(item.index))">
+                        <div v-for="dir in getDirectionCount(item.index)" :key="dir" class="direction-cell">
                             <canvas
                                 :ref="el => setCanvasRef(el as HTMLCanvasElement, `${item.index}-${dir - 1}`)"
                                 width="200"
@@ -144,7 +140,9 @@
 
             <div class="canvas-area">
                 <div class="canvas-wrapper">
-                    <canvas ref="ghCav" class="main-canvas"> Sorry! Your browser does not support HTML5 Canvas. </canvas>
+                    <canvas ref="ghCav" class="main-canvas">
+                        Sorry! Your browser does not support HTML5 Canvas.
+                    </canvas>
                 </div>
                 <div v-if="!doAnimation && selectedGil && withCorrections" class="shift-controls">
                     <span class="shift-label">Shift (WASD):</span>
@@ -174,10 +172,18 @@ import {
 } from '@/utilities/view-helpers';
 import type { IGfxImage } from '@/resources/gfx/igfx-image';
 import { getFrameCorrection, renderCorrectedImage } from './jil-view-corrections';
-import { setCorrection, serializeCorrections, CORRECTIONS_YAML_PATH } from '@/game/renderer/sprite-metadata/frame-corrections';
+import {
+    setCorrection,
+    serializeCorrections,
+    CORRECTIONS_YAML_PATH,
+} from '@/game/renderer/sprite-metadata/frame-corrections';
 import { writeDevFile } from '@/utilities/dev-file-writer';
 import { getSavedState, loadSavedState, saveJilState, restoreScrollOffset } from './jil-view-persistence';
-import { renderGridFrame as renderGridFrameImpl, renderJobSprite as renderJobSpriteImpl, type GridRenderContext } from './jil-view-grid-render';
+import {
+    renderGridFrame as renderGridFrameImpl,
+    renderJobSprite as renderJobSpriteImpl,
+    type GridRenderContext,
+} from './jil-view-grid-render';
 import { useCompositeGridView } from '@/composables/useGridView';
 import {
     isSettlerFile as isSettlerFileCheck,
@@ -225,8 +231,8 @@ const manualFrameIndex = ref(0);
 function currentFrameIdx(): number {
     return gilList.value.length > 0 ? gilList.value.indexOf(selectedGil.value!) : 0;
 }
-const currentFrameDisplay = computed(() => viewMode.value === 'single' ? currentFrameIdx() : manualFrameIndex.value);
-const totalFrameCount = computed(() => viewMode.value === 'single' ? gilList.value.length : gridMaxFrameCount());
+const currentFrameDisplay = computed(() => (viewMode.value === 'single' ? currentFrameIdx() : manualFrameIndex.value));
+const totalFrameCount = computed(() => (viewMode.value === 'single' ? gilList.value.length : gridMaxFrameCount()));
 
 function gridMaxFrameCount(): number {
     if (!dilFileReader.value || !gilFileReader.value) {
@@ -272,9 +278,15 @@ function buildGridCtx(): GridRenderContext | null {
         return null;
     }
     return {
-        gfxReader: gfxFileReader.value, dilReader: dilFileReader.value, gilReader: gilFileReader.value,
-        jilList: jilList.value, visibleStart: gridVisibleStart, visibleEnd: gridVisibleEnd,
-        getCanvas: key => canvasRefs.get(key), clearCanvas, renderImage: renderImageToCanvas,
+        gfxReader: gfxFileReader.value,
+        dilReader: dilFileReader.value,
+        gilReader: gilFileReader.value,
+        jilList: jilList.value,
+        visibleStart: gridVisibleStart,
+        visibleEnd: gridVisibleEnd,
+        getCanvas: key => canvasRefs.get(key),
+        clearCanvas,
+        renderImage: renderImageToCanvas,
         lookupCorrection,
     };
 }
@@ -294,8 +306,10 @@ function loadPixelShift(): void {
         return;
     }
     const c = getFrameCorrection(
-        getCurrentFileId(), selectedJil.value.index,
-        dilList.value.indexOf(selectedDil.value), gilList.value.indexOf(selectedGil.value)
+        getCurrentFileId(),
+        selectedJil.value.index,
+        dilList.value.indexOf(selectedDil.value),
+        gilList.value.indexOf(selectedGil.value)
     );
     // eslint-disable-next-line no-restricted-syntax -- c is undefined when no correction exists for this frame
     pixelShift.dx = c?.dx ?? 0;
@@ -403,6 +417,29 @@ const directionCounts = ref<Map<number, number>>(new Map());
 function getDirectionCount(jobIndex: number): number {
     // eslint-disable-next-line no-restricted-syntax -- Map.get() returns undefined for missing keys
     return directionCounts.value.get(jobIndex) ?? 1;
+}
+
+const maxDirectionCount = computed(() => {
+    let max = 1;
+    for (const count of directionCounts.value.values()) {
+        if (count > max) {
+            max = count;
+        }
+    }
+    return max;
+});
+
+const DIR_GRID_THRESHOLDS: [number, string][] = [
+    [1, 'dirs-1'],
+    [2, 'dirs-2'],
+    [4, 'dirs-4'],
+    [6, 'dirs-6'],
+    [8, 'dirs-8'],
+];
+
+function dirGridClass(count: number): string {
+    // eslint-disable-next-line no-restricted-syntax -- fallback for counts exceeding all thresholds (9+ directions)
+    return DIR_GRID_THRESHOLDS.find(([max]) => count <= max)?.[1] ?? 'dirs-12';
 }
 
 function getCurrentFileId(): number | null {
@@ -625,7 +662,6 @@ function getSelectedDirection(): number {
     return typeof gridDirection.value === 'number' ? gridDirection.value : 0;
 }
 
-
 function renderJobSprite(item: IndexFileItem) {
     const ctx = buildGridCtx();
     if (ctx) {
@@ -743,10 +779,22 @@ function onKeyDown(e: KeyboardEvent): void {
     }
     const step = e.shiftKey ? 5 : 1;
     switch (e.key.toLowerCase()) {
-        case 'w': e.preventDefault(); shiftPixels(0, -step); break;
-        case 's': e.preventDefault(); shiftPixels(0, step); break;
-        case 'a': e.preventDefault(); shiftPixels(-step, 0); break;
-        case 'd': e.preventDefault(); shiftPixels(step, 0); break;
+        case 'w':
+            e.preventDefault();
+            shiftPixels(0, -step);
+            break;
+        case 's':
+            e.preventDefault();
+            shiftPixels(0, step);
+            break;
+        case 'a':
+            e.preventDefault();
+            shiftPixels(-step, 0);
+            break;
+        case 'd':
+            e.preventDefault();
+            shiftPixels(step, 0);
+            break;
     }
 }
 
@@ -903,6 +951,11 @@ onUnmounted(() => {
 
 .direction-grid.dirs-7,
 .direction-grid.dirs-8 {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+}
+
+.direction-grid.dirs-12 {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
 }

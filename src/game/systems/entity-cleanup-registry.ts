@@ -23,6 +23,7 @@
  * ```
  */
 
+import type { Entity } from '../entity';
 import { type EventBus, EventSubscriptionManager } from '../event-bus';
 import { createLogger } from '@/utilities/logger';
 
@@ -63,7 +64,7 @@ export type CleanupPriority = (typeof CLEANUP_PRIORITY)[keyof typeof CLEANUP_PRI
 // ─────────────────────────────────────────────────────────────
 
 /** A cleanup handler for a specific entity removal event. */
-type EntityCleanupHandler = (entityId: number) => void;
+type EntityCleanupHandler = (entityId: number, entity: Entity) => void;
 
 interface RegisteredHandler {
     priority: number;
@@ -97,10 +98,10 @@ export class EntityCleanupRegistry {
         // Sort handlers by priority (stable — insertion order preserved for equal priorities)
         this.handlers.sort((a, b) => a.priority - b.priority);
 
-        this.subscriptions.subscribe(eventBus, 'entity:removed', ({ entityId }) => {
+        this.subscriptions.subscribe(eventBus, 'entity:removed', ({ entityId, entity }) => {
             for (const { handler } of this.handlers) {
                 try {
-                    handler(entityId);
+                    handler(entityId, entity);
                 } catch (e) {
                     // Cleanup handlers must not abort each other — log and continue.
                     // This mirrors the EventBus's own per-handler isolation.

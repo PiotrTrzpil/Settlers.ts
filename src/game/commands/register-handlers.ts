@@ -139,7 +139,7 @@ export function registerAllHandlers(registry: CommandHandlerRegistry, deps: Comm
     );
 
     // Script
-    registry.register('script_add_goods', cmd => executeScriptAddGoods({ state, eventBus }, cmd));
-    registry.register('script_add_building', cmd => executeScriptAddBuilding({ state, eventBus }, cmd));
-    registry.register('script_add_settlers', cmd => executeScriptAddSettlers({ state, eventBus }, cmd));
+    registry.register('script_add_goods', cmd => executeScriptAddGoods({ state, eventBus, terrain }, cmd));
+    registry.register('script_add_building', cmd => executeScriptAddBuilding({ state, eventBus, terrain }, cmd));
+    registry.register('script_add_settlers', cmd => executeScriptAddSettlers({ state, eventBus, terrain }, cmd));
 }

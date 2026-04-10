@@ -75,6 +75,11 @@ export const S4_SETTLER_TYPES = {
     BLOWGUNWARRIOR_02: 42,
     BLOWGUNWARRIOR_03: 43,
 
+    // Military - Backpack Catapultists (Trojan)
+    BACKPACKCATAPULTIST_01: 61,
+    BACKPACKCATAPULTIST_02: 62,
+    BACKPACKCATAPULTIST_03: 63,
+
     // Special units
     SQUADLEADER: 44,
     PRIEST: 45,
@@ -94,17 +99,63 @@ export const S4_SETTLER_TYPES = {
 function mapS4ToInternalType(s4Type: number): UnitType {
     // Map implemented types
     const mapping: Record<number, UnitType> = {
+        // Workers
         [S4_SETTLER_TYPES.CARRIER]: UnitType.Carrier,
+        [S4_SETTLER_TYPES.DIGGER]: UnitType.Digger,
         [S4_SETTLER_TYPES.BUILDER]: UnitType.Builder,
         [S4_SETTLER_TYPES.WOODCUTTER]: UnitType.Woodcutter,
         [S4_SETTLER_TYPES.STONECUTTER]: UnitType.Stonecutter,
         [S4_SETTLER_TYPES.FORESTER]: UnitType.Forester,
+        [S4_SETTLER_TYPES.FARMERGRAIN]: UnitType.Farmer,
+        [S4_SETTLER_TYPES.FARMERANIMALS]: UnitType.AnimalFarmer,
+        [S4_SETTLER_TYPES.FISHER]: UnitType.Fisher,
+        [S4_SETTLER_TYPES.WATERWORKER]: UnitType.Waterworker,
+        [S4_SETTLER_TYPES.HUNTER]: UnitType.Hunter,
+        [S4_SETTLER_TYPES.SAWMILLWORKER]: UnitType.SawmillWorker,
+        [S4_SETTLER_TYPES.SMELTER]: UnitType.Smelter,
+        [S4_SETTLER_TYPES.MINEWORKER]: UnitType.Miner,
+        [S4_SETTLER_TYPES.SMITH]: UnitType.Smith,
+        [S4_SETTLER_TYPES.MILLER]: UnitType.Miller,
+        [S4_SETTLER_TYPES.BAKER]: UnitType.Baker,
+        [S4_SETTLER_TYPES.BUTCHER]: UnitType.Butcher,
+        [S4_SETTLER_TYPES.HEALER]: UnitType.Healer,
+        [S4_SETTLER_TYPES.CHARCOALMAKER]: UnitType.Smelter, // charcoal burner uses smelter worker
+        [S4_SETTLER_TYPES.AMMOMAKER]: UnitType.Smith, // ammo smith uses smith worker
+        [S4_SETTLER_TYPES.VEHICLEMAKER]: UnitType.Smith, // vehicle maker uses smith worker
+        [S4_SETTLER_TYPES.VINTNER]: UnitType.Winemaker,
+        [S4_SETTLER_TYPES.BEEKEEPER]: UnitType.Beekeeper,
+        [S4_SETTLER_TYPES.MEADMAKER]: UnitType.Meadmaker,
+        [S4_SETTLER_TYPES.AGAVEFARMER]: UnitType.AgaveFarmer,
+        [S4_SETTLER_TYPES.TEQUILAMAKER]: UnitType.Tequilamaker,
+        // Military
         [S4_SETTLER_TYPES.SWORDSMAN_01]: UnitType.Swordsman1,
+        [S4_SETTLER_TYPES.SWORDSMAN_02]: UnitType.Swordsman2,
+        [S4_SETTLER_TYPES.SWORDSMAN_03]: UnitType.Swordsman3,
         [S4_SETTLER_TYPES.BOWMAN_01]: UnitType.Bowman1,
+        [S4_SETTLER_TYPES.BOWMAN_02]: UnitType.Bowman2,
+        [S4_SETTLER_TYPES.BOWMAN_03]: UnitType.Bowman3,
+        [S4_SETTLER_TYPES.MEDIC_01]: UnitType.Medic1,
+        [S4_SETTLER_TYPES.MEDIC_02]: UnitType.Medic2,
+        [S4_SETTLER_TYPES.MEDIC_03]: UnitType.Medic3,
+        [S4_SETTLER_TYPES.AXEWARRIOR_01]: UnitType.AxeWarrior1,
+        [S4_SETTLER_TYPES.AXEWARRIOR_02]: UnitType.AxeWarrior2,
+        [S4_SETTLER_TYPES.AXEWARRIOR_03]: UnitType.AxeWarrior3,
+        [S4_SETTLER_TYPES.BLOWGUNWARRIOR_01]: UnitType.BlowgunWarrior1,
+        [S4_SETTLER_TYPES.BLOWGUNWARRIOR_02]: UnitType.BlowgunWarrior2,
+        [S4_SETTLER_TYPES.BLOWGUNWARRIOR_03]: UnitType.BlowgunWarrior3,
+        [S4_SETTLER_TYPES.BACKPACKCATAPULTIST_01]: UnitType.BackpackCatapultist1,
+        [S4_SETTLER_TYPES.BACKPACKCATAPULTIST_02]: UnitType.BackpackCatapultist2,
+        [S4_SETTLER_TYPES.BACKPACKCATAPULTIST_03]: UnitType.BackpackCatapultist3,
+        // Specialists
+        [S4_SETTLER_TYPES.SQUADLEADER]: UnitType.SquadLeader,
         [S4_SETTLER_TYPES.PRIEST]: UnitType.Priest,
+        [S4_SETTLER_TYPES.SABOTEUR]: UnitType.Saboteur,
         [S4_SETTLER_TYPES.PIONEER]: UnitType.Pioneer,
         [S4_SETTLER_TYPES.THIEF]: UnitType.Thief,
         [S4_SETTLER_TYPES.GEOLOGIST]: UnitType.Geologist,
+        [S4_SETTLER_TYPES.GARDENER]: UnitType.Gardener,
+        [S4_SETTLER_TYPES.LANDSCAPER]: UnitType.Gardener,
+        [S4_SETTLER_TYPES.DONKEY]: UnitType.Donkey,
     };
 
     const mapped = mapping[s4Type];

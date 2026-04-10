@@ -86,38 +86,18 @@ function resolveInterleavedOverlays(
     const xmlSettlers = getBuildingInfo(race, buildingType)?.settlers;
     const unitRaceReady = registry != null && registry.isUnitRaceLoaded(race);
 
-    if (!_settlerDebugDone && garrison) {
-        logGarrisonDebug(buildingType, race, spec.length, xmlSettlers?.length, garrison);
-    }
-
     for (const tower of spec) {
         emitTowerSlot(tower, overlayMap, usedOverlayKeys, er, out);
 
         if (garrison && unitRaceReady && xmlSettlers) {
-            emitSettlersByIndex(entity, garrison, xmlSettlers, tower.settlers, g.state, registry, out, tower.name);
+            emitSettlersByIndex(entity, garrison, xmlSettlers, tower.settlers, g.state, registry, out);
         }
 
         emitTowerFrontwall(tower, overlayMap, usedOverlayKeys, er, out);
     }
 
-    _settlerDebugDone = true;
-
     // Append remaining overlays not in the spec (flag, door, etc.)
     emitRemainingOverlays(entityId, usedOverlayKeys, g, er, out);
-}
-
-function logGarrisonDebug(
-    buildingType: BuildingType,
-    race: Race,
-    towerCount: number,
-    xmlSettlerCount: number | undefined,
-    garrison: Readonly<BuildingGarrisonState>
-): void {
-    console.warn(
-        `[spec-debug] buildingType=${buildingType} race=${race} towers=${towerCount} ` +
-            `xmlSettlers=${xmlSettlerCount} sw=${garrison.swordsmanSlots.unitIds.length}/${garrison.swordsmanSlots.max} ` +
-            `bw=${garrison.bowmanSlots.unitIds.length}/${garrison.bowmanSlots.max}`
-    );
 }
 
 function emitTowerSlot(
@@ -178,9 +158,6 @@ function buildOverlayMap(entityId: number, g: Game): Map<string, BuildingOverlay
  * bowman slot (top=true). We count how many swordsman/bowman positions
  * come before this index to find the correct unit ID from the garrison.
  */
-// Debug: log settler rendering once
-let _settlerDebugDone = false;
-
 function emitSettlersByIndex(
     building: { x: number; y: number; race: Race },
     garrison: Readonly<BuildingGarrisonState>,
@@ -188,13 +165,8 @@ function emitSettlersByIndex(
     indices: readonly number[],
     state: GameState,
     registry: SpriteMetadataRegistry,
-    out: BuildingOverlayRenderData[],
-    towerName: string
+    out: BuildingOverlayRenderData[]
 ): void {
-    if (!_settlerDebugDone) {
-        console.warn(`[tower] "${towerName}" indices=[${indices}]`);
-    }
-
     for (const idx of indices) {
         emitSettlerAtIndex(idx, building, garrison, xmlSettlers, state, registry, out);
     }
@@ -210,37 +182,20 @@ function emitSettlerAtIndex(
     out: BuildingOverlayRenderData[]
 ): void {
     if (idx >= xmlSettlers.length) {
-        if (!_settlerDebugDone) {
-            console.warn(`  [${idx}] SKIP out-of-range (max=${xmlSettlers.length})`);
-        }
         return;
     }
     const pos = xmlSettlers[idx]!;
-    const role = pos.top ? 'bowman' : 'swordsman';
 
     const slotIndex = countPrecedingSlots(xmlSettlers, idx, pos.top);
     const slots = pos.top ? garrison.bowmanSlots : garrison.swordsmanSlots;
     if (slotIndex >= slots.unitIds.length) {
-        if (!_settlerDebugDone) {
-            console.warn(`  [${idx}] ${role} slotIdx=${slotIndex} SKIP (only ${slots.unitIds.length} garrisoned)`);
-        }
         return;
     }
 
     const unitId = slots.unitIds[slotIndex]!;
     const unit = state.getEntity(unitId);
     if (!unit) {
-        if (!_settlerDebugDone) {
-            console.warn(`  [${idx}] ${role} slotIdx=${slotIndex} unitId=${unitId} SKIP (entity missing)`);
-        }
         return;
-    }
-
-    if (!_settlerDebugDone) {
-        console.warn(
-            `  [${idx}] ${role} slotIdx=${slotIndex} unitId=${unitId} type=${unit.subType} ` +
-                `pos=(${pos.xOffset},${pos.yOffset}) dir=${pos.direction} RENDERED`
-        );
     }
 
     const sprite = resolveSettlerSprite(building, pos, unitId, unit, state, registry);
@@ -300,14 +255,13 @@ function emitCustomOverlayInstance(
     out: BuildingOverlayRenderData[]
 ): void {
     const spriteRef = inst.def.spriteRef;
-    const frames = er.spriteManager?.registry.getOverlayFrames(
-        spriteRef.gfxFile,
-        spriteRef.jobIndex,
-        // eslint-disable-next-line no-restricted-syntax -- directionIndex is an optional sprite property; 0 is the correct default direction
-        spriteRef.directionIndex ?? 0
-    );
+    // eslint-disable-next-line no-restricted-syntax -- directionIndex is an optional sprite property; 0 is the correct default direction
+    const dirIdx = spriteRef.directionIndex ?? 0;
+    const frames = er.spriteManager!.registry.getOverlayFrames(spriteRef.gfxFile, spriteRef.jobIndex, dirIdx);
     if (!frames || frames.length === 0) {
-        return;
+        throw new Error(
+            `Overlay "${inst.def.key}" has no sprite frames (gfx=${spriteRef.gfxFile} job=${spriteRef.jobIndex} dir=${dirIdx})`
+        );
     }
 
     const frameIndex = getOverlayFrame(inst);

@@ -103,6 +103,15 @@ export function executeSpawnPile(deps: SpawnPileDeps, cmd: SpawnPileCommand): Sp
     if (!terrain.isInBounds(cmd)) {
         throw new Error(`spawn_pile: position (${cmd.x}, ${cmd.y}) out of bounds`);
     }
+
+    const existing = state.getGroundEntityAt(cmd);
+    if (existing && existing.type === EntityType.StackedPile) {
+        throw new Error(
+            `spawn_pile: tile (${cmd.x}, ${cmd.y}) already occupied by StackedPile #${existing.id}` +
+                ` (${existing.subType}). Caller must find a free tile before spawning.`
+        );
+    }
+
     const entity = state.addEntity(EntityType.StackedPile, cmd.materialType, cmd, cmd.player);
 
     if (cmd.kind.kind === 'free') {

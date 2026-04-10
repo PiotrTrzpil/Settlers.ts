@@ -18,6 +18,8 @@ import { createCli } from '@/game/cli';
 import { connectCliWs } from '@/game/cli/ws-client';
 import { TimelineCapture } from '@/game/debug/timeline-capture';
 
+import { readStartResources, mapNeedsStartResources } from './state/game-mode-settings';
+
 // Scripting is loaded dynamically to avoid bundling Lua when disabled
 type ScriptLoadResult = { success: boolean; scriptPath: string | null; error?: string };
 
@@ -27,6 +29,10 @@ type ScriptLoadResult = { success: boolean; scriptPath: string | null; error?: s
  */
 interface IScriptService {
     loadScriptForMap(mapFilename: string): Promise<ScriptLoadResult>;
+    applyStartResources(
+        startResources: number,
+        players: { playerIndex: number; startX?: number; startY?: number }[]
+    ): void;
     destroy(): void;
 }
 
@@ -84,6 +90,10 @@ export class Game extends GameCore {
 
         // Create frame loop and register tick systems
         this._gameLoop = new GameLoop(this.state, this.services.visualService, this.settings.state, this.viewState);
+        this._gameLoop.setTickCallback(() => {
+            this.currentTick++;
+            this.journal.advanceTick();
+        });
         for (const { system, group } of this.services.getTickSystems()) {
             this._gameLoop.registerSystem(system, group);
         }
@@ -188,6 +198,20 @@ export class Game extends GameCore {
     }
 
     /**
+     * Reset to initial map state and re-apply start resources with current settings.
+     * Unlike a full map reload, this preserves sprites and the renderer.
+     */
+    public resetWithStartResources(): void {
+        this.restoreToInitialState();
+        if (this.scriptService && mapNeedsStartResources(this.mapLoader)) {
+            const startResources = readStartResources();
+            // eslint-disable-next-line no-restricted-syntax -- entityData is absent for synthetic/test maps; empty array is correct fallback
+            const players = this.mapLoader.entityData?.players ?? [];
+            this.scriptService.applyStartResources(startResources, players);
+        }
+    }
+
+    /**
      * Load and execute a Lua script for the map.
      * Scripting is only loaded when enabled in settings.
      */
@@ -218,6 +242,14 @@ export class Game extends GameCore {
                 await service.initialize();
                 this._gameLoop.registerSystem(service, 'Scripting');
                 this.scriptService = service;
+
+                // Execute start resources for multiplayer/coop maps (campaign maps have entities baked in)
+                if (mapNeedsStartResources(this.mapLoader)) {
+                    const startResources = readStartResources();
+                    // eslint-disable-next-line no-restricted-syntax -- entityData is absent for synthetic/test maps; empty array is correct fallback
+                    const players = this.mapLoader.entityData?.players ?? [];
+                    await service.loadStartResources(startResources, players);
+                }
             }
 
             return this.scriptService.loadScriptForMap(mapFilename);

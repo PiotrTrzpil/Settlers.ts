@@ -16,6 +16,12 @@ import { getBuildingInfo } from '../../data/game-data-access';
 import { PersistentMap } from '@/game/persistence/persistent-store';
 import type { Tile } from '@/game/core/coordinates';
 
+/**
+ * S4 XML uses large values (~980-985) in workingPos as a sentinel for "unset".
+ * Any offset component above this threshold is treated as unset → falls back to door offset.
+ */
+const WORKING_POS_SENTINEL_THRESHOLD = 100;
+
 export class WorkAreaStore {
     /** Per-instance overrides (entityId → offset), auto-persisted. */
     readonly persistentStore = new PersistentMap<TileOffset>('workAreaOffsets');
@@ -38,6 +44,11 @@ export class WorkAreaStore {
             throw new Error(`No BuildingInfo for ${buildingType} / race ${race}`);
         }
         const { xOffset, yOffset } = info.workingPos;
+        // S4 XML uses large sentinel values (~980-985) for workingPos when the position
+        // is unset (e.g. barracks, healer hut). Fall back to the door offset.
+        if (xOffset > WORKING_POS_SENTINEL_THRESHOLD || yOffset > WORKING_POS_SENTINEL_THRESHOLD) {
+            return { dx: info.door.xOffset, dy: info.door.yOffset };
+        }
         return { dx: xOffset, dy: yOffset };
     }
 

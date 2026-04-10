@@ -297,22 +297,33 @@ export class GameState {
         }
     }
 
-    /** Register a non-building, non-unit entity (MapObject, StackedPile) in ground occupancy. */
+    /**
+     * Register a non-building, non-unit entity (MapObject, StackedPile) in ground occupancy.
+     *
+     * StackedPiles are allowed on building footprint tiles (input/output/storage slots
+     * sit on the building footprint by design). All other overlaps are rejected.
+     */
     private addGroundEntityOccupancy(entityId: number, type: EntityType, subType: number | string, tile: Tile): void {
         const key = tileKey(tile);
-        if (type === EntityType.MapObject) {
-            const occupantId = this.groundOccupancy.get(key);
-            if (occupantId !== undefined) {
-                const occupant = this.entityMap.get(occupantId);
-                const desc =
-                    occupant?.type === EntityType.Building
-                        ? `building #${occupantId} (${String(occupant.subType)})`
-                        : // eslint-disable-next-line no-restricted-syntax -- occupant type may be unknown when building an error description; 0 gives a safe enum fallback for display only
-                          `${EntityType[occupant?.type ?? 0]} #${occupantId}`;
-                throw new Error(
-                    `addEntity: cannot place MapObject (subType=${subType}) at (${tile.x},${tile.y}) — tile occupied by ${desc}`
-                );
+        const occupantId = this.groundOccupancy.get(key);
+        if (occupantId !== undefined) {
+            const occupant = this.entityMap.get(occupantId);
+
+            // Piles on building footprint tiles are valid (input/output/storage slots)
+            if (type === EntityType.StackedPile && occupant?.type === EntityType.Building) {
+                // Don't overwrite the building in groundOccupancy — the building owns the tile.
+                // The pile is tracked via spatialIndex (set in addSpatialAndOccupancy).
+                return;
             }
+
+            const desc =
+                occupant?.type === EntityType.Building
+                    ? `building #${occupantId} (${String(occupant.subType)})`
+                    : // eslint-disable-next-line no-restricted-syntax -- occupant type may be unknown when building an error description; 0 gives a safe enum fallback for display only
+                      `${EntityType[occupant?.type ?? 0]} #${occupantId}`;
+            throw new Error(
+                `addEntity: cannot place ${EntityType[type]} (subType=${String(subType)}) at (${tile.x},${tile.y}) — tile occupied by ${desc}`
+            );
         }
         this.groundOccupancy.set(key, entityId);
     }
@@ -377,7 +388,6 @@ export class GameState {
             this.spatialIndex.remove(id);
         }
 
-        this.entityMap.delete(id);
         this.entityIndex.remove(id, entity.type, entity.player);
 
         // Remove occupancy from the correct layer
@@ -398,8 +408,11 @@ export class GameState {
             this.groundOccupancy.delete(tileKey(entity));
         }
 
-        // Emit event for system cleanup (movement controllers, carrier state, inventory, etc.)
-        this.eventBus.emit('entity:removed', { entityId: id });
+        this.entityMap.delete(id);
+
+        // Emit AFTER deleting from entityMap. Pass the entity snapshot so handlers
+        // (e.g. MaterialTransfer.onEntityRemoved) can read state without querying entityMap.
+        this.eventBus.emit('entity:removed', { entityId: id, entity });
 
         this.selection.deselect(id);
     }

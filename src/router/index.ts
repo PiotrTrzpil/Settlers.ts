@@ -11,6 +11,7 @@ const routes: Array<RouteRecordRaw> = [
         path: '/map-select',
         name: 'MapSelect',
         component: () => import('@/views/MapSelectView.vue'),
+        meta: { hideNav: true },
     },
     {
         path: '/game',

@@ -56,6 +56,11 @@ export class BuildingOverlayManager implements TickSystem {
     private readonly entityProvider: EntityProvider;
     private readonly overlaysByEntity = new Map<number, BuildingOverlayInstance[]>();
 
+    /** Cached frame counts from sprite loading — keyed by "gfxFile:jobIndex:directionIndex" */
+    private readonly knownFrameCounts = new Map<string, number>();
+    /** Cached flag frame count (0 = not yet known) */
+    private knownFlagFrameCount = 0;
+
     constructor(config: BuildingOverlayManagerConfig) {
         this.registry = config.overlayRegistry;
         this.entityProvider = config.entityProvider;
@@ -83,6 +88,24 @@ export class BuildingOverlayManager implements TickSystem {
         }
 
         const instances = defs.map(def => createInstance(def, entityId));
+
+        // Apply cached frame counts so animations work immediately
+        for (const inst of instances) {
+            if (inst.def.isFlag) {
+                if (this.knownFlagFrameCount > 0) {
+                    inst.frameCount = this.knownFlagFrameCount;
+                }
+            } else {
+                const ref = inst.def.spriteRef;
+                // eslint-disable-next-line no-restricted-syntax -- directionIndex is an optional sprite ref field; absent means direction 0
+                const key = `${ref.gfxFile}:${ref.jobIndex}:${ref.directionIndex ?? 0}`;
+                const cached = this.knownFrameCounts.get(key);
+                if (cached !== undefined) {
+                    inst.frameCount = cached;
+                }
+            }
+        }
+
         this.overlaysByEntity.set(entityId, instances);
     }
 
@@ -158,6 +181,8 @@ export class BuildingOverlayManager implements TickSystem {
      * More efficient than per-entity setFrameCount when sprites are loaded globally.
      */
     setFrameCountForDef(gfxFile: number, jobIndex: number, directionIndex: number, frameCount: number): void {
+        this.knownFrameCounts.set(`${gfxFile}:${jobIndex}:${directionIndex}`, frameCount);
+
         for (const instances of this.overlaysByEntity.values()) {
             for (const inst of instances) {
                 const ref = inst.def.spriteRef;
@@ -179,6 +204,8 @@ export class BuildingOverlayManager implements TickSystem {
      * so they can't be matched by spriteRef like other overlays.
      */
     setFlagFrameCount(frameCount: number): void {
+        this.knownFlagFrameCount = frameCount;
+
         for (const instances of this.overlaysByEntity.values()) {
             for (const inst of instances) {
                 if (inst.def.isFlag) {
@@ -234,6 +261,8 @@ export class BuildingOverlayManager implements TickSystem {
     /** Clean up all state */
     destroy(): void {
         this.overlaysByEntity.clear();
+        this.knownFrameCounts.clear();
+        this.knownFlagFrameCount = 0;
     }
 }
 

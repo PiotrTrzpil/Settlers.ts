@@ -11,7 +11,7 @@ import type { Race } from './core/race';
 import type { UnitType } from './core/unit-types';
 import type { EMaterialType } from './economy';
 import type { MapObjectType } from './types/map-object-types';
-import type { EntityType, Tile } from './entity';
+import type { Entity, EntityType, Tile } from './entity';
 import type { GameEventBase, TrainingRecipe } from './event-types';
 
 /** Feature-specific events — merged into GameEvents via intersection. */
@@ -98,6 +98,8 @@ export interface GameEventsFeatures {
      */
     'entity:removed': {
         entityId: number;
+        /** The entity snapshot at removal time. Only available when emitted by GameState.removeEntity. */
+        entity: Entity;
     };
 
     // === Pile Events ===

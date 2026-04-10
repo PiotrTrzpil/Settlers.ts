@@ -87,9 +87,9 @@
 
             <!-- Post-game stats screen -->
             <game-stats-screen
-                v-if="showStats && gameEndResult"
+                v-if="showStats"
                 :game="game"
-                :won="gameEndResult.won"
+                :won="gameEndResult?.won ?? null"
                 :stats-tracker="statsTracker"
                 @quit="$router.push('/')"
             />
@@ -121,7 +121,10 @@
 
             <!-- Right floating panel: speed + save/load controls -->
             <div class="gm-right-panels">
-                <div class="gm-controls-panel">
+                <button class="gm-panel-toggle" @click="rightPanelOpen = !rightPanelOpen">
+                    {{ rightPanelOpen ? '&#9654;' : '&#9664;' }}
+                </button>
+                <div v-if="rightPanelOpen" class="gm-controls-panel">
                     <button class="gm-pause-btn" :class="{ paused: isPaused }" @click="togglePause">
                         {{ isPaused ? '&#9654;' : '&#10074;&#10074;' }}
                     </button>
@@ -142,6 +145,7 @@
                     <button class="gm-menu-btn gm-menu-btn--danger" @click="showRestartConfirm = true">
                         Restart Map
                     </button>
+                    <button class="gm-menu-btn gm-menu-btn--danger" @click="showExitConfirm = true">Exit Game</button>
                 </div>
             </div>
 
@@ -161,6 +165,31 @@
                 </div>
             </div>
 
+            <!-- Exit confirmation -->
+            <div v-if="showExitConfirm" class="game-end-backdrop">
+                <div class="game-end-dialog">
+                    <h2 class="game-end-title game-end-title--lost">Exit Game?</h2>
+                    <p class="game-end-message">
+                        Do you want to view game stats before leaving? Unsaved progress will be lost.
+                    </p>
+                    <div class="game-end-actions">
+                        <button class="game-end-btn game-end-btn--continue" @click="showExitConfirm = false">
+                            Cancel
+                        </button>
+                        <button
+                            class="game-end-btn game-end-btn--stats"
+                            @click="
+                                showExitConfirm = false;
+                                showStats = true;
+                            "
+                        >
+                            View Stats
+                        </button>
+                        <button class="game-end-btn game-end-btn--quit" @click="$router.push('/')">Quit Now</button>
+                    </div>
+                </div>
+            </div>
+
             <!-- Save/Load dialog -->
             <save-load-dialog
                 v-if="showSaveLoad"
@@ -173,7 +202,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, useTemplateRef, reactive, onBeforeUnmount, nextTick } from 'vue';
+import { ref, computed, useTemplateRef, reactive, onMounted, onBeforeUnmount, nextTick } from 'vue';
 import type { Game } from '@/game/game';
 import { Race } from '@/game/core/race';
 import { BuildingType } from '@/game/entity';
@@ -254,22 +283,35 @@ const modeToggler = createModeToggler(game, getInputManager);
 const gameActions = createGameActions(game);
 const setPlaceMode = (buildingType: BuildingType) => modeToggler.setPlaceMode(buildingType, playerRace.value);
 
-// Speed and pause controls — cap speed at 3x for game mode
-const isPaused = ref(!game.isRunning);
-const currentSpeed = ref(Math.min(game.settings.state.gameSpeed, 3));
-
-// Clamp speed to game mode max on load
-game.settings.state.gameSpeed = currentSpeed.value;
+// Speed and pause controls — always start at 1x in game mode
+const isPaused = ref(game.settings.state.paused);
+const currentSpeed = ref(1);
+game.settings.state.gameSpeed = 1;
 
 function togglePause(): void {
-    gameActions.togglePause();
-    isPaused.value = !game.isRunning;
+    game.settings.state.paused = !game.settings.state.paused;
+    isPaused.value = game.settings.state.paused;
 }
 
 function setSpeed(speed: number): void {
     currentSpeed.value = speed;
     game.settings.state.gameSpeed = speed;
 }
+
+// Spacebar pause toggle
+function onKeyDown(e: KeyboardEvent): void {
+    if (e.code === 'Space' && !e.repeat && !(e.target instanceof HTMLInputElement)) {
+        e.preventDefault();
+        togglePause();
+    }
+}
+
+onMounted(() => {
+    window.addEventListener('keydown', onKeyDown);
+});
+
+// Right panel collapse
+const rightPanelOpen = ref(true);
 
 // Save/Load dialog
 const showSaveLoad = ref(false);
@@ -278,7 +320,8 @@ function onSaveLoaded(): void {
     gameEndResult.value = null;
 }
 
-// Restart map
+// Exit / Restart confirmations
+const showExitConfirm = ref(false);
 const showRestartConfirm = ref(false);
 
 function doRestartMap(): void {
@@ -316,6 +359,7 @@ onBeforeUnmount(() => {
     game.eventBus.off('game:ended', onGameEnded);
     game.eventBus.off('game:playerEliminated', onPlayerEliminated);
     game.eventBus.off('game:stateRestored', onStateRestored);
+    window.removeEventListener('keydown', onKeyDown);
 });
 
 /** Blur non-text inputs after interaction so keyboard focus returns to the game. */

@@ -202,5 +202,11 @@ export default tseslint.config(
         rules: {
             'max-lines': ['error', { max: 800, skipBlankLines: true, skipComments: true }]
         }
+    },
+    {
+        files: ['**/views/jil-view.vue'],
+        rules: {
+            'max-lines': ['error', { max: 1000, skipBlankLines: true, skipComments: true }]
+        }
     }
 );

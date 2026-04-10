@@ -107,6 +107,9 @@ export class GameLoop {
     /** Per-frame update callback — non-rendering work (sound, input, debug stats) */
     private onUpdate: ((deltaSec: number) => void) | null = null;
 
+    /** Called once per tick before systems run (e.g. to increment game.currentTick) */
+    private _onTick: (() => void) | null = null;
+
     /** When true, game logic (ticks) is paused but rendering continues */
     private _ticksPaused = true;
 
@@ -140,6 +143,11 @@ export class GameLoop {
             }
         };
         document.addEventListener('visibilitychange', this.visibilityHandler);
+    }
+
+    /** Set a callback invoked once per tick before systems run */
+    public setTickCallback(cb: () => void): void {
+        this._onTick = cb;
     }
 
     /** Register a tick system to be updated each tick */
@@ -460,6 +468,7 @@ export class GameLoop {
 
     private tick(dt: number): void {
         debugStats.recordTick();
+        this._onTick?.();
 
         const timings: Record<string, number> = {};
 

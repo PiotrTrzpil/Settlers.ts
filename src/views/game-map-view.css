@@ -204,6 +204,16 @@
     font-size: 13px;
 }
 
+.start-resources-select {
+    padding: 3px 6px;
+    background: #2c1e0e;
+    border: 1px solid #4a3218;
+    border-radius: 3px;
+    color: #c8a96e;
+    font-size: 12px;
+    cursor: pointer;
+}
+
 .mode-indicator {
     padding: 3px 8px;
     background: #2c1e0e;

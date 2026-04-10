@@ -359,7 +359,8 @@ export class WorkerJobLifecycle {
             (nextNode.task === ChoreoTaskType.GO_TO_TARGET ||
                 nextNode.task === ChoreoTaskType.GO_TO_TARGET_ROUGHLY ||
                 nextNode.task === ChoreoTaskType.WORK ||
-                nextNode.task === ChoreoTaskType.WORK_VIRTUAL);
+                nextNode.task === ChoreoTaskType.WORK_VIRTUAL ||
+                nextNode.task === ChoreoTaskType.PLANT);
         if (completedTask !== ChoreoTaskType.SEARCH && !nextNeedsTargetPos) {
             job.targetPos = null;
         }

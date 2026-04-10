@@ -13,8 +13,9 @@ import type { EMaterialType } from '../../economy/material-type';
 import type { GameState } from '../../game-state';
 import type { BuildingInventoryManager } from '../inventory';
 import type { EventBus } from '../../event-bus';
-import type { CommandExecutor } from '../../commands';
-import { setCarrying, clearCarrying } from '../../entity';
+import type { CommandExecutor, CommandResult } from '../../commands';
+import { type Entity, type Tile, setCarrying, clearCarrying } from '../../entity';
+import { findNearestTile } from '../../systems/spatial-search';
 import { createLogger } from '@/utilities/logger';
 
 const log = createLogger('MaterialTransfer');
@@ -107,13 +108,7 @@ export class MaterialTransfer {
             log.warn(
                 `deliver: ${overflow} of material ${material} overflow at building ${toBuilding}, dropping as free pile`
             );
-            this.executeCommand({
-                type: 'place_pile',
-                materialType: material,
-                amount: overflow,
-                x: entity.x,
-                y: entity.y,
-            });
+            this.placePileNear(entity, material, overflow);
         }
 
         return deposited;
@@ -133,13 +128,7 @@ export class MaterialTransfer {
         const { material, amount } = entity.carrying;
         clearCarrying(entity);
 
-        this.executeCommand({
-            type: 'place_pile',
-            materialType: material,
-            amount,
-            x: entity.x,
-            y: entity.y,
-        });
+        this.placePileNear(entity, material, amount);
     }
 
     /**
@@ -147,21 +136,36 @@ export class MaterialTransfer {
      * as a free pile. Registered at CLEANUP_PRIORITY.EARLY so it runs before
      * logistics cleanup.
      */
-    onEntityRemoved(entityId: number): void {
-        const entity = this.gameState.getEntity(entityId);
-        if (!entity?.carrying) {
+    onEntityRemoved(_entityId: number, entity: Entity): void {
+        if (!entity.carrying) {
             return;
         }
 
         const { material, amount } = entity.carrying;
         clearCarrying(entity);
 
-        this.executeCommand({
-            type: 'place_pile',
-            materialType: material,
-            amount,
-            x: entity.x,
-            y: entity.y,
-        });
+        this.placePileNear(entity, material, amount);
+    }
+
+    /**
+     * Place a free pile at or near the given position.
+     * If the tile is occupied, searches nearby tiles within radius 3.
+     */
+    private placePileNear(pos: Tile, material: EMaterialType, amount: number): void {
+        const result = this.tryPlacePile(pos.x, pos.y, material, amount);
+        if (result.success) {
+            return;
+        }
+
+        const free = findNearestTile(pos, 3, tile => !this.gameState.getGroundEntityAt(tile));
+        if (free) {
+            this.tryPlacePile(free.x, free.y, material, amount);
+        } else {
+            log.warn(`placePileNear: no free tile near (${pos.x}, ${pos.y}) — ${amount}x ${material} lost`);
+        }
+    }
+
+    private tryPlacePile(x: number, y: number, material: EMaterialType, amount: number): CommandResult {
+        return this.executeCommand({ type: 'place_pile', materialType: material, amount, x, y });
     }
 }

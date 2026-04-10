@@ -6,6 +6,7 @@
 import { LogHandler } from '@/utilities/log-handler';
 import type { LuaRuntime } from '../lua-runtime';
 import type { GameState } from '@/game/game-state';
+import { raceToS4Tribe, type Race } from '@/game/core/race';
 
 const log = new LogHandler('GameAPI');
 
@@ -35,6 +36,8 @@ export interface GameAPIContext {
     /** Map dimensions */
     mapWidth: number;
     mapHeight: number;
+    /** Per-player race mapping (player index → Race) */
+    playerRaces?: Map<number, Race>;
 }
 
 /**
@@ -103,8 +106,12 @@ export function registerGameAPI(runtime: LuaRuntime, context: GameAPIContext): v
     // Game.PlayerRace(player) - Get player's race/tribe
     // Returns: 0=Roman, 1=Viking, 2=Maya, 3=Dark, 4=Trojan
     runtime.registerFunction('Game', 'PlayerRace', (player: number) => {
-        // TODO: Look up player race from player data
-        // For now, return Roman (0) as default
+        const race = context.playerRaces?.get(player);
+        if (race != null) {
+            const s4Tribe = raceToS4Tribe(race);
+            log.debug(`PlayerRace: player ${player} -> ${s4Tribe} (${race})`);
+            return s4Tribe;
+        }
         log.debug(`PlayerRace: player ${player} -> 0 (Roman, default)`);
         return RACE_CONSTANTS.RACE_ROMAN;
     });

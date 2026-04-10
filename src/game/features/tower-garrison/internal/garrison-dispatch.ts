@@ -34,11 +34,11 @@ export function dispatchUnitToGarrison(unitId: number, buildingId: number, deps:
     });
 
     try {
-        settlerTaskSystem.assignWorkerToBuilding(unitId, buildingId);
         const job = choreo('WORKER_DISPATCH').goToDoorAndEnter(buildingId).build();
         const assigned = settlerTaskSystem.assignJob(unitId, job, job.targetPos ?? undefined);
 
         if (assigned) {
+            settlerTaskSystem.assignWorkerToBuilding(unitId, buildingId);
             return true;
         }
 
@@ -46,16 +46,15 @@ export function dispatchUnitToGarrison(unitId: number, buildingId: number, deps:
         const unit = gameState.getEntityOrThrow(unitId, 'garrison dispatch');
         if (job.targetPos && unit.x === job.targetPos.x && unit.y === job.targetPos.y) {
             settlerTaskSystem.assignJob(unitId, job);
+            settlerTaskSystem.assignWorkerToBuilding(unitId, buildingId);
             return true;
         }
 
         // Genuinely unreachable — roll back
-        settlerTaskSystem.releaseWorkerAssignment(unitId);
         unitReservation.release(unitId);
         log.warn(`Dispatch failed: unit ${unitId} cannot reach building ${buildingId}`);
         return false;
     } catch (e) {
-        settlerTaskSystem.releaseWorkerAssignment(unitId);
         unitReservation.release(unitId);
         log.error(`Dispatch error: unit ${unitId} to building ${buildingId}`, e);
         return false;

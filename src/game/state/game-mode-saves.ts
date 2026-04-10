@@ -157,6 +157,7 @@ export class GameModeSaveManager {
         try {
             const snapshot = superjson.parse<GameStateSnapshot>(stored.snapshot);
             restoreFromSnapshot(this.game, snapshot);
+            this.game.eventBus.emit('game:stateRestored', {});
             return true;
         } catch (e) {
             console.warn('Failed to load game mode save:', e);
