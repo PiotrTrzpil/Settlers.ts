@@ -265,18 +265,34 @@ export function checkInventoryIntegrity(
 
 // ─── World-building helpers ─────────────────────────────────────
 
-/** Find N empty tiles near a building entity. */
+/** Find N empty tiles near a building's work area center. */
 export function tilesNearBuilding(
     state: GameState,
     buildingId: number,
     count: number,
     far: boolean,
     mapWidth: number,
-    mapHeight: number
+    mapHeight: number,
+    services?: GameServices
 ): Tile[] {
     const b = state.getEntityOrThrow(buildingId, 'tilesNearBuilding');
+    const center = resolveSearchCenter(b, buildingId, services);
     const skip = far ? 25 : footprintRadius(b) + 1;
-    return findEmptyTiles(state, b.x, b.y, count, mapWidth, mapHeight, skip);
+    return findEmptyTiles(state, center.x, center.y, count, mapWidth, mapHeight, skip);
+}
+
+/**
+ * Resolve the search center for a building — uses the work area center
+ * when the building has a work area, otherwise falls back to the anchor.
+ */
+function resolveSearchCenter(b: import('@/game/entity').Entity, buildingId: number, services?: GameServices): Tile {
+    if (services) {
+        const type = b.subType as BuildingType;
+        if (services.workAreaStore.hasWorkArea(type, b.race)) {
+            return services.workAreaStore.getAbsoluteCenter(buildingId, b.x, b.y, type, b.race);
+        }
+    }
+    return { x: b.x, y: b.y };
 }
 
 /** Chebyshev radius of a building's footprint from its anchor. */

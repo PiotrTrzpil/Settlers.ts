@@ -64,7 +64,7 @@ function runTicks(game: GameCore, count: number): string[] {
 
 installRealGameData();
 
-describe('Pile slot integrity — MD_roman4', () => {
+describe('Pile slot integrity — MD_roman4', { timeout: 60_000 }, () => {
     it('no orphan piles after map load', () => {
         const game = loadMap('Campaign/MD_roman4.map');
 

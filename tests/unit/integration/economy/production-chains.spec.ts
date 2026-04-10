@@ -151,13 +151,29 @@ describe('Economy – gatherer & production chains', { timeout: 5000 }, () => {
         let treesPlanted = 0;
         let treesMatured = 0;
         let treesCut = 0;
-        const plantedPositions: Tile[] = [];
+        const MIN_DIST_SQ = 4;
+        // Track living trees by entityId — spacing is checked at plant time
+        // against other living trees (not historical positions).
+        const livingTrees = new Map<number, Tile>();
+        const spacingViolations: string[] = [];
         sim.eventBus.on('tree:planted', e => {
             treesPlanted++;
-            plantedPositions.push({ x: e.x, y: e.y });
+            const pos = { x: e.x, y: e.y };
+            for (const [, other] of livingTrees) {
+                const dx = pos.x - other.x;
+                const dy = pos.y - other.y;
+                const dSq = dx * dx + dy * dy;
+                if (dSq < MIN_DIST_SQ) {
+                    spacingViolations.push(`(${pos.x},${pos.y}) vs (${other.x},${other.y}) distSq=${dSq}`);
+                }
+            }
+            livingTrees.set(e.entityId, pos);
         });
         sim.eventBus.on('tree:matured', () => treesMatured++);
-        sim.eventBus.on('tree:cut', () => treesCut++);
+        sim.eventBus.on('tree:cut', e => {
+            treesCut++;
+            livingTrees.delete(e.entityId);
+        });
 
         sim.placeBuilding(BuildingType.ResidenceSmall);
         const foresterId = sim.placeBuilding(BuildingType.ForesterHut);
@@ -174,21 +190,8 @@ describe('Economy – gatherer & production chains', { timeout: 5000 }, () => {
         expect(treesMatured).toBeGreaterThanOrEqual(treesCut);
         expect(treesPlanted).toBeGreaterThanOrEqual(treesMatured);
 
-        // Trees must respect minimum spacing (minDistanceSq=4 → distance >= 2 tiles)
-        const MIN_DIST_SQ = 4;
-        for (let i = 0; i < plantedPositions.length; i++) {
-            for (let j = i + 1; j < plantedPositions.length; j++) {
-                const a = plantedPositions[i]!;
-                const b = plantedPositions[j]!;
-                const dx = a.x - b.x;
-                const dy = a.y - b.y;
-                const dSq = dx * dx + dy * dy;
-                expect(
-                    dSq,
-                    `Trees at (${a.x},${a.y}) and (${b.x},${b.y}) are too close (distSq=${dSq}, min=${MIN_DIST_SQ})`
-                ).toBeGreaterThanOrEqual(MIN_DIST_SQ);
-            }
-        }
+        // Spacing was checked at each plant event against living trees
+        expect(spacingViolations, 'Tree spacing violations').toEqual([]);
     });
 });
 

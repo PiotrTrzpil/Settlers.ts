@@ -421,7 +421,7 @@ export class Simulation {
     // ─── Map object placement ─────────────────────────────────────
 
     private tilesNear(buildingId: number, count: number, far = false) {
-        return tilesNearBuilding(this.state, buildingId, count, far, this.mapWidth, this.mapHeight);
+        return tilesNearBuilding(this.state, buildingId, count, far, this.mapWidth, this.mapHeight, this.services);
     }
 
     plantTreesNear(buildingId: number, count: number): number {
