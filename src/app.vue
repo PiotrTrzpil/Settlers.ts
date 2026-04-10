@@ -1,6 +1,6 @@
 <template>
     <div class="app-shell">
-        <div id="nav">
+        <div v-if="!route.meta['hideNav']" id="nav">
             <router-link to="/">Start</router-link>
             <router-link to="/map-view">Map View</router-link>
             <router-link to="/map-file-view">Map File View</router-link>
@@ -17,6 +17,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue';
+import { useRoute } from 'vue-router';
 import { FileManager } from './utilities/file-manager';
 import { FileListProvider } from './utilities/file-list-provider';
 import { LibFileProvider } from './utilities/lib-file-provider';
@@ -24,6 +25,7 @@ import { LogHandler } from './utilities/log-handler';
 import { getGameDataLoader } from './resources/game-data';
 
 const log = new LogHandler('App');
+const route = useRoute();
 const fileManager = ref<FileManager | null>(null);
 
 onMounted(async () => {

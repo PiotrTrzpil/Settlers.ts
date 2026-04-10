@@ -1,0 +1,336 @@
+/* ===== GAME MODE LAYOUT ===== */
+.game-mode-layout {
+    display: flex;
+    flex: 1;
+    min-height: 0;
+    background: #0d0a05;
+}
+
+/* ===== LEFT SIDEBAR ===== */
+.gm-sidebar {
+    width: 180px;
+    min-width: 180px;
+    background: linear-gradient(180deg, #2c1e0e 0%, #1a1209 100%);
+    border-right: 3px solid #5c3d1a;
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+}
+
+.gm-sidebar-tabs {
+    display: flex;
+    border-bottom: 2px solid #5c3d1a;
+}
+
+.gm-tab-btn {
+    flex: 1;
+    padding: 8px 4px;
+    background: #1a1209;
+    color: #8a7040;
+    border: none;
+    border-bottom: 3px solid transparent;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: bold;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    transition:
+        background 0.15s,
+        color 0.15s;
+}
+
+.gm-tab-btn:hover {
+    background: #2c1e0e;
+    color: #c8a96e;
+}
+
+.gm-tab-btn.active {
+    background: #3a2810;
+    color: #e8c87e;
+    border-bottom-color: #d4a030;
+}
+
+.gm-tab-content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    padding: 2px 6px;
+    overflow-y: auto;
+}
+
+/* ===== SIDEBAR BUTTONS ===== */
+.gm-sidebar-btn {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    width: 100%;
+    padding: 0 6px;
+    background: #2c1e0e;
+    color: #c8a96e;
+    border: 1px solid #4a3218;
+    border-radius: 3px;
+    cursor: pointer;
+    font-size: 11px;
+    text-align: left;
+    transition:
+        background 0.15s,
+        border-color 0.15s;
+}
+
+.gm-sidebar-btn:hover {
+    background: #3a2810;
+    border-color: #6a4a20;
+}
+
+.gm-sidebar-btn.active {
+    background: #4a3518;
+    border-color: #d4a030;
+    color: #ffe8a0;
+    box-shadow: inset 0 0 8px rgba(212, 160, 48, 0.2);
+}
+
+.gm-btn-icon {
+    font-size: 14px;
+    width: 56px;
+    height: 56px;
+    text-align: center;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: radial-gradient(circle, rgba(212, 160, 48, 0.35) 0%, rgba(212, 160, 48, 0.08) 60%, transparent 100%);
+    border-radius: 3px;
+}
+
+.gm-icon-img {
+    object-fit: contain;
+}
+
+.gm-sidebar-btn.active .gm-btn-icon {
+    background: radial-gradient(circle, rgba(212, 160, 48, 0.3) 0%, transparent 70%);
+}
+
+.gm-sidebar-btn.active .gm-icon-img {
+    filter: brightness(1.3) drop-shadow(0 0 3px #ffd700);
+}
+
+.gm-btn-label {
+    flex: 1;
+}
+
+/* ===== CANVAS AREA ===== */
+.gm-canvas-area {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    position: relative;
+}
+
+.gm-canvas {
+    flex: 1;
+    min-height: 0;
+}
+
+.gm-canvas :deep(.cav) {
+    width: 100%;
+    height: 100%;
+    display: block;
+    margin: 0;
+    border: none;
+}
+
+/* Left floating panels (minimap + selection) */
+.gm-left-panels {
+    position: absolute;
+    top: 8px;
+    left: 8px;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+    z-index: 100;
+    max-height: calc(100% - 16px);
+    pointer-events: none;
+}
+
+/* Right floating panel (speed controls) */
+.gm-right-panels {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    z-index: 100;
+    pointer-events: none;
+}
+
+.gm-controls-panel {
+    pointer-events: auto;
+    background: rgba(26, 18, 9, 0.92);
+    border: 1px solid #5c3d1a;
+    border-radius: 6px;
+    padding: 8px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+}
+
+.gm-pause-btn {
+    width: 40px;
+    height: 40px;
+    background: #2c1e0e;
+    color: #e8c87e;
+    border: 1px solid #5c3d1a;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition:
+        background 0.15s,
+        border-color 0.15s;
+}
+
+.gm-pause-btn:hover {
+    background: #3a2810;
+    border-color: #6a4a20;
+}
+
+.gm-pause-btn.paused {
+    background: #3a6e28;
+    border-color: #4a8e34;
+    color: #e8f4e0;
+}
+
+.gm-speed-row {
+    display: flex;
+    gap: 2px;
+}
+
+.gm-speed-btn {
+    padding: 4px 8px;
+    background: #2c1e0e;
+    color: #8a7040;
+    border: 1px solid #4a3218;
+    border-radius: 3px;
+    cursor: pointer;
+    font-size: 11px;
+    font-weight: 600;
+    transition:
+        background 0.12s,
+        color 0.12s;
+}
+
+.gm-speed-btn:hover:not(:disabled) {
+    background: #3a2810;
+    color: #c8a96e;
+}
+
+.gm-speed-btn.active {
+    background: #4a3518;
+    border-color: #d4a030;
+    color: #ffe8a0;
+}
+
+.gm-speed-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+/* ===== GAME END / STALE SAVE MODAL ===== */
+.game-end-backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.7);
+    z-index: 300;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.game-end-dialog {
+    background: #1a1209;
+    border: 2px solid #c8a24e;
+    border-radius: 8px;
+    padding: 32px 40px;
+    max-width: 460px;
+    text-align: center;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
+}
+
+.game-end-title {
+    font-size: 28px;
+    font-weight: 700;
+    margin: 0 0 12px;
+}
+
+.game-end-title--won {
+    color: #f0c040;
+}
+
+.game-end-title--lost {
+    color: #c84040;
+}
+
+.game-end-message {
+    color: #d4c4a0;
+    font-size: 15px;
+    line-height: 1.5;
+    margin: 0 0 24px;
+}
+
+.game-end-actions {
+    display: flex;
+    justify-content: center;
+    gap: 16px;
+}
+
+.game-end-btn {
+    padding: 10px 28px;
+    border-radius: 4px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    border: 1px solid transparent;
+    transition: background 0.15s;
+}
+
+.game-end-btn--continue {
+    background: #3a7a3a;
+    color: #fff;
+    border-color: #4a9a4a;
+}
+
+.game-end-btn--continue:hover {
+    background: #48944a;
+}
+
+.game-end-btn--quit {
+    background: #c84040;
+    color: #fff;
+    border-color: #e05050;
+}
+
+.game-end-btn--quit:hover {
+    background: #e04848;
+}
+
+/* ===== SCROLLBAR ===== */
+.gm-sidebar::-webkit-scrollbar {
+    width: 6px;
+}
+
+.gm-sidebar::-webkit-scrollbar-track {
+    background: #1a1209;
+}
+
+.gm-sidebar::-webkit-scrollbar-thumb {
+    background: #4a3218;
+    border-radius: 3px;
+}
+
+.gm-sidebar::-webkit-scrollbar-thumb:hover {
+    background: #5c3d1a;
+}

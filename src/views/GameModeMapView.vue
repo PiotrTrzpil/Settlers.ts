@@ -1,0 +1,270 @@
+<template>
+    <div class="game-mode-layout" @mouseup="blurNonTextInput" @change="blurNonTextInput">
+        <!-- LEFT SIDEBAR — buildings + specialists only -->
+        <aside class="gm-sidebar">
+            <div class="gm-sidebar-tabs">
+                <button
+                    class="gm-tab-btn"
+                    :class="{ active: activeTab === 'buildings' }"
+                    @click="activeTab = 'buildings'"
+                >
+                    Build
+                </button>
+                <button
+                    class="gm-tab-btn"
+                    :class="{ active: activeTab === 'specialists' }"
+                    @click="activeTab = 'specialists'"
+                >
+                    SP
+                </button>
+            </div>
+
+            <!-- Buildings tab -->
+            <div v-if="activeTab === 'buildings'" class="gm-tab-content">
+                <button
+                    v-for="b in availableBuildings"
+                    :key="b.type"
+                    class="gm-sidebar-btn"
+                    :class="{ active: currentMode === 'place_building' && placeBuildingType === b.type }"
+                    @click="setPlaceMode(b.type)"
+                >
+                    <span class="gm-btn-icon">
+                        <img
+                            v-if="buildingIcons[b.type]"
+                            :src="buildingIcons[b.type]!.url"
+                            :alt="b.name"
+                            class="gm-icon-img"
+                            :style="{
+                                width: buildingIcons[b.type]!.size + 'px',
+                                height: buildingIcons[b.type]!.size + 'px',
+                            }"
+                        />
+                        <span v-else>{{ b.icon }}</span>
+                    </span>
+                    <span class="gm-btn-label">{{ b.name }}</span>
+                </button>
+            </div>
+
+            <!-- Specialists tab -->
+            <div v-if="activeTab === 'specialists'" class="gm-tab-content">
+                <specialists-panel
+                    :game="game"
+                    :race="playerRace"
+                    :specialist-icons="specialistIcons"
+                    :get-camera-center="() => rendererRef?.getCamera?.() ?? null"
+                />
+            </div>
+        </aside>
+
+        <!-- MAIN CANVAS AREA -->
+        <div class="gm-canvas-area">
+            <renderer-viewer ref="rendererRef" :game="game" :layerVisibility="layerVisibility" class="gm-canvas" />
+
+            <!-- Game end overlay -->
+            <div v-if="gameEndResult" class="game-end-backdrop">
+                <div class="game-end-dialog">
+                    <h2
+                        class="game-end-title"
+                        :class="gameEndResult.won ? 'game-end-title--won' : 'game-end-title--lost'"
+                    >
+                        {{ gameEndResult.won ? 'Victory!' : 'Defeat' }}
+                    </h2>
+                    <p class="game-end-message">
+                        {{
+                            gameEndResult.won
+                                ? 'All enemies have been eliminated. The land is yours.'
+                                : 'Your settlements have fallen. The enemy has prevailed.'
+                        }}
+                    </p>
+                    <div class="game-end-actions">
+                        <button class="game-end-btn game-end-btn--continue" @click="gameEndResult = null">
+                            Continue
+                        </button>
+                        <button class="game-end-btn game-end-btn--quit" @click="$router.push('/')">Quit</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Stale save warning -->
+            <div v-if="staleSnapshotWarning" class="game-end-backdrop">
+                <div class="game-end-dialog">
+                    <h2 class="game-end-title game-end-title--lost">Incompatible Save Data</h2>
+                    <p class="game-end-message">
+                        A saved game was found, but it was created with an older version and can no longer be loaded.
+                    </p>
+                    <div class="game-end-actions">
+                        <button class="game-end-btn game-end-btn--quit" @click="$emit('dismissStaleSnapshot')">
+                            Discard &amp; Start Fresh
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Left floating panels: minimap + selection -->
+            <div class="gm-left-panels">
+                <game-minimap
+                    :game="game"
+                    :get-camera="() => rendererRef?.getCamera?.() ?? null"
+                    :navigate-to-tile="(x: number, y: number) => rendererRef?.setCameraPosition?.(x, y)"
+                />
+                <selection-panel :game="game" :unit-icons="unitIcons" />
+            </div>
+
+            <!-- Right floating panel: speed controls -->
+            <div class="gm-right-panels">
+                <div class="gm-controls-panel">
+                    <button class="gm-pause-btn" :class="{ paused: isPaused }" @click="togglePause">
+                        {{ isPaused ? '&#9654;' : '&#10074;&#10074;' }}
+                    </button>
+                    <div class="gm-speed-row">
+                        <button
+                            v-for="s in SPEED_OPTIONS"
+                            :key="s"
+                            class="gm-speed-btn"
+                            :class="{ active: currentSpeed === s }"
+                            :disabled="isPaused"
+                            @click="setSpeed(s)"
+                        >
+                            {{ s }}x
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</template>
+
+<script setup lang="ts">
+import { ref, computed, useTemplateRef, reactive, onBeforeUnmount, nextTick } from 'vue';
+import type { Game } from '@/game/game';
+import { Race } from '@/game/core/race';
+import { BuildingType } from '@/game/entity';
+import { GameEndReason } from '@/game/features/victory-conditions/victory-conditions-system';
+import { isBuildingAvailableForRace } from '@/game/data/race-availability';
+import { loadLayerVisibility } from '@/game/renderer/layer-visibility';
+import { toastInfo } from '@/game/ui/toast-notifications';
+import { ALL_BUILDINGS } from './palette-data';
+
+import RendererViewer from '@/components/renderer-viewer.vue';
+import SelectionPanel from '@/components/selection-panel.vue';
+import SpecialistsPanel from '@/components/SpecialistsPanel.vue';
+import GameMinimap from '@/components/game-minimap.vue';
+
+import { createModeToggler, createGameActions, setupIconLoading } from './use-map-view-helpers';
+import type { IconEntry } from './sprite-icon-loader';
+
+const SPEED_OPTIONS = [0.5, 1, 2, 3] as const;
+
+const props = defineProps<{
+    game: Game;
+    fileManager: import('@/utilities/file-manager').FileManager;
+    staleSnapshotWarning: boolean;
+}>();
+
+defineEmits<{
+    (e: 'dismissStaleSnapshot'): void;
+}>();
+
+const { game, fileManager } = props;
+
+const rendererRef = useTemplateRef<InstanceType<typeof RendererViewer>>('rendererRef');
+
+// Player race derived from the game's map data
+const playerRace = computed(() => game.playerRaces.get(game.currentPlayer) ?? Race.Roman);
+
+// Sidebar tabs — only buildings and specialists in game mode
+const activeTab = ref<'buildings' | 'specialists'>('buildings');
+
+// Layer visibility — use saved defaults, no layer panel to toggle
+const layerVisibility = reactive(loadLayerVisibility());
+
+// Available buildings filtered by race
+const availableBuildings = computed(() =>
+    ALL_BUILDINGS.filter(b => isBuildingAvailableForRace(b.type, playerRace.value))
+);
+
+// Mode state
+const currentMode = computed(() => game.viewState.state.mode);
+const placeBuildingType = computed(() => game.viewState.state.placeBuildingType);
+
+// Icons
+const buildingIcons = ref<Partial<Record<BuildingType, IconEntry>>>({});
+const unitIcons = ref<Record<string, IconEntry>>({});
+const specialistIcons = ref<Record<string, IconEntry>>({});
+const resourceIcons = ref<Record<string, string>>({});
+
+setupIconLoading(game, () => fileManager, playerRace, resourceIcons, buildingIcons, unitIcons, specialistIcons);
+
+// Mode toggling
+// eslint-disable-next-line no-restricted-syntax -- optional chaining; null when renderer absent
+const getInputManager = () => rendererRef.value?.getInputManager?.() ?? null;
+const modeToggler = createModeToggler(game, getInputManager);
+const gameActions = createGameActions(game);
+const setPlaceMode = (buildingType: BuildingType) => modeToggler.setPlaceMode(buildingType, playerRace.value);
+
+// Speed and pause controls — cap speed at 3x for game mode
+const isPaused = ref(!game.isRunning);
+const currentSpeed = ref(Math.min(game.settings.state.gameSpeed, 3));
+
+// Clamp speed to game mode max on load
+game.settings.state.gameSpeed = currentSpeed.value;
+
+function togglePause(): void {
+    gameActions.togglePause();
+    isPaused.value = !game.isRunning;
+}
+
+function setSpeed(speed: number): void {
+    currentSpeed.value = speed;
+    game.settings.state.gameSpeed = speed;
+}
+
+// Game end overlay
+const gameEndResult = ref<{ won: boolean; reason: GameEndReason } | null>(null);
+
+function onGameEnded({ winner, reason }: { winner: number | null; reason: string }): void {
+    gameEndResult.value = { won: winner !== null, reason: reason as GameEndReason };
+}
+
+function onPlayerEliminated({ player }: { player: number }): void {
+    if (player === game.currentPlayer) {
+        return;
+    }
+    toastInfo(`Player ${player + 1} has been eliminated`, 8000);
+}
+
+function onStateRestored(): void {
+    gameEndResult.value = null;
+}
+
+game.eventBus.on('game:ended', onGameEnded);
+game.eventBus.on('game:playerEliminated', onPlayerEliminated);
+game.eventBus.on('game:stateRestored', onStateRestored);
+
+onBeforeUnmount(() => {
+    game.eventBus.off('game:ended', onGameEnded);
+    game.eventBus.off('game:playerEliminated', onPlayerEliminated);
+    game.eventBus.off('game:stateRestored', onStateRestored);
+});
+
+/** Blur non-text inputs after interaction so keyboard focus returns to the game. */
+function blurNonTextInput(e: Event): void {
+    const active = document.activeElement as HTMLElement | null;
+    if (!active) {
+        return;
+    }
+    const tag = active.tagName;
+    const isNonText =
+        tag === 'SELECT' || tag === 'BUTTON' || (tag === 'INPUT' && (active as HTMLInputElement).type === 'checkbox');
+    if (!isNonText) {
+        return;
+    }
+    if (e.type === 'change') {
+        void nextTick(() => active.blur());
+    } else if (e.type === 'mouseup' && e.target !== active) {
+        active.blur();
+    }
+}
+</script>
+
+<style scoped src="./game-mode-map-view.css"></style>

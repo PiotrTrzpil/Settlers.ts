@@ -7,7 +7,8 @@
             </div>
 
             <div v-if="isValidSettlers" class="home-body">
-                <button class="play-btn" @click="$router.push('/map-view')">&#9654; Play</button>
+                <button class="play-btn" @click="$router.push('/map-select')">&#9654; Game Mode</button>
+                <button class="dev-btn" @click="$router.push('/map-view')">&#9881; Dev Mode</button>
 
                 <div class="options">
                     <div class="options-title">Settings</div>
@@ -248,6 +249,28 @@ checkIsValidSettlers();
 .play-btn:hover {
     background: #4a8e34;
     border-color: #5aae44;
+}
+
+/* Dev mode button */
+.dev-btn {
+    font-size: 1rem;
+    font-weight: 600;
+    padding: 10px 56px;
+    cursor: pointer;
+    background: var(--bg-mid);
+    color: var(--text);
+    border: 1px solid var(--border-mid);
+    border-radius: 6px;
+    letter-spacing: 1px;
+    transition:
+        background 0.15s,
+        border-color 0.15s;
+    width: 100%;
+}
+
+.dev-btn:hover {
+    background: var(--bg-raised);
+    border-color: var(--border-hover);
 }
 
 /* Options panel */

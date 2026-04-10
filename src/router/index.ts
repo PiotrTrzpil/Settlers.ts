@@ -8,6 +8,17 @@ const routes: Array<RouteRecordRaw> = [
         component: Home,
     },
     {
+        path: '/map-select',
+        name: 'MapSelect',
+        component: () => import('@/views/MapSelectView.vue'),
+    },
+    {
+        path: '/game',
+        name: 'GameMode',
+        component: () => import('@/views/game-mode-view.vue'),
+        meta: { hideNav: true },
+    },
+    {
         path: '/map-view',
         name: 'MapView',
         component: () => import('@/views/map-view.vue'),
