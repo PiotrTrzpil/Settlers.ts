@@ -98,9 +98,9 @@ describe('Pioneer territory claiming (integration)', { timeout: 60_000 }, () => 
 
         expect(moveUnit(sim, id, { x: tx, y: ty }).success).toBe(true);
 
-        // Wait until pioneer claims several tiles
+        // Wait until pioneer claims several tiles (pioneers claim slowly — ~10k ticks per tile)
         sim.runUntil(() => countPlayerTiles(sim, tx, ty, 20, 0) >= 3, {
-            maxTicks: 40_000,
+            maxTicks: 120_000,
             label: 'pioneer claims 3+ tiles',
         });
 

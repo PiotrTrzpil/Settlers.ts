@@ -29,20 +29,50 @@ const FLAG_FRAME_DURATION_MS = Math.round(1000 / 12);
 const FLAG_SPRITE_REF: OverlaySpriteRef = { gfxFile: 0, jobIndex: 0 };
 
 /**
+ * Direction overrides for buildings where the GFX direction order doesn't
+ * match the XML patch order. Maps job name → actual GFX direction index.
+ *
+ * Determined by manual visual inspection of the GFX sprite data.
+ * Only Castle is known to have this mismatch.
+ */
+const CASTLE_DIRECTION_OVERRIDES: ReadonlyMap<string, number> = new Map([
+    // GFX directions don't match XML patch order for castle towers.
+    ['BUILDING_CASTLE_TOWER1', 3], // back of top tower
+    ['BUILDING_CASTLE_TOWER2', 4], // back of right tower
+    ['BUILDING_CASTLE_TOWER3', 6], // back of left tower
+    ['BUILDING_CASTLE_TOWER1_FRONTWALL', 2], // front of top tower
+    // FRONTWALL (D5), TOWER2_FRONTWALL (D7), TOWER3_FRONTWALL (D8), DOOR (D9) match defaults
+]);
+
+const DIRECTION_OVERRIDES: ReadonlyMap<string, ReadonlyMap<string, number>> = new Map([
+    ['BUILDING_CASTLE', CASTLE_DIRECTION_OVERRIDES],
+]);
+
+/**
  * Build a sprite ref for a patch overlay.
  *
- * The direction index is derived from the patch's position in the race-specific
- * XML patch list: `directionIndex = 2 + patchIndex`. See the module-level doc in
- * jil-overlay-indices.ts for the full explanation of this convention.
+ * The direction index is normally derived from the patch's position in the
+ * race-specific XML patch list: `directionIndex = 2 + patchIndex`.
+ * For buildings with known GFX/XML mismatches, an override table is used.
  *
  * @param patchIndex Position of this patch in the race's XML patch list (0-based).
  * @param parentJobIndex The parent building's JIL job index.
+ * @param buildingXmlId The building's XML ID (for direction override lookup).
+ * @param jobName The patch's XML job name (for direction override lookup).
  */
-function buildOverlaySpriteRef(gfxFile: number, patchIndex: number, parentJobIndex: number): OverlaySpriteRef {
+function buildOverlaySpriteRef(
+    gfxFile: number,
+    patchIndex: number,
+    parentJobIndex: number,
+    buildingXmlId: string,
+    jobName: string
+): OverlaySpriteRef {
+    const overrides = DIRECTION_OVERRIDES.get(buildingXmlId);
+    const directionIndex = overrides?.get(jobName) ?? OVERLAY_DIRECTION_BASE + patchIndex;
     return {
         gfxFile,
         jobIndex: parentJobIndex,
-        directionIndex: OVERLAY_DIRECTION_BASE + patchIndex,
+        directionIndex,
     };
 }
 
@@ -99,7 +129,7 @@ function patchToDef(
     gfxFile: number,
     parentJobIndex: number
 ): BuildingOverlayDef {
-    const spriteRef = buildOverlaySpriteRef(gfxFile, patchIndex, parentJobIndex);
+    const spriteRef = buildOverlaySpriteRef(gfxFile, patchIndex, parentJobIndex, buildingXmlId, patch.job);
     const key = deriveOverlayKey(patch.job, buildingXmlId);
     const isEvent = patch.type === 'EVENT';
 

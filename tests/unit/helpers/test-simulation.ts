@@ -303,6 +303,23 @@ export class Simulation {
         return this.placeBuildingAt(pos.x, pos.y, buildingType, player, completed, r, spawnWorker);
     }
 
+    /**
+     * Place a building at the nearest valid position to the given tile.
+     * Uses spiral search to find a valid placement accounting for footprint, terrain, etc.
+     */
+    placeBuildingNear(
+        tile: Tile,
+        buildingType: BuildingType,
+        player = 0,
+        completed = true,
+        race?: Race,
+        spawnWorker?: boolean
+    ): number {
+        const r = race ?? this.state.playerRaces.get(player) ?? Race.Roman;
+        const pos = this.placer.findBuildingPositionNear(tile, buildingType, r);
+        return this.placeBuildingAt(pos.x, pos.y, buildingType, player, completed, r, spawnWorker);
+    }
+
     /** Place a building at explicit coordinates (bypasses auto-placer). */
     placeBuildingAt(
         x: number,

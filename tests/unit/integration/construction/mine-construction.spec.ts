@@ -109,6 +109,9 @@ describe('Mine construction: full flow without digger', { timeout: 60_000 }, () 
     it('mine completes construction without ever dispatching a digger', () => {
         sim = createSimulation();
 
+        // Set up rock terrain first so auto-placer avoids this region
+        setupSteepRockTerrain(sim);
+
         // Infrastructure: residence + storage with materials
         sim.placeBuilding(BuildingType.ResidenceSmall);
         const storageId = sim.placeBuilding(BuildingType.StorageArea);
@@ -121,9 +124,6 @@ describe('Mine construction: full flow without digger', { timeout: 60_000 }, () 
             e => e.type === EntityType.Building && e.subType === BuildingType.ResidenceSmall
         )!.id;
         sim.spawnUnitNear(residenceId, UnitType.Builder, 2);
-
-        // Set up mine site on steep rock terrain
-        setupSteepRockTerrain(sim);
 
         // Track: no digging event should fire for mine construction
         let diggingStartedFired = false;

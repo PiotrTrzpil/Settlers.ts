@@ -102,7 +102,7 @@ describe('Territory consequences – building destruction', { timeout: 60_000 },
         expect(sim.errors).toHaveLength(0);
     });
 
-    it('building on territory that becomes unclaimed is also destroyed', () => {
+    it('building on territory survives when tower is destroyed (territory persists)', () => {
         sim = createSimulation({ skipTerritory: true });
 
         const towerId = sim.placeBuilding(BuildingType.GuardTowerSmall, 0);
@@ -112,31 +112,35 @@ describe('Territory consequences – building destruction', { timeout: 60_000 },
         const wc = sim.state.getEntityOrThrow(woodcutterId, 'woodcutter');
         expect(tm.isInTerritory({ x: wc.x, y: wc.y }, 0)).toBe(true);
 
+        // Territory persists when a tower is destroyed — only capture changes ownership
         sim.removeBuilding(towerId);
         processConsequences(sim);
 
-        expect(tm.getOwner({ x: wc.x, y: wc.y })).toBe(-1);
-        expect(sim.state.getEntity(woodcutterId)).toBeUndefined();
+        expect(tm.getOwner({ x: wc.x, y: wc.y })).toBe(0);
+        expect(sim.state.getEntity(woodcutterId)).toBeDefined();
         expect(sim.errors).toHaveLength(0);
     });
 
     it('building under another tower survives when only the near tower is captured', () => {
-        sim = createSimulation({ skipTerritory: true });
+        sim = createSimulation({ skipTerritory: true, mapWidth: 256, mapHeight: 256 });
 
-        // Two towers for player 0 — far apart so each has exclusive territory
-        const nearTowerId = sim.placeBuilding(BuildingType.GuardTowerSmall, 0);
+        // Chain of towers to bridge territory: nearTower → mid → farTower.
+        const nearTowerId = sim.placeBuildingAt(100, 128, BuildingType.GuardTowerBig, 0);
         const nearTower = sim.state.getEntityOrThrow(nearTowerId, 'nearTower');
-        const farTowerId = sim.placeBuildingAt(nearTower.x + 20, nearTower.y, BuildingType.GuardTowerSmall, 0);
+        sim.placeBuildingAt(125, 128, BuildingType.GuardTowerBig, 0);
+        sim.placeBuildingAt(150, 128, BuildingType.GuardTowerBig, 0);
+        const farTowerId = sim.placeBuildingAt(175, 128, BuildingType.GuardTowerBig, 0);
         const farTower = sim.state.getEntityOrThrow(farTowerId, 'farTower');
 
-        // Place a building near the FAR tower (safe territory, outside footprint)
-        const safeBuilding = sim.placeBuildingAt(farTower.x - 10, farTower.y, BuildingType.WoodcutterHut, 0);
-        // Place a building near the NEAR tower (will be lost)
-        const lostBuilding = sim.placeBuilding(BuildingType.Sawmill, 0);
+        // Place buildings using auto-search near each tower
+        const safeBuilding = sim.placeBuildingNear(farTower, BuildingType.WoodcutterHut, 0);
+        const lostBuilding = sim.placeBuildingNear(nearTower, BuildingType.Sawmill, 0);
 
         const tm = sim.services.territoryManager;
         const safe = sim.state.getEntityOrThrow(safeBuilding, 'safe building');
         expect(tm.isInTerritory({ x: safe.x, y: safe.y }, 0)).toBe(true);
+
+        ensureTerritoryComputed(sim);
 
         captureTower(sim, nearTowerId, 1);
         processConsequences(sim);
@@ -219,29 +223,34 @@ describe('Territory consequences – settler displacement', { timeout: 60_000 },
     });
 
     it('civilian settler is displaced toward friendly territory after capture', () => {
-        sim = createSimulation({ skipTerritory: true });
+        sim = createSimulation({ skipTerritory: true, mapWidth: 256, mapHeight: 256 });
 
-        const nearTowerId = sim.placeBuilding(BuildingType.GuardTowerSmall, 0);
-        const nearTower = sim.state.getEntityOrThrow(nearTowerId, 'nearTower');
-        sim.placeBuildingAt(nearTower.x + 20, nearTower.y, BuildingType.GuardTowerSmall, 0);
+        // Chain of towers to bridge territory: nearTower → mid → farTower.
+        const nearTowerId = sim.placeBuildingAt(100, 128, BuildingType.GuardTowerBig, 0);
+        sim.placeBuildingAt(125, 128, BuildingType.GuardTowerBig, 0);
+        sim.placeBuildingAt(150, 128, BuildingType.GuardTowerBig, 0);
+        sim.placeBuildingAt(175, 128, BuildingType.GuardTowerBig, 0);
 
         const tm = sim.services.territoryManager;
-        const [carrierId] = sim.spawnUnitNear(nearTowerId, UnitType.Carrier, 1, 0);
-        const startX = sim.state.getEntityOrThrow(carrierId!, 'carrier').x;
-        expect(tm.isInTerritory({ x: startX, y: nearTower.y }, 0)).toBe(true);
+        // Spawn carrier at the far edge of nearTower's exclusive zone (away from midTower)
+        const carrierId = sim.spawnUnit({ x: 80, y: 128 }, UnitType.Carrier, 0);
+        const startX = sim.state.getEntityOrThrow(carrierId, 'carrier').x;
+        expect(tm.isInTerritory({ x: startX, y: 128 }, 0)).toBe(true);
+
+        ensureTerritoryComputed(sim);
 
         captureTower(sim, nearTowerId, 1);
         processConsequences(sim);
 
         sim.runUntil(
             () => {
-                const c = sim.state.getEntity(carrierId!);
+                const c = sim.state.getEntity(carrierId);
                 return c !== undefined && c.x > startX;
             },
             { maxTicks: 2_000, label: 'carrier displaced toward friendly territory' }
         );
 
-        expect(sim.state.getEntityOrThrow(carrierId!, 'carrier').x).toBeGreaterThan(startX);
+        expect(sim.state.getEntityOrThrow(carrierId, 'carrier').x).toBeGreaterThan(startX);
         expect(sim.errors).toHaveLength(0);
     });
 
@@ -351,7 +360,7 @@ describe('Territory consequences – settler displacement', { timeout: 60_000 },
         expect(sim.errors).toHaveLength(0);
     });
 
-    it('settler on unclaimed territory is displaced', () => {
+    it('settler stays put when tower is destroyed (territory persists)', () => {
         sim = createSimulation({ skipTerritory: true });
 
         const nearTowerId = sim.placeBuilding(BuildingType.GuardTowerSmall, 0);
@@ -361,20 +370,15 @@ describe('Territory consequences – settler displacement', { timeout: 60_000 },
         const tm = sim.services.territoryManager;
         const [carrierId] = sim.spawnUnitNear(nearTowerId, UnitType.Carrier, 1, 0);
         const startX = sim.state.getEntityOrThrow(carrierId!, 'carrier').x;
-        expect(tm.isInTerritory({ x: startX, y: nearTower.y }, 0)).toBe(true);
+        const startY = sim.state.getEntityOrThrow(carrierId!, 'carrier').y;
+        expect(tm.isInTerritory({ x: startX, y: startY }, 0)).toBe(true);
 
+        // Territory persists when tower is destroyed — no displacement should occur
         sim.removeBuilding(nearTowerId);
         processConsequences(sim);
 
-        sim.runUntil(
-            () => {
-                const c = sim.state.getEntity(carrierId!);
-                return c !== undefined && c.x > startX;
-            },
-            { maxTicks: 2_000, label: 'carrier displaced from unclaimed territory' }
-        );
-
-        expect(sim.state.getEntityOrThrow(carrierId!, 'carrier').x).toBeGreaterThan(startX);
+        expect(tm.isInTerritory({ x: startX, y: startY }, 0)).toBe(true);
+        expect(sim.state.getEntityOrThrow(carrierId!, 'carrier').x).toBe(startX);
         expect(sim.errors).toHaveLength(0);
     });
 });

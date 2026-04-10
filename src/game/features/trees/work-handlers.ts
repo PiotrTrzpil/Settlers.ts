@@ -9,6 +9,8 @@ import { OBJECT_TYPE_CATEGORY } from '../../systems/map-objects';
 import { findNearestEntity } from '../../systems/spatial-search';
 import { createLogger } from '@/utilities/logger';
 import { WorkHandlerType, type EntityWorkHandler, type PositionWorkHandler } from '../settler-tasks/types';
+import { asBounded } from '../settler-tasks/choreo-types';
+import type { SearchArea } from '../settler-tasks/choreo-types';
 import type { PlantingCapable } from '../../systems/growth';
 import type { TreeSystem } from './tree-system';
 
@@ -22,10 +24,8 @@ export function createWoodcuttingHandler(gameState: GameState, treeSystem: TreeS
     return {
         type: WorkHandlerType.ENTITY,
 
-        findTarget: ({ center, radius }, _settlerId, player) => {
-            if (radius === undefined) {
-                throw new Error('WoodcuttingHandler: work area radius is required');
-            }
+        findTarget: (area, _settlerId, player) => {
+            const { center, radius } = asBounded(area);
             return findNearestEntity(
                 gameState.spatialIndex.nearbyForPlayer(center, radius, player),
                 center,
@@ -68,10 +68,8 @@ export function createPlantingHandler(system: PlantingCapable): PositionWorkHand
     return {
         type: WorkHandlerType.POSITION,
 
-        findPosition: ({ center, radius }) => {
-            if (radius === undefined) {
-                throw new Error('PlantingHandler: work area radius is required');
-            }
+        findPosition: (area: SearchArea) => {
+            const { center, radius } = asBounded(area);
             return system.findPlantingSpot(center, radius);
         },
 

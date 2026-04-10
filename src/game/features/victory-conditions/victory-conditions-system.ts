@@ -65,6 +65,8 @@ export class VictoryConditionsSystem implements TickSystem {
 
     /** Cached result — only changes when a player is eliminated or game ends. */
     private result: GameResult = { ended: false, winner: null, reason: null };
+    /** True if only one player exists — victory conditions are disabled (sandbox/test). */
+    private singlePlayer = false;
 
     constructor(config: VictoryConditionsConfig) {
         this.gameState = config.gameState;
@@ -116,6 +118,7 @@ export class VictoryConditionsSystem implements TickSystem {
         this.castleCounts.clear();
         this.initialized = false;
         this.dirty = false;
+        this.singlePlayer = false;
         this.result = { ended: false, winner: null, reason: null };
     }
 
@@ -187,11 +190,17 @@ export class VictoryConditionsSystem implements TickSystem {
             this.castleCounts.set(playerIndex, count);
         }
 
+        this.singlePlayer = this.playerStatus.size <= 1;
         this.initialized = true;
         return true;
     }
 
     private checkConditions(): void {
+        // Single-player maps (sandbox/test) have no opponents — skip victory logic entirely.
+        if (this.singlePlayer) {
+            return;
+        }
+
         // Don't eliminate players until at least one castle has been placed somewhere.
         // Without this guard, test scenarios (and skirmish starts) that place buildings
         // before castles would immediately eliminate all players on tick 1.

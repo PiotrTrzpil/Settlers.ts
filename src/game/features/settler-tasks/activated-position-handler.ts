@@ -10,6 +10,7 @@
 
 import { spiralSearch } from '../../utils/spiral-search';
 import { WorkHandlerType, type PositionWorkHandler } from './types';
+import { asSelf } from './choreo-types';
 import type { Tile } from '@/game/core/coordinates';
 import { distSq } from '@/game/core/distance';
 import { scanRect } from '@/game/core/tile-search';
@@ -74,19 +75,21 @@ export function createActivatedPositionHandler(cfg: ActivatedPositionHandlerConf
         type: WorkHandlerType.POSITION,
         shouldWaitForWork: true,
 
-        findPosition: ({ center }, settlerId) => {
+        findPosition: (area, settlerId) => {
             if (!activatedSettlers.has(settlerId)) {
                 return null;
             }
 
+            const selfOrigin = asSelf(area).origin;
+
             // Resolve (or record) the fixed origin for this settler
-            const origin = originBySettler.get(settlerId) ?? center;
+            const origin = originBySettler.get(settlerId) ?? selfOrigin;
             if (!originBySettler.has(settlerId)) {
-                originBySettler.set(settlerId, center);
+                originBySettler.set(settlerId, selfOrigin);
             }
 
             // Phase 1: local search — nearby tile closest to origin
-            const local = findLocalCandidate(center, origin, cfg);
+            const local = findLocalCandidate(selfOrigin, origin, cfg);
             if (local) {
                 return local;
             }

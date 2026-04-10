@@ -82,6 +82,8 @@ export enum JobType {
 
 /** Discriminator for WorkHandler union. */
 export enum WorkHandlerType {
+    /** Externally dispatched — no autonomous search (carriers, builders, diggers). */
+    NULL = 'null',
     ENTITY = 'entity',
     POSITION = 'position',
 }
@@ -96,40 +98,47 @@ export enum SettlerState {
     INTERRUPTED = 'INTERRUPTED',
 }
 
-/** Handler for entity-targeted work: SEARCH → GO_TO_TARGET → WORK_ON_ENTITY */
-export interface EntityWorkHandler {
-    type: WorkHandlerType.ENTITY;
-    /** Find a target entity for this settler */
-    findTarget(area: SearchArea, settlerId: number, player: number): TileWithEntity | null;
-    /** Check if target is still valid / has materials to work with */
+// ── Shared work lifecycle interfaces ──
+
+/** Entity work lifecycle — shared by all handlers that produce entity targets. */
+export interface EntityWorkLifecycle {
     canWork(targetId: number): boolean;
-    /** If true, worker waits (idles) when canWork is false instead of failing */
     shouldWaitForWork?: boolean;
-    /** Called when WORK_ON_ENTITY starts */
     onWorkStart?(targetId: number, settlerId: number): void;
-    /** Called each tick during WORK_ON_ENTITY, return true when done */
     onWorkTick(targetId: number, progress: number): boolean;
-    /** Called when work completes */
     onWorkComplete?(targetId: number, settlerX: number, settlerY: number, settlerId: number): void;
-    /** Called if work is interrupted */
     onWorkInterrupt?(targetId: number, settlerId: number): void;
 }
 
-/** Handler for position-based work: SEARCH → GO_TO_POS → WORK */
-export interface PositionWorkHandler {
-    type: WorkHandlerType.POSITION;
-    /** Find a position to work at */
-    findPosition(area: SearchArea, settlerId: number): Tile | null;
-    /** If true, worker waits (idles) when no position is found instead of failing */
+/** Position work lifecycle — shared by all handlers that produce position targets. */
+export interface PositionWorkLifecycle {
     shouldWaitForWork?: boolean;
-    /** Called when WORK task completes at searched position */
     onWorkAtPositionComplete(tile: Tile, settlerId: number): void;
-    /** Called when a settler is reassigned via move command, or removed on game reset. */
     onSettlerRemoved?(settlerId: number, targetX?: number, targetY?: number): void;
 }
 
-/** Discriminated union of work handler types */
-export type WorkHandler = EntityWorkHandler | PositionWorkHandler;
+// ── Handler interfaces ──
+
+/** Handler for externally-dispatched settlers that never search autonomously. */
+export interface NullWorkHandler {
+    type: WorkHandlerType.NULL;
+    shouldWaitForWork?: boolean;
+}
+
+/** Handler for entity-targeted work: SEARCH → GO_TO_TARGET → WORK_ON_ENTITY */
+export interface EntityWorkHandler extends EntityWorkLifecycle {
+    type: WorkHandlerType.ENTITY;
+    findTarget(area: SearchArea, settlerId: number, player: number): TileWithEntity | null;
+}
+
+/** Handler for position-based work: SEARCH → GO_TO_POS → WORK */
+export interface PositionWorkHandler extends PositionWorkLifecycle {
+    type: WorkHandlerType.POSITION;
+    findPosition(area: SearchArea, settlerId: number): Tile | null;
+}
+
+/** Discriminated union of all work handler types. */
+export type WorkHandler = NullWorkHandler | EntityWorkHandler | PositionWorkHandler;
 
 /** Narrow interface for assigning tasks to units. Used by logistics, building-demand, siege, etc. */
 export interface TaskDispatcher {

@@ -70,18 +70,43 @@ export interface BuildingPositionResolver {
 // Search area resolution
 // ─────────────────────────────────────────────────────────────
 
-/** Resolved search area: center tile + optional radius constraint. */
-export interface SearchArea {
+/** Bounded work area: building-centered with required radius. */
+export interface BoundedArea {
+    type: 'bounded';
     center: Tile;
-    radius: number | undefined;
+    radius: number;
+}
+
+/** Self-centered area: settler's current position, no radius constraint. */
+export interface SelfArea {
+    type: 'self';
+    origin: Tile;
+}
+
+/** Discriminated search area — handlers switch on type to get the right fields. */
+export type SearchArea = BoundedArea | SelfArea;
+
+/** Assert area is bounded — throws with context if wrong variant. */
+export function asBounded(area: SearchArea): BoundedArea {
+    if (area.type !== 'bounded') {
+        throw new Error(`Expected bounded search area, got '${area.type}'`);
+    }
+    return area;
+}
+
+/** Assert area is self — throws with context if wrong variant. */
+export function asSelf(area: SearchArea): SelfArea {
+    if (area.type !== 'self') {
+        throw new Error(`Expected self search area, got '${area.type}'`);
+    }
+    return area;
 }
 
 /**
  * Resolve the search area for a work handler.
  *
- * When the settler has a home building with a work area, returns the
- * building's work-area center + radius. Otherwise returns the settler's
- * position with no radius constraint.
+ * Home building with work area → BoundedArea (center + radius from building).
+ * Otherwise → SelfArea (settler position).
  */
 export function resolveSearchArea(
     settler: Tile,
@@ -90,11 +115,12 @@ export function resolveSearchArea(
 ): SearchArea {
     if (homeBuildingId !== null && resolver.hasWorkArea(homeBuildingId)) {
         return {
+            type: 'bounded',
             center: resolver.getWorkAreaCenter(homeBuildingId),
             radius: resolver.getWorkAreaRadius(homeBuildingId),
         };
     }
-    return { center: settler, radius: undefined };
+    return { type: 'self', origin: settler };
 }
 
 /** Fires building overlay animations from trigger IDs. */

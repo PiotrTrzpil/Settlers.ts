@@ -1,9 +1,9 @@
 /**
  * Work handler registry for settler tasks.
  *
- * Manages registration and lookup of entity/position work handlers
- * that domain systems register to plug into the settler task system.
- * A search type can have one entity handler and one position handler.
+ * Manages registration and lookup of work handlers that domain systems
+ * register to plug into the settler task system. A search type maps to
+ * exactly one handler (entity, position, or null).
  */
 
 import type { SettlerConfig } from './types';
@@ -20,38 +20,32 @@ import type { UnitType } from '../../entity';
 export type SettlerConfigMap = ReadonlyMap<UnitType, SettlerConfig>;
 
 export class WorkHandlerRegistry {
-    private readonly entityHandlers = new Map<SearchType, EntityWorkHandler>();
-    private readonly positionHandlers = new Map<SearchType, PositionWorkHandler>();
+    private readonly handlers = new Map<SearchType, WorkHandler>();
 
     /**
      * Register a work handler for a search type.
      * Domain systems call this to plug into the task system.
-     * A search type can have one entity handler and one position handler.
+     * Each search type may have exactly one handler (entity, position, or null).
      */
     register(searchType: SearchType, handler: WorkHandler): void {
-        if (handler.type === WorkHandlerType.ENTITY) {
-            if (this.entityHandlers.has(searchType)) {
-                throw new Error(`Entity work handler already registered for ${searchType}.`);
-            }
-            this.entityHandlers.set(searchType, handler);
-        } else {
-            if (this.positionHandlers.has(searchType)) {
-                throw new Error(`Position work handler already registered for ${searchType}.`);
-            }
-            this.positionHandlers.set(searchType, handler);
+        if (this.handlers.has(searchType)) {
+            throw new Error(`Work handler already registered for ${searchType}`);
         }
+        this.handlers.set(searchType, handler);
     }
 
     getEntityHandler(searchType: SearchType): EntityWorkHandler | undefined {
-        return this.entityHandlers.get(searchType);
+        const h = this.handlers.get(searchType);
+        return h?.type === WorkHandlerType.ENTITY ? h : undefined;
     }
 
     getPositionHandler(searchType: SearchType): PositionWorkHandler | undefined {
-        return this.positionHandlers.get(searchType);
+        const h = this.handlers.get(searchType);
+        return h?.type === WorkHandlerType.POSITION ? h : undefined;
     }
 
     hasAnyHandler(searchType: SearchType): boolean {
-        return this.entityHandlers.has(searchType) || this.positionHandlers.has(searchType);
+        return this.handlers.has(searchType);
     }
 
     /**
@@ -61,7 +55,7 @@ export class WorkHandlerRegistry {
     findEntityHandlerForJob(jobId: string, settlerConfigs: SettlerConfigMap): EntityWorkHandler | undefined {
         for (const [, config] of settlerConfigs) {
             if (config.jobs.includes(jobId)) {
-                return this.entityHandlers.get(config.search);
+                return this.getEntityHandler(config.search);
             }
         }
         return undefined;

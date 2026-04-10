@@ -349,14 +349,18 @@ export class WorkerJobLifecycle {
         job.pathRetryCountdown = 0;
         job.pathRetryCount = 0;
         const completedTask = nodes[job.nodeIndex - 1]!.task;
-        // Preserve targetPos when the next node is also GO_TO_TARGET — some choreographies
-        // (e.g. Viking JOB_FARMERGRAIN_PLANT) split the walk into multiple legs that all
-        // share the same target position set at job start.
+        // Preserve targetPos when the next node still needs it:
+        //  - GO_TO_TARGET / GO_TO_TARGET_ROUGHLY: multi-leg walks sharing the same target
+        //    (e.g. Viking JOB_FARMERGRAIN_PLANT)
+        //  - WORK / WORK_VIRTUAL: callPositionComplete uses targetPos for the completion callback
         const nextNode = nodes[job.nodeIndex];
-        const nextIsGoToTarget =
+        const nextNeedsTargetPos =
             nextNode &&
-            (nextNode.task === ChoreoTaskType.GO_TO_TARGET || nextNode.task === ChoreoTaskType.GO_TO_TARGET_ROUGHLY);
-        if (completedTask !== ChoreoTaskType.SEARCH && !nextIsGoToTarget) {
+            (nextNode.task === ChoreoTaskType.GO_TO_TARGET ||
+                nextNode.task === ChoreoTaskType.GO_TO_TARGET_ROUGHLY ||
+                nextNode.task === ChoreoTaskType.WORK ||
+                nextNode.task === ChoreoTaskType.WORK_VIRTUAL);
+        if (completedTask !== ChoreoTaskType.SEARCH && !nextNeedsTargetPos) {
             job.targetPos = null;
         }
     }

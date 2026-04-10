@@ -47,10 +47,8 @@ export const ConstructionDemandFeature: FeatureDefinition = {
         // the idle-scan work handler path — but a handler must exist to
         // suppress "No work handler registered" warnings.
         const noopHandler = {
-            type: WorkHandlerType.ENTITY as const,
-            findTarget: () => null,
-            canWork: () => false,
-            onWorkTick: () => true,
+            type: WorkHandlerType.NULL as const,
+            shouldWaitForWork: true,
         };
         settlerTaskSystem.registerWorkHandler(SearchType.CONSTRUCTION, noopHandler);
         settlerTaskSystem.registerWorkHandler(SearchType.CONSTRUCTION_DIG, noopHandler);

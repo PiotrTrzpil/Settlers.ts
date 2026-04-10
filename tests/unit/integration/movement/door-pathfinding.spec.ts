@@ -188,12 +188,13 @@ describe('Door pathfinding — every building, every race', { timeout: 15000 }, 
                 (sim.state.playerRaces as Map<number, Race>).set(0, race);
 
                 // Extend territory coverage — many buildings are placed, auto-placer spirals outward.
-                // Place towers within existing Castle territory (radius ~32 tiles from center)
-                // to create additional territory for buildings placed further out.
-                sim.placeBuildingAt(230, 256, BuildingType.GuardTowerBig);
-                sim.placeBuildingAt(282, 256, BuildingType.GuardTowerBig);
-                sim.placeBuildingAt(256, 230, BuildingType.GuardTowerBig);
-                sim.placeBuildingAt(256, 282, BuildingType.GuardTowerBig);
+                // Place a grid of towers around center to cover a wide area.
+                for (const dx of [-25, 0, 25]) {
+                    for (const dy of [-25, 0, 25]) {
+                        if (dx === 0 && dy === 0) continue; // center has virtual Castle
+                        sim.placeBuildingAt(256 + dx, 256 + dy, BuildingType.GuardTowerBig);
+                    }
+                }
 
                 const failures: string[] = [];
                 for (const bt of FUNCTIONAL_BUILDINGS) {

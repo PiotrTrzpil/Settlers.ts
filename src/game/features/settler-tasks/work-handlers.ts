@@ -14,7 +14,8 @@ import type { BuildingInventoryManager } from '../inventory';
 import type { OreVeinData } from '../ore-veins';
 import { MINE_ORE_TYPE, MINE_SEARCH_RADIUS } from '../ore-veins/ore-type';
 import { isMineBuilding } from '../../buildings/types';
-import { WorkHandlerType, type EntityWorkHandler, type PositionWorkHandler } from './types';
+import { WorkHandlerType, type EntityWorkHandler, type NullWorkHandler, type PositionWorkHandler } from './types';
+import { asBounded } from './choreo-types';
 import { ProductionMode } from '../production-control';
 import { findNearestTile } from '../../systems/spatial-search';
 import type { TerrainData } from '../../terrain';
@@ -163,18 +164,14 @@ export function createWorkplaceHandler(
 /**
  * Create a handler for GOOD search type (carriers).
  *
- * Carriers don't find work themselves - they get jobs assigned externally
- * by LogisticsDispatcher via assignJob(). This handler exists to
- * prevent "no handler registered" errors when carriers are idle.
+ * Carriers don't find work themselves — they get jobs assigned externally
+ * by LogisticsDispatcher via assignJob(). This null handler exists to
+ * suppress "no handler registered" warnings while keeping idle carriers silent.
  */
-export function createCarrierHandler(): EntityWorkHandler {
+export function createCarrierHandler(): NullWorkHandler {
     return {
-        type: WorkHandlerType.ENTITY,
+        type: WorkHandlerType.NULL,
         shouldWaitForWork: true,
-
-        findTarget: () => null, // carriers get jobs assigned externally by LogisticsDispatcher
-        canWork: () => false,
-        onWorkTick: () => false,
     };
 }
 
@@ -199,10 +196,8 @@ export function createWaterHandler(terrain: TerrainData): PositionWorkHandler {
     return {
         type: WorkHandlerType.POSITION,
 
-        findPosition: ({ center, radius }) => {
-            if (radius === undefined) {
-                throw new Error('WaterHandler: work area radius is required');
-            }
+        findPosition: area => {
+            const { center, radius } = asBounded(area);
             return findNearestTile(
                 center,
                 radius,

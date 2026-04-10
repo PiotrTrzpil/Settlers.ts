@@ -131,6 +131,29 @@ export class SmartBuildingPlacer {
         return result;
     }
 
+    /** Find the closest valid position to a given tile. */
+    findBuildingPositionNear(tile: Tile, buildingType: BuildingType, race = Race.Roman): Tile {
+        const result = spiralSearch(tile, this.mapWidth, this.mapHeight, ({ x, y }) => {
+            if (
+                !canPlaceBuildingFootprint(
+                    this.terrain,
+                    this.state.groundOccupancy,
+                    x,
+                    y,
+                    buildingType,
+                    race,
+                    this.state.buildingFootprint
+                )
+            )
+                return false;
+            const fp = getBuildingFootprint({ x, y }, buildingType, race);
+            return fp.every(t => !this.state.unitOccupancy.has(tileKey(t)));
+        });
+        if (!result)
+            throw new Error(`SmartBuildingPlacer: no valid position near (${tile.x},${tile.y}) for ${buildingType}`);
+        return result;
+    }
+
     /** Find any non-occupied tile near center (for goods piles). */
     findOpenPosition(): Tile {
         const result = spiralSearch(

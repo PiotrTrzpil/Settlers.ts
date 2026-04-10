@@ -173,11 +173,15 @@ export class WorkerTaskExecutor {
         const positionHandler = this.handlerRegistry.getPositionHandler(config.plantSearch ?? config.search);
 
         if (!entityHandler && !positionHandler) {
+            if (!this.handlerRegistry.hasAnyHandler(config.search)) {
+                // Genuinely missing handler — feature not yet implemented
+                this.missingHandlerLogger.warn(
+                    `No work handler registered for search type: ${config.search}. ` +
+                        `Settler ${settler.id} (${settler.subType as UnitType}) will stay idle until feature is implemented.`
+                );
+            }
+            // NullWorkHandler (carrier, builder) or missing handler — settler stays idle, no warning
             this.idleEarlyExitCount++;
-            this.missingHandlerLogger.warn(
-                `No work handler registered for search type: ${config.search}. ` +
-                    `Settler ${settler.id} (${settler.subType as UnitType}) will stay idle until feature is implemented.`
-            );
             return false;
         }
 
