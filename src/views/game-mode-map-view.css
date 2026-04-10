@@ -265,6 +265,17 @@
     border-color: #6a4a20;
 }
 
+.gm-menu-btn--danger {
+    color: #c07050;
+    border-color: #5a3028;
+}
+
+.gm-menu-btn--danger:hover {
+    background: #3a2018;
+    border-color: #8a4030;
+    color: #e08060;
+}
+
 /* ===== GAME END / STALE SAVE MODAL ===== */
 .game-end-backdrop {
     position: absolute;

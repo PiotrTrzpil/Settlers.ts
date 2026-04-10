@@ -16,7 +16,7 @@ import { createSnapshot, restoreFromSnapshot, getCurrentMapId, type GameStateSna
 const AUTO_SAVE_PREFIX = 'gm_auto_';
 const MANUAL_SAVE_PREFIX = 'gm_manual_';
 const AUTO_SAVE_SLOTS = 3;
-const AUTO_SAVE_INTERVAL_MS = 60_000; // 60 seconds
+const AUTO_SAVE_INTERVAL_MS = 300_000; // 5 minutes
 
 export interface SaveEntry {
     id: string;

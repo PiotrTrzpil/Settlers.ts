@@ -29,12 +29,23 @@
                             <span class="sld-time">{{ formatTime(save.timestamp) }}</span>
                         </div>
                         <div class="sld-entry-actions">
-                            <button class="sld-action-btn sld-action-btn--load" @click="doLoad(save)">Load</button>
+                            <button class="sld-action-btn sld-action-btn--load" @click="confirmingLoad = save">
+                                Load
+                            </button>
                             <button class="sld-action-btn sld-action-btn--delete" @click="doDelete(save)">
                                 &#10005;
                             </button>
                         </div>
                     </div>
+                </div>
+            </div>
+
+            <!-- Load confirmation -->
+            <div v-if="confirmingLoad" class="sld-confirm">
+                <p class="sld-confirm-msg">Load this save? Unsaved progress will be lost.</p>
+                <div class="sld-confirm-actions">
+                    <button class="sld-action-btn" @click="confirmingLoad = null">Cancel</button>
+                    <button class="sld-action-btn sld-action-btn--load" @click="doLoad(confirmingLoad!)">Load</button>
                 </div>
             </div>
         </div>
@@ -58,6 +69,7 @@ const saves = ref<SaveEntry[]>([]);
 const isLoading = ref(true);
 const isSaving = ref(false);
 const saveMessage = ref('');
+const confirmingLoad = ref<SaveEntry | null>(null);
 
 function formatTime(ts: number): string {
     const ago = Date.now() - ts;
@@ -98,6 +110,7 @@ async function doManualSave(): Promise<void> {
 }
 
 async function doLoad(save: SaveEntry): Promise<void> {
+    confirmingLoad.value = null;
     const ok = await props.saveManager.loadSave(save.id);
     if (ok) {
         emit('loaded');
@@ -328,6 +341,28 @@ onMounted(() => {
     background: #4a2020;
     color: #d06060;
     border-color: #8a3030;
+}
+
+/* Load confirmation */
+.sld-confirm {
+    margin-top: 4px;
+    padding: 12px;
+    background: #2c1e0e;
+    border: 1px solid #5c3d1a;
+    border-radius: 4px;
+    text-align: center;
+}
+
+.sld-confirm-msg {
+    margin: 0 0 10px;
+    font-size: 13px;
+    color: #d4c4a0;
+}
+
+.sld-confirm-actions {
+    display: flex;
+    justify-content: center;
+    gap: 10px;
 }
 
 /* Scrollbar */

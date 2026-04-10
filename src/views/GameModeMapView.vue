@@ -130,6 +130,25 @@
                     </div>
                     <div class="gm-divider" />
                     <button class="gm-menu-btn" @click="showSaveLoad = true">Save / Load</button>
+                    <button class="gm-menu-btn gm-menu-btn--danger" @click="showRestartConfirm = true">
+                        Restart Map
+                    </button>
+                </div>
+            </div>
+
+            <!-- Restart confirmation -->
+            <div v-if="showRestartConfirm" class="game-end-backdrop">
+                <div class="game-end-dialog">
+                    <h2 class="game-end-title game-end-title--lost">Restart Map?</h2>
+                    <p class="game-end-message">
+                        This will reset the map to its initial state. All unsaved progress will be lost.
+                    </p>
+                    <div class="game-end-actions">
+                        <button class="game-end-btn game-end-btn--continue" @click="showRestartConfirm = false">
+                            Cancel
+                        </button>
+                        <button class="game-end-btn game-end-btn--quit" @click="doRestartMap">Restart</button>
+                    </div>
                 </div>
             </div>
 
@@ -152,6 +171,8 @@ import { BuildingType } from '@/game/entity';
 import { GameEndReason } from '@/game/features/victory-conditions/victory-conditions-system';
 import { isBuildingAvailableForRace } from '@/game/data/race-availability';
 import { loadLayerVisibility } from '@/game/renderer/layer-visibility';
+import { clearCameraState } from '@/game/renderer/camera-persistence';
+import { getCurrentMapId } from '@/game/state/game-state-persistence';
 import { toastInfo } from '@/game/ui/toast-notifications';
 import { ALL_BUILDINGS } from './palette-data';
 
@@ -242,6 +263,17 @@ function setSpeed(speed: number): void {
 const showSaveLoad = ref(false);
 
 function onSaveLoaded(): void {
+    gameEndResult.value = null;
+}
+
+// Restart map
+const showRestartConfirm = ref(false);
+
+function doRestartMap(): void {
+    showRestartConfirm.value = false;
+    gameActions.resetGameState();
+    clearCameraState(getCurrentMapId());
+    rendererRef.value?.centerOnPlayerStart?.();
     gameEndResult.value = null;
 }
 
