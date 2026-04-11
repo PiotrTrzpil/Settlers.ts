@@ -6,7 +6,7 @@
  * in-flight tracker, or request manager.
  */
 
-import { EntityType } from '../../entity';
+import { clearJobId, EntityType } from '../../entity';
 import { EMaterialType } from '../../economy/material-type';
 import type { EventBus } from '../../event-bus';
 import { TransportPhase, type TransportJobRecord } from './transport-job-record';
@@ -97,7 +97,7 @@ export function activate(
     }
 
     const record: TransportJobRecord = {
-        id: deps.jobStore.allocateJobId(),
+        id: deps.gameState.allocateJobId(),
         demandId,
         sourceBuilding,
         destBuilding,
@@ -146,6 +146,9 @@ export function deliver(record: TransportJobRecord, deps: TransportJobDeps): voi
     deps.inventoryManager.unreserveSlot(record.slotId, record.id);
     record.phase = TransportPhase.Delivered;
     deps.jobStore.jobs.reindex(record.carrierId);
+    // Do NOT clearJobId here — the carrier's choreography task is still running its
+    // delivery animation. Clearing jobId makes the carrier appear idle, allowing
+    // recruitment to grab it mid-task. jobId is cleared on settler:taskCompleted instead.
     deps.eventBus.emit('logistics:demandFulfilled', {
         demandId: record.demandId,
         buildingId: record.destBuilding,
@@ -167,6 +170,8 @@ export function cancel(record: TransportJobRecord, reason: string, deps: Transpo
     if (deps.jobStore.jobs.has(record.carrierId)) {
         deps.jobStore.jobs.reindex(record.carrierId);
     }
+    const carrier = deps.gameState.getEntityOrThrow(record.carrierId, 'TransportJobService.cancel');
+    clearJobId(carrier);
     deps.eventBus.emit('carrier:transportCancelled', {
         unitId: record.carrierId,
         requestId: record.demandId,

@@ -11,6 +11,8 @@ import { createSimulation, cleanupSimulation, type Simulation } from '../../help
 import { installRealGameData } from '../../helpers/test-game-data';
 import { BuildingType } from '@/game/buildings/building-type';
 import { EntityType, UnitType } from '@/game/entity';
+import { hexDistance, getDirectionToward } from '@/game/systems/hex-directions';
+import { TreeStage } from '@/game/features/trees/tree-system';
 import type { Tile } from '@/game/core/coordinates';
 import { EMaterialType } from '@/game/economy/material-type';
 import { Race } from '@/game/core/race';
@@ -86,6 +88,29 @@ describe('Economy – gatherer & production chains', { timeout: 5000 }, () => {
         expect(sim.getOutput(woodcutterId, EMaterialType.LOG)).toBe(3);
     });
 
+    it('woodcutter stands adjacent to tree during cutting, not on top of it', () => {
+        sim = createSimulation();
+
+        sim.placeBuilding(BuildingType.ResidenceSmall);
+        const woodcutterId = sim.placeBuilding(BuildingType.WoodcutterHut);
+        sim.plantTreesNear(woodcutterId, 1);
+
+        // Run until a tree is being cut (TreeStage.Cutting)
+        const treeSystem = sim.services.treeSystem;
+        sim.runUntil(() => treeSystem.getStats()[TreeStage.Cutting]! > 0, {
+            maxTicks: 300 * 30,
+            label: 'tree cutting started',
+        });
+        expect(treeSystem.getStats()[TreeStage.Cutting]).toBe(1);
+
+        // Find the woodcutter unit and the tree being cut
+        const worker = sim.state.entities.find(e => e.type === EntityType.Unit && e.subType === UnitType.Woodcutter)!;
+        const tree = sim.state.entities.find(e => e.type === EntityType.MapObject && treeSystem.isCutting(e.id))!;
+
+        const dist = hexDistance(worker.x, worker.y, tree.x, tree.y);
+        expect(dist).toBeGreaterThanOrEqual(1);
+    });
+
     it('full chain: farm → grain → mill → flour + waterwork → water → bakery → bread', () => {
         sim = createSimulation({ mapWidth: 256, mapHeight: 256 });
 
@@ -115,13 +140,13 @@ describe('Economy – gatherer & production chains', { timeout: 5000 }, () => {
     });
 
     it('stonecutter mines only nearby rocks, ignores far ones', () => {
-        sim = createSimulation();
+        sim = createSimulation({ mapWidth: 256, mapHeight: 256 });
 
         sim.placeBuilding(BuildingType.ResidenceSmall);
         const stonecutterId = sim.placeBuilding(BuildingType.StonecutterHut);
 
-        sim.placeStonesNear(stonecutterId, 2);
-        sim.placeStonesFar(stonecutterId, 3);
+        sim.placeStonesNear(stonecutterId, 1);
+        sim.placeStonesFar(stonecutterId, 1);
 
         let lastCount = 0;
         let stableTicks = 0;
@@ -143,6 +168,31 @@ describe('Economy – gatherer & production chains', { timeout: 5000 }, () => {
 
         sim.runTicks(60 * 30);
         expect(sim.getOutput(stonecutterId, EMaterialType.STONE)).toBe(stonesFromNearby);
+    });
+
+    it('stonecutter stands adjacent to stone during mining, not on top of it', () => {
+        sim = createSimulation();
+
+        sim.placeBuilding(BuildingType.ResidenceSmall);
+        const stonecutterId = sim.placeBuilding(BuildingType.StonecutterHut);
+        sim.placeStonesNear(stonecutterId, 1);
+
+        // Run until a stone is being mined (StoneStage.Mining)
+        const stoneSystem = sim.services.stoneSystem;
+        sim.runUntil(() => stoneSystem.getStats().mining > 0, { maxTicks: 300 * 30, label: 'stone mining started' });
+        expect(stoneSystem.getStats().mining).toBe(1);
+
+        // Find the stonecutter unit and the stone being mined
+        const worker = sim.state.entities.find(e => e.type === EntityType.Unit && e.subType === UnitType.Stonecutter)!;
+        const minedStone = sim.state.entities.find(e => e.type === EntityType.MapObject && stoneSystem.isMining(e.id))!;
+
+        const dist = hexDistance(worker.x, worker.y, minedStone.x, minedStone.y);
+        expect(dist).toBe(1);
+
+        // Settler should face toward the stone
+        const controller = sim.state.movement.getController(worker.id)!;
+        const expectedDir = getDirectionToward(worker.x, worker.y, minedStone.x, minedStone.y);
+        expect(controller.direction).toBe(expectedDir);
     });
 
     it('forester plants trees, woodcutter harvests them (no initial trees)', () => {

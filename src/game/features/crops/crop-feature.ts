@@ -53,20 +53,20 @@ export const CropFeature: FeatureDefinition = {
             settlerTaskSystem.registerWorkHandler(plantSearch, createPlantingHandler(cropSystem.getCropPlanter(crop)));
         }
 
-        // Register crop entities on creation (map-loaded crops start as Mature)
-        ctx.on('entity:created', ({ entityId, entityType: type, subType }) => {
+        // Register crop entities on creation (map-loaded crops start as Mature, planted start as Growing)
+        ctx.on('entity:created', ({ entityId, entityType: type, subType, planted }) => {
             if (
                 type === EntityType.MapObject &&
                 OBJECT_TYPE_CATEGORY[subType as MapObjectType] === MapObjectCategory.Crops
             ) {
-                cropSystem.register(entityId, subType as MapObjectType);
+                cropSystem.register(entityId, subType as MapObjectType, planted);
             }
         });
 
         // Clean up crop state on entity removal
         ctx.cleanupRegistry.onEntityRemoved(cropSystem.unregister.bind(cropSystem));
 
-        const cropDeps = { state: ctx.gameState, eventBus: ctx.eventBus, cropSystem };
+        const cropDeps = { state: ctx.gameState, eventBus: ctx.eventBus };
 
         return {
             systems: [cropSystem],

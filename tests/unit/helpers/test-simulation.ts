@@ -22,8 +22,8 @@ import {
     placeTreeEntities,
     placeStoneEntities,
     fillTerrain as fillTerrainRegion,
-    fillRockSquare,
-    fillOreSquare,
+    populateMapData as populateMapDataFn,
+    placeMineBuilding as placeMineBuildingFn,
     type SimulationError,
     type SimSnapshot,
     type RunUntilOptions,
@@ -51,11 +51,10 @@ import { StorageDirection } from '@/game/systems/inventory/storage-filter-manage
 import { GameSettingsManager } from '@/game/game-settings';
 import { Race } from '@/game/core/race';
 import { SlotKind } from '@/game/core/pile-kind';
-import { isMineBuilding } from '@/game/buildings/types';
-import { populateMapBuildings } from '@/game/features/building-construction';
-import { populateMapSettlers } from '@/game/systems/map-settlers';
 import type { MapBuildingData, MapSettlerData } from '@/resources/map/map-entity-data';
 import { BuildingConstructionPhase } from '@/game/features/building-construction/types';
+import { createSnapshot, restoreFromSnapshot, type GameStateSnapshot } from '@/game/state/game-state-persistence';
+import type { Game } from '@/game/game';
 import type { OreType } from '@/game/features/ore-veins/ore-type';
 import type { TestMap } from './test-map';
 import { simulateMovement } from './simulation-movement';
@@ -396,26 +395,11 @@ export class Simulation {
 
     // ─── Map-data population (real map-load pipeline) ─────────────
 
-    /**
-     * Populate buildings and settlers from raw map entity data arrays, using
-     * the same code paths as the real Game.populateMapEntities.
-     */
     populateMapData(
         buildings: MapBuildingData[],
         settlers: MapSettlerData[]
     ): { buildingCount: number; settlerCount: number } {
-        const mapBuildings = populateMapBuildings(this.state, buildings, {
-            terrain: this.map.terrain,
-        });
-        const settlerCount = populateMapSettlers(this.state, settlers, this.eventBus);
-
-        this.services.settlerTaskSystem.relocateUnitsFromFootprints();
-
-        for (const { buildingId, buildingType, race } of mapBuildings) {
-            this.eventBus.emit('building:completed', { buildingId, buildingType, race });
-        }
-
-        return { buildingCount: mapBuildings.length, settlerCount };
+        return populateMapDataFn(this.state, this.services, this.eventBus, this.map, buildings, settlers);
     }
 
     // ─── Map object placement ─────────────────────────────────────
@@ -459,34 +443,18 @@ export class Simulation {
 
     // ─── Mine placement ───────────────────────────────────────────
 
-    /**
-     * Place a mine building: sets a region to ROCK terrain, places the building,
-     * then sets ore veins of the given type around the building.
-     */
     placeMineBuilding(buildingType: BuildingType, oreType: OreType, oreLevel = 3): number {
-        if (!isMineBuilding(buildingType)) {
-            throw new Error(`${buildingType} is not a mine building`);
-        }
-        const pos = this.placer.findMinePosition();
-        fillRockSquare(this.map, pos.x, pos.y, 6, this.mapWidth, this.mapHeight);
-
-        const result = this.execute({
-            type: 'place_building',
+        return placeMineBuildingFn(
+            this.placer,
+            this.map,
+            this.services,
+            this.commandRegistry.execute.bind(this.commandRegistry),
             buildingType,
-            x: pos.x,
-            y: pos.y,
-            player: 0,
-            race: Race.Roman,
-            completed: true,
-            spawnWorker: true,
-        });
-        if (!result.success) {
-            throw new Error(`Failed to place mine ${buildingType} at (${pos.x}, ${pos.y}): ${result.error}`);
-        }
-        const entityId = result.entityId;
-
-        fillOreSquare(this.services, pos.x, pos.y, 4, oreType, oreLevel, this.mapWidth, this.mapHeight);
-        return entityId;
+            oreType,
+            oreLevel,
+            this.mapWidth,
+            this.mapHeight
+        );
     }
 
     // ─── Unit management ──────────────────────────────────────────
@@ -591,6 +559,33 @@ export class Simulation {
     /** Fill a square region with a terrain type. */
     fillTerrain(cx: number, cy: number, radius: number, terrain: number): void {
         fillTerrainRegion(this.map, cx, cy, radius, terrain, this.mapWidth, this.mapHeight);
+    }
+
+    // ─── Persistence helpers ────────────────────────────────────────
+
+    /** Create a duck-typed Game-like object for createSnapshot / restoreFromSnapshot. */
+    private asGame(): Game {
+        return {
+            state: this.state,
+            services: this.services,
+            terrain: this.map.terrain,
+            eventBus: this.eventBus,
+            execute: (cmd: Command) => this.execute(cmd),
+        } as unknown as Game;
+    }
+
+    /** Take a keyframe snapshot of the current simulation state. */
+    createSnapshot(): GameStateSnapshot {
+        return createSnapshot(this.asGame());
+    }
+
+    /** Snapshot → restore into a fresh Simulation → run replay ticks. Caller must destroy. */
+    saveAndRestore(replayTicks = 300): Simulation {
+        const snapshot = this.createSnapshot();
+        const sim2 = new Simulation({ mapWidth: this.mapWidth, mapHeight: this.mapHeight });
+        restoreFromSnapshot(sim2.asGame(), snapshot);
+        sim2.runTicks(replayTicks);
+        return sim2;
     }
 
     // ─── Lifecycle ────────────────────────────────────────────────

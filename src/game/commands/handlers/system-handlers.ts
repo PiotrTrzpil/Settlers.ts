@@ -5,7 +5,6 @@ import type { EventBus } from '../../event-bus';
 import { BuildingType, isStorageBuilding } from '../../buildings/types';
 import { EMaterialType } from '../../economy';
 import type { TreeSystem } from '../../features/trees';
-import type { CropSystem } from '../../features/crops';
 import type { StorageFilterManager } from '../../systems/inventory/storage-filter-manager';
 import type { BuildingInventoryManager } from '../../systems/inventory/building-inventory';
 import { SlotKind } from '../../core/pile-kind';
@@ -51,7 +50,6 @@ export interface SetStorageFilterDeps {
 export interface PlantTreeDeps {
     state: GameState;
     eventBus: EventBus;
-    treeSystem: TreeSystem;
 }
 
 export interface PlantTreesAreaDeps {
@@ -61,7 +59,6 @@ export interface PlantTreesAreaDeps {
 export interface PlantCropDeps {
     state: GameState;
     eventBus: EventBus;
-    cropSystem: CropSystem;
 }
 
 export function executePlacePile(deps: PlacePileDeps, cmd: PlacePileCommand): SpawnResult | CommandFailure {
@@ -153,10 +150,7 @@ export function executePlantTree(deps: PlantTreeDeps, cmd: PlantTreeCommand): Sp
         return commandFailed(`Tile (${cmd.x}, ${cmd.y}) is occupied, cannot plant tree`);
     }
 
-    const entity = state.addEntity(EntityType.MapObject, cmd.treeType, cmd, 0);
-    entity.operational = false; // Planted trees start growing, not yet harvestable
-
-    deps.treeSystem.register(entity.id, cmd.treeType, true);
+    const entity = state.addEntity(EntityType.MapObject, cmd.treeType, cmd, 0, { planted: true });
     deps.eventBus.emit('tree:planted', { entityId: entity.id, treeType: cmd.treeType, x: cmd.x, y: cmd.y });
 
     return { success: true, entityId: entity.id };
@@ -180,10 +174,7 @@ export function executePlantCrop(deps: PlantCropDeps, cmd: PlantCropCommand): Sp
         return commandFailed(`Tile (${cmd.x}, ${cmd.y}) is occupied, cannot plant crop`);
     }
 
-    const entity = state.addEntity(EntityType.MapObject, cmd.cropType, cmd, 0);
-
-    deps.cropSystem.register(entity.id, cmd.cropType, true);
-
+    const entity = state.addEntity(EntityType.MapObject, cmd.cropType, cmd, 0, { planted: true });
     deps.eventBus.emit('crop:planted', { entityId: entity.id, cropType: cmd.cropType, x: cmd.x, y: cmd.y });
 
     return { success: true, entityId: entity.id };

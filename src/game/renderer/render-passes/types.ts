@@ -71,6 +71,10 @@ export interface PathIndicatorContext extends SpatialPassData, ColorShaderPassDa
 export interface GroundOverlayContext extends SpatialPassData, ColorShaderPassData, EntityFramePassData {
     readonly renderSettings: RenderSettings;
     readonly workAreaCircles: readonly CircleRenderData[];
+    readonly getBuildingOverlays: (entityId: number) => readonly BuildingOverlayRenderData[];
+    readonly groundOccupancy: ReadonlyMap<string, number>;
+    readonly unitOccupancy: ReadonlyMap<string, number>;
+    readonly buildingOccupancy: ReadonlySet<string>;
 }
 
 export interface TerritoryDotContext extends SpatialPassData, SpritePassData {
@@ -227,4 +231,9 @@ export interface PassContext extends SpatialPassData, ColorShaderPassData, Sprit
 
     /** Map objects hidden by layer visibility but needing labels (when showDecoLabels is on). */
     readonly labelOnlyMapObjects: Entity[];
+
+    // Occupancy debug
+    readonly groundOccupancy: ReadonlyMap<string, number>;
+    readonly unitOccupancy: ReadonlyMap<string, number>;
+    readonly buildingOccupancy: ReadonlySet<string>;
 }

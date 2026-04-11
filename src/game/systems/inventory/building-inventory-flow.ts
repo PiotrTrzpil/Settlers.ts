@@ -98,7 +98,7 @@ export function withdrawInput(
             return mgr.withdraw(slot.id, amount);
         }
     }
-    throw new Error(`Building ${buildingId} has no input slot with stock for ${material} [withdrawInput]`);
+    return 0;
 }
 
 /**
@@ -117,7 +117,7 @@ export function withdrawOutput(
             return mgr.withdraw(slot.id, amount);
         }
     }
-    throw new Error(`Building ${buildingId} has no output slot with stock for ${material} [withdrawOutput]`);
+    return 0;
 }
 
 /**

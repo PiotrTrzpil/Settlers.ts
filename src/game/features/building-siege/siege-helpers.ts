@@ -1,5 +1,5 @@
 /**
- * Siege helper functions — pure queries for building sieges.
+ * Siege helper functions — pure queries shared by BuildingSiegeSystem and TowerAssaultSystem.
  *
  * Extracted from building-siege-system.ts to keep it under the line limit.
  */
@@ -14,6 +14,7 @@ import { isGarrisonBuildingType } from '../tower-garrison';
 import { getBuildingDoorPos } from '../../data/game-data-access';
 import { DOOR_ARRIVAL_DISTANCE } from './siege-types';
 import type { TileWithPlayer } from '../ai-player/internal/ai-world-queries';
+import type { UnitReservationRegistry } from '../../systems/unit-reservation';
 
 export type BuildingLike = Tile & { race: Race; subType: number | string };
 export type OwnedBuildingLike = BuildingLike & { player: number };
@@ -135,4 +136,60 @@ export function findUnitsAttacking(defenderId: number, gameState: GameState, com
         }
     }
     return result;
+}
+
+/**
+ * Check if a swordsman is idle and available for siege/assault duty:
+ * not reserved, not in combat, and not currently moving.
+ */
+export function isIdleSwordsman(
+    entity: Entity,
+    unitReservation: UnitReservationRegistry,
+    combatSystem: CombatSystem,
+    gameState: GameState
+): boolean {
+    if (entity.type !== EntityType.Unit || entity.hidden) {
+        return false;
+    }
+    if (!isSwordsman(entity.subType as UnitType)) {
+        return false;
+    }
+    if (unitReservation.isReserved(entity.id) || combatSystem.isInCombat(entity.id)) {
+        return false;
+    }
+    const controller = gameState.movement.getController(entity.id);
+    return !controller || controller.state === 'idle';
+}
+
+/**
+ * Get all walkable tiles adjacent to a building's footprint (the "perimeter").
+ * Scans building-occupied tiles and collects their non-occupied hex neighbours.
+ */
+export function getBuildingPerimeterTiles(building: Entity, gameState: GameState): Tile[] {
+    const tiles: Tile[] = [];
+    const seen = new Set<string>();
+    const bx = building.x;
+    const by = building.y;
+    const range = 8;
+    for (let dy = -range; dy <= range; dy++) {
+        for (let dx = -range; dx <= range; dx++) {
+            const tx = bx + dx;
+            const ty = by + dy;
+            const key = tileKey({ x: tx, y: ty });
+            if (!gameState.buildingOccupancy.has(key)) {
+                continue;
+            }
+            for (const [ox, oy] of EXTENDED_OFFSETS) {
+                const nx = tx + ox;
+                const ny = ty + oy;
+                const nKey = tileKey({ x: nx, y: ny });
+                if (seen.has(nKey) || gameState.buildingOccupancy.has(nKey)) {
+                    continue;
+                }
+                seen.add(nKey);
+                tiles.push({ x: nx, y: ny });
+            }
+        }
+    }
+    return tiles;
 }

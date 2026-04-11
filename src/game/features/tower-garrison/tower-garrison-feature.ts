@@ -7,7 +7,7 @@
  * - onTerrainReady → re-builds WORKER_DISPATCH choreo jobs for en-route units
  *
  * Garrison dispatch uses WORKER_DISPATCH choreo jobs (goToDoorAndEnter).
- * The garrison manager listens for settler-location:entered to finalize.
+ * The garrison manager listens for settler:taskCompleted to finalize.
  *
  * Entity removal cleanup (killed en-route / killed while garrisoned) is handled
  * automatically by UnitReservationRegistry.onForcedRelease.
@@ -18,7 +18,6 @@ import type { SettlerTaskExports } from '@/game/features/settler-tasks';
 import type { SettlerLocationExports } from '@/game/features/settler-location';
 import type { CombatExports } from '@/game/features/combat';
 import type { BuildingConstructionExports } from '../building-construction';
-import { EntityType } from '../../entity';
 import { BuildingType } from '../../buildings/building-type';
 import { TowerGarrisonManager } from './tower-garrison-manager';
 import { AutoGarrisonSystem } from './tower-garrison-auto-system';
@@ -45,6 +44,8 @@ import { COMMAND_OK, commandFailed } from '@/game/commands/command-types';
 import { createLogger } from '@/utilities/logger';
 
 const log = createLogger('TowerGarrisonFeature');
+
+import { forEachCompletedBuilding } from '../restore-utils';
 
 export interface TowerGarrisonExports {
     garrisonManager: TowerGarrisonManager;
@@ -155,36 +156,30 @@ export const TowerGarrisonFeature: FeatureDefinition = {
             // Both swordsmen and bowmen are rendered via overlay-resolution.ts
             // (AboveBuilding layer) as static standing poses.
             renderPasses: [],
-            persistence: [],
+            persistence: [manager.garrisonJobs],
             onRestoreComplete() {
-                for (const e of ctx.gameState.entities) {
-                    if (e.type !== EntityType.Building) {
-                        continue;
-                    }
-                    if (constructionSiteManager.hasSite(e.id)) {
-                        continue;
-                    }
+                // Step 1: Register all garrison towers.
+                forEachCompletedBuilding(ctx.gameState, constructionSiteManager, e => {
                     const bt = e.subType as BuildingType;
                     if (isGarrisonBuildingType(bt)) {
                         manager.initTower(e.id, bt);
                     }
-                }
-            },
-            onTerrainReady(terrain) {
-                manager.setTerrain(terrain);
-                // Re-build WORKER_DISPATCH choreo jobs for units that were
-                // en-route when the game was saved. Approaching state is
-                // persisted by SettlerBuildingLocationManager; reservations
-                // and jobs are restored here after pathfinding is available.
+                });
+
+                // Step 2: Rebuild garrison slots and reservations from persisted garrisonJobs.
+                manager.rebuildFromGarrisonJobs();
+
+                // Step 3: Re-build WORKER_DISPATCH choreo jobs for units that were
+                // en-route when the game was saved. Approaching state is persisted
+                // by SettlerBuildingLocationManager; reservations and jobs are
+                // restored here after feature stores have been deserialized.
                 for (const { unitId, towerId } of manager.getEnRouteEntries()) {
                     const building = ctx.gameState.getEntity(towerId);
                     if (!building) {
-                        // Tower gone during save — release reservation, assignment
                         ctx.unitReservation.release(unitId);
                         settlerTaskSystem.releaseWorkerAssignment(unitId);
                         continue;
                     }
-                    // Restore reservation (not serialized by garrison manager)
                     ctx.unitReservation.reserve(unitId, {
                         purpose: 'garrison-en-route',
                         onForcedRelease: () => {
@@ -194,6 +189,9 @@ export const TowerGarrisonFeature: FeatureDefinition = {
                     const job = choreo('WORKER_DISPATCH').goToDoorAndEnter(towerId).build();
                     settlerTaskSystem.assignJob(unitId, job);
                 }
+            },
+            onTerrainReady(terrain) {
+                manager.setTerrain(terrain);
             },
             commands: {
                 garrison_units: cmd => {

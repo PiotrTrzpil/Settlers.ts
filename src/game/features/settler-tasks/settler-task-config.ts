@@ -10,7 +10,6 @@ import type { EntityVisualService } from '../../animation/entity-visual-service'
 import type { WorkAreaStore } from '../work-areas/work-area-store';
 import type { BuildingOverlayManager } from '../building-overlays/building-overlay-manager';
 import type { ProductionControlManager } from '../production-control';
-import type { BarracksTrainingManager } from '../barracks';
 import type { ConstructionSiteManager } from '../building-construction/construction-site-manager';
 import type { ExecuteCommand } from '../../commands';
 import type { MaterialTransfer } from '../material-transfer';
@@ -29,7 +28,6 @@ export interface SettlerTaskSystemConfig extends CoreDeps {
     workAreaStore: WorkAreaStore;
     buildingOverlayManager: BuildingOverlayManager;
     getProductionControlManager?: () => ProductionControlManager;
-    getBarracksTrainingManager?: () => BarracksTrainingManager;
     constructionSiteManager: ConstructionSiteManager;
     executeCommand: ExecuteCommand;
     materialTransfer: MaterialTransfer;

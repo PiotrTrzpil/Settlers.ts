@@ -441,6 +441,7 @@ export class EntityRenderer extends RendererBase implements IRenderer {
                 this.setupColorShader(gl, projection);
                 groundOverlayPass.drawFootprints(gl, projection, viewPoint);
                 groundOverlayPass.drawUnitPositions(gl, projection, viewPoint);
+                groundOverlayPass.drawTileOccupancy(gl, projection, viewPoint);
             }
         }
         profiler.endPhase('draw');
@@ -530,6 +531,10 @@ export class EntityRenderer extends RendererBase implements IRenderer {
             // Debug
             debugDecoLabels: this.debugDecoLabels,
             labelOnlyMapObjects: this.labelOnlyMapObjects,
+            // Occupancy
+            groundOccupancy: rc.groundOccupancy,
+            unitOccupancy: rc.unitOccupancy,
+            buildingOccupancy: rc.buildingOccupancy,
         };
     }
 

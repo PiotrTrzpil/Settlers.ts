@@ -39,7 +39,6 @@ import type { GameState } from '../../game-state';
 import type { EventBus } from '../../event-bus';
 import type { BuildingInventoryManager } from '../inventory';
 import type { MaterialTransfer } from '../material-transfer';
-import type { BarracksTrainingManager } from '../barracks';
 import type { ExecuteCommand } from '../../commands';
 import type { ConstructionSiteManager } from '../building-construction/construction-site-manager';
 import { EMaterialType } from '../../economy';
@@ -72,7 +71,6 @@ export interface WorkerTaskExecutorConfig extends CoreDeps {
     materialTransfer: MaterialTransfer;
     locationManager: ISettlerBuildingLocationManager;
     constructionSiteManager: ConstructionSiteManager;
-    getBarracksTrainingManager?: () => BarracksTrainingManager | undefined;
     executeCommand?: ExecuteCommand;
 }
 
@@ -126,7 +124,6 @@ export class WorkerTaskExecutor {
             inventoryManager: cfg.inventoryManager,
             materialTransfer: cfg.materialTransfer,
             constructionSiteManager: cfg.constructionSiteManager,
-            barracksTrainingManager: cfg.getBarracksTrainingManager,
             buildingPositionResolver: cfg.buildingPositionResolver,
             jobPartResolver: cfg.jobPartResolver,
             triggerSystem: cfg.triggerSystem,

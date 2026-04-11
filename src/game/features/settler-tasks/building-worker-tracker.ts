@@ -180,12 +180,18 @@ export class BuildingWorkerTracker {
         }
     }
 
-    /** Assign a worker that was spawned already inside its building (hidden, no movement needed). */
+    /**
+     * Assign a worker that was spawned already inside its building (hidden, no movement needed).
+     * On restore, the locationStore PersistentMap may already have the Inside entry —
+     * skip enterBuilding in that case to avoid a duplicate-entry throw.
+     */
     assignWorkerInside(settlerId: number, buildingId: number): void {
         const runtime = this.getOrCreateRuntime(settlerId);
         this.claim(settlerId, runtime, buildingId);
         runtime.homeAssignment!.hasVisited = true;
-        this.locationManager.enterBuilding(settlerId, buildingId);
+        if (!this.locationManager.isInside(settlerId, buildingId)) {
+            this.locationManager.enterBuilding(settlerId, buildingId);
+        }
     }
 
     /**

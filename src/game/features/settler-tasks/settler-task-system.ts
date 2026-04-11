@@ -81,7 +81,7 @@ export class SettlerTaskSystem implements TickSystem, TaskDispatcher, WorkerStat
 
         this.workerTracker = new BuildingWorkerTracker(
             this.runtimes,
-            id => this.getRuntime(id),
+            id => this.getOrCreateRuntime(id),
             this.locationManager,
             this.gameState,
             this.eventBus,
@@ -130,7 +130,6 @@ export class SettlerTaskSystem implements TickSystem, TaskDispatcher, WorkerStat
             jobPartResolver,
             materialTransfer: config.materialTransfer,
             constructionSiteManager: config.constructionSiteManager,
-            getBarracksTrainingManager: config.getBarracksTrainingManager,
             executeCommand: config.executeCommand,
             locationManager: this.locationManager,
         });
@@ -322,7 +321,7 @@ export class SettlerTaskSystem implements TickSystem, TaskDispatcher, WorkerStat
             return false;
         }
 
-        const runtime = this.getRuntime(entityId);
+        const runtime = this.getOrCreateRuntime(entityId);
 
         const unitConfig = this.settlerConfigs.get(entity.subType as UnitType);
         if (runtime.job) {
@@ -358,7 +357,7 @@ export class SettlerTaskSystem implements TickSystem, TaskDispatcher, WorkerStat
 
     assignJob(entityId: number, job: JobState, moveTo?: Tile): boolean {
         const entity = this.gameState.getEntityOrThrow(entityId, 'unit for job assignment');
-        const runtime = this.getRuntime(entityId);
+        const runtime = this.getOrCreateRuntime(entityId);
 
         if (runtime.job) {
             const config = this.settlerConfigs.get(entity.subType as UnitType);
@@ -380,11 +379,14 @@ export class SettlerTaskSystem implements TickSystem, TaskDispatcher, WorkerStat
         runtime.job = job;
         runtime.moveTask = null;
 
+        const jobNumericId = this.gameState.allocateJobId();
+        entity.jobId = jobNumericId;
+
         if (moveTo) {
             this.animController.startWalkAnimation(entity);
         }
 
-        log.debug(`Unit ${entityId} assigned job ${job.jobId}`);
+        log.debug(`Unit ${entityId} assigned job ${job.jobId} (numeric id ${jobNumericId})`);
         return true;
     }
 
@@ -408,7 +410,7 @@ export class SettlerTaskSystem implements TickSystem, TaskDispatcher, WorkerStat
 
             const start = performance.now();
             try {
-                const runtime = this.getRuntime(entity.id);
+                const runtime = this.getOrCreateRuntime(entity.id);
                 const cat = this.stateMachine.updateUnit(entity, runtime, dt);
                 cats[cat] += performance.now() - start;
             } catch (e) {
@@ -437,7 +439,7 @@ export class SettlerTaskSystem implements TickSystem, TaskDispatcher, WorkerStat
         return this.lastSubTimings;
     }
 
-    private getRuntime(entityId: number): UnitRuntime {
+    getOrCreateRuntime(entityId: number): UnitRuntime {
         let runtime = this.runtimes.get(entityId);
         if (!runtime) {
             runtime = {

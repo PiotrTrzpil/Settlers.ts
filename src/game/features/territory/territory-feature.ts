@@ -88,7 +88,7 @@ export const TerritoryFeature: FeatureDefinition = {
                 // Deferred to next tick: recompute fires lazily inside other systems'
                 // queries, so destroying buildings mid-query causes re-entrancy bugs.
                 territoryManager.onTerritoryChanged = (changes: TerritoryChange[]) => {
-                    ctx.tickScheduler.schedule(1, () => {
+                    ctx.tickScheduler.deferNextTick(() => {
                         handleTerritoryChanges(ctx, territoryManager, changes);
                     });
                 };

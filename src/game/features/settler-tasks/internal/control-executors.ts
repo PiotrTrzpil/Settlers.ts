@@ -5,9 +5,7 @@
  * CHANGE_JOB, CHANGE_JOB_COME_TO_WORK, and military stubs.
  */
 
-import type { Entity, Tile } from '../../../entity';
-import { getUnitTypeAtLevel } from '../../../entity';
-import { ringTiles } from '../../../systems/spatial-search';
+import type { Entity } from '../../../entity';
 import { createLogger } from '@/utilities/logger';
 import { TaskResult } from '../types';
 import {
@@ -98,83 +96,6 @@ export function executeChangeJob(
 // ─────────────────────────────────────────────────────────────
 // Military executors
 // ─────────────────────────────────────────────────────────────
-
-/**
- * Convert a carrier into a trained soldier at the barracks.
- *
- * The carrier is already at the building door (walked there via GO_TO_TARGET).
- * We spawn the soldier near the carrier's position (door = footprint edge, so
- * adjacent tiles are free), then remove the carrier.
- * Cannot remove carrier first — entity must exist during executor execution.
- */
-export function executeChangeTypeAtBarracks(
-    settler: Entity,
-    _job: ChoreoJobState,
-    _node: ChoreoNode,
-    _dt: number,
-    ctx: ControlContext
-): TaskResult {
-    const training = ctx.barracksTrainingManager?.getTrainingForCarrier(settler.id);
-    if (!training) {
-        log.warn(`CHANGE_TYPE_AT_BARRACKS: no training state for carrier ${settler.id}, skipping`);
-        return TaskResult.DONE;
-    }
-
-    const { buildingId, recipe } = training;
-    const unitType = getUnitTypeAtLevel(recipe.unitType, recipe.soldierLevel);
-
-    // Find a free tile near the carrier (at the door = footprint edge).
-    // Uses the same ringTiles pattern as spawnUnitsNear for building completion.
-    let spawnPos: Tile | null = null;
-    for (let r = 1; r <= 4 && !spawnPos; r++) {
-        for (const tile of ringTiles(settler, r)) {
-            if (!ctx.gameState.getGroundEntityAt(tile)) {
-                spawnPos = tile;
-                break;
-            }
-        }
-    }
-    if (!spawnPos) {
-        log.warn(`CHANGE_TYPE_AT_BARRACKS: no free tile near door for carrier ${settler.id}`);
-        return TaskResult.DONE;
-    }
-
-    const spawnResult = ctx.executeCommand!({
-        type: 'spawn_unit',
-        unitType,
-        x: spawnPos.x,
-        y: spawnPos.y,
-        player: settler.player,
-        race: settler.race,
-    });
-    if (!spawnResult.success) {
-        log.warn(`CHANGE_TYPE_AT_BARRACKS: failed to spawn soldier for carrier ${settler.id}: ${spawnResult.error}`);
-        return TaskResult.DONE;
-    }
-
-    const soldierId = spawnResult.entityId;
-
-    // Remove the carrier after spawning. Carrier cleanup happens via entity:removed event.
-    ctx.executeCommand!({ type: 'remove_entity', entityId: settler.id });
-
-    // Notify manager to clear training state and emit completion event
-    ctx.barracksTrainingManager!.completeTraining(buildingId);
-
-    // Emit training completed event
-    ctx.eventBus.emit('barracks:trainingCompleted', {
-        buildingId,
-        unitType: recipe.unitType,
-        soldierLevel: recipe.soldierLevel,
-        unitId: soldierId,
-    });
-
-    log.debug(
-        `CHANGE_TYPE_AT_BARRACKS: carrier ${settler.id} converted to soldier ${soldierId} ` +
-            `(${unitType} L${recipe.soldierLevel}) at barracks ${buildingId}`
-    );
-
-    return TaskResult.DONE;
-}
 
 /**
  * Healer work — restore health to a target entity.

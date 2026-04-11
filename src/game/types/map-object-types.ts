@@ -388,3 +388,8 @@ export function stoneTypeForLevel(level: number): MapObjectType {
 
 /** Full stone depletion level (12). */
 export const STONE_FULL_LEVEL = 12;
+
+/** Check if a MapObjectType is a dark tribe tree (raw 23-31). */
+export function isDarkTree(type: MapObjectType): boolean {
+    return type >= MapObjectType.DarkTree1A && type <= MapObjectType.DarkTree5A;
+}

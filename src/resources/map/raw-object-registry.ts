@@ -27,6 +27,8 @@ export interface RawObjectEntry {
     type?: MapObjectType;
     /** Optional initial variation (e.g., stone depletion level 1-12). */
     variation?: number;
+    /** Blocks movement on the object's tile. For typed objects this comes from objectInfo.xml instead. */
+    blocking?: boolean;
 }
 
 // ============================================================
@@ -99,27 +101,27 @@ export const RAW_OBJECT_REGISTRY: readonly RawObjectEntry[] = [
     { raw: 55, label: 'Shore55', category: MapObjectCategory.Sea, notes: 'Near sea / on sea near shore, rare — possibly map data bug' },
 
     // ---- Mountain / stone: raw 56-75 ----
-    { raw: 56, label: 'MountainEdge56', category: MapObjectCategory.Stone, notes: 'Near mountain edge' },
-    { raw: 57, label: 'Mountain57', category: MapObjectCategory.Stone, notes: 'On mountain' },
-    { raw: 58, label: 'Mountain58', category: MapObjectCategory.Stone, notes: 'On mountain (inferred from 57)' },
+    { raw: 56, label: 'MountainEdge56', category: MapObjectCategory.Stone, notes: 'Near mountain edge', blocking: true },
+    { raw: 57, label: 'Mountain57', category: MapObjectCategory.Stone, notes: 'On mountain', blocking: true },
+    { raw: 58, label: 'Mountain58', category: MapObjectCategory.Stone, notes: 'On mountain (inferred from 57)', blocking: true },
     // 59-75: Mountain edge decorations — rocks/rubble near mountain-grass transitions
-    { raw: 59, label: 'MountainEdge59', category: MapObjectCategory.Stone, notes: 'Near mountain edges, mostly on mountain but some on grass' },
-    { raw: 60, label: 'MountainEdge60', category: MapObjectCategory.Stone, notes: 'Near mountain edges' },
-    { raw: 61, label: 'MountainEdge61', category: MapObjectCategory.Stone, notes: 'Near mountain edges' },
-    { raw: 62, label: 'MountainEdge62', category: MapObjectCategory.Stone, notes: 'Near mountain edges' },
-    { raw: 63, label: 'MountainEdge63', category: MapObjectCategory.Stone, notes: 'Near mountain edges' },
-    { raw: 64, label: 'MountainEdge64', category: MapObjectCategory.Stone, notes: 'Near mountain edges' },
-    { raw: 65, label: 'MountainEdge65', category: MapObjectCategory.Stone, notes: 'Near mountain edges' },
-    { raw: 66, label: 'MountainEdge66', category: MapObjectCategory.Stone, notes: 'Near mountain edges' },
-    { raw: 67, label: 'MountainEdge67', category: MapObjectCategory.Stone, notes: 'Near mountain edges' },
-    { raw: 68, label: 'MountainEdge68', category: MapObjectCategory.Stone, notes: 'Near mountain edges' },
-    { raw: 69, label: 'MountainEdge69', category: MapObjectCategory.Stone, notes: 'Near mountain edges' },
-    { raw: 70, label: 'MountainEdge70', category: MapObjectCategory.Stone, notes: 'Near mountain edges' },
-    { raw: 71, label: 'MountainEdge71', category: MapObjectCategory.Stone, notes: 'Near mountain edges' },
-    { raw: 72, label: 'MountainEdge72', category: MapObjectCategory.Stone, notes: 'Near mountain edges' },
-    { raw: 73, label: 'MountainEdge73', category: MapObjectCategory.Stone, notes: 'Near mountain edges' },
-    { raw: 74, label: 'MountainEdge74', category: MapObjectCategory.Stone, notes: 'Near mountain edges' },
-    { raw: 75, label: 'MountainEdge75', category: MapObjectCategory.Stone, notes: 'Near mountain edges' },
+    { raw: 59, label: 'MountainEdge59', category: MapObjectCategory.Stone, notes: 'Near mountain edges, mostly on mountain but some on grass', blocking: true },
+    { raw: 60, label: 'MountainEdge60', category: MapObjectCategory.Stone, notes: 'Near mountain edges', blocking: true },
+    { raw: 61, label: 'MountainEdge61', category: MapObjectCategory.Stone, notes: 'Near mountain edges', blocking: true },
+    { raw: 62, label: 'MountainEdge62', category: MapObjectCategory.Stone, notes: 'Near mountain edges', blocking: true },
+    { raw: 63, label: 'MountainEdge63', category: MapObjectCategory.Stone, notes: 'Near mountain edges', blocking: true },
+    { raw: 64, label: 'MountainEdge64', category: MapObjectCategory.Stone, notes: 'Near mountain edges', blocking: true },
+    { raw: 65, label: 'MountainEdge65', category: MapObjectCategory.Stone, notes: 'Near mountain edges', blocking: true },
+    { raw: 66, label: 'MountainEdge66', category: MapObjectCategory.Stone, notes: 'Near mountain edges', blocking: true },
+    { raw: 67, label: 'MountainEdge67', category: MapObjectCategory.Stone, notes: 'Near mountain edges', blocking: true },
+    { raw: 68, label: 'MountainEdge68', category: MapObjectCategory.Stone, notes: 'Near mountain edges', blocking: true },
+    { raw: 69, label: 'MountainEdge69', category: MapObjectCategory.Stone, notes: 'Near mountain edges', blocking: true },
+    { raw: 70, label: 'MountainEdge70', category: MapObjectCategory.Stone, notes: 'Near mountain edges', blocking: true },
+    { raw: 71, label: 'MountainEdge71', category: MapObjectCategory.Stone, notes: 'Near mountain edges', blocking: true },
+    { raw: 72, label: 'MountainEdge72', category: MapObjectCategory.Stone, notes: 'Near mountain edges', blocking: true },
+    { raw: 73, label: 'MountainEdge73', category: MapObjectCategory.Stone, notes: 'Near mountain edges', blocking: true },
+    { raw: 74, label: 'MountainEdge74', category: MapObjectCategory.Stone, notes: 'Near mountain edges', blocking: true },
+    { raw: 75, label: 'MountainEdge75', category: MapObjectCategory.Stone, notes: 'Near mountain edges', blocking: true },
 
     // ---- Grass / river: raw 76-85 ----
     // 76 is extremely common (201k) — could be Grass7 or a generic ground fill
@@ -190,21 +192,21 @@ export const RAW_OBJECT_REGISTRY: readonly RawObjectEntry[] = [
     // ---- Harvestable stone: raw 124-135 ----
     // 12 depletion levels: 124 = nearly depleted, 135 = full.
     // Each raw byte is its own MapObjectType (ResourceStone1-12). No type/variation conversion.
-    { raw: 124, label: 'ResourceStone1', category: MapObjectCategory.HarvestableStone, notes: 'Level 1 of 12 (nearly depleted)' },
-    { raw: 125, label: 'ResourceStone2', category: MapObjectCategory.HarvestableStone, notes: 'Level 2 of 12' },
-    { raw: 126, label: 'ResourceStone3', category: MapObjectCategory.HarvestableStone, notes: 'Level 3 of 12' },
-    { raw: 127, label: 'ResourceStone4', category: MapObjectCategory.HarvestableStone, notes: 'Level 4 of 12' },
-    { raw: 128, label: 'ResourceStone5', category: MapObjectCategory.HarvestableStone, notes: 'Level 5 of 12' },
-    { raw: 129, label: 'ResourceStone6', category: MapObjectCategory.HarvestableStone, notes: 'Level 6 of 12' },
-    { raw: 130, label: 'ResourceStone7', category: MapObjectCategory.HarvestableStone, notes: 'Level 7 of 12' },
-    { raw: 131, label: 'ResourceStone8', category: MapObjectCategory.HarvestableStone, notes: 'Level 8 of 12' },
-    { raw: 132, label: 'ResourceStone9', category: MapObjectCategory.HarvestableStone, notes: 'Level 9 of 12' },
-    { raw: 133, label: 'ResourceStone10', category: MapObjectCategory.HarvestableStone, notes: 'Level 10 of 12' },
-    { raw: 134, label: 'ResourceStone11', category: MapObjectCategory.HarvestableStone, notes: 'Level 11 of 12' },
-    { raw: 135, label: 'ResourceStone12', category: MapObjectCategory.HarvestableStone, notes: 'Level 12 of 12 (full)' },
+    { raw: 124, label: 'ResourceStone1', category: MapObjectCategory.HarvestableStone, notes: 'Level 1 of 12 (nearly depleted)', type: MapObjectType.ResourceStone1 },
+    { raw: 125, label: 'ResourceStone2', category: MapObjectCategory.HarvestableStone, notes: 'Level 2 of 12', type: MapObjectType.ResourceStone2 },
+    { raw: 126, label: 'ResourceStone3', category: MapObjectCategory.HarvestableStone, notes: 'Level 3 of 12', type: MapObjectType.ResourceStone3 },
+    { raw: 127, label: 'ResourceStone4', category: MapObjectCategory.HarvestableStone, notes: 'Level 4 of 12', type: MapObjectType.ResourceStone4 },
+    { raw: 128, label: 'ResourceStone5', category: MapObjectCategory.HarvestableStone, notes: 'Level 5 of 12', type: MapObjectType.ResourceStone5 },
+    { raw: 129, label: 'ResourceStone6', category: MapObjectCategory.HarvestableStone, notes: 'Level 6 of 12', type: MapObjectType.ResourceStone6 },
+    { raw: 130, label: 'ResourceStone7', category: MapObjectCategory.HarvestableStone, notes: 'Level 7 of 12', type: MapObjectType.ResourceStone7 },
+    { raw: 131, label: 'ResourceStone8', category: MapObjectCategory.HarvestableStone, notes: 'Level 8 of 12', type: MapObjectType.ResourceStone8 },
+    { raw: 132, label: 'ResourceStone9', category: MapObjectCategory.HarvestableStone, notes: 'Level 9 of 12', type: MapObjectType.ResourceStone9 },
+    { raw: 133, label: 'ResourceStone10', category: MapObjectCategory.HarvestableStone, notes: 'Level 10 of 12', type: MapObjectType.ResourceStone10 },
+    { raw: 134, label: 'ResourceStone11', category: MapObjectCategory.HarvestableStone, notes: 'Level 11 of 12', type: MapObjectType.ResourceStone11 },
+    { raw: 135, label: 'ResourceStone12', category: MapObjectCategory.HarvestableStone, notes: 'Level 12 of 12 (full)', type: MapObjectType.ResourceStone12 },
 
     // ---- Stone / rare grass: raw 136-159 ----
-    { raw: 136, label: 'StoneEdge136', category: MapObjectCategory.Stone, notes: 'Near harvestable stones (22k)' },
+    { raw: 136, label: 'StoneEdge136', category: MapObjectCategory.Stone, notes: 'Near harvestable stones (22k)', blocking: true },
 
     // ---- Desert transition: raw 137-148 (373-map scan: 40-70% desert, grass/desert edges) ----
     { raw: 137, label: 'DarkPlant137', category: MapObjectCategory.DarkGround, notes: 'dark-land:98%, 72 across 18 maps; was Desert' },
@@ -262,12 +264,12 @@ export const RAW_OBJECT_REGISTRY: readonly RawObjectEntry[] = [
     { raw: 177, label: 'Beach177', category: MapObjectCategory.Beach, notes: 'On beach/shore (37k)' },
 
     // ---- Mountain edge / desert / grass / river: raw 178-188 ----
-    { raw: 178, label: 'MountainEdge178', category: MapObjectCategory.Stone, notes: 'Near mountain edge (14k)' },
+    { raw: 178, label: 'MountainEdge178', category: MapObjectCategory.Stone, notes: 'Near mountain edge (14k)', blocking: true },
     { raw: 179, label: 'Desert179', category: MapObjectCategory.Desert, notes: 'On desert' },
     { raw: 180, label: 'Desert180', category: MapObjectCategory.Desert, notes: 'On desert' },
     { raw: 181, label: 'Grass181', category: MapObjectCategory.Plants, notes: 'On grass' },
-    { raw: 182, label: 'MountainEdge182', category: MapObjectCategory.Stone, notes: 'On some mountain edges' },
-    { raw: 183, label: 'MountainEdge183', category: MapObjectCategory.Stone, notes: 'On mountain edges, similar to 182' },
+    { raw: 182, label: 'MountainEdge182', category: MapObjectCategory.Stone, notes: 'On some mountain edges', blocking: true },
+    { raw: 183, label: 'MountainEdge183', category: MapObjectCategory.Stone, notes: 'On mountain edges, similar to 182', blocking: true },
     { raw: 184, label: 'River184', category: MapObjectCategory.River, notes: 'Mostly near rivers' },
     { raw: 185, label: 'River185', category: MapObjectCategory.River, notes: 'Mostly near rivers' },
     { raw: 186, label: 'Grass186', category: MapObjectCategory.Plants, notes: 'On grass' },
@@ -315,7 +317,7 @@ export const RAW_OBJECT_REGISTRY: readonly RawObjectEntry[] = [
     // ---- Grass/landscape decorations: raw 230-244 (373-map scan) ----
     { raw: 230, label: 'Plant230', category: MapObjectCategory.Plants, notes: '373-map: 4732 across 48 maps, Grass:93%, Rock:7% — very common' },
     { raw: 231, label: 'Plant231', category: MapObjectCategory.Plants, notes: '373-map: 541 across 103 maps, Grass:89%, DarkGrass:6%' },
-    { raw: 232, label: 'StoneEdge232', category: MapObjectCategory.Stone, notes: '373-map: 298 across 16 maps, Grass:57%, Rock:42% — rock-edge decoration' },
+    { raw: 232, label: 'StoneEdge232', category: MapObjectCategory.Stone, notes: '373-map: 298 across 16 maps, Grass:57%, Rock:42% — rock-edge decoration', blocking: true },
     { raw: 233, label: 'DarkPlant233', category: MapObjectCategory.DarkGround, notes: 'dark-land:98%, 238 across 39 maps; was Plants' },
     { raw: 234, label: 'DarkPlant234', category: MapObjectCategory.DarkGround, notes: 'dark-land:99%, 148 across 26 maps; was Plants' },
     { raw: 235, label: 'DarkPlant235', category: MapObjectCategory.DarkGround, notes: 'dark-land:99%, 145 across 30 maps; was Plants' },

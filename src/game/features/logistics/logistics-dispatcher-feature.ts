@@ -28,8 +28,7 @@ export const LogisticsDispatcherFeature: FeatureDefinition = {
     dependencies: ['carriers', 'settler-tasks', 'logistics', 'inventory', 'building-construction', 'material-transfer'],
 
     create(ctx: FeatureContext) {
-        const { carrierRegistry, idleCarrierPool, setIsTransportBusy } =
-            ctx.getFeature<CarrierFeatureExports>('carriers');
+        const { carrierRegistry, idleCarrierPool } = ctx.getFeature<CarrierFeatureExports>('carriers');
         const settlerTaskExports = ctx.getFeature<SettlerTaskExports>('settler-tasks');
         const { settlerTaskSystem, choreoSystem } = settlerTaskExports;
         const taskDispatcher = settlerTaskSystem as unknown as TaskDispatcher;
@@ -72,19 +71,16 @@ export const LogisticsDispatcherFeature: FeatureDefinition = {
         });
         logisticsDispatcher.registerEvents(ctx.eventBus, ctx.cleanupRegistry);
 
-        // Wire the transport busy check into the idle carrier pool (late binding)
-        setIsTransportBusy((carrierId: number) => logisticsDispatcher.jobStore.jobs.has(carrierId));
-
         return {
             systems: [logisticsDispatcher],
             systemGroup: 'Logistics',
-            persistence: [jobStore.jobs, jobStore.nextJobIdStore],
+            persistence: [],
             exports: { logisticsDispatcher } satisfies LogisticsDispatcherExports,
             onRestoreComplete() {
-                // Carrier choreo tasks are transient — after keyframe restore, jobs in
-                // Reserved phase have carriers that will never start pickup. Cancel them
-                // so demands re-enter the queue and get re-matched on the next tick.
-                logisticsDispatcher.cancelReservedJobs();
+                // Transport jobs are transient — not persisted. Reconstruct from entity state:
+                // - Carriers with entity.carrying → rebuild delivery-only choreo from slot reservation
+                // - Carriers with jobId but no carrying → clear jobId, release reservation
+                logisticsDispatcher.rebuildFromEntities();
             },
         };
     },

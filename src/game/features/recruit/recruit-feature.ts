@@ -11,7 +11,11 @@ import { ChoreoTaskType } from '../../systems/choreo';
 import { RecruitSystem } from '../../systems/recruit/recruit-system';
 import { UnitTransformer } from '../../systems/recruit/unit-transformer';
 import { ToolSourceResolver } from '../../systems/recruit/tool-source-resolver';
-import { createTransformRecruitExecutor, createTransformDirectExecutor } from './recruit-choreo-executors';
+import {
+    createTransformRecruitExecutor,
+    createTransformRecruitBuildingExecutor,
+    createTransformDirectExecutor,
+} from './recruit-choreo-executors';
 
 export interface RecruitExports {
     recruitSystem: RecruitSystem;
@@ -52,6 +56,10 @@ export const RecruitFeature: FeatureDefinition = {
         choreoSystem.register(
             ChoreoTaskType.TRANSFORM_RECRUIT,
             createTransformRecruitExecutor(ctx.gameState, ctx.eventBus, inventoryManager)
+        );
+        choreoSystem.register(
+            ChoreoTaskType.TRANSFORM_RECRUIT_BUILDING,
+            createTransformRecruitBuildingExecutor(ctx.eventBus, toolSourceResolver)
         );
         choreoSystem.register(ChoreoTaskType.TRANSFORM_DIRECT, createTransformDirectExecutor(ctx.eventBus));
 

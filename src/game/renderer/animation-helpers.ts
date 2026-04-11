@@ -100,9 +100,12 @@ export function resolveAnimationFrame(
         return null;
     }
 
-    const frameIndex = shouldLoop
+    let frameIndex = shouldLoop
         ? playback.currentFrame % sequence.frames.length
         : Math.min(playback.currentFrame, sequence.frames.length - 1);
+    if (playback.reverse) {
+        frameIndex = sequence.frames.length - 1 - frameIndex;
+    }
     return sequence.frames[frameIndex]!;
 }
 
@@ -151,9 +154,12 @@ export function getAnimatedSprite(
         return null;
     }
 
-    const frameIndex = shouldLoop
+    let frameIndex = shouldLoop
         ? playback.currentFrame % sequence.frames.length
         : Math.min(playback.currentFrame, sequence.frames.length - 1);
+    if (playback.reverse) {
+        frameIndex = sequence.frames.length - 1 - frameIndex;
+    }
     return sequence.frames[frameIndex] ?? fallbackSprite;
 }
 
@@ -205,8 +211,11 @@ export function getAnimatedSpriteForDirection(
     }
 
     // Use modulo for looping animations (allows unbounded frame counter)
-    const frameIndex = shouldLoop
+    let frameIndex = shouldLoop
         ? playback.currentFrame % sequence.frames.length
         : Math.min(playback.currentFrame, sequence.frames.length - 1);
+    if (playback.reverse) {
+        frameIndex = sequence.frames.length - 1 - frameIndex;
+    }
     return sequence.frames[frameIndex]!;
 }

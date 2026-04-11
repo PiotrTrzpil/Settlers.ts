@@ -90,6 +90,10 @@ export interface GameEventsFeatures {
         player: number;
         /** Initial visual variation (sprite offset from map data). 0 for most entities. */
         variation: number;
+        /** True if entity starts hidden (e.g. garrisoned unit restored from save). */
+        hidden: boolean;
+        /** True if entity was planted by a worker (forester/farmer). Starts in growing stage. */
+        planted: boolean;
     };
 
     /**

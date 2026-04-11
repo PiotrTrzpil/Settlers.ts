@@ -96,8 +96,10 @@ function resolveInterleavedOverlays(
         emitTowerFrontwall(tower, overlayMap, usedOverlayKeys, er, out);
     }
 
-    // Append remaining overlays not in the spec (flag, door, etc.)
-    emitRemainingOverlays(entityId, usedOverlayKeys, g, er, out);
+    // Castle has explicit direction overrides — only emit flags, all other overlays are in the spec.
+    // Other garrison buildings (guard towers) still need remaining overlays drawn normally.
+    const flagsOnly = buildingType === BuildingType.Castle;
+    emitRemainingOverlays(entityId, usedOverlayKeys, flagsOnly, g, er, out);
 }
 
 function emitTowerSlot(
@@ -255,13 +257,14 @@ function emitCustomOverlayInstance(
     out: BuildingOverlayRenderData[]
 ): void {
     const spriteRef = inst.def.spriteRef;
-    // eslint-disable-next-line no-restricted-syntax -- directionIndex is an optional sprite property; 0 is the correct default direction
-    const dirIdx = spriteRef.directionIndex ?? 0;
-    const frames = er.spriteManager!.registry.getOverlayFrames(spriteRef.gfxFile, spriteRef.jobIndex, dirIdx);
+    const frames = er.spriteManager?.registry.getOverlayFrames(
+        spriteRef.gfxFile,
+        spriteRef.jobIndex,
+        // eslint-disable-next-line no-restricted-syntax -- directionIndex is an optional sprite property; 0 is the correct default direction
+        spriteRef.directionIndex ?? 0
+    );
     if (!frames || frames.length === 0) {
-        throw new Error(
-            `Overlay "${inst.def.key}" has no sprite frames (gfx=${spriteRef.gfxFile} job=${spriteRef.jobIndex} dir=${dirIdx})`
-        );
+        return;
     }
 
     const frameIndex = getOverlayFrame(inst);
@@ -278,10 +281,15 @@ function emitCustomOverlayInstance(
     });
 }
 
-/** Emit overlays whose keys were NOT consumed by the render spec (e.g. flags). */
+/**
+ * Emit overlays not consumed by the render spec.
+ * When `flagsOnly` is true (building has direction overrides), only flags are emitted —
+ * all other overlays must be explicitly placed in the tower spec.
+ */
 function emitRemainingOverlays(
     entityId: number,
     usedKeys: Set<string>,
+    flagsOnly: boolean,
     g: Game,
     er: EntityRenderer,
     out: BuildingOverlayRenderData[]
@@ -307,7 +315,7 @@ function emitRemainingOverlays(
             );
             continue;
         }
-        if (!usedKeys.has(inst.def.key)) {
+        if (!flagsOnly && !usedKeys.has(inst.def.key)) {
             emitCustomOverlayInstance(inst, er, out);
         }
     }
@@ -395,6 +403,7 @@ function pushGarrisonOverlay(
         layer: OverlayRenderLayer.AboveBuilding,
         teamColored: true,
         verticalProgress: 1.0,
+        isGarrisonUnit: true,
     });
 }
 
@@ -438,7 +447,7 @@ function resolveFlagInstance(
     er: EntityRenderer,
     out: BuildingOverlayRenderData[]
 ): void {
-    if (!er.spriteManager) {
+    if (!er.spriteManager?.hasSprites) {
         return;
     }
     const entity = g.state.getEntity(entityId);

@@ -12,8 +12,9 @@ import { BuildingDemandSystem } from './building-demand-system';
 import type { SettlerLocationExports } from '../settler-location';
 import { ChoreoTaskType } from '@/game/systems/choreo';
 import { createEnterBuildingExecutor } from '../settler-tasks';
-import { EntityType, BuildingType } from '../../entity';
+import { BuildingType } from '../../entity';
 import { BUILDING_SPAWN_ON_COMPLETE } from '../building-construction/spawn-units';
+import { forEachCompletedBuilding } from '../restore-utils';
 
 export interface BuildingDemandExports {
     buildingDemandSystem: BuildingDemandSystem;
@@ -53,20 +54,12 @@ export const BuildingDemandFeature: FeatureDefinition = {
             } satisfies BuildingDemandExports,
             persistence: 'none',
             onRestoreComplete() {
-                for (const e of ctx.gameState.entities) {
-                    if (e.type !== EntityType.Building) {
-                        continue;
+                forEachCompletedBuilding(ctx.gameState, constructionSiteManager, e => {
+                    const bt = e.subType as BuildingType;
+                    if (!BUILDING_SPAWN_ON_COMPLETE[bt]) {
+                        buildingDemandSystem.addDemandFromBuilding(e.id, bt, e.race);
                     }
-                    if (constructionSiteManager.hasSite(e.id)) {
-                        continue;
-                    }
-                    // Buildings that auto-spawn units on completion (residences)
-                    // already have their workers — skip them.
-                    if (BUILDING_SPAWN_ON_COMPLETE[e.subType as BuildingType]) {
-                        continue;
-                    }
-                    buildingDemandSystem.addDemandFromBuilding(e.id, e.subType as BuildingType, e.race);
-                }
+                });
             },
             destroy: () => {
                 buildingDemandSystem.unregisterEvents();

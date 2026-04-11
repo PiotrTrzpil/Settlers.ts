@@ -22,12 +22,13 @@ import { createLogger } from '@/utilities/logger';
 import { SettlerBuildingStatus, type ISettlerBuildingLocationManager, type SettlerBuildingLocation } from './types';
 import { getBuildingDoorPos } from '@/game/data/game-data-access';
 import { BuildingType } from '@/game/buildings/building-type';
+import { PersistentMap } from '@/game/persistence/persistent-store';
 
 const log = createLogger('SettlerBuildingLocationManager');
 
 export class SettlerBuildingLocationManager implements ISettlerBuildingLocationManager {
     /** Maps settlerId → { buildingId, status } for both approaching and inside states. */
-    private readonly locationMap = new Map<number, SettlerBuildingLocation>();
+    readonly locationStore = new PersistentMap<SettlerBuildingLocation>('settlerBuildingLocations');
 
     private readonly ctx: FeatureContext;
 
@@ -48,15 +49,15 @@ export class SettlerBuildingLocationManager implements ISettlerBuildingLocationM
      * Settler remains visible. Throws if settler is already tracked.
      */
     markApproaching(settlerId: number, buildingId: number): void {
-        if (this.locationMap.has(settlerId)) {
+        if (this.locationStore.has(settlerId)) {
             // OK: has() check above guarantees entry exists
-            const existing = this.locationMap.get(settlerId)!;
+            const existing = this.locationStore.get(settlerId)!;
             throw new Error(
                 `SettlerBuildingLocationManager.markApproaching: settler ${settlerId} is already tracked ` +
                     `(buildingId=${existing.buildingId}, status=${existing.status})`
             );
         }
-        this.locationMap.set(settlerId, { buildingId, status: SettlerBuildingStatus.Approaching });
+        this.locationStore.set(settlerId, { buildingId, status: SettlerBuildingStatus.Approaching });
         log.debug(`Settler ${settlerId} marked approaching building ${buildingId}`);
     }
 
@@ -66,7 +67,7 @@ export class SettlerBuildingLocationManager implements ISettlerBuildingLocationM
      * Throws if settler is Inside (cannot cancel Inside; must call exitBuilding).
      */
     cancelApproach(settlerId: number): void {
-        const location = this.locationMap.get(settlerId);
+        const location = this.locationStore.get(settlerId);
         if (!location) {
             return;
         } // no-op — idempotent
@@ -76,7 +77,7 @@ export class SettlerBuildingLocationManager implements ISettlerBuildingLocationM
                     `${location.buildingId} — call exitBuilding() instead`
             );
         }
-        this.locationMap.delete(settlerId);
+        this.locationStore.delete(settlerId);
         log.debug(`Settler ${settlerId} approach to building ${location.buildingId} cancelled`);
     }
 
@@ -87,7 +88,7 @@ export class SettlerBuildingLocationManager implements ISettlerBuildingLocationM
      * Throws if settler is already Inside, or if Approaching a different building.
      */
     enterBuilding(settlerId: number, buildingId: number): void {
-        const existing = this.locationMap.get(settlerId);
+        const existing = this.locationStore.get(settlerId);
         if (existing) {
             if (existing.status === SettlerBuildingStatus.Inside) {
                 throw new Error(
@@ -103,12 +104,12 @@ export class SettlerBuildingLocationManager implements ISettlerBuildingLocationM
                     `Settler ${settlerId} was Approaching building ${existing.buildingId} ` +
                         `but entering ${buildingId} — cancelling stale approach`
                 );
-                this.locationMap.delete(settlerId);
+                this.locationStore.delete(settlerId);
             }
             // Transition Approaching → Inside
         }
 
-        this.locationMap.set(settlerId, { buildingId, status: SettlerBuildingStatus.Inside });
+        this.locationStore.set(settlerId, { buildingId, status: SettlerBuildingStatus.Inside });
 
         const entity = this.ctx.gameState.getEntityOrThrow(settlerId, 'SettlerBuildingLocationManager.enterBuilding');
         entity.hidden = true;
@@ -132,7 +133,7 @@ export class SettlerBuildingLocationManager implements ISettlerBuildingLocationM
      * Throws if settler is not tracked as Inside.
      */
     exitBuilding(settlerId: number): void {
-        const location = this.locationMap.get(settlerId);
+        const location = this.locationStore.get(settlerId);
         if (!location || location.status !== SettlerBuildingStatus.Inside) {
             throw new Error(
                 `SettlerBuildingLocationManager.exitBuilding: settler ${settlerId} is not Inside any building ` +
@@ -142,11 +143,15 @@ export class SettlerBuildingLocationManager implements ISettlerBuildingLocationM
         }
 
         const buildingId = location.buildingId;
-        this.locationMap.delete(settlerId);
+        this.locationStore.delete(settlerId);
 
         const building = this.ctx.gameState.getEntityOrThrow(buildingId, 'SettlerBuildingLocationManager.exitBuilding');
         const entity = this.ctx.gameState.getEntityOrThrow(settlerId, 'SettlerBuildingLocationManager.exitBuilding');
         const door = getBuildingDoorPos(building, building.race, building.subType as BuildingType);
+
+        // Push any unit blocking the door before placing the exiting settler
+        this.ctx.gameState.movement.pushUnitAt(door);
+
         entity.x = door.x;
         entity.y = door.y;
         entity.hidden = false;
@@ -163,12 +168,12 @@ export class SettlerBuildingLocationManager implements ISettlerBuildingLocationM
 
     /** Returns current location (approaching or inside), or null if settler is not tracked. */
     getLocation(settlerId: number): SettlerBuildingLocation | undefined {
-        return this.locationMap.get(settlerId);
+        return this.locationStore.get(settlerId);
     }
 
     /** Returns true if settler is confirmed inside a building (hidden). If buildingId is given, also checks it matches. */
     isInside(settlerId: number, buildingId?: number): boolean {
-        const location = this.locationMap.get(settlerId);
+        const location = this.locationStore.get(settlerId);
         if (location?.status !== SettlerBuildingStatus.Inside) {
             return false;
         }
@@ -177,13 +182,13 @@ export class SettlerBuildingLocationManager implements ISettlerBuildingLocationM
 
     /** Returns true if settler is tracked (approaching or inside). */
     isCommitted(settlerId: number): boolean {
-        return this.locationMap.has(settlerId);
+        return this.locationStore.has(settlerId);
     }
 
     /** Returns all settler IDs currently inside the given building. */
     getOccupants(buildingId: number): readonly number[] {
         const result: number[] = [];
-        for (const [settlerId, location] of this.locationMap) {
+        for (const [settlerId, location] of this.locationStore) {
             if (location.buildingId === buildingId && location.status === SettlerBuildingStatus.Inside) {
                 result.push(settlerId);
             }
@@ -194,7 +199,7 @@ export class SettlerBuildingLocationManager implements ISettlerBuildingLocationM
     /** Returns all settler IDs approaching the given building. */
     getApproaching(buildingId: number): readonly number[] {
         const result: number[] = [];
-        for (const [settlerId, location] of this.locationMap) {
+        for (const [settlerId, location] of this.locationStore) {
             if (location.buildingId === buildingId && location.status === SettlerBuildingStatus.Approaching) {
                 result.push(settlerId);
             }
@@ -210,7 +215,7 @@ export class SettlerBuildingLocationManager implements ISettlerBuildingLocationM
         const insideSettlers: number[] = [];
         const approachingSettlers: number[] = [];
 
-        for (const [settlerId, location] of this.locationMap) {
+        for (const [settlerId, location] of this.locationStore) {
             if (location.buildingId !== buildingId) {
                 continue;
             }
@@ -224,7 +229,7 @@ export class SettlerBuildingLocationManager implements ISettlerBuildingLocationM
         // Unhide Inside settlers first, before emitting approachInterrupted,
         // so subscribers see a consistent state.
         for (const settlerId of insideSettlers) {
-            this.locationMap.delete(settlerId);
+            this.locationStore.delete(settlerId);
             const entity = this.ctx.gameState.getEntity(settlerId);
             if (entity) {
                 entity.hidden = false;
@@ -240,7 +245,7 @@ export class SettlerBuildingLocationManager implements ISettlerBuildingLocationM
 
         // Emit approachInterrupted for approaching settlers
         for (const settlerId of approachingSettlers) {
-            this.locationMap.delete(settlerId);
+            this.locationStore.delete(settlerId);
             this.ctx.eventBus.emit('settler-location:approachInterrupted', { unitId: settlerId, buildingId });
             log.debug(`Settler ${settlerId} approach interrupted — building ${buildingId} removed`);
         }
@@ -248,7 +253,7 @@ export class SettlerBuildingLocationManager implements ISettlerBuildingLocationM
 
     private onEntityRemoved(entityId: number): void {
         // Entity is being removed — no unhide needed, just clean up map entry
-        if (this.locationMap.delete(entityId)) {
+        if (this.locationStore.delete(entityId)) {
             log.debug(`Settler ${entityId} removed from location map (entity removed)`);
         }
     }

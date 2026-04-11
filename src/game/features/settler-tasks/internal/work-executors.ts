@@ -12,8 +12,8 @@
 import { createLogger } from '@/utilities/logger';
 import { TaskResult } from '../types';
 import { framesToSeconds, tickDuration, type ChoreoJobState, type ChoreoNode, type WorkContext } from '../choreo-types';
-import type { Entity } from '../../../entity';
-import type { EDirection } from '../../../systems/hex-directions';
+import { EntityType, type Entity } from '../../../entity';
+import { getDirectionToward, type EDirection } from '../../../systems/hex-directions';
 import type { EntityWorkHandler } from '../types';
 import { safeCall } from '../safe-call';
 
@@ -42,7 +42,22 @@ function resolveDurationSeconds(node: ChoreoNode): number {
 
 /** Apply direction constraint on first tick (progress === 0). No-op when dir === -1. */
 function applyDirectionConstraint(settler: Entity, node: ChoreoNode, job: ChoreoJobState, ctx: WorkContext): void {
-    if (node.dir !== -1 && job.progress === 0) {
+    if (job.progress !== 0) {
+        return;
+    }
+
+    // When the target is a map object (stone, tree), face toward it dynamically
+    // rather than using the static node.dir (which assumes a fixed approach position).
+    if (job.targetId !== null) {
+        const target = ctx.gameState.getEntity(job.targetId);
+        if (target && target.type === EntityType.MapObject) {
+            const controller = ctx.gameState.movement.getController(settler.id);
+            controller?.setDirection(getDirectionToward(settler.x, settler.y, target.x, target.y));
+            return;
+        }
+    }
+
+    if (node.dir !== -1) {
         const controller = ctx.gameState.movement.getController(settler.id);
         controller?.setDirection(node.dir as EDirection);
     }

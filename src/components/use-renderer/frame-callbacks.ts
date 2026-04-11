@@ -44,6 +44,7 @@ function applyEntityData(b: RenderContextBuilder, g: Game): void {
     b.entities(g.state.entities)
         .unitStates(g.state.unitStates)
         .pileStates(g.services.inventoryManager.pileStates)
+        .occupancy(g.state.groundOccupancy, g.state.unitOccupancy, g.state.buildingOccupancy)
         .selection({
             primaryId: g.state.selection.selectedEntityId,
             ids: g.state.selection.selectedEntityIds,
@@ -110,6 +111,7 @@ function applyRenderEnvironment(
         .settings({
             showBuildingFootprint: ctx.layerVisibility.showBuildingFootprint,
             showUnitPositions: ctx.layerVisibility.showUnitPositions,
+            showTileOccupancy: ctx.layerVisibility.showTileOccupancy,
             disablePlayerTinting: g.settings.state.disablePlayerTinting,
             antialias: g.settings.state.antialias,
         })

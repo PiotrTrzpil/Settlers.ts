@@ -54,19 +54,20 @@ export enum ChoreoTaskType {
     CHANGE_JOB_COME_TO_WORK,
 
     // Military
-    CHANGE_TYPE_AT_BARRACKS,
     HEAL_ENTITY,
     ATTACK_REACTION,
 
     // Recruit
     TRANSFORM_RECRUIT,
     TRANSFORM_DIRECT = 'TRANSFORM_DIRECT',
+    TRANSFORM_RECRUIT_BUILDING = 'TRANSFORM_RECRUIT_BUILDING',
 
     // Carrier transport (built dynamically via ChoreoBuilder, not parsed from XML)
     TRANSPORT_GO_TO_SOURCE = 'TRANSPORT_GO_TO_SOURCE',
     TRANSPORT_GO_TO_DEST = 'TRANSPORT_GO_TO_DEST',
     TRANSPORT_PICKUP = 'TRANSPORT_PICKUP',
     TRANSPORT_DELIVER = 'TRANSPORT_DELIVER',
+    TRANSPORT_STAND_UP = 'TRANSPORT_STAND_UP',
 
     // Feature-layer dynamic tasks (registered at runtime, not parsed from XML)
     ENTER_BUILDING = 'ENTER_BUILDING',
@@ -103,7 +104,6 @@ const TASK_STRING_MAP: Record<string, ChoreoTaskType> = {
     CHECKIN: ChoreoTaskType.CHECKIN,
     CHANGE_JOB: ChoreoTaskType.CHANGE_JOB,
     CHANGE_JOB_COME_TO_WORK: ChoreoTaskType.CHANGE_JOB_COME_TO_WORK,
-    CHANGE_TYPE_AT_BARRACKS: ChoreoTaskType.CHANGE_TYPE_AT_BARRACKS,
     HEAL_ENTITY: ChoreoTaskType.HEAL_ENTITY,
     ATTACK_REACTION: ChoreoTaskType.ATTACK_REACTION,
     TRANSFORM_RECRUIT: ChoreoTaskType.TRANSFORM_RECRUIT,
@@ -203,6 +203,8 @@ export interface ChoreoJobState {
     targetId: number | null;
     /** Target position (from building position resolution) */
     targetPos: Tile | null;
+    /** Approach position — adjacent tile the settler moves to when the target itself is non-walkable. */
+    approachPos: Tile | null;
     /** Carried material (after GET_GOOD / RESOURCE_GATHERING) */
     carryingGood: EMaterialType | null;
     /** Whether work was started for current node (for cleanup tracking) */
@@ -236,6 +238,7 @@ export function createChoreoJobState(jobId: string, nodes: ChoreoNode[], synthet
         activeTrigger: '',
         targetId: null,
         targetPos: null,
+        approachPos: null,
         carryingGood: null,
         workStarted: false,
         pathRetryCountdown: 0,

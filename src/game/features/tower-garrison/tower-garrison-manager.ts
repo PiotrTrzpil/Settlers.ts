@@ -25,7 +25,9 @@ import { getBuildingDoorPos } from '@/game/data/game-data-access';
 import { createLogger } from '@/utilities/logger';
 import { findBuildingApproachTile } from '@/game/buildings/approach';
 import { getGarrisonCapacity, getGarrisonRole } from './internal/garrison-capacity';
-import type { BuildingGarrisonState } from './types';
+import type { BuildingGarrisonState, GarrisonJobRecord } from './types';
+import { clearJobId } from '@/game/entity';
+import { PersistentMap } from '@/game/persistence/persistent-store';
 
 const log = createLogger('TowerGarrisonManager');
 
@@ -46,6 +48,9 @@ export class TowerGarrisonManager {
     /** Per-tower garrison state. Keyed by building entity ID. */
     private readonly garrisons = new Map<number, BuildingGarrisonState>();
 
+    /** Maps unitId → GarrisonJobRecord for all currently garrisoned units. Persisted. */
+    readonly garrisonJobs: PersistentMap<GarrisonJobRecord>;
+
     /**
      * Tracks unit→tower pairs where pathfinding failed, preventing repeated
      * dispatch attempts to unreachable towers. Keyed by `${unitId}:${towerId}`.
@@ -59,9 +64,18 @@ export class TowerGarrisonManager {
         this.unitReservation = config.unitReservation;
         this.locationManager = config.locationManager;
         this.releaseWorkerAssignment = config.releaseWorkerAssignment;
+        this.garrisonJobs = new PersistentMap<GarrisonJobRecord>('garrisonJobs');
 
-        this.eventBus.on('settler-location:entered', ({ unitId: settlerId, buildingId }) => {
-            const garrison = this.garrisons.get(buildingId);
+        // Finalize garrison on task completion — NOT on settler-location:entered.
+        // ENTER_BUILDING calls enterBuilding() (hiding the unit) then returns DONE,
+        // which triggers completeJob → clearJobId → emits settler:taskCompleted.
+        // We listen here so the garrison jobId is set AFTER completeJob clears the old one.
+        this.eventBus.on('settler:taskCompleted', ({ unitId: settlerId }) => {
+            const location = this.locationManager.getLocation(settlerId);
+            if (!location) {
+                return;
+            }
+            const garrison = this.garrisons.get(location.buildingId);
             if (!garrison) {
                 return;
             }
@@ -72,7 +86,7 @@ export class TowerGarrisonManager {
                 return;
             }
 
-            this.finalizeGarrison(settlerId, buildingId);
+            this.finalizeGarrison(settlerId, location.buildingId);
         });
 
         this.eventBus.on('settler-location:approachInterrupted', ({ unitId: settlerId }) => {
@@ -146,6 +160,31 @@ export class TowerGarrisonManager {
 
         this.garrisons.delete(buildingId);
         log.debug(`Tower ${buildingId} removed, garrison released`);
+    }
+
+    // =========================================================================
+    // Restore helpers
+    // =========================================================================
+
+    /**
+     * Rebuild garrison slots and reservations from the persisted garrisonJobs map.
+     * Called from onRestoreComplete after initTower has registered all towers.
+     * The garrisonJobs PersistentMap is already deserialized at this point.
+     */
+    rebuildFromGarrisonJobs(): void {
+        for (const [unitId, record] of this.garrisonJobs.entries()) {
+            const unit = this.gameState.getEntityOrThrow(unitId, 'TowerGarrisonManager.rebuildFromGarrisonJobs');
+            const garrison = this.garrisons.get(record.buildingId)!;
+            const role = getGarrisonRole(unit.subType as UnitType)!;
+
+            const slots = role === 'swordsman' ? garrison.swordsmanSlots : garrison.bowmanSlots;
+            slots.unitIds.push(unitId);
+
+            this.unitReservation.reserve(unitId, {
+                purpose: 'garrison',
+                onForcedRelease: id => this.handleForcedRelease(id, record.buildingId),
+            });
+        }
     }
 
     // =========================================================================
@@ -281,8 +320,8 @@ export class TowerGarrisonManager {
      * - Releases worker assignment (garrison manager now owns this unit)
      * - Emits garrison:unitEntered
      *
-     * Note: enterBuilding is already called by the ENTER_BUILDING executor
-     * before the settler-location:entered event fires.
+     * Called from settler:taskCompleted (after completeJob clears the choreo jobId)
+     * or directly by executeFillGarrisonCommand (instant spawn path).
      */
     finalizeGarrison(unitId: number, towerId: number): void {
         const unit = this.gameState.getEntityOrThrow(unitId, 'TowerGarrisonManager.finalizeGarrison');
@@ -306,15 +345,7 @@ export class TowerGarrisonManager {
 
         this.unitReservation.updateReservation(unitId, {
             purpose: 'garrison',
-            onForcedRelease: id => {
-                const g = this.garrisons.get(towerId);
-                if (!g) {
-                    return;
-                }
-                removeFromArray(g.swordsmanSlots.unitIds, id);
-                removeFromArray(g.bowmanSlots.unitIds, id);
-                log.debug(`Garrisoned unit ${id} removed externally, slot cleared`);
-            },
+            onForcedRelease: id => this.handleForcedRelease(id, towerId),
         });
 
         const role = getGarrisonRole(unit.subType as UnitType);
@@ -325,12 +356,34 @@ export class TowerGarrisonManager {
         const slots = role === 'swordsman' ? garrison.swordsmanSlots : garrison.bowmanSlots;
         slots.unitIds.push(unitId);
 
+        // Allocate a garrison jobId. completeJob already cleared the WORKER_DISPATCH
+        // jobId before settler:taskCompleted fired, so entity.jobId is undefined here.
+        const jobId = this.gameState.allocateJobId();
+        unit.jobId = jobId;
+        this.garrisonJobs.set(unitId, { jobId, unitId, buildingId: towerId });
+
         // Release the worker assignment — garrison manager now owns this unit.
         // This prevents completeJob from exiting the building.
         this.releaseWorkerAssignment(unitId);
 
         this.eventBus.emit('garrison:unitEntered', { buildingId: towerId, unitId, unitType: unit.subType as UnitType });
         log.debug(`Unit ${unitId} garrisoned in tower ${towerId} (${role} slot)`);
+    }
+
+    /** Handle a garrisoned unit being forcefully removed (killed, etc.). */
+    private handleForcedRelease(unitId: number, towerId: number): void {
+        const g = this.garrisons.get(towerId);
+        if (!g) {
+            return;
+        }
+        const unit = this.gameState.getEntity(unitId);
+        if (unit) {
+            clearJobId(unit);
+        }
+        this.garrisonJobs.delete(unitId);
+        removeFromArray(g.swordsmanSlots.unitIds, unitId);
+        removeFromArray(g.bowmanSlots.unitIds, unitId);
+        log.debug(`Garrisoned unit ${unitId} removed externally, slot cleared`);
     }
 
     /** Returns true if any unit inside the garrison belongs to a different player. */
@@ -367,6 +420,8 @@ export class TowerGarrisonManager {
         }
 
         const unit = this.gameState.getEntityOrThrow(unitId, 'TowerGarrisonManager.ejectUnit');
+        clearJobId(unit);
+        this.garrisonJobs.delete(unitId);
         this.unitReservation.release(unitId);
         this.locationManager.exitBuilding(unitId);
 
@@ -403,6 +458,8 @@ export class TowerGarrisonManager {
             return;
         } // May have been removed externally already
 
+        clearJobId(unit);
+        this.garrisonJobs.delete(unitId);
         this.unitReservation.release(unitId);
         // entity.hidden = false is handled by locationManager.onBuildingRemoved (fires before this)
         this.placeAtApproach(unit, tower);

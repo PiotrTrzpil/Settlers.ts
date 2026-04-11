@@ -55,6 +55,7 @@ describe('DemandQueue state machine', () => {
 
 describe('TransportJobStore derived queries', () => {
     let jobStore: TransportJobStore;
+    let nextJobId = 1;
 
     function addJob(
         store: TransportJobStore,
@@ -67,7 +68,7 @@ describe('TransportJobStore derived queries', () => {
         demandId = carrierId
     ): TransportJobRecord {
         const record: TransportJobRecord = {
-            id: store.allocateJobId(),
+            id: nextJobId++,
             demandId,
             sourceBuilding,
             destBuilding,

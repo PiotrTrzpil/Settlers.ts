@@ -5,7 +5,7 @@
  * the max-lines limit while preserving the same logic.
  */
 
-import { type Entity, UnitType, Tile, type TileWithEntity } from '../../../entity';
+import { type Entity, UnitType, Tile, type TileWithEntity, clearJobId } from '../../../entity';
 import { createLogger } from '@/utilities/logger';
 import { hexDistance } from '../../../systems/hex-directions';
 import { TaskResult, SettlerState, type SettlerConfig } from '../types';
@@ -159,6 +159,7 @@ export class WorkerJobLifecycle {
         // assignJob won't see a stale job and recurse into interruptJobForCleanup.
         runtime.state = SettlerState.IDLE;
         runtime.job = null;
+        clearJobId(settler);
 
         this.eventBus.emit('settler:taskCompleted', {
             unitId: settler.id,
@@ -226,6 +227,8 @@ export class WorkerJobLifecycle {
         }
 
         log.debug(`Settler ${settler.id} interrupted job ${job.jobId}`);
+
+        clearJobId(settler);
 
         const failedNode = job.nodes[job.nodeIndex];
         const failedStep = failedNode ? ChoreoTaskType[failedNode.task] : 'unknown';
@@ -363,6 +366,7 @@ export class WorkerJobLifecycle {
                 nextNode.task === ChoreoTaskType.PLANT);
         if (completedTask !== ChoreoTaskType.SEARCH && !nextNeedsTargetPos) {
             job.targetPos = null;
+            job.approachPos = null;
         }
     }
 
@@ -383,6 +387,9 @@ export class WorkerJobLifecycle {
             return;
         }
         const resolution: JobPartResolution = this.jobPartResolver.resolve(node.jobPart, settler);
+        if (!node.forward) {
+            resolution.reverse = true;
+        }
         this.animController.applyChoreoAnimation(settler, resolution);
         if (this.verbose) {
             this.eventBus.emit('choreo:animationApplied', {

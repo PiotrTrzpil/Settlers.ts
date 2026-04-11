@@ -46,9 +46,7 @@ export async function loadCropSprites(
                 atlas,
                 paletteBaseOffset
             );
-            if (sprite) {
-                batch.add({ cropType, variation: i, firstFrame: sprite.entry, allFrames: null });
-            }
+            batch.add({ cropType, variation: i, firstFrame: sprite.entry, allFrames: null });
         }
 
         // Mature sprite (animated)
@@ -61,9 +59,7 @@ export async function loadCropSprites(
                 atlas,
                 paletteBaseOffset
             );
-            if (sprite) {
-                matureFrames.push(sprite.entry);
-            }
+            matureFrames.push(sprite.entry);
         }
         if (matureFrames.length > 0) {
             batch.add({
@@ -82,14 +78,12 @@ export async function loadCropSprites(
             atlas,
             paletteBaseOffset
         );
-        if (harvested) {
-            batch.add({
-                cropType,
-                variation: config.growingSprites.length + 1,
-                firstFrame: harvested.entry,
-                allFrames: null,
-            });
-        }
+        batch.add({
+            cropType,
+            variation: config.growingSprites.length + 1,
+            firstFrame: harvested.entry,
+            allFrames: null,
+        });
 
         batch.finalize(atlas, gl, data => {
             registry.registerMapObject(data.cropType, data.firstFrame, data.variation);

@@ -271,7 +271,7 @@ import { FileManager, IFileSource } from '@/utilities/file-manager';
 import { Race, formatRace, AVAILABLE_RACES, loadSavedRace, saveSavedRace } from '@/game/renderer/sprite-metadata';
 import { SoundManager } from '@/game/audio/sound-manager';
 import { saveCameraState, clearCameraState } from '@/game/renderer/camera-persistence';
-import { getCurrentMapId } from '@/game/state/game-state-persistence';
+import { clearSavedGameState, getCurrentMapId } from '@/game/state/game-state-persistence';
 import { saveLayerVisibility } from '@/game/renderer/layer-visibility';
 import { BuildingType, UnitType } from '@/game/entity';
 import type { EMaterialType } from '@/game/economy';
@@ -543,6 +543,7 @@ const dismissGameEnd = () => {
 // =========================================================================
 
 function onResetGameState() {
+    void clearSavedGameState();
     game.resetWithStartResources();
     clearCameraState(getCurrentMapId());
     rendererRef.value?.centerOnPlayerStart?.();

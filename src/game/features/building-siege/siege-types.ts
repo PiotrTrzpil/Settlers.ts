@@ -10,6 +10,24 @@ import type { CombatSystem } from '../combat/combat-system';
 import type { UnitReservationRegistry } from '../../systems/unit-reservation';
 import type { SettlerTaskSystem } from '../settler-tasks';
 
+// ── Siege role lookup ──────────────────────────
+
+/** Role of an entity within an active siege. */
+export type SiegeRole = { role: 'defender'; buildingId: number } | { role: 'door-attacker'; buildingId: number };
+
+/** Find which siege (if any) an entity participates in and what role it plays. */
+export function findSiegeRole(entityId: number, sieges: ReadonlyMap<number, SiegeState>): SiegeRole | undefined {
+    for (const [buildingId, siege] of sieges) {
+        if (siege.activeDefenderId === entityId) {
+            return { role: 'defender', buildingId };
+        }
+        if (siege.doorAttackerIds.includes(entityId)) {
+            return { role: 'door-attacker', buildingId };
+        }
+    }
+    return undefined;
+}
+
 // ── Constants ──────────────────────────
 
 /** How often (in ticks) the system validates active siege states. */

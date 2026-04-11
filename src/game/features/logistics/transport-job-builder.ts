@@ -71,25 +71,64 @@ export class TransportJobBuilder {
             record.sourceBuilding,
             this.positionResolver.getSourcePilePosition(record.sourceBuilding, record.material)
         );
-        // Destination slot's position comes directly from the PileSlot — no resolver indirection
-        const destSlot = this.inventoryManager.getSlot(record.slotId);
-        if (!destSlot) {
-            throw new Error(
-                `TransportJobBuilder.build: slot ${record.slotId} not found for job ${record.id} ` +
-                    `(dest building ${record.destBuilding}, material ${record.material})`
-            );
-        }
-        const destPos = destSlot.position;
+        const destPos = this.resolveDestPos(record);
 
         const job = choreo('JOB_CARRIER_TRANSPORT_GOOD')
             .addNode(ChoreoTaskType.TRANSPORT_GO_TO_SOURCE, { jobPart: 'C_WALK' })
             .addNode(ChoreoTaskType.TRANSPORT_PICKUP, { jobPart: 'C_DOWN_NONE' })
             .addNode(ChoreoTaskType.TRANSPORT_GO_TO_DEST, { jobPart: 'C_WALK' })
             .addNode(ChoreoTaskType.TRANSPORT_DELIVER, { jobPart: 'C_DOWN_NONE' })
+            .addNode(ChoreoTaskType.TRANSPORT_STAND_UP, { jobPart: 'C_DOWN_NONE', forward: false })
             .build();
 
         // targetPos = first movement destination (source pile), used by assignJob for initial pathfinding
         job.targetPos = sourcePos;
+        this.attachTransportData(job, record, sourcePos, destPos);
+
+        return job;
+    }
+
+    /**
+     * Build a delivery-only choreography for a carrier that already picked up material.
+     *
+     * Used after keyframe restore: PickedUp-phase jobs lose their choreography (transient),
+     * but the carrier still holds material. This builds a 2-node choreo (GO_TO_DEST → DELIVER)
+     * so the carrier resumes delivery without re-visiting the source.
+     */
+    buildDeliveryOnly(record: TransportJobRecord): ChoreoJobState {
+        const destPos = this.resolveDestPos(record);
+        const sourcePos = this.resolvePilePos(
+            record.sourceBuilding,
+            this.positionResolver.getSourcePilePosition(record.sourceBuilding, record.material)
+        );
+
+        const job = choreo('JOB_CARRIER_TRANSPORT_GOOD')
+            .addNode(ChoreoTaskType.TRANSPORT_GO_TO_DEST, { jobPart: 'C_WALK' })
+            .addNode(ChoreoTaskType.TRANSPORT_DELIVER, { jobPart: 'C_DOWN_NONE' })
+            .addNode(ChoreoTaskType.TRANSPORT_STAND_UP, { jobPart: 'C_DOWN_NONE', forward: false })
+            .build();
+
+        // targetPos = destination pile, used by assignJob for initial pathfinding
+        job.targetPos = destPos;
+        // Carrier already holds material — reflect that on the choreo job
+        job.carryingGood = record.material;
+        this.attachTransportData(job, record, sourcePos, destPos);
+
+        return job;
+    }
+
+    private resolveDestPos(record: TransportJobRecord): Tile {
+        const destSlot = this.inventoryManager.getSlot(record.slotId);
+        if (!destSlot) {
+            throw new Error(
+                `TransportJobBuilder: slot ${record.slotId} not found for job ${record.id} ` +
+                    `(dest building ${record.destBuilding}, material ${record.material})`
+            );
+        }
+        return destSlot.position;
+    }
+
+    private attachTransportData(job: ChoreoJobState, record: TransportJobRecord, sourcePos: Tile, destPos: Tile): void {
         const ops: TransportOps = {
             isValid: () => this.findRecord(record.id) !== undefined,
             pickUp: () => {
@@ -128,8 +167,6 @@ export class TransportJobBuilder {
                 TransportJobService.cancel(r, 'interrupted', this.transportJobDeps);
             }
         };
-
-        return job;
     }
 
     /**

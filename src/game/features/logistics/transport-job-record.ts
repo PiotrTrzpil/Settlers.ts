@@ -33,3 +33,29 @@ export interface TransportJobRecord {
     /** Game time when job was created (seconds, for stall detection). */
     readonly createdAt: number;
 }
+
+/** Create a TransportJobRecord for a delivery-only reconstruction (post-restore). */
+export function createDeliveryOnlyRecord(
+    jobId: number,
+    carrierId: number,
+    destBuilding: number,
+    material: EMaterialType,
+    amount: number,
+    slotId: number,
+    gameTime: number
+): TransportJobRecord {
+    return {
+        id: jobId,
+        // Demand was consumed before save — sentinel value, not used for delivery-only jobs
+        demandId: -1,
+        // Source is irrelevant for delivery-only — carrier already holds material
+        sourceBuilding: destBuilding,
+        destBuilding,
+        material,
+        amount,
+        carrierId,
+        slotId,
+        phase: TransportPhase.PickedUp,
+        createdAt: gameTime,
+    };
+}

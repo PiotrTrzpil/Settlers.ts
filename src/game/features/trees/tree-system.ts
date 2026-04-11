@@ -15,7 +15,7 @@
 import { GrowableSystem, type GrowableConfig, type GrowableState } from '../../systems/growth';
 import type { CoreDeps } from '../feature';
 import type { Tile } from '../../entity';
-import { MapObjectCategory, MapObjectType } from '@/game/types/map-object-types';
+import { MapObjectCategory, MapObjectType, isDarkTree } from '@/game/types/map-object-types';
 import { OBJECT_TYPE_CATEGORY } from '../../systems/map-objects';
 import type { EntityVisualService } from '../../animation/entity-visual-service';
 import type { Command, CommandExecutor } from '../../commands';
@@ -106,10 +106,20 @@ export class TreeSystem extends GrowableSystem<TreeState> {
         this.eventBus = cfg.eventBus;
     }
 
+    // ── Registration ────────────────────────────────────────────
+
+    override register(entityId: number, objectType: MapObjectType, planted: boolean = false): void {
+        super.register(entityId, objectType, planted);
+        // Planted trees are not yet harvestable — mark non-operational until growth completes.
+        if (planted && this.states.has(entityId)) {
+            this.gameState.getEntityOrThrow(entityId, 'tree:planted').operational = false;
+        }
+    }
+
     // ── GrowableSystem implementation ────────────────────────────
 
     protected shouldRegister(objectType: MapObjectType): boolean {
-        return OBJECT_TYPE_CATEGORY[objectType] === MapObjectCategory.Trees;
+        return OBJECT_TYPE_CATEGORY[objectType] === MapObjectCategory.Trees && !isDarkTree(objectType);
     }
 
     protected createState(planted: boolean, objectType: MapObjectType): TreeState {

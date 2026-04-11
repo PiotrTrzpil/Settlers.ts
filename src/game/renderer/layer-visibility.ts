@@ -62,6 +62,8 @@ export interface LayerVisibility {
     showDecoLabels: boolean;
     /** Show debug wireframe grid overlay on landscape */
     showDebugGrid: boolean;
+    /** Show tile occupancy overlay (ground + unit layers) */
+    showTileOccupancy: boolean;
 }
 
 /** Default layer visibility (all visible) */
@@ -84,6 +86,7 @@ export const DEFAULT_LAYER_VISIBILITY: LayerVisibility = {
     showTerritory: true,
     showDecoLabels: false,
     showDebugGrid: false,
+    showTileOccupancy: false,
 };
 
 // ============================================================================

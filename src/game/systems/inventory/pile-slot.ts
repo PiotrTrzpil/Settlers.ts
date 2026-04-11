@@ -14,9 +14,9 @@ import type { SlotKind } from '../../core/pile-kind';
 
 /** A pending delivery reservation against a slot — tracks who reserved how much capacity. */
 export interface SlotReservation {
-    /** Transport job ID that owns this reservation. */
+    /** Globally unique job ID (entity.jobId). Primary key — unique per job, stable across save/load. */
     readonly jobId: number;
-    /** Carrier entity ID (for debugging). */
+    /** Carrier entity ID (for restore: find which carrier owns this reservation). */
     readonly carrierId: number;
     /** Amount reserved. */
     readonly amount: number;

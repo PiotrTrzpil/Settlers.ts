@@ -1,11 +1,14 @@
 /**
  * TransportJobStore — single source of truth for all active transport jobs.
  *
- * Wraps PersistentIndexedMap<TransportJobRecord> with derived query methods that replace
+ * Wraps IndexedMap<carrierId, TransportJobRecord> with derived query methods that replace
  * InventoryReservationManager, InFlightTracker, and RequestManager status tracking.
  *
  * All reservation and in-flight queries are derived from job records — no separate
  * data structures. The job's existence at a given phase IS the reservation/in-flight state.
+ *
+ * Transport jobs are transient — not persisted. On restore, they are reconstructed from
+ * entity state (entity.jobId, entity.carrying) and slot reservations (keyed by carrierId).
  *
  * Pending reservations: When a busy carrier is pre-assigned a follow-up job, the record
  * is stored in `pendingReservations` (not in `jobs`) to avoid overwriting the carrier's
@@ -14,8 +17,7 @@
  * is promoted to the active `jobs` map via `promotePending()`.
  */
 
-import { PersistentIndexedMap, PersistentValue } from '../../persistence/persistent-store';
-import type { Index } from '@/game/utils/indexed-map';
+import { IndexedMap, type Index } from '@/game/utils/indexed-map';
 import { TransportPhase, type TransportJobRecord } from './transport-job-record';
 import type { EMaterialType } from '../../economy/material-type';
 
@@ -29,7 +31,7 @@ import type { EMaterialType } from '../../economy/material-type';
  */
 export class TransportJobStore {
     /** Primary store: carrierId → TransportJobRecord */
-    readonly jobs: PersistentIndexedMap<TransportJobRecord>;
+    readonly jobs: IndexedMap<number, TransportJobRecord>;
 
     /** Index: building ID → carrier IDs (both source and dest). */
     readonly byBuilding: Index<number, number>;
@@ -40,9 +42,6 @@ export class TransportJobStore {
     /** Index: demandId → carrier ID (1:1, for demand consumption tracking). */
     readonly byDemand: Index<number, number>;
 
-    /** Persisted next job ID counter. */
-    readonly nextJobIdStore: PersistentValue<number>;
-
     /**
      * Pending reservations for busy carriers that have been pre-assigned a follow-up job.
      * Keyed by jobId. Counted in supply queries but NOT in the primary `jobs` map
@@ -50,11 +49,8 @@ export class TransportJobStore {
      */
     private readonly pendingReservations = new Map<number, TransportJobRecord>();
 
-    /** Module-level next job ID — synced with persistence. */
-    private nextJobId = 1;
-
     constructor() {
-        this.jobs = new PersistentIndexedMap<TransportJobRecord>('transportJobs');
+        this.jobs = new IndexedMap<number, TransportJobRecord>();
 
         // Multi-value index: a job appears under both its source and dest building
         this.byBuilding = this.jobs.addIndex((_carrierId, job) => [job.sourceBuilding, job.destBuilding]);
@@ -64,29 +60,6 @@ export class TransportJobStore {
 
         // Demand index: 1:1 mapping for O(1) "is this demand already assigned?" checks
         this.byDemand = this.jobs.addIndex((_carrierId, job) => job.demandId);
-
-        this.nextJobIdStore = new PersistentValue<number>('transportNextJobId', 1, {
-            serialize: () => this.nextJobId,
-            deserialize: (raw: unknown) => {
-                this.nextJobId = raw as number;
-                return this.nextJobId;
-            },
-        });
-    }
-
-    /** Allocate the next job ID. */
-    allocateJobId(): number {
-        return this.nextJobId++;
-    }
-
-    /** Get the current next job ID (for testing). */
-    getNextJobId(): number {
-        return this.nextJobId;
-    }
-
-    /** Reset the job ID counter (for testing). */
-    resetJobIds(): void {
-        this.nextJobId = 1;
     }
 
     // ── Pending reservations (pre-assigned follow-up jobs for busy carriers) ──

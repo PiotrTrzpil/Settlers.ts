@@ -9,8 +9,8 @@
  * can re-acquire runtime state (animation, handlers, callbacks) naturally
  * by re-walking to its target from the snapped nodeIndex.
  *
- * Transport jobs (carriers) are explicitly excluded — they are handled by
- * LogisticsDispatcherFeature persistence + onRestoreComplete re-dispatch.
+ * Transport jobs (carriers) use synthetic choreos and are excluded — their state
+ * is reconstructed from entity.jobId + entity.carrying on restore.
  */
 
 import { createLogger } from '@/utilities/logger';
@@ -90,6 +90,9 @@ function serializeJobIntent(runtime: UnitRuntime): SerializedJobIntent | undefin
     if (job.targetPos !== null) {
         intent.targetPos = job.targetPos;
     }
+    if (job.approachPos !== null) {
+        intent.approachPos = job.approachPos;
+    }
 
     return intent;
 }
@@ -138,6 +141,7 @@ interface RestoreContext {
     runtimes: IndexedMap<number, UnitRuntime>;
     workerTracker: BuildingWorkerTracker;
     choreographyStore: JobChoreographyStore;
+    getOrCreateRuntime: (entityId: number) => UnitRuntime;
 }
 
 function restoreHomeAssignment(
@@ -172,11 +176,7 @@ function restoreMoveTask(entityId: number, target: Tile, ctx: RestoreContext): v
         return;
     }
 
-    const runtime = ctx.runtimes.get(entityId);
-    if (!runtime) {
-        log.warn(`Skipping move task for unit ${entityId}: runtime not found`);
-        return;
-    }
+    const runtime = ctx.getOrCreateRuntime(entityId);
 
     const moveSuccess = ctx.gameState.movement.moveUnit(entityId, target);
     if (!moveSuccess) {
@@ -202,11 +202,7 @@ function restoreJobIntent(entityId: number, intent: SerializedJobIntent, ctx: Re
         return;
     }
 
-    const runtime = ctx.runtimes.get(entityId);
-    if (!runtime) {
-        log.warn(`Skipping job restore for unit ${entityId}: runtime not found`);
-        return;
-    }
+    const runtime = ctx.getOrCreateRuntime(entityId);
 
     const raceId = raceToRaceId(entity.race);
     const choreoJob = ctx.choreographyStore.getJob(raceId, intent.jobId);
@@ -221,6 +217,8 @@ function restoreJobIntent(entityId: number, intent: SerializedJobIntent, ctx: Re
     jobState.targetId = intent.targetId ?? null;
     // eslint-disable-next-line no-restricted-syntax -- value is nullable by API contract; null coercion
     jobState.targetPos = intent.targetPos ?? null;
+    // eslint-disable-next-line no-restricted-syntax -- value is nullable by API contract; null coercion
+    jobState.approachPos = intent.approachPos ?? null;
 
     runtime.job = jobState;
     runtime.state = SettlerState.WORKING;
@@ -260,6 +258,7 @@ export interface SettlerTaskPersistenceConfig {
     runtimes: IndexedMap<number, UnitRuntime>;
     workerTracker: BuildingWorkerTracker;
     choreographyStore: JobChoreographyStore;
+    getOrCreateRuntime: (entityId: number) => UnitRuntime;
 }
 
 /**
@@ -292,6 +291,7 @@ export function createSettlerTaskPersistence(
                 runtimes: config.runtimes,
                 workerTracker: config.workerTracker,
                 choreographyStore: config.choreographyStore,
+                getOrCreateRuntime: config.getOrCreateRuntime,
             };
             for (const serialized of data) {
                 try {

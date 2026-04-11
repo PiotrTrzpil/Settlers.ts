@@ -8,7 +8,9 @@ import type { Entity } from '@/game/entity';
 import { BuildingType, EntityType } from '@/game/entity';
 import { EMaterialType } from '@/game/economy/material-type';
 import { hasMultipleRecipes, getRecipeSet } from '@/game/economy/building-production';
-import { type ProductionMode } from '@/game/features/production-control';
+import { type ProductionMode, type ProductionState } from '@/game/features/production-control';
+import { UNIT_TYPE_CONFIG } from '@/game/core/unit-types';
+import type { TrainingRecipe } from '@/game/features/barracks/types';
 
 export interface RecipeInfo {
     /** Recipe index in the building's RecipeSet */
@@ -64,19 +66,23 @@ export function useProductionControl(
         }
 
         const bt = entity.subType as BuildingType;
+        const pcm = game.services.productionControlManager;
+        const prodState = pcm.getProductionState(entity.id);
+        if (!prodState) {
+            return null;
+        }
+
+        // Barracks: training recipes (unit types)
+        if (bt === BuildingType.Barrack) {
+            return buildBarracksState(game, entity.id, prodState);
+        }
+
+        // Production buildings: material recipes
         if (!hasMultipleRecipes(bt)) {
             return null;
         }
-
         const recipeSet = getRecipeSet(bt);
         if (!recipeSet) {
-            return null;
-        }
-
-        const pcm = game.services.productionControlManager;
-
-        const prodState = pcm.getProductionState(entity.id);
-        if (!prodState) {
             return null;
         }
 
@@ -146,5 +152,39 @@ export function useProductionControl(
         setRecipeProportion: setProportion,
         addToProductionQueue: addToQueue,
         removeFromProductionQueue: removeFromQueue,
+    };
+}
+
+/** Format a training recipe as a display name, e.g. "Swordsman L2". */
+function trainingRecipeName(recipe: TrainingRecipe): string {
+    const base = UNIT_TYPE_CONFIG[recipe.unitType].name;
+    return recipe.soldierLevel > 1 ? `${base} L${recipe.soldierLevel}` : base;
+}
+
+/** Build ProductionControlState for a barracks building using training recipes. */
+function buildBarracksState(game: Game, buildingId: number, prodState: ProductionState): ProductionControlState {
+    const trainingRecipes = game.services.barracksTrainingManager.getRecipes(buildingId);
+
+    const recipes: RecipeInfo[] = [];
+    for (let i = 0; i < trainingRecipes.length; i++) {
+        const r = trainingRecipes[i]!;
+        recipes.push({
+            index: i,
+            output: EMaterialType.NO_MATERIAL,
+            outputName: trainingRecipeName(r),
+            // eslint-disable-next-line no-restricted-syntax -- Map.get() returns undefined for missing keys
+            weight: prodState.proportions.get(i) ?? 1,
+        });
+    }
+
+    return {
+        isMultiRecipe: true,
+        mode: prodState.mode,
+        recipes,
+        queue: prodState.queue.map(idx => {
+            const r = trainingRecipes[idx];
+            return r ? trainingRecipeName(r) : `Recipe ${idx}`;
+        }),
+        queueRaw: [...prodState.queue],
     };
 }

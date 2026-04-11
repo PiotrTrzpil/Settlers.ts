@@ -80,6 +80,11 @@ export class PaletteTextureManager {
     /** Whether GPU needs re-upload */
     private dirty = false;
 
+    /** Whether the palette texture has been uploaded to the GPU at least once. */
+    get isUploaded(): boolean {
+        return this.texture !== null;
+    }
+
     /** GPU texture dimensions (for change detection) */
     private gpuWidth = 0;
     private gpuHeight = 0;

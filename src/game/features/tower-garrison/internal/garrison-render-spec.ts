@@ -37,9 +37,12 @@ const GUARD_TOWER: readonly TowerSlot[] = [tower('', 0, 1, 2, 3, 4, 5)];
 
 /** Roman Castle */
 const CASTLE_ROMAN: readonly TowerSlot[] = [
-    tower('tower1', 4, 5, 8), // top tower   — pair (4,5) far left + top bowman (8) y=-156
-    tower('tower3', 0, 1, 2, 3), // left tower  — pairs (0,1) and (2,3)
-    tower('tower2', 6, 7), // right tower — pair (6,7) x≈+112
+    tower('tower1', 4, 5, 8), // top tower   — bowman (4) + swordsman (5) + bowman (8)
+    tower('tower3', 6, 7), // right tower — pair (6,7)
+    tower('', 0), // bowman (0) — between tower3 and main frontwall
+    tower('frontwall'), // main castle frontwall
+    tower('tower2', 1, 2, 3), // center — swordsman (1) + pair (2,3)
+    tower('door'), // castle gate
 ];
 
 /** Mayan Castle */

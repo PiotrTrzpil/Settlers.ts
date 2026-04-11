@@ -44,7 +44,6 @@ import {
     executeWait,
     executeCheckin,
     executeChangeJob,
-    executeChangeTypeAtBarracks,
     executeHealEntity,
     executeAttackReaction,
 } from './internal/control-executors';
@@ -131,9 +130,6 @@ export function registerCoreExecutors(
     choreoSystem.register(ChoreoTaskType.CHANGE_JOB, (s, j, n, dt) => executeChangeJob(s, j, n, dt, ctrlCtx));
     choreoSystem.register(ChoreoTaskType.CHANGE_JOB_COME_TO_WORK, (s, j, n, dt) =>
         executeChangeJob(s, j, n, dt, ctrlCtx)
-    );
-    choreoSystem.register(ChoreoTaskType.CHANGE_TYPE_AT_BARRACKS, (s, j, n, dt) =>
-        executeChangeTypeAtBarracks(s, j, n, dt, ctrlCtx)
     );
     choreoSystem.register(ChoreoTaskType.HEAL_ENTITY, (s, j, n, dt) => executeHealEntity(s, j, n, dt, ctrlCtx));
     choreoSystem.register(ChoreoTaskType.ATTACK_REACTION, (s, j, n, dt) => executeAttackReaction(s, j, n, dt, ctrlCtx));

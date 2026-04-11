@@ -49,16 +49,16 @@ export const TreeFeature: FeatureDefinition = {
         settlerTaskSystem.registerWorkHandler(SearchType.TREE_SEED_POS, createForesterHandler(treeSystem));
 
         // Register for map object creation events to auto-register trees
-        ctx.on('entity:created', ({ entityId, entityType: type, subType }) => {
+        ctx.on('entity:created', ({ entityId, entityType: type, subType, planted }) => {
             if (type === EntityType.MapObject) {
-                treeSystem.register(entityId, subType as MapObjectType);
+                treeSystem.register(entityId, subType as MapObjectType, planted);
             }
         });
 
         // Clean up tree state when entities are removed
         ctx.cleanupRegistry.onEntityRemoved(treeSystem.unregister.bind(treeSystem));
 
-        const treeDeps = { state: ctx.gameState, eventBus: ctx.eventBus, treeSystem };
+        const treeDeps = { state: ctx.gameState, eventBus: ctx.eventBus };
 
         return {
             systems: [treeSystem],

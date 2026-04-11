@@ -11,7 +11,6 @@ import type { EventBus } from '../../event-bus';
 import type { BuildingInventoryManager } from '../inventory';
 import type { ThrottledLogger } from '@/utilities/throttled-logger';
 import type { EntityWorkHandler, PositionWorkHandler } from './types';
-import type { BarracksTrainingManager } from '../barracks';
 import type { MaterialTransfer } from '../material-transfer';
 import type { ExecuteCommand } from '../../commands';
 import type { TaskResult, ChoreoJobState, ChoreoNode } from '../../systems/choreo';
@@ -43,6 +42,8 @@ export interface JobPartResolution {
     sequenceKey: string;
     loop: boolean;
     stopped: boolean;
+    /** When true, the animation plays in reverse (last frame first). */
+    reverse?: boolean;
 }
 
 /** Resolves jobPart strings to animation sequence keys. */
@@ -183,8 +184,6 @@ export interface ControlContext {
     gameState: GameState;
     eventBus: EventBus;
     handlerErrorLogger: ThrottledLogger;
-    /** Barracks training manager — only needed by CHANGE_TYPE_AT_BARRACKS. */
-    barracksTrainingManager?: BarracksTrainingManager;
     /** Command executor — needed by TRANSFORM_RECRUIT. */
     executeCommand?: ExecuteCommand;
     /** Inventory manager — needed by TRANSFORM_RECRUIT for pile withdrawal. */

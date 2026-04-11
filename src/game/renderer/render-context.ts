@@ -92,6 +92,7 @@ const DEFAULT_BUILDING_RENDER_STATE: BuildingRenderState = {
 export interface RenderSettings {
     showBuildingFootprint: boolean;
     showUnitPositions: boolean;
+    showTileOccupancy: boolean;
     disablePlayerTinting: boolean;
     antialias: boolean;
 }
@@ -179,6 +180,8 @@ export interface BuildingOverlayRenderData {
      * Used for construction-style rising effects. Default 1.0.
      */
     readonly verticalProgress: number;
+    /** True for garrison soldier overlays (swordsmen/bowmen in towers). */
+    readonly isGarrisonUnit?: boolean;
 }
 
 const EMPTY_OVERLAYS: readonly BuildingOverlayRenderData[] = [];
@@ -256,6 +259,14 @@ export interface IRenderContext {
     // === Stack Ghosts ===
     /** Ghost resource stacks to render during stack-adjust mode */
     readonly stackGhosts: readonly StackGhostRenderData[];
+
+    // === Occupancy Debug ===
+    /** Ground-layer occupancy map (tile key → entity ID) for debug overlay */
+    readonly groundOccupancy: ReadonlyMap<string, number>;
+    /** Unit-layer occupancy map (tile key → entity ID) for debug overlay */
+    readonly unitOccupancy: ReadonlyMap<string, number>;
+    /** Building footprint tiles that block pathfinding (for walkability coloring) */
+    readonly buildingOccupancy: ReadonlySet<string>;
 }
 
 /**
@@ -278,6 +289,7 @@ export class RenderContextBuilder {
     private _settings: RenderSettings = {
         showBuildingFootprint: false,
         showUnitPositions: false,
+        showTileOccupancy: false,
         disablePlayerTinting: false,
         antialias: false,
     };
@@ -290,6 +302,9 @@ export class RenderContextBuilder {
     private _workAreaCircles: readonly CircleRenderData[] = [];
     private _workAreaDots: readonly TerritoryDotRenderData[] = [];
     private _stackGhosts: readonly StackGhostRenderData[] = [];
+    private _groundOccupancy: ReadonlyMap<string, number> = new Map();
+    private _unitOccupancy: ReadonlyMap<string, number> = new Map();
+    private _buildingOccupancy: ReadonlySet<string> = new Set();
 
     entities(entities: readonly Entity[]): this {
         this._entities = entities;
@@ -397,6 +412,17 @@ export class RenderContextBuilder {
         return this;
     }
 
+    occupancy(
+        ground: ReadonlyMap<string, number>,
+        unit: ReadonlyMap<string, number>,
+        building: ReadonlySet<string>
+    ): this {
+        this._groundOccupancy = ground;
+        this._unitOccupancy = unit;
+        this._buildingOccupancy = building;
+        return this;
+    }
+
     /**
      * Build the immutable render context.
      * @throws Error if required fields (viewPoint) are not set
@@ -429,6 +455,9 @@ export class RenderContextBuilder {
             workAreaCircles: this._workAreaCircles,
             workAreaDots: this._workAreaDots,
             stackGhosts: this._stackGhosts,
+            groundOccupancy: this._groundOccupancy,
+            unitOccupancy: this._unitOccupancy,
+            buildingOccupancy: this._buildingOccupancy,
         };
     }
 }

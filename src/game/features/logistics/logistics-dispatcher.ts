@@ -21,7 +21,7 @@ import type { EntityCleanupRegistry } from '../../systems/entity-cleanup-registr
 import type { CarrierRegistry, IdleCarrierPool } from '../carriers';
 import type { DemandEntry } from './demand-queue';
 import type { DemandQueue } from './demand-queue';
-import { TransportPhase } from './transport-job-record';
+import { TransportPhase, createDeliveryOnlyRecord } from './transport-job-record';
 import * as TransportJobService from './transport-job-service';
 import type { TransportJobDeps } from './transport-job-service';
 import type { TransportJobStore } from './transport-job-store';
@@ -35,6 +35,10 @@ import { StallDetector } from './stall-detector';
 import { MatchDiagnostics } from './match-diagnostics';
 import { ThrottledEmitter } from './throttled-emitter';
 import { TransportJobBuilder, type TransportPositionResolver } from './transport-job-builder';
+import { clearCarrying, clearJobId } from '../../entity';
+import { createLogger } from '@/utilities/logger';
+
+const log = createLogger('LogisticsDispatcher');
 
 /** Maximum number of job assignments per tick (to avoid frame drops) */
 const MAX_ASSIGNMENTS_PER_TICK = 5;
@@ -85,14 +89,21 @@ export class LogisticsDispatcher implements TickSystem {
     /** Pre-assignment queue for busy carriers that will get a job when their current delivery completes. */
     private readonly preAssignmentQueue: PreAssignmentQueue;
 
-    /** Job assigner reference needed for flushing queued assignments. */
+    /** Job assigner reference needed for flushing queued assignments and resuming orphaned jobs. */
     private readonly jobAssigner: JobAssigner;
+
+    /** Builder for creating transport choreographies (needed for resuming PickedUp jobs after restore). */
+    private readonly transportJobBuilder: TransportJobBuilder;
+
+    /** Carrier registry for scanning all carrier entities during restore reconstruction. */
+    private readonly carrierRegistry: CarrierRegistry;
 
     constructor(config: LogisticsDispatcherConfig) {
         this.eventBus = config.eventBus;
         this.demandQueue = config.demandQueue;
         this.jobStore = config.jobStore;
         this.jobAssigner = config.jobAssigner;
+        this.carrierRegistry = config.carrierRegistry;
 
         this.transportJobDeps = {
             jobStore: config.jobStore,
@@ -112,7 +123,7 @@ export class LogisticsDispatcher implements TickSystem {
             matchFilter: config.matchFilter,
         });
 
-        const transportJobBuilder = new TransportJobBuilder({
+        this.transportJobBuilder = new TransportJobBuilder({
             gameState: config.gameState,
             positionResolver: config.positionResolver,
             inventoryManager: config.inventoryManager,
@@ -125,7 +136,7 @@ export class LogisticsDispatcher implements TickSystem {
             eventBus: config.eventBus,
             idleCarrierPool: config.idleCarrierPool,
             jobAssigner: config.jobAssigner,
-            transportJobBuilder,
+            transportJobBuilder: this.transportJobBuilder,
             jobStore: config.jobStore,
             demandQueue: config.demandQueue,
             inventoryManager: config.inventoryManager,
@@ -175,6 +186,10 @@ export class LogisticsDispatcher implements TickSystem {
         // Instead, both cleanup and flush happen on settler:taskCompleted when the job ends naturally.
         this.subscriptions.subscribe(eventBus, 'settler:taskCompleted', ({ unitId }) => {
             this.jobStore.jobs.delete(unitId);
+            const entity = this.transportJobDeps.gameState.getEntity(unitId);
+            if (entity) {
+                clearJobId(entity);
+            }
             this.flushQueuedAssignment(unitId);
         });
 
@@ -214,23 +229,86 @@ export class LogisticsDispatcher implements TickSystem {
     }
 
     /**
-     * Cancel all transport jobs still in Reserved phase.
+     * Rebuild transport jobs from entity state after keyframe restore / hot reload.
      *
-     * After keyframe restore, carrier choreo tasks are transient and lost.
-     * Jobs in Reserved phase have an assigned carrier that will never start
-     * its pickup task. Cancelling frees the carrier and returns the demand
-     * to the queue so normal matching re-dispatches on the next tick.
+     * Transport jobs are now transient — not persisted. On restore, we reconstruct them
+     * from entity state (entity.jobId, entity.carrying) combined with slot reservations
+     * (keyed by carrierId). Only carriers (UnitType.Carrier) are scanned.
+     *
+     * - Carriers with entity.carrying: slot reservation exists → reconstruct delivery-only job
+     * - Carriers without entity.carrying but jobId set: Reserved-phase job never picked up →
+     *   clear jobId and release the slot reservation; demand will be re-created by scanners
      */
-    cancelReservedJobs(): void {
-        const reservedCarriers = [...this.jobStore.byPhase.get(TransportPhase.Reserved)];
-        for (const carrierId of reservedCarriers) {
-            const record = this.jobStore.jobs.get(carrierId);
-            if (!record) {
-                throw new Error(`No job for carrier ${carrierId} in LogisticsDispatcher.cancelReservedJobs`);
+    rebuildFromEntities(): void {
+        const gameState = this.transportJobDeps.gameState;
+        const inventoryManager = this.transportJobDeps.inventoryManager;
+
+        for (const carrierId of this.carrierRegistry) {
+            const entity = gameState.getEntityOrThrow(carrierId, 'rebuildFromEntities carrier scan');
+
+            if (entity.jobId == null) {
+                continue;
             }
-            TransportJobService.cancel(record, 'restore_cleanup', this.transportJobDeps);
-            this.jobStore.jobs.delete(carrierId);
+
+            if (!entity.carrying) {
+                // Reserved phase that never picked up: clear jobId and release reservation
+                const reservation = inventoryManager.findReservationByCarrier(carrierId);
+                // Reservation may not exist if save happened between jobId assignment and reserveSlot
+                if (reservation) {
+                    const resJobId = reservation.slot.reservations.find(r => r.carrierId === carrierId)!.jobId;
+                    inventoryManager.unreserveSlot(reservation.slotId, resJobId);
+                }
+                clearJobId(entity);
+                continue;
+            }
+
+            // PickedUp phase: carrier holds material — find slot reservation and reconstruct job
+            const reservation = inventoryManager.findReservationByCarrier(carrierId);
+            if (!reservation) {
+                // Reservation lost between save cycles — drop the material, carrier becomes idle
+                log.warn(
+                    `Carrier ${carrierId} carrying ${entity.carrying.material} but no slot reservation — dropping`
+                );
+                clearCarrying(entity);
+                clearJobId(entity);
+                continue;
+            }
+            const destBuilding = reservation.slot.buildingId!;
+
+            // Reconstruct a PickedUp-phase record with a fresh job ID.
+            const record = createDeliveryOnlyRecord(
+                gameState.allocateJobId(),
+                carrierId,
+                destBuilding,
+                entity.carrying.material,
+                entity.carrying.amount,
+                reservation.slotId,
+                this.transportJobDeps.demandQueue.getGameTime()
+            );
+
+            this.jobStore.jobs.set(carrierId, record);
+
+            const choreoJob = this.transportJobBuilder.buildDeliveryOnly(record);
+            const success = this.jobAssigner.assignJob(carrierId, choreoJob, choreoJob.targetPos!);
+
+            if (success) {
+                log.info(`Rebuilt delivery job for carrier ${carrierId} (job #${record.id}, ${record.material})`);
+            } else {
+                log.warn(`Failed to rebuild delivery for carrier ${carrierId} — cancelling and clearing state`);
+                this.jobStore.jobs.delete(carrierId);
+                inventoryManager.unreserveSlot(reservation.slotId, record.id);
+                clearCarrying(entity);
+                clearJobId(entity);
+            }
         }
+
+        // Clean up orphaned slot reservations — reservations from a previous save cycle
+        // that don't match any rebuilt job.
+        const activeJobIds = new Set<number>();
+        for (const job of this.jobStore.jobs.values()) {
+            activeJobIds.add(job.id);
+        }
+        inventoryManager.removeOrphanedReservations(jobId => activeJobIds.has(jobId));
     }
 
     /**
@@ -296,10 +374,21 @@ export class LogisticsDispatcher implements TickSystem {
     /** Emit `logistics:noMatch` at most once per cooldown per material type. */
     private emitNoMatchThrottled(demand: DemandEntry): void {
         const key = `${demand.materialType}`;
+        const s = this.requestMatcher.lastRejectionStats;
         this.noMatchEmitter.tryEmit(key, {
             requestId: demand.id,
             buildingId: demand.buildingId,
             materialType: demand.materialType,
+            rejection: s
+                ? {
+                      supplies: s.suppliesFound,
+                      sourceIds: s.sourceIds,
+                      self: s.self,
+                      storageBlocked: s.storageBlocked,
+                      reserved: s.fullyReserved,
+                      filter: s.filterRejected,
+                  }
+                : undefined,
         });
     }
 
@@ -333,6 +422,13 @@ export class LogisticsDispatcher implements TickSystem {
             this.jobStore.removePending(queued.record.id);
             TransportJobService.cancel(queued.record, 'assignment_failed', this.transportJobDeps);
         }
+        this.eventBus.emit('logistics:preAssignFlushed', {
+            carrierId: queued.carrierId,
+            demandId: queued.record.demandId,
+            jobId: queued.record.id,
+            success,
+            reason: success ? undefined : 'assignment_failed',
+        });
     }
 
     /**

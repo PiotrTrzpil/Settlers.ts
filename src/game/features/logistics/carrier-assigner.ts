@@ -376,6 +376,15 @@ export class CarrierAssigner {
             material: demand.materialType,
         });
 
+        this.eventBus.emit('logistics:preAssignQueued', {
+            carrierId: busyCandidate.carrierId,
+            demandId: demand.id,
+            jobId: record.id,
+            materialType: demand.materialType,
+            sourceBuilding: match.sourceBuilding,
+            destBuilding: demand.buildingId,
+        });
+
         return { record, carrierId: busyCandidate.carrierId, queued: true };
     }
 

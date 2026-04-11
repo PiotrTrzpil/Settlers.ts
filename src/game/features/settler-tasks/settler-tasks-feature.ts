@@ -17,7 +17,6 @@ import type { CombatExports } from '../combat';
 import type { BuildingPileRegistry } from '../inventory';
 import type { SettlerLocationExports } from '../settler-location';
 import type { TerrainData } from '../../terrain';
-import type { BarracksTrainingManager } from '../barracks';
 import { SettlerTaskSystem, SearchType } from './index';
 import { ChoreoSystem } from '../../systems/choreo';
 import { createWaterHandler } from './work-handlers';
@@ -27,8 +26,6 @@ export interface SettlerTaskExports {
     settlerTaskSystem: SettlerTaskSystem;
     /** Shared choreography executor registry — features register task types here. */
     choreoSystem: ChoreoSystem;
-    /** Allows BarracksFeature to inject its training manager after loading. */
-    setBarracksTrainingManager: (getter: () => BarracksTrainingManager) => void;
     /** Inject BuildingPileRegistry once game data is loaded. */
     setPileRegistry: (registry: BuildingPileRegistry) => void;
 }
@@ -60,10 +57,6 @@ export const SettlerTaskFeature: FeatureDefinition = {
         // The lazy getter in SettlerTaskSystem tolerates null until then.
         let pileRegistry: BuildingPileRegistry | null = null;
 
-        // Barracks training manager is wired lazily by BarracksFeature after it loads.
-        // The closure reads the mutable variable at call time, not at construction time.
-        let barracksTrainingManagerGetter: (() => BarracksTrainingManager) | undefined;
-
         // Shared choreography executor registry — core executors registered in WorkerTaskExecutor ctor;
         // domain features (recruit) register their task types after create() runs.
         const choreoSystem = new ChoreoSystem();
@@ -79,7 +72,6 @@ export const SettlerTaskFeature: FeatureDefinition = {
             workAreaStore,
             buildingOverlayManager,
             getProductionControlManager: () => productionControlManager,
-            getBarracksTrainingManager: (() => barracksTrainingManagerGetter?.()) as () => BarracksTrainingManager,
             constructionSiteManager,
             executeCommand: ctx.executeCommand,
             materialTransfer,
@@ -90,9 +82,6 @@ export const SettlerTaskFeature: FeatureDefinition = {
         const exports: SettlerTaskExports = {
             settlerTaskSystem,
             choreoSystem,
-            setBarracksTrainingManager: (getter: () => BarracksTrainingManager) => {
-                barracksTrainingManagerGetter = getter;
-            },
             setPileRegistry: (registry: BuildingPileRegistry) => {
                 pileRegistry = registry;
             },
@@ -103,6 +92,7 @@ export const SettlerTaskFeature: FeatureDefinition = {
             runtimes: settlerTaskSystem.runtimes,
             workerTracker: settlerTaskSystem.workerTracker,
             choreographyStore: settlerTaskSystem.getChoreographyStore(),
+            getOrCreateRuntime: id => settlerTaskSystem.getOrCreateRuntime(id),
         });
 
         return {

@@ -7,16 +7,22 @@
  */
 
 import { BuildingType } from '@/game/buildings/building-type';
-import { getBuildingFootprint } from '@/game/buildings/types';
+import { getBuildingBlockArea, getBuildingFootprint, isMineBuilding } from '@/game/buildings/types';
+import { GRID_DELTAS, NUMBER_OF_DIRECTIONS } from '@/game/systems/hex-directions';
 import { SlotKind } from '@/game/core/pile-kind';
 import { Race } from '@/game/core/race';
 import { query } from '@/game/ecs';
 import { EntityType, UnitType, tileKey, Tile } from '@/game/entity';
+import type { EventBus } from '@/game/event-bus';
+import { populateMapBuildings } from '@/game/features/building-construction';
+import { populateMapSettlers } from '@/game/systems/map-settlers';
 import type { GameServices } from '@/game/game-services';
 import type { GameState } from '@/game/game-state';
 import { MapObjectType } from '@/game/types/map-object-types';
+import type { MapBuildingData, MapSettlerData } from '@/resources/map/map-entity-data';
 import { canPlaceBuildingFootprint } from '@/game/systems/placement';
 import { spiralSearch } from '@/game/utils/spiral-search';
+import type { ExecuteCommand } from '@/game/commands';
 import { formatSlots } from './simulation-timeline';
 import { TERRAIN, type TestMap } from './test-map';
 import type { OreType } from '@/game/features/ore-veins/ore-type';
@@ -110,22 +116,7 @@ export class SmartBuildingPlacer {
     /** Find the closest valid position to center. */
     findBuildingPosition(buildingType: BuildingType, race = Race.Roman): Tile {
         const result = spiralSearch({ x: this.centerX, y: this.centerY }, this.mapWidth, this.mapHeight, ({ x, y }) => {
-            if (
-                !canPlaceBuildingFootprint(
-                    this.terrain,
-                    this.state.groundOccupancy,
-                    x,
-                    y,
-                    buildingType,
-                    race,
-                    this.state.buildingFootprint
-                )
-            )
-                return false;
-            // In tests, buildings are often placed as instantly completed.
-            // Avoid footprint tiles occupied by units to prevent trapping them.
-            const fp = getBuildingFootprint({ x, y }, buildingType, race);
-            return fp.every(t => !this.state.unitOccupancy.has(tileKey(t)));
+            return this.isValidBuildingPosition(x, y, buildingType, race);
         });
         if (!result) throw new Error(`SmartBuildingPlacer: no valid position for ${buildingType}`);
         return result;
@@ -134,24 +125,52 @@ export class SmartBuildingPlacer {
     /** Find the closest valid position to a given tile. */
     findBuildingPositionNear(tile: Tile, buildingType: BuildingType, race = Race.Roman): Tile {
         const result = spiralSearch(tile, this.mapWidth, this.mapHeight, ({ x, y }) => {
-            if (
-                !canPlaceBuildingFootprint(
-                    this.terrain,
-                    this.state.groundOccupancy,
-                    x,
-                    y,
-                    buildingType,
-                    race,
-                    this.state.buildingFootprint
-                )
-            )
-                return false;
-            const fp = getBuildingFootprint({ x, y }, buildingType, race);
-            return fp.every(t => !this.state.unitOccupancy.has(tileKey(t)));
+            return this.isValidBuildingPosition(x, y, buildingType, race);
         });
         if (!result)
             throw new Error(`SmartBuildingPlacer: no valid position near (${tile.x},${tile.y}) for ${buildingType}`);
         return result;
+    }
+
+    /**
+     * Check if a building can be placed at (x, y) without overlapping existing block areas.
+     * Ensures a 1-tile gap between the new building's block area and any existing buildingOccupancy,
+     * so workers can always path between buildings.
+     */
+    private isValidBuildingPosition(x: number, y: number, buildingType: BuildingType, race: Race): boolean {
+        if (
+            !canPlaceBuildingFootprint(
+                this.terrain,
+                this.state.groundOccupancy,
+                x,
+                y,
+                buildingType,
+                race,
+                this.state.buildingFootprint
+            )
+        ) {
+            return false;
+        }
+        const fp = getBuildingFootprint({ x, y }, buildingType, race);
+        if (!fp.every(t => !this.state.unitOccupancy.has(tileKey(t)))) {
+            return false;
+        }
+        // Block area of the candidate must not overlap or be adjacent to existing block areas.
+        // This guarantees a 1-tile walkable gap between buildings.
+        const blockArea = getBuildingBlockArea({ x, y }, buildingType, race);
+        for (const tile of blockArea) {
+            if (this.state.buildingOccupancy.has(tileKey(tile))) {
+                return false;
+            }
+            // Check 1-tile gap: no hex neighbor of any block tile should be in existing block area
+            for (let d = 0; d < NUMBER_OF_DIRECTIONS; d++) {
+                const [dx, dy] = GRID_DELTAS[d]!;
+                if (this.state.buildingOccupancy.has(tileKey({ x: tile.x + dx, y: tile.y + dy }))) {
+                    return false;
+                }
+            }
+        }
+        return true;
     }
 
     /** Find any non-occupied tile near center (for goods piles). */
@@ -394,4 +413,65 @@ export function fillOreSquare(
             }
         }
     }
+}
+
+// ─── Map-data population (real map-load pipeline) ─────────────────
+
+export function populateMapData(
+    state: GameState,
+    services: GameServices,
+    eventBus: EventBus,
+    map: TestMap,
+    buildings: MapBuildingData[],
+    settlers: MapSettlerData[]
+): { buildingCount: number; settlerCount: number } {
+    const mapBuildings = populateMapBuildings(state, buildings, {
+        terrain: map.terrain,
+    });
+    const settlerCount = populateMapSettlers(state, settlers, eventBus);
+
+    services.settlerTaskSystem.relocateUnitsFromFootprints();
+
+    for (const { buildingId, buildingType, race } of mapBuildings) {
+        eventBus.emit('building:completed', { buildingId, buildingType, race });
+    }
+
+    return { buildingCount: mapBuildings.length, settlerCount };
+}
+
+// ─── Mine placement ──────────────────────────────────────────────
+
+export function placeMineBuilding(
+    placer: SmartBuildingPlacer,
+    map: TestMap,
+    services: GameServices,
+    execute: ExecuteCommand,
+    buildingType: BuildingType,
+    oreType: OreType,
+    oreLevel: number,
+    mapWidth: number,
+    mapHeight: number
+): number {
+    if (!isMineBuilding(buildingType)) {
+        throw new Error(`${buildingType} is not a mine building`);
+    }
+    const pos = placer.findMinePosition();
+    fillRockSquare(map, pos.x, pos.y, 6, mapWidth, mapHeight);
+
+    const result = execute({
+        type: 'place_building',
+        buildingType,
+        x: pos.x,
+        y: pos.y,
+        player: 0,
+        race: Race.Roman,
+        completed: true,
+        spawnWorker: true,
+    });
+    if (!result.success) {
+        throw new Error(`Failed to place mine ${buildingType} at (${pos.x}, ${pos.y}): ${result.error}`);
+    }
+
+    fillOreSquare(services, pos.x, pos.y, 4, oreType, oreLevel, mapWidth, mapHeight);
+    return result.entityId;
 }

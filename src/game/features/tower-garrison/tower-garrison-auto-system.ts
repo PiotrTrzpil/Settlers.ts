@@ -31,6 +31,9 @@ import { seconds } from '@/game/core/tick-rate';
 /** Number of ticks between auto-garrison scans. */
 const SCAN_INTERVAL_TICKS = seconds(1);
 
+/** Max Chebyshev distance (tiles) to search for idle soldiers when auto-garrisoning. */
+const AUTO_GARRISON_SEARCH_RADIUS = 40;
+
 export interface AutoGarrisonSystemConfig {
     manager: TowerGarrisonManager;
     unitReservation: UnitReservationRegistry;
@@ -147,12 +150,13 @@ export class AutoGarrisonSystem implements TickSystem {
      * Find the nearest idle garrison-eligible unit for the given player.
      * Prefers Swordsman-role units; falls back to Bowman-role if none found.
      * Distance metric: Chebyshev distance to the tower door.
+     * Only considers units within {@link AUTO_GARRISON_SEARCH_RADIUS} tiles.
      */
     private findNearestIdleSoldier(player: number, doorX: number, doorY: number, buildingId: number): number | null {
-        let bestSwordsmanId: number | null = null;
-        let bestSwordsmanDist = Infinity;
-        let bestBowmanId: number | null = null;
-        let bestBowmanDist = Infinity;
+        const best = {
+            swordsman: { id: null as number | null, dist: Infinity },
+            bowman: { id: null as number | null, dist: Infinity },
+        };
 
         for (const entity of this.gameState.entityIndex.ofTypeAndPlayer(EntityType.Unit, player)) {
             if (entity.hidden) {
@@ -163,21 +167,18 @@ export class AutoGarrisonSystem implements TickSystem {
             }
 
             const dist = Math.max(Math.abs(entity.x - doorX), Math.abs(entity.y - doorY));
+            if (dist > AUTO_GARRISON_SEARCH_RADIUS) {
+                continue;
+            }
             const role = getGarrisonRole(entity.subType as UnitType)!;
+            const entry = best[role];
 
-            if (role === 'swordsman') {
-                if (dist < bestSwordsmanDist) {
-                    bestSwordsmanDist = dist;
-                    bestSwordsmanId = entity.id;
-                }
-            } else {
-                if (dist < bestBowmanDist) {
-                    bestBowmanDist = dist;
-                    bestBowmanId = entity.id;
-                }
+            if (dist < entry.dist) {
+                entry.dist = dist;
+                entry.id = entity.id;
             }
         }
 
-        return bestSwordsmanId ?? bestBowmanId;
+        return best.swordsman.id ?? best.bowman.id;
     }
 }

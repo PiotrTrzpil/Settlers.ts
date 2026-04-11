@@ -10,8 +10,8 @@ import type { FeatureDefinition, FeatureContext, FeatureDiagnostics } from '../f
 import type { BuildingConstructionExports } from '../building-construction';
 import { VictoryConditionsSystem } from './victory-conditions-system';
 import type { GameResult } from './victory-conditions-system';
-import { EntityType } from '../../entity';
 import { BuildingType } from '../../buildings/building-type';
+import { forEachCompletedBuilding } from '../restore-utils';
 
 export interface VictoryConditionsExports {
     victorySystem: VictoryConditionsSystem;
@@ -58,15 +58,9 @@ export const VictoryConditionsFeature: FeatureDefinition = {
             persistence: 'none',
             onRestoreComplete() {
                 victorySystem.reset();
-                for (const e of ctx.gameState.entities) {
-                    if (e.type !== EntityType.Building) {
-                        continue;
-                    }
-                    if (constructionSiteManager.hasSite(e.id)) {
-                        continue;
-                    }
+                forEachCompletedBuilding(ctx.gameState, constructionSiteManager, e => {
                     victorySystem.onBuildingCompleted(e.subType as BuildingType, e.player);
-                }
+                });
             },
             diagnostics: (): FeatureDiagnostics => {
                 const result: GameResult = victorySystem.getResult();

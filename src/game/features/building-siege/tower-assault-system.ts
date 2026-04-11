@@ -17,12 +17,11 @@ import type { TickSystem } from '../../core/tick-system';
 import type { GameState } from '../../game-state';
 import type { EventBus } from '../../event-bus';
 import type { Entity, Tile } from '../../entity';
-import { EntityType, UnitType, BuildingType, tileKey, EXTENDED_OFFSETS } from '../../entity';
+import { UnitType, BuildingType, tileKey } from '../../entity';
 import { isDarkTribe } from '../../core/race';
 import { getCombatStats } from '../combat/combat-state';
 import { hexDistanceTo } from '../../systems/hex-directions';
-import { isGarrisonBuildingType } from '../tower-garrison/internal/garrison-capacity';
-import { isSwordsman } from './siege-helpers';
+import { isIdleSwordsman, findNearbyEnemyGarrison, getBuildingPerimeterTiles } from './siege-helpers';
 import { BUILDING_SEARCH_RADIUS } from './siege-types';
 import { BuildingHealthTracker, getBuildingMaxHealth } from '../../systems/building-health';
 import type { CombatSystem } from '../combat/combat-system';
@@ -162,7 +161,7 @@ export class TowerAssaultSystem implements TickSystem {
 
     /** Find dark tribe swordsmen at the building perimeter that are idle (not fighting, not moving). */
     private findIdleAttackersAtPerimeter(building: Entity): Entity[] {
-        const perimeter = this.getPerimeterTiles(building);
+        const perimeter = getBuildingPerimeterTiles(building, this.gameState);
         const attackers: Entity[] = [];
 
         for (const tile of perimeter) {
@@ -171,21 +170,10 @@ export class TowerAssaultSystem implements TickSystem {
                 continue;
             }
             const unit = this.gameState.getEntity(occupantId);
-            if (!unit || unit.type !== EntityType.Unit || unit.hidden) {
+            if (!unit || unit.player === building.player || !isDarkTribe(unit.race)) {
                 continue;
             }
-            if (unit.player === building.player) {
-                continue;
-            }
-            if (!isDarkTribe(unit.race) || !isSwordsman(unit.subType as UnitType)) {
-                continue;
-            }
-            // Only idle units deal structural damage — fighting units are busy with enemies
-            if (this.combatSystem.isInCombat(occupantId)) {
-                continue;
-            }
-            const controller = this.gameState.movement.getController(occupantId);
-            if (controller && controller.state !== 'idle') {
+            if (!isIdleSwordsman(unit, this.unitReservation, this.combatSystem, this.gameState)) {
                 continue;
             }
             attackers.push(unit);
@@ -221,46 +209,13 @@ export class TowerAssaultSystem implements TickSystem {
 
     /** Check if a unit is on a tile adjacent to the building's footprint. */
     private isAdjacentToBuilding(unit: Tile, building: Entity): boolean {
-        const perimeter = this.getPerimeterTiles(building);
+        const perimeter = getBuildingPerimeterTiles(building, this.gameState);
         return perimeter.some(t => t.x === unit.x && t.y === unit.y);
-    }
-
-    /**
-     * Get all walkable tiles adjacent to a building's footprint.
-     * These are the valid positions for dark tribe attackers.
-     */
-    private getPerimeterTiles(building: Entity): Tile[] {
-        const tiles: Tile[] = [];
-        const seen = new Set<string>();
-        const bx = building.x;
-        const by = building.y;
-        const range = 8;
-        for (let dy = -range; dy <= range; dy++) {
-            for (let dx = -range; dx <= range; dx++) {
-                const tx = bx + dx;
-                const ty = by + dy;
-                const key = tileKey({ x: tx, y: ty });
-                if (!this.gameState.buildingOccupancy.has(key)) {
-                    continue;
-                }
-                for (const [ox, oy] of EXTENDED_OFFSETS) {
-                    const nx = tx + ox;
-                    const ny = ty + oy;
-                    const nKey = tileKey({ x: nx, y: ny });
-                    if (seen.has(nKey) || this.gameState.buildingOccupancy.has(nKey)) {
-                        continue;
-                    }
-                    seen.add(nKey);
-                    tiles.push({ x: nx, y: ny });
-                }
-            }
-        }
-        return tiles;
     }
 
     /** Find the closest walkable perimeter tile to a unit. */
     private findNearestPerimeterTile(unit: Entity, building: Entity): Tile | undefined {
-        const perimeter = this.getPerimeterTiles(building);
+        const perimeter = getBuildingPerimeterTiles(building, this.gameState);
         let best: Tile | undefined;
         let bestDist = Infinity;
         for (const tile of perimeter) {
@@ -276,26 +231,7 @@ export class TowerAssaultSystem implements TickSystem {
     // ── Target finding ──────────────────────────
 
     private findAssaultTarget(unit: Entity): Entity | undefined {
-        const nearby = this.gameState.getEntitiesInRadius(unit, BUILDING_SEARCH_RADIUS);
-        let best: Entity | undefined;
-        let bestDist = Infinity;
-
-        for (const candidate of nearby) {
-            if (candidate.type !== EntityType.Building || candidate.player === unit.player) {
-                continue;
-            }
-            if (!isGarrisonBuildingType(candidate.subType as BuildingType)) {
-                continue;
-            }
-            const dx = candidate.x - unit.x;
-            const dy = candidate.y - unit.y;
-            const dist = dx * dx + dy * dy;
-            if (dist < bestDist) {
-                bestDist = dist;
-                best = candidate;
-            }
-        }
-        return best;
+        return findNearbyEnemyGarrison(unit, BUILDING_SEARCH_RADIUS, this.gameState);
     }
 
     private ensureAssault(building: Entity): void {
@@ -314,17 +250,10 @@ export class TowerAssaultSystem implements TickSystem {
 
     private scanDarkTribeSwordsmen(): void {
         for (const entity of this.gameState.entities) {
-            if (entity.type !== EntityType.Unit || entity.hidden) {
+            if (!isDarkTribe(entity.race)) {
                 continue;
             }
-            if (!isDarkTribe(entity.race) || !isSwordsman(entity.subType as UnitType)) {
-                continue;
-            }
-            if (this.unitReservation.isReserved(entity.id) || this.combatSystem.isInCombat(entity.id)) {
-                continue;
-            }
-            const controller = this.gameState.movement.getController(entity.id);
-            if (controller && controller.state !== 'idle') {
+            if (!isIdleSwordsman(entity, this.unitReservation, this.combatSystem, this.gameState)) {
                 continue;
             }
             this.tryStartAssault(entity);

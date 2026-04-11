@@ -39,7 +39,7 @@ async function loadOneBuildingSprites(
     const hasSplitJobs = info.constructionIndex !== undefined;
     const constructionJobIndex = info.constructionIndex ?? info.index;
     const constructionDirIndex = hasSplitJobs ? 0 : BUILDING_DIRECTION.CONSTRUCTION;
-    const completedDirIndex = hasSplitJobs ? 0 : BUILDING_DIRECTION.COMPLETED;
+    const completedDirIndex = info.completedDirection ?? (hasSplitJobs ? 0 : BUILDING_DIRECTION.COMPLETED);
 
     const dirCount = ctx.spriteLoader.getDirectionCount(fileSet, constructionJobIndex);
     if (dirCount === 0) {

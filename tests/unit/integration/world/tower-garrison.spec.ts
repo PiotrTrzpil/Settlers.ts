@@ -1,30 +1,14 @@
 /**
- * Integration tests for tower garrison.
+ * Integration tests for tower garrison — basic commands, selection, ungarrison & lifecycle.
  *
- * All garrison operations are driven via the same commands the UI uses.
- * Tests cover:
- *   - Swordsman / bowman walk to tower and become hidden (garrisoned)
- *   - Multiple units fill their respective role slots
- *   - Swordsman slots are filled before bowman slots (command ordering)
- *   - Excess units beyond slot capacity are rejected
- *   - Non-military units (Carrier) cannot garrison
- *   - Unit already en-route to the same tower is not doubled up
- *   - Garrison fails for non-garrison buildings
- *   - garrison_selected_units: uses tile coords, clears selection on success
- *   - Ejected unit becomes visible at approach tile
- *   - Cannot eject the last garrisoned unit
- *   - Can eject last swordsman when bowmen remain (total > 1)
- *   - Tower removal ejects all garrisoned units
- *   - Full tower rejects additional units
+ * Edge cases (pathfinding, race-specific, mass garrison) are in tower-garrison-edge-cases.spec.ts.
  */
 
 import { describe, it, expect, afterEach } from 'vitest';
 import { Simulation, createSimulation, cleanupSimulation } from '../../helpers/test-simulation';
 import { installRealGameData } from '../../helpers/test-game-data';
-import { UnitType, tileKey, Tile } from '@/game/entity';
+import { UnitType } from '@/game/entity';
 import { BuildingType } from '@/game/buildings';
-import { Race } from '@/game/core/race';
-import { getBuildingDoorPos } from '@/game/data/game-data-access';
 import type { BuildingGarrisonState } from '@/game/features/tower-garrison/types';
 
 installRealGameData();
@@ -429,147 +413,5 @@ describe('Tower garrison – ungarrison & lifecycle', { timeout: 30_000 }, () =>
         expect(garrisonedCount(sim, towerId)).toBe(1);
         expect(isHidden(sim, unitId)).toBe(true);
         expect(sim.errors).toHaveLength(0);
-    });
-});
-
-// ─── Garrison edge cases ─────────────────────────────────────────────────────
-
-describe('Tower garrison – garrison edge cases', { timeout: 30_000 }, () => {
-    let sim: Simulation;
-
-    afterEach(() => {
-        sim?.destroy();
-        cleanupSimulation();
-    });
-
-    it('garrison command where pathfinding fails does not leave unit stuck en-route', () => {
-        sim = createSimulation();
-        const towerId = sim.placeBuilding(BuildingType.GuardTowerSmall);
-        const tower = sim.state.getEntityOrThrow(towerId, 'test');
-
-        const wallY = tower.y + 8;
-        for (let dy = 0; dy < 3; dy++) {
-            for (let x = 0; x < sim.mapWidth; x++) {
-                sim.fillTerrain(x, wallY + dy, 0, 0);
-            }
-        }
-
-        const unitId = sim.spawnUnit({ x: tower.x, y: wallY + 10 }, UnitType.Swordsman1);
-
-        garrisonUnits(sim, towerId, [unitId]);
-        sim.runTicks(100);
-
-        const isEnRoute = sim.services.garrisonManager.isEnRoute(unitId);
-        expect(isEnRoute).toBe(false);
-        expect(isHidden(sim, unitId)).toBe(false);
-    });
-
-    it('garrison pathfinding failure does not retry — gives up after 1 attempt', () => {
-        sim = createSimulation();
-        sim.state.movement.verbose = true;
-
-        const towerId = sim.placeBuilding(BuildingType.GuardTowerSmall);
-        const tower = sim.state.getEntityOrThrow(towerId, 'test');
-
-        const wallY = tower.y + 8;
-        for (let dy = 0; dy < 3; dy++) {
-            for (let x = 0; x < sim.mapWidth; x++) {
-                sim.fillTerrain(x, wallY + dy, 0, 0);
-            }
-        }
-
-        const unitId = sim.spawnUnit({ x: tower.x, y: wallY + 10 }, UnitType.Swordsman1);
-
-        let pathFailCount = 0;
-        sim.eventBus.on('movement:pathFailed', ({ unitId: id }) => {
-            if (id === unitId) pathFailCount++;
-        });
-
-        garrisonUnits(sim, towerId, [unitId]);
-        sim.runTicks(100);
-
-        expect(pathFailCount).toBe(1);
-    });
-
-    it('Mayan GuardTowerBig: second soldier from right garrisons (first already inside)', () => {
-        sim = createSimulation();
-        (sim.state.playerRaces as Map<number, Race>).set(0, Race.Mayan);
-
-        const towerId = sim.placeBuilding(BuildingType.GuardTowerBig, 0, true, Race.Mayan);
-        const tower = sim.state.getEntityOrThrow(towerId, 'test');
-        const door = getBuildingDoorPos(tower, tower.race, tower.subType as BuildingType);
-
-        const firstId = sim.spawnUnitNear(towerId, UnitType.Swordsman1)[0]!;
-        garrisonUnits(sim, towerId, [firstId]);
-        waitForGarrisoned(sim, towerId, 1, 'first soldier garrisoned');
-        expect(isHidden(sim, firstId)).toBe(true);
-
-        const secondId = sim.spawnUnit({ x: tower.x + 15, y: tower.y }, UnitType.Swordsman1);
-
-        let stoppedPos: Tile | null = null;
-        sim.eventBus.on('unit:movementStopped', ({ unitId }) => {
-            if (unitId === secondId) {
-                const u = sim.state.getEntity(secondId);
-                if (u) stoppedPos = { x: u.x, y: u.y };
-            }
-        });
-
-        const result = garrisonUnits(sim, towerId, [secondId]);
-        expect(result.success).toBe(true);
-
-        waitForGarrisoned(sim, towerId, 2, 'second soldier from right garrisoned');
-
-        if (garrisonedCount(sim, towerId) < 2) {
-            const u = sim.state.getEntityOrThrow(secondId, 'diag');
-            const chebyshev = Math.max(Math.abs(u.x - door.x), Math.abs(u.y - door.y));
-            console.log(`[DIAG] tower=(${tower.x},${tower.y}) door=(${door.x},${door.y})`);
-            const sp = stoppedPos as Tile | null;
-            console.log(`[DIAG] unit stopped at (${sp?.x},${sp?.y}), now at (${u.x},${u.y})`);
-            console.log(`[DIAG] chebyshev from door=${chebyshev}`);
-            console.log(`[DIAG] door in buildingOccupancy=${sim.state.buildingOccupancy.has(tileKey(door))}`);
-            console.log(`[DIAG] isEnRoute=${sim.services.garrisonManager.isEnRoute(secondId)}`);
-            console.log(`[DIAG] hidden=${u.hidden}`);
-            const doorOccupant = sim.state.unitOccupancy.get(tileKey(door));
-            console.log(`[DIAG] door unitOccupancy=${doorOccupant} (tower=${towerId}, first=${firstId})`);
-        }
-
-        expect(garrisonedCount(sim, towerId)).toBe(2);
-        expect(isHidden(sim, secondId)).toBe(true);
-        expect(sim.errors).toHaveLength(0);
-    });
-
-    it('garrisoned unit does not ghost-block the door tile for subsequent units', () => {
-        sim = createSimulation();
-        const towerId = sim.placeBuilding(BuildingType.GuardTowerSmall);
-        const tower = sim.state.getEntityOrThrow(towerId, 'test');
-        const door = getBuildingDoorPos(tower, tower.race, tower.subType as BuildingType);
-
-        const firstId = sim.spawnUnitNear(towerId, UnitType.Swordsman1)[0]!;
-        garrisonUnits(sim, towerId, [firstId]);
-        waitForGarrisoned(sim, towerId, 1, 'first soldier garrisoned');
-
-        expect(sim.state.movement.hasController(firstId)).toBe(false);
-
-        const doorOccupant = sim.state.unitOccupancy.get(tileKey(door));
-        expect(doorOccupant).not.toBe(firstId);
-
-        const bowmanId = sim.spawnUnitNear(towerId, UnitType.Bowman1)[0]!;
-        garrisonUnits(sim, towerId, [bowmanId]);
-        waitForGarrisoned(sim, towerId, 2, 'second unit garrisoned after first');
-
-        expect(garrisonedCount(sim, towerId)).toBe(2);
-        expect(isHidden(sim, bowmanId)).toBe(true);
-        expect(sim.errors).toHaveLength(0);
-    });
-
-    it('door tile is not in buildingOccupancy (must be walkable for approach)', () => {
-        sim = createSimulation();
-        const towerId = sim.placeBuilding(BuildingType.GuardTowerSmall);
-        const tower = sim.state.getEntityOrThrow(towerId, 'test');
-
-        const door = getBuildingDoorPos(tower, tower.race, tower.subType as BuildingType);
-
-        const doorBlocked = sim.state.buildingOccupancy.has(tileKey(door));
-        expect(doorBlocked).toBe(false);
     });
 });

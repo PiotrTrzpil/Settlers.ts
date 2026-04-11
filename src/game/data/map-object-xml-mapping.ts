@@ -44,7 +44,18 @@ export const MAP_OBJECT_TYPE_TO_XML_ID: Partial<Record<MapObjectType, string>> =
     [MapObjectType.DarkTree4A]: 'OBJECT_DARKTREE04A',
     [MapObjectType.DarkTree5A]: 'OBJECT_DARKTREE05A',
 
-    // ---- Resources ----
+    // ---- Resources — harvestable stone (12 depletion levels, all blocking=2 in XML) ----
+    [MapObjectType.ResourceStone1]: 'OBJECT_STONEMINE1_11',
+    [MapObjectType.ResourceStone2]: 'OBJECT_STONEMINE1_10',
+    [MapObjectType.ResourceStone3]: 'OBJECT_STONEMINE1_09',
+    [MapObjectType.ResourceStone4]: 'OBJECT_STONEMINE1_08',
+    [MapObjectType.ResourceStone5]: 'OBJECT_STONEMINE1_07',
+    [MapObjectType.ResourceStone6]: 'OBJECT_STONEMINE1_06',
+    [MapObjectType.ResourceStone7]: 'OBJECT_STONEMINE1_05',
+    [MapObjectType.ResourceStone8]: 'OBJECT_STONEMINE1_04',
+    [MapObjectType.ResourceStone9]: 'OBJECT_STONEMINE1_03',
+    [MapObjectType.ResourceStone10]: 'OBJECT_STONEMINE1_02',
+    [MapObjectType.ResourceStone11]: 'OBJECT_STONEMINE1_01',
     [MapObjectType.ResourceStone12]: 'OBJECT_STONEMINE1_00',
     [MapObjectType.ResourceDarkStone]: 'OBJECT_DARKSTONEMINE1_00',
 

@@ -416,11 +416,10 @@ function buildFinalPath(
  * Uses A* with hex distance heuristic and bucket priority queue.
  * Applies path smoothing to remove unnecessary zigzags.
  *
- * A* considers terrain and building footprints for blocking. Unit-occupied tiles
- * are penalized (1.5x cost) but not blocked — collisions are resolved at movement time.
- *
- * TODO: Map objects with blocking > 0 in objectInfo.xml (trees, cacti, large stones, etc.)
- * should also block pathfinding. Currently units can path through blocking map objects.
+ * A* considers terrain, building footprints, and map object blocking areas for blocking.
+ * Unit-occupied tiles are penalized (1.5x cost) but not blocked — collisions are resolved
+ * at movement time. Map object blocking uses the `blocking` field from objectInfo.xml,
+ * interpreted as a tile count, expanded outward from the object's center via BFS.
  *
  * @param startX Starting tile X coordinate
  * @param startY Starting tile Y coordinate

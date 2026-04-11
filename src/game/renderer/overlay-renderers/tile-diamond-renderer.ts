@@ -9,6 +9,10 @@ import {
     FOOTPRINT_DOOR_COLOR,
     UNIT_POSITION_TILE_COLOR,
     UNIT_DIRECTION_ARROW_COLOR,
+    OCCUPANCY_BLOCKED_COLOR,
+    OCCUPANCY_OBJECT_BLOCKED_COLOR,
+    OCCUPANCY_WALKABLE_COLOR,
+    OCCUPANCY_UNIT_COLOR,
     SHADER_VERTEX_SCALE,
 } from '../entity-renderer-constants';
 import type { OverlaySession } from './overlay-session';
@@ -203,6 +207,117 @@ export class TileDiamondRenderer {
             // Draw direction arrow from movement controller's canonical direction
             this.drawDirectionArrow(s, center.centerX, center.centerY, unitState.direction);
         }
+    }
+
+    /**
+     * Draw tile occupancy overlay with walkability coloring.
+     * Red = non-walkable (building footprint), yellow-orange = walkable ground, blue = unit.
+     * Batches diamonds by color to minimize draw calls.
+     */
+    public drawTileOccupancy(
+        s: OverlaySession,
+        groundOccupancy: ReadonlyMap<string, number>,
+        unitOccupancy: ReadonlyMap<string, number>,
+        buildingOccupancy: ReadonlySet<string>
+    ): void {
+        if (groundOccupancy.size === 0 && unitOccupancy.size === 0 && buildingOccupancy.size === 0) {
+            return;
+        }
+
+        s.gl.bindBuffer(s.gl.ARRAY_BUFFER, s.buffer);
+
+        // Partition ground occupancy into blocked vs walkable
+        const blocked: string[] = [];
+        const objectBlocked: string[] = [];
+        const walkable: string[] = [];
+        for (const key of groundOccupancy.keys()) {
+            if (buildingOccupancy.has(key)) {
+                blocked.push(key);
+            } else {
+                walkable.push(key);
+            }
+        }
+        // Blocking tiles not in groundOccupancy (e.g. multi-tile map object blocking)
+        for (const key of buildingOccupancy) {
+            if (!groundOccupancy.has(key)) {
+                objectBlocked.push(key);
+            }
+        }
+
+        this.drawOccupancyBatch(s, blocked, OCCUPANCY_BLOCKED_COLOR);
+        this.drawOccupancyBatch(s, objectBlocked, OCCUPANCY_OBJECT_BLOCKED_COLOR);
+        this.drawOccupancyBatch(s, walkable, OCCUPANCY_WALKABLE_COLOR);
+        this.drawOccupancyBatch(s, [...unitOccupancy.keys()], OCCUPANCY_UNIT_COLOR);
+    }
+
+    /** Batch-draw diamond overlays for a list of tile keys in one color. */
+    private drawOccupancyBatch(s: OverlaySession, keys: string[], color: readonly number[]): void {
+        if (keys.length === 0) {
+            return;
+        }
+        s.gl.vertexAttrib4f(s.aColor, color[0]!, color[1]!, color[2]!, color[3]!);
+
+        const { width, height } = s.ctx.mapSize;
+        const vpX = s.ctx.viewPoint.x;
+        const vpY = s.ctx.viewPoint.y;
+        const invScale = 1 / SHADER_VERTEX_SCALE;
+
+        // 6 vertices per diamond, 2 floats per vertex
+        const VERTS_PER_TILE = 12;
+        const MAX_BATCH = 256;
+        const batchBuf = new Float32Array(MAX_BATCH * VERTS_PER_TILE);
+        let count = 0;
+
+        for (const key of keys) {
+            const commaIdx = key.indexOf(',');
+            const tx = parseInt(key.slice(0, commaIdx), 10);
+            const ty = parseInt(key.slice(commaIdx + 1), 10);
+            if (tx < 0 || ty < 0 || tx >= width || ty >= height) {
+                continue;
+            }
+
+            const idx = s.ctx.mapSize.toIndex({ x: tx, y: ty });
+            const hWorld = heightToWorld(s.ctx.groundHeight[idx]!);
+
+            const top = shiftBuildingWorldPos(tileToWorld(tx, ty, hWorld, vpX, vpY));
+            const right = shiftBuildingWorldPos(tileToWorld(tx + 1, ty, hWorld, vpX, vpY));
+            const bottom = shiftBuildingWorldPos(tileToWorld(tx + 1, ty + 1, hWorld, vpX, vpY));
+            const left = shiftBuildingWorldPos(tileToWorld(tx, ty + 1, hWorld, vpX, vpY));
+
+            const off = count * VERTS_PER_TILE;
+            // Vertices in absolute world coords / SHADER_VERTEX_SCALE (shader multiplies by 0.4)
+            // Triangle 1: top, right, bottom
+            batchBuf[off] = top.worldX * invScale;
+            batchBuf[off + 1] = top.worldY * invScale;
+            batchBuf[off + 2] = right.worldX * invScale;
+            batchBuf[off + 3] = right.worldY * invScale;
+            batchBuf[off + 4] = bottom.worldX * invScale;
+            batchBuf[off + 5] = bottom.worldY * invScale;
+            // Triangle 2: top, bottom, left
+            batchBuf[off + 6] = top.worldX * invScale;
+            batchBuf[off + 7] = top.worldY * invScale;
+            batchBuf[off + 8] = bottom.worldX * invScale;
+            batchBuf[off + 9] = bottom.worldY * invScale;
+            batchBuf[off + 10] = left.worldX * invScale;
+            batchBuf[off + 11] = left.worldY * invScale;
+
+            count++;
+            if (count === MAX_BATCH) {
+                this.flushOccupancyBatch(s, batchBuf, count);
+                count = 0;
+            }
+        }
+        if (count > 0) {
+            this.flushOccupancyBatch(s, batchBuf, count);
+        }
+    }
+
+    private flushOccupancyBatch(s: OverlaySession, buf: Float32Array, count: number): void {
+        const vertexCount = count * 6;
+        // Use (0,0) as entity pos — vertices are already in world-relative coords
+        s.gl.vertexAttrib2f(s.aEntityPos, 0, 0);
+        s.gl.bufferData(s.gl.ARRAY_BUFFER, buf.subarray(0, count * 12), s.gl.DYNAMIC_DRAW);
+        s.gl.drawArrays(s.gl.TRIANGLES, 0, vertexCount);
     }
 
     /** Draw a small triangle arrow from tile center in the given EDirection. */

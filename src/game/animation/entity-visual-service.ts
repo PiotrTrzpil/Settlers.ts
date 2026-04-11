@@ -57,6 +57,8 @@ export interface AnimationIntent {
     stopped: boolean;
     /** If true, entity becomes invisible after the animation finishes (non-looping only) */
     hideOnComplete?: boolean;
+    /** If true, frames are resolved in reverse order (last frame first). */
+    reverse?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -82,6 +84,8 @@ export interface AnimationPlayback {
     playing: boolean;
     /** When true, the entity becomes invisible after a non-looping animation finishes. */
     hideOnComplete: boolean;
+    /** When true, frames are resolved in reverse order (last frame first). */
+    reverse: boolean;
 }
 
 /** Unit-only: smooth direction change. Stored separately because most entities never use it. */
@@ -98,6 +102,8 @@ export interface PlayOptions {
     startFrame?: number;
     /** When true, the entity becomes invisible after a non-looping animation finishes. */
     hideOnComplete?: boolean;
+    /** When true, frames are resolved in reverse order (last frame first). */
+    reverse?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -118,6 +124,8 @@ function createPlayback(sequenceKey: string, opts: PlayOptions, existing: Animat
         playing: true,
         // eslint-disable-next-line no-restricted-syntax -- hideOnComplete is an optional PlayOptions field; false is the correct default (stay visible after animation ends)
         hideOnComplete: opts.hideOnComplete ?? false,
+        // eslint-disable-next-line no-restricted-syntax -- reverse is an optional PlayOptions field; false is the correct default (play forward)
+        reverse: opts.reverse ?? false,
     };
 }
 
@@ -214,7 +222,14 @@ export class EntityVisualService {
         const existing = state.animation;
 
         if (existing && existing.sequenceKey === sequenceKey) {
-            // Same sequence — update options without restarting
+            // eslint-disable-next-line no-restricted-syntax -- reverse is optional; false is the correct default
+            const newReverse = opts.reverse ?? false;
+            if (existing.reverse !== newReverse) {
+                // Reverse flag changed — must restart to reset frame counter
+                state.animation = createPlayback(sequenceKey, opts, existing);
+                return;
+            }
+            // Same sequence, same direction — update options without restarting
             if (opts.direction !== undefined) {
                 existing.direction = opts.direction;
             }
@@ -304,7 +319,11 @@ export class EntityVisualService {
                 state.animation.elapsedMs = 0;
             }
         } else {
-            this.play(entityId, intent.sequence, { loop: intent.loop, hideOnComplete: intent.hideOnComplete });
+            this.play(entityId, intent.sequence, {
+                loop: intent.loop,
+                hideOnComplete: intent.hideOnComplete,
+                reverse: intent.reverse,
+            });
         }
     }
 

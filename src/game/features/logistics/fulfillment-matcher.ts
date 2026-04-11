@@ -13,6 +13,8 @@ import { getAvailableSupplies } from './resource-supply';
 import type { TransportJobStore } from './transport-job-store';
 import type { BuildingInventoryManager } from '../inventory';
 import type { StorageFilterManager } from '../../systems/inventory/storage-filter-manager';
+/** Reasons a supply candidate was rejected during matching. */
+export type MatchRejection = 'self' | 'storage_blocked' | 'fully_reserved' | 'no_supply';
 
 /**
  * Minimal request shape needed by the matcher.
@@ -97,11 +99,28 @@ function isStorageSourceAllowed(
  * Filters by: self-reference, entity existence, storage direction, and reservations.
  * Yields candidates in supply order (unsorted).
  */
+
+/** Rejection counters accumulated during candidate iteration. */
+export interface MatchRejectionStats {
+    suppliesFound: number;
+    /** Building IDs that had supply */
+    sourceIds: number[];
+    self: number;
+    storageBlocked: number;
+    fullyReserved: number;
+    filterRejected: number;
+}
+
+function createRejectionStats(): MatchRejectionStats {
+    return { suppliesFound: 0, sourceIds: [], self: 0, storageBlocked: 0, fullyReserved: 0, filterRejected: 0 };
+}
+
 function* iterateMatchCandidates(
     request: MatchableRequest,
     gameState: GameState,
     inventoryManager: BuildingInventoryManager,
-    options: MatchOptions
+    options: MatchOptions,
+    stats: MatchRejectionStats
 ): Generator<MatchCandidate> {
     const { playerId, jobStore, storageFilterManager } = options;
 
@@ -117,8 +136,12 @@ function* iterateMatchCandidates(
         minAmount: 1,
     });
 
+    stats.suppliesFound = supplies.length;
+    stats.sourceIds = supplies.map(s => s.buildingId);
+
     for (const supply of supplies) {
         if (supply.buildingId === request.buildingId) {
+            stats.self++;
             continue;
         }
 
@@ -132,6 +155,7 @@ function* iterateMatchCandidates(
                     storageFilterManager
                 )
             ) {
+                stats.storageBlocked++;
                 continue;
             }
         }
@@ -143,6 +167,7 @@ function* iterateMatchCandidates(
         }
 
         if (effectiveAmount <= 0) {
+            stats.fullyReserved++;
             continue;
         }
 
@@ -189,10 +214,12 @@ export function matchRequestToSupply(
     request: MatchableRequest,
     gameState: GameState,
     inventoryManager: BuildingInventoryManager,
-    options: MatchOptions = {}
+    options: MatchOptions = {},
+    outStats?: MatchRejectionStats
 ): FulfillmentMatch | null {
     const fullSupplyDistanceFactor = options.fullSupplyDistanceFactor ?? DEFAULT_FULL_SUPPLY_DISTANCE_FACTOR;
-    const candidates = iterateMatchCandidates(request, gameState, inventoryManager, options);
+    const stats = outStats ?? createRejectionStats();
+    const candidates = iterateMatchCandidates(request, gameState, inventoryManager, options, stats);
     const sorted = collectSortedMatches(candidates, request.amount);
 
     if (sorted.length === 0) {
@@ -231,9 +258,11 @@ export function findAllMatches(
     request: MatchableRequest,
     gameState: GameState,
     inventoryManager: BuildingInventoryManager,
-    options: MatchOptions = {}
+    options: MatchOptions = {},
+    outStats?: MatchRejectionStats
 ): FulfillmentMatch[] {
-    const candidates = iterateMatchCandidates(request, gameState, inventoryManager, options);
+    const stats = outStats ?? createRejectionStats();
+    const candidates = iterateMatchCandidates(request, gameState, inventoryManager, options, stats);
     return collectSortedMatches(candidates, request.amount);
 }
 

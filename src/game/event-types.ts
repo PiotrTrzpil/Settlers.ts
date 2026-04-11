@@ -299,6 +299,15 @@ export interface GameEventsCore {
         requestId: number;
         buildingId: number;
         materialType: EMaterialType;
+        /** Why matching failed: how many supplies found, how many rejected by each filter. */
+        rejection?: {
+            supplies: number;
+            sourceIds: number[];
+            self: number;
+            storageBlocked: number;
+            reserved: number;
+            filter: number;
+        };
     };
 
     /** Emitted when logistics cleanup completes after a building is destroyed */
@@ -329,6 +338,33 @@ export interface GameEventsCore {
         demandId: number;
         buildingId: number;
         materialType: EMaterialType;
+    };
+
+    /** Emitted when a follow-up job is queued for a busy carrier */
+    'logistics:preAssignQueued': {
+        carrierId: number;
+        demandId: number;
+        jobId: number;
+        materialType: EMaterialType;
+        sourceBuilding: number;
+        destBuilding: number;
+    };
+
+    /** Emitted when a queued pre-assignment is flushed and promoted to active */
+    'logistics:preAssignFlushed': {
+        carrierId: number;
+        demandId: number;
+        jobId: number;
+        success: boolean;
+        reason?: string;
+    };
+
+    /** Emitted when a queued pre-assignment is cancelled */
+    'logistics:preAssignCancelled': {
+        carrierId: number;
+        demandId: number;
+        jobId: number;
+        reason: string;
     };
 
     // === Inventory Events ===

@@ -70,8 +70,8 @@ export function createGameState(): GameState {
  * for units and resource state for stacked resources.
  */
 function wireEntityLifecycleEvents(eventBus: EventBus, movement: MovementSystem, _state: GameState): void {
-    eventBus.on('entity:created', ({ entityId, entityType: type, subType, x, y }) => {
-        if (type === EntityType.Unit) {
+    eventBus.on('entity:created', ({ entityId, entityType: type, subType, x, y, hidden }) => {
+        if (type === EntityType.Unit && !hidden) {
             const speed = getUnitTypeSpeed(subType as UnitType);
             movement.createController(entityId, { x, y }, speed);
         }

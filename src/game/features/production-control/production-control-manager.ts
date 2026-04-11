@@ -38,14 +38,20 @@ export class ProductionControlManager {
      * Register a building with the manager.
      *
      * Creates a fresh ProductionState with:
-     * - mode = ProductionMode.Even
+     * - mode = defaultMode (defaults to ProductionMode.Even)
      * - equal proportions (weight=1) for every recipe index 0..recipeCount-1
      * - empty queue, zero counts, roundRobinIndex=0
      *
      * @param buildingId  Entity ID of the building.
      * @param recipeCount Number of recipes available for this building.
+     * @param defaultMode Initial production mode (defaults to Even).
      */
-    initBuilding(buildingId: number, recipeCount: number): void {
+    initBuilding(buildingId: number, recipeCount: number, defaultMode: ProductionMode = ProductionMode.Even): void {
+        // Skip if state already exists (e.g. restored from a snapshot).
+        if (this.persistentStore.has(buildingId)) {
+            return;
+        }
+
         const proportions = new Map<number, number>();
         const productionCounts = new Map<number, number>();
 
@@ -55,7 +61,7 @@ export class ProductionControlManager {
         }
 
         const state: ProductionState = {
-            mode: ProductionMode.Even,
+            mode: defaultMode,
             proportions,
             queue: [],
             roundRobinIndex: 0,

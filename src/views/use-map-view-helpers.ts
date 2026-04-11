@@ -93,7 +93,7 @@ export function createGameActions(game: Game) {
         resetGameState(): void {
             try {
                 void clearSavedGameState();
-                game.restoreToInitialState();
+                game.resetWithStartResources();
                 log.info('Game state reset to initial map state');
             } catch (e) {
                 const err = e instanceof Error ? e : new Error(String(e));

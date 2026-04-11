@@ -197,6 +197,12 @@
                 emoji="🔲"
                 @update:modelValue="saveAndEmit()"
             />
+            <LayerCheckbox
+                v-model="visibility.showTileOccupancy"
+                label="Tile Occupancy"
+                emoji="🧱"
+                @update:modelValue="saveAndEmit()"
+            />
         </CollapseSection>
 
         <!-- Quick actions -->

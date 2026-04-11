@@ -13,6 +13,7 @@ import { GameState } from './game-state';
 import type { TerrainData } from './terrain';
 import type { TickSystem } from './core/tick-system';
 import { EntityType, UnitType, getUnitTypeSpeed } from './entity';
+import { MapObjectBlockingTracker } from './map-object-blocking';
 import { isAngelUnitType } from './core/unit-types';
 import { EventBus, EventSubscriptionManager } from './event-bus';
 import { EntityVisualService } from './animation/entity-visual-service';
@@ -144,6 +145,7 @@ export class GameServices {
     private readonly featureRegistry: FeatureRegistry;
     private readonly subscriptions = new EventSubscriptionManager();
     private readonly cleanupRegistry = new EntityCleanupRegistry();
+    private readonly mapObjectBlocking: MapObjectBlockingTracker;
 
     // ===== Shared kernel services (also exposed for command registration) =====
     public readonly unitReservation: UnitReservationRegistry;
@@ -215,13 +217,30 @@ export class GameServices {
         });
         gameState.initMovement(this.movement);
 
-        // Create movement controllers for units on spawn (skip ephemeral angels)
-        this.subscriptions.subscribe(eventBus, 'entity:created', ({ entityId, entityType: type, subType, x, y }) => {
-            if (type === EntityType.Unit && !isAngelUnitType(subType as UnitType)) {
-                const speed = getUnitTypeSpeed(subType as UnitType);
-                this.movement.createController(entityId, { x, y }, speed);
+        // 3b. Map object blocking — adds blocked tiles to buildingOccupancy so A* respects them.
+        this.mapObjectBlocking = new MapObjectBlockingTracker(gameState.buildingOccupancy);
+        this.subscriptions.subscribe(eventBus, 'entity:created', ({ entityId, entityType, subType, x, y }) => {
+            if (entityType === EntityType.MapObject) {
+                this.mapObjectBlocking.add(entityId, subType, { x, y });
             }
         });
+        this.cleanupRegistry.onEntityRemoved(entityId => {
+            this.mapObjectBlocking.remove(entityId);
+        });
+
+        // Create movement controllers for units on spawn (skip ephemeral angels and hidden units).
+        // Hidden units (e.g. garrisoned soldiers restored from save) don't need controllers —
+        // they'll get one when they exit the building via locationManager.exitBuilding().
+        this.subscriptions.subscribe(
+            eventBus,
+            'entity:created',
+            ({ entityId, entityType: type, subType, x, y, hidden }) => {
+                if (type === EntityType.Unit && !isAngelUnitType(subType as UnitType) && !hidden) {
+                    const speed = getUnitTypeSpeed(subType as UnitType);
+                    this.movement.createController(entityId, { x, y }, speed);
+                }
+            }
+        );
 
         // Remove movement controllers on entity removal
         this.cleanupRegistry.onEntityRemoved(entityId => {

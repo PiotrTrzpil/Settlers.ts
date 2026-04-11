@@ -72,4 +72,6 @@ export interface SerializedJobIntent {
     targetId?: number;
     /** Target position if the job had one. */
     targetPos?: Tile;
+    /** Approach position (adjacent tile for movement when target is non-walkable). */
+    approachPos?: Tile;
 }

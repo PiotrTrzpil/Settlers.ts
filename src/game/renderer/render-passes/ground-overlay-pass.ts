@@ -56,6 +56,19 @@ export class GroundOverlayPass implements IRenderPass {
         this.setupAttributes(gl);
         const s = this.beginSession(gl, viewPoint);
         s.drawUnitPositions(ctx.sortedEntities);
+        s.drawGarrisonPositionDots(ctx.sortedEntities, ctx.getBuildingOverlays);
+    }
+
+    /** Draw tile occupancy debug overlay (called after entity sprites). */
+    public drawTileOccupancy(gl: WebGL2RenderingContext, _projection: Float32Array, viewPoint: IViewPoint): void {
+        const { ctx } = this;
+        if (!ctx.renderSettings.showTileOccupancy) {
+            return;
+        }
+
+        this.setupAttributes(gl);
+        const s = this.beginSession(gl, viewPoint);
+        s.drawTileOccupancy(ctx.groundOccupancy, ctx.unitOccupancy, ctx.buildingOccupancy);
     }
 
     private beginSession(gl: WebGL2RenderingContext, viewPoint: IViewPoint): SelectionOverlayRenderer {

@@ -92,6 +92,14 @@ export const FOOTPRINT_DOOR_COLOR = [1.0, 0.3, 0.1, 0.5]; // Semi-transparent or
 export const UNIT_POSITION_TILE_COLOR = [0.2, 1.0, 0.4, 0.3]; // Semi-transparent green
 export const UNIT_DIRECTION_ARROW_COLOR = [1.0, 1.0, 0.2, 0.8]; // Bright yellow arrow
 
+// Tile occupancy debug visualization
+export const OCCUPANCY_BLOCKED_COLOR = [1.0, 0.2, 0.2, 0.35]; // Semi-transparent red (non-walkable — building footprint)
+export const OCCUPANCY_OBJECT_BLOCKED_COLOR = [0.8, 0.2, 0.6, 0.35]; // Semi-transparent magenta (non-walkable — map object blocking)
+export const OCCUPANCY_WALKABLE_COLOR = [1.0, 0.7, 0.1, 0.3]; // Semi-transparent yellow-orange (walkable ground — piles/objects)
+export const OCCUPANCY_UNIT_COLOR = [0.4, 0.6, 1.0, 0.3]; // Semi-transparent blue (unit-layer occupancy)
+export const GARRISON_POSITION_DOT_COLOR = [0.2, 1.0, 0.4, 0.8]; // Green dot for garrisoned units
+export const GARRISON_POSITION_DOT_SCALE = 0.55; // Dot for garrison positions
+
 // Circle overlay segments (used by work area circles)
 export const CIRCLE_OVERLAY_SEGMENTS = 64;
 

@@ -12,6 +12,7 @@ import type { RaceId } from '@/resources/game-data';
 import { OverlayCondition, OverlayLayer, type BuildingOverlayDef, type OverlaySpriteRef } from './types';
 import type { OverlayRegistry } from './overlay-registry';
 import { BUILDING_JOB_INDICES, OVERLAY_DIRECTION_BASE } from '../../renderer/sprite-metadata/jil-indices';
+import { BuildingType } from '../../buildings/building-type';
 import { createLogger } from '@/utilities/logger';
 
 const log = createLogger('OverlayDataLoader');
@@ -36,12 +37,16 @@ const FLAG_SPRITE_REF: OverlaySpriteRef = { gfxFile: 0, jobIndex: 0 };
  * Only Castle is known to have this mismatch.
  */
 const CASTLE_DIRECTION_OVERRIDES: ReadonlyMap<string, number> = new Map([
-    // GFX directions don't match XML patch order for castle towers.
-    ['BUILDING_CASTLE_TOWER1', 3], // back of top tower
-    ['BUILDING_CASTLE_TOWER2', 4], // back of right tower
-    ['BUILDING_CASTLE_TOWER3', 6], // back of left tower
-    ['BUILDING_CASTLE_TOWER1_FRONTWALL', 2], // front of top tower
-    // FRONTWALL (D5), TOWER2_FRONTWALL (D7), TOWER3_FRONTWALL (D8), DOOR (D9) match defaults
+    // When a building has overrides, ALL patches must be listed — no implicit defaults.
+    // Each tower pair: back=even, frontwall=odd (D2-D3 main, D4-D5 tower1, D6-D7 tower2, D8-D9 tower3)
+    ['BUILDING_CASTLE_FRONTWALL', 2], // main castle frontwall (D2)
+    ['BUILDING_CASTLE_TOWER1', 4], // back of top tower (D4)
+    ['BUILDING_CASTLE_TOWER1_FRONTWALL', 5], // front of top tower (D5)
+    ['BUILDING_CASTLE_TOWER2', 6], // back of right tower (D6)
+    ['BUILDING_CASTLE_TOWER2_FRONTWALL', 7], // front of right tower (D7)
+    ['BUILDING_CASTLE_TOWER3', 8], // back of left tower (D8)
+    ['BUILDING_CASTLE_TOWER3_FRONTWALL', 9], // front of left tower (D9)
+    ['BUILDING_CASTLE_DOOR', 10], // gate/door (D10)
 ]);
 
 const DIRECTION_OVERRIDES: ReadonlyMap<string, ReadonlyMap<string, number>> = new Map([
@@ -49,11 +54,20 @@ const DIRECTION_OVERRIDES: ReadonlyMap<string, ReadonlyMap<string, number>> = ne
 ]);
 
 /**
+ * Buildings whose completed sprite uses a non-default DIL direction.
+ * Castle uses D3 (tower0 backwall) instead of D1 — the tower overlays compose the rest.
+ */
+export const BUILDING_COMPLETED_DIRECTION: ReadonlyMap<BuildingType, number> = new Map([[BuildingType.Castle, 3]]);
+
+/**
  * Build a sprite ref for a patch overlay.
  *
  * The direction index is normally derived from the patch's position in the
  * race-specific XML patch list: `directionIndex = 2 + patchIndex`.
- * For buildings with known GFX/XML mismatches, an override table is used.
+ *
+ * When a building has a direction override table, ALL patches must be listed
+ * explicitly — no fallback to the default formula. This prevents fragile
+ * implicit ordering where adding/removing a patch silently shifts directions.
  *
  * @param patchIndex Position of this patch in the race's XML patch list (0-based).
  * @param parentJobIndex The parent building's JIL job index.
@@ -68,7 +82,19 @@ function buildOverlaySpriteRef(
     jobName: string
 ): OverlaySpriteRef {
     const overrides = DIRECTION_OVERRIDES.get(buildingXmlId);
-    const directionIndex = overrides?.get(jobName) ?? OVERLAY_DIRECTION_BASE + patchIndex;
+    let directionIndex: number;
+    if (overrides) {
+        const override = overrides.get(jobName);
+        if (override === undefined) {
+            throw new Error(
+                `Missing direction override for ${jobName} in ${buildingXmlId}. ` +
+                    'All patches must have explicit overrides when the building has an override table.'
+            );
+        }
+        directionIndex = override;
+    } else {
+        directionIndex = OVERLAY_DIRECTION_BASE + patchIndex;
+    }
     return {
         gfxFile,
         jobIndex: parentJobIndex,
@@ -163,6 +189,10 @@ function patchToDef(
  * This is race-specific — each race has its own patch list, so the same overlay
  * name maps to different compacted directions for different races.
  *
+ * When a building has a direction override table, it acts as a whitelist:
+ * only patches whose job name is in the table are registered. This prevents
+ * unlisted patches from being drawn with incorrect default directions.
+ *
  * Ensures unique keys by appending slot index on collision.
  */
 function convertPatches(
@@ -173,10 +203,16 @@ function convertPatches(
 ): BuildingOverlayDef[] {
     const defs: BuildingOverlayDef[] = [];
     const usedKeys = new Set<string>();
+    const overrides = DIRECTION_OVERRIDES.get(buildingXmlId);
     let overlayIndex = 0;
 
     for (const patch of patches) {
         if (!patch.job) {
+            continue;
+        }
+        // When overrides exist, skip patches not in the whitelist
+        if (overrides && !overrides.has(patch.job)) {
+            overlayIndex++;
             continue;
         }
         let def = patchToDef(patch, buildingXmlId, overlayIndex, gfxFile, parentJobIndex);

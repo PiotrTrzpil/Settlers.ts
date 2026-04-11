@@ -161,8 +161,9 @@ export function computeLayerPriority(
 // SpriteAtlasCacheManager
 // =============================================================================
 
-/** Callback for when essential sprites are ready (common sprites near player start) */
-export type EssentialSpritesCallback = () => void;
+/** Callback for when essential sprites are ready (common sprites near player start).
+ *  Receives the atlas and registry so the caller can expose them before notifying downstream. */
+export type EssentialSpritesCallback = (atlas: EntityTextureAtlas, registry: SpriteMetadataRegistry) => void;
 
 /**
  * Manages sprite atlas caching with progressive streaming.
@@ -251,7 +252,7 @@ export class SpriteAtlasCacheManager {
         if (moduleCached) {
             const result = this.restoreFromModuleCache(gl, moduleCached, textureUnit, paletteManager);
             if (result) {
-                onEssentialReady();
+                onEssentialReady(result.atlas, result.registry);
                 return result;
             }
             // Stale cache — fall through to streaming or fresh load
@@ -479,7 +480,7 @@ export class SpriteAtlasCacheManager {
                 `[${tEssential.toFixed(0)}ms] [restore] essential sprites ready ` +
                     `(${essentialCount} layers in ${Math.round(tEssential - t0)}ms)`
             );
-            onEssentialReady();
+            onEssentialReady(atlas, registry);
         };
 
         setPaletteCb((pd: Uint8Array | null) => {
@@ -507,7 +508,7 @@ export class SpriteAtlasCacheManager {
             // If essential wasn't fired (e.g. 0 essential layers), fire now
             if (!essentialFired) {
                 essentialFired = true;
-                onEssentialReady();
+                onEssentialReady(atlas, registry);
             }
 
             console.log(

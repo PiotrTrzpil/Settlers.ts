@@ -33,7 +33,12 @@ export function consumeProductionInputs(
         return false;
     }
     for (const material of inputs) {
-        manager.withdrawInput(buildingId, material, 1);
+        const withdrawn = manager.withdrawInput(buildingId, material, 1);
+        if (withdrawn === 0) {
+            throw new Error(
+                `consumeProductionInputs: building ${buildingId} had no stock for ${material} — canStartProduction should have prevented this`
+            );
+        }
     }
     return true;
 }

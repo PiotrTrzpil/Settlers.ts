@@ -1,10 +1,14 @@
 import { describe, it, expect, vi } from 'vitest';
 import { TickScheduler, NO_HANDLE } from '../../../src/game/systems/tick-scheduler';
+import { TICK_RATE } from '../../../src/game/core/tick-rate';
 
-// Helper: advance the scheduler by N ticks
+/** dt that advances the scheduler by exactly 1 tick-unit per call (simulates BASE_SPEED × gameSpeed = 1). */
+const DT_1X = 1 / TICK_RATE;
+
+// Helper: advance the scheduler by N ticks at 1x speed
 function advance(scheduler: TickScheduler, ticks: number): void {
     for (let i = 0; i < ticks; i++) {
-        scheduler.tick(0);
+        scheduler.tick(DT_1X);
     }
 }
 
@@ -19,7 +23,7 @@ describe('TickScheduler', () => {
             advance(scheduler, 4);
             expect(spy).not.toHaveBeenCalled();
 
-            scheduler.tick(0); // tick 5
+            scheduler.tick(DT_1X); // tick 5
             expect(spy).toHaveBeenCalledOnce();
         });
 
@@ -200,7 +204,7 @@ describe('TickScheduler', () => {
             expect(scheduler.currentTick).toBe(0);
 
             advance(scheduler, 3);
-            expect(scheduler.currentTick).toBe(3);
+            expect(scheduler.currentTick).toBeCloseTo(3, 10);
         });
     });
 
@@ -211,7 +215,7 @@ describe('TickScheduler', () => {
 
             scheduler.schedule(2, spy);
             advance(scheduler, 1);
-            expect(scheduler.currentTick).toBe(1);
+            expect(scheduler.currentTick).toBeCloseTo(1, 10);
 
             scheduler.destroy();
 
@@ -229,7 +233,7 @@ describe('TickScheduler', () => {
             const ticks: number[] = [];
 
             function reschedule(): void {
-                ticks.push(scheduler.currentTick);
+                ticks.push(Math.round(scheduler.currentTick));
                 scheduler.schedule(3, reschedule);
             }
 
@@ -239,5 +243,52 @@ describe('TickScheduler', () => {
             // Should fire at ticks 3, 6, 9, 12
             expect(ticks).toEqual([3, 6, 9, 12]);
         });
+    });
+});
+
+describe('TickScheduler — game speed scaling', () => {
+    it('fires callbacks sooner at higher game speed', () => {
+        const scheduler = new TickScheduler();
+        const spy = vi.fn();
+
+        scheduler.schedule(10, spy);
+
+        // At 2x speed, dt is doubled — each tick advances by 2 instead of 1
+        const dt2x = DT_1X * 2;
+        for (let i = 0; i < 5; i++) {
+            scheduler.tick(dt2x);
+        }
+        // 5 real ticks × 2 advance = 10 game-ticks → should have fired
+        expect(spy).toHaveBeenCalledOnce();
+    });
+
+    it('fires callbacks later at lower game speed', () => {
+        const scheduler = new TickScheduler();
+        const spy = vi.fn();
+
+        scheduler.schedule(10, spy);
+
+        // At 0.5x speed, dt is halved — each tick advances by 0.5
+        const dtHalf = DT_1X * 0.5;
+        for (let i = 0; i < 19; i++) {
+            scheduler.tick(dtHalf);
+        }
+        expect(spy).not.toHaveBeenCalled();
+
+        scheduler.tick(dtHalf); // 20th tick × 0.5 = 10 game-ticks
+        expect(spy).toHaveBeenCalledOnce();
+    });
+
+    it('drains multiple overdue entries when a large dt skip occurs', () => {
+        const scheduler = new TickScheduler();
+        const order: number[] = [];
+
+        scheduler.schedule(2, () => order.push(2));
+        scheduler.schedule(5, () => order.push(5));
+        scheduler.schedule(8, () => order.push(8));
+
+        // Single large tick that jumps past all three
+        scheduler.tick(10 / TICK_RATE);
+        expect(order).toEqual([2, 5, 8]);
     });
 });

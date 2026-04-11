@@ -26,7 +26,7 @@ import { AnimationDataProvider } from './animation-helpers';
 import type { AtlasRegion } from './entity-texture-atlas';
 import { TEAM_COLOR_PALETTES } from '@/resources/gfx/team-colors';
 import { loadUnitSpritesForRace } from './sprite-unit-loader';
-import { SpriteAtlasCacheManager, type EssentialSpritesCallback } from './sprite-atlas-cache-manager';
+import { SpriteAtlasCacheManager } from './sprite-atlas-cache-manager';
 import {
     loadGilManifest,
     loadBuildingSprites,
@@ -76,7 +76,7 @@ export class SpriteRenderManager {
     private _paletteManager: PaletteTextureManager;
 
     /** Callback fired when essential sprites (common near player start) are ready */
-    private _onEssentialReady: EssentialSpritesCallback | null = null;
+    private _onEssentialReady: (() => void) | null = null;
 
     /** Entities near player start for computing layer priority */
     private _nearbyEntities: Entity[] = [];
@@ -93,7 +93,7 @@ export class SpriteRenderManager {
      * Set the callback for when essential sprites are ready.
      * Essential = sprites visible near the player start (trees, buildings, player units).
      */
-    public set onEssentialSpritesReady(callback: EssentialSpritesCallback | null) {
+    public set onEssentialSpritesReady(callback: (() => void) | null) {
         this._onEssentialReady = callback;
     }
 
@@ -137,9 +137,9 @@ export class SpriteRenderManager {
         return this._currentRace;
     }
 
-    /** Check if sprites are available for rendering */
+    /** Check if sprites are available for rendering (atlas, registry, AND palette all ready) */
     get hasSprites(): boolean {
-        return this._spriteAtlas !== null && this._spriteRegistry !== null;
+        return this._spriteAtlas !== null && this._spriteRegistry !== null && this._paletteManager.isUploaded;
     }
 
     /** Whether a specific atlas layer has been uploaded to GPU. */
@@ -335,7 +335,13 @@ export class SpriteRenderManager {
         // Try cache first — combined atlas keyed by `race`.
         // For streaming restore: the cache manager fires onEssentialReady when
         // common sprites are loaded, but returns atlas+registry immediately (with empty layers).
-        const onEssentialReady = () => this._onEssentialReady?.();
+        const onEssentialReady = (atlas: EntityTextureAtlas, registry: SpriteMetadataRegistry) => {
+            // Assign atlas/registry before notifying downstream so consumers
+            // (e.g. loadOverlaySpritesAndUpdateFrameCounts) can read from the registry.
+            this._spriteAtlas = atlas;
+            this._spriteRegistry = registry;
+            this._onEssentialReady?.();
+        };
         const cached = await this.cacheManager.tryRestore(
             gl,
             race,

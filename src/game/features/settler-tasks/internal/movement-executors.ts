@@ -9,9 +9,15 @@
  * Each executor matches the MovementExecutorFn signature defined in choreo-types.ts.
  */
 
-import { EntityType, BuildingType, tileKey, type Entity } from '../../../entity';
+import { EntityType, BuildingType, tileKey, type Entity, type Tile } from '../../../entity';
 import { getBuildingDoorPos } from '../../../data/game-data-access';
-import { hexDistance, type EDirection } from '../../../systems/hex-directions';
+import {
+    hexDistance,
+    getDirectionToward,
+    NUMBER_OF_DIRECTIONS,
+    GRID_DELTAS,
+    type EDirection,
+} from '../../../systems/hex-directions';
 import { createLogger } from '@/utilities/logger';
 import { TaskResult } from '../types';
 import type { ChoreoNode, MovementExecutorFn, ChoreoJobState, MovementContext } from '../choreo-types';
@@ -170,6 +176,65 @@ function findMaterialInAdjacentNode(job: ChoreoJobState, taskType: ChoreoTaskTyp
 }
 
 // ─────────────────────────────────────────────────────────────
+// Helper: move adjacent to a map-object entity
+// ─────────────────────────────────────────────────────────────
+
+/**
+ * Find a reachable adjacent tile near a target, preferring the side closest to the settler.
+ * Skips tiles inside building footprints (which block pathfinding).
+ */
+function findApproachTile(settler: Entity, targetTile: Tile, ctx: MovementContext): Tile | null {
+    const bestDir = getDirectionToward(targetTile.x, targetTile.y, settler.x, settler.y);
+    // Try the closest direction first, then rotate through all 6 neighbors
+    for (let offset = 0; offset < NUMBER_OF_DIRECTIONS; offset++) {
+        const dir = (bestDir + offset) % NUMBER_OF_DIRECTIONS;
+        const [dx, dy] = GRID_DELTAS[dir]!;
+        const tile: Tile = { x: targetTile.x + dx, y: targetTile.y + dy };
+        if (!ctx.gameState.buildingOccupancy.has(tileKey(tile))) {
+            return tile;
+        }
+    }
+    return null;
+}
+
+/**
+ * Move adjacent to a target tile and face it on arrival.
+ * Used for map objects (stones, trees) and position targets (planting tiles).
+ *
+ * Picks a reachable neighbor tile (not inside a building footprint), pathfinds there,
+ * and faces the target on arrival. Caches the approach tile in job.approachPos so
+ * job.targetPos is preserved for downstream callbacks (PLANT, onWorkAtPositionComplete).
+ */
+function moveAdjacentToTarget(
+    settler: Entity,
+    targetTile: Tile,
+    job: ChoreoJobState,
+    node: ChoreoNode,
+    ctx: MovementContext
+): TaskResult {
+    if (!job.approachPos) {
+        const approach = findApproachTile(settler, targetTile, ctx);
+        if (!approach) {
+            log.warn(`moveAdjacentToTarget: no free adjacent tile near (${targetTile.x},${targetTile.y})`);
+            return TaskResult.FAILED;
+        }
+        job.approachPos = approach;
+    }
+
+    const result = moveToPosition(settler, job.approachPos.x, job.approachPos.y, node, ctx, 0, job);
+
+    // On arrival, face toward the target (overrides the static node.dir)
+    if (result === TaskResult.DONE) {
+        const controller = ctx.gameState.movement.getController(settler.id);
+        if (controller) {
+            controller.setDirection(getDirectionToward(settler.x, settler.y, targetTile.x, targetTile.y));
+        }
+    }
+
+    return result;
+}
+
+// ─────────────────────────────────────────────────────────────
 // Phase 2A — Regular movement executors
 // ─────────────────────────────────────────────────────────────
 
@@ -198,11 +263,19 @@ function makeGoToTarget(arrivalDist: number): MovementExecutorFn {
                 return moveToPosition(settler, door.x, door.y, node, ctx, arrivalDist, job);
             }
 
+            // Map objects (stones, trees) occupy their tile — move to an adjacent tile
+            // and face toward the object, like buildings redirect to the door tile.
+            if (target.type === EntityType.MapObject) {
+                return moveAdjacentToTarget(settler, target, job, node, ctx);
+            }
+
             return moveToPosition(settler, target.x, target.y, node, ctx, arrivalDist, job);
         }
 
+        // Position target (from SEARCH with PositionWorkHandler, e.g. forester planting).
+        // Move to an adjacent tile so the settler stands next to the target position.
         if (job.targetPos) {
-            return moveToPosition(settler, job.targetPos.x, job.targetPos.y, node, ctx, arrivalDist, job);
+            return moveAdjacentToTarget(settler, job.targetPos, job, node, ctx);
         }
 
         log.debug(`executeGoToTarget: settler ${settler.id} has no target`);

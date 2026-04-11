@@ -435,6 +435,7 @@ export class BuildingInventoryManager {
     /**
      * Reserve capacity in a slot for an in-flight transport job.
      * Called when a transport job is activated (carrier assigned to deliver here).
+     * Keyed by jobId (entity.jobId) — globally unique and persisted across save/load.
      */
     reserveSlot(slotId: number, jobId: number, carrierId: number, amount: number): void {
         const slot = this.getSlotOrThrow(slotId, 'reserveSlot');
@@ -454,6 +455,27 @@ export class BuildingInventoryManager {
         const idx = slot.reservations.findIndex(r => r.jobId === jobId);
         if (idx !== -1) {
             slot.reservations.splice(idx, 1);
+        }
+    }
+
+    /** Find the slot reserved by a carrier. Linear scan — only used on restore. */
+    findReservationByCarrier(carrierId: number): { slotId: number; slot: PileSlot } | undefined {
+        for (const slot of this.slotStore.values()) {
+            if (slot.reservations.some(r => r.carrierId === carrierId)) {
+                return { slotId: slot.id, slot };
+            }
+        }
+        return undefined;
+    }
+
+    /** Remove slot reservations where the predicate returns false. Used for post-restore cleanup. */
+    removeOrphanedReservations(isValidReservation: (jobId: number) => boolean): void {
+        for (const slot of this.slotStore.values()) {
+            for (let i = slot.reservations.length - 1; i >= 0; i--) {
+                if (!isValidReservation(slot.reservations[i]!.jobId)) {
+                    slot.reservations.splice(i, 1);
+                }
+            }
         }
     }
 

@@ -19,7 +19,7 @@ export const SettlerLocationFeature: FeatureDefinition = {
         const locationManager = new SettlerBuildingLocationManager(ctx);
         return {
             exports: { locationManager } satisfies SettlerLocationExports,
-            persistence: [],
+            persistence: [locationManager.locationStore],
         };
     },
 };

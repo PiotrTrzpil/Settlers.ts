@@ -210,7 +210,7 @@ import { GameEndReason } from '@/game/features/victory-conditions/victory-condit
 import { isBuildingAvailableForRace } from '@/game/data/race-availability';
 import { loadLayerVisibility } from '@/game/renderer/layer-visibility';
 import { clearCameraState } from '@/game/renderer/camera-persistence';
-import { getCurrentMapId } from '@/game/state/game-state-persistence';
+import { clearSavedGameState, getCurrentMapId } from '@/game/state/game-state-persistence';
 import { toastInfo } from '@/game/ui/toast-notifications';
 import { ALL_BUILDINGS } from './palette-data';
 
@@ -221,7 +221,7 @@ import GameMinimap from '@/components/game-minimap.vue';
 import SaveLoadDialog from '@/components/SaveLoadDialog.vue';
 import GameStatsScreen from '@/components/GameStatsScreen.vue';
 
-import { createModeToggler, createGameActions, setupIconLoading } from './use-map-view-helpers';
+import { createModeToggler, setupIconLoading } from './use-map-view-helpers';
 import type { IconEntry } from './sprite-icon-loader';
 import type { GameModeSaveManager } from '@/game/state/game-mode-saves';
 import type { GameModeStatsTracker } from '@/game/state/game-mode-stats-tracker';
@@ -280,7 +280,6 @@ setupIconLoading(game, () => fileManager, playerRace, resourceIcons, buildingIco
 // eslint-disable-next-line no-restricted-syntax -- optional chaining; null when renderer absent
 const getInputManager = () => rendererRef.value?.getInputManager?.() ?? null;
 const modeToggler = createModeToggler(game, getInputManager);
-const gameActions = createGameActions(game);
 const setPlaceMode = (buildingType: BuildingType) => modeToggler.setPlaceMode(buildingType, playerRace.value);
 
 // Speed and pause controls — always start at 1x in game mode
@@ -326,7 +325,8 @@ const showRestartConfirm = ref(false);
 
 function doRestartMap(): void {
     showRestartConfirm.value = false;
-    gameActions.resetGameState();
+    void clearSavedGameState();
+    game.resetWithStartResources();
     clearCameraState(getCurrentMapId());
     rendererRef.value?.centerOnPlayerStart?.();
     gameEndResult.value = null;

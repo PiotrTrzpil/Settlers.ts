@@ -91,6 +91,13 @@ export class ChoreoBuilder {
         return this;
     }
 
+    /** Add a TRANSFORM_RECRUIT_BUILDING node and stash unitType + reservationId in metadata. */
+    transformRecruitBuilding(targetUnitType: UnitType, reservationId: number): this {
+        this.nodes.push(node(ChoreoTaskType.TRANSFORM_RECRUIT_BUILDING));
+        this.meta({ unitType: targetUnitType, reservationId });
+        return this;
+    }
+
     /** Add a TRANSFORM_DIRECT node and stash unitType in metadata. */
     transformDirect(targetUnitType: UnitType): this {
         this.nodes.push(node(ChoreoTaskType.TRANSFORM_DIRECT));
@@ -137,12 +144,6 @@ export class ChoreoBuilder {
     /** Add a WAIT node. */
     wait(duration: number): this {
         this.nodes.push(node(ChoreoTaskType.WAIT, { duration }));
-        return this;
-    }
-
-    /** Add a CHANGE_TYPE_AT_BARRACKS node. */
-    changeTypeAtBarracks(): this {
-        this.nodes.push(node(ChoreoTaskType.CHANGE_TYPE_AT_BARRACKS));
         return this;
     }
 

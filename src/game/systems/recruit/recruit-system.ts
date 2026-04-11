@@ -17,7 +17,8 @@ import { EventSubscriptionManager, type EventBus } from '../../event-bus';
 import { UnitType } from '../../core/unit-types';
 import { EMaterialType } from '../../economy/material-type';
 import type { UnitTransformer } from './unit-transformer';
-import type { ToolSourceResolver } from './tool-source-resolver';
+import type { ToolSourceResolver, MaterialCost, InventorySide } from './tool-source-resolver';
+import { choreo } from '../choreo/choreo-builder';
 import type { IdleCarrierPool } from '../idle-carrier-pool';
 import type { Race } from '../../core/race';
 import type { ChoreoJobState } from '../choreo';
@@ -39,6 +40,8 @@ export type TileWithPile = Tile & { pileEntityId: number };
 export interface RecruitmentCandidate {
     carrierId: number;
     toolPile: TileWithPile | null;
+    /** Present when dispatched via dispatchRecruitmentFromBuilding with a custom buildJob. */
+    reservationId?: number;
 }
 
 /** Options for dispatchRecruitment. */
@@ -198,6 +201,111 @@ export class RecruitSystem implements TickSystem {
         }
 
         return this.executeDirectRecruitment(candidate.carrierId, unitType, player);
+    }
+
+    /**
+     * Dispatch recruitment using a specific pile as the tool source.
+     *
+     * Unlike dispatchRecruitment() which scans for the nearest available tool pile,
+     * this targets a known pile entity — e.g. a weapon on a barracks output slot.
+     * The tool material is derived from the pile entity's subType.
+     *
+     * Returns carrierId on success, null on failure.
+     */
+    dispatchRecruitmentFromPile(
+        unitType: UnitType,
+        player: number,
+        pileEntityId: number,
+        opts?: DispatchRecruitmentOpts
+    ): number | null {
+        // eslint-disable-next-line no-restricted-syntax -- index access returns undefined for missing keys
+        const toolMaterial = SPECIALIST_TOOL_MAP[unitType] ?? null;
+        if (toolMaterial === null) {
+            throw new Error(`dispatchRecruitmentFromPile: ${unitType} requires no tool — use dispatchRecruitment`);
+        }
+
+        const toolPile = this.toolSourceResolver.validatePile(pileEntityId, toolMaterial, player);
+        if (!toolPile) {
+            return null;
+        }
+
+        const ref: Tile = toolPile;
+        const filter = this.buildTerritoryFilter(ref, player);
+        const carrierId = this.idleCarrierPool.findNearest(toolPile.x, toolPile.y, player, filter);
+        if (carrierId === null) {
+            return null;
+        }
+
+        return this.executeToolRecruitment({ carrierId, toolPile }, unitType, toolMaterial, opts);
+    }
+
+    /**
+     * Dispatch recruitment consuming multiple materials from a specific building's inventory.
+     *
+     * Materials are reserved at dispatch time and withdrawn when the carrier arrives.
+     * If the carrier dies, reservations are released (no materials lost).
+     *
+     * The carrier walks to the first matching pile on the building, then the
+     * TRANSFORM_RECRUIT_BUILDING executor withdraws all costs and triggers the transform.
+     *
+     * @param side — 'output' (default) or 'input' — which inventory side to reserve from.
+     * Returns carrierId on success, null on failure.
+     */
+    dispatchRecruitmentFromBuilding(
+        unitType: UnitType,
+        player: number,
+        buildingId: number,
+        costs: readonly MaterialCost[],
+        opts?: DispatchRecruitmentOpts,
+        side: InventorySide = 'output'
+    ): number | null {
+        // 1. Reserve all materials on the building
+        const handle = this.toolSourceResolver.reserveBuildingMaterials(buildingId, costs, side);
+        if (!handle) {
+            return null;
+        }
+
+        // 2. Find a walk-to position (first slot with stock on the correct side)
+        const walkTo = this.toolSourceResolver.findBuildingSlotPosition(buildingId, costs, side);
+        if (!walkTo) {
+            this.toolSourceResolver.releaseBuildingReservation(handle.id);
+            return null;
+        }
+
+        // 3. Find nearest idle carrier
+        const filter = this.buildTerritoryFilter(walkTo, player);
+        const carrierId = this.idleCarrierPool.findNearest(walkTo.x, walkTo.y, player, filter);
+        if (carrierId === null) {
+            this.toolSourceResolver.releaseBuildingReservation(handle.id);
+            return null;
+        }
+
+        // 4. Build choreo: walk to building → withdraw + transform
+        const job = opts?.buildJob
+            ? opts.buildJob({ carrierId, toolPile: null, reservationId: handle.id })
+            : choreo('BUILDING_RECRUIT')
+                  .goTo(walkTo, buildingId)
+                  .transformRecruitBuilding(unitType, handle.id)
+                  .target(buildingId)
+                  .build();
+
+        // 5. Assign job and register transform with reservation release on death
+        const assigned = this.assignJob(carrierId, job, walkTo);
+        if (!assigned) {
+            this.toolSourceResolver.releaseBuildingReservation(handle.id);
+            return null;
+        }
+
+        const reservationId = handle.id;
+        this.unitTransformer.registerDirectTransform(carrierId, unitType, () => {
+            this.toolSourceResolver.releaseBuildingReservation(reservationId);
+        });
+
+        log.debug(
+            `Building recruit: carrier ${carrierId} → ${unitType} from building ${buildingId} ` +
+                `(reservation ${reservationId})`
+        );
+        return carrierId;
     }
 
     // =====================================================================

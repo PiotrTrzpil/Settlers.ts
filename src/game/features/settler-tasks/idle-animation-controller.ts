@@ -113,6 +113,7 @@ export class IdleAnimationController {
             sequence: resolution.sequenceKey,
             loop: resolution.loop,
             stopped: resolution.stopped,
+            reverse: resolution.reverse,
         });
     }
 

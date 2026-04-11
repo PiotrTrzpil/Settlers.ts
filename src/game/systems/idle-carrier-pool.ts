@@ -4,9 +4,9 @@
  * Replaces 4 duplicated findIdleCarrier implementations across logistics,
  * construction-demand, building-demand, and barracks features.
  *
- * "Available" means: not busy with a transport job, not reserved by another
- * feature (barracks training, auto-recruit, garrison), and passes an optional
- * caller-specific eligibility filter.
+ * "Available" means: not busy with any job (entity.jobId == null), not reserved
+ * by another feature (barracks training, auto-recruit, garrison), and passes an
+ * optional caller-specific eligibility filter.
  *
  * This is a stateless query service — it does not claim or reserve carriers.
  * Callers still do their own claiming after finding a carrier.
@@ -24,21 +24,17 @@ export type CarrierEligibilityFilter = (entityId: number) => boolean;
 export interface IdleCarrierPoolConfig {
     gameState: GameState;
     carrierRegistry: CarrierRegistry;
-    /** Returns true if carrier is busy with a transport job. */
-    isTransportBusy: (carrierId: number) => boolean;
     unitReservation: UnitReservationRegistry;
 }
 
 export class IdleCarrierPool {
     private readonly gameState: GameState;
     private readonly carrierRegistry: CarrierRegistry;
-    private readonly isTransportBusy: (carrierId: number) => boolean;
     private readonly unitReservation: UnitReservationRegistry;
 
     constructor(config: IdleCarrierPoolConfig) {
         this.gameState = config.gameState;
         this.carrierRegistry = config.carrierRegistry;
-        this.isTransportBusy = config.isTransportBusy;
         this.unitReservation = config.unitReservation;
     }
 
@@ -47,9 +43,10 @@ export class IdleCarrierPool {
         return this.carrierRegistry.store;
     }
 
-    /** Check if a carrier is idle (not transport-busy, not reserved). */
+    /** Check if a carrier is idle (no active job, not reserved). */
     isIdle(carrierId: number): boolean {
-        return !this.isTransportBusy(carrierId) && !this.unitReservation.isReserved(carrierId);
+        const entity = this.gameState.getEntityOrThrow(carrierId, 'IdleCarrierPool.isIdle');
+        return entity.jobId == null && !this.unitReservation.isReserved(carrierId);
     }
 
     /**
@@ -78,7 +75,7 @@ export class IdleCarrierPool {
         let bestDistSq = Infinity;
 
         for (const [id, , entity] of query(this.carrierRegistry.store, this.gameState.store)) {
-            if (!this.isAvailable(id, entity.player, player, filter)) {
+            if (!this.isAvailable(id, entity.player, entity.jobId, player, filter)) {
                 continue;
             }
 
@@ -93,10 +90,16 @@ export class IdleCarrierPool {
         return bestId !== null ? { carrierId: bestId, distSq: bestDistSq } : null;
     }
 
-    private isAvailable(id: number, entityPlayer: number, player: number, filter?: CarrierEligibilityFilter): boolean {
+    private isAvailable(
+        id: number,
+        entityPlayer: number,
+        entityJobId: number | undefined,
+        player: number,
+        filter?: CarrierEligibilityFilter
+    ): boolean {
         return (
             entityPlayer === player &&
-            !this.isTransportBusy(id) &&
+            entityJobId == null &&
             !this.unitReservation.isReserved(id) &&
             (!filter || filter(id))
         );

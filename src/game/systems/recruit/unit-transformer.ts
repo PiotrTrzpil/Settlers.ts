@@ -159,6 +159,42 @@ export class UnitTransformer {
     }
 
     /**
+     * Register a pending direct (no tool pile) transformation without assigning a choreo job.
+     *
+     * The caller builds and assigns its own choreo job (which must include a TRANSFORM_DIRECT
+     * node with unitType metadata). This method only registers the pending state and reserves
+     * the carrier. Used by BarracksTrainingManager which has its own multi-step choreo.
+     *
+     * @param onForcedRelease — optional callback invoked when the carrier is killed mid-transform.
+     */
+    registerDirectTransform(
+        carrierId: number,
+        targetUnitType: UnitType,
+        onForcedRelease?: (unitId: number) => void
+    ): void {
+        const record: PendingTransform = {
+            carrierId,
+            targetUnitType,
+            toolMaterial: null,
+            pileEntityId: -1,
+        };
+        this.pending.set(carrierId, record);
+        this.unitReservation.reserve(carrierId, {
+            purpose: 'unit-transform',
+            onForcedRelease: unitId => {
+                const p = this.pending.get(unitId);
+                if (!p) {
+                    return;
+                }
+                this.pending.delete(unitId);
+                onForcedRelease?.(unitId);
+                log.debug(`Carrier ${unitId} removed during direct transform, reservation auto-released`);
+            },
+        });
+        log.debug(`Registered pending direct transform: carrier ${carrierId} → ${targetUnitType}`);
+    }
+
+    /**
      * Register a pending carrier → specialist transformation without building or assigning
      * a choreo job. The caller is responsible for building the combined choreo job (which
      * must include a TRANSFORM_RECRUIT node) and assigning it before calling this method.

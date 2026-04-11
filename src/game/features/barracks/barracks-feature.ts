@@ -7,14 +7,12 @@
  */
 
 import type { FeatureDefinition, FeatureContext } from '../feature';
-import type { InventoryExports } from '../inventory';
-import type { CarrierFeatureExports } from '../carriers';
 import type { ProductionControlExports } from '../production-control';
-import type { SettlerTaskExports } from '../settler-tasks';
 import type { BuildingConstructionExports } from '../building-construction';
+import type { RecruitExports } from '../recruit';
 import { BarracksTrainingManager } from './barracks-training-manager';
 import { BuildingType } from '../../buildings/building-type';
-import { EntityType } from '../../entity';
+import { forEachCompletedBuilding } from '../restore-utils';
 
 export interface BarracksExports {
     barracksTrainingManager: BarracksTrainingManager;
@@ -22,29 +20,21 @@ export interface BarracksExports {
 
 export const BarracksFeature: FeatureDefinition = {
     id: 'barracks',
-    dependencies: ['inventory', 'carriers', 'settler-tasks', 'production-control', 'building-construction'],
+    dependencies: ['production-control', 'building-construction', 'recruit'],
 
     create(ctx: FeatureContext) {
-        const { inventoryManager } = ctx.getFeature<InventoryExports>('inventory');
-        const { carrierRegistry, idleCarrierPool } = ctx.getFeature<CarrierFeatureExports>('carriers');
-        const { settlerTaskSystem } = ctx.getFeature<SettlerTaskExports>('settler-tasks');
         const { productionControlManager } = ctx.getFeature<ProductionControlExports>('production-control');
         const { constructionSiteManager } = ctx.getFeature<BuildingConstructionExports>('building-construction');
+        const { recruitSystem } = ctx.getFeature<RecruitExports>('recruit');
 
         const barracksTrainingManager = new BarracksTrainingManager({
             gameState: ctx.gameState,
-            inventoryManager,
-            carrierRegistry,
-            idleCarrierPool,
-            settlerTaskSystem,
             productionControlManager,
             eventBus: ctx.eventBus,
-            unitReservation: ctx.unitReservation,
+            recruitSystem,
         });
 
-        // Wire barracks training manager back to settler-tasks feature (lazy dependency)
-        const settlerTaskExports = ctx.getFeature<SettlerTaskExports>('settler-tasks');
-        settlerTaskExports.setBarracksTrainingManager(() => barracksTrainingManager);
+        barracksTrainingManager.registerEvents();
 
         // Handle barracks lifecycle events
         ctx.on('building:completed', ({ buildingId, buildingType, race }) => {
@@ -62,18 +52,15 @@ export const BarracksFeature: FeatureDefinition = {
             systemGroup: 'Military',
             exports: { barracksTrainingManager } satisfies BarracksExports,
             persistence: [],
+            destroy: () => {
+                barracksTrainingManager.unregisterEvents();
+            },
             onRestoreComplete() {
-                for (const e of ctx.gameState.entities) {
-                    if (e.type !== EntityType.Building) {
-                        continue;
-                    }
-                    if (constructionSiteManager.hasSite(e.id)) {
-                        continue;
-                    }
+                forEachCompletedBuilding(ctx.gameState, constructionSiteManager, e => {
                     if (e.subType === BuildingType.Barrack) {
                         barracksTrainingManager.initBarracks(e.id, e.race);
                     }
-                }
+                });
             },
         };
     },

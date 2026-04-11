@@ -11,7 +11,8 @@
  * lifecycle via td.ops closures, material transfer, and carrier events.
  */
 
-import { type Entity, clearCarrying } from '../../../entity';
+import type { Entity } from '../../../entity';
+import { clearCarrying } from '../../../entity';
 import { createLogger } from '@/utilities/logger';
 import { TaskResult, framesToSeconds, tickDuration } from '../../../systems/choreo/types';
 import type { ChoreoJobState, ChoreoNode, TransportData } from '../../../systems/choreo/types';
@@ -86,7 +87,10 @@ export function executeTransportGoToDest(
  * TRANSPORT_PICKUP — withdraw material from source building.
  *
  * First tick: validates job via td.ops.isValid() and starts the pickup animation.
- * Animation end: withdraws via materialTransfer and consumes reservation.
+ * Animation end: advances phase to PickedUp and withdraws via materialTransfer.
+ *
+ * Phase stays Reserved during animation so getReservedAmount() keeps counting
+ * this job's material — prevents double-dispatch of the same output stock.
  */
 export function executeTransportPickup(
     settler: Entity,
@@ -104,22 +108,29 @@ export function executeTransportPickup(
             log.debug(`Carrier ${settler.id}: transport job ${td.jobId} no longer exists, aborting pickup`);
             return TaskResult.FAILED;
         }
-
-        // Advance phase to PickedUp BEFORE withdrawal so that if the source entity
-        // is destroyed (e.g. free pile emptied to 0), the cleanup sees PickedUp and
-        // lets the carrier continue to deliver instead of cancelling the job.
-        if (!td.ops.pickUp()) {
-            log.debug(`Carrier ${settler.id}: transport job ${td.jobId} cancelled before pickup`);
-            return TaskResult.FAILED;
-        }
     }
 
     const result = tickDuration(job, dt, resolveInventoryDuration(node));
 
     if (result === TaskResult.DONE) {
         const td = requireTransportData(job, 'TRANSPORT_PICKUP');
-        const { material, sourceBuildingId, amount: requestedAmount } = td;
 
+        // Re-check validity — job may have been cancelled during the animation
+        // (e.g. source building destroyed). If so, material was already handled
+        // by the building's destruction cleanup.
+        if (!td.ops.isValid()) {
+            log.debug(`Carrier ${settler.id}: transport job ${td.jobId} cancelled during pickup animation`);
+            return TaskResult.FAILED;
+        }
+
+        // Advance phase to PickedUp atomically with the withdrawal — this ensures
+        // getReservedAmount() counts the material until it's actually withdrawn.
+        if (!td.ops.pickUp()) {
+            log.debug(`Carrier ${settler.id}: transport job ${td.jobId} cancelled before pickup`);
+            return TaskResult.FAILED;
+        }
+
+        const { material, sourceBuildingId, amount: requestedAmount } = td;
         const withdrawn = ctx.materialTransfer.pickUp(settler.id, sourceBuildingId, material, requestedAmount, true);
 
         if (withdrawn === 0) {
@@ -255,4 +266,19 @@ export function executeTransportDeliver(
     }
 
     return result;
+}
+
+/**
+ * TRANSPORT_STAND_UP — cosmetic stand-up animation after delivery.
+ *
+ * Plays the C_DOWN_NONE animation in reverse (via node.forward=false) so the
+ * carrier smoothly rises instead of snapping to idle. No material logic needed.
+ */
+export function executeTransportStandUp(
+    _settler: Entity,
+    job: ChoreoJobState,
+    node: ChoreoNode,
+    dt: number
+): TaskResult {
+    return tickDuration(job, dt, resolveInventoryDuration(node));
 }

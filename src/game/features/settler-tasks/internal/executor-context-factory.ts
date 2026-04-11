@@ -9,7 +9,6 @@ import type { GameState } from '../../../game-state';
 import type { EventBus } from '../../../event-bus';
 import type { BuildingInventoryManager } from '../../inventory';
 import type { MaterialTransfer } from '../../material-transfer';
-import type { BarracksTrainingManager } from '../../barracks';
 import type { ConstructionSiteManager } from '../../building-construction/construction-site-manager';
 import type { ExecuteCommand } from '../../../commands';
 import type { ThrottledLogger } from '@/utilities/throttled-logger';
@@ -31,7 +30,6 @@ export interface ExecutorContextDeps {
     inventoryManager: BuildingInventoryManager;
     materialTransfer: MaterialTransfer;
     constructionSiteManager: ConstructionSiteManager;
-    barracksTrainingManager?: () => BarracksTrainingManager | undefined;
     buildingPositionResolver: BuildingPositionResolver;
     jobPartResolver: JobPartResolver;
     triggerSystem: TriggerSystem;
@@ -84,14 +82,10 @@ export function buildExecutorContexts(deps: ExecutorContextDeps): ExecutorContex
         constructionSiteManager: deps.constructionSiteManager,
     };
 
-    const getBarracksTrainingManager = deps.barracksTrainingManager;
     const control: ControlContext = {
         gameState: deps.gameState,
         eventBus: deps.eventBus,
         handlerErrorLogger: deps.handlerErrorLogger,
-        get barracksTrainingManager() {
-            return getBarracksTrainingManager?.();
-        },
         executeCommand: deps.executeCommand,
         inventoryManager: deps.inventoryManager,
     };

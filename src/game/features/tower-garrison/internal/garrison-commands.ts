@@ -275,7 +275,7 @@ export interface FillGarrisonContext {
  *
  * Spawns the requested units and immediately garrisons them — no walking.
  * Each unit is created via addUnit, hidden via locationManager.enterBuilding
- * (which triggers finalizeGarrison through the settler-location:entered event).
+ * and calls finalizeGarrison directly to set the garrison jobId.
  *
  * Returns the number of units actually garrisoned.
  */
@@ -325,9 +325,10 @@ export function executeFillGarrisonCommand(
             player: building.player,
         });
 
-        // enterBuilding hides the unit and emits settler-location:entered,
-        // which triggers finalizeGarrison in the manager.
+        // enterBuilding hides the unit; finalizeGarrison sets the garrison jobId
+        // and adds the unit to the garrison slot set.
         locationManager.enterBuilding(entity.id, cmd.buildingId);
+        manager.finalizeGarrison(entity.id, cmd.buildingId);
         garrisoned++;
     }
 

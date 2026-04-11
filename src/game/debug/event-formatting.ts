@@ -149,13 +149,31 @@ export const EventFmt = {
     'inventory:changed': (e: GameEvents['inventory:changed']) => `${e.materialType} ${e.previousAmount}→${e.newAmount}`,
     'storage:directionChanged': (e: GameEvents['storage:directionChanged']) => `#${e.buildingId} ${e.materialType}`,
 
-    'logistics:noMatch': (e: GameEvents['logistics:noMatch']) => `${e.materialType} req=${e.requestId}`,
+    'logistics:noMatch': (e: GameEvents['logistics:noMatch']) => {
+        const r = e.rejection;
+        if (!r) {
+            return `${e.materialType} req=${e.requestId}`;
+        }
+        const src = r.sourceIds.length > 0 ? ` src=[${r.sourceIds.join(',')}]` : '';
+        return `${e.materialType} req=${e.requestId} [sup=${r.supplies}${src} self=${r.self} storBlk=${r.storageBlocked} rsv=${r.reserved} flt=${r.filter}]`;
+    },
 
     'logistics:noCarrier': (e: GameEvents['logistics:noCarrier']) =>
         `${e.materialType} #${e.sourceBuilding}→#${e.buildingId}`,
 
     'logistics:buildingCleanedUp': (e: GameEvents['logistics:buildingCleanedUp']) =>
         `reqs=${e.requestsCancelled} jobs=${e.jobsCancelled}`,
+
+    'logistics:preAssignQueued': (e: GameEvents['logistics:preAssignQueued']) =>
+        `carrier=#${e.carrierId} ${e.materialType} #${e.sourceBuilding}→#${e.destBuilding} demand=${e.demandId} job=${e.jobId}`,
+
+    'logistics:preAssignFlushed': (e: GameEvents['logistics:preAssignFlushed']) => {
+        const result = e.success ? 'OK' : 'FAIL: ' + e.reason;
+        return `carrier=#${e.carrierId} demand=${e.demandId} job=${e.jobId} ${result}`;
+    },
+
+    'logistics:preAssignCancelled': (e: GameEvents['logistics:preAssignCancelled']) =>
+        `carrier=#${e.carrierId} demand=${e.demandId} job=${e.jobId} reason=${e.reason}`,
 
     'logistics:demandCreated': (e: GameEvents['logistics:demandCreated']) =>
         `${e.materialType} ×${e.amount} pri=${e.priority} bld=#${e.buildingId}`,

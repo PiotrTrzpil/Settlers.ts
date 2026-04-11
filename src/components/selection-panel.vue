@@ -61,82 +61,16 @@
                         </button>
                     </div>
 
-                    <!-- Production Control (multi-recipe buildings only) -->
-                    <template v-if="productionControl">
-                        <div class="info-section production-section">
-                            <div class="section-label">Production</div>
-
-                            <!-- Mode selector -->
-                            <div class="production-mode">
-                                <button
-                                    v-for="m in [
-                                        ProductionMode.Even,
-                                        ProductionMode.Proportional,
-                                        ProductionMode.Manual,
-                                    ]"
-                                    :key="m"
-                                    class="mode-btn"
-                                    :class="{ active: productionControl.mode === m }"
-                                    @click="setProductionMode(m)"
-                                >
-                                    {{ m }}
-                                </button>
-                            </div>
-
-                            <!-- Even / Proportional mode: recipe weights -->
-                            <template v-if="productionControl.mode !== ProductionMode.Manual">
-                                <div class="recipe-grid">
-                                    <div
-                                        v-for="recipe in productionControl.recipes"
-                                        :key="recipe.output"
-                                        class="recipe-item"
-                                    >
-                                        <span class="recipe-name">{{ recipe.outputName }}</span>
-                                        <div class="recipe-controls">
-                                            <button
-                                                class="recipe-btn"
-                                                @click="setRecipeProportion(recipe.index, recipe.weight - 1)"
-                                            >
-                                                -
-                                            </button>
-                                            <span class="recipe-weight">{{ recipe.weight }}</span>
-                                            <button
-                                                class="recipe-btn"
-                                                @click="setRecipeProportion(recipe.index, recipe.weight + 1)"
-                                            >
-                                                +
-                                            </button>
-                                        </div>
-                                    </div>
-                                </div>
-                            </template>
-
-                            <!-- Manual mode: queue display + add/remove buttons -->
-                            <template v-else>
-                                <div v-if="productionControl.queue.length > 0" class="queue-display">
-                                    {{ productionControl.queue.join(' → ') }}
-                                </div>
-                                <div v-else class="queue-empty">Queue empty (idle)</div>
-                                <div class="recipe-grid">
-                                    <div
-                                        v-for="recipe in productionControl.recipes"
-                                        :key="recipe.output"
-                                        class="recipe-item"
-                                    >
-                                        <span class="recipe-name">{{ recipe.outputName }}</span>
-                                        <div class="recipe-controls">
-                                            <button class="recipe-btn" @click="addToProductionQueue(recipe.index)">
-                                                +1
-                                            </button>
-                                            <button class="recipe-btn" @click="removeFromProductionQueue(recipe.index)">
-                                                -1
-                                            </button>
-                                        </div>
-                                    </div>
-                                </div>
-                            </template>
-                        </div>
-                    </template>
+                    <!-- Production Control (multi-recipe buildings and barracks) -->
+                    <ProductionControlPanel
+                        v-if="productionControl"
+                        :state="productionControl"
+                        :section-label="isBarracks ? 'Training' : 'Production'"
+                        @set-mode="setProductionMode"
+                        @set-proportion="setRecipeProportion"
+                        @add-to-queue="addToProductionQueue"
+                        @remove-from-queue="removeFromProductionQueue"
+                    />
 
                     <!-- Garrison (shown for garrison buildings: GuardTowerSmall, GuardTowerBig, Castle) -->
                     <GarrisonPanel
@@ -287,7 +221,7 @@ import Badge from './Badge.vue';
 import StatRow from './StatRow.vue';
 import { usePersistedRef } from '@/composables/use-persisted-ref';
 import type { Game } from '@/game/game';
-import { EntityType } from '@/game/entity';
+import { BuildingType, EntityType } from '@/game/entity';
 import { useSelectionPanel } from '@/composables/useSelectionPanel';
 import { useCarrierDebugInfo } from '@/composables/useCarrierDebugInfo';
 import { useBuildingDebugInfo } from '@/composables/useBuildingDebugInfo';
@@ -296,7 +230,7 @@ import { useWorkAreaAdjustment } from '@/composables/useWorkAreaAdjustment';
 import { useProductionControl } from '@/composables/useProductionControl';
 import { useConstructionInfo } from '@/composables/useConstructionInfo';
 import StorageFilterPanel from './StorageFilterPanel.vue';
-import { ProductionMode } from '@/game/features/production-control';
+import ProductionControlPanel from './ProductionControlPanel.vue';
 import GarrisonPanel from './GarrisonPanel.vue';
 import type { IconEntry } from '@/views/sprite-icon-loader';
 
@@ -331,6 +265,11 @@ const { hasWorkArea, isWorkAreaActive, toggleWorkArea } = useWorkAreaAdjustment(
 const { productionControl, setProductionMode, setRecipeProportion, addToProductionQueue, removeFromProductionQueue } =
     useProductionControl(gameRef, selectedEntity, tick);
 const { constructionInfo } = useConstructionInfo(gameRef, selectedEntity, tick);
+
+const isBarracks = computed(() => {
+    const entity = selectedEntity.value;
+    return entity?.type === EntityType.Building && entity.subType === BuildingType.Barrack;
+});
 
 const selectedBuildingId = computed<number | null>(() => {
     const entity = selectedEntity.value;
@@ -767,117 +706,5 @@ const showDebugInfo = computed(() => debugPanelOpen.value);
     font-size: 9px;
     color: var(--text-secondary);
     word-break: break-word;
-}
-
-/* Production Control */
-.production-section {
-    border-top-color: var(--border-soft);
-}
-
-.production-mode {
-    display: flex;
-    gap: 2px;
-    margin-bottom: 6px;
-}
-
-.mode-btn {
-    flex: 1;
-    padding: 2px 4px;
-    font-size: 9px;
-    text-transform: capitalize;
-    border: 1px solid rgba(180, 140, 80, 0.3);
-    border-radius: 2px;
-    background: rgba(40, 30, 15, 0.4);
-    color: var(--text-secondary);
-    cursor: pointer;
-    transition:
-        background 0.15s,
-        color 0.15s;
-}
-
-.mode-btn:hover {
-    background: rgba(60, 45, 20, 0.5);
-    color: var(--text);
-}
-
-.mode-btn.active {
-    background: rgba(180, 140, 60, 0.3);
-    border-color: rgba(200, 160, 60, 0.5);
-    color: var(--text-bright);
-}
-
-.recipe-grid {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-}
-
-.recipe-item {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 2px 4px;
-    font-size: 10px;
-}
-
-.recipe-name {
-    color: var(--text-secondary);
-    flex: 1;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-
-.recipe-controls {
-    display: flex;
-    align-items: center;
-    gap: 2px;
-}
-
-.recipe-btn {
-    width: 18px;
-    height: 16px;
-    font-size: 10px;
-    line-height: 1;
-    border: 1px solid rgba(180, 140, 80, 0.3);
-    border-radius: 2px;
-    background: rgba(40, 30, 15, 0.4);
-    color: var(--text-secondary);
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
-
-.recipe-btn:hover {
-    background: rgba(80, 60, 25, 0.5);
-    color: var(--text);
-}
-
-.recipe-weight {
-    min-width: 14px;
-    text-align: center;
-    font-size: 10px;
-    color: var(--text-emphasis);
-    font-variant-numeric: tabular-nums;
-}
-
-.queue-display {
-    font-size: 9px;
-    color: var(--text-secondary);
-    padding: 3px 4px;
-    margin-bottom: 4px;
-    background: rgba(30, 25, 15, 0.4);
-    border-radius: 2px;
-    overflow-x: auto;
-    white-space: nowrap;
-}
-
-.queue-empty {
-    font-size: 9px;
-    color: var(--text-dim);
-    font-style: italic;
-    padding: 3px 4px;
-    margin-bottom: 4px;
 }
 </style>

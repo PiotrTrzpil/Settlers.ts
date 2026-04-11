@@ -56,7 +56,12 @@ export function createBuildStepExecutor(
         if (count >= BUILD_CYCLES_PER_MATERIAL) {
             const material = constructionSiteManager.consumeNextMaterial(siteId);
             if (material !== null) {
-                inventoryManager.withdrawInput(siteId, material, 1);
+                const withdrawn = inventoryManager.withdrawInput(siteId, material, 1);
+                if (withdrawn === 0) {
+                    throw new Error(
+                        `Construction: site ${siteId} has no stock for ${material} — consumeNextMaterial returned it but input slot is empty`
+                    );
+                }
             }
             cycleCounters.set(siteId, 0);
         } else {

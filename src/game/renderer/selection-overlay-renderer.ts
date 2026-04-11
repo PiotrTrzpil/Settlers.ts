@@ -7,6 +7,7 @@ import type { CircleRenderData } from './render-context';
 import { CircleRingRenderer } from './overlay-renderers/circle-ring-renderer';
 import { TileDiamondRenderer } from './overlay-renderers/tile-diamond-renderer';
 import type { OverlaySession } from './overlay-renderers/overlay-session';
+import type { BuildingOverlayRenderData } from './render-context';
 import {
     FRAME_COLOR,
     FRAME_CORNER_COLOR,
@@ -22,6 +23,8 @@ import {
     BASE_QUAD,
     SELECTION_ORIGIN_DOT_SCALE,
     SELECTION_ORIGIN_DOT_COLOR,
+    GARRISON_POSITION_DOT_COLOR,
+    GARRISON_POSITION_DOT_SCALE,
 } from './entity-renderer-constants';
 
 /** Shift a world position from tile center to tile vertex (matching building sprite anchor). */
@@ -249,9 +252,66 @@ export class SelectionOverlayRenderer {
         this.tileRenderer.drawTileHighlights(this.session, highlights);
     }
 
+    /** Draw tile occupancy overlay from occupancy maps. */
+    public drawTileOccupancy(
+        groundOccupancy: ReadonlyMap<string, number>,
+        unitOccupancy: ReadonlyMap<string, number>,
+        buildingOccupancy: ReadonlySet<string>
+    ): void {
+        this.tileRenderer.drawTileOccupancy(this.session, groundOccupancy, unitOccupancy, buildingOccupancy);
+    }
+
     /** Draw tile highlights and direction arrows for all unit entities. */
     public drawUnitPositions(sortedEntities: Entity[]): void {
         this.tileRenderer.drawUnitPositions(this.session, sortedEntities);
+    }
+
+    /** Draw position dots for garrisoned units (soldiers in towers/castles). */
+    public drawGarrisonPositionDots(
+        sortedEntities: Entity[],
+        getBuildingOverlays: (entityId: number) => readonly BuildingOverlayRenderData[]
+    ): void {
+        const { gl, buffer, aColor, ctx } = this;
+        gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+        gl.vertexAttrib4f(
+            aColor,
+            GARRISON_POSITION_DOT_COLOR[0]!,
+            GARRISON_POSITION_DOT_COLOR[1]!,
+            GARRISON_POSITION_DOT_COLOR[2]!,
+            GARRISON_POSITION_DOT_COLOR[3]!
+        );
+
+        for (const entity of sortedEntities) {
+            if (entity.type !== EntityType.Building) {
+                continue;
+            }
+            const overlays = getBuildingOverlays(entity.id);
+            if (overlays.length === 0) {
+                continue;
+            }
+            const buildingWorldPos = getEntityWorldPos(entity, ctx);
+            this.emitGarrisonDots(overlays, buildingWorldPos);
+        }
+    }
+
+    private emitGarrisonDots(
+        overlays: readonly BuildingOverlayRenderData[],
+        buildingWorldPos: { worldX: number; worldY: number }
+    ): void {
+        const { gl, aEntityPos } = this;
+        for (const overlay of overlays) {
+            if (!overlay.isGarrisonUnit) {
+                continue;
+            }
+            gl.vertexAttrib2f(
+                aEntityPos,
+                buildingWorldPos.worldX + overlay.worldOffsetX,
+                buildingWorldPos.worldY + overlay.worldOffsetY
+            );
+            this.fillQuadVertices(0, 0, GARRISON_POSITION_DOT_SCALE);
+            gl.bufferData(gl.ARRAY_BUFFER, this.vertexData, gl.DYNAMIC_DRAW);
+            gl.drawArrays(gl.TRIANGLES, 0, 6);
+        }
     }
 
     // ========================================================================

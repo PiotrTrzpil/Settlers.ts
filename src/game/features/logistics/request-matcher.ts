@@ -13,6 +13,7 @@ import {
     findAllMatches,
     type FulfillmentMatch,
     type MatchableRequest,
+    type MatchRejectionStats,
 } from './fulfillment-matcher';
 import type { TransportJobStore } from './transport-job-store';
 import type { StorageFilterManager } from '../../systems/inventory/storage-filter-manager';
@@ -95,15 +96,32 @@ export class RequestMatcher {
      * @param maxCandidates Maximum number of candidates to return.
      * @returns Array of match results (may be empty), filtered by policy.
      */
+    /** Last rejection stats from the most recent matchRequestCandidates call. */
+    lastRejectionStats: MatchRejectionStats | null = null;
+
     matchRequestCandidates(request: MatchableRequest, maxCandidates: number): RequestMatchResult[] {
         const destBuilding = this.gameState.getEntityOrThrow(request.buildingId, 'requesting building');
         const playerId = destBuilding.player;
 
-        const allMatches = findAllMatches(request, this.gameState, this.inventoryManager, {
-            playerId,
-            jobStore: this.jobStore,
-            storageFilterManager: this.storageFilterManager ?? undefined,
-        });
+        const stats: MatchRejectionStats = {
+            suppliesFound: 0,
+            sourceIds: [],
+            self: 0,
+            storageBlocked: 0,
+            fullyReserved: 0,
+            filterRejected: 0,
+        };
+        const allMatches = findAllMatches(
+            request,
+            this.gameState,
+            this.inventoryManager,
+            {
+                playerId,
+                jobStore: this.jobStore,
+                storageFilterManager: this.storageFilterManager ?? undefined,
+            },
+            stats
+        );
 
         const results: RequestMatchResult[] = [];
         for (const match of allMatches) {
@@ -114,12 +132,14 @@ export class RequestMatcher {
             if (this.matchFilter) {
                 const sourceEntity = this.gameState.getEntityOrThrow(match.sourceBuilding, 'match filter source');
                 if (!this.matchFilter(sourceEntity, destBuilding, playerId)) {
+                    stats.filterRejected++;
                     continue;
                 }
             }
 
             results.push({ ...match, playerId });
         }
+        this.lastRejectionStats = results.length === 0 ? stats : null;
         return results;
     }
 }

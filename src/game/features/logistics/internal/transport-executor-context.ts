@@ -19,6 +19,7 @@ import {
     executeTransportGoToDest,
     executeTransportPickup,
     executeTransportDeliver,
+    executeTransportStandUp,
 } from './transport-executors';
 
 // ─────────────────────────────────────────────────────────────
@@ -66,4 +67,5 @@ export function registerTransportExecutors(
     choreoSystem.register(ChoreoTaskType.TRANSPORT_DELIVER, (s, j, n, dt) =>
         executeTransportDeliver(s, j, n, dt, transportCtx)
     );
+    choreoSystem.register(ChoreoTaskType.TRANSPORT_STAND_UP, (s, j, n, dt) => executeTransportStandUp(s, j, n, dt));
 }

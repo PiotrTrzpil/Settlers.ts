@@ -4,6 +4,7 @@ import { EMaterialType } from '../../economy';
 import { ANIMATION_DEFAULTS } from '../../animation/animation';
 import { Race, RACE_GFX_FILE } from '../../core/race';
 import { isUnitAvailableForRace, isBuildingAvailableForRace } from '../../data/race-availability';
+import { BUILDING_COMPLETED_DIRECTION } from '../../features/building-overlays/overlay-data-loader';
 
 // Re-export from canonical locations and new index files
 export {
@@ -162,6 +163,8 @@ export interface BuildingSpriteInfo {
     index: number;
     /** Optional separate JIL job index for the construction state (when stored as a separate job entry) */
     constructionIndex?: number;
+    /** Optional DIL direction override for the completed sprite (default: BUILDING_DIRECTION.COMPLETED = 1) */
+    completedDirection?: number;
 }
 
 /**
@@ -242,6 +245,13 @@ export function getBuildingSpriteMap(race: Race): Partial<Record<BuildingType, B
     }
 
     // SunflowerFarmerHut uses regular index like other buildings (S4BuildingType = 82)
+
+    // Apply completed direction overrides (e.g. Castle uses D3 instead of D1)
+    for (const [bt, dir] of BUILDING_COMPLETED_DIRECTION) {
+        if (result[bt]) {
+            result[bt] = { ...result[bt], completedDirection: dir };
+        }
+    }
 
     return result;
 }

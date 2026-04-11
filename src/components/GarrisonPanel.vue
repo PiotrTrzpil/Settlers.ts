@@ -215,11 +215,11 @@ function ungarrison(unitId: number): void {
 }
 
 .garrison-slot-enroute {
-    border-color: rgba(180, 160, 80, 0.55);
+    border-color: rgba(180, 160, 80, 0.35);
     border-style: dashed;
     background: rgba(50, 40, 15, 0.35);
     cursor: default;
-    opacity: 0.8;
+    opacity: 0.55;
 }
 
 .garrison-slot-disabled {

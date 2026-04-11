@@ -56,9 +56,11 @@ function createInventoryStub(outputAmount = 5) {
 
 /** Minimal GameState stub — destination buildings are regular (non-storage) buildings. */
 function createGameStateStub() {
+    let nextJobId = 1;
     return {
         getEntity: (id: number) => ({ id, type: EntityType.Building, subType: 0 }),
         getEntityOrThrow: (id: number) => ({ id, type: EntityType.Building, subType: 0 }),
+        allocateJobId: () => nextJobId++,
     };
 }
 
@@ -78,7 +80,6 @@ describe('TransportJobService', () => {
 
     beforeEach(() => {
         jobStore = new TransportJobStore();
-        jobStore.resetJobIds();
         eventBus = new EventBus();
         demandQueue = new DemandQueue(eventBus);
         inventoryManager = createInventoryStub(5);

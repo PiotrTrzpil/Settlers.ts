@@ -30,6 +30,10 @@ export interface AddEntityOptions {
     occupancy?: boolean;
     /** Building is already completed (not a construction site). Sets buildingOccupancy at creation time. */
     completed?: boolean;
+    /** Entity starts hidden (e.g. garrisoned unit on restore). Set before entity:created fires. */
+    hidden?: boolean;
+    /** Entity was planted by a worker (e.g. forester/farmer). Starts in growing stage. */
+    planted?: boolean;
 }
 
 /** Options for addUnit. Race is validated at runtime (throws if missing). */
@@ -85,6 +89,9 @@ export class GameState {
 
     public nextId = 1;
 
+    /** Global monotonic counter for job IDs — persisted so IDs never collide after save/load. */
+    public nextJobId = 1;
+
     /** Ground-layer occupancy: buildings (footprints), map objects, stacked piles */
     public groundOccupancy: Map<string, number> = new Map();
 
@@ -107,6 +114,14 @@ export class GameState {
         this.eventBus = eventBus;
         this.rng = createGameRng(seed);
         this.selection = new SelectionManager(this, currentPlayerFn);
+    }
+
+    /**
+     * Allocate a unique numeric job ID. Monotonically increasing — IDs are never reused.
+     * Called by settler-task-system when assigning a job to a unit.
+     */
+    public allocateJobId(): number {
+        return this.nextJobId++;
     }
 
     /**
@@ -142,7 +157,15 @@ export class GameState {
         player: number,
         opts?: AddEntityOptions
     ): Entity {
-        const { selectable, variation, occupancy: explicitOccupancy, race: explicitRace, completed } = opts ?? {};
+        const {
+            selectable,
+            variation,
+            occupancy: explicitOccupancy,
+            race: explicitRace,
+            completed,
+            hidden,
+            planted,
+        } = opts ?? {};
         // eslint-disable-next-line no-restricted-syntax -- optional flag with sensible boolean default
         const occupancy = explicitOccupancy ?? true;
 
@@ -179,6 +202,12 @@ export class GameState {
         this.entityMap.set(entity.id, entity);
         this.entityIndex.add(entity.id, type, player);
 
+        // Set hidden BEFORE emitting entity:created so subscribers can skip
+        // initialization for hidden entities (e.g. no movement controller for garrisoned units).
+        if (hidden) {
+            entity.hidden = true;
+        }
+
         if (occupancy) {
             this.addSpatialAndOccupancy(entity, type, subType, tile, completed);
         }
@@ -194,6 +223,8 @@ export class GameState {
             player,
             // eslint-disable-next-line no-restricted-syntax -- variation is optional in AddEntityOptions; 0 is the correct default sprite variation
             variation: variation ?? 0,
+            hidden: hidden === true,
+            planted: planted === true,
         });
 
         return entity;
@@ -276,7 +307,11 @@ export class GameState {
         if (type === EntityType.Building) {
             this.addBuildingOccupancy(entity, subType, tile, completed);
         } else if (type === EntityType.Unit) {
-            this.unitOccupancy.set(tileKey(tile), entity.id);
+            // Hidden units (e.g. garrisoned soldiers restored from save) are inside a building
+            // and must not occupy a tile — enterBuilding() already cleared their occupancy.
+            if (!entity.hidden) {
+                this.unitOccupancy.set(tileKey(tile), entity.id);
+            }
         } else {
             this.addGroundEntityOccupancy(entity.id, type, subType, tile);
         }
@@ -305,6 +340,15 @@ export class GameState {
      */
     private addGroundEntityOccupancy(entityId: number, type: EntityType, subType: number | string, tile: Tile): void {
         const key = tileKey(tile);
+
+        // Block area tiles (buildingOccupancy) extend beyond the footprint and block pathfinding.
+        // Map objects placed there would be unreachable, so reject them.
+        if (type === EntityType.MapObject && this.buildingOccupancy.has(key)) {
+            throw new Error(
+                `addEntity: cannot place ${EntityType[type]} (subType=${String(subType)}) at (${tile.x},${tile.y}) — tile is inside a building block area`
+            );
+        }
+
         const occupantId = this.groundOccupancy.get(key);
         if (occupantId !== undefined) {
             const occupant = this.entityMap.get(occupantId);
