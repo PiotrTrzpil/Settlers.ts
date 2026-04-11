@@ -319,7 +319,7 @@ export function gatherCarriers(
         }
     }
 
-    for (const entity of gameState.entityIndex.ofTypeAndPlayer(EntityType.Unit, player)) {
+    for (const entity of gameState.entityIndex.query(EntityType.Unit, player)) {
         if (entity.subType === UnitType.Carrier && !carrierRegistry.has(entity.id)) {
             stats.unregisteredCarriers++;
         }
@@ -372,7 +372,7 @@ export function gatherProductionBuildings(
     const { gameState, inventoryManager, workerStateQuery, constructionSiteManager } = config;
     const result: ProductionBuildingSummary[] = [];
 
-    for (const entity of gameState.entityIndex.ofTypeAndPlayer(EntityType.Building, player)) {
+    for (const entity of gameState.entityIndex.query(EntityType.Building, player)) {
         if (!inventoryManager.hasSlots(entity.id)) {
             continue;
         }
@@ -429,7 +429,7 @@ export function gatherPiles(
     const kindFilter = options?.kindFilter;
     const result: PileSummary[] = [];
 
-    for (const entity of gameState.entityIndex.ofTypeAndPlayer(EntityType.StackedPile, player)) {
+    for (const entity of gameState.entityIndex.query(EntityType.StackedPile, player)) {
         const slot = inventoryManager.getSlotByEntityId(entity.id);
         if (!slot || slot.currentAmount === 0) {
             continue;
@@ -469,7 +469,7 @@ export function gatherWorkers(
     const stateFilter = options?.stateFilter?.toUpperCase();
     const result: WorkerSummary[] = [];
 
-    for (const entity of gameState.entityIndex.ofTypeAndPlayer(EntityType.Unit, player)) {
+    for (const entity of gameState.entityIndex.query(EntityType.Unit, player)) {
         if (!isNonCarrierWorker(entity.subType as UnitType)) {
             continue;
         }

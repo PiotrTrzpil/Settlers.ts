@@ -20,17 +20,11 @@ export type TileWithPlayer = Tile & { player: number };
  * Returns an array of entities (deterministic order via sorted IDs).
  */
 export function getPlayerBuildings(state: GameState, player: number, buildingType?: BuildingType): readonly Entity[] {
-    const ids = state.entityIndex.idsOfTypeAndPlayer(EntityType.Building, player);
-    const result: Entity[] = [];
-    // Sort IDs for deterministic iteration
-    const sorted = [...ids].sort((a, b) => a - b);
-    for (const id of sorted) {
-        const entity = state.getEntityOrThrow(id, 'getPlayerBuildings');
-        if (buildingType === undefined || entity.subType === buildingType) {
-            result.push(entity);
-        }
-    }
-    return result;
+    const q =
+        buildingType !== undefined
+            ? state.entityIndex.query(EntityType.Building, player, buildingType)
+            : state.entityIndex.query(EntityType.Building, player);
+    return q.toArray().sort((a, b) => a.id - b.id);
 }
 
 /**
@@ -43,14 +37,10 @@ export function countOperationalBuildings(
     player: number,
     buildingType: BuildingType
 ): number {
-    const buildings = getPlayerBuildings(state, player, buildingType);
-    let count = 0;
-    for (const building of buildings) {
-        if (!services.constructionSiteManager.hasSite(building.id)) {
-            count++;
-        }
-    }
-    return count;
+    return state.entityIndex
+        .query(EntityType.Building, player, buildingType)
+        .filter(b => !services.constructionSiteManager.hasSite(b.id))
+        .count();
 }
 
 // ── Unit queries ─────────────────────────────────────────────────────────────
@@ -60,16 +50,11 @@ export function countOperationalBuildings(
  * Returns entities sorted by ID for deterministic iteration.
  */
 export function getPlayerMilitaryUnits(state: GameState, player: number): readonly Entity[] {
-    const ids = state.entityIndex.idsOfTypeAndPlayer(EntityType.Unit, player);
-    const result: Entity[] = [];
-    const sorted = [...ids].sort((a, b) => a - b);
-    for (const id of sorted) {
-        const entity = state.getEntityOrThrow(id, 'getPlayerMilitaryUnits');
-        if (isUnitTypeMilitary(entity.subType as UnitType)) {
-            result.push(entity);
-        }
-    }
-    return result;
+    return state.entityIndex
+        .query(EntityType.Unit, player)
+        .filter(e => isUnitTypeMilitary(e.subType as UnitType))
+        .toArray()
+        .sort((a, b) => a.id - b.id);
 }
 
 // ── Base queries ────────────────────────────────────────────────────────────
@@ -80,14 +65,12 @@ export function getPlayerMilitaryUnits(state: GameState, player: number): readon
  * Throws if the player has no territory buildings.
  */
 export function getPlayerBasePosition(state: GameState, player: number): Tile {
-    const buildings = getPlayerBuildings(state, player);
     let best: Entity | null = null;
     let bestPriority = -1;
-    for (const b of buildings) {
+    for (const b of state.entityIndex
+        .query(EntityType.Building, player)
+        .filter(e => TERRITORY_BUILDINGS.has(e.subType as BuildingType))) {
         const bt = b.subType as BuildingType;
-        if (!TERRITORY_BUILDINGS.has(bt)) {
-            continue;
-        }
         let priority = 0;
         if (bt === BuildingType.Castle) {
             priority = 2;
@@ -115,27 +98,12 @@ export function findNearestEnemyBase(
     fromX: number,
     fromY: number
 ): TileWithPlayer | null {
-    let bestDist = Infinity;
-    let bestResult: TileWithPlayer | null = null;
-
-    const allBuildingIds = state.entityIndex.idsOfType(EntityType.Building);
-    const sorted = [...allBuildingIds].sort((a, b) => a - b);
-    for (const id of sorted) {
-        const entity = state.getEntityOrThrow(id, 'building in findNearestEnemyBase');
-        if (entity.player === player) {
-            continue;
-        }
-        if (!TERRITORY_BUILDINGS.has(entity.subType as BuildingType)) {
-            continue;
-        }
-
-        const dx = entity.x - fromX;
-        const dy = entity.y - fromY;
-        const dist = dx * dx + dy * dy;
-        if (dist < bestDist) {
-            bestDist = dist;
-            bestResult = { x: entity.x, y: entity.y, player: entity.player };
-        }
+    const nearest = state.entityIndex
+        .query(EntityType.Building)
+        .filter(e => e.player !== player && TERRITORY_BUILDINGS.has(e.subType as BuildingType))
+        .nearest({ x: fromX, y: fromY });
+    if (!nearest) {
+        return null;
     }
-    return bestResult;
+    return { x: nearest.x, y: nearest.y, player: nearest.player };
 }

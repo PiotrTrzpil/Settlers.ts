@@ -10,7 +10,7 @@ import { LogHandler } from '@/utilities/log-handler';
 import { Race } from '../../core/race';
 import type { LuaRuntime } from '../lua-runtime';
 import type { GameState } from '@/game/game-state';
-import { EntityType, BuildingType } from '@/game/entity';
+import { EntityType, BuildingType, getEntityIfType } from '@/game/entity';
 import { type ConstructionSiteManager } from '@/game/features/building-construction';
 import type { ExecuteCommand } from '@/game/commands';
 
@@ -201,36 +201,24 @@ export function registerBuildingsAPI(runtime: LuaRuntime, context: BuildingsAPIC
     });
 
     // Buildings.Amount(player, buildingType, state?) - Count buildings
-    // eslint-disable-next-line sonarjs/cognitive-complexity -- complex state filter logic for Lua scripting API
     runtime.registerFunction('Buildings', 'Amount', (player: number, buildingType: number, state?: number) => {
         const internalType = mapS4ToInternalType(buildingType);
-        let count = 0;
+        const query = context.gameState.entityIndex.query(EntityType.Building, player, internalType);
 
-        for (const entity of context.gameState.entities) {
-            if (entity.type !== EntityType.Building) {
-                continue;
-            }
-            if (entity.subType !== internalType) {
-                continue;
-            }
-            if (entity.player !== player) {
-                continue;
-            }
-
-            // Filter by state if specified
-            if (state !== undefined) {
-                const isComplete = isBuildingCompleted(context.constructionSiteManager, entity.id);
-                if (state === BUILDING_STATE_CONSTANTS.STANDARD && !isComplete) {
-                    continue;
-                }
-                if (state === BUILDING_STATE_CONSTANTS.BUILD && isComplete) {
-                    continue;
-                }
-            }
-
-            count++;
+        if (state === undefined) {
+            return query.count();
         }
-        return count;
+
+        return query
+            .filter(entity => {
+                const isComplete = isBuildingCompleted(context.constructionSiteManager, entity.id);
+                if (state === BUILDING_STATE_CONSTANTS.STANDARD) {
+                    return isComplete;
+                }
+                // state === BUILDING_STATE_CONSTANTS.BUILD
+                return !isComplete;
+            })
+            .count();
     });
 
     // Buildings.ExistsBuildingInArea(player, buildingType, x, y, range) - Check if building exists in area
@@ -239,26 +227,10 @@ export function registerBuildingsAPI(runtime: LuaRuntime, context: BuildingsAPIC
         'ExistsBuildingInArea',
         (player: number, buildingType: number, x: number, y: number, range: number) => {
             const internalType = mapS4ToInternalType(buildingType);
-            const rangeSq = range * range;
-
-            for (const entity of context.gameState.entities) {
-                if (entity.type !== EntityType.Building) {
-                    continue;
-                }
-                if (entity.subType !== internalType) {
-                    continue;
-                }
-                if (entity.player !== player) {
-                    continue;
-                }
-
-                const dx = entity.x - x;
-                const dy = entity.y - y;
-                if (dx * dx + dy * dy <= rangeSq) {
-                    return true;
-                }
-            }
-            return false;
+            return context.gameState.entityIndex
+                .query(EntityType.Building, player, internalType)
+                .inRadius({ x, y }, range)
+                .some();
         }
     );
 
@@ -293,8 +265,8 @@ export function registerBuildingsAPI(runtime: LuaRuntime, context: BuildingsAPIC
     // Buildings.GetState(entityId) - Get building construction state
     // Returns: 0 = BUILD (under construction), 1 = STANDARD (completed)
     runtime.registerFunction('Buildings', 'GetState', (entityId: number) => {
-        const entity = context.gameState.getEntity(entityId);
-        if (!entity || entity.type !== EntityType.Building) {
+        const entity = getEntityIfType(context.gameState, entityId, EntityType.Building);
+        if (!entity) {
             return -1;
         }
 
@@ -309,8 +281,8 @@ export function registerBuildingsAPI(runtime: LuaRuntime, context: BuildingsAPIC
 
     // Buildings.GetPosition(entityId) - Get building position
     runtime.registerFunction('Buildings', 'GetPosition', (entityId: number) => {
-        const entity = context.gameState.getEntity(entityId);
-        if (entity && entity.type === EntityType.Building) {
+        const entity = getEntityIfType(context.gameState, entityId, EntityType.Building);
+        if (entity) {
             return { x: entity.x, y: entity.y };
         }
         return null;

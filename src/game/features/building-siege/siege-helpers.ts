@@ -44,14 +44,10 @@ export function findNearbyEnemyGarrison(
     radius: number,
     gameState: GameState
 ): Entity | undefined {
-    const nearby = gameState.getEntitiesInRadius(unit, radius);
     let best: Entity | undefined;
     let bestDist = Infinity;
 
-    for (const candidate of nearby) {
-        if (candidate.type !== EntityType.Building) {
-            continue;
-        }
+    for (const candidate of gameState.entityIndex.query(EntityType.Building).inRadius(unit, radius)) {
         if (candidate.player === unit.player) {
             continue;
         }
@@ -82,42 +78,23 @@ export function findSwordsmanAtDoor(
     isReserved: (id: number) => boolean
 ): Entity | undefined {
     const door = getBuildingDoorPos(building, building.race, building.subType as BuildingType);
-    const nearby = gameState.getEntitiesInRadius(door, DOOR_ARRIVAL_DISTANCE);
-    for (const unit of nearby) {
-        if (unit.type !== EntityType.Unit || unit.hidden) {
-            continue;
-        }
-        if (unit.player === building.player) {
-            continue;
-        }
-        if (!isSwordsman(unit.subType as UnitType)) {
-            continue;
-        }
-        if (isReserved(unit.id)) {
-            continue;
-        }
-        return unit;
-    }
-    return undefined;
+    return gameState.entityIndex
+        .query(EntityType.Unit)
+        .inRadius(door, DOOR_ARRIVAL_DISTANCE)
+        .filter(
+            u => !u.hidden && u.player !== building.player && isSwordsman(u.subType as UnitType) && !isReserved(u.id)
+        )
+        .first();
 }
 
 /** Check if any enemy swordsman is within door arrival distance of the building. */
 export function hasEnemyAtDoor(building: OwnedBuildingLike, gameState: GameState): boolean {
     const door = getBuildingDoorPos(building, building.race, building.subType as BuildingType);
-    const nearby = gameState.getEntitiesInRadius(door, DOOR_ARRIVAL_DISTANCE);
-    for (const unit of nearby) {
-        if (unit.type !== EntityType.Unit || unit.hidden) {
-            continue;
-        }
-        if (unit.player === building.player) {
-            continue;
-        }
-        if (!isSwordsman(unit.subType as UnitType)) {
-            continue;
-        }
-        return true;
-    }
-    return false;
+    return gameState.entityIndex
+        .query(EntityType.Unit)
+        .inRadius(door, DOOR_ARRIVAL_DISTANCE)
+        .filter(u => !u.hidden && u.player !== building.player && isSwordsman(u.subType as UnitType))
+        .some();
 }
 
 /**
@@ -126,8 +103,8 @@ export function hasEnemyAtDoor(building: OwnedBuildingLike, gameState: GameState
  */
 export function findUnitsAttacking(defenderId: number, gameState: GameState, combatSystem: CombatSystem): number[] {
     const result: number[] = [];
-    for (const entity of gameState.entities) {
-        if (entity.type !== EntityType.Unit || entity.hidden) {
+    for (const entity of gameState.entityIndex.query(EntityType.Unit)) {
+        if (entity.hidden) {
             continue;
         }
         const state = combatSystem.getState(entity.id);

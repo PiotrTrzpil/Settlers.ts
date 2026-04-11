@@ -11,6 +11,7 @@ import { AVAILABLE_RACES } from '@/game/renderer/sprite-metadata';
 import { debugStats } from '@/game/debug/debug-stats';
 import type { Race } from '@/game/core/race';
 import type { Game } from '@/game/game';
+import { EntityQuery } from '@/game/entity-query';
 
 /** Radius (in tiles) around player start to scan for nearby entities */
 const NEARBY_ENTITY_RADIUS = 40;
@@ -38,10 +39,9 @@ export async function initRenderersAsync(
         const startPos = game.findPlayerStartPosition();
         if (startPos) {
             const r = NEARBY_ENTITY_RADIUS;
-            const nearby = game.state.getEntitiesInRect(
-                { x: startPos.x - r, y: startPos.y - r },
-                { x: startPos.x + r, y: startPos.y + r }
-            );
+            const nearby = new EntityQuery(game.state.entities)
+                .inRect({ x: startPos.x - r, y: startPos.y - r }, { x: startPos.x + r, y: startPos.y + r })
+                .toArray();
             entityRenderer.spriteManager.setNearbyEntities(nearby);
         }
     }

@@ -96,14 +96,7 @@ export function registerGoodsAPI(runtime: LuaRuntime, context: GoodsAPIContext):
     runtime.registerFunction('Goods', 'Amount', (player: number, goodType: number) => {
         // TODO: Implement inventory system lookup
         // For now, count stacks on the map
-        let count = 0;
-        for (const entity of context.gameState.entities) {
-            if (entity.type === EntityType.StackedPile && entity.subType === goodType && entity.player === player) {
-                // Stack entity - count would be stored in entity data
-                count++;
-            }
-        }
-        return count;
+        return context.gameState.entityIndex.query(EntityType.StackedPile, player, goodType).count();
     });
 
     // Goods.AddGoods(x, y, goodType, amount) - Create goods at position
@@ -130,16 +123,20 @@ export function registerGoodsAPI(runtime: LuaRuntime, context: GoodsAPIContext):
 
     // Goods.GetStackAt(x, y) - Get goods info at position
     runtime.registerFunction('Goods', 'GetStackAt', (x: number, y: number) => {
-        for (const entity of context.gameState.entities) {
-            if (entity.type === EntityType.StackedPile && Math.floor(entity.x) === x && Math.floor(entity.y) === y) {
-                return {
-                    type: entity.subType,
-                    amount: 1, // TODO: Get actual amount from stack data
-                    id: entity.id,
-                };
-            }
+        const entity = context.gameState.entityIndex
+            .query(EntityType.StackedPile)
+            .filter(e => Math.floor(e.x) === x && Math.floor(e.y) === y)
+            .first();
+
+        if (!entity) {
+            return null;
         }
-        return null;
+
+        return {
+            type: entity.subType,
+            amount: 1, // TODO: Get actual amount from stack data
+            id: entity.id,
+        };
     });
 
     // Goods.AddPileEx(x, y, goodType, amount) - Alias for AddGoods (S4 script compatibility)

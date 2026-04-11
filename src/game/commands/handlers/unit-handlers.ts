@@ -123,18 +123,11 @@ function resolveTargetOutsideBuilding(state: GameState, tile: Tile): Tile {
 
 /** Check if there's an enemy military unit within 1 tile of a position. */
 function hasEnemyNearTarget(state: GameState, targetX: number, targetY: number, player: number): boolean {
-    const nearby = state.getEntitiesInRadius({ x: targetX, y: targetY }, 1.5);
-    for (const e of nearby) {
-        if (
-            e.type === EntityType.Unit &&
-            e.player !== player &&
-            !e.hidden &&
-            isUnitTypeMilitary(e.subType as UnitType)
-        ) {
-            return true;
-        }
-    }
-    return false;
+    return state.entityIndex
+        .query(EntityType.Unit)
+        .inRadius({ x: targetX, y: targetY }, 1.5)
+        .filter(e => e.player !== player && !e.hidden && isUnitTypeMilitary(e.subType as UnitType))
+        .some();
 }
 
 /** Workers (carriers, diggers, etc.) cannot be commanded to move outside their player's territory. */

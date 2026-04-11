@@ -71,18 +71,12 @@ export function findCommand(): CliCommand {
             const near = parseNearArg(args);
             const radius = typeof args['radius'] === 'number' ? args['radius'] : 10;
 
+            let q = ctx.game.state.entityIndex.query(resolved.entityType, ctx.player, resolved.subType);
+            if (near) {
+                q = q.inRadius(near, radius);
+            }
             const rows: string[][] = [];
-            for (const e of ctx.game.state.entityIndex.ofTypeAndPlayer(resolved.entityType, ctx.player)) {
-                if (e.subType !== resolved.subType) {
-                    continue;
-                }
-                if (near) {
-                    const dx = e.x - near.x;
-                    const dy = e.y - near.y;
-                    if (dx * dx + dy * dy > radius * radius) {
-                        continue;
-                    }
-                }
+            for (const e of q) {
                 rows.push([String(e.id), posText(e)]);
             }
 
@@ -150,9 +144,12 @@ function describeTileInfo(x: number, y: number, state: GameState, terrain: Terra
 function describeNearbyEntities(tile: Tile, searchRadius: number, state: GameState): string[] {
     const { x, y } = tile;
     const lines: string[] = [];
-    const nearby = state.getEntitiesInRadius(tile, searchRadius);
-    const nearbyUnits = nearby.filter(e => e.type === EntityType.Unit && !(e.x === x && e.y === y));
-    const nearbyBuildings = nearby.filter(e => e.type === EntityType.Building);
+    const nearbyUnits = state.entityIndex
+        .query(EntityType.Unit)
+        .inRadius(tile, searchRadius)
+        .filter(e => !(e.x === x && e.y === y))
+        .toArray();
+    const nearbyBuildings = state.entityIndex.query(EntityType.Building).inRadius(tile, searchRadius).toArray();
 
     if (nearbyBuildings.length > 0) {
         lines.push('\nnearby buildings (r=' + searchRadius + '):');

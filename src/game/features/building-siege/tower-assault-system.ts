@@ -17,7 +17,7 @@ import type { TickSystem } from '../../core/tick-system';
 import type { GameState } from '../../game-state';
 import type { EventBus } from '../../event-bus';
 import type { Entity, Tile } from '../../entity';
-import { UnitType, BuildingType, tileKey } from '../../entity';
+import { EntityType, UnitType, BuildingType, tileKey } from '../../entity';
 import { isDarkTribe } from '../../core/race';
 import { getCombatStats } from '../combat/combat-state';
 import { hexDistanceTo } from '../../systems/hex-directions';
@@ -249,7 +249,7 @@ export class TowerAssaultSystem implements TickSystem {
     }
 
     private scanDarkTribeSwordsmen(): void {
-        for (const entity of this.gameState.entities) {
+        for (const entity of this.gameState.entityIndex.query(EntityType.Unit)) {
             if (!isDarkTribe(entity.race)) {
                 continue;
             }

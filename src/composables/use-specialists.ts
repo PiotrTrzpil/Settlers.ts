@@ -55,12 +55,7 @@ export function useSpecialists(
                 continue;
             }
 
-            let liveCount = 0;
-            for (const entity of g.state.entities) {
-                if (entity.type === EntityType.Unit && entity.subType === def.type && entity.player === currentPlayer) {
-                    liveCount++;
-                }
-            }
+            const liveCount = g.state.entityIndex.query(EntityType.Unit, currentPlayer, def.type).count();
 
             const queuedCount = g.services.recruitSystem.getQueuedCount(def.type);
             const pendingCount = g.services.unitTransformer.getPendingCountByType(def.type);

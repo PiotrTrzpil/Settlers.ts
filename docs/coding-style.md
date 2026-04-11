@@ -145,6 +145,32 @@ public labels: DebugEntityLabel[] = [];
 
 Dynamic `await import(...)` for lazy-loading or optional dependencies at runtime is fine — this rule only applies to type-position usage.
 
+### Entity Queries — Use EntityIndex, Not Full Scans
+
+**Never iterate `gameState.entities` to search by type/player/subType.** Use the indexed query API:
+
+```typescript
+// BAD — O(N) scan of every entity in the game
+let count = 0;
+for (const entity of gameState.entities) {
+    if (entity.type === EntityType.Building && entity.player === player) {
+        count++;
+    }
+}
+
+// GOOD — O(k) indexed lookup, k = matching entities only
+const count = gameState.entityIndex.query(EntityType.Building, player).count();
+
+// GOOD — with subType, spatial filter, and custom predicate
+const target = gameState.entityIndex
+    .query(EntityType.Building, player, BuildingType.GuardTowerSmall)
+    .filter(e => e.operational)
+    .inRadius(center, 30)
+    .nearest(center);
+```
+
+See `docs/design-rules.md` Rule 6.0 for the full API reference.
+
 ### Coding Style
 
 - **Prefer async/await** over `.then()` chains

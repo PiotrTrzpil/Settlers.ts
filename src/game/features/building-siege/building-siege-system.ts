@@ -17,7 +17,7 @@
 import type { TickSystem } from '../../core/tick-system';
 import type { GameState } from '../../game-state';
 import type { EventBus } from '../../event-bus';
-import { EntityType, UnitType, BuildingType, type Entity, type Tile, tileKey } from '../../entity';
+import { EntityType, UnitType, BuildingType, type Entity, type Tile, tileKey, getEntityIfType } from '../../entity';
 import { isDarkTribe } from '../../core/race';
 import { hexDistanceTo } from '../../systems/hex-directions';
 import { dispatchUnitToGarrison } from '../tower-garrison/internal/garrison-dispatch';
@@ -127,8 +127,8 @@ export class BuildingSiegeSystem implements TickSystem {
     /** Called when a unit stops moving — check if it should trigger a siege. */
     onMovementStopped(entityId: number): void {
         try {
-            const unit = this.gameState.getEntityOrThrow(entityId, 'siege:onMovementStopped');
-            if (unit.type !== EntityType.Unit || !isSwordsman(unit.subType as UnitType)) {
+            const unit = getEntityIfType(this.gameState, entityId, EntityType.Unit);
+            if (!unit || !isSwordsman(unit.subType as UnitType)) {
                 return;
             }
             if (this.unitReservation.isReserved(entityId)) {
@@ -164,8 +164,8 @@ export class BuildingSiegeSystem implements TickSystem {
     /** Check if a unit should start a siege (e.g. after winning combat). */
     checkSiegeOpportunity(entityId: number): void {
         try {
-            const unit = this.gameState.getEntity(entityId);
-            if (!unit || unit.type !== EntityType.Unit || !isSwordsman(unit.subType as UnitType)) {
+            const unit = getEntityIfType(this.gameState, entityId, EntityType.Unit);
+            if (!unit || !isSwordsman(unit.subType as UnitType)) {
                 return;
             }
             if (this.unitReservation.isReserved(entityId) || this.combatSystem.isInCombat(entityId)) {
@@ -230,7 +230,7 @@ export class BuildingSiegeSystem implements TickSystem {
 
     /** Check idle, unreserved swordsmen for siege opportunities. */
     private scanIdleSwordsmen(): void {
-        for (const entity of this.gameState.entities) {
+        for (const entity of this.gameState.entityIndex.query(EntityType.Unit)) {
             if (!isIdleSwordsman(entity, this.unitReservation, this.combatSystem, this.gameState)) {
                 continue;
             }
@@ -305,8 +305,8 @@ export class BuildingSiegeSystem implements TickSystem {
             if (occupantId === undefined || siege.doorAttackerIds.includes(occupantId)) {
                 continue;
             }
-            const unit = this.gameState.getEntity(occupantId);
-            if (!unit || unit.type !== EntityType.Unit || unit.hidden) {
+            const unit = getEntityIfType(this.gameState, occupantId, EntityType.Unit);
+            if (!unit || unit.hidden) {
                 continue;
             }
             if (unit.player === building.player || !isSwordsman(unit.subType as UnitType)) {

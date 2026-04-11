@@ -21,7 +21,7 @@
 import { BaseInputMode, HANDLED, UNHANDLED, type InputContext, type InputResult } from '../input-mode';
 import { InputAction, MouseButton, type PointerData } from '../input-actions';
 import { CursorType, type ModeRenderState, type TileHighlight } from '../render-state';
-import { EntityType, type BuildingType } from '../../entity';
+import { EntityType, type BuildingType, getEntityOfType } from '../../entity';
 import type { Race } from '../../core/race';
 import type { GameState } from '../../game-state';
 import type { BuildingAdjustHandler, AdjustableItem, TileOffset, PixelOffset } from '../building-adjust/types';
@@ -74,10 +74,12 @@ export class BuildingAdjustMode extends BaseInputMode {
             return;
         }
 
-        const building = deps.gameState.getEntityOrThrow(buildingId, 'building selected for adjustment');
-        if (building.type !== EntityType.Building) {
-            return;
-        }
+        const building = getEntityOfType(
+            deps.gameState,
+            buildingId,
+            EntityType.Building,
+            'building selected for adjustment'
+        );
 
         this.active = {
             buildingId,

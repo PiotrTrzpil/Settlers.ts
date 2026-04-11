@@ -10,7 +10,7 @@ import { LogHandler } from '@/utilities/log-handler';
 import { Race } from '../../core/race';
 import type { LuaRuntime } from '../lua-runtime';
 import type { GameState } from '@/game/game-state';
-import { EntityType, UnitType, type Tile } from '@/game/entity';
+import { EntityType, UnitType, type Tile, getEntityIfType } from '@/game/entity';
 import type { ExecuteCommand } from '@/game/commands';
 
 const log = new LogHandler('SettlersAPI');
@@ -218,13 +218,7 @@ export function registerSettlersAPI(runtime: LuaRuntime, context: SettlersAPICon
     // Settlers.Amount(player, settlerType) - Count settlers of type
     runtime.registerFunction('Settlers', 'Amount', (player: number, settlerType: number) => {
         const internalType = mapS4ToInternalType(settlerType);
-        let count = 0;
-        for (const entity of context.gameState.entities) {
-            if (entity.type === EntityType.Unit && entity.subType === internalType && entity.player === player) {
-                count++;
-            }
-        }
-        return count;
+        return context.gameState.entityIndex.query(EntityType.Unit, player, internalType).count();
     });
 
     // Settlers.AmountInArea(player, settlerType, x, y, range) - Count settlers in area
@@ -233,34 +227,17 @@ export function registerSettlersAPI(runtime: LuaRuntime, context: SettlersAPICon
         'AmountInArea',
         (player: number, settlerType: number, x: number, y: number, range: number) => {
             const internalType = mapS4ToInternalType(settlerType);
-            let count = 0;
-            const rangeSq = range * range;
-
-            for (const entity of context.gameState.entities) {
-                if (entity.type !== EntityType.Unit) {
-                    continue;
-                }
-                if (entity.subType !== internalType) {
-                    continue;
-                }
-                if (entity.player !== player) {
-                    continue;
-                }
-
-                const dx = entity.x - x;
-                const dy = entity.y - y;
-                if (dx * dx + dy * dy <= rangeSq) {
-                    count++;
-                }
-            }
-            return count;
+            return context.gameState.entityIndex
+                .query(EntityType.Unit, player, internalType)
+                .inRadius({ x, y }, range)
+                .count();
         }
     );
 
     // Settlers.Kill(entityId) - Kill a specific settler
     runtime.registerFunction('Settlers', 'Kill', (entityId: number) => {
-        const entity = context.gameState.getEntity(entityId);
-        if (entity && entity.type === EntityType.Unit) {
+        const entity = getEntityIfType(context.gameState, entityId, EntityType.Unit);
+        if (entity) {
             context.gameState.removeEntity(entityId);
             log.debug(`Killed settler ${entityId}`);
             return true;
@@ -270,8 +247,8 @@ export function registerSettlersAPI(runtime: LuaRuntime, context: SettlersAPICon
 
     // Settlers.MoveTo(entityId, x, y) - Move a settler to a position
     runtime.registerFunction('Settlers', 'MoveTo', (entityId: number, x: number, y: number) => {
-        const entity = context.gameState.getEntity(entityId);
-        if (!entity || entity.type !== EntityType.Unit) {
+        const entity = getEntityIfType(context.gameState, entityId, EntityType.Unit);
+        if (!entity) {
             log.debug(`MoveTo: entity ${entityId} not found or not a unit`);
             return false;
         }
@@ -287,8 +264,8 @@ export function registerSettlersAPI(runtime: LuaRuntime, context: SettlersAPICon
 
     // Settlers.GetPosition(entityId) - Get settler's current position
     runtime.registerFunction('Settlers', 'GetPosition', (entityId: number) => {
-        const entity = context.gameState.getEntity(entityId);
-        if (entity && entity.type === EntityType.Unit) {
+        const entity = getEntityIfType(context.gameState, entityId, EntityType.Unit);
+        if (entity) {
             return { x: entity.x, y: entity.y };
         }
         return null;
@@ -296,8 +273,7 @@ export function registerSettlersAPI(runtime: LuaRuntime, context: SettlersAPICon
 
     // Settlers.IsAlive(entityId) - Check if settler exists
     runtime.registerFunction('Settlers', 'IsAlive', (entityId: number) => {
-        const entity = context.gameState.getEntity(entityId);
-        return entity !== undefined && entity.type === EntityType.Unit;
+        return getEntityIfType(context.gameState, entityId, EntityType.Unit) !== undefined;
     });
 
     // Settlers.GetType(entityId) - Get settler's type (returns string name or -1 if not a unit)

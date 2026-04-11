@@ -42,7 +42,7 @@ function isNonCarrierWorker(subType: UnitType): boolean {
 function scanBuildings(gameState: GameState, inventoryManager: BuildingInventoryManager, player: number) {
     const fullOutputBuildings: number[] = [];
 
-    for (const entity of gameState.entityIndex.ofTypeAndPlayer(EntityType.Building, player)) {
+    for (const entity of gameState.entityIndex.query(EntityType.Building, player)) {
         if (!inventoryManager.hasSlots(entity.id)) {
             continue;
         }
@@ -77,7 +77,7 @@ function countCarrierStatus(config: SnapshotConfig, player: number) {
 
 function findIdleWorkers(gameState: GameState, workerStateQuery: WorkerStateQuery, player: number): number[] {
     const idleWorkers: number[] = [];
-    for (const entity of gameState.entityIndex.ofTypeAndPlayer(EntityType.Unit, player)) {
+    for (const entity of gameState.entityIndex.query(EntityType.Unit, player)) {
         if (!isNonCarrierWorker(entity.subType as UnitType)) {
             continue;
         }

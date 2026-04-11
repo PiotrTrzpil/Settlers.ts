@@ -252,20 +252,14 @@ export class UnitTransformer {
      * Returns false if no live specialist of the given type exists for the player.
      */
     dismissSpecialist(unitType: UnitType, toolMaterial: EMaterialType | null, player: number): boolean {
-        let target = null;
-        for (const entity of this.gameState.entities) {
-            if (entity.type === EntityType.Unit && entity.subType === unitType && entity.player === player) {
-                target = entity;
-                break;
-            }
-        }
+        const target = this.gameState.entityIndex.query(EntityType.Unit, player, unitType).first();
         if (!target) {
             return false;
         }
 
         const fromType = target.subType as UnitType;
         const { id, x, y } = target;
-        target.subType = UnitType.Carrier;
+        this.gameState.changeEntitySubType(id, UnitType.Carrier);
         this.carrierRegistry.register(id);
         this.eventBus.emit('unit:dismissed', { unitId: id, fromType, toType: UnitType.Carrier, level: 'info' });
         log.debug(`Dismissed ${fromType} (entity ${id}), returned to carrier pool`);
@@ -342,7 +336,7 @@ export class UnitTransformer {
 
         const entity = this.gameState.getEntityOrThrow(carrierId, 'UnitTransformer.handleCompleted');
         const fromType = entity.subType as UnitType;
-        entity.subType = targetUnitType;
+        this.gameState.changeEntitySubType(carrierId, targetUnitType);
         this.carrierRegistry.remove(carrierId);
         entity.carrying = undefined;
 

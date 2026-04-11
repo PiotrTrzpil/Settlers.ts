@@ -336,15 +336,10 @@ export function clearMapObjects(state: GameState, category?: MapObjectCategory, 
     }
 
     // Find matching entities
-    const toRemove = state.entities.filter(e => {
-        if (e.type !== EntityType.MapObject) {
-            return false;
-        }
-        if (allowedTypes && !allowedTypes.has(e.subType as MapObjectType)) {
-            return false;
-        }
-        return true;
-    });
+    const toRemove = state.entityIndex
+        .query(EntityType.MapObject)
+        .filter(e => !allowedTypes || allowedTypes.has(e.subType as MapObjectType))
+        .toArray();
 
     // Remove them
     for (const entity of toRemove) {
@@ -368,10 +363,7 @@ export function countMapObjectsByCategory(state: GameState): Map<MapObjectCatego
         counts.set(cat, 0);
     }
 
-    for (const entity of state.entities) {
-        if (entity.type !== EntityType.MapObject) {
-            continue;
-        }
+    for (const entity of state.entityIndex.query(EntityType.MapObject)) {
         const category = OBJECT_TYPE_CATEGORY[entity.subType as MapObjectType];
 
         if (category) {

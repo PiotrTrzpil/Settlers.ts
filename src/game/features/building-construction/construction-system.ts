@@ -375,10 +375,7 @@ export class BuildingConstructionSystem implements TickSystem {
         // building owns those tiles, so units that walked onto the footprint via
         // movement are invisible to tileOccupancy.
         const unitIds = new Set<number>();
-        for (const e of this.state.entities) {
-            if (e.type !== EntityType.Unit) {
-                continue;
-            }
+        for (const e of this.state.entityIndex.query(EntityType.Unit)) {
             if (blockKeys.has(tileKey(e))) {
                 unitIds.add(e.id);
             }

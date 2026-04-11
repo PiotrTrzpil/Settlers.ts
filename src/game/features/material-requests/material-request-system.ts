@@ -151,10 +151,7 @@ export class MaterialRequestSystem implements TickSystem {
 
     /** Seed the dirty set with all operational buildings that have input slots or are StorageAreas. */
     private markAllOperationalDirty(): void {
-        for (const entity of this.gameState.entities) {
-            if (entity.type !== EntityType.Building) {
-                continue;
-            }
+        for (const entity of this.gameState.entityIndex.query(EntityType.Building)) {
             if (this.constructionSiteManager.hasSite(entity.id)) {
                 continue;
             }

@@ -402,9 +402,9 @@ import { TERRAIN } from '../helpers/test-map';
 placeBuilding(state, map, x, y, BuildingType.WoodcutterHut);
 spawnUnit(state, map, x, y, UnitType.Carrier);
 ctx.map.groundType[index] = TERRAIN.WATER;
-const units = state.entities.filter(e => e.type === EntityType.Unit);
+const units = state.entityIndex.query(EntityType.Unit).toArray();
 
-// BAD — magic numbers
+// BAD — magic numbers, full entity scan
 placeBuilding(state, map, x, y, 1);
 state.entities.filter(e => e.type === 2);
 ```

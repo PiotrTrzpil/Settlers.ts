@@ -318,7 +318,7 @@ function econDetailCommand(): CliCommand {
 
 function formatBuildingCounts(state: GameState, player: number, ctx: CliContext, lines: string[]): void {
     const counts = new Map<BuildingType, number>();
-    for (const e of state.entityIndex.ofTypeAndPlayer(EntityType.Building, player)) {
+    for (const e of state.entityIndex.query(EntityType.Building, player)) {
         // eslint-disable-next-line no-restricted-syntax -- accumulating map totals; 0 is the correct initial value for a new key
         counts.set(e.subType as BuildingType, (counts.get(e.subType as BuildingType) ?? 0) + 1);
     }
@@ -345,7 +345,7 @@ function isOutputSlotWithMaterial(slot: {
 function formatStorageMaterials(state: GameState, player: number, ctx: CliContext, lines: string[]): void {
     const totals = new Map<EMaterialType, number>();
     const invManager = ctx.game.services.inventoryManager;
-    for (const e of state.entityIndex.ofTypeAndPlayer(EntityType.Building, player)) {
+    for (const e of state.entityIndex.query(EntityType.Building, player)) {
         if (!isStorageBuilding(e.subType as BuildingType)) {
             continue;
         }

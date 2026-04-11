@@ -198,10 +198,7 @@ export class GameCore {
     /** Assign territory owner to free ground piles — must run after activate so territory is computed. */
     private assignPileOwners(): void {
         const tm = this.services.territoryManager;
-        for (const entity of this.state.entities) {
-            if (entity.type !== EntityType.StackedPile) {
-                continue;
-            }
+        for (const entity of this.state.entityIndex.query(EntityType.StackedPile)) {
             const owner = tm.getOwner(entity);
             if (owner >= 0) {
                 entity.player = owner;

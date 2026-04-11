@@ -54,7 +54,7 @@ export interface AddBuildingOptions {
  *
  * GameState is responsible for:
  * - Entity CRUD (add, remove, get)
- * - Spatial queries (getEntityAt, getEntitiesInRect, getEntitiesInRadius)
+ * - Spatial queries (getEntityAt, getEntitiesInRect)
  * - Tile occupancy tracking
  *
  * Extracted concerns (owned here but encapsulated in dedicated classes):
@@ -200,7 +200,7 @@ export class GameState {
 
         this.entities.push(entity);
         this.entityMap.set(entity.id, entity);
-        this.entityIndex.add(entity.id, type, player);
+        this.entityIndex.add(entity.id, type, player, subType);
 
         // Set hidden BEFORE emitting entity:created so subscribers can skip
         // initialization for hidden entities (e.g. no movement controller for garrisoned units).
@@ -273,7 +273,7 @@ export class GameState {
 
         this.entities.push(entity);
         this.entityMap.set(entity.id, entity);
-        this.entityIndex.add(entity.id, data.type, data.player);
+        this.entityIndex.add(entity.id, data.type, data.player, data.subType);
 
         // Update nextId to stay ahead of restored entity IDs
         if (data.id >= this.nextId) {
@@ -432,7 +432,7 @@ export class GameState {
             this.spatialIndex.remove(id);
         }
 
-        this.entityIndex.remove(id, entity.type, entity.player);
+        this.entityIndex.remove(id, entity.type, entity.player, entity.subType);
 
         // Remove occupancy from the correct layer
         if (entity.type === EntityType.Building) {
@@ -507,29 +507,6 @@ export class GameState {
         return this.getGroundEntityAt(tile) ?? this.getUnitAt(tile);
     }
 
-    public getEntitiesInRadius(center: Tile, radius: number): Entity[] {
-        const result: Entity[] = [];
-        const r2 = radius * radius;
-        for (const entity of this.entities) {
-            const dx = entity.x - center.x;
-            const dy = entity.y - center.y;
-            if (dx * dx + dy * dy <= r2) {
-                result.push(entity);
-            }
-        }
-        return result;
-    }
-
-    /** Get all entities within a rectangular tile region */
-    public getEntitiesInRect(topLeft: Tile, bottomRight: Tile): Entity[] {
-        const minX = Math.min(topLeft.x, bottomRight.x);
-        const maxX = Math.max(topLeft.x, bottomRight.x);
-        const minY = Math.min(topLeft.y, bottomRight.y);
-        const maxY = Math.max(topLeft.y, bottomRight.y);
-
-        return this.entities.filter(e => e.x >= minX && e.x <= maxX && e.y >= minY && e.y <= maxY);
-    }
-
     /**
      * Re-index an entity under a new player. Updates entity.player, entity.race, and EntityIndex.
      * Used when a building is captured during a siege.
@@ -544,13 +521,13 @@ export class GameState {
         }
 
         // Re-index: remove from old (type, player) bucket, add to new
-        this.entityIndex.remove(entityId, entity.type, oldPlayer);
+        this.entityIndex.remove(entityId, entity.type, oldPlayer, entity.subType);
         entity.player = newPlayer;
         // Buildings keep their original race (visual/sprite identity); only units change race
         if (entity.type !== EntityType.Building) {
             entity.race = newRace;
         }
-        this.entityIndex.add(entityId, entity.type, newPlayer);
+        this.entityIndex.add(entityId, entity.type, newPlayer, entity.subType);
 
         this.eventBus.emit('building:ownerChanged', {
             buildingId: entityId,
@@ -559,6 +536,18 @@ export class GameState {
             newPlayer,
             level: 'info',
         });
+    }
+
+    /**
+     * Re-index an entity under a new subType. Updates entity.subType and EntityIndex.
+     * Used when a unit changes role (e.g. carrier → specialist or specialist → carrier).
+     */
+    public changeEntitySubType(entityId: number, newSubType: number | string): void {
+        const entity = this.getEntityOrThrow(entityId, 'changeEntitySubType');
+        const oldSubType = entity.subType;
+        this.entityIndex.remove(entityId, entity.type, entity.player, oldSubType);
+        entity.subType = newSubType;
+        this.entityIndex.add(entityId, entity.type, entity.player, newSubType);
     }
 
     /**

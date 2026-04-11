@@ -514,12 +514,7 @@ export class ConstructionSiteDemandSystem implements TickSystem {
         const max = role === 'digger' ? MAX_DIGGERS_PER_PLAYER : MAX_BUILDERS_PER_PLAYER;
         const unitType = role === 'digger' ? UnitType.Digger : UnitType.Builder;
 
-        let existing = 0;
-        for (const entity of this.gameState.entities) {
-            if (entity.type === EntityType.Unit && entity.subType === unitType && entity.player === player) {
-                existing++;
-            }
-        }
+        const existing = this.gameState.entityIndex.query(EntityType.Unit, player, unitType).count();
 
         return Math.max(0, max - existing);
     }

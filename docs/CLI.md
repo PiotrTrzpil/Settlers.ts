@@ -113,7 +113,7 @@ The `js` command evaluates expressions with these scope variables:
 ```sh
 pnpm cli "js state.getEntity(4807)"
 pnpm cli "js terrain.getHeightAt(100, 100)"
-pnpm cli "js state.entityIndex.ofTypeAndPlayer(1, 0).length"
+pnpm cli "js state.entityIndex.query(1, 0).count()"
 pnpm cli "js logistics"
 ```
 

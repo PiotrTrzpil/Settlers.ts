@@ -96,7 +96,7 @@ export class AutoGarrisonSystem implements TickSystem {
 
     private collectGarrisonBuildingIds(): number[] {
         const ids: number[] = [];
-        for (const entity of this.gameState.entityIndex.ofType(EntityType.Building)) {
+        for (const entity of this.gameState.entityIndex.query(EntityType.Building)) {
             if (isGarrisonBuildingType(entity.subType as BuildingType)) {
                 ids.push(entity.id);
             }
@@ -158,7 +158,7 @@ export class AutoGarrisonSystem implements TickSystem {
             bowman: { id: null as number | null, dist: Infinity },
         };
 
-        for (const entity of this.gameState.entityIndex.ofTypeAndPlayer(EntityType.Unit, player)) {
+        for (const entity of this.gameState.entityIndex.query(EntityType.Unit, player)) {
             if (entity.hidden) {
                 continue;
             }

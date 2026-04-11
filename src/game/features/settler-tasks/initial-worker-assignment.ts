@@ -23,10 +23,7 @@ export function relocateUnitsFromFootprints(gameState: GameState): void {
     const taken = new Set<string>();
     let relocated = 0;
 
-    for (const entity of gameState.entities) {
-        if (entity.type !== EntityType.Unit) {
-            continue;
-        }
+    for (const entity of gameState.entityIndex.query(EntityType.Unit)) {
         const buildingAtTile = gameState.getGroundEntityAt(entity);
         if (!buildingAtTile || buildingAtTile.type !== EntityType.Building) {
             continue;

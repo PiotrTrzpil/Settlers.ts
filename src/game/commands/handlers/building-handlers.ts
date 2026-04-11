@@ -1,4 +1,4 @@
-import { EntityType, UnitType, tileKey, getBuildingFootprint, type Entity, Tile } from '../../entity';
+import { EntityType, UnitType, tileKey, getBuildingFootprint, type Entity, Tile, getEntityIfType } from '../../entity';
 import type { GameState } from '../../game-state';
 import type { TerrainData } from '../../terrain';
 import type { EventBus } from '../../event-bus';
@@ -122,8 +122,8 @@ function spawnWorkerInsideBuilding(deps: SpawnBuildingUnitsDeps, entity: Entity,
 }
 
 function isReplaceableOccupant(state: GameState, entityId: number): boolean {
-    const entity = state.getEntity(entityId);
-    if (!entity || entity.type !== EntityType.MapObject) {
+    const entity = getEntityIfType(state, entityId, EntityType.MapObject);
+    if (!entity) {
         return false;
     }
     return isNonBlockingMapObject(entity.subType as number);
@@ -154,13 +154,13 @@ function validateTerritoryPlacement(
     const isBootstrap =
         !playerHasTerritory &&
         TERRITORY_BUILDINGS.has(cmd.buildingType) &&
-        !state.entities.some(
-            e =>
-                e.type === EntityType.Building &&
-                e.player === cmd.player &&
-                TERRITORY_BUILDINGS.has(e.subType as BuildingType)
-        );
-    if (isBootstrap) {return undefined;}
+        !state.entityIndex
+            .query(EntityType.Building, cmd.player)
+            .filter(e => TERRITORY_BUILDINGS.has(e.subType as BuildingType))
+            .some();
+    if (isBootstrap) {
+        return undefined;
+    }
 
     for (const tile of footprint) {
         if (deps.getOwner(tile) !== cmd.player) {
@@ -205,7 +205,9 @@ export function executePlaceBuilding(deps: PlaceBuildingDeps, cmd: PlaceBuilding
 
     if (!cmd.trusted) {
         const territoryError = validateTerritoryPlacement(deps, state, cmd, footprint);
-        if (territoryError) {return territoryError;}
+        if (territoryError) {
+            return territoryError;
+        }
     }
     removeReplaceableMapObjects(state, footprint);
 

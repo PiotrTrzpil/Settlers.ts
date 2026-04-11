@@ -44,13 +44,11 @@ import {
     type CommandFailure,
     type ExecuteCommand,
 } from '@/game/commands';
-import { BuildingType, isStorageBuilding } from '@/game/buildings/building-type';
+import { BuildingType } from '@/game/buildings/building-type';
 import { EntityType, UnitType, type Tile } from '@/game/entity';
 import { EMaterialType } from '@/game/economy/material-type';
-import { StorageDirection } from '@/game/systems/inventory/storage-filter-manager';
 import { GameSettingsManager } from '@/game/game-settings';
 import { Race } from '@/game/core/race';
-import { SlotKind } from '@/game/core/pile-kind';
 import type { MapBuildingData, MapSettlerData } from '@/resources/map/map-entity-data';
 import { BuildingConstructionPhase } from '@/game/features/building-construction/types';
 import { createSnapshot, restoreFromSnapshot, type GameStateSnapshot } from '@/game/state/game-state-persistence';
@@ -58,6 +56,13 @@ import type { Game } from '@/game/game';
 import type { OreType } from '@/game/features/ore-veins/ore-type';
 import type { TestMap } from './test-map';
 import { simulateMovement } from './simulation-movement';
+import {
+    injectInput as injectInputFn,
+    injectOutput as injectOutputFn,
+    getOutput as getOutputFn,
+    getInput as getInputFn,
+    countEntities as countEntitiesFn,
+} from './simulation-inventory';
 
 // Re-export types so existing imports keep working
 export type {
@@ -486,44 +491,26 @@ export class Simulation {
         return simulateMovement(this, entityId, opts);
     }
 
-    // ─── Inventory queries ────────────────────────────────────────
+    // ─── Inventory queries (delegated to simulation-inventory.ts) ──
 
     injectInput(buildingId: number, material: EMaterialType, amount: number) {
-        this.services.inventoryManager.depositInput(buildingId, material, amount);
+        injectInputFn(this.services, buildingId, material, amount);
     }
 
     injectOutput(buildingId: number, material: EMaterialType, amount: number) {
-        const entity = this.state.getEntityOrThrow(buildingId, 'injectOutput');
-        const im = this.services.inventoryManager;
-
-        // StorageArea slots start as NO_MATERIAL with kind=Storage — claim one before depositing
-        if (isStorageBuilding(entity.subType as BuildingType)) {
-            const existing = im.findSlotWithSpace(buildingId, material, SlotKind.Storage);
-            if (!existing) {
-                const free = im.findSlotWithSpace(buildingId, EMaterialType.NO_MATERIAL, SlotKind.Storage);
-                if (!free) throw new Error(`injectOutput: no free slot on StorageArea ${buildingId} for ${material}`);
-                im.setSlotMaterial(free.slotId, material);
-            }
-            const sfm = this.services.storageFilterManager;
-            if (!sfm.getDirection(buildingId, material)) {
-                sfm.setDirection(buildingId, material, StorageDirection.Both);
-            }
-        }
-
-        im.depositOutput(buildingId, material, amount);
+        injectOutputFn(this.state, this.services, buildingId, material, amount);
     }
 
     getOutput(buildingId: number, material: EMaterialType): number {
-        return this.services.inventoryManager.getOutputAmount(buildingId, material);
+        return getOutputFn(this.services, buildingId, material);
     }
 
     getInput(buildingId: number, material: EMaterialType): number {
-        return this.services.inventoryManager.getInputAmount(buildingId, material);
+        return getInputFn(this.services, buildingId, material);
     }
 
     countEntities(type: EntityType, subType?: number | string): number {
-        return this.state.entities.filter(e => e.type === type && (subType === undefined || e.subType === subType))
-            .length;
+        return countEntitiesFn(this.state, type, subType);
     }
 
     // ─── Event logging ────────────────────────────────────────────

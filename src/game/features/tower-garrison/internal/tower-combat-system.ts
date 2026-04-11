@@ -122,11 +122,7 @@ export class TowerCombatSystem implements TickSystem {
 
     private processAllTowers(): void {
         // Iterate all buildings that have garrisons
-        for (const entity of this.gameState.entities) {
-            if (entity.type !== EntityType.Building) {
-                continue;
-            }
-
+        for (const entity of this.gameState.entityIndex.query(EntityType.Building)) {
             const garrison = this.garrisonManager.getGarrison(entity.id);
             if (!garrison) {
                 continue;
@@ -142,10 +138,7 @@ export class TowerCombatSystem implements TickSystem {
     private processTower(building: Entity, bowmanIds: readonly number[]): void {
         // Find valid enemy targets within hex distance
         const enemies: Entity[] = [];
-        for (const candidate of this.gameState.entities) {
-            if (candidate.type !== EntityType.Unit) {
-                continue;
-            }
+        for (const candidate of this.gameState.entityIndex.query(EntityType.Unit)) {
             if (candidate.player === building.player) {
                 continue;
             }

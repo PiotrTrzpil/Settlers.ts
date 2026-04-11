@@ -131,6 +131,49 @@ export interface EntityProvider {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Typed entity access
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Get an entity by ID, throwing if it doesn't exist or isn't the expected type.
+ * Use when the entity MUST exist and MUST be a specific EntityType.
+ *
+ * ```ts
+ * const building = getEntityOfType(gameState, id, EntityType.Building, 'siege target');
+ * ```
+ */
+export function getEntityOfType(
+    provider: EntityProvider,
+    id: number,
+    expectedType: EntityType,
+    context?: string
+): Entity {
+    const entity = provider.getEntityOrThrow(id, context);
+    if (entity.type !== expectedType) {
+        const ctx = context ? ` (${context})` : '';
+        throw new Error(`Entity ${id}${ctx} is ${EntityType[entity.type]}, expected ${EntityType[expectedType]}`);
+    }
+    return entity;
+}
+
+/**
+ * Get an entity by ID if it exists and matches the expected type. Returns undefined otherwise.
+ * Use at API boundaries where the entity may not exist or may be a different type.
+ *
+ * ```ts
+ * const unit = getEntityIfType(gameState, id, EntityType.Unit);
+ * if (!unit) return;
+ * ```
+ */
+export function getEntityIfType(provider: EntityProvider, id: number, expectedType: EntityType): Entity | undefined {
+    const entity = provider.getEntity(id);
+    if (!entity || entity.type !== expectedType) {
+        return undefined;
+    }
+    return entity;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Carrying helpers
 // ─────────────────────────────────────────────────────────────────────────────
 

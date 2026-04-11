@@ -112,10 +112,14 @@ export function withdrawOutput(
     material: EMaterialType,
     amount: number
 ): number {
-    for (const slot of mgr.getSlots(buildingId)) {
+    const slots = mgr.getSlots(buildingId);
+    for (const slot of slots) {
         if (slot.materialType === material && isOutputKind(slot.kind) && slot.currentAmount > 0) {
             return mgr.withdraw(slot.id, amount);
         }
+    }
+    if (slots.length === 0) {
+        throw new Error(`Building ${buildingId} has no output slot with stock for ${material} [withdrawOutput]`);
     }
     return 0;
 }

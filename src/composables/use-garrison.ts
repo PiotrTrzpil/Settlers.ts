@@ -6,7 +6,7 @@
  */
 import { computed, type ComputedRef, type Ref } from 'vue';
 import type { Game } from '@/game/game';
-import { EntityType, BuildingType } from '@/game/entity';
+import { EntityType, BuildingType, getEntityIfType } from '@/game/entity';
 import { UnitType, getUnitLevel } from '@/game/core/unit-types';
 import { getGarrisonCapacity, getGarrisonRole } from '@/game/features/tower-garrison/internal/garrison-capacity';
 
@@ -55,8 +55,8 @@ export function useGarrison(
             return null;
         }
 
-        const entity = g.state.getEntity(id);
-        if (!entity || entity.type !== EntityType.Building) {
+        const entity = getEntityIfType(g.state, id, EntityType.Building);
+        if (!entity) {
             return null;
         }
 

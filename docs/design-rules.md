@@ -368,6 +368,101 @@ getBuildingState(entityId: number): BuildingState
 
 ## 6. Query & Mutation Rules
 
+### Rule 6.0: Use EntityIndex.query() for Entity Searches — CRITICAL
+
+**Never iterate `gameState.entities` (the full entity list) to find entities by type, player, or subType.** Use `gameState.entityIndex.query()` which selects the narrowest index automatically.
+
+```typescript
+// BAD — full scan of all entities
+for (const entity of gameState.entities) {
+    if (entity.type === EntityType.Building && entity.player === player && entity.subType === BuildingType.Woodcutter) {
+        count++;
+    }
+}
+
+// GOOD — indexed lookup, chainable
+const count = gameState.entityIndex.query(EntityType.Building, player, BuildingType.Woodcutter).count();
+```
+
+**EntityIndex maintains three index levels:**
+
+| Method | Index used | When to use |
+|--------|-----------|-------------|
+| `query(type)` | `byType` | All buildings, all units |
+| `query(type, player)` | `byTypePlayer` | Player 1's buildings |
+| `query(type, player, subType)` | `byTypePlayerSubType` | Player 1's Woodcutter buildings |
+
+**EntityQuery chainable operations:**
+
+| Chain | Terminal | Example |
+|-------|----------|---------|
+| `.filter(predicate)` | | Additional predicate filter |
+| `.inRadius(center, radius)` | | Spatial proximity filter |
+| | `.count()` | Count matching entities |
+| | `.toArray()` | Collect into array |
+| | `.first()` | First match or undefined |
+| | `.some()` | Existence check |
+| | `.nearest(center)` | Closest entity |
+| | `.forEach(cb)` | Iterate with callback |
+| | `for (const e of query)` | Iterable protocol |
+
+**Common patterns:**
+
+```typescript
+// Count operational buildings of a type
+entityIndex.query(EntityType.Building, player, BuildingType.Sawmill)
+    .filter(e => e.operational)
+    .count()
+
+// Find nearest enemy tower
+entityIndex.query(EntityType.Building)
+    .filter(e => e.player !== myPlayer && TERRITORY_BUILDINGS.has(e.subType as BuildingType))
+    .nearest(myPosition)
+
+// Check if any unit exists in area
+entityIndex.query(EntityType.Unit, player, UnitType.Swordsman)
+    .inRadius(center, 20)
+    .some()
+```
+
+**When `gameState.entities` is still OK:**
+- Queries that genuinely need ALL entity types simultaneously (e.g., `getEntitiesInRadius` which returns buildings, units, map objects together)
+- Snapshot/serialization code that processes every entity
+
+### Rule 6.0b: Use Typed Entity Accessors for Single-Entity Lookups
+
+When getting a single entity by ID and checking its type, use the typed accessors from `entity.ts` instead of manual `getEntity` + type guard:
+
+```typescript
+import { getEntityOfType, getEntityIfType } from '@/game/entity';
+
+// BAD — manual get + type guard
+const entity = gameState.getEntityOrThrow(id, 'siege target');
+if (entity.type !== EntityType.Building) {
+    throw new Error(`Entity ${id} is not a building`);
+}
+
+// GOOD — throws with context if wrong type
+const building = getEntityOfType(gameState, id, EntityType.Building, 'siege target');
+
+// BAD — manual get + soft check
+const entity = gameState.getEntity(id);
+if (!entity || entity.type !== EntityType.Unit) {
+    return;
+}
+
+// GOOD — returns undefined if missing or wrong type
+const unit = getEntityIfType(gameState, id, EntityType.Unit);
+if (!unit) return;
+```
+
+| Function | Returns | Use when |
+|----------|---------|----------|
+| `getEntityOfType(provider, id, type, ctx?)` | `Entity` (throws) | Entity MUST exist and MUST be the right type |
+| `getEntityIfType(provider, id, type)` | `Entity \| undefined` | Entity might not exist or might be wrong type |
+
+Both accept any `EntityProvider` (GameState, or any interface with `getEntity`/`getEntityOrThrow`).
+
 ### Rule 6.1: No Side Effects in Queries
 
 Functions starting with `get*`, `find*`, `has*`, `is*`, `can*` MUST be pure:

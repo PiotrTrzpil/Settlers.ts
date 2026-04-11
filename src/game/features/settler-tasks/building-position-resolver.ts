@@ -20,7 +20,7 @@ import type { BuildingPileRegistry } from '../../systems/inventory/building-pile
 import type { BuildingInventoryManager } from '../../systems/inventory/building-inventory';
 import type { WorkAreaStore } from '../work-areas/work-area-store';
 import type { ConstructionSiteManager } from '../building-construction/construction-site-manager';
-import { EntityType, BuildingType, type Entity, Tile } from '../../entity';
+import { EntityType, BuildingType, type Entity, Tile, getEntityOfType } from '../../entity';
 import { EMaterialType } from '../../economy/material-type';
 import { SlotKind } from '../../core/pile-kind';
 
@@ -97,8 +97,12 @@ export class BuildingPositionResolverImpl implements BuildingPositionResolver {
      */
     resolvePosition(buildingId: number, offset: Tile, useWork: boolean): Tile {
         const { x, y } = offset;
-        const building = this.gameState.getEntityOrThrow(buildingId, 'BuildingPositionResolver.resolvePosition');
-        assertIsBuilding(building, buildingId);
+        const building = getEntityOfType(
+            this.gameState,
+            buildingId,
+            EntityType.Building,
+            'BuildingPositionResolver.resolvePosition'
+        );
 
         if (useWork) {
             const center = this.workAreaStore.getAbsoluteCenter(
@@ -153,8 +157,7 @@ export class BuildingPositionResolverImpl implements BuildingPositionResolver {
     }
 
     hasWorkArea(buildingId: number): boolean {
-        const building = this.gameState.getEntityOrThrow(buildingId, 'hasWorkArea');
-        assertIsBuilding(building, buildingId);
+        const building = getEntityOfType(this.gameState, buildingId, EntityType.Building, 'hasWorkArea');
         return this.workAreaStore.hasWorkArea(building.subType as BuildingType, building.race);
     }
 
@@ -163,8 +166,7 @@ export class BuildingPositionResolverImpl implements BuildingPositionResolver {
     }
 
     getWorkAreaRadius(buildingId: number): number {
-        const building = this.gameState.getEntityOrThrow(buildingId, 'getWorkAreaRadius');
-        assertIsBuilding(building, buildingId);
+        const building = getEntityOfType(this.gameState, buildingId, EntityType.Building, 'getWorkAreaRadius');
         const buildingType = building.subType as BuildingType;
         if (!this.workAreaStore.hasWorkArea(buildingType, building.race)) {
             throw new Error(

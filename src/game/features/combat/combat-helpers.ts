@@ -38,23 +38,17 @@ export const SHOOT_RANGE = 8;
  * while field enemies are present.
  */
 export function hasNearbyThreats(entity: Entity, gameState: GameState, isExcluded: (id: number) => boolean): boolean {
-    const nearby = gameState.getEntitiesInRadius(entity, DETECTION_RANGE);
-    for (const candidate of nearby) {
-        if (candidate.type !== EntityType.Unit || candidate.hidden) {
-            continue;
-        }
-        if (candidate.player === entity.player) {
-            continue;
-        }
-        if (!isUnitTypeMilitary(candidate.subType as UnitType)) {
-            continue;
-        }
-        if (isExcluded(candidate.id)) {
-            continue;
-        }
-        return true;
-    }
-    return false;
+    return gameState.entityIndex
+        .query(EntityType.Unit)
+        .inRadius(entity, DETECTION_RANGE)
+        .filter(
+            c =>
+                !c.hidden &&
+                c.player !== entity.player &&
+                isUnitTypeMilitary(c.subType as UnitType) &&
+                !isExcluded(c.id)
+        )
+        .some();
 }
 
 /**
@@ -66,12 +60,11 @@ export function findNearestEnemy(
     gameState: GameState,
     combatStates: ReadonlyMap<number, CombatState>
 ): Entity | null {
-    const nearby = gameState.getEntitiesInRadius(entity, DETECTION_RANGE);
     const militaryTargets: Entity[] = [];
     const specialistTargets: Entity[] = [];
 
-    for (const c of nearby) {
-        if (c.type !== EntityType.Unit || c.hidden || c.player === entity.player) {
+    for (const c of gameState.entityIndex.query(EntityType.Unit).inRadius(entity, DETECTION_RANGE)) {
+        if (c.hidden || c.player === entity.player) {
             continue;
         }
         const state = combatStates.get(c.id);

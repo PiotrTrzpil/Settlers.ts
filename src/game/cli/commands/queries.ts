@@ -10,7 +10,7 @@ import type { CliArgs, CliCommand, CliContext, CliResult } from '../types';
 import type { LogEntry } from '../cli';
 import { getGameDataLoader } from '@/resources/game-data';
 
-import { EntityType, type Entity } from '@/game/entity';
+import { EntityType, type Entity, getEntityIfType } from '@/game/entity';
 import { UnitType, isUnitTypeMilitary } from '@/game/core/unit-types';
 import { EMaterialType } from '@/game/economy/material-type';
 import { BuildingConstructionPhase } from '@/game/features/building-construction';
@@ -44,7 +44,7 @@ function carryingText(entity: Entity): string {
 
 function lsBuildings(state: GameState, player: number, limit: number, ctx: CliContext): CliResult {
     const rows: string[][] = [];
-    for (const e of state.entityIndex.ofTypeAndPlayer(EntityType.Building, player)) {
+    for (const e of state.entityIndex.query(EntityType.Building, player)) {
         rows.push([String(e.id), entityTypeName(e), posText(e), buildingStatusText(e.id, ctx)]);
     }
     if (rows.length === 0) {
@@ -55,7 +55,7 @@ function lsBuildings(state: GameState, player: number, limit: number, ctx: CliCo
 
 function lsUnits(state: GameState, player: number, militaryOnly: boolean, limit: number, ctx: CliContext): CliResult {
     const rows: string[][] = [];
-    for (const e of state.entityIndex.ofTypeAndPlayer(EntityType.Unit, player)) {
+    for (const e of state.entityIndex.query(EntityType.Unit, player)) {
         if (militaryOnly && !isUnitTypeMilitary(e.subType as UnitType)) {
             continue;
         }
@@ -108,9 +108,9 @@ function invCommand(): CliCommand {
                 return fail('usage: inv <buildingId>');
             }
 
-            const entity = ctx.game.state.getEntityOrThrow(id, 'building id in inv command');
-            if (entity.type !== EntityType.Building) {
-                return fail(`entity ${id} is not a building`);
+            const entity = getEntityIfType(ctx.game.state, id, EntityType.Building);
+            if (!entity) {
+                return fail(`entity ${id} is not a building or does not exist`);
             }
 
             const invMgr = ctx.game.services.inventoryManager;

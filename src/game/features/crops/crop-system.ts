@@ -55,14 +55,20 @@ export interface CropTypeConfig {
     harvestDecayTime: number;
     /** Number of growing sprite variations (progress 0-1 maps to 0..growingCount-1) */
     growingCount: number;
+    /**
+     * Min squared distance between same-type crops when planting.
+     * Blocking crops (blocking>0 in objectInfo.xml) must use ≥2 to leave 1-tile gaps
+     * so settlers can approach them for harvesting.
+     */
+    minDistanceSq: number;
 }
 
 const CROP_TYPE_CONFIGS: ReadonlyMap<MapObjectType, CropTypeConfig> = new Map([
-    [MapObjectType.Grain, { growthTime: 110, harvestDecayTime: 20, growingCount: 4 }],
-    [MapObjectType.Sunflower, { growthTime: 120, harvestDecayTime: 20, growingCount: 3 }],
-    [MapObjectType.Agave, { growthTime: 130, harvestDecayTime: 25, growingCount: 3 }],
-    [MapObjectType.Beehive, { growthTime: 100, harvestDecayTime: 15, growingCount: 1 }],
-    [MapObjectType.Grape, { growthTime: 140, harvestDecayTime: 20, growingCount: 3 }],
+    [MapObjectType.Grain, { growthTime: 110, harvestDecayTime: 20, growingCount: 4, minDistanceSq: 1 }],
+    [MapObjectType.Sunflower, { growthTime: 120, harvestDecayTime: 20, growingCount: 3, minDistanceSq: 1 }],
+    [MapObjectType.Agave, { growthTime: 130, harvestDecayTime: 25, growingCount: 3, minDistanceSq: 1 }],
+    [MapObjectType.Beehive, { growthTime: 100, harvestDecayTime: 15, growingCount: 1, minDistanceSq: 2 }],
+    [MapObjectType.Grape, { growthTime: 140, harvestDecayTime: 20, growingCount: 3, minDistanceSq: 1 }],
 ]);
 
 function getCropConfig(cropType: MapObjectType): CropTypeConfig {
@@ -76,9 +82,8 @@ function getCropConfig(cropType: MapObjectType): CropTypeConfig {
 // ── GrowableSystem config ─────────────────────────────────────
 
 const PLANTING_SEARCH_RADIUS = 12;
-// TODO: Use the per-object `repellent` field from objectInfo.xml instead of a global constant.
-// Crops with repellent=1 (Grain, Sunflower, Agave, Grape, Wheat2) should enforce spacing
-// based on that value rather than a hardcoded distance.
+/** Default min distance for the shared GrowableSystem planting (used for generic findPlantingSpot).
+ * Per-type overrides in CropTypeConfig.minDistanceSq are used by findPlantingSpotForType. */
 const MIN_CROP_DISTANCE_SQ = 1;
 
 const ALL_CROP_TYPES: readonly MapObjectType[] = [
@@ -281,10 +286,12 @@ export class CropSystem extends GrowableSystem<CropState> {
      */
     findPlantingSpotForType(center: Tile, cropType: MapObjectType, radius?: number): Tile | null {
         const searchRadius = radius ?? this.config.plantingSearchRadius;
+        const typeConfig = CROP_TYPE_CONFIGS.get(cropType);
+        const minDist = typeConfig?.minDistanceSq ?? this.config.minDistanceSq;
         return findEmptySpot(center, {
             gameState: this.gameState,
             searchRadius,
-            minDistanceSq: this.config.minDistanceSq,
+            minDistanceSq: minDist,
             rng: this.gameState.rng,
             proximityEntities: [...this.gameState.spatialIndex.nearby(center, searchRadius * 2)],
             proximityFilter: entity => entity.type === EntityType.MapObject && entity.subType === cropType,

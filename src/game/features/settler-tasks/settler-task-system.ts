@@ -6,7 +6,7 @@
 
 import type { GameState } from '../../game-state';
 import type { TickSystem } from '../../core/tick-system';
-import { EntityType, UnitType, BuildingType, tileKey, type Entity, Tile } from '../../entity';
+import { EntityType, UnitType, BuildingType, tileKey, type Entity, Tile, getEntityIfType } from '../../entity';
 import type { EventBus } from '../../event-bus';
 import { isAngelUnitType } from '../../core/unit-types';
 import { createLogger } from '@/utilities/logger';
@@ -208,8 +208,8 @@ export class SettlerTaskSystem implements TickSystem, TaskDispatcher, WorkerStat
     }
 
     isManaged(entityId: number): boolean {
-        const entity = this.gameState.getEntity(entityId);
-        if (!entity || entity.type !== EntityType.Unit) {
+        const entity = getEntityIfType(this.gameState, entityId, EntityType.Unit);
+        if (!entity) {
             return false;
         }
         return this.settlerConfigs.has(entity.subType as UnitType);
@@ -302,8 +302,8 @@ export class SettlerTaskSystem implements TickSystem, TaskDispatcher, WorkerStat
     }
 
     assignMoveTask(entityId: number, target: Tile): boolean {
-        const entity = this.gameState.getEntity(entityId);
-        if (!entity || entity.type !== EntityType.Unit) {
+        const entity = getEntityIfType(this.gameState, entityId, EntityType.Unit);
+        if (!entity) {
             return false;
         }
 

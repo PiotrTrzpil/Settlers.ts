@@ -57,16 +57,7 @@ export class ToolSourceResolver {
         let bestSource: ToolSource | null = null;
         let bestDistSq = Infinity;
 
-        for (const entity of this.gameState.entities) {
-            if (entity.type !== EntityType.StackedPile) {
-                continue;
-            }
-            if (entity.subType !== material) {
-                continue;
-            }
-            if (entity.player !== player) {
-                continue;
-            }
+        for (const entity of this.gameState.entityIndex.query(EntityType.StackedPile, player, material)) {
             if (this.reservedPiles.has(entity.id)) {
                 continue;
             }

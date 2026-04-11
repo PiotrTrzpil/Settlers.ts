@@ -6,7 +6,7 @@ Clean up persistence/restore code after the entity-job-id feature. Fix stale com
 
 ## Problems
 
-1. **4 features do identical full-entity scans** filtering for completed buildings in `onRestoreComplete` (tower-garrison, barracks, building-demand, victory-conditions). Each iterates `ctx.gameState.entities`, skips non-buildings and construction sites. This is O(4N) where N = entity count.
+1. **4 features do identical full-entity scans** filtering for completed buildings in `onRestoreComplete` (tower-garrison, barracks, building-demand, victory-conditions). Each iterates `ctx.gameState.entities`, skips non-buildings and construction sites. This is O(4N) where N = entity count. **Note:** These should now use `entityIndex.query(EntityType.Building, player).filter(e => e.operational)` instead of full scans.
 
 2. **`rebuildFromEntities` uses fake values** in reconstructed `TransportJobRecord`: `demandId: 0` (sentinel) and `sourceBuilding: destBuilding` (stand-in). These exist because the record interface requires them, but they're meaningless for delivery-only jobs.
 

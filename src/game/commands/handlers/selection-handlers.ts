@@ -1,4 +1,5 @@
-import { EntityType, type Entity } from '../../entity';
+import { EntityType, type Entity, getEntityOfType } from '../../entity';
+import { EntityQuery } from '../../entity-query';
 import { GameState } from '../../game-state';
 import { debugStats } from '../../debug/debug-stats';
 import type {
@@ -69,7 +70,9 @@ export function executeToggleSelection(deps: SelectionDeps, cmd: ToggleSelection
 
 export function executeSelectArea(deps: SelectionDeps, cmd: SelectAreaCommand): CommandResult {
     const { state } = deps;
-    const allEntities = state.getEntitiesInRect({ x: cmd.x1, y: cmd.y1 }, { x: cmd.x2, y: cmd.y2 });
+    const allEntities = new EntityQuery(state.entities)
+        .inRect({ x: cmd.x1, y: cmd.y1 }, { x: cmd.x2, y: cmd.y2 })
+        .toArray();
     state.selection.selectArea(allEntities, debugStats.state.selectAllUnits);
     return COMMAND_OK;
 }
@@ -88,10 +91,7 @@ export function executeSelectSameUnitType(deps: SelectionDeps, cmd: SelectSameUn
     const { state } = deps;
     const debugAll = debugStats.state.selectAllUnits;
 
-    const seed = state.getEntityOrThrow(cmd.seedEntityId, 'seed entity for same-type selection');
-    if (seed.type !== EntityType.Unit) {
-        return commandFailed(`Seed entity ${cmd.seedEntityId} is not a unit`);
-    }
+    const seed = getEntityOfType(state, cmd.seedEntityId, EntityType.Unit, 'seed entity for same-type selection');
 
     const subType = seed.subType;
     const entities = cmd.candidateIds

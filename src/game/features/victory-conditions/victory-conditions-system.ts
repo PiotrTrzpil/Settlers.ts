@@ -179,14 +179,10 @@ export class VictoryConditionsSystem implements TickSystem {
 
         // Seed military building counts from current state
         for (const [playerIndex] of this.playerStatus) {
-            let count = 0;
-            const buildingIds = this.gameState.entityIndex.idsOfTypeAndPlayer(EntityType.Building, playerIndex);
-            for (const id of buildingIds) {
-                const entity = this.gameState.getEntity(id);
-                if (entity && MILITARY_BUILDINGS.has(entity.subType as BuildingType)) {
-                    count++;
-                }
-            }
+            const count = this.gameState.entityIndex
+                .query(EntityType.Building, playerIndex)
+                .filter(e => MILITARY_BUILDINGS.has(e.subType as BuildingType))
+                .count();
             this.castleCounts.set(playerIndex, count);
         }
 

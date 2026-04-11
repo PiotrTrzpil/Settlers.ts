@@ -11,10 +11,7 @@ export function forEachCompletedBuilding(
     constructionSiteManager: ConstructionSiteManager,
     callback: (entity: Entity) => void
 ): void {
-    for (const e of gameState.entities) {
-        if (e.type !== EntityType.Building) {
-            continue;
-        }
+    for (const e of gameState.entityIndex.query(EntityType.Building)) {
         if (constructionSiteManager.hasSite(e.id)) {
             continue;
         }

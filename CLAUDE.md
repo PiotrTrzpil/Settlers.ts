@@ -38,6 +38,7 @@ pnpm timeline:live    # Query live timeline DBs (shorthand for --dir live)
 - **Test map**: `?testMap=true` query param loads a synthetic map (no game assets needed)
 - **Feature modules**: Follow patterns in `docs/architecture/feature-modules.md`
 - **Architecture rules**: Read `docs/design-rules.md` for invariants and naming conventions
+- **Entity queries**: NEVER iterate `gameState.entities` to search by type/player/subType — use `gameState.entityIndex.query(type, player?, subType?)` which returns a chainable `EntityQuery` with `.filter()`, `.inRadius()`, `.count()`, `.toArray()`, `.nearest()`, `.some()`, `.first()`. See Rule 6.0 in `docs/design-rules.md`.
 
 
 
@@ -144,7 +145,7 @@ NEVER GIT STASH.
 <!-- gitnexus:start -->
 # GitNexus — Code Intelligence
 
-This project is indexed by GitNexus as **Settlers.ts** (49474 symbols, 108714 relationships, 300 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
+This project is indexed by GitNexus as **Settlers.ts** (71624 symbols, 151653 relationships, 300 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
 
 > If any GitNexus tool warns the index is stale, run `gitnexus analyze` in terminal first.
 
