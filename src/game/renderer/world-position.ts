@@ -8,11 +8,11 @@
  */
 
 import { Entity, EntityType } from '../entity';
+import { TILE_CENTER_X, TILE_CENTER_Y } from '../systems/coordinate-system';
 import type { UnitStateLookup } from './render-context';
 import { MapSize } from '@/utilities/map-size';
 import { TilePicker } from '../input/tile-picker';
 import { IViewPoint } from './i-view-point';
-import { TILE_CENTER_X, TILE_CENTER_Y } from '../systems/coordinate-system';
 
 /**
  * Minimal context required for world position calculations.

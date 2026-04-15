@@ -96,8 +96,8 @@ export const RAW_OBJECT_REGISTRY: readonly RawObjectEntry[] = [
     { raw: 52, label: 'DesertBush3', category: MapObjectCategory.Desert, notes: 'On desert; guessed DesertBush3', type: MapObjectType.DesertBush3 },
     // Pool index 0 → CACTUS sprite; confident mapping
     { raw: 53, label: 'Cactus1', category: MapObjectCategory.Desert, notes: 'On desert; pool→CACTUS sprite', type: MapObjectType.Cactus1 },
-    // DesertRare pool index 0 → SKELETON_LARGE
-    { raw: 54, label: 'SkeletonDesert1', category: MapObjectCategory.DesertRare, notes: 'Near desert, very rare; pool→SKELETON_LARGE', type: MapObjectType.SkeletonDesert1 },
+    // DesertRare pool index 0 → SKELETONDESERT1
+    { raw: 54, label: 'SkeletonDesert1', category: MapObjectCategory.DesertRare, notes: 'Near desert, very rare; pool→SKELETONDESERT1', type: MapObjectType.SkeletonDesert1 },
     { raw: 55, label: 'Shore55', category: MapObjectCategory.Sea, notes: 'Near sea / on sea near shore, rare — possibly map data bug' },
 
     // ---- Mountain / stone: raw 56-75 ----
@@ -140,8 +140,8 @@ export const RAW_OBJECT_REGISTRY: readonly RawObjectEntry[] = [
 
     // ---- Rare grass: raw 87, 90-92 ----
     // PlantsRare pool cycling: [87,90,91,92,116,152,154,155,156,157,158,159]
-    // Pool: MUSHROOM_RING, SCARECROW, ROMAN_COLUMN_OVERGROWN_A, BROKEN_PILLAR_A, ANCIENT_COLUMN, ...
-    { raw: 87, label: 'MushroomCycle', category: MapObjectCategory.PlantsRare, notes: 'Uncommon (672); pool→MUSHROOM_RING', type: MapObjectType.MushroomCycle },
+    // Pool: MUSHROOMCYCLE, SCARECROW, ROMAN_COLUMN_OVERGROWN_A, BROKEN_PILLAR_A, ANCIENT_COLUMN, ...
+    { raw: 87, label: 'Well', category: MapObjectCategory.PlantsRare, notes: 'Uncommon (672)', type: MapObjectType.Well },
     // raw 88: not observed on any map
     { raw: 89, label: 'Plant89', category: MapObjectCategory.Plants, notes: '373-map: 172 across 43 maps, Grass:90%, DarkGrass:9%, avgH 25' },
     { raw: 90, label: 'Scarecrow', category: MapObjectCategory.PlantsRare, notes: 'Rare; pool→SCARECROW', type: MapObjectType.Scarecrow },
@@ -227,14 +227,14 @@ export const RAW_OBJECT_REGISTRY: readonly RawObjectEntry[] = [
     { raw: 150, label: 'DarkPond', category: MapObjectCategory.DarkGround, notes: 'dark:100%, only 12 across 7 maps — very rare, guessed DarkPond', type: MapObjectType.DarkPond },
     // raw 151: not observed on any map
     // PlantsRare pool indices 5-11 (continuing from 87,90,91,92,116 = indices 0-4)
-    { raw: 152, label: 'Ruin', category: MapObjectCategory.PlantsRare, notes: 'Uncommon (2k); pool→BUILDING_RUIN_ANIM', type: MapObjectType.Ruin },
+    { raw: 152, label: 'Ruin', category: MapObjectCategory.PlantsRare, notes: 'Uncommon (2k); pool→RUIN1', type: MapObjectType.Ruin },
     { raw: 153, label: 'Plant153', category: MapObjectCategory.PlantsRare, notes: '373-map: 161 across 60 maps, Grass:89%, Rock:4%, avgH 41' },
     { raw: 154, label: 'RuneStone', category: MapObjectCategory.PlantsRare, notes: 'Rare (210); pool→STONE_STATUE', type: MapObjectType.RuneStone },
     { raw: 155, label: 'GrassRare155', category: MapObjectCategory.PlantsRare, notes: 'Rare (187); pool→SMALL_ANIMAL — no clear XML match' },
     { raw: 156, label: 'Grave1', category: MapObjectCategory.PlantsRare, notes: 'Rare (180); pool→GRAVE_A', type: MapObjectType.Grave1 },
-    { raw: 157, label: 'WaggonDestroyed', category: MapObjectCategory.PlantsRare, notes: 'Rare (185); pool→WAGON_WRECK', type: MapObjectType.WaggonDestroyed },
+    { raw: 157, label: 'WaggonDestroyed', category: MapObjectCategory.PlantsRare, notes: 'Rare (185); pool→WAGGONDESTR', type: MapObjectType.WaggonDestroyed },
     { raw: 158, label: 'PalmPlant', category: MapObjectCategory.PlantsRare, notes: 'Uncommon (1149); pool→VINE_GROUND_COVER', type: MapObjectType.PalmPlant },
-    { raw: 159, label: 'Mushroom1', category: MapObjectCategory.PlantsRare, notes: 'Rare (336); pool→AMANITA_MUSHROOM', type: MapObjectType.Mushroom1 },
+    { raw: 159, label: 'Mushroom1', category: MapObjectCategory.PlantsRare, notes: 'Rare (336)', type: MapObjectType.Mushroom1 },
 
     // ---- Grass plants: raw 160-162 (373-map scan) ----
     { raw: 160, label: 'Plant160', category: MapObjectCategory.Plants, notes: '373-map: 2548 across 70 maps, Grass:85%, Rock:14%' },
@@ -267,14 +267,14 @@ export const RAW_OBJECT_REGISTRY: readonly RawObjectEntry[] = [
     { raw: 178, label: 'MountainEdge178', category: MapObjectCategory.Stone, notes: 'Near mountain edge (14k)', blocking: true },
     { raw: 179, label: 'Desert179', category: MapObjectCategory.Desert, notes: 'On desert' },
     { raw: 180, label: 'Desert180', category: MapObjectCategory.Desert, notes: 'On desert' },
-    { raw: 181, label: 'Grass181', category: MapObjectCategory.Plants, notes: 'On grass' },
-    { raw: 182, label: 'MountainEdge182', category: MapObjectCategory.Stone, notes: 'On some mountain edges', blocking: true },
+    { raw: 181, label: 'Mushroom1', category: MapObjectCategory.PlantsRare, notes: 'On grass; same as raw 159', type: MapObjectType.Mushroom1 },
+    { raw: 182, label: 'Mushroom2', category: MapObjectCategory.PlantsRare, notes: 'On grass', type: MapObjectType.Mushroom2 },
     { raw: 183, label: 'MountainEdge183', category: MapObjectCategory.Stone, notes: 'On mountain edges, similar to 182', blocking: true },
     { raw: 184, label: 'River184', category: MapObjectCategory.River, notes: 'Mostly near rivers' },
-    { raw: 185, label: 'River185', category: MapObjectCategory.River, notes: 'Mostly near rivers' },
-    { raw: 186, label: 'Grass186', category: MapObjectCategory.Plants, notes: 'On grass' },
+    { raw: 185, label: 'Flower2', category: MapObjectCategory.Plants, notes: 'Mostly near rivers', type: MapObjectType.Flower2 },
+    { raw: 186, label: 'Flower3', category: MapObjectCategory.Plants, notes: 'On grass', type: MapObjectType.Flower3 },
     { raw: 187, label: 'Grass187', category: MapObjectCategory.Plants, notes: 'On grass near rivers' },
-    { raw: 188, label: 'River188', category: MapObjectCategory.River, notes: 'Mostly near rivers' },
+    { raw: 188, label: 'Flower5', category: MapObjectCategory.Plants, notes: 'Mostly near rivers', type: MapObjectType.Flower5 },
 
     // ---- Grass decorations: raw 189-192 (373-map scan: common, 80-85% grass) ----
     { raw: 189, label: 'Plant189', category: MapObjectCategory.Plants, notes: '373-map: 2210 across 130 maps, Grass:85%, Rock:8%, DarkGrass:8%' },
@@ -304,9 +304,9 @@ export const RAW_OBJECT_REGISTRY: readonly RawObjectEntry[] = [
     // raw 216-217: not observed
 
     // ---- Desert rare: raw 218-219 ----
-    // DesertRare pool: [SKELETON_LARGE, SKELETON_SMALL, WAGON_WRECK] — indices 1,2
-    { raw: 218, label: 'SkeletonDesert2', category: MapObjectCategory.DesertRare, notes: 'On desert, rare; pool→SKELETON_SMALL', type: MapObjectType.SkeletonDesert2 },
-    { raw: 219, label: 'DesertWreck219', category: MapObjectCategory.DesertRare, notes: 'On desert, rare; pool→WAGON_WRECK — same visual as raw 157 but distinct raw byte' },
+    // DesertRare pool: [SKELETONDESERT1, SKELETONDESERT2, WAGGONDESTR] — indices 1,2
+    { raw: 218, label: 'SkeletonDesert2', category: MapObjectCategory.DesertRare, notes: 'On desert, rare; pool→SKELETONDESERT2', type: MapObjectType.SkeletonDesert2 },
+    { raw: 219, label: 'DesertWreck219', category: MapObjectCategory.DesertRare, notes: 'On desert, rare; pool→WAGGONDESTR — same visual as raw 157 but distinct raw byte' },
     { raw: 220, label: 'Plant220', category: MapObjectCategory.Plants, notes: '373-map: 316 across 58 maps, Grass:86%, Rock:6%' },
 
     // ---- Desert: raw 221-222 ----

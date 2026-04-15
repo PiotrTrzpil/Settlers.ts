@@ -27,6 +27,7 @@ export {
     ndcToWorld,
     worldToNdc,
     tileToWorld,
+    tileVertexToWorld,
     worldToTileFractional,
     screenToTile,
     tileToScreen,

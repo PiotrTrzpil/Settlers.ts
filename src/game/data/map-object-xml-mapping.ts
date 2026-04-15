@@ -81,6 +81,8 @@ export const MAP_OBJECT_TYPE_TO_XML_ID: Partial<Record<MapObjectType, string>> =
     [MapObjectType.DesertBush3]: 'OBJECT_DESERTBUSH3',
 
     // ---- Ground cover — Flowers ----
+    [MapObjectType.Flower1]: 'OBJECT_FLOWER1',
+    [MapObjectType.Flower2]: 'OBJECT_FLOWER2',
     [MapObjectType.Flower3]: 'OBJECT_FLOWER3',
     [MapObjectType.Flower4]: 'OBJECT_FLOWER4',
     [MapObjectType.Flower5]: 'OBJECT_FLOWER5',

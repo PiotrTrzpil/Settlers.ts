@@ -40,7 +40,7 @@ export function fillQuadVertices(verts: Float32Array, worldX: number, worldY: nu
 }
 
 // Global scale applied to all entity sprites (buildings, units, trees, resources)
-export const ENTITY_SCALE = 1.5;
+export const ENTITY_SCALE = 1.3;
 
 // Scale for decoration sprites (non-tree, non-stone map objects like bushes, flowers, rocks)
 export const DECORATION_SCALE = 1.0;
@@ -87,6 +87,8 @@ export const SELECTION_ORIGIN_DOT_COLOR = [1.0, 0.4, 0.2, 1.0]; // Orange dot at
 export const FOOTPRINT_TILE_COLOR = [0.2, 0.8, 1.0, 0.3]; // Semi-transparent cyan (full-face tiles)
 export const FOOTPRINT_EDGE_COLOR = [0.8, 0.2, 1.0, 0.25]; // Semi-transparent purple (edge/partial tiles)
 export const FOOTPRINT_DOOR_COLOR = [1.0, 0.3, 0.1, 0.5]; // Semi-transparent orange-red
+export const FOOTPRINT_ANCHOR_COLOR = [1.0, 1.0, 0.2, 0.85]; // Bright yellow (building anchor point)
+export const FOOTPRINT_ANCHOR_DOT_SCALE = 0.2; // Small dot at anchor center
 
 // Unit position debug visualization
 export const UNIT_POSITION_TILE_COLOR = [0.2, 1.0, 0.4, 0.3]; // Semi-transparent green

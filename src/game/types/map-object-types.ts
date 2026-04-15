@@ -218,6 +218,8 @@ export enum MapObjectType {
     Wheat2 = 275, // OBJECT_WHEAT2 -- distinct from Grain (WHEAT1)
 
     // ---- Flowers without raw bytes ----
+    Flower1 = 282,
+    Flower2 = 283,
     Flower5 = 284,
     SpecialFlower = 285,
 

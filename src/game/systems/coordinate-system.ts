@@ -219,6 +219,30 @@ export function tileToWorld(
 }
 
 /**
+ * Convert tile vertex to world position, aligned with landscape grid.
+ * Unlike tileToWorld, this does NOT add TILE_CENTER offset — matches landscape-vert.glsl exactly.
+ * Use this for debug overlays that must align with the rendered terrain triangles.
+ */
+export function tileVertexToWorld(
+    tileX: number,
+    tileY: number,
+    heightWorld: number,
+    viewPointX: number,
+    viewPointY: number
+): { worldX: number; worldY: number } {
+    const vpX = splitViewPoint(viewPointX);
+    const vpY = splitViewPoint(viewPointY);
+
+    const instanceX = tileX - vpX.int;
+    const instanceY = tileY - vpY.int;
+
+    return {
+        worldX: instanceX - instanceY * 0.5 - vpX.frac + vpY.frac * 0.5,
+        worldY: (instanceY - heightWorld - vpY.frac) * 0.5,
+    };
+}
+
+/**
  * Convert world position to tile coordinates (single iteration).
  * Returns fractional tile coordinates - caller should round.
  */

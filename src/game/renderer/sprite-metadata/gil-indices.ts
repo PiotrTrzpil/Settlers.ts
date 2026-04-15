@@ -89,7 +89,7 @@ export const BUILDING_ICON_INDICES: Record<Race, Partial<Record<BuildingType, [n
  *
  * Some sprite categories have been migrated to JIL-based loading (see jil-indices.ts):
  * - Dark trees (686-783) → DARK_TREE_JOB_INDICES, DARK_TREE_STATIC_JOB_INDICES
- * - Dark tribe mushroom trees (1001-1003) → DARK_TRIBE_TREE_JOBS
+ * - Dark tribe mushroom trees (1001-1003) → DARK_TRIBE_TREE_JOBS (also available as EVILMUSHROOM1-3)
  * - Sea rocks (1004-1043) → SEA_ROCK_JOBS
  * - Resource signs (1208-1223) → RESOURCE_SIGN_JOBS
  * - Territory dots (1850-1857) → TERRITORY_DOT_JOB
@@ -110,20 +110,20 @@ export const MAP_OBJECT_SPRITES = {
     STONE_STAGES_B_DARK: { start: 1093, count: 13 },
 
     // ── Single-frame special decorations (797, 854-879, 960) ─
-    /** Abandoned overgrown Trojan horse decoration (403x294) */
-    TROJAN_HORSE_RUIN: 797,
+    /** Destroyed Trojan horse — OBJECT_TROJANHORSEDESTR (403x294) */
+    TROJANHORSEDESTR: 797,
     /** Desert cactus (103x87) */
     CACTUS: 854,
-    /** Stone cross ruins with moss (117x107) */
-    STONE_CROSS_RUIN: 855,
-    /** Animal skeleton lying on ground (108x56) */
-    SKELETON_LARGE: 856,
-    /** Smaller bones/skeleton remains (77x70) */
-    SKELETON_SMALL: 857,
-    /** Broken wagon/cart wreckage with wheels (118x88) */
-    WAGON_WRECK: 858,
-    /** Wrecked boat hull on rocks (118x106) */
-    BOAT_WRECK: 859,
+    /** Celtic cross — OBJECT_CELTICCROSS (117x107) */
+    CELTICCROSS: 855,
+    /** Desert skeleton — OBJECT_SKELETONDESERT1 (108x56) */
+    SKELETONDESERT1: 856,
+    /** Desert skeleton — OBJECT_SKELETONDESERT2 (77x70) */
+    SKELETONDESERT2: 857,
+    /** Destroyed wagon — OBJECT_WAGGONDESTR (118x88) */
+    WAGGONDESTR: 858,
+    /** Wreck — OBJECT_WRECK1 (118x106) */
+    WRECK1: 859,
     /** Small wood debris pile (56x39) */
     DEBRIS_SMALL: 860,
     /** Rubble/ruin pile (82x53) */
@@ -164,8 +164,8 @@ export const MAP_OBJECT_SPRITES = {
     PEBBLE: 878,
     /** Stone statue/ruined totem (74x88) */
     STONE_STATUE: 879,
-    /** Shipwreck with barrels (114x75) */
-    SHIPWRECK: 960,
+    /** Well — OBJECT_WELL (114x75) */
+    WELL: 960,
 
     // ── Animated bushes (798-853): 7 groups of 8 frames ──────
     /** Small yellow-green bush, 8 anim frames (54x42) */
@@ -210,14 +210,14 @@ export const MAP_OBJECT_SPRITES = {
     POND: { start: 961, count: 16 },
 
     // ── Animated ruined building (977-987): 11 frames ────
-    /** Overgrown stone building ruins with beams (128x124) */
-    BUILDING_RUIN_ANIM: { start: 977, count: 11 },
+    /** Ruin — OBJECT_RUIN1 (128x124) */
+    RUIN1: { start: 977, count: 11 },
 
     // ── Single-frame misc decorations (988-1003) ─────────
     /** Scarecrow (83x75) */
     SCARECROW: 988,
-    /** Mushroom fairy ring on grass (112x80) */
-    MUSHROOM_RING: 989,
+    /** Mushroom cycle — OBJECT_MUSHROOMCYCLE (112x80) */
+    MUSHROOMCYCLE: 989,
     /** Dark ore/rock deposit (54x54) */
     ORE_ROCK_A: 990,
     /** Dark brown boulder (55x45) */
@@ -240,6 +240,13 @@ export const MAP_OBJECT_SPRITES = {
     VOLCANIC_ROCK_SMALL: 999,
     /** Colorful vine/creeper ground cover (123x81) */
     VINE_GROUND_COVER: 1000,
+    // ── Evil mushrooms (1001-1003) ───────────────────────
+    /** Evil mushroom 1 — OBJECT_EVILMUSHROOM1 */
+    EVILMUSHROOM1: 1001,
+    /** Evil mushroom 2 — OBJECT_EVILMUSHROOM2 */
+    EVILMUSHROOM2: 1002,
+    /** Evil mushroom 3 — OBJECT_EVILMUSHROOM3 */
+    EVILMUSHROOM3: 1003,
     // ── Dark tribe single decorations (1044-1048) ────────
     /** Dark tribe purple flower plant (77x62) */
     DARK_TRIBE_FLOWER: 1044,
@@ -257,10 +264,10 @@ export const MAP_OBJECT_SPRITES = {
     ANCIENT_COLUMN: 1049,
 
     // ── Trojan horse construction (1050-1058) ────────────
-    /** Trojan horse being built with scaffolding, 8 anim frames (415x318) */
-    TROJAN_HORSE_CONSTRUCTION: { start: 1050, count: 8 },
-    /** Completed Trojan horse on wheels (375x228) */
-    TROJAN_HORSE_COMPLETE: 1058,
+    /** Trojan horse build — OBJECT_TROJANHORSE_BUILD (415x318) */
+    TROJANHORSE_BUILD: { start: 1050, count: 8 },
+    /** Trojan horse standard — OBJECT_TROJANHORSE_STANDARD (375x228) */
+    TROJANHORSE_STANDARD: 1058,
 
     // ── Magic portal (1059-1075): 17 anim frames ─────────
     /** Animated magic portal with green swirling energy (190x240) */
@@ -276,9 +283,9 @@ export const MAP_OBJECT_SPRITES = {
     /** Desert cactus sprout (27x18) */
     DESERT_CACTUS_SPROUT: 1079,
 
-    // ── Mayan decorations (1106-1107) ────────────────────
-    /** Mayan garden/terrain patch with rocks (134x83) */
-    MAYAN_GARDEN: 1106,
+    // ── Dark pond and snowman (1106-1107) ─────────────────
+    /** Dark pond — OBJECT_DARKPOND */
+    DARKPOND: 1106,
     /** Snowman variant B */
     SNOWMAN_B: 1107,
 
@@ -301,6 +308,10 @@ export const MAP_OBJECT_SPRITES = {
     ROMAN_COLUMN_OVERGROWN_B: 1377,
     /** Roman column with plants C */
     ROMAN_COLUMN_OVERGROWN_C: 1378,
+
+    // ── Special flower (1379-1387): 9 anim frames ─────────
+    /** Special flower — OBJECT_SPECIAL_FLOWER */
+    SPECIAL_FLOWER: { start: 1379, count: 9 },
 
     // ── Broken pillars (1113-1115) ────────────────────────
     /** Broken pillar A */
@@ -370,13 +381,24 @@ export const MAP_OBJECT_SPRITES = {
     DESERT_PLANT_F: 1194,
     /** Dry spiky plant G */
     DESERT_PLANT_G: 1195,
-    /** Amanita mushroom */
-    AMANITA_MUSHROOM: 1196,
-    BEACH_DECO_J: 1197,
-    BEACH_DECO_K: 1198,
-    BEACH_DECO_L: 1199,
-    /** Small daisies/flowers on grass (81x51) */
-    DAISIES: 1200,
+    /** Mushroom 1 — OBJECT_MUSHROOM1 */
+    /** Mushroom 1 — OBJECT_MUSHROOM1 */
+    MUSHROOM1: 1196,
+    /** Mushroom 2 — OBJECT_MUSHROOM2 */
+    MUSHROOM2: 1197,
+    /** Mushroom 3 — OBJECT_MUSHROOM3 */
+    MUSHROOM3: 1198,
+    // ── Flowers (1199-1203) ──────────────────────────────
+    /** Flower 1 — OBJECT_FLOWER1 */
+    FLOWER1: 1199,
+    /** Flower 2 — OBJECT_FLOWER2 */
+    FLOWER2: 1200,
+    /** Flower 3 — OBJECT_FLOWER3 */
+    FLOWER3: 1201,
+    /** Flower 4 — OBJECT_FLOWER4 */
+    FLOWER4: 1202,
+    /** Flower 5 — OBJECT_FLOWER5 */
+    FLOWER5: 1203,
 
     // ── Grain growth stages (1224-1243) ───────────────────
     /** Grain seed — just planted */
@@ -412,6 +434,14 @@ export const MAP_OBJECT_SPRITES = {
     /** Agave cut/harvested */
     AGAVE_CUT: 1282,
 
+    // ── Dark mushrooms (1284-1298) ────────────────────────
+    /** Dark mushroom 1 — OBJECT_MUSHROOM_DARK1 */
+    MUSHROOM_DARK1: { start: 1284, count: 5 },
+    /** Dark mushroom 2 — OBJECT_MUSHROOM_DARK2 */
+    MUSHROOM_DARK2: { start: 1289, count: 5 },
+    /** Dark mushroom 3 — OBJECT_MUSHROOM_DARK3 */
+    MUSHROOM_DARK3: { start: 1294, count: 5 },
+
     // ── Snow decorations ──────────────────────────────────
     /** Snowman decoration */
     SNOWMAN: 1299,
@@ -423,6 +453,10 @@ export const MAP_OBJECT_SPRITES = {
     BEEHIVE_EMPTY: 1373,
     /** Beehive destroyed — 2 frames */
     BEEHIVE_DESTROYED: { start: 1374, count: 2 },
+
+    // ── Palm plant (1505-1520) ────────────────────────────
+    /** Palm plant — OBJECT_PALMPLANT */
+    PALMPLANT: { start: 1505, count: 16 },
 
     // ── Misc decorations (1521-1522) ──────────────────────
     /** Grave/tombstone variant B */

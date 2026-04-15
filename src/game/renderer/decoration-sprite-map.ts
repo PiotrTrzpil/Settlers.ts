@@ -6,7 +6,8 @@
 
 import { MAP_OBJECT_SPRITES } from './sprite-metadata/gil-indices';
 import { DARK_TRIBE_TREE_JOBS, SEA_ROCK_JOBS } from './sprite-metadata/jil-indices';
-import { MapObjectCategory } from '@/game/types/map-object-types';
+import { MapObjectCategory, MapObjectType } from '@/game/types/map-object-types';
+import { MAP_OBJECT_TYPE_TO_XML_ID } from '@/game/data/map-object-xml-mapping';
 import { RAW_OBJECT_REGISTRY } from '@/resources/map/raw-object-registry';
 
 /** Sprite reference for a decoration — loads via GIL index or JIL job. */
@@ -66,7 +67,6 @@ const CATEGORY_SPRITE_POOLS: Partial<Record<MapObjectCategory, DecorationSpriteR
         gilAnimRef(S.GRASS_WEEDS_SMALL),
         gilAnimRef(S.GRASS_SMALL_ORANGE),
         gilAnimRef(S.GRASS_FLOWERS_YELLOW),
-        gilRef(S.DAISIES),
         gilAnimRef(S.GRASS_PLANT_SMALL),
         gilAnimRef(S.GRASS_FLOWERS_YELLOW),
         // Additional sprites to cover expanded raw value count
@@ -111,37 +111,29 @@ const CATEGORY_SPRITE_POOLS: Partial<Record<MapObjectCategory, DecorationSpriteR
         jilRef(SEA_ROCK_JOBS.C),
         jilRef(SEA_ROCK_JOBS.D),
     ],
-    [MapObjectCategory.Beach]: [
-        gilRef(S.SEASHELL),
-        gilRef(S.STARFISH),
-        gilRef(S.BEACH_DECO_J),
-        gilRef(S.BEACH_DECO_K),
-        gilRef(S.BEACH_DECO_L),
-    ],
+    [MapObjectCategory.Beach]: [gilRef(S.SEASHELL), gilRef(S.STARFISH)],
     // Rare variants — distinctive objects that stand out on the landscape
     [MapObjectCategory.PlantsRare]: [
-        gilRef(S.MUSHROOM_RING),
         gilRef(S.SCARECROW),
         gilRef(S.ROMAN_COLUMN_OVERGROWN_A),
         gilRef(S.BROKEN_PILLAR_A),
         gilRef(S.ANCIENT_COLUMN),
-        gilAnimRef(S.BUILDING_RUIN_ANIM),
+        gilAnimRef(S.RUIN1),
         gilRef(S.STONE_STATUE),
         gilRef(S.SMALL_ANIMAL),
         gilRef(S.GRAVE_A),
-        gilRef(S.WAGON_WRECK),
+        gilRef(S.WAGGONDESTR),
         gilRef(S.VINE_GROUND_COVER),
-        gilRef(S.AMANITA_MUSHROOM),
         gilRef(S.RUINED_COLUMN),
         gilRef(S.ROMAN_PILLAR_SMALL),
         gilRef(S.ROMAN_PILLAR_MEDIUM_A),
         gilRef(S.ROMAN_PILLAR_MEDIUM_B),
         gilRef(S.ROMAN_PILLAR_LARGE_A),
         gilRef(S.ROMAN_PILLAR_LARGE_B),
-        // Reserved for very rare values only: POND, STONE_CROSS_RUIN
+        // Reserved for very rare values only: POND, CELTICCROSS
     ],
-    [MapObjectCategory.DesertRare]: [gilRef(S.SKELETON_LARGE), gilRef(S.SKELETON_SMALL), gilRef(S.WAGON_WRECK)],
-    [MapObjectCategory.BeachRare]: [gilRef(S.BOAT_WRECK), gilRef(S.SHIPWRECK)],
+    [MapObjectCategory.DesertRare]: [gilRef(S.SKELETONDESERT1), gilRef(S.SKELETONDESERT2), gilRef(S.WAGGONDESTR)],
+    [MapObjectCategory.BeachRare]: [gilRef(S.WRECK1)],
     [MapObjectCategory.Lake]: [gilRef(S.LAKE_DECO_A), gilRef(S.LAKE_DECO_B), gilRef(S.LAKE_DECO_C)],
     [MapObjectCategory.Snow]: [gilRef(S.SNOWMAN), gilRef(S.SNOWMAN_B)],
     [MapObjectCategory.StoneRare]: [gilRef(S.ROCK_CAVE), gilRef(S.ROCK_SPIRE)],
@@ -172,9 +164,31 @@ const CATEGORY_SPRITE_POOLS: Partial<Record<MapObjectCategory, DecorationSpriteR
 };
 
 /**
+ * Derive sprite from MapObjectType using the XML naming convention.
+ * MapObjectType → XML name (via MAP_OBJECT_TYPE_TO_XML_ID) → strip "OBJECT_" → sprite key.
+ */
+function resolveSpriteFromType(type: MapObjectType): DecorationSpriteRef | null {
+    const xmlId = MAP_OBJECT_TYPE_TO_XML_ID[type];
+    if (!xmlId) {
+        return null;
+    }
+    // Strip "OBJECT_" prefix to get sprite key
+    const spriteKey = xmlId.replace(/^OBJECT_/, '');
+    if (!(spriteKey in S)) {
+        return null;
+    }
+    const value = S[spriteKey as keyof typeof S];
+    if (typeof value === 'number') {
+        return gilRef(value);
+    }
+    // Animated sprite range — use first frame
+    return gilAnimRef(value as { start: number });
+}
+
+/**
  * Build a map from raw decoration byte value → sprite reference.
- * Cycles through the sprite pool for each category so that
- * different raw values within the same category get different sprites.
+ * Entries with a `type` field derive sprites from MapObjectType → XML name → sprite key.
+ * Other entries cycle through the sprite pool for their category.
  */
 export function buildDecorationSpriteMap(): Map<number, DecorationSpriteRef> {
     const map = new Map<number, DecorationSpriteRef>();
@@ -187,20 +201,32 @@ export function buildDecorationSpriteMap(): Map<number, DecorationSpriteRef> {
         MapObjectCategory.HarvestableStone,
     ]);
 
-    // Group entity keys by category, skipping only categories handled by dedicated loaders.
-    // For typed entries, use the MapObjectType enum value (matches entity.subType at runtime).
-    // For untyped entries, use the raw byte value (also matches entity.subType).
+    // First pass: derive sprites from typed entries using MapObjectType → XML → sprite
+    // Second pass: collect remaining entries for pool cycling
     const byCategory = new Map<MapObjectCategory, number[]>();
     for (const entry of RAW_OBJECT_REGISTRY) {
         if (LOADER_CATEGORIES.has(entry.category)) {
             continue;
         }
+        const entityKey = entry.type ?? entry.raw;
+
+        // Typed entries derive sprite from MapObjectType → XML name → sprite key
+        if (entry.type != null) {
+            const ref = resolveSpriteFromType(entry.type);
+            if (ref) {
+                map.set(entityKey, ref);
+                continue;
+            }
+        }
+
+        // No type or sprite not found — add to category for pool cycling
         // eslint-disable-next-line no-restricted-syntax -- accumulator pattern: Map may not yet have an entry for this category
         const list = byCategory.get(entry.category) ?? [];
-        list.push(entry.type ?? entry.raw);
+        list.push(entityKey);
         byCategory.set(entry.category, list);
     }
 
+    // Pool cycling for entries without direct sprites
     for (const [category, rawValues] of byCategory) {
         const pool = CATEGORY_SPRITE_POOLS[category];
         if (!pool?.length) {

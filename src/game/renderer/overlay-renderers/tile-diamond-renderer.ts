@@ -2,11 +2,13 @@ import { Entity, EntityType, getBuildingFootprint, BuildingType, tileKey, Tile }
 import { getBuildingDoorPos } from '../../data/game-data-access';
 import { getBuildingBlockArea } from '../../buildings/types';
 import type { TileHighlight } from '../../input/render-state';
-import { tileToWorld, heightToWorld, TILE_CENTER_X, TILE_CENTER_Y } from '../../systems/coordinate-system';
+import { tileVertexToWorld, heightToWorld } from '../../systems/coordinate-system';
 import {
     FOOTPRINT_TILE_COLOR,
     FOOTPRINT_EDGE_COLOR,
     FOOTPRINT_DOOR_COLOR,
+    FOOTPRINT_ANCHOR_COLOR,
+    FOOTPRINT_ANCHOR_DOT_SCALE,
     UNIT_POSITION_TILE_COLOR,
     UNIT_DIRECTION_ARROW_COLOR,
     OCCUPANCY_BLOCKED_COLOR,
@@ -14,13 +16,9 @@ import {
     OCCUPANCY_WALKABLE_COLOR,
     OCCUPANCY_UNIT_COLOR,
     SHADER_VERTEX_SCALE,
+    BASE_QUAD,
 } from '../entity-renderer-constants';
 import type { OverlaySession } from './overlay-session';
-
-/** Shift a world position from tile center to tile vertex (matching building sprite anchor). */
-function shiftBuildingWorldPos(pos: { worldX: number; worldY: number }): { worldX: number; worldY: number } {
-    return { worldX: pos.worldX - TILE_CENTER_X, worldY: pos.worldY - TILE_CENTER_Y * 0.5 };
-}
 
 /** Parse '#rrggbb' hex string to [r, g, b] in 0-1 range. */
 function parseHexColor(hex: string): [number, number, number] {
@@ -96,18 +94,10 @@ export class TileDiamondRenderer {
                 const idx = s.ctx.mapSize.toIndex(tile);
                 const hWorld = heightToWorld(s.ctx.groundHeight[idx]!);
 
-                const top = shiftBuildingWorldPos(
-                    tileToWorld(tile.x, tile.y, hWorld, s.ctx.viewPoint.x, s.ctx.viewPoint.y)
-                );
-                const right = shiftBuildingWorldPos(
-                    tileToWorld(tile.x + 1, tile.y, hWorld, s.ctx.viewPoint.x, s.ctx.viewPoint.y)
-                );
-                const bottom = shiftBuildingWorldPos(
-                    tileToWorld(tile.x + 1, tile.y + 1, hWorld, s.ctx.viewPoint.x, s.ctx.viewPoint.y)
-                );
-                const left = shiftBuildingWorldPos(
-                    tileToWorld(tile.x, tile.y + 1, hWorld, s.ctx.viewPoint.x, s.ctx.viewPoint.y)
-                );
+                const top = tileVertexToWorld(tile.x, tile.y, hWorld, s.ctx.viewPoint.x, s.ctx.viewPoint.y);
+                const right = tileVertexToWorld(tile.x + 1, tile.y, hWorld, s.ctx.viewPoint.x, s.ctx.viewPoint.y);
+                const bottom = tileVertexToWorld(tile.x + 1, tile.y + 1, hWorld, s.ctx.viewPoint.x, s.ctx.viewPoint.y);
+                const left = tileVertexToWorld(tile.x, tile.y + 1, hWorld, s.ctx.viewPoint.x, s.ctx.viewPoint.y);
 
                 const center = this.fillDiamondFromWorldPositions(top, right, bottom, left);
                 s.gl.vertexAttrib2f(s.aEntityPos, center.centerX, center.centerY);
@@ -115,6 +105,9 @@ export class TileDiamondRenderer {
                 s.gl.bufferData(s.gl.ARRAY_BUFFER, this.diamondVerts, s.gl.DYNAMIC_DRAW);
                 s.gl.drawArrays(s.gl.TRIANGLES, 0, 6);
             }
+
+            // Draw anchor dot at building position
+            this.drawAnchorDot(s, entity.x, entity.y);
         }
     }
 
@@ -136,12 +129,10 @@ export class TileDiamondRenderer {
 
             s.gl.vertexAttrib4f(s.aColor, r, g, b, alpha);
 
-            const top = shiftBuildingWorldPos(tileToWorld(tx, ty, hWorld, s.ctx.viewPoint.x, s.ctx.viewPoint.y));
-            const right = shiftBuildingWorldPos(tileToWorld(tx + 1, ty, hWorld, s.ctx.viewPoint.x, s.ctx.viewPoint.y));
-            const bottom = shiftBuildingWorldPos(
-                tileToWorld(tx + 1, ty + 1, hWorld, s.ctx.viewPoint.x, s.ctx.viewPoint.y)
-            );
-            const left = shiftBuildingWorldPos(tileToWorld(tx, ty + 1, hWorld, s.ctx.viewPoint.x, s.ctx.viewPoint.y));
+            const top = tileVertexToWorld(tx, ty, hWorld, s.ctx.viewPoint.x, s.ctx.viewPoint.y);
+            const right = tileVertexToWorld(tx + 1, ty, hWorld, s.ctx.viewPoint.x, s.ctx.viewPoint.y);
+            const bottom = tileVertexToWorld(tx + 1, ty + 1, hWorld, s.ctx.viewPoint.x, s.ctx.viewPoint.y);
+            const left = tileVertexToWorld(tx, ty + 1, hWorld, s.ctx.viewPoint.x, s.ctx.viewPoint.y);
 
             const center = this.fillDiamondFromWorldPositions(top, right, bottom, left);
             s.gl.vertexAttrib2f(s.aEntityPos, center.centerX, center.centerY);
@@ -191,12 +182,10 @@ export class TileDiamondRenderer {
             const idx = s.ctx.mapSize.toIndex({ x: tx, y: ty });
             const hWorld = heightToWorld(s.ctx.groundHeight[idx]!);
 
-            const top = shiftBuildingWorldPos(tileToWorld(tx, ty, hWorld, s.ctx.viewPoint.x, s.ctx.viewPoint.y));
-            const right = shiftBuildingWorldPos(tileToWorld(tx + 1, ty, hWorld, s.ctx.viewPoint.x, s.ctx.viewPoint.y));
-            const bottom = shiftBuildingWorldPos(
-                tileToWorld(tx + 1, ty + 1, hWorld, s.ctx.viewPoint.x, s.ctx.viewPoint.y)
-            );
-            const left = shiftBuildingWorldPos(tileToWorld(tx, ty + 1, hWorld, s.ctx.viewPoint.x, s.ctx.viewPoint.y));
+            const top = tileVertexToWorld(tx, ty, hWorld, s.ctx.viewPoint.x, s.ctx.viewPoint.y);
+            const right = tileVertexToWorld(tx + 1, ty, hWorld, s.ctx.viewPoint.x, s.ctx.viewPoint.y);
+            const bottom = tileVertexToWorld(tx + 1, ty + 1, hWorld, s.ctx.viewPoint.x, s.ctx.viewPoint.y);
+            const left = tileVertexToWorld(tx, ty + 1, hWorld, s.ctx.viewPoint.x, s.ctx.viewPoint.y);
 
             const center = this.fillDiamondFromWorldPositions(top, right, bottom, left);
             s.gl.vertexAttrib2f(s.aEntityPos, center.centerX, center.centerY);
@@ -279,10 +268,10 @@ export class TileDiamondRenderer {
             const idx = s.ctx.mapSize.toIndex({ x: tx, y: ty });
             const hWorld = heightToWorld(s.ctx.groundHeight[idx]!);
 
-            const top = shiftBuildingWorldPos(tileToWorld(tx, ty, hWorld, vpX, vpY));
-            const right = shiftBuildingWorldPos(tileToWorld(tx + 1, ty, hWorld, vpX, vpY));
-            const bottom = shiftBuildingWorldPos(tileToWorld(tx + 1, ty + 1, hWorld, vpX, vpY));
-            const left = shiftBuildingWorldPos(tileToWorld(tx, ty + 1, hWorld, vpX, vpY));
+            const top = tileVertexToWorld(tx, ty, hWorld, vpX, vpY);
+            const right = tileVertexToWorld(tx + 1, ty, hWorld, vpX, vpY);
+            const bottom = tileVertexToWorld(tx + 1, ty + 1, hWorld, vpX, vpY);
+            const left = tileVertexToWorld(tx, ty + 1, hWorld, vpX, vpY);
 
             const off = count * VERTS_PER_TILE;
             // Vertices in absolute world coords / SHADER_VERTEX_SCALE (shader multiplies by 0.4)
@@ -357,6 +346,32 @@ export class TileDiamondRenderer {
 
         s.gl.bufferData(s.gl.ARRAY_BUFFER, verts.subarray(0, 6), s.gl.DYNAMIC_DRAW);
         s.gl.drawArrays(s.gl.TRIANGLES, 0, 3);
+    }
+
+    /** Draw a small dot at the building anchor position. */
+    private drawAnchorDot(s: OverlaySession, anchorX: number, anchorY: number): void {
+        const idx = s.ctx.mapSize.toIndex({ x: anchorX, y: anchorY });
+        const hWorld = heightToWorld(s.ctx.groundHeight[idx]!);
+        const worldPos = tileVertexToWorld(anchorX, anchorY, hWorld, s.ctx.viewPoint.x, s.ctx.viewPoint.y);
+
+        s.gl.vertexAttrib4f(
+            s.aColor,
+            FOOTPRINT_ANCHOR_COLOR[0]!,
+            FOOTPRINT_ANCHOR_COLOR[1]!,
+            FOOTPRINT_ANCHOR_COLOR[2]!,
+            FOOTPRINT_ANCHOR_COLOR[3]!
+        );
+        s.gl.vertexAttrib2f(s.aEntityPos, worldPos.worldX, worldPos.worldY);
+
+        // Fill vertex buffer with scaled quad centered at origin
+        const verts = this.diamondVerts;
+        for (let i = 0; i < 6; i++) {
+            verts[i * 2] = BASE_QUAD[i * 2]! * FOOTPRINT_ANCHOR_DOT_SCALE;
+            verts[i * 2 + 1] = BASE_QUAD[i * 2 + 1]! * FOOTPRINT_ANCHOR_DOT_SCALE;
+        }
+
+        s.gl.bufferData(s.gl.ARRAY_BUFFER, this.diamondVerts, s.gl.DYNAMIC_DRAW);
+        s.gl.drawArrays(s.gl.TRIANGLES, 0, 6);
     }
 
     /** Fill vertex data for a diamond shape from 4 absolute world positions. */
