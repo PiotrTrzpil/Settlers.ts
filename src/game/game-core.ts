@@ -41,6 +41,8 @@ import {
     createTerritoryCarrierFilter,
 } from './features/territory';
 import { spiralSearch } from './utils/spiral-search';
+import { isGarrisonBuildingType } from './features/tower-garrison/internal/garrison-capacity';
+import { UnitType } from './core/unit-types';
 
 /** Headless game core — usable in tests without a browser. */
 export class GameCore {
@@ -113,6 +115,7 @@ export class GameCore {
         const mapBuildings = this.populate(mapLoader);
         this.reconcile();
         this.activate(mapBuildings);
+        this.populateInitialGarrisons(mapBuildings);
         this.assignPileOwners();
     }
 
@@ -193,6 +196,20 @@ export class GameCore {
             this.eventBus.emit('building:completed', { buildingId, buildingType, race });
         }
         this.services.victorySystem.setLocalPlayer(this.currentPlayer);
+    }
+
+    /** GARRISON — spawn 1 level 1 swordsman in each garrison building (towers/castles). */
+    private populateInitialGarrisons(mapBuildings: MapBuildingEntry[]): void {
+        for (const { buildingId, buildingType } of mapBuildings) {
+            if (!isGarrisonBuildingType(buildingType)) {
+                continue;
+            }
+            this.commandRegistry.execute({
+                type: 'fill_garrison',
+                buildingId,
+                units: [{ unitType: UnitType.Swordsman1 }],
+            });
+        }
     }
 
     /** Assign territory owner to free ground piles — must run after activate so territory is computed. */
