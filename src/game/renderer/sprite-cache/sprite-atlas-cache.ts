@@ -475,7 +475,9 @@ export async function clearAllCaches(): Promise<void> {
     // Invalidate any in-flight or already-resolved prefetch so stale data
     // doesn't resurrect the cache on the next tryRestore() call.
     const { invalidatePrefetch } = await import('../sprite-atlas-cache-manager');
+    const { invalidateEarlyPrefetch } = await import('./early-prefetch');
     invalidatePrefetch();
+    invalidateEarlyPrefetch();
     log.info('All caches cleared');
 }
 

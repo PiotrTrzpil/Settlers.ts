@@ -73,6 +73,14 @@ export function consumeEarlyPrefetch(): EarlyPrefetchHandle | null {
     return h;
 }
 
+/** Invalidate any early prefetch in progress — terminates worker and clears handle. */
+export function invalidateEarlyPrefetch(): void {
+    if (earlyHandle) {
+        earlyHandle.worker.terminate();
+        earlyHandle = null;
+    }
+}
+
 /** Get the race that was prefetched (without consuming). */
 export function getEarlyPrefetchRace(): Race | null {
     // eslint-disable-next-line no-restricted-syntax -- optional chaining; null when source is absent

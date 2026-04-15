@@ -90,6 +90,7 @@ import { LocalFileProvider } from '@/utilities/local-file-provider';
 import { GameSettingsManager } from '@/game/game-settings';
 import { clearAllCaches } from '@/game/renderer/sprite-cache';
 import { clearAllGameState, open as openSaveDb } from '@/game/persistence/indexed-db-store';
+import { clearLabelCache } from '@/views/gfx-view-labels';
 
 // Local settings instance — loads from localStorage.
 // When Game is later created, it reads the same persisted state.
@@ -124,6 +125,7 @@ async function handleClearCache(): Promise<void> {
     isClearing.value = true;
     try {
         await clearAllCaches();
+        clearLabelCache();
     } finally {
         isClearing.value = false;
     }
@@ -144,6 +146,7 @@ watch(
     () => [homeSettings.state.cacheCompressionEnabled, homeSettings.state.cacheDisabled],
     () => {
         void clearAllCaches();
+        clearLabelCache();
     }
 );
 

@@ -17,12 +17,17 @@
         <!-- Grid View -->
         <ImageGridViewer
             v-if="viewMode === 'grid'"
+            ref="gridViewerRef"
             :items="gfxContent"
             :selected-item="selectedItem"
             :set-canvas-ref="setCanvasRef"
             @select="(img, i) => selectImage(img, i)"
-            @visible="(s, e) => renderVisibleImages(gfxContent, s, e)"
-        />
+            @visible="onGridVisible"
+        >
+            <template #default="{ index }">
+                <div v-if="getLabelForIndex(index)" class="sprite-label">{{ getLabelForIndex(index) }}</div>
+            </template>
+        </ImageGridViewer>
 
         <!-- Single View -->
         <div v-if="viewMode === 'single'" class="single-view">
@@ -44,7 +49,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, useTemplateRef } from 'vue';
+import { ref, useTemplateRef, watch, onMounted, onUnmounted } from 'vue';
 import { IGfxImage } from '@/resources/gfx/igfx-image';
 import { Path } from '@/utilities/path';
 import { GfxFileReader } from '@/resources/gfx/gfx-file-reader';
@@ -52,6 +57,8 @@ import { LogHandler } from '@/utilities/log-handler';
 import { FileManager, IFileSource } from '@/utilities/file-manager';
 import { pad, renderImageToCanvas, collectImages, loadGfxFileSet, parseGfxReaders } from '@/utilities/view-helpers';
 import { useFileViewer } from '@/composables/useFileViewer';
+import { getGilLabel } from './gfx-view-labels';
+import { getSavedState, loadSavedState, saveGfxState, restoreScrollOffset } from './gfx-view-persistence';
 
 import FileBrowser from '@/components/file-browser.vue';
 import ImageGridViewer from '@/components/ImageGridViewer.vue';
@@ -63,12 +70,36 @@ const props = defineProps<{
 }>();
 
 const mainCanvas = useTemplateRef<HTMLCanvasElement>('mainCanvas');
+const gridViewerRef = ref<InstanceType<typeof ImageGridViewer> | null>(null);
 
 const { viewMode, setCanvasRef, switchToGrid, onFileSelect, renderVisibleImages } = useFileViewer('grid');
 
 const gfxContent = ref<IGfxImage[]>([]);
 const selectedItem = ref<IGfxImage | null>(null);
+const selectedIndex = ref<number | null>(null);
 const gfxFile = ref<GfxFileReader | null>(null);
+const currentFileId = ref<number | null>(null);
+
+let pendingScrollRestore = false;
+let scrollSaveTimer = 0;
+
+const viewRefs = { viewMode };
+const saveCtx = {
+    refs: viewRefs,
+    pendingScrollRestore: () => pendingScrollRestore,
+    getScrollOffset: () => gridViewerRef.value?.getScrollOffset(),
+    getSelectedIndex: () => selectedIndex.value ?? undefined,
+};
+const saveState = () => saveGfxState(saveCtx);
+
+loadSavedState(viewRefs);
+
+function getLabelForIndex(index: number): string | undefined {
+    if (currentFileId.value === null) {
+        return undefined;
+    }
+    return getGilLabel(currentFileId.value, index);
+}
 
 async function load(file: IFileSource) {
     const fileId = Path.getFileNameWithoutExtension(file.name);
@@ -76,6 +107,10 @@ async function load(file: IFileSource) {
 }
 
 async function doLoad(fileId: string) {
+    // Extract numeric file ID for label lookups (e.g., "5" from "5.gfx")
+    const numericId = parseInt(fileId, 10);
+    currentFileId.value = isNaN(numericId) ? null : numericId;
+
     const fileSet = await loadGfxFileSet(props.fileManager, fileId);
     const readers = parseGfxReaders(fileSet);
 
@@ -93,10 +128,21 @@ async function doLoad(fileId: string) {
     gfxContent.value = collectImages(gfx.getImageCount.bind(gfx), gfx.getImage.bind(gfx));
 
     log.debug('File: ' + fileId + ' with ' + gfxContent.value.length + ' images');
+
+    // Restore saved selection
+    const saved = getSavedState();
+    if (saved?.selectedIndex !== undefined && saved.selectedIndex < gfxContent.value.length) {
+        selectedItem.value = gfxContent.value[saved.selectedIndex]!;
+        selectedIndex.value = saved.selectedIndex;
+    }
+
+    // Defer scroll restore until the grid actually renders
+    pendingScrollRestore = true;
 }
 
 function selectImage(img: IGfxImage, index: number) {
     selectedItem.value = img;
+    selectedIndex.value = index;
     log.debug(`Selected image #${index}: ${img.width}x${img.height}`);
 }
 
@@ -107,6 +153,36 @@ function onSelectItem() {
     }
     renderImageToCanvas(img, mainCanvas.value);
 }
+
+function onGridVisible(startIndex: number, endIndex: number) {
+    if (pendingScrollRestore) {
+        pendingScrollRestore = false;
+        restoreScrollOffset(() => gridViewerRef.value);
+    }
+    renderVisibleImages(gfxContent.value, startIndex, endIndex);
+}
+
+watch([viewMode, selectedIndex], () => saveState());
+
+onMounted(() => {
+    scrollSaveTimer = window.setInterval(() => saveState(), 500);
+});
+
+onUnmounted(() => {
+    window.clearInterval(scrollSaveTimer);
+    saveState();
+});
 </script>
 
 <style src="@/styles/file-viewer.css"></style>
+
+<style scoped>
+.sprite-label {
+    font-size: 10px;
+    color: #81c784;
+    text-align: center;
+    word-break: break-word;
+    max-width: 200px;
+    line-height: 1.2;
+}
+</style>
