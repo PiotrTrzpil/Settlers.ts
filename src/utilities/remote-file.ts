@@ -1,8 +1,9 @@
 import { LogHandler } from '@/utilities/log-handler';
 import { Path } from '@/utilities/path';
 import { BinaryReader } from '../resources/file/binary-reader';
+import { looksLikeHtmlFallback, reportAssetError } from './asset-error-reporter';
 
-class RequestError extends Error {
+export class RequestError extends Error {
     public state: number;
     public statusText: string;
 
@@ -13,6 +14,35 @@ class RequestError extends Error {
 
         Object.seal(this);
     }
+}
+
+export class MissingAssetError extends Error {
+    constructor(public readonly url: string) {
+        super(`Missing asset: ${url}`);
+    }
+}
+
+const HTML_FALLBACK_MAGIC = [0x3c, 0x21, 0x44, 0x4f, 0x43]; // "<!DOC"
+const HTML_FALLBACK_MAGIC_2 = [0x3c, 0x68, 0x74, 0x6d, 0x6c]; // "<html"
+
+function bytesStartWith(buf: ArrayBuffer, magic: number[]): boolean {
+    if (buf.byteLength < magic.length) {
+        return false;
+    }
+    const view = new Uint8Array(buf, 0, magic.length);
+    for (let i = 0; i < magic.length; i++) {
+        if (view[i] !== magic[i]) {
+            return false;
+        }
+    }
+    return true;
+}
+
+function isHtmlFallbackBinary(contentType: string | null, buf: ArrayBuffer): boolean {
+    if (contentType && contentType.toLowerCase().includes('text/html')) {
+        return true;
+    }
+    return bytesStartWith(buf, HTML_FALLBACK_MAGIC) || bytesStartWith(buf, HTML_FALLBACK_MAGIC_2);
 }
 
 /**
@@ -127,6 +157,13 @@ export class RemoteFile {
 
             xhr.onload = async () => {
                 if (xhr.status >= 200 && xhr.status < 300) {
+                    const contentType = xhr.getResponseHeader('content-type');
+                    if (isHtmlFallbackBinary(contentType, xhr.response)) {
+                        RemoteFile.log.error('missing asset (SPA fallback): ' + url);
+                        reportAssetError({ path: url, reason: 'missing' });
+                        reject(new MissingAssetError(url));
+                        return;
+                    }
                     // Cache GFX files for future use
                     if (this.cacheEnabled && this.isCacheableFile(url)) {
                         await FileCache.set(url, xhr.response);
@@ -136,12 +173,14 @@ export class RemoteFile {
                     resolve(reader);
                 } else {
                     RemoteFile.log.error('error load file:' + url);
+                    reportAssetError({ path: url, reason: 'missing', detail: `HTTP ${xhr.status}` });
                     reject(new RequestError(xhr.status, xhr.statusText));
                 }
             };
 
             xhr.onerror = () => {
                 RemoteFile.log.error('error load file:' + url);
+                reportAssetError({ path: url, reason: 'missing', detail: xhr.statusText || 'network error' });
                 reject(new RequestError(xhr.status, xhr.statusText));
             };
 
@@ -168,19 +207,39 @@ export class RemoteFile {
         );
     }
 
-    /** load string data from URL */
-    public loadString(url: string): Promise<string> {
+    /**
+     * load string data from URL.
+     * @param url      Asset URL
+     * @param options  expectsHtml: set true when the asset legitimately is HTML; otherwise an HTML body
+     *                 is treated as a SPA fallback (= missing) and the promise rejects.
+     */
+    public loadString(url: string, options: { expectsHtml?: boolean } = {}): Promise<string> {
+        const { expectsHtml = false } = options;
         RemoteFile.log.debug('Load file as string: ' + url);
 
         return new Promise((resolve, reject) => {
             const xhr = new XMLHttpRequest();
 
             xhr.onload = () => {
-                resolve(xhr.response);
+                if (xhr.status < 200 || xhr.status >= 300) {
+                    RemoteFile.log.error('error load file:' + url);
+                    reportAssetError({ path: url, reason: 'missing', detail: `HTTP ${xhr.status}` });
+                    reject(new RequestError(xhr.status, xhr.statusText));
+                    return;
+                }
+                const body = typeof xhr.response === 'string' ? xhr.response : '';
+                if (!expectsHtml && looksLikeHtmlFallback(body)) {
+                    RemoteFile.log.error('missing asset (SPA fallback): ' + url);
+                    reportAssetError({ path: url, reason: 'missing' });
+                    reject(new MissingAssetError(url));
+                    return;
+                }
+                resolve(body);
             };
 
             xhr.onerror = () => {
                 RemoteFile.log.error('error load file:' + url);
+                reportAssetError({ path: url, reason: 'missing', detail: xhr.statusText || 'network error' });
                 reject(new RequestError(xhr.status, xhr.statusText));
             };
 

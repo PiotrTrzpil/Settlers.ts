@@ -7,6 +7,7 @@
 
 import { LogHandler } from '@/utilities/log-handler';
 import { RemoteFile } from '@/utilities/remote-file';
+import { reportAssetError } from '@/utilities/asset-error-reporter';
 import type { GameData, RaceId, BuildingInfo, JobInfo, ObjectInfo, BuildingTrigger, SettlerValueInfo } from './types';
 import { parseBuildingInfo } from './building-info-parser';
 import { parseJobInfo } from './job-info-parser';
@@ -93,12 +94,12 @@ export class GameDataLoader {
             this.loadXmlFile(remoteFile, 'SettlerValues.xml'),
         ]);
 
-        // Parse all files
-        const buildings = buildingXml ? parseBuildingInfo(buildingXml) : new Map();
-        const jobs = jobXml ? parseJobInfo(jobXml) : new Map();
-        const objects = objectXml ? parseObjectInfo(objectXml) : new Map();
-        const buildingTriggers = triggerXml ? parseBuildingTriggers(triggerXml) : new Map();
-        const settlers = settlerXml ? parseSettlerValues(settlerXml) : new Map();
+        // Parse all files (parse errors are reported and degrade to empty map so unrelated systems keep working)
+        const buildings = this.tryParse('buildingInfo.xml', buildingXml, parseBuildingInfo);
+        const jobs = this.tryParse('jobInfo.xml', jobXml, parseJobInfo);
+        const objects = this.tryParse('objectInfo.xml', objectXml, parseObjectInfo);
+        const buildingTriggers = this.tryParse('BuildingTrigger.xml', triggerXml, parseBuildingTriggers);
+        const settlers = this.tryParse('SettlerValues.xml', settlerXml, parseSettlerValues);
 
         this.data = { buildings, jobs, objects, buildingTriggers, settlers };
 
@@ -135,8 +136,23 @@ export class GameDataLoader {
             const content = await remoteFile.loadString(url);
             return content;
         } catch (e) {
+            // RemoteFile already reports the error; warn locally and return null so siblings can still parse.
             log.warn(`Failed to load ${filename}: ${String(e)}`);
             return null;
+        }
+    }
+
+    private tryParse<K, V>(filename: string, xml: string | null, parser: (xml: string) => Map<K, V>): Map<K, V> {
+        if (!xml) {
+            return new Map<K, V>();
+        }
+        try {
+            return parser(xml);
+        } catch (e) {
+            const detail = e instanceof Error ? e.message : String(e);
+            log.warn(`Failed to parse ${filename}: ${detail}`);
+            reportAssetError({ path: `${GAME_DATA_PATH}/${filename}`, reason: 'parse', detail });
+            return new Map<K, V>();
         }
     }
 

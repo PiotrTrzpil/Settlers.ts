@@ -16,6 +16,7 @@ import {
     saveInitialState,
 } from '@/game/state/game-state-persistence';
 import { getGameDataLoader } from '@/resources/game-data';
+import { reportAssetError } from '@/utilities/asset-error-reporter';
 import { setupLifecycle } from './use-map-view-helpers';
 
 export type { LayerCounts } from './use-map-view-state';
@@ -282,9 +283,16 @@ export function useMapView(getFileManager: () => FileManager) {
                 name: mapPath,
                 path: mapPath,
                 readBinary: async () => {
-                    const resp = await fetch(`/Siedler4/Map/${mapPath}`);
+                    const url = `/Siedler4/Map/${mapPath}`;
+                    const resp = await fetch(url);
                     if (!resp.ok) {
+                        reportAssetError({ path: url, reason: 'missing', detail: `HTTP ${resp.status}` });
                         throw new Error(`Failed to fetch map: ${resp.status} ${resp.statusText}`);
+                    }
+                    const contentType = resp.headers.get('content-type');
+                    if (contentType && contentType.toLowerCase().includes('text/html')) {
+                        reportAssetError({ path: url, reason: 'missing' });
+                        throw new Error(`Failed to fetch map: SPA fallback for ${url}`);
                     }
                     const buf = await resp.arrayBuffer();
                     return new BinaryReader(buf, 0, null, mapPath);

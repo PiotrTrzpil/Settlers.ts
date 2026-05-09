@@ -12,6 +12,7 @@
         </div>
 
         <router-view v-if="fileManager" :fileManager="fileManager" class="app-content" />
+        <AssetErrorOverlay />
     </div>
 </template>
 
@@ -23,6 +24,7 @@ import { FileListProvider } from './utilities/file-list-provider';
 import { LibFileProvider } from './utilities/lib-file-provider';
 import { LogHandler } from './utilities/log-handler';
 import { getGameDataLoader } from './resources/game-data';
+import AssetErrorOverlay from './components/AssetErrorOverlay.vue';
 
 const log = new LogHandler('App');
 const route = useRoute();
