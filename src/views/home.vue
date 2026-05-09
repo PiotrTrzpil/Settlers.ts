@@ -2,7 +2,13 @@
     <div class="home">
         <div class="home-card">
             <div class="home-header">
-                <h1 class="home-title">Settlers.ts</h1>
+                <h1 class="home-title">
+                    <span class="title-ornament" aria-hidden="true"></span>
+                    <span class="title-text">
+                        <span class="title-name">Settlers</span><span class="title-ext">.ts</span>
+                    </span>
+                    <span class="title-ornament" aria-hidden="true"></span>
+                </h1>
                 <p class="home-subtitle">A Settlers 4 browser remake</p>
             </div>
 
@@ -19,14 +25,6 @@
 
                     <Checkbox v-model="homeSettings.state.cacheDisabled" label="Disable sprite cache">
                         <span class="hint-inline">(slower loading)</span>
-                    </Checkbox>
-
-                    <Checkbox
-                        v-model="homeSettings.state.cacheCompressionEnabled"
-                        label="Compress sprite cache"
-                        :disabled="homeSettings.state.cacheDisabled"
-                    >
-                        <span class="hint-inline">(experimental — may be slower, but uses less memory)</span>
                     </Checkbox>
 
                     <div class="cache-controls">
@@ -74,8 +72,13 @@
             </div>
 
             <div class="home-footer">
-                Found a bug or want to contribute?
-                <a href="https://github.com/tomsoftware/Settlers.ts" target="_blank" rel="noopener">View on GitHub</a>
+                <div>
+                    Found a bug or want to contribute?
+                    <a href="https://github.com/tomsoftware/Settlers.ts" target="_blank" rel="noopener"
+                        >View on GitHub</a
+                    >
+                </div>
+                <div class="home-disclaimer">Unaffiliated fan remake. The Settlers is a trademark of Ubisoft.</div>
             </div>
         </div>
     </div>
@@ -141,9 +144,9 @@ async function handleClearGameState(): Promise<void> {
     }
 }
 
-// Invalidate cache when toggling compression or disabling cache — stored format changes
+// Invalidate cache when disabling — stored format changes
 watch(
-    () => [homeSettings.state.cacheCompressionEnabled, homeSettings.state.cacheDisabled],
+    () => homeSettings.state.cacheDisabled,
     () => {
         void clearAllCaches();
         clearLabelCache();
@@ -209,18 +212,84 @@ checkIsValidSettlers();
 
 .home-title {
     margin: 0;
-    font-size: 2rem;
-    font-weight: 700;
-    color: var(--text-emphasis);
-    letter-spacing: 1px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 14px;
+    line-height: 1;
+}
+
+.title-text {
+    display: inline-flex;
+    align-items: baseline;
+    white-space: nowrap;
+}
+
+.title-name {
+    font-family: 'Cinzel', 'Trajan Pro', 'Optima', Georgia, serif;
+    font-size: 2.6rem;
+    font-weight: 600;
+    letter-spacing: 4px;
     text-transform: uppercase;
+    background: linear-gradient(180deg, #f6e0a4 0%, #e8c87e 30%, #c8932a 65%, #8a6020 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    color: transparent;
+    text-shadow:
+        0 1px 0 rgba(0, 0, 0, 0.6),
+        0 0 22px rgba(212, 160, 48, 0.18);
+    filter: drop-shadow(0 2px 1px rgba(0, 0, 0, 0.7));
+}
+
+.title-ext {
+    font-family: 'JetBrains Mono', 'SFMono-Regular', Menlo, Consolas, monospace;
+    font-size: 1rem;
+    font-weight: 500;
+    color: var(--text-accent);
+    letter-spacing: 0.5px;
+    margin-left: -2px;
+    align-self: flex-end;
+    transform: translateY(-0.35em);
+    opacity: 0.95;
+}
+
+.title-ornament {
+    flex: 1 1 auto;
+    max-width: 70px;
+    height: 1px;
+    background: linear-gradient(to right, transparent 0%, var(--border-strong) 30%, var(--text-accent) 100%);
+    position: relative;
+}
+
+.title-ornament:last-child {
+    background: linear-gradient(to left, transparent 0%, var(--border-strong) 30%, var(--text-accent) 100%);
+}
+
+.title-ornament::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    right: -1px;
+    width: 6px;
+    height: 6px;
+    background: var(--text-accent);
+    transform: translateY(-50%) rotate(45deg);
+    box-shadow: 0 0 6px rgba(212, 160, 48, 0.6);
+}
+
+.title-ornament:last-child::after {
+    right: auto;
+    left: -1px;
 }
 
 .home-subtitle {
-    margin: 6px 0 0;
-    font-size: 0.85rem;
+    margin: 10px 0 0;
+    font-size: 0.78rem;
     color: var(--text-secondary);
-    letter-spacing: 0.5px;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    font-weight: 500;
 }
 
 /* Body */
@@ -238,9 +307,9 @@ checkIsValidSettlers();
     font-weight: 600;
     padding: 12px 56px;
     cursor: pointer;
-    background: #3a6e28;
-    color: #e8f4e0;
-    border: 1px solid #4a8e34;
+    background: #426a30;
+    color: #e4eed8;
+    border: 1px solid #56823e;
     border-radius: 6px;
     letter-spacing: 1px;
     transition:
@@ -250,15 +319,15 @@ checkIsValidSettlers();
 }
 
 .play-btn:hover {
-    background: #4a8e34;
-    border-color: #5aae44;
+    background: #56823e;
+    border-color: #6a994e;
 }
 
 /* Dev mode button */
 .dev-btn {
-    font-size: 1rem;
+    font-size: 1.2rem;
     font-weight: 600;
-    padding: 10px 56px;
+    padding: 12px 56px;
     cursor: pointer;
     background: var(--bg-mid);
     color: var(--text);
@@ -437,5 +506,12 @@ checkIsValidSettlers();
 .home-footer a:hover {
     color: var(--text-emphasis);
     text-decoration: underline;
+}
+
+.home-disclaimer {
+    margin-top: 8px;
+    font-size: 0.7rem;
+    color: var(--text-faint);
+    font-style: italic;
 }
 </style>

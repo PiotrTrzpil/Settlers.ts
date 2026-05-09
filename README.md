@@ -1,4 +1,5 @@
-# Settlers.ts
+
+![Settlers.ts — A Settlers 4 browser remake](docs/images/banner.png)
 
 A browser-based remake of **The Settlers 4** (Die Siedler 4) built with TypeScript, Vue 3, and WebGL2.
 
