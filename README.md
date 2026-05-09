@@ -15,7 +15,7 @@ A browser-based remake of **The Settlers 4** (Die Siedler 4) built with TypeScri
 - All five races render with their own building and unit sprite sets: Roman, Viking, Mayan, Dark Tribe, Trojan
 
 ### Economy and Logistics
-- **Full production chains**: wood/boards, stone, grain→flour→bread, hunting, fishing, animal ranching, mining (coal/iron/gold/sulfur), smelting, tool and weapon smithing, plus race-specific drink chains (Roman wine, Viking mead, Mayan tequila, Trojan sunflower oil)
+- **Full production chains**: wood/boards, stone, grain→flour→bread, hunting, fishing, animal ranching, mining (coal/iron/gold/sulfur), smelting, tool and weapon smithing, plus race-specific drink chains
 - **Worker Tasks** driven by YAML job definitions — woodcutters, stonecutters, foresters, farmers, miners, carriers, builders, diggers, smiths, millers, butchers, smelters, bakers, hunters, fishers, waterworkers, healers, animal farmers, and race-specific workers
 - **Logistics dispatcher** matches resource requests to available supplies, assigns idle carriers, and tracks delivery status with stall detection
 - **Building inventory** system with input/output slots and reservations
@@ -104,23 +104,22 @@ npx playwright test   # E2E tests
 
 - **Terrain rendering fixes** — river and desert tiles have visual artifacts and incorrect transitions that need fixing
 - **Map object sprites** — many raw map objects are not yet mapped to the correct sprite; needs visual comparison with the original game
-- **Full logistics** — the current system handles basic supply/demand but lacks the full priority-based distribution, overflow handling, and transport optimization of the original
+- **Logistics refinement** — the current system handles supply/demand but lacks the full priority-based distribution and some other elements of the original
 - **Trade** — no donkey or ship-based goods transport between your own buildings
-- **Ships and waterways** — no harbors, ferries, or naval transport
-- **Fog of war** — darkness map renders but is static; no dynamic exploration or line-of-sight updates
-- **Full construction** — settlers don't yet perform the full digging and multi-step building animation sequences from the original
+- **Ships** — no harbors or naval transport
 - **War machines** — catapults, ballistae, and siege equipment are not implemented
-- **Special units** — priests, pioneers, gardeners, saboteurs, and thieves lack gameplay behavior (geologists are fully implemented)
+- **Fog of war** — no dynamic exploration or line-of-sight updates
+- ** Many special units** — priests, gardeners, saboteurs, and thieves lack gameplay behavior 
 - **Magic** — no mana system or priest spells
-- **Dark Tribe specifics** — unique Dark Tribe mechanics (e.g. conversion, mushroom-based economy quirks) are not implemented
+- **Dark Tribe specifics** — unique Dark Tribe mechanics (e.g. conversion, mushroom-based economy) are not implemented
 - **AI players** — a behavior tree framework and basic decision logic exist but are untested and not yet playable
 - **Multiplayer** — no networking layer
 - **Sound** — music playback is complete with race-specific playlists and crossfading; sound effects are not yet integrated into gameplay
-- **Map editor** — no in-browser map creation tool
+- **Map editor** — no in-browser map creation tool, apart from some dev tools
 
 ## Acknowledgments
 
-This project is a fork of [tomsoftware/Settlers.ts](https://github.com/tomsoftware/Settlers.ts) by Thomas Schian, who built the original file format readers and WebGL map viewer that made this remake possible.
+This project started as a fork of [tomsoftware/Settlers.ts](https://github.com/tomsoftware/Settlers.ts) by Thomas Schian, who built the original file format readers and WebGL map rendering that made this remake possible.
 
 **The Settlers 4** was created by **Blue Byte** and published by **Ubisoft**. All original game assets, the names *Siedler* and *Settlers*, and related intellectual property belong to their respective owners. This project does not distribute any copyrighted game data.
 
