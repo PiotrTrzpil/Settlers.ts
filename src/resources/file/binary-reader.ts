@@ -1,6 +1,12 @@
 import { LogHandler } from '@/utilities/log-handler';
 
-/** Class to provide a read pointer and read functions to a binary Buffer */
+/**
+ * Class to provide a read pointer and read functions to a binary Buffer.
+ *
+ * All reads happen at the cursor and advance it; position explicitly with
+ * setOffset(). Out-of-data reads log an error and return 0 / '' without
+ * advancing the cursor.
+ */
 export class BinaryReader {
     private static log = new LogHandler('BinaryReader');
     public filename: string;
@@ -72,104 +78,67 @@ export class BinaryReader {
         }
     }
 
-    /** Read one Byte from stream */
-    public readByte(offset: number | null = null): number {
-        if (offset !== null) {
-            this.pos = offset + this.hiddenOffset;
-        }
-
-        if (this.pos < 0 || this.pos > this.data.length) {
+    /**
+     * Validate a read of `count` bytes at the cursor and advance the cursor.
+     * Returns the read start position, or -1 (with an error logged) when out of data.
+     */
+    private take(count: number): number {
+        const start = this.pos;
+        if (start < 0 || start + count > this.data.length) {
             BinaryReader.log.error(
-                'read out of data: ' + this.filename + ' - size: ' + this.data.length + ' @ ' + this.pos
+                'read out of data: ' + this.filename + ' - size: ' + this.data.length + ' @ ' + start
             );
-            return 0;
+            return -1;
         }
+        this.pos = start + count;
+        return start;
+    }
 
-        const v = this.data[this.pos]!;
-        this.pos++;
-
-        return v;
+    /** Read one Byte from stream */
+    public readByte(): number {
+        const p = this.take(1);
+        return p < 0 ? 0 : this.data[p]!;
     }
 
     /** Read one DWord (4 Byte) from stream (little-endian) */
-    public readInt(offset: number | null = null): number {
-        if (offset == null) {
-            offset = this.pos;
-        }
-
-        if (this.pos < 0 || this.pos + 4 > this.data.length) {
-            BinaryReader.log.error(
-                'read out of data: ' + this.filename + ' - size: ' + this.data.length + ' @ ' + this.pos
-            );
+    public readInt(): number {
+        const p = this.take(4);
+        if (p < 0) {
             return 0;
         }
-
-        this.pos = offset + 4;
-
-        return (
-            this.data[offset]! |
-            (this.data[offset + 1]! << 8) |
-            (this.data[offset + 2]! << 16) |
-            (this.data[offset + 3]! << 24)
-        );
+        return this.data[p]! | (this.data[p + 1]! << 8) | (this.data[p + 2]! << 16) | (this.data[p + 3]! << 24);
     }
 
-    /** Read one DWord (4 Byte) from stream (big-endian) */
-    public readIntBE(offset: number | null = null, length = 4): number {
-        if (offset === null) {
-            offset = this.pos;
+    /** Read `length` bytes from stream as a big-endian integer */
+    public readIntBE(length = 4): number {
+        const p = this.take(length);
+        if (p < 0) {
+            return 0;
         }
-
-        if (length === 4) {
-            const v =
-                (this.data[offset]! << 24) |
-                (this.data[offset + 1]! << 16) |
-                (this.data[offset + 2]! << 8) |
-                this.data[offset + 3]!;
-            this.pos = offset + 4;
-            return v;
-        }
-
         let v = 0;
-        for (let i = length; i > 0; i--) {
-            v = (v << 8) | this.data[offset]!;
-            offset++;
+        for (let i = 0; i < length; i++) {
+            v = (v << 8) | this.data[p + i]!;
         }
-
-        this.pos = offset;
-
         return v;
     }
 
     /** Read one Word (2 Byte) from stream (little-endian) */
-    public readWord(offset?: number): number {
-        if (offset == null) {
-            offset = this.pos;
-        }
-
-        this.pos = offset + 2;
-        return this.data[offset]! | (this.data[offset + 1]! << 8);
+    public readWord(): number {
+        const p = this.take(2);
+        return p < 0 ? 0 : this.data[p]! | (this.data[p + 1]! << 8);
     }
 
     /** Read one Word (2 Byte) from stream (big-endian) */
-    public readWordBE(offset: number | null = null): number {
-        if (offset === null) {
-            offset = this.pos;
-        }
-
-        this.pos = offset + 2;
-        return (this.data[offset]! << 8) | this.data[offset + 1]!;
+    public readWordBE(): number {
+        const p = this.take(2);
+        return p < 0 ? 0 : (this.data[p]! << 8) | this.data[p + 1]!;
     }
 
-    /** Read a String */
-    public readNullString(offset: number | null = null): string {
-        if (offset != null) {
-            this.pos = offset + this.hiddenOffset;
-        }
-
+    /** Read a zero-terminated String */
+    public readNullString(): string {
         let result = '';
 
-        while (this.pos < this.length) {
+        while (!this.eof()) {
             const v: number = this.data[this.pos]!;
             this.pos++;
             if (v === 0) {
@@ -181,44 +150,38 @@ export class BinaryReader {
         return '';
     }
 
-    /** Read a String */
-    public readString(length: number | null = null, offset: number | null = null): string {
-        if (offset !== null) {
-            this.pos = offset + this.hiddenOffset;
-        }
-
+    /** Read a String of `length` bytes (to the end of the data when omitted) */
+    public readString(length: number | null = null): string {
         if (length === null) {
             length = this.length - this.getOffset();
         }
 
+        const p = this.take(length);
+        if (p < 0) {
+            return '';
+        }
+
         let result = '';
-
         for (let i = 0; i < length; i++) {
-            const v: number = this.data[this.pos]!;
-            this.pos++;
-
-            result += String.fromCharCode(v);
+            result += String.fromCharCode(this.data[p + i]!);
         }
         return result;
     }
 
-    /** Read a String */
-    public readStringHex(length: number | null = null, offset: number | null = null, spacer = ''): string {
-        if (offset !== null) {
-            this.pos = offset + this.hiddenOffset;
-        }
-
+    /** Read `length` bytes as a hex String (to the end of the data when omitted) */
+    public readStringHex(length: number | null = null, spacer = ''): string {
         if (length === null) {
             length = this.length - this.getOffset();
         }
 
+        const p = this.take(length);
+        if (p < 0) {
+            return '';
+        }
+
         let result = '';
-
         for (let i = 0; i < length; i++) {
-            const v: number = this.data[this.pos]!;
-            this.pos++;
-
-            result += ('0' + v.toString(16)).slice(-2) + spacer;
+            result += ('0' + this.data[p + i]!.toString(16)).slice(-2) + spacer;
         }
         return result;
     }
@@ -241,6 +204,7 @@ export class BinaryReader {
 
     /** return a String of the data */
     public readAll(): string {
-        return this.readString(this.length, 0);
+        this.setOffset(0);
+        return this.readString(this.length);
     }
 }

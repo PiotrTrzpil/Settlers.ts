@@ -118,7 +118,7 @@ export class GfxFileReader extends ResourceFile {
             newImg.imgType = reader.readByte();
 
             newImg.flag1 = reader.readByte();
-            newImg.flag2 = reader.readInt(2);
+            newImg.flag2 = reader.readWordBE();
 
             newImg.dataOffset = offset + 12;
         }

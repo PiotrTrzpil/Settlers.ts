@@ -58,7 +58,7 @@ describe('compression/decompression.ts', () => {
 
         const decompress = new Decompress();
         const resultBuffer = decompress.unpack(sourceBuffer, 0, sourceBuffer.length, 27);
-        const readStringHex = resultBuffer.readStringHex(null, null, ' ');
+        const readStringHex = resultBuffer.readStringHex(null, ' ');
 
         expect(readStringHex).toBe('45 00 45 00 66 00 66 00 87 00 87 00 87 00 66 00 66 00 45 00 45 00 45 00 66 00 00 ');
     });

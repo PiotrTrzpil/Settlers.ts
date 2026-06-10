@@ -200,7 +200,8 @@ function getMaxLengthAndSetTrimmed(source: BinaryReader) {
 
 function toText(source: BinaryReader): string {
     const maxLen = getMaxLengthAndSetTrimmed(source);
-    return source.readString(maxLen, 0);
+    source.setOffset(0);
+    return source.readString(maxLen);
 }
 
 function toHex(source: BinaryReader): string {

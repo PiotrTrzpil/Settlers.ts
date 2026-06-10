@@ -53,7 +53,8 @@ export class SaveGameLoader extends OriginalMapFile implements IMapLoader {
         this.unknown5 = reader.readInt();
         this.unknown6 = reader.readInt();
 
-        const mapSize = reader.readInt(28);
+        reader.setOffset(28);
+        const mapSize = reader.readInt();
         this.mapSize = new MapSize(mapSize, mapSize);
 
         return true;

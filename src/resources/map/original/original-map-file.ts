@@ -79,7 +79,8 @@ export class OriginalMapFile {
         }
 
         let dataStartOffset;
-        if (data.readString(4, 0) === 'MZ\x90\x00') {
+        data.setOffset(0);
+        if (data.readString(4) === 'MZ\x90\x00') {
             /// settler4 save games are prefixed by a windows executable
             this.mapFileSourceType = MapFileSourceType.SaveGame;
             dataStartOffset = 6656;
