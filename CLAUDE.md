@@ -145,7 +145,7 @@ NEVER GIT STASH.
 <!-- gitnexus:start -->
 # GitNexus — Code Intelligence
 
-Indexed as **Settlers.ts** (36293 symbols, 75052 relationships, 300 execution flows). Prefer GitNexus MCP tools over grep/glob for structural questions. If a tool warns the index is stale, run `gitnexus analyze`.
+Indexed as **Settlers.ts**. Prefer GitNexus MCP tools over grep/glob for structural questions. If a tool warns the index is stale, run `gitnexus analyze`. Index stats live in `.gitnexus/stats.md`.
 
 ## Always
 

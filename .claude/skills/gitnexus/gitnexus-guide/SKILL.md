@@ -60,6 +60,27 @@ Lightweight reads (~100-500 tokens) for navigation:
 
 Method, Constructor, and Property nodes have a `className` property for easy class-scoped queries.
 
+### Method vs Function — language-specific labelling
+
+Whether class members are stored as `Method` or `Function` depends on the language parser:
+
+| Language       | Class members labelled as |
+|----------------|---------------------------|
+| TypeScript / JavaScript | `Method` (with `className`) |
+| Java / Kotlin / C# | `Method` (with `className`) |
+| Python         | `Function` (still has `className` when defined inside a class) |
+| Go / Rust      | `Function` (receivers / impl blocks tracked via edges, not label) |
+
+To match every callable that belongs to a class, regardless of language, prefer:
+
+```cypher
+MATCH (s) WHERE s.className = 'GameState'
+  AND label(s) IN ['Method', 'Function', 'Constructor']
+RETURN label(s) AS kind, s.name, s.id
+```
+
+`MATCH (m:Method)` alone will miss Python and Go class-bound callables.
+
 ```cypher
 MATCH (caller)-[:CodeRelation {type: 'CALLS'}]->(f:Function {name: "myFunc"})
 RETURN caller.name, caller.filePath
