@@ -10,23 +10,64 @@ import type { Entity, Tile, TileWithEntity } from '../entity';
 import type { SeededRng } from '../core/rng';
 import { distSq } from '../core/distance';
 import { CARDINAL_OFFSETS } from '../core/coordinates';
+import { ringTiles } from '../core/tile-iteration';
+
+export { ringTiles };
 
 // ─────────────────────────────────────────────────────────────
-// Ring iteration
+// Nearest candidate collection
 // ─────────────────────────────────────────────────────────────
+
+type NearCandidate = Tile & { distSq: number };
 
 /**
- * Generate tiles on the perimeter of a square ring at the given radius.
- * Yields positions in a deterministic order (top-left to bottom-right along edges).
+ * Collect tiles accepted by `isValid` in expanding rings around `center`,
+ * keeping each tile's squared euclidean distance.
+ *
+ * Stops expanding once the next ring can only produce tiles farther than every
+ * collected candidate: ring corners (distSq = 2r²) can be farther than the
+ * next ring's edge midpoints (distSq = (r+1)²), so expansion continues until
+ * the next ring's minimum possible distance exceeds all current candidates.
  */
-export function* ringTiles(center: Tile, radius: number): Generator<Tile> {
-    for (let dy = -radius; dy <= radius; dy++) {
-        for (let dx = -radius; dx <= radius; dx++) {
-            if (Math.abs(dx) === radius || Math.abs(dy) === radius) {
-                yield { x: center.x + dx, y: center.y + dy };
+function collectNearestCandidates(center: Tile, radius: number, isValid: (tile: Tile) => boolean): NearCandidate[] {
+    const radiusSq = radius * radius;
+    const candidates: NearCandidate[] = [];
+
+    for (let r = 0; r <= radius; r++) {
+        for (const tile of ringTiles(center, r)) {
+            const d = distSq(tile, center);
+            if (d > radiusSq || !isValid(tile)) {
+                continue;
+            }
+            candidates.push({ x: tile.x, y: tile.y, distSq: d });
+        }
+
+        if (candidates.length > 0) {
+            const nextMinDistSq = (r + 1) * (r + 1);
+            const maxCandidateDistSq = candidates.reduce((max, c) => Math.max(max, c.distSq), 0);
+            if (nextMinDistSq > maxCandidateDistSq) {
+                break;
             }
         }
     }
+
+    return candidates;
+}
+
+/** Pick the closest candidate, using RNG as tiebreaker among equidistant spots. */
+function pickClosest(candidates: NearCandidate[], rng?: SeededRng): NearCandidate {
+    candidates.sort((a, b) => a.distSq - b.distSq);
+
+    if (rng) {
+        const minDist = candidates[0]!.distSq;
+        let tieCount = 1;
+        while (tieCount < candidates.length && candidates[tieCount]!.distSq === minDist) {
+            tieCount++;
+        }
+        return candidates[rng.nextInt(tieCount)]!;
+    }
+
+    return candidates[0]!;
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -70,33 +111,12 @@ export function findNearestEntity(
  * Uses expanding rings with euclidean distance, same as findEmptySpot.
  */
 export function findNearestTile(center: Tile, radius: number, predicate: (tile: Tile) => boolean): Tile | null {
-    type Candidate = Tile & { distSq: number };
-    const radiusSq = radius * radius;
-    const candidates: Candidate[] = [];
-
-    for (let r = 0; r <= radius; r++) {
-        for (const tile of ringTiles(center, r)) {
-            const d = distSq(tile, center);
-            if (d > radiusSq || !predicate(tile)) {
-                continue;
-            }
-            candidates.push({ x: tile.x, y: tile.y, distSq: d });
-        }
-
-        if (candidates.length > 0) {
-            const nextMinDistSq = (r + 1) * (r + 1);
-            const maxCandidateDistSq = candidates.reduce((max, c) => Math.max(max, c.distSq), 0);
-            if (nextMinDistSq > maxCandidateDistSq) {
-                break;
-            }
-        }
-    }
-
+    const candidates = collectNearestCandidates(center, radius, predicate);
     if (candidates.length === 0) {
         return null;
     }
-    candidates.sort((a, b) => a.distSq - b.distSq);
-    return { x: candidates[0]!.x, y: candidates[0]!.y };
+    const pick = pickClosest(candidates);
+    return { x: pick.x, y: pick.y };
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -152,53 +172,6 @@ function isValidSpot(tile: Tile, config: FindEmptySpotConfig): boolean {
     return true;
 }
 
-type SpotCandidate = Tile & { distSq: number };
-
-/** Collect valid spots in expanding rings, stopping once no closer spots are possible. */
-function collectCandidates(center: Tile, config: FindEmptySpotConfig): SpotCandidate[] {
-    const searchRadiusSq = config.searchRadius * config.searchRadius;
-    const candidates: SpotCandidate[] = [];
-
-    for (let radius = 0; radius <= config.searchRadius; radius++) {
-        for (const tile of ringTiles(center, radius)) {
-            const d = distSq(tile, center);
-            if (d > searchRadiusSq || !isValidSpot(tile, config)) {
-                continue;
-            }
-            candidates.push({ x: tile.x, y: tile.y, distSq: d });
-        }
-
-        // Early exit: ring corners (distSq = 2r²) can be farther than next ring's
-        // edge midpoints (distSq = (r+1)²). Continue expanding until the next ring
-        // can only produce spots farther than all current candidates.
-        if (candidates.length > 0) {
-            const nextMinDistSq = (radius + 1) * (radius + 1);
-            const maxCandidateDistSq = candidates.reduce((max, c) => Math.max(max, c.distSq), 0);
-            if (nextMinDistSq > maxCandidateDistSq) {
-                break;
-            }
-        }
-    }
-
-    return candidates;
-}
-
-/** Pick the closest candidate, using RNG as tiebreaker among equidistant spots. */
-function pickClosest(candidates: SpotCandidate[], rng?: SeededRng): SpotCandidate {
-    candidates.sort((a, b) => a.distSq - b.distSq);
-
-    if (rng) {
-        const minDist = candidates[0]!.distSq;
-        let tieCount = 1;
-        while (tieCount < candidates.length && candidates[tieCount]!.distSq === minDist) {
-            tieCount++;
-        }
-        return candidates[rng.nextInt(tieCount)]!;
-    }
-
-    return candidates[0]!;
-}
-
 /**
  * Find an empty tile nearest to the center, with RNG as tiebreaker among equidistant spots.
  *
@@ -207,7 +180,7 @@ function pickClosest(candidates: SpotCandidate[], rng?: SeededRng): SpotCandidat
  * for natural-looking variation.
  */
 export function findEmptySpot(center: Tile, config: FindEmptySpotConfig): Tile | null {
-    const candidates = collectCandidates(center, config);
+    const candidates = collectNearestCandidates(center, config.searchRadius, tile => isValidSpot(tile, config));
     if (candidates.length === 0) {
         return null;
     }

@@ -1,4 +1,5 @@
 import { isInMapBounds, type Tile } from '@/game/core/coordinates';
+import { ringTiles } from '@/game/core/tile-iteration';
 
 /**
  * Spiral search from a center point outward.
@@ -13,7 +14,6 @@ import { isInMapBounds, type Tile } from '@/game/core/coordinates';
  * @param maxRadius - Maximum search radius (default: half the larger dimension)
  * @returns The first matching coordinate, or null if none found
  */
-// eslint-disable-next-line sonarjs/cognitive-complexity -- triple nested loops required for spiral traversal
 export function spiralSearch(
     center: Tile,
     w: number,
@@ -23,18 +23,9 @@ export function spiralSearch(
 ): Tile | null {
     const limit = maxRadius ?? Math.ceil(Math.max(w, h) / 2);
     for (let r = 0; r < limit; r++) {
-        for (let dx = -r; dx <= r; dx++) {
-            for (let dy = -r; dy <= r; dy++) {
-                if (Math.abs(dx) !== r && Math.abs(dy) !== r) {
-                    continue;
-                } // perimeter only
-                const tile: Tile = { x: center.x + dx, y: center.y + dy };
-                if (!isInMapBounds(tile, w, h)) {
-                    continue;
-                }
-                if (predicate(tile)) {
-                    return tile;
-                }
+        for (const tile of ringTiles(center, r)) {
+            if (isInMapBounds(tile, w, h) && predicate(tile)) {
+                return tile;
             }
         }
     }

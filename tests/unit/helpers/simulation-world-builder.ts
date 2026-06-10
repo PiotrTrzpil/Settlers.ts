@@ -339,7 +339,13 @@ function findEmptyTiles(
     for (let i = 0; i < count; i++) {
         const pos = spiralSearch({ x: cx, y: cy }, mapWidth, mapHeight, ({ x, y }) => {
             const dist = Math.max(Math.abs(x - cx), Math.abs(y - cy));
-            return dist >= skipRadius && !state.getEntityAt({ x, y }) && !placed.has(`${x},${y}`);
+            return (
+                dist >= skipRadius &&
+                !state.getEntityAt({ x, y }) &&
+                // addEntity rejects MapObjects inside building block areas
+                !state.buildingOccupancy.has(tileKey({ x, y })) &&
+                !placed.has(`${x},${y}`)
+            );
         });
         if (!pos) break;
         placed.add(`${pos.x},${pos.y}`);

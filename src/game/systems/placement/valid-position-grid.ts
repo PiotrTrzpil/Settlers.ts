@@ -13,6 +13,7 @@ import type { PlacementContext, PlacementFilter } from './types';
 import { validateBuildingPlacement } from './internal/building-validator';
 import { computeHeightRange } from './slope';
 import { getAllNeighbors } from '../../systems/hex-directions';
+import { spiralTiles } from '../../core/tile-iteration';
 
 export interface ValidPositionEntry {
     x: number;
@@ -57,12 +58,8 @@ export class ValidPositionGrid {
      */
     private readonly sizeWeight: number;
 
-    /** Current spiral ring radius */
-    private ring = 0;
-    /** Position within the current ring perimeter */
-    private ringPos = 0;
-    /** Total tiles in the current ring perimeter (0 for ring 0 which is just center) */
-    private ringPerimeter = 0;
+    /** Resumable spiral over all map tiles, expanding outward from the camera center */
+    private readonly spiral: Generator<Tile>;
     private complete = false;
 
     constructor(
@@ -79,6 +76,7 @@ export class ValidPositionGrid {
         this.mapWidth = mapSize.width;
         this.mapHeight = mapSize.height;
         this.groundHeightRef = groundHeight;
+        this.spiral = spiralTiles({ x: request.centerX, y: request.centerY }, mapSize.width, mapSize.height);
 
         // Compute block area size once — same for every position of this building type.
         // Reference size = 4 (a 2×2 building). Exponent 0.3 gives gentle scaling:
@@ -108,40 +106,13 @@ export class ValidPositionGrid {
             return true;
         }
 
-        let processed = 0;
-
-        while (processed < maxTiles) {
-            if (this.ring === 0 && this.ringPos === 0) {
-                // Ring 0: evaluate center tile only
-                this.evaluateTile({ x: this.request.centerX, y: this.request.centerY });
-                processed++;
-                this.ring = 1;
-                this.ringPos = 0;
-                this.ringPerimeter = computeRingPerimeter(1);
-
-                if (this.isRingFullyOutOfBounds(1)) {
-                    this.complete = true;
-                    return true;
-                }
-                continue;
+        for (let processed = 0; processed < maxTiles; processed++) {
+            const next = this.spiral.next();
+            if (next.done) {
+                this.complete = true;
+                return true;
             }
-
-            // Evaluate tiles along the current ring
-            this.evaluateTile(this.getRingTile(this.ring, this.ringPos));
-            processed++;
-            this.ringPos++;
-
-            if (this.ringPos >= this.ringPerimeter) {
-                // Advance to next ring
-                this.ring++;
-                this.ringPos = 0;
-                this.ringPerimeter = computeRingPerimeter(this.ring);
-
-                if (this.isRingFullyOutOfBounds(this.ring)) {
-                    this.complete = true;
-                    return true;
-                }
-            }
+            this.evaluateTile(next.value);
         }
 
         return false;
@@ -217,12 +188,8 @@ export class ValidPositionGrid {
 
     // ---- Private helpers ----
 
-    /** Evaluate a single tile and add to valid set if placement succeeds. */
+    /** Evaluate a single tile (in map bounds) and add to valid set if placement succeeds. */
     private evaluateTile(tile: Tile): void {
-        if (!isInMapBounds(tile, this.mapWidth, this.mapHeight)) {
-            return;
-        }
-
         const result = validateBuildingPlacement(tile.x, tile.y, this.request.buildingType, this.ctx);
         if (!result.canPlace) {
             return;
@@ -295,55 +262,6 @@ export class ValidPositionGrid {
         }
         return result;
     }
-
-    /**
-     * Check if an entire ring is fully outside the map bounds.
-     * A ring at distance `r` from center spans from (centerX - r) to (centerX + r)
-     * and (centerY - r) to (centerY + r). If that entire rectangle is outside
-     * map bounds, we are done.
-     */
-    private isRingFullyOutOfBounds(r: number): boolean {
-        const cx = this.request.centerX;
-        const cy = this.request.centerY;
-        return cx - r >= this.mapWidth || cx + r < 0 || cy - r >= this.mapHeight || cy + r < 0;
-    }
-
-    /**
-     * Get the (x, y) coordinates for a tile at position `pos` within ring `r`.
-     *
-     * Ring `r` is a rectangular perimeter of tiles where max(|dx|, |dy|) == r
-     * relative to the center. We walk the perimeter: top edge, right edge,
-     * bottom edge, left edge.
-     */
-    private getRingTile(r: number, pos: number): Tile {
-        const cx = this.request.centerX;
-        const cy = this.request.centerY;
-        const sideLen = 2 * r;
-
-        if (pos < sideLen) {
-            // Top edge: y = cy - r, x goes from cx - r to cx + r - 1
-            return { x: cx - r + pos, y: cy - r };
-        }
-        const pos1 = pos - sideLen;
-        if (pos1 < sideLen) {
-            // Right edge: x = cx + r, y goes from cy - r + 1 to cy + r
-            return { x: cx + r, y: cy - r + 1 + pos1 };
-        }
-        const pos2 = pos1 - sideLen;
-        if (pos2 < sideLen) {
-            // Bottom edge: y = cy + r, x goes from cx + r - 1 to cx - r
-            return { x: cx + r - 1 - pos2, y: cy + r };
-        }
-        const pos3 = pos2 - sideLen;
-        // Left edge: x = cx - r, y goes from cy + r - 1 to cy - r + 1
-        return { x: cx - r, y: cy + r - 1 - pos3 };
-    }
-}
-
-/** Compute the perimeter length of a rectangular ring at distance `r`. */
-function computeRingPerimeter(r: number): number {
-    // Rectangle from (-r, -r) to (+r, +r), perimeter = 4 * (2r) = 8r
-    return 8 * r;
 }
 
 /** Add a tile and all its hex neighbors to a set (by tile index). */
