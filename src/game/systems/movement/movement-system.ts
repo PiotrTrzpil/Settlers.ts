@@ -152,6 +152,14 @@ export class MovementSystem implements TickSystem {
     createController(entityId: number, tile: Tile, speed: number): MovementController {
         const controller = new MovementController(entityId, tile, speed);
         this.controllers.set(entityId, controller);
+        const existing = this.unitOccupancy.get(tileKey(tile));
+        if (existing !== undefined && existing !== entityId) {
+            // Overwriting desyncs the other unit: it keeps standing here but becomes
+            // invisible to bump/push logic. Callers must clear the tile first.
+            log.warn(
+                `createController: unit ${entityId} overwrites occupancy of unit ${existing} at (${tile.x},${tile.y})`
+            );
+        }
         this.unitOccupancy.set(tileKey(tile), entityId);
         return controller;
     }

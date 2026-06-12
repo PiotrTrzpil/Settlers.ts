@@ -9,7 +9,10 @@ import {
     type Tile,
 } from './entity';
 import { Race } from './core/race';
-import { getBuildingBlockArea, getBuildingPassableTiles } from './buildings/types';
+import {
+    clearBuildingFootprintBlock as clearBuildingFootprintBlockFn,
+    restoreBuildingFootprintBlock as restoreBuildingFootprintBlockFn,
+} from './state/building-footprint-block';
 import type { MovementSystem } from './systems/movement/index';
 import { SeededRng, createGameRng } from './core/rng';
 import { EventBus } from './event-bus';
@@ -42,6 +45,12 @@ export interface AddUnitOptions {
     selectable?: boolean;
     /** Set false to skip occupancy registration (visual-only entities). Defaults to true. */
     occupancy?: boolean;
+    /**
+     * Spawn hidden (already inside a building). Skips occupancy AND movement
+     * controller creation — otherwise the controller registers the unit on its
+     * spawn tile and clobbers the registration of any unit standing there.
+     */
+    hidden?: boolean;
 }
 
 /** Options for addBuilding. Race is validated at runtime (throws if missing). */
@@ -382,38 +391,14 @@ export class GameState {
         return this.addEntity(EntityType.Building, buildingType, tile, player, opts);
     }
 
-    /**
-     * Remove a building's non-door footprint tiles from buildingOccupancy.
-     * Used for construction sites — their footprints should be walkable during leveling.
-     */
+    /** Remove a building's non-door footprint tiles from buildingOccupancy (see building-footprint-block.ts). */
     public clearBuildingFootprintBlock(buildingId: number): void {
-        const entity = this.entityMap.get(buildingId);
-        if (!entity || entity.type !== EntityType.Building) {
-            return;
-        }
-        const blockArea = getBuildingBlockArea(entity, entity.subType as BuildingType, entity.race);
-        for (const tile of blockArea) {
-            this.buildingOccupancy.delete(tileKey(tile));
-        }
+        clearBuildingFootprintBlockFn(this.entityMap.get(buildingId), this.buildingOccupancy);
     }
 
-    /**
-     * Re-add a building's non-door footprint tiles to buildingOccupancy.
-     * Used when a construction site finishes leveling and the structure starts rising.
-     */
+    /** Re-add a building's non-door footprint tiles to buildingOccupancy (see building-footprint-block.ts). */
     public restoreBuildingFootprintBlock(buildingId: number): void {
-        const entity = this.entityMap.get(buildingId);
-        if (!entity || entity.type !== EntityType.Building) {
-            return;
-        }
-        const blockArea = getBuildingBlockArea(entity, entity.subType as BuildingType, entity.race);
-        const passableKeys = getBuildingPassableTiles(entity, entity.subType as BuildingType, entity.race, blockArea);
-        for (const tile of blockArea) {
-            const key = tileKey(tile);
-            if (!passableKeys.has(key)) {
-                this.buildingOccupancy.add(key);
-            }
-        }
+        restoreBuildingFootprintBlockFn(this.entityMap.get(buildingId), this.buildingOccupancy);
     }
 
     public removeEntity(id: number): void {
@@ -574,6 +559,14 @@ export class GameState {
             return;
         }
         const key = tileKey(entity);
+        const existing = this.unitOccupancy.get(key);
+        if (existing !== undefined && existing !== entityId) {
+            // Overwriting another unit's registration desyncs the occupancy map:
+            // that unit keeps standing here but becomes invisible to bump/push logic.
+            console.warn(
+                `restoreTileOccupancy: unit ${entityId} overwrites unit ${existing} at (${entity.x},${entity.y})`
+            );
+        }
         this.unitOccupancy.set(key, entityId);
     }
 

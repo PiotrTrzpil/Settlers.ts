@@ -102,10 +102,12 @@ function spawnWorkerInsideBuilding(deps: SpawnBuildingUnitsDeps, entity: Entity,
     }
 
     // Spawn the worker at the door tile but hidden (already inside the building).
-    // No occupancy — the building owns the door tile. The task system will assign
-    // the worker and the normal work cycle handles walking out via exitBuilding.
+    // No occupancy and no movement controller — the door tile may legitimately be
+    // occupied by another unit, and registering the hidden worker there would
+    // clobber that unit's occupancy entry. The task system will assign the worker
+    // and the normal work cycle handles walking out via exitBuilding.
     const door = getBuildingDoorPos(tile, entity.race, buildingType);
-    const workerEntity = state.addUnit(workerInfo.unitType, door, entity.player, { occupancy: false });
+    const workerEntity = state.addUnit(workerInfo.unitType, door, entity.player, { occupancy: false, hidden: true });
 
     eventBus.emit('unit:spawned', {
         unitId: workerEntity.id,

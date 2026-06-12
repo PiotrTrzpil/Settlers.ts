@@ -150,7 +150,12 @@ export class SettlerBuildingLocationManager implements ISettlerBuildingLocationM
         const door = getBuildingDoorPos(building, building.race, building.subType as BuildingType);
 
         // Push any unit blocking the door before placing the exiting settler
-        this.ctx.gameState.movement.pushUnitAt(door);
+        if (!this.ctx.gameState.movement.pushUnitAt(door)) {
+            log.warn(
+                `exitBuilding: could not clear door (${door.x},${door.y}) of building ${buildingId} ` +
+                    `for settler ${settlerId} — exiting onto an occupied tile`
+            );
+        }
 
         entity.x = door.x;
         entity.y = door.y;

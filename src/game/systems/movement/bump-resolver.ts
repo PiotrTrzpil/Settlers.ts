@@ -81,10 +81,14 @@ export class BumpResolver {
     }
 
     /**
-     * Push any unit standing at (x, y) to a free passable neighbor tile.
-     * Returns true if the tile is now free (was empty or push succeeded).
+     * Push any unit standing at (x, y) to a passable neighbor tile.
+     * If every neighbor is occupied, chain-pushes an idle neighbor occupant
+     * out of the way first (up to MAX_BUMP_DEPTH), so a crowded door can
+     * still be cleared. Returns true if the tile is now free (was empty or
+     * push succeeded). Used when a settler exits a building onto its door —
+     * a failed push there would leave two units sharing the door tile.
      */
-    pushUnitAt(tile: Tile): boolean {
+    pushUnitAt(tile: Tile, depth = 0): boolean {
         const key = tileKey(tile);
         const occupantId = this.deps.unitOccupancy.get(key);
         if (occupantId === undefined) {
@@ -97,6 +101,17 @@ export class BumpResolver {
         }
 
         const neighbors = getAllNeighbors(tile);
+        if (this.pushToFreeNeighbor(occupant, occupantId, neighbors)) {
+            return true;
+        }
+        if (depth >= MAX_BUMP_DEPTH) {
+            return false;
+        }
+        return this.pushThroughIdleNeighbor(occupant, occupantId, neighbors, depth);
+    }
+
+    /** Move the occupant to the first free passable neighbor tile. */
+    private pushToFreeNeighbor(occupant: MovementController, occupantId: number, neighbors: Tile[]): boolean {
         for (const n of neighbors) {
             if (!this.isTilePassableForBump(n)) {
                 continue;
@@ -104,18 +119,50 @@ export class BumpResolver {
             if (this.getUnitAt(tileKey(n), occupantId) !== undefined) {
                 continue;
             }
-
-            const oldKey = tileKey({ x: occupant.tileX, y: occupant.tileY });
-            if (this.deps.unitOccupancy.get(oldKey) === occupantId) {
-                this.deps.unitOccupancy.delete(oldKey);
-            }
-            occupant.handlePush(n.x, n.y);
-            this.deps.unitOccupancy.set(tileKey(n), occupantId);
-            this.deps.updatePositionFn(occupantId, n);
-            this.repathBumpedOccupant(occupant, n);
+            this.movePushedOccupant(occupant, occupantId, n);
             return true;
         }
         return false;
+    }
+
+    /** Chain-push an idle neighbor occupant out of the way, then move the occupant there. */
+    private pushThroughIdleNeighbor(
+        occupant: MovementController,
+        occupantId: number,
+        neighbors: Tile[],
+        depth: number
+    ): boolean {
+        for (const n of neighbors) {
+            if (!this.isTilePassableForBump(n)) {
+                continue;
+            }
+            const neighborOccupantId = this.getUnitAt(tileKey(n), occupantId);
+            if (neighborOccupantId === undefined) {
+                continue;
+            }
+            const neighborOccupant = this.deps.controllers.get(neighborOccupantId);
+            if (!neighborOccupant || neighborOccupant.busy || neighborOccupant.state !== 'idle') {
+                continue;
+            }
+            if (!this.pushUnitAt(n, depth + 1)) {
+                continue;
+            }
+            this.movePushedOccupant(occupant, occupantId, n);
+            return true;
+        }
+        return false;
+    }
+
+    /** Relocate a pushed occupant to the target tile, keeping occupancy in sync. */
+    private movePushedOccupant(occupant: MovementController, occupantId: number, target: Tile): void {
+        const oldKey = tileKey({ x: occupant.tileX, y: occupant.tileY });
+        if (this.deps.unitOccupancy.get(oldKey) === occupantId) {
+            this.deps.unitOccupancy.delete(oldKey);
+        }
+        occupant.handlePush(target.x, target.y);
+        this.deps.unitOccupancy.set(tileKey(target), occupantId);
+        this.deps.updatePositionFn(occupantId, target);
+        this.repathBumpedOccupant(occupant, target);
     }
 
     /**
