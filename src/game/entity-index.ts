@@ -118,6 +118,15 @@ export class EntityIndex {
         }
     }
 
+    /** Iterate entities matching type and subType across all players. */
+    *ofTypeAndSubType(type: EntityType, subType: number | string): IterableIterator<Entity> {
+        for (const entity of this.ofType(type)) {
+            if (entity.subType === subType) {
+                yield entity;
+            }
+        }
+    }
+
     // ── Query builder ──────────────────────────────────────────────
 
     /** Create a chainable EntityQuery, selecting the narrowest index available. */
@@ -127,6 +136,9 @@ export class EntityIndex {
         }
         if (player !== undefined) {
             return new EntityQuery(this.ofTypeAndPlayer(type, player));
+        }
+        if (subType !== undefined) {
+            return new EntityQuery(this.ofTypeAndSubType(type, subType));
         }
         return new EntityQuery(this.ofType(type));
     }
