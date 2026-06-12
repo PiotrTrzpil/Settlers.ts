@@ -5,13 +5,14 @@
  * Tests verify that:
  * - Building placement triggers inventory and service area creation
  * - Entity removal triggers proper cleanup
- * - Demands are tracked correctly via DemandQueue
+ * - Standing orders are tracked correctly via DemandLedger
  */
 
 import { describe, it, expect, afterEach } from 'vitest';
 import { BuildingType, UnitType } from '@/game/entity';
 import { EMaterialType } from '@/game/economy';
-import { DemandPriority } from '@/game/features/logistics/demand-queue';
+import { DemandPriority } from '@/game/features/logistics/demand-ledger';
+import { computeDeficit } from '@/game/features/logistics/demand-deficit';
 import { SlotKind } from '@/game/core/pile-kind';
 import { createSimulation, cleanupSimulation, type Simulation } from '../../helpers/test-simulation';
 import { installRealGameData } from '../../helpers/test-game-data';
@@ -89,29 +90,32 @@ describe('Carriers, Inventory & Service Areas (simulation)', { timeout: 5000 }, 
     // ---------------------------------------------------------------------------
 
     describe('Demand Creation', () => {
-        it('should create demand with correct attributes', () => {
+        it('should seed a standing order with correct attributes for a processing building', () => {
             sim = createSimulation();
             const sawmillId = sim.placeBuilding(BuildingType.Sawmill);
+            sim.runTicks(1); // let MaterialRequestSystem seed standing orders
 
-            const demand = sim.services.demandQueue.addDemand(sawmillId, EMaterialType.LOG, 4, DemandPriority.Normal);
+            const order = sim.services.demandLedger.getTarget(sawmillId, EMaterialType.LOG);
+            expect(order).toBeDefined();
+            expect(order!.materialType).toBe(EMaterialType.LOG);
+            expect(order!.priority).toBe(DemandPriority.Normal);
+            expect(order!.buildingId).toBe(sawmillId);
 
-            expect(demand).toBeDefined();
-            expect(demand.materialType).toBe(EMaterialType.LOG);
-            expect(demand.amount).toBe(4);
-            expect(demand.priority).toBe(DemandPriority.Normal);
-            expect(demand.buildingId).toBe(sawmillId);
+            // Capacity-fill order with empty input slots and no incoming jobs → positive deficit
+            const deficit = computeDeficit(order!, sim.services.inventoryManager, sim.services.jobStore);
+            expect(deficit).toBeGreaterThan(0);
         });
 
-        it('should track demand in sorted demands list', () => {
+        it('should track standing order in sorted entries list', () => {
             sim = createSimulation();
             const sawmillId = sim.placeBuilding(BuildingType.Sawmill);
+            sim.runTicks(1); // let MaterialRequestSystem seed standing orders
 
-            sim.services.demandQueue.addDemand(sawmillId, EMaterialType.LOG, 4, DemandPriority.Normal);
-
-            expect(sim.services.demandQueue.size).toBe(1);
-            const demands = sim.services.demandQueue.getSortedDemands();
-            expect(demands).toHaveLength(1);
-            expect(demands[0]!.materialType).toBe(EMaterialType.LOG);
+            expect(sim.services.demandLedger.size).toBe(1);
+            const entries = sim.services.demandLedger.getSortedEntries();
+            expect(entries).toHaveLength(1);
+            expect(entries[0]!.materialType).toBe(EMaterialType.LOG);
+            expect(entries[0]!.buildingId).toBe(sawmillId);
         });
     });
 

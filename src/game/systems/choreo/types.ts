@@ -174,8 +174,6 @@ export interface TransportData {
     sourcePos: Tile;
     /** Pre-resolved destination position (input pile / door for delivery). */
     destPos: Tile;
-    /** Target PileSlot ID at the destination (stable across inventory lifecycle). */
-    slotId: number;
     /** Lifecycle operations — closures over the specific TransportJobRecord, set by the job builder. */
     ops: TransportOps;
 }

@@ -6,14 +6,15 @@
  */
 
 import type { GameState } from '../../game-state';
-import type { DemandQueue, DemandEntry } from './demand-queue';
+import type { DemandLedger, DemandTarget } from './demand-ledger';
+import { computeDeficit } from './demand-deficit';
 import type { CarrierRegistry } from '../../systems/carrier-registry';
 import type { LogisticsDispatcher } from './logistics-dispatcher';
 import type { WorkerStateQuery } from '../settler-tasks';
 import type { BuildingInventoryManager } from '../../systems/inventory/building-inventory';
 import type { UnitReservationRegistry } from '../../systems/unit-reservation';
 import type { ConstructionSiteManager } from '../building-construction/construction-site-manager';
-import { DemandPriority } from './demand-queue';
+import { DemandPriority } from './demand-ledger';
 import { EMaterialType } from '../../economy/material-type';
 import { EntityType } from '../../entity';
 import { UnitType, UNIT_TYPE_CONFIG, isUnitTypeMilitary } from '../../core/unit-types';
@@ -30,7 +31,7 @@ import {
 /** All service references needed by snapshot functions. */
 export interface SnapshotConfig {
     gameState: GameState;
-    demandQueue: DemandQueue;
+    demandLedger: DemandLedger;
     carrierRegistry: CarrierRegistry;
     logisticsDispatcher: LogisticsDispatcher;
     workerStateQuery: WorkerStateQuery;
@@ -52,13 +53,15 @@ export interface LogisticsStats {
 }
 
 export interface DemandSummary {
-    id: number;
+    /** Stable display key: `${buildingId}:${material}`. */
+    id: string;
     buildingId: number;
     buildingType: string;
     material: string;
     materialType: number | string;
     priority: 'High' | 'Normal' | 'Low';
-    age: number;
+    /** Units still to order (derived shortfall of the standing order). */
+    deficit: number;
     reason: string | null;
 }
 
@@ -200,70 +203,62 @@ function isNonCarrierWorker(subType: UnitType): boolean {
     return subType !== UnitType.Carrier && !isUnitTypeMilitary(subType);
 }
 
-const PRIORITY_ORDER = { High: 0, Normal: 1, Low: 2 } as const;
-
 // ─── Core logistics snapshot functions ───────────────────────────────────────
 
 /**
- * Gather and summarize all demands from the demand queue for a player.
- * Optionally runs fulfillment diagnostics on demands.
+ * Gather and summarize all unsatisfied standing orders (deficit > 0) for a player.
+ * Optionally runs fulfillment diagnostics on them.
  */
 export function gatherDemands(
     config: SnapshotConfig,
     player: number,
     stats: LogisticsStats,
     options?: { limit?: number; diagnose?: boolean }
-): { demands: DemandSummary[]; rawDemands: DemandEntry[] } {
-    const { demandQueue, gameState } = config;
-    const now = demandQueue.getGameTime();
+): { demands: DemandSummary[]; rawDemands: DemandTarget[] } {
+    const { demandLedger, gameState, inventoryManager, logisticsDispatcher } = config;
     // eslint-disable-next-line no-restricted-syntax -- limit is an optional config field; absent means no limit (0)
     const limit = options?.limit ?? 0;
 
     const summaries: DemandSummary[] = [];
-    const rawDemands: DemandEntry[] = [];
+    const rawDemands: DemandTarget[] = [];
 
-    for (const demand of demandQueue.getAllDemands()) {
+    for (const entry of demandLedger.getSortedEntries()) {
         const building = gameState.getEntityOrThrow(
-            demand.buildingId,
+            entry.buildingId,
             'demand destination building in logistics snapshot'
         );
         if (building.player !== player) {
             continue;
         }
+        const deficit = computeDeficit(entry, inventoryManager, logisticsDispatcher.jobStore);
+        if (deficit <= 0) {
+            continue;
+        }
         summaries.push({
-            id: demand.id,
-            buildingId: demand.buildingId,
+            id: `${entry.buildingId}:${entry.materialType}`,
+            buildingId: entry.buildingId,
             buildingType: buildingTypeNameSafe(building.subType),
-            material: formatMaterial(demand.materialType),
-            materialType: demand.materialType,
-            priority: PRIORITY_NAMES[demand.priority],
-            age: Math.max(0, Math.floor(now - demand.timestamp)),
+            material: formatMaterial(entry.materialType),
+            materialType: entry.materialType,
+            priority: PRIORITY_NAMES[entry.priority],
+            deficit,
             reason: null,
         });
-        rawDemands.push(demand);
+        rawDemands.push(entry);
         stats.demandCount++;
     }
 
-    const indices = summaries.map((_, i) => i);
-    indices.sort((a, b) => {
-        const pd = PRIORITY_ORDER[summaries[a]!.priority] - PRIORITY_ORDER[summaries[b]!.priority];
-        return pd !== 0 ? pd : summaries[b]!.age - summaries[a]!.age;
-    });
-    const sortedSummaries = indices.map(i => summaries[i]!);
-    const sortedRaw = indices.map(i => rawDemands[i]!);
-
     if (options?.diagnose !== false) {
         const diagConfig = buildDiagConfig(config);
-        const diagLimit = limit > 0 ? Math.min(sortedRaw.length, limit) : sortedRaw.length;
+        const diagLimit = limit > 0 ? Math.min(rawDemands.length, limit) : rawDemands.length;
         for (let i = 0; i < diagLimit; i++) {
-            sortedSummaries[i]!.reason =
-                UNFULFILLED_REASON_LABELS[diagnoseUnfulfilledRequest(sortedRaw[i]!, diagConfig)];
+            summaries[i]!.reason = UNFULFILLED_REASON_LABELS[diagnoseUnfulfilledRequest(rawDemands[i]!, diagConfig)];
         }
     }
 
     return {
-        demands: applyLimit(sortedSummaries, limit),
-        rawDemands: applyLimit(sortedRaw, limit),
+        demands: applyLimit(summaries, limit),
+        rawDemands: applyLimit(rawDemands, limit),
     };
 }
 
@@ -275,7 +270,7 @@ function buildCarrierSummary(
 ): CarrierSummary {
     const carrying = entity.carrying;
     const activeJobId = workerStateQuery.getActiveJobId(id);
-    const job = logisticsDispatcher.jobStore.jobs.raw.get(id);
+    const job = logisticsDispatcher.jobStore.getActiveJobForCarrier(id);
 
     return {
         entityId: id,
@@ -345,13 +340,13 @@ export function gatherLogisticsSnapshot(
     const carriers = gatherCarriers(config, player, stats, { limit });
 
     // Count active jobs and stalled jobs from job store
-    for (const [carrierId, job] of config.logisticsDispatcher.jobStore.jobs.raw) {
-        const carrier = config.gameState.getEntityOrThrow(carrierId, 'carrier in active job store');
+    for (const job of config.logisticsDispatcher.jobStore.jobs.values()) {
+        const carrier = config.gameState.getEntityOrThrow(job.carrierId, 'carrier in active job store');
         if (carrier.player !== player) {
             continue;
         }
         stats.activeJobCount++;
-        if (config.demandQueue.getGameTime() - job.createdAt > STALL_THRESHOLD_SEC) {
+        if (config.demandLedger.getGameTime() - job.createdAt > STALL_THRESHOLD_SEC) {
             stats.stalledCount++;
         }
     }
@@ -535,14 +530,14 @@ export function gatherTransportJobs(
     const { gameState, logisticsDispatcher } = config;
     const result: TransportJobSummary[] = [];
 
-    for (const [carrierId, job] of logisticsDispatcher.jobStore.jobs.raw) {
-        const carrier = gameState.getEntityOrThrow(carrierId, 'carrier in transport job store');
+    for (const job of logisticsDispatcher.jobStore.jobs.values()) {
+        const carrier = gameState.getEntityOrThrow(job.carrierId, 'carrier in transport job store');
         if (carrier.player !== player) {
             continue;
         }
         result.push({
             id: job.id,
-            carrierId,
+            carrierId: job.carrierId,
             material: formatMaterial(job.material),
             phase: job.phase,
             sourceBuilding: job.sourceBuilding,

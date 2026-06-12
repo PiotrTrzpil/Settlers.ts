@@ -6,21 +6,15 @@
  *
  * A building's inventory = Map<slotId, PileSlot>.
  * Free piles are standalone PileSlots with kind='free' and buildingId=null.
+ *
+ * Slots hold no reservation state — material in motion is tracked entirely
+ * by TransportJobStore records; deliveries land in whichever slot has space
+ * at delivery time (depositDelivery).
  */
 
 import type { Tile } from '../../core/coordinates';
 import type { EMaterialType } from '../../economy/material-type';
 import type { SlotKind } from '../../core/pile-kind';
-
-/** A pending delivery reservation against a slot — tracks who reserved how much capacity. */
-export interface SlotReservation {
-    /** Globally unique job ID (entity.jobId). Primary key — unique per job, stable across save/load. */
-    readonly jobId: number;
-    /** Carrier entity ID (for restore: find which carrier owns this reservation). */
-    readonly carrierId: number;
-    /** Amount reserved. */
-    readonly amount: number;
-}
 
 /**
  * A single inventory-pile slot. Holds material data, pile entity reference,
@@ -43,10 +37,4 @@ export interface PileSlot {
     kind: SlotKind;
     /** Owning building entity ID. null for free piles. */
     buildingId: number | null;
-    /**
-     * Active delivery reservations — transport jobs that have been assigned to
-     * deposit into this slot but haven't delivered yet. Used by findSlot to
-     * avoid over-assigning capacity when multiple slots exist for one material.
-     */
-    reservations: SlotReservation[];
 }

@@ -26,7 +26,7 @@ function buildSnapshotConfig(game: Game): SnapshotConfig {
     const svc = game.services;
     return {
         gameState: game.state,
-        demandQueue: svc.demandQueue,
+        demandLedger: svc.demandLedger,
         carrierRegistry: svc.carrierRegistry,
         logisticsDispatcher: svc.logisticsDispatcher,
         workerStateQuery: svc.settlerTaskSystem,

@@ -3,8 +3,9 @@
  * piles (slots) per material type.
  *
  * Buildings needing >8 of a material get multiple input slots (each capped at 8).
- * Without slot-level reservation tracking, all transport jobs target the first slot,
- * causing overflow when it fills up while other slots remain empty.
+ * Carriers deposit at delivery time via depositDelivery, which fills matching
+ * Input slots across multiple piles; demand deficit accounting (target vs
+ * incoming jobs) prevents over-ordering while a slot fills up.
  */
 
 import { describe, it, expect, afterEach } from 'vitest';
@@ -77,7 +78,7 @@ describe('Multi-pile construction delivery', { timeout: 60_000 }, () => {
 
     it('castle construction completes without overflow with many concurrent carriers', () => {
         // 10 extra carriers = 12 total — more carriers than a single slot can hold,
-        // which would cause overflow without the reservation fix
+        // which would cause overflow without deficit accounting capping incoming jobs
         const { sim: s } = createCastleSite(10);
         sim = s;
 
@@ -109,8 +110,9 @@ describe('Multi-pile construction delivery', { timeout: 60_000 }, () => {
 
     it('no over-delivery when storage has excess materials', () => {
         // Excess supply + many carriers ensures all demands get fulfilled.
-        // Without the demand cap in processSite, builders consuming materials mid-delivery
-        // opens slot space that processSite mistakes for needing more deliveries.
+        // The ledger target is the site's remaining cost (delivered throughput),
+        // so slot space freed by builders consuming materials mid-delivery must
+        // not be mistaken for needing more deliveries.
         const s = createScenario.constructionSite(BuildingType.Castle, [], {
             mapWidth: 1024,
             mapHeight: 1024,
@@ -134,14 +136,16 @@ describe('Multi-pile construction delivery', { timeout: 60_000 }, () => {
             false
         );
 
-        // Verify no material was delivered more than its construction cost
+        // Verify deliveries stay bounded by construction cost: ledger targets are
+        // resynced on construction:materialDelivered, so the deficit never
+        // transiently inflates when a delivered job leaves the store.
         for (const cost of costs) {
             const delivered = deliveries.get(cost.material) ?? 0;
             expect(delivered, `${EMaterialType[cost.material]} delivered`).toBeLessThanOrEqual(cost.count);
         }
     });
 
-    it('slot reservations are cleaned up after construction completes', () => {
+    it('transport jobs and standing orders are cleaned up after construction completes', () => {
         const { sim: s } = createCastleSite(10);
         sim = s;
 
@@ -150,9 +154,7 @@ describe('Multi-pile construction delivery', { timeout: 60_000 }, () => {
             false
         );
 
-        const slots = sim.services.inventoryManager.getSlots(s.siteId);
-        for (const slot of slots) {
-            expect(slot.reservations).toHaveLength(0);
-        }
+        expect(sim.services.jobStore.getJobsForBuilding(s.siteId)).toHaveLength(0);
+        expect(sim.services.demandLedger.getTargetsForBuilding(s.siteId)).toHaveLength(0);
     });
 });

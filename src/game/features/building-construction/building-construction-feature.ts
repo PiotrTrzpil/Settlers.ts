@@ -13,7 +13,7 @@
 
 import type { FeatureDefinition, FeatureContext } from '../feature';
 import type { InventoryExports } from '../inventory';
-import type { DemandQueueExports } from '../logistics/demand-queue-feature';
+import type { DemandLedgerExports } from '../logistics/demand-ledger-feature';
 import type { TerrainData } from '../../terrain';
 import { ConstructionSiteManager } from './construction-site-manager';
 import { BuildingConstructionSystem } from './construction-system';
@@ -38,7 +38,7 @@ export const BuildingConstructionFeature: FeatureDefinition = {
 
     create(ctx: FeatureContext) {
         const { inventoryManager } = ctx.getFeature<InventoryExports>('inventory');
-        const { demandQueue, jobStore } = ctx.getFeature<DemandQueueExports>('logistics');
+        const { demandLedger } = ctx.getFeature<DemandLedgerExports>('logistics');
 
         const constructionSiteManager = new ConstructionSiteManager(ctx.eventBus, ctx.gameState.rng, inventoryManager);
 
@@ -57,9 +57,8 @@ export const BuildingConstructionFeature: FeatureDefinition = {
 
         const constructionRequestSystem = new ConstructionRequestSystem(
             constructionSiteManager,
-            demandQueue,
-            jobStore,
-            inventoryManager
+            demandLedger,
+            ctx.eventBus
         );
 
         // Create pile position resolver from XML game data (if loaded).
@@ -116,7 +115,10 @@ export const BuildingConstructionFeature: FeatureDefinition = {
             onRestoreComplete() {
                 constructionSystem.rebuildAfterRestore();
             },
-            destroy: () => buildingLifecycle.unregisterEvents(),
+            destroy: () => {
+                buildingLifecycle.unregisterEvents();
+                constructionRequestSystem.destroy();
+            },
         };
     },
 };

@@ -131,7 +131,7 @@ export function executeTransportPickup(
         }
 
         const { material, sourceBuildingId, amount: requestedAmount } = td;
-        const withdrawn = ctx.materialTransfer.pickUp(settler.id, sourceBuildingId, material, requestedAmount, true);
+        const withdrawn = ctx.materialTransfer.pickUpOutput(settler.id, sourceBuildingId, material, requestedAmount);
 
         if (withdrawn === 0) {
             log.warn(`Carrier ${settler.id}: pickup failed at building ${sourceBuildingId}`);
@@ -161,21 +161,22 @@ export function executeTransportPickup(
 }
 
 /**
- * Deposit material from the carrier into the targeted slot and handle overflow.
+ * Deposit material from the carrier into the destination building, resolving
+ * the landing slot(s) at delivery time (late slot binding — no reservation).
  *
- * Calls `inventoryManager.deposit(slotId, amount)` using the stable slot ID from transportData.
- * If the slot cannot fit all material (overflow), the remainder is dropped as
- * a free pile via `materialTransfer.drop` after adjusting entity.carrying.
+ * Calls `inventoryManager.depositDelivery(buildingId, material, amount)`.
+ * If the building cannot fit all material (overflow), the remainder is dropped
+ * as a free pile via `materialTransfer.drop` after adjusting entity.carrying.
  *
  * Returns the amount successfully deposited.
  */
-function depositIntoSlot(settler: Entity, slotId: number, ctx: TransportExecutorContext): number {
+function depositIntoBuilding(settler: Entity, buildingId: number, ctx: TransportExecutorContext): number {
     if (!settler.carrying) {
-        throw new Error(`TransportExecutors.depositIntoSlot: settler ${settler.id} is not carrying anything`);
+        throw new Error(`TransportExecutors.depositIntoBuilding: settler ${settler.id} is not carrying anything`);
     }
 
     const { material, amount } = settler.carrying;
-    const deposited = ctx.inventoryManager.deposit(slotId, amount);
+    const deposited = ctx.inventoryManager.depositDelivery(buildingId, material, amount);
 
     const overflow = amount - deposited;
     if (overflow > 0) {
@@ -228,10 +229,10 @@ export function executeTransportDeliver(
 
     if (result === TaskResult.DONE) {
         const td = requireTransportData(job, 'TRANSPORT_DELIVER');
-        const { destBuildingId, material, slotId } = td;
+        const { destBuildingId, material } = td;
 
         const amount = settler.carrying!.amount;
-        const deposited = depositIntoSlot(settler, slotId, ctx);
+        const deposited = depositIntoBuilding(settler, destBuildingId, ctx);
         td.ops.deliver();
 
         const overflow = amount - deposited;

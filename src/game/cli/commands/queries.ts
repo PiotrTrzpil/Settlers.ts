@@ -338,7 +338,7 @@ function buildJsScope(ctx: CliContext): Record<string, unknown> {
         territory: s.territoryManager,
         recruit: s.recruitSystem,
         logistics: s.logisticsDispatcher,
-        demands: s.demandQueue,
+        demands: s.demandLedger,
         carriers: s.carrierRegistry,
         storage: s.storageFilterManager,
         gameData: getGameDataLoader(),

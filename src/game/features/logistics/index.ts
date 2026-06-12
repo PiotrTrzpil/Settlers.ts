@@ -19,8 +19,12 @@ export {
     getTotalSupply,
 } from './resource-supply';
 
-// Demand queue (replaces RequestManager)
-export { DemandQueue, type DemandEntry, DemandPriority } from './demand-queue';
+// Demand ledger (declarative standing orders; replaces the ticket-based DemandQueue)
+export { DemandLedger, type DemandTarget, type SetTargetOptions, DemandPriority } from './demand-ledger';
+export { computeDeficit, deliverySpace } from './demand-deficit';
+
+// Travel cost (single distance metric for logistics decisions)
+export { travelCost } from './travel-cost';
 
 // Fulfillment matching
 export {
@@ -42,7 +46,7 @@ export {
 } from './fulfillment-diagnostics';
 
 // Transport job record + service (flat data + stateless lifecycle)
-export { TransportPhase, type TransportJobRecord } from './transport-job-record';
+export { TransportPhase, type TransportJobRecord, claimsSourceStock, isIncoming } from './transport-job-record';
 export * as TransportJobService from './transport-job-service';
 export type { TransportJobDeps } from './transport-job-service';
 
@@ -58,6 +62,7 @@ export {
     type CarrierAssignerConfig,
     type AssignmentSuccess,
     type JobAssigner,
+    type TransportDemand,
 } from './carrier-assigner';
 
 // Transport job builder (constructs ChoreoJobState for carrier transport)
@@ -107,5 +112,5 @@ export {
 } from './logistics-snapshot';
 
 // Feature definitions (self-registering via FeatureRegistry)
-export { DemandQueueFeature, type DemandQueueExports } from './demand-queue-feature';
+export { DemandLedgerFeature, type DemandLedgerExports } from './demand-ledger-feature';
 export { LogisticsDispatcherFeature, type LogisticsDispatcherExports } from './logistics-dispatcher-feature';

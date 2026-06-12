@@ -8,6 +8,7 @@ import { computed, type Ref } from 'vue';
 import type { Entity } from '@/game/entity';
 import { EntityType } from '@/game/entity';
 import { BuildingConstructionPhase } from '@/game/features/building-construction';
+import { computeDeficit } from '@/game/features/logistics';
 import { SlotKind } from '@/game/core/pile-kind';
 import type { Game } from '@/game/game';
 
@@ -76,7 +77,9 @@ export function useBuildingDebugInfo(
         const slots = svc.inventoryManager.getSlots(entity.id);
         const hasSlots = svc.inventoryManager.hasSlots(entity.id);
         const activeJobs = svc.logisticsDispatcher.jobStore.getJobsForBuilding(entity.id);
-        const demands = [...svc.demandQueue.getAllDemands()].filter(d => d.buildingId === entity.id);
+        const demands = svc.demandLedger
+            .getTargetsForBuilding(entity.id)
+            .filter(t => computeDeficit(t, svc.inventoryManager, svc.jobStore) > 0);
 
         // Construction info
         const isConstructing = site !== undefined && site.phase !== BuildingConstructionPhase.Completed;
@@ -95,7 +98,7 @@ export function useBuildingDebugInfo(
             }
         }
 
-        // Material demand info — derive from demand queue and active jobs
+        // Material demand info — derive from standing orders and active jobs
         const hasProduction = demands.length > 0 || activeJobs.length > 0 || hasSlots;
         const pendingInputs = demands.map(d => d.materialType);
 

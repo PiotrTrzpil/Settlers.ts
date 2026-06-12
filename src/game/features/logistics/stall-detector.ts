@@ -63,12 +63,12 @@ export class StallDetector {
     private checkProgress(): void {
         const activeCarriers = new Set<number>();
 
-        for (const [carrierId, job] of this.jobStore.jobs.raw) {
+        for (const job of this.jobStore.jobs.values()) {
             if (job.phase !== TransportPhase.Reserved && job.phase !== TransportPhase.PickedUp) {
                 continue;
             }
-            activeCarriers.add(carrierId);
-            this.checkCarrier(carrierId, job.id, job.material, job.destBuilding, job.phase);
+            activeCarriers.add(job.carrierId);
+            this.checkCarrier(job.carrierId, job.id, job.material, job.destBuilding, job.phase);
         }
 
         for (const carrierId of this.snapshots.keys()) {

@@ -34,7 +34,7 @@ import { TickScheduler } from './systems/tick-scheduler';
 import { WorkAreaFeature, type WorkAreaExports } from './features/work-areas/work-areas-feature';
 import { ProductionControlFeature, type ProductionControlExports } from './features/production-control';
 import { CarrierFeature, type CarrierFeatureExports } from './features/carriers';
-import { DemandQueueFeature, type DemandQueueExports } from './features/logistics';
+import { DemandLedgerFeature, type DemandLedgerExports } from './features/logistics';
 import { BuildingOverlayFeature, type BuildingOverlayFeatureExports } from './features/building-overlays';
 import { BuildingConstructionFeature, type BuildingConstructionExports } from './features/building-construction';
 import { MaterialRequestFeature } from './features/material-requests';
@@ -72,7 +72,7 @@ import { PioneerFeature } from './features/pioneer';
 import type { CarrierRegistry } from './features/carriers';
 import { BuildingInventoryManager, StorageFilterManager } from './systems/inventory';
 import type { BuildingPileRegistry } from './systems/inventory/building-pile-registry';
-import type { DemandQueue, TransportJobStore, LogisticsDispatcher } from './features/logistics';
+import type { DemandLedger, TransportJobStore, LogisticsDispatcher } from './features/logistics';
 import type { BuildingOverlayManager, OverlayRegistry } from './features/building-overlays';
 import type {
     ConstructionSiteManager,
@@ -103,7 +103,7 @@ export class GameServices {
     public readonly carrierRegistry: CarrierRegistry;
     public readonly inventoryManager: BuildingInventoryManager;
     public readonly storageFilterManager: StorageFilterManager;
-    public readonly demandQueue: DemandQueue;
+    public readonly demandLedger: DemandLedger;
     public readonly jobStore: TransportJobStore;
     public readonly buildingOverlayManager: BuildingOverlayManager;
     public readonly overlayRegistry: OverlayRegistry;
@@ -258,7 +258,7 @@ export class GameServices {
             WorkAreaFeature,
             ProductionControlFeature,
             CarrierFeature,
-            DemandQueueFeature,
+            DemandLedgerFeature,
             BuildingOverlayFeature,
             TreeFeature,
             StoneFeature,
@@ -292,8 +292,8 @@ export class GameServices {
 
         // 4. Extract commonly-accessed exports for external consumers.
         this.carrierRegistry = this.feat<CarrierFeatureExports>('carriers').carrierRegistry;
-        this.demandQueue = this.feat<DemandQueueExports>('logistics').demandQueue;
-        this.jobStore = this.feat<DemandQueueExports>('logistics').jobStore;
+        this.demandLedger = this.feat<DemandLedgerExports>('logistics').demandLedger;
+        this.jobStore = this.feat<DemandLedgerExports>('logistics').jobStore;
         const overlayExports = this.feat<BuildingOverlayFeatureExports>('building-overlays');
         this.buildingOverlayManager = overlayExports.buildingOverlayManager;
         this.overlayRegistry = overlayExports.overlayRegistry;

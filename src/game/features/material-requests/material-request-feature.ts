@@ -1,18 +1,18 @@
 /**
  * Material Request Feature - Self-registering feature module for material delivery demands.
  *
- * Creates transport demands for buildings that need input materials.
+ * Maintains standing orders (DemandLedger targets) for operational buildings.
  * Dependencies are accessed via the feature registry:
  * - building-construction: ConstructionSiteManager (checks construction status)
- * - inventory: BuildingInventoryManager (checks input slot levels)
- * - logistics: DemandQueue + TransportJobStore (manages delivery demands)
+ * - inventory: BuildingInventoryManager + StorageFilterManager (slot configs, import directions)
+ * - logistics: DemandLedger (standing orders)
  */
 
 import type { FeatureDefinition, FeatureContext } from '../feature';
 import { MaterialRequestSystem } from './material-request-system';
 import type { ConstructionSiteManager } from '../building-construction';
 import type { BuildingInventoryManager, StorageFilterManager } from '../inventory';
-import type { DemandQueueExports } from '../logistics/demand-queue-feature';
+import type { DemandLedgerExports } from '../logistics/demand-ledger-feature';
 
 export interface MaterialRequestExports {
     materialRequestSystem: MaterialRequestSystem;
@@ -30,15 +30,14 @@ export const MaterialRequestFeature: FeatureDefinition = {
             inventoryManager: BuildingInventoryManager;
             storageFilterManager: StorageFilterManager;
         }>('inventory');
-        const { demandQueue, jobStore } = ctx.getFeature<DemandQueueExports>('logistics');
+        const { demandLedger } = ctx.getFeature<DemandLedgerExports>('logistics');
 
         const system = new MaterialRequestSystem({
             gameState: ctx.gameState,
             eventBus: ctx.eventBus,
             constructionSiteManager,
             inventoryManager,
-            demandQueue,
-            jobStore,
+            demandLedger,
             storageFilterManager,
         });
 

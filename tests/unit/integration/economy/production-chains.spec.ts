@@ -260,9 +260,7 @@ describe('Economy – mine & smelting chains', { timeout: 5000 }, () => {
 
         const failures: string[] = [];
         sim.eventBus.on('carrier:assignmentFailed', e => {
-            failures.push(
-                `${e.reason} req=${e.requestId} src=${e.sourceBuilding} dst=${e.destBuilding} mat=${e.material}`
-            );
+            failures.push(`${e.reason} src=${e.sourceBuilding} dst=${e.destBuilding} mat=${e.material}`);
         });
 
         sim.placeBuilding(BuildingType.ResidenceSmall);

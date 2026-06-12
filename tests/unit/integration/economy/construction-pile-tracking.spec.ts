@@ -26,11 +26,16 @@ describe('Construction pile tracking (real game data)', { timeout: 60_000 }, () 
 
     /** Count StackedPile entities of a given material type linked to a building. */
     function countConstructionPiles(buildingId: number, material: EMaterialType): number {
-        return sim.state.entities.filter(e => {
-            if (e.type !== EntityType.StackedPile || e.subType !== material) return false;
-            const kind = sim.services.inventoryManager.getPileKind(e.id);
-            return kind?.kind === SlotKind.Input && 'buildingId' in kind && kind.buildingId === buildingId;
-        }).length;
+        // Note: subType must be filtered in the predicate — EntityIndex.query
+        // silently ignores subType when player is undefined.
+        return sim.state.entityIndex
+            .query(EntityType.StackedPile)
+            .filter(e => {
+                if (e.subType !== material) return false;
+                const kind = sim.services.inventoryManager.getPileKind(e.id);
+                return kind.kind === SlotKind.Input && kind.buildingId === buildingId;
+            })
+            .count();
     }
 
     it('each material delivery creates or updates pile, piles survive until completion', () => {

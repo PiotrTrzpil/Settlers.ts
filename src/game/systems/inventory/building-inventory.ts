@@ -39,6 +39,7 @@ import {
 import { InventoryThroughputTracker } from './building-inventory-throughput';
 import {
     depositInput as depositInputFn,
+    depositDelivery as depositDeliveryFn,
     depositOutput as depositOutputFn,
     withdrawInput as withdrawInputFn,
     withdrawOutput as withdrawOutputFn,
@@ -387,6 +388,10 @@ export class BuildingInventoryManager {
     depositInput(buildingId: number, material: EMaterialType, amount: number): number {
         return depositInputFn(this, buildingId, material, amount);
     }
+    /** Deposit a carrier delivery — fills input/storage slots, claiming free storage slots as needed. */
+    depositDelivery(buildingId: number, material: EMaterialType, amount: number): number {
+        return depositDeliveryFn(this, buildingId, material, amount);
+    }
     depositOutput(buildingId: number, material: EMaterialType, amount: number): number {
         return depositOutputFn(this, buildingId, material, amount);
     }
@@ -432,53 +437,6 @@ export class BuildingInventoryManager {
         return getSinksNeedingInputFn(this.inventorySlots, this.slotStore, material, minSpace);
     }
 
-    /**
-     * Reserve capacity in a slot for an in-flight transport job.
-     * Called when a transport job is activated (carrier assigned to deliver here).
-     * Keyed by jobId (entity.jobId) — globally unique and persisted across save/load.
-     */
-    reserveSlot(slotId: number, jobId: number, carrierId: number, amount: number): void {
-        const slot = this.getSlotOrThrow(slotId, 'reserveSlot');
-        slot.reservations.push({ jobId, carrierId, amount });
-    }
-
-    /**
-     * Release a reservation from a slot (delivery complete or job cancelled).
-     * No-op if the jobId is not found (idempotent for cancel-after-deliver).
-     */
-    unreserveSlot(slotId: number, jobId: number): void {
-        const slot = this.slotStore.get(slotId);
-        if (!slot) {
-            // Slot may have been destroyed (building removed) — safe to ignore.
-            return;
-        }
-        const idx = slot.reservations.findIndex(r => r.jobId === jobId);
-        if (idx !== -1) {
-            slot.reservations.splice(idx, 1);
-        }
-    }
-
-    /** Find the slot reserved by a carrier. Linear scan — only used on restore. */
-    findReservationByCarrier(carrierId: number): { slotId: number; slot: PileSlot } | undefined {
-        for (const slot of this.slotStore.values()) {
-            if (slot.reservations.some(r => r.carrierId === carrierId)) {
-                return { slotId: slot.id, slot };
-            }
-        }
-        return undefined;
-    }
-
-    /** Remove slot reservations where the predicate returns false. Used for post-restore cleanup. */
-    removeOrphanedReservations(isValidReservation: (jobId: number) => boolean): void {
-        for (const slot of this.slotStore.values()) {
-            for (let i = slot.reservations.length - 1; i >= 0; i--) {
-                if (!isValidReservation(slot.reservations[i]!.jobId)) {
-                    slot.reservations.splice(i, 1);
-                }
-            }
-        }
-    }
-
     hasSlots(buildingId: number): boolean {
         return this.inventorySlots.has(buildingId);
     }
@@ -511,7 +469,6 @@ export class BuildingInventoryManager {
             entityId,
             kind: SlotKind.Free,
             buildingId: entityId, // use pile entity ID as "building" for output queries
-            reservations: [],
         };
         this.slotStore.set(slotId, slot);
         this.getInventorySlotSet(entityId).add(slotId);
@@ -531,8 +488,6 @@ export class BuildingInventoryManager {
         this.inventorySlots.clear();
         this._entityIndex.clear();
         for (const slot of this.slotStore.values()) {
-            // Ensure reservations array exists (missing on slots from older snapshots)
-            (slot as { reservations?: unknown }).reservations ??= [];
             if (slot.buildingId !== null) {
                 this.getInventorySlotSet(slot.buildingId).add(slot.id);
             }
@@ -559,7 +514,6 @@ export class BuildingInventoryManager {
             entityId: null,
             kind,
             buildingId,
-            reservations: [],
         };
         this.slotStore.set(slotId, slot);
         this.getInventorySlotSet(buildingId).add(slotId);

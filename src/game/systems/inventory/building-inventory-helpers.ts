@@ -63,11 +63,7 @@ export function buildPileKind(slot: PileSlot): PileKind {
  * Updates slot.entityId in place.
  * playerNumber must be the owning player (from the building entity).
  */
-export function spawnPileEntity(
-    slot: PileSlot,
-    playerNumber: number,
-    executeCommand: ExecuteCommand
-): void {
+export function spawnPileEntity(slot: PileSlot, playerNumber: number, executeCommand: ExecuteCommand): void {
     const result = executeCommand({
         type: 'spawn_pile',
         materialType: slot.materialType,
@@ -205,15 +201,6 @@ export function requireOutputSlot(
 
 type SlotLookup = { get(id: number): PileSlot | undefined };
 
-/** Current amount + reserved (in-flight) amount. Used for capacity checks. */
-export function effectiveAmount(slot: PileSlot): number {
-    let reserved = 0;
-    for (const r of slot.reservations) {
-        reserved += r.amount;
-    }
-    return slot.currentAmount + reserved;
-}
-
 // ── Bulk query helpers ──────────────────────────────────────────────────────
 
 export function getSourcesWithOutput(
@@ -315,7 +302,7 @@ export function findSlotByKind(
         if (!slot) {
             throw new Error(`Slot ${id} not found in slotStore [findSlotByKind]`);
         }
-        if (slot.materialType === material && slot.kind === resolvedKind && effectiveAmount(slot) < slot.maxCapacity) {
+        if (slot.materialType === material && slot.kind === resolvedKind && slot.currentAmount < slot.maxCapacity) {
             return slot;
         }
     }

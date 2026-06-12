@@ -2,7 +2,9 @@
  * MaterialTransfer — Unified material movement & conservation.
  *
  * Single service that owns all cross-container material movement:
- * produce, pickUp, deliver, drop. External code MUST NOT write to
+ * produce, pickUpOutput/pickUpInput, drop. Building deposits go through
+ * BuildingInventoryManager (depositDelivery for carriers, depositOutput for
+ * workers). External code MUST NOT write to
  * entity.carrying directly — only MaterialTransfer sets/clears it.
  *
  * Safety net: onEntityRemoved drops carried material as a free pile
@@ -48,70 +50,35 @@ export class MaterialTransfer {
     }
 
     /**
-     * Transfer material from a building inventory slot to a carrier.
-     * Withdraws from inventory + sets entity.carrying atomically.
-     *
-     * @param reserved - true: use withdrawReservedOutput (carrier transport)
-     *                   false: use withdrawInput (worker pickup)
+     * Carrier transport pickup: withdraw from the source building's
+     * output/storage/free slots + set entity.carrying atomically.
      * @returns Amount picked up (0 = failed).
      */
-    pickUp(
-        carrierId: number,
-        fromBuilding: number,
-        material: EMaterialType,
-        amount: number,
-        reserved: boolean
-    ): number {
-        const entity = this.gameState.getEntityOrThrow(carrierId, 'MaterialTransfer.pickUp');
-
-        const withdrawn = reserved
-            ? this.inventoryManager.withdrawOutput(fromBuilding, material, amount)
-            : this.inventoryManager.withdrawInput(fromBuilding, material, amount);
-
-        if (withdrawn === 0) {
-            return 0;
-        }
-
-        setCarrying(entity, material, withdrawn);
-        return withdrawn;
+    pickUpOutput(carrierId: number, fromBuilding: number, material: EMaterialType, amount: number): number {
+        return this.withdrawOntoCarrier(carrierId, material, () =>
+            this.inventoryManager.withdrawOutput(fromBuilding, material, amount)
+        );
     }
 
     /**
-     * Transfer material from a carrier to a building inventory slot.
-     * Deposits into inventory + clears entity.carrying atomically.
-     *
-     * If the destination cannot accept all material, the remainder is
-     * dropped as a free pile (no material is ever lost).
-     *
-     * @param slotType - 'input': depositInput (carrier delivery)
-     *                   'output': depositOutput (worker PUT_GOOD)
-     * @returns Amount deposited.
+     * Worker fetch: withdraw from the building's input slots (production
+     * inputs consumed by the worker) + set entity.carrying atomically.
+     * @returns Amount picked up (0 = failed).
      */
-    deliver(carrierId: number, toBuilding: number, slotType: 'input' | 'output'): number {
-        const entity = this.gameState.getEntityOrThrow(carrierId, 'MaterialTransfer.deliver');
-        if (!entity.carrying) {
-            throw new Error(`MaterialTransfer.deliver: entity ${carrierId} is not carrying anything`);
+    pickUpInput(carrierId: number, fromBuilding: number, material: EMaterialType, amount: number): number {
+        return this.withdrawOntoCarrier(carrierId, material, () =>
+            this.inventoryManager.withdrawInput(fromBuilding, material, amount)
+        );
+    }
+
+    private withdrawOntoCarrier(carrierId: number, material: EMaterialType, withdraw: () => number): number {
+        const entity = this.gameState.getEntityOrThrow(carrierId, 'MaterialTransfer.pickUp');
+        const withdrawn = withdraw();
+        if (withdrawn === 0) {
+            return 0;
         }
-
-        const { material, amount } = entity.carrying;
-
-        const deposited =
-            slotType === 'input'
-                ? this.inventoryManager.depositInput(toBuilding, material, amount)
-                : this.inventoryManager.depositOutput(toBuilding, material, amount);
-
-        clearCarrying(entity);
-
-        // Drop overflow as a free pile — never lose material
-        const overflow = amount - deposited;
-        if (overflow > 0) {
-            log.warn(
-                `deliver: ${overflow} of material ${material} overflow at building ${toBuilding}, dropping as free pile`
-            );
-            this.placePileNear(entity, material, overflow);
-        }
-
-        return deposited;
+        setCarrying(entity, material, withdrawn);
+        return withdrawn;
     }
 
     /**

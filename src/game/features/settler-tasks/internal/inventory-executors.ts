@@ -141,7 +141,7 @@ export const executeGetGood: InventoryExecutorFn = (
         const material = requireMaterial(node, settler.id);
         const buildingId = requireHomeBuilding(settler, ctx);
 
-        const withdrawn = ctx.materialTransfer.pickUp(settler.id, buildingId, material, 1, false);
+        const withdrawn = ctx.materialTransfer.pickUpInput(settler.id, buildingId, material, 1);
         if (withdrawn === 0) {
             log.warn(
                 `GET_GOOD: settler ${settler.id} — building ${buildingId} has no ` + `${material} in input inventory`
@@ -277,7 +277,7 @@ export const executeLoadGood: InventoryExecutorFn = (
     const material = requireMaterial(node, settler.id);
     const buildingId = requireHomeBuilding(settler, ctx);
 
-    const withdrawn = ctx.materialTransfer.pickUp(settler.id, buildingId, material, 1, false);
+    const withdrawn = ctx.materialTransfer.pickUpInput(settler.id, buildingId, material, 1);
     if (withdrawn === 0) {
         log.warn(`LOAD_GOOD: settler ${settler.id} — building ${buildingId} has no ${material} in input inventory`);
         return TaskResult.FAILED;

@@ -5,7 +5,7 @@
  * distance optimization.
  */
 
-import { hexDistance } from '../../systems/hex-directions';
+import { travelCost } from './travel-cost';
 import type { GameState } from '../../game-state';
 import type { EMaterialType } from '../../economy/material-type';
 import { SlotKind } from '../../core/pile-kind';
@@ -175,7 +175,7 @@ function* iterateMatchCandidates(
             supply.buildingId,
             'supply source building in fulfillment matching'
         );
-        const distance = hexDistance(sourceBuilding.x, sourceBuilding.y, destBuilding.x, destBuilding.y);
+        const distance = travelCost(sourceBuilding.x, sourceBuilding.y, destBuilding.x, destBuilding.y);
 
         yield { buildingId: supply.buildingId, effectiveAmount, distance };
     }
@@ -329,7 +329,7 @@ export function estimateFulfillmentDistance(
             continue;
         }
 
-        const distance = hexDistance(sourceBuilding.x, sourceBuilding.y, destBuilding.x, destBuilding.y);
+        const distance = travelCost(sourceBuilding.x, sourceBuilding.y, destBuilding.x, destBuilding.y);
 
         if (distance < minDistance) {
             minDistance = distance;

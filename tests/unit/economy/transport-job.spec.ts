@@ -1,263 +1,319 @@
 // @vitest-environment jsdom
 /**
  * Unit tests for TransportJobService — stateless lifecycle operations
- * for TransportJobRecord (job store queries, demand consumption, and inventory operations).
+ * for TransportJobRecord (supply accounting, queued activation, phase
+ * transitions, terminal removal, and carrier jobId clearing semantics).
  */
 
 import { describe, it, expect, beforeEach } from 'vitest';
 import * as TransportJobService from '@/game/features/logistics/transport-job-service';
-import { TransportPhase, type TransportJobRecord } from '@/game/features/logistics/transport-job-record';
-import { DemandQueue, DemandPriority } from '@/game/features/logistics/demand-queue';
+import type { TransportJobDeps } from '@/game/features/logistics/transport-job-service';
+import { TransportPhase } from '@/game/features/logistics/transport-job-record';
+import { DemandLedger } from '@/game/features/logistics/demand-ledger';
 import { TransportJobStore } from '@/game/features/logistics/transport-job-store';
 import { EMaterialType } from '@/game/economy';
 import type { BuildingInventoryManager } from '@/game/features/inventory';
 import { EventBus } from '@/game/event-bus';
-import type { TransportJobDeps } from '@/game/features/logistics/transport-job-service';
-import { EntityType } from '@/game/entity';
 import type { GameState } from '@/game/game-state';
 
 // ─── Minimal BuildingInventoryManager stub ──────────────────────────
+// activate() only reads getOutputAmount(); everything else (withdrawal,
+// deposit) is handled by the choreography, outside the service.
 
-function createInventoryStub(outputAmount = 5) {
-    const slots = new Map<string, { current: number }>();
-
-    function key(buildingId: number, material: EMaterialType) {
-        return `${buildingId}:${material}`;
-    }
-
-    function getOrCreate(buildingId: number, material: EMaterialType) {
-        const k = key(buildingId, material);
-        if (!slots.has(k)) {
-            slots.set(k, { current: outputAmount });
-        }
-        return slots.get(k)!;
-    }
-
+function createInventoryStub(outputAmount: number) {
     return {
-        getOutputAmount(buildingId: number, material: EMaterialType): number {
-            return getOrCreate(buildingId, material).current;
+        getOutputAmount(_buildingId: number, _material: EMaterialType): number {
+            return outputAmount;
         },
-        withdrawOutput(buildingId: number, material: EMaterialType, amount: number): void {
-            const slot = getOrCreate(buildingId, material);
-            slot.current -= amount;
-        },
-        getSourcesWithOutput: () => [],
-        findSlot: (_buildingId: number, _material: EMaterialType) => ({ id: 1 }),
-        findSlotWithSpace: (_buildingId: number, _material: EMaterialType) => ({
-            slot: { id: 1, currentAmount: 0, maxCapacity: 8 },
-            slotId: 1,
-        }),
-        setSlotMaterial: () => {},
-        reserveSlot: () => {},
-        unreserveSlot: () => {},
-        _slots: slots,
     };
 }
 
-/** Minimal GameState stub — destination buildings are regular (non-storage) buildings. */
+// ─── Minimal GameState stub ─────────────────────────────────────────
+// Tracks carrier entities so cancel()'s clearJobId mutation is observable.
+
+interface CarrierStub {
+    id: number;
+    jobId?: number;
+}
+
 function createGameStateStub() {
     let nextJobId = 1;
+    const carriers = new Map<number, CarrierStub>();
     return {
-        getEntity: (id: number) => ({ id, type: EntityType.Building, subType: 0 }),
-        getEntityOrThrow: (id: number) => ({ id, type: EntityType.Building, subType: 0 }),
+        carriers,
+        addCarrier(id: number): CarrierStub {
+            const carrier: CarrierStub = { id };
+            carriers.set(id, carrier);
+            return carrier;
+        },
+        getEntity: (id: number) => carriers.get(id),
         allocateJobId: () => nextJobId++,
     };
 }
 
-// ─── Test setup ─────────────────────────────────────────────────────
+// ─── Test setup (module scope — the top-level beforeEach applies to all
+// describes in this file, keeping each describe under the function-size cap) ──
 
-describe('TransportJobService', () => {
-    let demandQueue: DemandQueue;
-    let jobStore: TransportJobStore;
-    let inventoryManager: ReturnType<typeof createInventoryStub>;
-    let eventBus: EventBus;
-    let deps: TransportJobDeps;
+let demandLedger: DemandLedger;
+let jobStore: TransportJobStore;
+let eventBus: EventBus;
+let gameState: ReturnType<typeof createGameStateStub>;
+let deps: TransportJobDeps;
 
-    const SOURCE = 100;
-    const DEST = 200;
-    const CARRIER = 1;
-    const MATERIAL = EMaterialType.LOG;
+const SOURCE = 100;
+const DEST = 200;
+const CARRIER = 1;
+const MATERIAL = EMaterialType.LOG;
 
-    beforeEach(() => {
-        jobStore = new TransportJobStore();
-        eventBus = new EventBus();
-        demandQueue = new DemandQueue(eventBus);
-        inventoryManager = createInventoryStub(5);
-        deps = {
-            jobStore,
-            demandQueue,
-            eventBus,
-            inventoryManager: inventoryManager as unknown as BuildingInventoryManager,
-            gameState: createGameStateStub() as unknown as GameState,
-        };
+function makeDeps(outputAmount: number): TransportJobDeps {
+    return {
+        jobStore,
+        demandLedger,
+        eventBus,
+        inventoryManager: createInventoryStub(outputAmount) as unknown as BuildingInventoryManager,
+        gameState: gameState as unknown as GameState,
+    };
+}
+
+beforeEach(() => {
+    jobStore = new TransportJobStore();
+    eventBus = new EventBus();
+    demandLedger = new DemandLedger();
+    gameState = createGameStateStub();
+    gameState.addCarrier(CARRIER);
+    deps = makeDeps(5);
+});
+
+function activate(amount = 1, carrierId = CARRIER, options?: { queued?: boolean }) {
+    return TransportJobService.activate(SOURCE, DEST, MATERIAL, amount, carrierId, deps, options);
+}
+
+// ─── activate ───────────────────────────────────────────────────────
+
+describe('TransportJobService.activate', () => {
+    it('creates a Reserved record in the store that claims source stock', () => {
+        const record = activate();
+
+        expect(record).not.toBeNull();
+        expect(record!.phase).toBe(TransportPhase.Reserved);
+        expect(record!.sourceBuilding).toBe(SOURCE);
+        expect(record!.destBuilding).toBe(DEST);
+        expect(record!.material).toBe(MATERIAL);
+        expect(record!.amount).toBe(1);
+        expect(record!.carrierId).toBe(CARRIER);
+
+        expect(jobStore.get(record!.id)).toBe(record);
+        expect(jobStore.getActiveJobForCarrier(CARRIER)).toBe(record);
+        expect(jobStore.getReservedAmount(SOURCE, MATERIAL)).toBe(1);
     });
 
-    function addDemand() {
-        return demandQueue.addDemand(DEST, MATERIAL, 1, DemandPriority.Normal);
-    }
+    it('returns null if inventory supply is insufficient', () => {
+        deps = makeDeps(0);
 
-    function createRecord(demand = addDemand()): TransportJobRecord | null {
-        return TransportJobService.activate(demand.id, SOURCE, DEST, MATERIAL, 1, CARRIER, deps);
-    }
-
-    // ─── activate ───────────────────────────────────────────────────
-
-    describe('activate', () => {
-        it('creates job record at Reserved phase and consumes demand', () => {
-            const demand = addDemand();
-            const record = createRecord(demand);
-
-            expect(record).not.toBeNull();
-            expect(record!.phase).toBe(TransportPhase.Reserved);
-            expect(record!.sourceBuilding).toBe(SOURCE);
-            expect(record!.destBuilding).toBe(DEST);
-            expect(record!.material).toBe(MATERIAL);
-            expect(record!.amount).toBe(1);
-            expect(record!.demandId).toBe(demand.id);
-
-            // Demand should be consumed
-            expect(demandQueue.getDemand(demand.id)).toBeUndefined();
-
-            // Job should be in the store
-            expect(jobStore.jobs.get(CARRIER)).toBe(record);
-            expect(jobStore.getReservedAmount(SOURCE, MATERIAL)).toBe(1);
-        });
-
-        it('returns null if inventory supply is insufficient', () => {
-            inventoryManager = createInventoryStub(0);
-            deps = {
-                jobStore,
-                demandQueue,
-                eventBus,
-                inventoryManager: inventoryManager as unknown as BuildingInventoryManager,
-                gameState: createGameStateStub() as unknown as GameState,
-            };
-
-            const demand = addDemand();
-            const record = TransportJobService.activate(demand.id, SOURCE, DEST, MATERIAL, 1, CARRIER, deps);
-
-            expect(record).toBeNull();
-            // Demand should still be in the queue (not consumed)
-            expect(demandQueue.getDemand(demand.id)).toBeDefined();
-        });
-
-        it('returns null if all inventory is already reserved by another job', () => {
-            // Pre-fill with a reservation for the full amount
-            const existingRecord: TransportJobRecord = {
-                id: 999,
-                demandId: 999,
-                sourceBuilding: SOURCE,
-                destBuilding: 201,
-                material: MATERIAL,
-                amount: 5,
-                carrierId: 99,
-                slotId: 0,
-                phase: TransportPhase.Reserved,
-                createdAt: 0,
-            };
-            jobStore.jobs.set(99, existingRecord);
-
-            const demand = addDemand();
-            const record = TransportJobService.activate(demand.id, SOURCE, DEST, MATERIAL, 1, CARRIER, deps);
-
-            expect(record).toBeNull();
-        });
+        expect(activate()).toBeNull();
+        expect(jobStore.getReservedAmount(SOURCE, MATERIAL)).toBe(0);
     });
 
-    // ─── pickUp ─────────────────────────────────────────────────────
+    it('returns null if all supply is already reserved by another job', () => {
+        const first = activate(5, 99);
+        expect(first).not.toBeNull();
 
-    describe('pickUp', () => {
-        it('transitions to picked-up phase (withdrawal handled by choreography)', () => {
-            const record = createRecord()!;
-
-            TransportJobService.pickUp(record, deps);
-
-            expect(record.phase).toBe(TransportPhase.PickedUp);
-            // Reservation is gone (phase changed from Reserved)
-            expect(jobStore.getReservedAmount(SOURCE, MATERIAL)).toBe(0);
-            // Inventory is NOT reduced here — the choreography handles withdrawal via MaterialTransfer.pickUp()
-            expect(inventoryManager.getOutputAmount(SOURCE, MATERIAL)).toBe(5);
-        });
-
-        it('throws if called when not Reserved', () => {
-            const record = createRecord()!;
-            TransportJobService.pickUp(record, deps);
-
-            expect(() => TransportJobService.pickUp(record, deps)).toThrow(/picked-up/);
-        });
-
-        it('throws if called when cancelled', () => {
-            const record = createRecord()!;
-            TransportJobService.cancel(record, 'cancelled', deps);
-
-            expect(() => TransportJobService.pickUp(record, deps)).toThrow(/cancelled/);
-        });
+        expect(activate(1)).toBeNull();
     });
 
-    // ─── deliver ────────────────────────────────────────────────────
+    it('counts both Queued and Reserved jobs against available supply', () => {
+        // Supply is 5: a Reserved 3 + a Queued 2 consume all of it.
+        expect(activate(3, 90)).not.toBeNull();
+        expect(activate(2, 91, { queued: true })).not.toBeNull();
 
-    describe('deliver', () => {
-        it('transitions to Delivered phase after pickup', () => {
-            const demand = addDemand();
-            const record = createRecord(demand)!;
-            TransportJobService.pickUp(record, deps);
-
-            TransportJobService.deliver(record, deps);
-
-            expect(record.phase).toBe(TransportPhase.Delivered);
-        });
-
-        it('throws if called when still Reserved (not picked up)', () => {
-            const record = createRecord()!;
-
-            expect(() => TransportJobService.deliver(record, deps)).toThrow(/reserved/);
-        });
-
-        it('throws if called when cancelled', () => {
-            const record = createRecord()!;
-            TransportJobService.cancel(record, 'cancelled', deps);
-
-            expect(() => TransportJobService.deliver(record, deps)).toThrow(/cancelled/);
-        });
+        expect(jobStore.getReservedAmount(SOURCE, MATERIAL)).toBe(5);
+        expect(jobStore.getAvailableSupply(SOURCE, MATERIAL, 5)).toBe(0);
+        expect(activate(1)).toBeNull();
     });
 
-    // ─── cancel ─────────────────────────────────────────────────────
+    it('creates a Queued follow-up record when options.queued is set', () => {
+        const active = activate(1)!;
+        const queued = activate(1, CARRIER, { queued: true });
 
-    describe('cancel', () => {
-        it('transitions to Cancelled phase and releases reservation when Reserved', () => {
-            const record = createRecord()!;
+        expect(queued).not.toBeNull();
+        expect(queued!.phase).toBe(TransportPhase.Queued);
+        expect(jobStore.getQueuedJobForCarrier(CARRIER)).toBe(queued);
+        expect(jobStore.getActiveJobForCarrier(CARRIER)).toBe(active);
+    });
+});
 
-            TransportJobService.cancel(record, 'cancelled', deps);
+// ─── promoteQueued ──────────────────────────────────────────────────
 
-            expect(record.phase).toBe(TransportPhase.Cancelled);
-            // Reservation is released (no Reserved jobs in store)
-            expect(jobStore.getReservedAmount(SOURCE, MATERIAL)).toBe(0);
-        });
+describe('TransportJobService.promoteQueued', () => {
+    it('promotes a Queued record to Reserved and reindexes it', () => {
+        const record = activate(1, CARRIER, { queued: true })!;
 
-        it('transitions to Cancelled phase when PickedUp (no reservation to release)', () => {
-            const record = createRecord()!;
-            TransportJobService.pickUp(record, deps);
+        TransportJobService.promoteQueued(record, deps);
 
-            TransportJobService.cancel(record, 'cancelled', deps);
+        expect(record.phase).toBe(TransportPhase.Reserved);
+        expect(jobStore.getActiveJobForCarrier(CARRIER)).toBe(record);
+        expect(jobStore.getQueuedJobForCarrier(CARRIER)).toBeUndefined();
+        expect([...jobStore.byPhase.get(TransportPhase.Queued)]).toHaveLength(0);
+        expect([...jobStore.byPhase.get(TransportPhase.Reserved)]).toEqual([record.id]);
+    });
 
-            expect(record.phase).toBe(TransportPhase.Cancelled);
-        });
+    it('throws if the record is not Queued', () => {
+        const record = activate()!;
 
-        it('is a no-op if already cancelled', () => {
-            const record = createRecord()!;
-            TransportJobService.cancel(record, 'cancelled', deps);
-            TransportJobService.cancel(record, 'cancelled', deps); // second call should be fine
+        expect(() => TransportJobService.promoteQueued(record, deps)).toThrow(/reserved/);
+    });
+});
 
-            expect(record.phase).toBe(TransportPhase.Cancelled);
-        });
+// ─── pickUp ─────────────────────────────────────────────────────────
 
-        it('is a no-op if already delivered', () => {
-            const record = createRecord()!;
-            TransportJobService.pickUp(record, deps);
-            TransportJobService.deliver(record, deps);
-            TransportJobService.cancel(record, 'cancelled', deps); // should be fine
+describe('TransportJobService.pickUp', () => {
+    it('moves Reserved → PickedUp: stock claim released, amount now in flight', () => {
+        const record = activate()!;
 
-            expect(record.phase).toBe(TransportPhase.Delivered);
-        });
+        TransportJobService.pickUp(record, deps);
+
+        expect(record.phase).toBe(TransportPhase.PickedUp);
+        expect(jobStore.getReservedAmount(SOURCE, MATERIAL)).toBe(0);
+        expect(jobStore.getInFlightAmount(DEST, MATERIAL)).toBe(1);
+    });
+
+    it('throws if called when already PickedUp', () => {
+        const record = activate()!;
+        TransportJobService.pickUp(record, deps);
+
+        expect(() => TransportJobService.pickUp(record, deps)).toThrow(/picked-up/);
+    });
+
+    it('throws if called on a Queued record', () => {
+        const record = activate(1, CARRIER, { queued: true })!;
+
+        expect(() => TransportJobService.pickUp(record, deps)).toThrow(/queued/);
+    });
+
+    it('throws if called when cancelled', () => {
+        const record = activate()!;
+        TransportJobService.cancel(record, 'test', deps);
+
+        expect(() => TransportJobService.pickUp(record, deps)).toThrow(/cancelled/);
+    });
+});
+
+// ─── deliver ────────────────────────────────────────────────────────
+
+describe('TransportJobService.deliver', () => {
+    it('removes the record from the store and emits logistics:demandFulfilled', () => {
+        const fulfilled: { buildingId: number; materialType: EMaterialType }[] = [];
+        eventBus.on('logistics:demandFulfilled', payload => fulfilled.push(payload));
+
+        const record = activate()!;
+        TransportJobService.pickUp(record, deps);
+        TransportJobService.deliver(record, deps);
+
+        expect(record.phase).toBe(TransportPhase.Delivered);
+        expect(jobStore.get(record.id)).toBeUndefined();
+        expect(jobStore.getIncomingAmount(DEST, MATERIAL)).toBe(0);
+        expect(fulfilled).toEqual([{ buildingId: DEST, materialType: MATERIAL }]);
+    });
+
+    it('does not clear the carrier jobId (cleared on settler:taskCompleted instead)', () => {
+        const carrier = gameState.carriers.get(CARRIER)!;
+        const record = activate()!;
+        carrier.jobId = record.id;
+
+        TransportJobService.pickUp(record, deps);
+        TransportJobService.deliver(record, deps);
+
+        expect(carrier.jobId).toBe(record.id);
+    });
+
+    it('throws if called when still Reserved (not picked up)', () => {
+        const record = activate()!;
+
+        expect(() => TransportJobService.deliver(record, deps)).toThrow(/reserved/);
+    });
+
+    it('throws if called when cancelled', () => {
+        const record = activate()!;
+        TransportJobService.cancel(record, 'test', deps);
+
+        expect(() => TransportJobService.deliver(record, deps)).toThrow(/cancelled/);
+    });
+});
+
+// ─── cancel ─────────────────────────────────────────────────────────
+
+describe('TransportJobService.cancel', () => {
+    it('removes the record, clears the carrier jobId, and emits carrier:transportCancelled', () => {
+        const events: { unitId: number; jobId: number; reason: string }[] = [];
+        eventBus.on('carrier:transportCancelled', ({ unitId, jobId, reason }) =>
+            events.push({ unitId, jobId, reason })
+        );
+
+        const carrier = gameState.carriers.get(CARRIER)!;
+        const record = activate()!;
+        carrier.jobId = record.id;
+
+        TransportJobService.cancel(record, 'building destroyed', deps);
+
+        expect(record.phase).toBe(TransportPhase.Cancelled);
+        expect(jobStore.get(record.id)).toBeUndefined();
+        expect(jobStore.getReservedAmount(SOURCE, MATERIAL)).toBe(0);
+        expect(carrier.jobId).toBeUndefined();
+        expect(events).toEqual([{ unitId: CARRIER, jobId: record.id, reason: 'building destroyed' }]);
+    });
+
+    it('does NOT clear the carrier jobId when cancelling a Queued record', () => {
+        const carrier = gameState.carriers.get(CARRIER)!;
+        const active = activate()!;
+        carrier.jobId = active.id;
+        const queued = activate(1, CARRIER, { queued: true })!;
+
+        TransportJobService.cancel(queued, 'rerouted', deps);
+
+        expect(queued.phase).toBe(TransportPhase.Cancelled);
+        expect(jobStore.get(queued.id)).toBeUndefined();
+        // The carrier's running job belongs to the active record and must stay intact.
+        expect(carrier.jobId).toBe(active.id);
+        expect(jobStore.getActiveJobForCarrier(CARRIER)).toBe(active);
+    });
+
+    it('cancels a PickedUp record (no stock claim to release)', () => {
+        const record = activate()!;
+        TransportJobService.pickUp(record, deps);
+
+        TransportJobService.cancel(record, 'test', deps);
+
+        expect(record.phase).toBe(TransportPhase.Cancelled);
+        expect(jobStore.getInFlightAmount(DEST, MATERIAL)).toBe(0);
+    });
+
+    it('tolerates an already-removed carrier (entity-removal cleanup)', () => {
+        const record = activate()!;
+        gameState.carriers.delete(CARRIER);
+
+        expect(() => TransportJobService.cancel(record, 'carrier died', deps)).not.toThrow();
+        expect(jobStore.get(record.id)).toBeUndefined();
+    });
+
+    it('is a no-op if already cancelled (emits only once)', () => {
+        let eventCount = 0;
+        eventBus.on('carrier:transportCancelled', () => eventCount++);
+
+        const record = activate()!;
+        TransportJobService.cancel(record, 'test', deps);
+        TransportJobService.cancel(record, 'test', deps);
+
+        expect(record.phase).toBe(TransportPhase.Cancelled);
+        expect(eventCount).toBe(1);
+    });
+
+    it('is a no-op if already delivered', () => {
+        const record = activate()!;
+        TransportJobService.pickUp(record, deps);
+        TransportJobService.deliver(record, deps);
+
+        TransportJobService.cancel(record, 'test', deps);
+
+        expect(record.phase).toBe(TransportPhase.Delivered);
     });
 });

@@ -139,13 +139,10 @@ describe('Free pile logistics (real game data)', { timeout: 30_000 }, () => {
         const siteId = sim.placeBuilding(BuildingType.WoodcutterHut, 0, false);
 
         // Run until a carrier is assigned a transport job from the sawmill
-        sim.runUntil(
-            () =>
-                [...sim.services.logisticsDispatcher.jobStore.jobs.raw.values()].some(
-                    j => j.sourceBuilding === sawmillId
-                ),
-            { maxTicks: 50_000, label: 'carrier assigned transport from sawmill' }
-        );
+        sim.runUntil(() => [...sim.services.jobStore.jobs.values()].some(j => j.sourceBuilding === sawmillId), {
+            maxTicks: 50_000,
+            label: 'carrier assigned transport from sawmill',
+        });
 
         // Find the pile entity at the sawmill
         const piles = sim.state.entities.filter(

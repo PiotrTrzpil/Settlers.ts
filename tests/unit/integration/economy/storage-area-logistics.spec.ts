@@ -14,6 +14,8 @@ import { BuildingType } from '@/game/entity';
 import { EMaterialType } from '@/game/economy';
 import { SlotKind } from '@/game/core/pile-kind';
 import { StorageDirection } from '@/game/systems/inventory/storage-filter-manager';
+import { DemandPriority } from '@/game/features/logistics/demand-ledger';
+import { computeDeficit } from '@/game/features/logistics/demand-deficit';
 import { createSimulation, createScenario, cleanupSimulation, type Simulation } from '../../helpers/test-simulation';
 import { installRealGameData } from '../../helpers/test-game-data';
 
@@ -103,7 +105,7 @@ describe('StorageArea logistics – import', { timeout: 30_000 }, () => {
         cleanupSimulation();
     });
 
-    it('import-enabled StorageArea creates low-priority requests', () => {
+    it('import-enabled StorageArea registers a low-priority standing order', () => {
         sim = createSimulation();
         sim.placeBuilding(BuildingType.ResidenceSmall);
         const storageId = sim.placeBuilding(BuildingType.StorageArea);
@@ -112,13 +114,13 @@ describe('StorageArea logistics – import', { timeout: 30_000 }, () => {
 
         sim.tick(100);
 
-        const requests = [...sim.services.demandQueue.getAllDemands()].filter(r => r.buildingId === storageId);
-        const boardReqs = requests.filter(r => r.materialType === EMaterialType.BOARD);
-        expect(boardReqs.length).toBeGreaterThan(0);
-        expect(boardReqs[0]!.priority).toBe(2);
+        const order = sim.services.demandLedger.getTarget(storageId, EMaterialType.BOARD);
+        expect(order).toBeDefined();
+        expect(order!.priority).toBe(DemandPriority.Low);
+        expect(computeDeficit(order!, sim.services.inventoryManager, sim.services.jobStore)).toBeGreaterThan(0);
     });
 
-    it('import requests are capped per material to avoid request flooding', () => {
+    it('import deficit is capped per material to avoid job flooding', () => {
         sim = createSimulation();
         sim.placeBuilding(BuildingType.ResidenceSmall);
         const storageId = sim.placeBuilding(BuildingType.StorageArea);
@@ -132,12 +134,11 @@ describe('StorageArea logistics – import', { timeout: 30_000 }, () => {
         sim.services.storageFilterManager.setDirection(storageId, EMaterialType.LOG, StorageDirection.Import);
         sim.tick(100);
 
-        const requests = [...sim.services.demandQueue.getAllDemands()].filter(r => r.buildingId === storageId);
-        const logReqs = requests.filter(r => r.materialType === EMaterialType.LOG);
-        expect(logReqs).toHaveLength(20);
-        for (const req of logReqs) {
-            expect(req.amount).toBe(1);
-        }
+        const order = sim.services.demandLedger.getTarget(storageId, EMaterialType.LOG);
+        expect(order).toBeDefined();
+        expect(order!.maxIncoming).toBe(20);
+        // Despite far more slot capacity, the orderable shortfall is capped at maxIncoming.
+        expect(computeDeficit(order!, sim.services.inventoryManager, sim.services.jobStore)).toBe(20);
     });
 
     it('import pulls material from free pile into StorageArea', () => {
@@ -177,7 +178,7 @@ describe('StorageArea logistics – import', { timeout: 30_000 }, () => {
         expect(sim.errors).toHaveLength(0);
     });
 
-    it('enabling import AFTER initial tick creates requests (direction change mid-game)', () => {
+    it('enabling import AFTER initial tick creates a standing order (direction change mid-game)', () => {
         sim = createSimulation();
         sim.placeBuilding(BuildingType.ResidenceSmall);
         const storageId = sim.placeBuilding(BuildingType.StorageArea);
@@ -194,9 +195,9 @@ describe('StorageArea logistics – import', { timeout: 30_000 }, () => {
         });
         sim.tick(100);
 
-        const requests = [...sim.services.demandQueue.getAllDemands()].filter(r => r.buildingId === storageId);
-        const logReqs = requests.filter(r => r.materialType === EMaterialType.LOG);
-        expect(logReqs.length).toBeGreaterThan(0);
+        const order = sim.services.demandLedger.getTarget(storageId, EMaterialType.LOG);
+        expect(order).toBeDefined();
+        expect(order!.priority).toBe(DemandPriority.Low);
     });
 });
 
@@ -298,7 +299,7 @@ describe('StorageArea logistics – boundaries & slot reuse', { timeout: 30_000 
         expect(logSlot.materialType).toBe(EMaterialType.NO_MATERIAL);
     });
 
-    it('no import requests when storage is full', () => {
+    it('no import deficit when storage is full', () => {
         sim = createSimulation();
         sim.placeBuilding(BuildingType.ResidenceSmall);
         const storageId = sim.placeBuilding(BuildingType.StorageArea);
@@ -313,8 +314,13 @@ describe('StorageArea logistics – boundaries & slot reuse', { timeout: 30_000 
         sim.services.storageFilterManager.setDirection(storageId, EMaterialType.BOARD, StorageDirection.Import);
         sim.tick(100);
 
-        const requests = [...sim.services.demandQueue.getAllDemands()].filter(r => r.buildingId === storageId);
-        const boardReqs = requests.filter(r => r.materialType === EMaterialType.BOARD);
-        expect(boardReqs).toHaveLength(0);
+        // The standing order exists, but with no delivery space the derived shortfall is zero.
+        const openOrders = [...sim.services.demandLedger.getAllTargets()].filter(
+            order =>
+                order.buildingId === storageId &&
+                order.materialType === EMaterialType.BOARD &&
+                computeDeficit(order, sim.services.inventoryManager, sim.services.jobStore) > 0
+        );
+        expect(openOrders).toHaveLength(0);
     });
 });

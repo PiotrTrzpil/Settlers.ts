@@ -1,61 +1,46 @@
 /**
  * TransportJobRecord — flat, serializable transport job data.
  *
- * Replaces the TransportJob class. No closures, no manager references.
+ * The job record is the ONLY stateful representation of material in motion:
+ * source-side stock reservations, destination-side incoming amounts, and
+ * queued follow-up work are all derived from records and their phase.
  * Lifecycle operations live in TransportJobService.
  */
 
 import type { EMaterialType } from '../../economy/material-type';
 
 export enum TransportPhase {
-    /** Inventory reserved, carrier en route to pickup */
+    /** Pre-assigned to a busy carrier — activates when its current delivery finishes. */
+    Queued = 'queued',
+    /** Job active, carrier en route to pickup. Source stock is spoken for. */
     Reserved = 'reserved',
-    /** Carrier picked up material, en route to delivery */
+    /** Carrier picked up material, en route to delivery. */
     PickedUp = 'picked-up',
-    /** Cancelled — reservation released, request reset */
+    /** Cancelled — record removed from the store. */
     Cancelled = 'cancelled',
-    /** Delivered — request fulfilled */
+    /** Delivered — record removed from the store. */
     Delivered = 'delivered',
+}
+
+/** Phases in which a job claims source stock (not yet withdrawn). */
+export function claimsSourceStock(phase: TransportPhase): boolean {
+    return phase === TransportPhase.Queued || phase === TransportPhase.Reserved;
+}
+
+/** Phases in which a job counts as incoming material at its destination. */
+export function isIncoming(phase: TransportPhase): boolean {
+    return claimsSourceStock(phase) || phase === TransportPhase.PickedUp;
 }
 
 /** Flat, serializable transport job record. No closures, no manager refs. */
 export interface TransportJobRecord {
     readonly id: number;
-    readonly demandId: number;
     sourceBuilding: number; // mutable: can be redirected
     readonly destBuilding: number;
     readonly material: EMaterialType;
     readonly amount: number;
     readonly carrierId: number;
-    /** Target PileSlot ID at the destination (stable across inventory lifecycle). */
-    readonly slotId: number;
     phase: TransportPhase;
     /** Game time when job was created (seconds, for stall detection). */
     readonly createdAt: number;
-}
-
-/** Create a TransportJobRecord for a delivery-only reconstruction (post-restore). */
-export function createDeliveryOnlyRecord(
-    jobId: number,
-    carrierId: number,
-    destBuilding: number,
-    material: EMaterialType,
-    amount: number,
-    slotId: number,
-    gameTime: number
-): TransportJobRecord {
-    return {
-        id: jobId,
-        // Demand was consumed before save — sentinel value, not used for delivery-only jobs
-        demandId: -1,
-        // Source is irrelevant for delivery-only — carrier already holds material
-        sourceBuilding: destBuilding,
-        destBuilding,
-        material,
-        amount,
-        carrierId,
-        slotId,
-        phase: TransportPhase.PickedUp,
-        createdAt: gameTime,
-    };
 }

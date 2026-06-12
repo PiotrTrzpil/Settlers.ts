@@ -257,7 +257,7 @@ export interface GameEventsCore {
 
     /** Emitted when a carrier is successfully assigned to a transport job */
     'carrier:assigned': {
-        requestId: number;
+        jobId: number;
         unitId: number;
         sourceBuilding: number;
         destBuilding: number;
@@ -267,13 +267,12 @@ export interface GameEventsCore {
     /** Emitted when a transport job is cancelled (from any path — task interruption, carrier removal, etc.) */
     'carrier:transportCancelled': {
         unitId: number;
-        requestId: number;
+        jobId: number;
         reason: string;
     };
 
     /** Emitted when carrier assignment fails (reservation failed or movement failed) */
     'carrier:assignmentFailed': {
-        requestId: number;
         reason: 'reservation_failed' | 'movement_failed';
         sourceBuilding: number;
         destBuilding: number;
@@ -282,11 +281,10 @@ export interface GameEventsCore {
     };
 
     /**
-     * Emitted (throttled) when no idle carrier is available for a pending request.
-     * Deduplicated per (building, material) — fires at most once per ~5 seconds.
+     * Emitted (throttled) when no idle carrier is available for a pending demand.
+     * Deduplicated per material — fires at most once per ~5 seconds.
      */
     'logistics:noCarrier': {
-        requestId: number;
         buildingId: number;
         materialType: EMaterialType;
         sourceBuilding: number;
@@ -294,9 +292,8 @@ export interface GameEventsCore {
 
     // === Logistics Events ===
 
-    /** Emitted when no supply source is found for a pending request */
+    /** Emitted when no supply source is found for a pending demand */
     'logistics:noMatch': {
-        requestId: number;
         buildingId: number;
         materialType: EMaterialType;
         /** Why matching failed: how many supplies found, how many rejected by each filter. */
@@ -310,32 +307,15 @@ export interface GameEventsCore {
         };
     };
 
-    /** Emitted when logistics cleanup completes after a building is destroyed */
+    /** Emitted when logistics cleanup completes after a building is destroyed or completes construction */
     'logistics:buildingCleanedUp': {
         buildingId: number;
-        requestsCancelled: number;
+        targetsCleared: number;
         jobsCancelled: number;
-    };
-
-    /** Emitted when a new demand is added to the queue */
-    'logistics:demandCreated': {
-        demandId: number;
-        buildingId: number;
-        materialType: EMaterialType;
-        amount: number;
-        priority: number;
-    };
-
-    /** Emitted when a demand is consumed (job created for it) */
-    'logistics:demandConsumed': {
-        demandId: number;
-        buildingId: number;
-        materialType: EMaterialType;
     };
 
     /** Emitted when a transport job fulfills delivery */
     'logistics:demandFulfilled': {
-        demandId: number;
         buildingId: number;
         materialType: EMaterialType;
     };
@@ -343,7 +323,6 @@ export interface GameEventsCore {
     /** Emitted when a follow-up job is queued for a busy carrier */
     'logistics:preAssignQueued': {
         carrierId: number;
-        demandId: number;
         jobId: number;
         materialType: EMaterialType;
         sourceBuilding: number;
@@ -353,18 +332,9 @@ export interface GameEventsCore {
     /** Emitted when a queued pre-assignment is flushed and promoted to active */
     'logistics:preAssignFlushed': {
         carrierId: number;
-        demandId: number;
         jobId: number;
         success: boolean;
         reason?: string;
-    };
-
-    /** Emitted when a queued pre-assignment is cancelled */
-    'logistics:preAssignCancelled': {
-        carrierId: number;
-        demandId: number;
-        jobId: number;
-        reason: string;
     };
 
     // === Inventory Events ===

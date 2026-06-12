@@ -5,19 +5,21 @@
  * The logistics feature builds the full job state (with positions resolved) and
  * passes it to settlerTaskSystem.assignJob() as an opaque job.
  *
- * Uses the fluent ChoreoBuilder instead of XML lookup — the XML choreography
- * (JOB_CARRIER_TRANSPORT_GOOD) was just 4 trivial nodes with no real data.
+ * Destination binding is late: the builder resolves a walk-target pile position
+ * up front, but the landing slot is chosen at delivery time (depositDelivery),
+ * so no slot is reserved or claimed when the job is created.
  */
 
 import { EntityType, Tile } from '../../entity';
 import { BuildingType } from '../../buildings/building-type';
 import { getBuildingDoorPos } from '../../data/game-data-access';
+import { EMaterialType } from '../../economy/material-type';
+import { SlotKind } from '../../core/pile-kind';
 import { ChoreoTaskType, type ChoreoJobState, type TransportOps } from '../../systems/choreo/types';
 import { choreo } from '../../systems/choreo/choreo-builder';
 import { type TransportJobRecord } from './transport-job-record';
 import * as TransportJobService from './transport-job-service';
 import type { TransportJobDeps } from './transport-job-service';
-import type { TransportJobStore } from './transport-job-store';
 import type { GameState } from '../../game-state';
 import type { BuildingInventoryManager } from '../../systems/inventory/building-inventory';
 
@@ -33,7 +35,6 @@ export interface TransportJobBuilderConfig {
     gameState: GameState;
     positionResolver: TransportPositionResolver;
     inventoryManager: BuildingInventoryManager;
-    jobStore: TransportJobStore;
     transportJobDeps: TransportJobDeps;
 }
 
@@ -41,22 +42,19 @@ export interface TransportJobBuilderConfig {
  * Builds ChoreoJobState for carrier transport deliveries.
  *
  * Source pile position (pickup): resolved via positionResolver (output pile at source building).
- * Destination pile position (delivery): read directly from inventoryManager.getSlot(slotId).position.
- *
- * Builds the transport choreography dynamically via ChoreoBuilder.
+ * Destination pile position (delivery): best matching slot position at the destination,
+ * falling back to the building door.
  */
 export class TransportJobBuilder {
     private readonly gameState: GameState;
     private readonly positionResolver: TransportPositionResolver;
     private readonly inventoryManager: BuildingInventoryManager;
-    private readonly jobStore: TransportJobStore;
     private readonly transportJobDeps: TransportJobDeps;
 
     constructor(config: TransportJobBuilderConfig) {
         this.gameState = config.gameState;
         this.positionResolver = config.positionResolver;
         this.inventoryManager = config.inventoryManager;
-        this.jobStore = config.jobStore;
         this.transportJobDeps = config.transportJobDeps;
     }
 
@@ -91,9 +89,9 @@ export class TransportJobBuilder {
     /**
      * Build a delivery-only choreography for a carrier that already picked up material.
      *
-     * Used after keyframe restore: PickedUp-phase jobs lose their choreography (transient),
-     * but the carrier still holds material. This builds a 2-node choreo (GO_TO_DEST → DELIVER)
-     * so the carrier resumes delivery without re-visiting the source.
+     * Used after keyframe restore: PickedUp-phase jobs lose their choreography
+     * (choreographies are transient), but the carrier still holds material. This
+     * builds a delivery choreo so the carrier resumes without re-visiting the source.
      */
     buildDeliveryOnly(record: TransportJobRecord): ChoreoJobState {
         const destPos = this.resolveDestPos(record);
@@ -117,15 +115,28 @@ export class TransportJobBuilder {
         return job;
     }
 
+    /**
+     * Resolve the walk target at the destination: the pile position where the
+     * delivery will most likely land. Order: claimed Storage slot with space,
+     * unclaimed Storage slot, Input slot, free-pile slot, building door.
+     * Purely positional — the landing slot is re-resolved at delivery time.
+     */
     private resolveDestPos(record: TransportJobRecord): Tile {
-        const destSlot = this.inventoryManager.getSlot(record.slotId);
-        if (!destSlot) {
-            throw new Error(
-                `TransportJobBuilder: slot ${record.slotId} not found for job ${record.id} ` +
-                    `(dest building ${record.destBuilding}, material ${record.material})`
-            );
+        const entity = this.gameState.getEntityOrThrow(record.destBuilding, 'transport job destination');
+        if (entity.type !== EntityType.Building) {
+            // Free piles / non-building entities: walk to the entity itself
+            return entity;
         }
-        return destSlot.position;
+
+        const im = this.inventoryManager;
+        const slot =
+            im.findSlot(record.destBuilding, record.material, SlotKind.Storage) ??
+            im.findSlot(record.destBuilding, EMaterialType.NO_MATERIAL, SlotKind.Storage) ??
+            im.findSlot(record.destBuilding, record.material, SlotKind.Input);
+        if (slot) {
+            return slot.position;
+        }
+        return getBuildingDoorPos(entity, entity.race, entity.subType as BuildingType);
     }
 
     private attachTransportData(job: ChoreoJobState, record: TransportJobRecord, sourcePos: Tile, destPos: Tile): void {
@@ -157,7 +168,6 @@ export class TransportJobBuilder {
             amount: record.amount,
             sourcePos,
             destPos,
-            slotId: record.slotId,
             ops,
         };
 
@@ -170,16 +180,11 @@ export class TransportJobBuilder {
     }
 
     /**
-     * Find a TransportJobRecord by its job ID, searching both active jobs and pending reservations.
-     * Returns undefined if the record no longer exists (cancelled externally).
+     * Find a TransportJobRecord by its job ID.
+     * Returns undefined if the record no longer exists (cancelled or delivered).
      */
     private findRecord(jobId: number): TransportJobRecord | undefined {
-        for (const record of this.jobStore.jobs.values()) {
-            if (record.id === jobId) {
-                return record;
-            }
-        }
-        return undefined;
+        return this.transportJobDeps.jobStore.get(jobId);
     }
 
     /** Resolve a source pile position, falling back to building door or entity position. */

@@ -13,6 +13,7 @@ import { UnitType, UNIT_TYPE_CONFIG, isUnitTypeMilitary } from '../../core/unit-
 import { SlotKind } from '../../core/pile-kind';
 import { EMaterialType } from '../../economy/material-type';
 import { SettlerState } from '../settler-tasks/types';
+import { computeDeficit } from './demand-deficit';
 import { query } from '../../ecs';
 
 export interface BottleneckDiag {
@@ -89,14 +90,14 @@ function findIdleWorkers(gameState: GameState, workerStateQuery: WorkerStateQuer
 }
 
 function countDemandsForPlayer(config: SnapshotConfig, player: number): number {
-    const { demandQueue, gameState } = config;
+    const { demandLedger, gameState, inventoryManager, logisticsDispatcher } = config;
     let count = 0;
-    for (const demand of demandQueue.getAllDemands()) {
+    for (const entry of demandLedger.getAllTargets()) {
         const building = gameState.getEntityOrThrow(
-            demand.buildingId,
+            entry.buildingId,
             'demand destination building in bottleneck detection'
         );
-        if (building.player === player) {
+        if (building.player === player && computeDeficit(entry, inventoryManager, logisticsDispatcher.jobStore) > 0) {
             count++;
         }
     }

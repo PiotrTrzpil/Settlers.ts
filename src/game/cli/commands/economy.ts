@@ -31,7 +31,7 @@ function buildSnapshotConfig(ctx: CliContext): SnapshotConfig {
     const svc = ctx.game.services;
     return {
         gameState: ctx.game.state,
-        demandQueue: svc.demandQueue,
+        demandLedger: svc.demandLedger,
         carrierRegistry: svc.carrierRegistry,
         logisticsDispatcher: svc.logisticsDispatcher,
         workerStateQuery: svc.settlerTaskSystem,
@@ -117,15 +117,14 @@ function reqsCommand(): CliCommand {
             if (demands.length > 0) {
                 lines.push('--- Pending Demands ---');
                 const rows = demands.map((r: DemandSummary) => [
-                    String(r.id),
                     `${r.buildingType}#${r.buildingId}`,
                     r.material,
                     r.priority,
-                    `${r.age}s`,
+                    `×${r.deficit}`,
                     // eslint-disable-next-line no-restricted-syntax -- nullable field with display/config default
                     r.reason ?? '-',
                 ]);
-                lines.push(ctx.fmt.table(rows, ['id', 'building', 'material', 'priority', 'age', 'reason']));
+                lines.push(ctx.fmt.table(rows, ['building', 'material', 'priority', 'deficit', 'reason']));
             } else {
                 lines.push('no active demands');
             }

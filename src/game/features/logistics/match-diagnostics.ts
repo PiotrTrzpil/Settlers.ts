@@ -9,7 +9,7 @@
 import { createLogger } from '@/utilities/logger';
 import type { BuildingInventoryManager } from '../inventory';
 import type { GameState } from '../../game-state';
-import type { DemandEntry } from './demand-queue';
+import type { MatchableRequest } from './fulfillment-matcher';
 import { PeriodicTimer } from './periodic-timer';
 
 /** How often to log match failure diagnostics (in seconds). */
@@ -75,12 +75,12 @@ export class MatchDiagnostics {
      *
      * @param request The unmatched request.
      */
-    logFailure(request: DemandEntry): void {
+    logFailure(request: MatchableRequest): void {
         const supplies = this.inventoryManager.getSourcesWithOutput(request.materialType, 1);
         const otherSupplies = supplies.filter((id: number) => id !== request.buildingId);
         if (otherSupplies.length > 0) {
             log.debug(
-                `Request #${request.id} (material=${request.materialType}): ` +
+                `Demand at building #${request.buildingId} (material=${request.materialType}): ` +
                     `${otherSupplies.length} supply buildings exist but all reserved or insufficient`
             );
         }

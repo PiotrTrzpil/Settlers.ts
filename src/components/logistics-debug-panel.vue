@@ -35,7 +35,7 @@
                     {{ req.priority[0] }}
                 </span>
                 <span class="req-target">→ #{{ req.buildingId }}</span>
-                <span class="req-age">{{ req.age }}s</span>
+                <span class="req-age">×{{ req.deficit }}</span>
                 <span class="req-status pending">⏳</span>
                 <span v-if="req.reason" class="req-reason">{{ req.reason }}</span>
             </div>
@@ -133,7 +133,7 @@ const displayedDemands = computed(() => {
             if (pDiff !== 0) {
                 return pDiff;
             }
-            return b.age - a.age;
+            return b.deficit - a.deficit;
         })
         .slice(0, 15);
 });

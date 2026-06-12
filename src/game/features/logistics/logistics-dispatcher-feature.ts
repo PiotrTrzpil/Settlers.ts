@@ -7,7 +7,7 @@
 
 import type { FeatureDefinition, FeatureContext } from '../feature';
 import type { CarrierFeatureExports } from '../carriers';
-import type { DemandQueueExports } from './demand-queue-feature';
+import type { DemandLedgerExports } from './demand-ledger-feature';
 import type { InventoryExports } from '../inventory';
 import type { MaterialTransferExports } from '../material-transfer/material-transfer-feature';
 import type { BuildingConstructionExports } from '../building-construction';
@@ -32,7 +32,7 @@ export const LogisticsDispatcherFeature: FeatureDefinition = {
         const settlerTaskExports = ctx.getFeature<SettlerTaskExports>('settler-tasks');
         const { settlerTaskSystem, choreoSystem } = settlerTaskExports;
         const taskDispatcher = settlerTaskSystem as unknown as TaskDispatcher;
-        const { demandQueue, jobStore } = ctx.getFeature<DemandQueueExports>('logistics');
+        const { demandLedger, jobStore } = ctx.getFeature<DemandLedgerExports>('logistics');
         const { inventoryManager, storageFilterManager } = ctx.getFeature<InventoryExports>('inventory');
         const { materialTransfer } = ctx.getFeature<MaterialTransferExports>('material-transfer');
         const { constructionSiteManager } = ctx.getFeature<BuildingConstructionExports>('building-construction');
@@ -64,9 +64,10 @@ export const LogisticsDispatcherFeature: FeatureDefinition = {
             idleCarrierPool,
             jobAssigner: taskDispatcher,
             positionResolver,
-            demandQueue,
+            demandLedger,
             jobStore,
             inventoryManager,
+            materialTransfer,
             storageFilterManager,
         });
         logisticsDispatcher.registerEvents(ctx.eventBus, ctx.cleanupRegistry);
@@ -77,10 +78,9 @@ export const LogisticsDispatcherFeature: FeatureDefinition = {
             persistence: [],
             exports: { logisticsDispatcher } satisfies LogisticsDispatcherExports,
             onRestoreComplete() {
-                // Transport jobs are transient — not persisted. Reconstruct from entity state:
-                // - Carriers with entity.carrying → rebuild delivery-only choreo from slot reservation
-                // - Carriers with jobId but no carrying → clear jobId, release reservation
-                logisticsDispatcher.rebuildFromEntities();
+                // Job records are persisted; choreographies are transient.
+                // Rebuild carrier choreographies from the restored records.
+                logisticsDispatcher.restoreJobs();
             },
         };
     },

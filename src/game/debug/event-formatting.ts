@@ -152,31 +152,25 @@ export const EventFmt = {
     'logistics:noMatch': (e: GameEvents['logistics:noMatch']) => {
         const r = e.rejection;
         if (!r) {
-            return `${e.materialType} req=${e.requestId}`;
+            return `${e.materialType} bld=#${e.buildingId}`;
         }
         const src = r.sourceIds.length > 0 ? ` src=[${r.sourceIds.join(',')}]` : '';
-        return `${e.materialType} req=${e.requestId} [sup=${r.supplies}${src} self=${r.self} storBlk=${r.storageBlocked} rsv=${r.reserved} flt=${r.filter}]`;
+        return `${e.materialType} bld=#${e.buildingId} [sup=${r.supplies}${src} self=${r.self} storBlk=${r.storageBlocked} rsv=${r.reserved} flt=${r.filter}]`;
     },
 
     'logistics:noCarrier': (e: GameEvents['logistics:noCarrier']) =>
         `${e.materialType} #${e.sourceBuilding}→#${e.buildingId}`,
 
     'logistics:buildingCleanedUp': (e: GameEvents['logistics:buildingCleanedUp']) =>
-        `reqs=${e.requestsCancelled} jobs=${e.jobsCancelled}`,
+        `targets=${e.targetsCleared} jobs=${e.jobsCancelled}`,
 
     'logistics:preAssignQueued': (e: GameEvents['logistics:preAssignQueued']) =>
-        `carrier=#${e.carrierId} ${e.materialType} #${e.sourceBuilding}→#${e.destBuilding} demand=${e.demandId} job=${e.jobId}`,
+        `carrier=#${e.carrierId} ${e.materialType} #${e.sourceBuilding}→#${e.destBuilding} job=${e.jobId}`,
 
     'logistics:preAssignFlushed': (e: GameEvents['logistics:preAssignFlushed']) => {
         const result = e.success ? 'OK' : 'FAIL: ' + e.reason;
-        return `carrier=#${e.carrierId} demand=${e.demandId} job=${e.jobId} ${result}`;
+        return `carrier=#${e.carrierId} job=${e.jobId} ${result}`;
     },
-
-    'logistics:preAssignCancelled': (e: GameEvents['logistics:preAssignCancelled']) =>
-        `carrier=#${e.carrierId} demand=${e.demandId} job=${e.jobId} reason=${e.reason}`,
-
-    'logistics:demandCreated': (e: GameEvents['logistics:demandCreated']) =>
-        `${e.materialType} ×${e.amount} pri=${e.priority} bld=#${e.buildingId}`,
 
     'production:modeChanged': (e: GameEvents['production:modeChanged']) => `${e.mode}`,
 
@@ -222,13 +216,10 @@ export const EventFmt = {
 
     'barracks:trainingInterrupted': (e: GameEvents['barracks:trainingInterrupted']) => e.reason,
 
-    'carrier:transportCancelled': (e: GameEvents['carrier:transportCancelled']) => `req=${e.requestId} ${e.reason}`,
-
-    'logistics:demandConsumed': (e: GameEvents['logistics:demandConsumed']) =>
-        `${e.materialType} demand=#${e.demandId} bld=#${e.buildingId}`,
+    'carrier:transportCancelled': (e: GameEvents['carrier:transportCancelled']) => `job=${e.jobId} ${e.reason}`,
 
     'logistics:demandFulfilled': (e: GameEvents['logistics:demandFulfilled']) =>
-        `${e.materialType} demand=#${e.demandId} bld=#${e.buildingId}`,
+        `${e.materialType} bld=#${e.buildingId}`,
 
     'pile:freePilePlaced': (e: GameEvents['pile:freePilePlaced']) => `#${e.entityId} ${e.materialType} ×${e.quantity}`,
 

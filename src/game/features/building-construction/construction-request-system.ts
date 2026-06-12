@@ -1,40 +1,46 @@
 /**
- * ConstructionRequestSystem — tick system that creates material delivery demands for buildings under construction.
+ * ConstructionRequestSystem — keeps construction-material standing orders in
+ * sync with each active site's remaining costs.
  *
- * Periodically scans all active construction sites and creates slot-agnostic demands
- * for each material that still has capacity. Multiple carriers can deliver in parallel —
- * matching the original game's behaviour. Slot assignment happens at job creation time.
+ * Writes the remaining cost per material (total cost minus delivered
+ * throughput) into the DemandLedger as an absolute target. The dispatcher
+ * derives the actual shortfall from live inventory + in-flight jobs, so
+ * deliveries may run parallel to terrain leveling and cancelled transports
+ * re-open the deficit automatically — matching the original game's behaviour.
  *
- * Demands are created as soon as a site is registered — carriers may deliver materials
- * during terrain leveling, parallel to the diggers, exactly as in Settlers 4.
+ * Targets are re-synced immediately on 'construction:materialDelivered':
+ * a delivery lowers the remaining cost at the same moment the transport job
+ * leaves the store, and both sides of the deficit must move together or the
+ * dispatcher would briefly over-order. The periodic sync covers everything
+ * else (new sites, leveling progress).
+ *
+ * Orders are cleared on building:completed / building:removed by
+ * MaterialRequestSystem and LogisticsDispatcher.
  */
 
 import type { TickSystem } from '../../core/tick-system';
+import type { EventBus } from '../../event-bus';
+import { EventSubscriptionManager } from '../../event-bus';
 import type { ConstructionSiteManager } from './construction-site-manager';
-import { DemandPriority, type DemandQueue } from '../logistics/demand-queue';
-import type { TransportJobStore } from '../logistics/transport-job-store';
-import type { BuildingInventoryManager } from '../../systems/inventory';
-import { SlotKind } from '../../core/pile-kind';
+import { DemandPriority, type DemandLedger } from '../logistics/demand-ledger';
 
 export class ConstructionRequestSystem implements TickSystem {
     private readonly constructionSiteManager: ConstructionSiteManager;
-    private readonly demandQueue: DemandQueue;
-    private readonly jobStore: TransportJobStore;
-    private readonly inventoryManager: BuildingInventoryManager;
+    private readonly demandLedger: DemandLedger;
+    private readonly subscriptions = new EventSubscriptionManager();
 
     private accumulator = 0;
     private static readonly TICK_INTERVAL = 0.5; // seconds
 
-    constructor(
-        constructionSiteManager: ConstructionSiteManager,
-        demandQueue: DemandQueue,
-        jobStore: TransportJobStore,
-        inventoryManager: BuildingInventoryManager
-    ) {
+    constructor(constructionSiteManager: ConstructionSiteManager, demandLedger: DemandLedger, eventBus: EventBus) {
         this.constructionSiteManager = constructionSiteManager;
-        this.demandQueue = demandQueue;
-        this.jobStore = jobStore;
-        this.inventoryManager = inventoryManager;
+        this.demandLedger = demandLedger;
+
+        this.subscriptions.subscribe(eventBus, 'construction:materialDelivered', ({ buildingId }) => {
+            if (this.constructionSiteManager.hasSite(buildingId)) {
+                this.syncSite(buildingId);
+            }
+        });
     }
 
     tick(dt: number): void {
@@ -43,42 +49,34 @@ export class ConstructionRequestSystem implements TickSystem {
             return;
         }
         this.accumulator -= ConstructionRequestSystem.TICK_INTERVAL;
-        this.processSites();
-    }
-
-    private processSites(): void {
         for (const site of this.constructionSiteManager.getAllActiveSites()) {
-            this.processSite(site.buildingId);
+            this.syncSite(site.buildingId);
         }
     }
 
-    /**
-     * Estimate total capacity per material across all input slots and create
-     * slot-agnostic demands for the remaining space (minus active demands/jobs).
-     */
-    private processSite(buildingId: number): void {
-        const remainingCosts = this.constructionSiteManager.getRemainingCosts(buildingId);
-        for (const cost of remainingCosts) {
-            const slots = this.inventoryManager
-                .getSlots(buildingId)
-                .filter(s => s.kind === SlotKind.Input && s.materialType === cost.material);
-            let totalSpace = 0;
-            for (const slot of slots) {
-                totalSpace += slot.maxCapacity - slot.currentAmount;
-            }
-            if (totalSpace <= 0) {
-                continue;
-            }
+    destroy(): void {
+        this.subscriptions.unsubscribeAll();
+    }
 
-            // Cap by remaining delivery need: builders may consume materials mid-delivery,
-            // opening slot space beyond what still needs to be delivered.
-            const cappedSpace = Math.min(totalSpace, cost.count);
-            const activeDemands = this.demandQueue.countDemands(buildingId, cost.material);
-            const activeJobs = this.jobStore.getActiveJobCountForDest(buildingId, cost.material);
-            const needed = cappedSpace - activeDemands - activeJobs;
-            for (let i = 0; i < needed; i++) {
-                this.demandQueue.addDemand(buildingId, cost.material, 1, DemandPriority.Normal);
+    /**
+     * Write the site's remaining costs as absolute targets.
+     * A cost that reaches 0 removes its order (setTarget(…, 0) clears).
+     */
+    private syncSite(buildingId: number): void {
+        const remainingCosts = this.constructionSiteManager.getRemainingCosts(buildingId);
+
+        // Clear orders for materials whose cost is fully delivered
+        for (const order of this.demandLedger.getTargetsForBuilding(buildingId)) {
+            if (!remainingCosts.some(c => c.material === order.materialType)) {
+                this.demandLedger.clearTarget(buildingId, order.materialType);
             }
+        }
+
+        for (const cost of remainingCosts) {
+            this.demandLedger.setTarget(buildingId, cost.material, {
+                priority: DemandPriority.Normal,
+                target: cost.count,
+            });
         }
     }
 }

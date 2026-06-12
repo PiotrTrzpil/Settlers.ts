@@ -6,7 +6,7 @@
  * They follow the same pattern as building-inventory-production.ts.
  */
 
-import type { EMaterialType } from '../../economy/material-type';
+import { EMaterialType } from '../../economy/material-type';
 import { SlotKind } from '../../core/pile-kind';
 import type { PileSlot } from './pile-slot';
 import type { BuildingInventoryManager } from './building-inventory';
@@ -79,6 +79,48 @@ export function depositOutput(
     amount: number
 ): number {
     return mgr.deposit(requireOutputSlot(mgr, buildingId, material, 'depositOutput').id, amount);
+}
+
+/**
+ * Deposit a carrier delivery into a building, choosing landing slots at
+ * delivery time (no slots are reserved while the carrier is en route).
+ *
+ * Fill order: matching Input slots, matching Storage slots, then unclaimed
+ * (NO_MATERIAL) Storage slots — which are claimed for the material on use.
+ * Iterates all candidate slots to handle multi-slot materials.
+ * Returns actual amount deposited; the caller drops any overflow as a free pile.
+ */
+export function depositDelivery(
+    mgr: BuildingInventoryManager,
+    buildingId: number,
+    material: EMaterialType,
+    amount: number
+): number {
+    let remaining = amount;
+
+    for (const slot of mgr.getSlots(buildingId)) {
+        if (remaining <= 0) {
+            break;
+        }
+        const accepts =
+            slot.materialType === material &&
+            (slot.kind === SlotKind.Input || slot.kind === SlotKind.Storage || slot.kind === SlotKind.Free);
+        if (accepts) {
+            remaining -= mgr.deposit(slot.id, remaining);
+        }
+    }
+
+    for (const slot of mgr.getSlots(buildingId)) {
+        if (remaining <= 0) {
+            break;
+        }
+        if (slot.kind === SlotKind.Storage && slot.materialType === EMaterialType.NO_MATERIAL) {
+            mgr.setSlotMaterial(slot.id, material);
+            remaining -= mgr.deposit(slot.id, remaining);
+        }
+    }
+
+    return amount - remaining;
 }
 
 /**
