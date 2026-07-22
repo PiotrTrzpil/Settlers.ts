@@ -1,6 +1,12 @@
 import { LogHandler } from '@/utilities/log-handler';
 import { ShaderTexture } from './shader-texture';
 import type { CachedSlot } from './sprite-cache';
+import { LAYER_SIZE } from './entity-texture-atlas-constants';
+import { AtlasGpuStore } from './atlas-gpu-store';
+import { extractAtlasRegion } from './atlas-region-extract';
+
+export { LAYER_SIZE, LAYER_BYTES, MAX_LAYERS_PER_GPU_ARRAY, MAX_GPU_ARRAYS } from './entity-texture-atlas-constants';
+export { gpuArrayIndexForLayer, localLayerIndex, requiredGpuArrayCount, nextGpuArrayCapacity } from './atlas-gpu-store';
 
 /**
  * Padding in pixels around each sprite to prevent texture bleeding
@@ -10,18 +16,6 @@ const ATLAS_PADDING = 1;
 
 /** Log slow main-thread operations (threshold in ms) */
 const SLOW_OP_THRESHOLD_MS = 20;
-
-/** Fixed layer size — each layer is LAYER_SIZE x LAYER_SIZE pixels.
- *  4096x4096 = 32MB per layer at 2 bytes/pixel (R16UI). */
-export const LAYER_SIZE = 4096;
-
-/**
- * Minimum initial GPU texture capacity (layers).
- * Avoids frequent early reallocs when the atlas is being populated.
- * With doubling growth: 8 → 16 → 32 → ... so a typical 15-layer atlas
- * triggers at most 2 reallocs instead of 15.
- */
-const MIN_GPU_CAPACITY = 8;
 
 /**
  * Defines a region within the texture atlas, with both pixel coordinates,
@@ -122,21 +116,23 @@ export class EntityTextureAtlas extends ShaderTexture {
     /** Cached GL context for GPU operations */
     private glContext: WebGL2RenderingContext | null = null;
 
-    /**
-     * Number of layers allocated on the GPU texture (may exceed layers.length).
-     * When layers.length exceeds this, texImage3D reallocation is needed.
-     * Grows with a doubling strategy to minimize expensive reallocs.
-     */
-    private gpuCapacity = 0;
+    /** Multi-array GPU storage (splits at 1 GiB / 32 layers for ANGLE Metal). */
+    private readonly gpuStore: AtlasGpuStore;
 
     constructor(maxLayers: number, textureIndex: number, skipInitialLayer = false) {
         super(textureIndex);
         this.maxLayers = maxLayers;
+        this.gpuStore = new AtlasGpuStore(textureIndex);
 
         if (!skipInitialLayer) {
             // Start with one layer (skip when restoring from cache)
             this.addLayer();
         }
+    }
+
+    /** Total GPU layer capacity across all arrays (debug / tests). */
+    public get gpuCapacity(): number {
+        return this.gpuStore.totalCapacity;
     }
 
     public get width(): number {
@@ -315,59 +311,29 @@ export class EntityTextureAtlas extends ShaderTexture {
     }
 
     // =========================================================================
-    // GPU Upload — capacity-based allocation with budgeted uploads
+    // GPU Upload — multi-array capacity with budgeted uploads
     // =========================================================================
     //
-    // The GPU texture array is managed with a doubling capacity strategy:
-    //   - texImage3D (realloc) only happens when layers exceed capacity
-    //   - Realloc invalidates ALL GPU data, so all layers are marked fully dirty
-    //   - Dirty sub-regions are uploaded via texSubImage3D (the fast, common path)
+    // ANGLE Metal rejects a single TEXTURE_2D_ARRAY larger than ~1 GiB (32 layers
+    // of 4096² R16UI). AtlasGpuStore splits layers across multiple arrays.
     //
     // Two upload modes:
     //   update()          — upload all dirty layers immediately (for SafeLoadBatch)
     //   uploadBudgeted()  — upload N layers per call (for per-frame draining)
 
-    /**
-     * Ensure GPU texture has capacity for all current CPU layers.
-     * Uses doubling growth factor to minimize expensive texImage3D reallocs.
-     *
-     * Must be called with the atlas texture already bound (via bindAsArray).
-     */
-    private ensureCapacity(gl: WebGL2RenderingContext): void {
-        if (this.layers.length <= this.gpuCapacity) {
-            return;
+    /** Ensure GPU arrays hold all CPU layers; mark invalidated layers fully dirty. */
+    private ensureCapacity(gl: WebGL2RenderingContext): boolean {
+        const capacityBefore = this.gpuStore.totalCapacity;
+        const invalidated = this.gpuStore.ensureCapacity(gl, this.layers.length);
+        for (const layer of invalidated) {
+            if (layer < this.layers.length) {
+                this.dirtyRegions[layer] = { minX: 0, minY: 0, maxX: LAYER_SIZE, maxY: LAYER_SIZE };
+            }
         }
-
-        const newCapacity = Math.min(
-            Math.max(this.layers.length, this.gpuCapacity * 2, MIN_GPU_CAPACITY),
-            this.maxLayers
-        );
-
-        gl.texImage3D(
-            gl.TEXTURE_2D_ARRAY,
-            0,
-            gl.R16UI,
-            LAYER_SIZE,
-            LAYER_SIZE,
-            newCapacity,
-            0,
-            gl.RED_INTEGER,
-            gl.UNSIGNED_SHORT,
-            null
-        );
-
-        const prevCapacity = this.gpuCapacity;
-        this.gpuCapacity = newCapacity;
-
-        // texImage3D invalidates all GPU data — mark every existing layer fully dirty
-        for (let i = 0; i < this.layers.length; i++) {
-            this.dirtyRegions[i] = { minX: 0, minY: 0, maxX: LAYER_SIZE, maxY: LAYER_SIZE };
+        if (invalidated.length > 0) {
+            this._hasPendingUploads = true;
         }
-
-        EntityTextureAtlas.log.debug(
-            `GPU realloc: ${prevCapacity} → ${newCapacity} layers ` +
-                `(${this.layers.length} used, ${((newCapacity * LAYER_SIZE * LAYER_SIZE * 2) / 1024 / 1024).toFixed(0)}MB)`
-        );
+        return this.gpuStore.totalCapacity > capacityBefore;
     }
 
     /** Upload a single layer's dirty sub-region to GPU. */
@@ -376,56 +342,14 @@ export class EntityTextureAtlas extends ShaderTexture {
         if (!dirty) {
             return;
         }
-
-        const isFullLayer =
-            dirty.minX === 0 && dirty.minY === 0 && dirty.maxX === LAYER_SIZE && dirty.maxY === LAYER_SIZE;
-
-        if (isFullLayer) {
-            // Full-layer upload — no UNPACK_ROW_LENGTH needed
-            gl.texSubImage3D(
-                gl.TEXTURE_2D_ARRAY,
-                0,
-                0,
-                0,
-                layerIndex,
-                LAYER_SIZE,
-                LAYER_SIZE,
-                1,
-                gl.RED_INTEGER,
-                gl.UNSIGNED_SHORT,
-                this.layers[layerIndex]!
-            );
-        } else {
-            // Sub-region upload
-            gl.pixelStorei(gl.UNPACK_ROW_LENGTH, LAYER_SIZE);
-
-            gl.texSubImage3D(
-                gl.TEXTURE_2D_ARRAY,
-                0,
-                dirty.minX,
-                dirty.minY,
-                layerIndex,
-                dirty.maxX - dirty.minX,
-                dirty.maxY - dirty.minY,
-                1,
-                gl.RED_INTEGER,
-                gl.UNSIGNED_SHORT,
-                this.layers[layerIndex]!,
-                dirty.minY * LAYER_SIZE + dirty.minX
-            );
-
-            gl.pixelStorei(gl.UNPACK_ROW_LENGTH, 0);
-        }
-
+        this.gpuStore.uploadDirtyLayer(gl, layerIndex, this.layers[layerIndex]!, dirty);
         this.dirtyRegions[layerIndex] = null;
     }
 
-    /** Bind the texture and set pixel store alignment for upload operations. */
-    private prepareForUpload(gl: WebGL2RenderingContext): void {
+    private prepareForUpload(gl: WebGL2RenderingContext): boolean {
         this.glContext = gl;
-        this.bindAsArray(gl);
         gl.pixelStorei(gl.UNPACK_ALIGNMENT, 2);
-        this.ensureCapacity(gl);
+        return this.ensureCapacity(gl);
     }
 
     /**
@@ -442,60 +366,15 @@ export class EntityTextureAtlas extends ShaderTexture {
     }
 
     /**
-     * Upload all layers from a contiguous Uint16Array in a single gl.texImage3D call.
-     * Faster than update() for cache restores: one DMA transfer instead of N sub-region uploads.
-     * Sets gpuCapacity to layerCount and clears all dirty flags.
-     */
-    public uploadContiguous(gl: WebGL2RenderingContext, data: Uint16Array, layerCount: number): void {
-        this.glContext = gl;
-        this.bindAsArray(gl);
-        gl.pixelStorei(gl.UNPACK_ALIGNMENT, 2);
-        gl.texImage3D(
-            gl.TEXTURE_2D_ARRAY,
-            0,
-            gl.R16UI,
-            LAYER_SIZE,
-            LAYER_SIZE,
-            layerCount,
-            0,
-            gl.RED_INTEGER,
-            gl.UNSIGNED_SHORT,
-            data
-        );
-        this.gpuCapacity = layerCount;
-        for (let i = 0; i < this.dirtyRegions.length; i++) {
-            this.dirtyRegions[i] = null;
-        }
-        this._hasPendingUploads = false;
-    }
-
-    /**
      * Allocate GPU texture memory without uploading pixel data.
      * Marks all layers as fully dirty so uploadBudgeted() can drain them
-     * progressively across frames. Pre-sets gpuCapacity so uploadBudgeted()
-     * won't trigger a realloc (which would bypass the per-frame budget).
+     * progressively across frames.
      */
     public allocateDeferred(gl: WebGL2RenderingContext): void {
         this.glContext = gl;
-        this.bindAsArray(gl);
         gl.pixelStorei(gl.UNPACK_ALIGNMENT, 2);
+        this.gpuStore.allocateExact(gl, this.layers.length);
 
-        const capacity = Math.min(Math.max(this.layers.length, MIN_GPU_CAPACITY), this.maxLayers);
-        gl.texImage3D(
-            gl.TEXTURE_2D_ARRAY,
-            0,
-            gl.R16UI,
-            LAYER_SIZE,
-            LAYER_SIZE,
-            capacity,
-            0,
-            gl.RED_INTEGER,
-            gl.UNSIGNED_SHORT,
-            null
-        );
-        this.gpuCapacity = capacity;
-
-        // Mark all layers fully dirty for progressive upload
         for (let i = 0; i < this.layers.length; i++) {
             this.dirtyRegions[i] = { minX: 0, minY: 0, maxX: LAYER_SIZE, maxY: LAYER_SIZE };
         }
@@ -508,18 +387,11 @@ export class EntityTextureAtlas extends ShaderTexture {
      * Upload up to `maxLayers` dirty layers, spreading GPU work across frames.
      * Returns true if more uploads remain pending.
      *
-     * Sprites on un-uploaded layers appear transparent (palette index 0)
-     * until their layer is uploaded in a subsequent frame.
-     *
-     * If `ensureCapacity` triggers a GPU reallocation, the budget is bypassed and
-     * ALL dirty layers are uploaded immediately. A realloc calls texImage3D(null)
-     * which clears all existing GPU data — deferring re-upload would cause every
-     * already-visible sprite to disappear until the budget fully drained.
+     * If ensureCapacity reallocates any GPU array, the budget is bypassed and
+     * ALL dirty layers are uploaded (realloc clears that array's GPU data).
      */
     public uploadBudgeted(gl: WebGL2RenderingContext, maxLayers: number): boolean {
-        const capacityBefore = this.gpuCapacity;
-        this.prepareForUpload(gl);
-        const wasReallocated = this.gpuCapacity > capacityBefore;
+        const wasReallocated = this.prepareForUpload(gl);
 
         let uploaded = 0;
         let remaining = false;
@@ -549,46 +421,23 @@ export class EntityTextureAtlas extends ShaderTexture {
     }
 
     /**
-     * Bind as TEXTURE_2D_ARRAY for upload operations.
-     * Sets texture parameters only on first creation.
-     */
-    private bindAsArray(gl: WebGL2RenderingContext): void {
-        const isNew = !this.texture;
-        if (isNew) {
-            this.texture = gl.createTexture();
-        }
-        gl.activeTexture(gl.TEXTURE0 + this.textureIndex);
-        gl.bindTexture(gl.TEXTURE_2D_ARRAY, this.texture);
-
-        if (isNew) {
-            // R16UI requires NEAREST filtering (integer textures) — set once on creation
-            gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
-            gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
-            gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-            gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-        }
-    }
-
-    /**
-     * Bind the atlas texture for rendering (lightweight, no param setup).
-     * Call before draw calls to ensure the atlas is on the correct texture unit.
+     * Bind all atlas GPU arrays for rendering (multi-sampler fragment shaders).
      */
     public bindForRendering(gl: WebGL2RenderingContext): void {
-        if (!this.texture) {
-            return;
-        }
-        gl.activeTexture(gl.TEXTURE0 + this.textureIndex);
-        gl.bindTexture(gl.TEXTURE_2D_ARRAY, this.texture);
+        this.gpuStore.bindForRendering(gl);
+    }
+
+    /** Layers per GPU array — shaders use this to map global layer → local layer. */
+    public get layersPerGpuArray(): number {
+        return this.gpuStore.maxLayersPerArray;
     }
 
     /**
-     * Override free() since we use TEXTURE_2D_ARRAY (parent uses TEXTURE_2D).
+     * Override free() — multi-array GPU store owns TEXTURE_2D_ARRAY objects.
      */
     public override free(): void {
-        if (this.glContext && this.texture) {
-            this.glContext.deleteTexture(this.texture);
-            this.texture = null;
-        }
+        this.gpuStore.free();
+        this.texture = null;
     }
 
     /**
@@ -607,21 +456,6 @@ export class EntityTextureAtlas extends ShaderTexture {
     }
 
     /**
-     * Fill the first layer with a procedural pattern for testing/fallback.
-     */
-    public fillProceduralPattern(): void {
-        const layer = this.layers[0]!;
-        for (let y = 0; y < LAYER_SIZE; y++) {
-            for (let x = 0; x < LAYER_SIZE; x++) {
-                const idx = y * LAYER_SIZE + x;
-                const checker = ((x >> 4) + (y >> 4)) % 2;
-                layer[idx] = checker ? 3 : 2;
-            }
-        }
-        this.markDirty(0, 0, 0, LAYER_SIZE, LAYER_SIZE);
-    }
-
-    /**
      * Extract a region from the atlas and convert from palette indices to RGBA ImageData.
      * Used for generating icon thumbnails (e.g. resource icons in UI).
      */
@@ -630,87 +464,25 @@ export class EntityTextureAtlas extends ShaderTexture {
         paletteData?: Uint8Array | null,
         paletteBaseOffset = 0
     ): ImageData | null {
-        if (region.layer >= this.layers.length) {
-            return null;
-        }
-        if (region.x + region.width > LAYER_SIZE || region.y + region.height > LAYER_SIZE) {
-            return null;
-        }
-
-        const layer = this.layers[region.layer]!;
-        const imageData = new ImageData(region.width, region.height);
-        const dst = new Uint32Array(imageData.data.buffer);
-
-        for (let y = 0; y < region.height; y++) {
-            const srcRow = (region.y + y) * LAYER_SIZE + region.x;
-            const dstRow = y * region.width;
-
-            for (let x = 0; x < region.width; x++) {
-                dst[dstRow + x] = this.resolvePixel(layer[srcRow + x]!, paletteData, paletteBaseOffset);
-            }
-        }
-
-        return imageData;
+        return extractAtlasRegion(this.layers, region, paletteData, paletteBaseOffset);
     }
 
-    /** Resolve a single atlas pixel index to an RGBA uint32 value. */
-    private resolvePixel(
-        rawIndex: number,
-        paletteData: Uint8Array | null | undefined,
-        paletteBaseOffset: number
-    ): number {
-        if (rawIndex === 0) {
-            return 0x00000000;
-        } // transparent
-        if (rawIndex === 1) {
-            return 0x40000000;
-        } // shadow
-
-        const index = rawIndex + paletteBaseOffset;
-        if (paletteData && index * 4 + 3 < paletteData.length) {
-            const pi = index * 4;
-            const r = paletteData[pi]!;
-            const g = paletteData[pi + 1]!;
-            const b = paletteData[pi + 2]!;
-            const a = paletteData[pi + 3]!;
-            return (a << 24) | (b << 16) | (g << 8) | r;
-        }
-        return 0xffff00ff; // magenta for missing palette
-    }
-
-    /**
-     * Get per-layer ArrayBuffers for cache serialization.
-     * Each buffer is exactly LAYER_SIZE*LAYER_SIZE*2 bytes.
-     * Returns owned copies so the atlas can be modified independently.
-     */
+    /** Per-layer ArrayBuffers for cache serialization (LAYER_SIZE²×2 bytes each). */
     public getLayerBuffers(): ArrayBuffer[] {
         return this.layers.map(layer => {
             const buf = layer.buffer as ArrayBuffer;
             if (layer.byteOffset === 0 && layer.byteLength === buf.byteLength) {
                 return buf;
             }
-            // Layer is a subarray view — slice to get an owned copy
             return buf.slice(layer.byteOffset, layer.byteOffset + layer.byteLength);
         });
     }
 
-    /**
-     * Get the slot layout for caching (per-layer).
-     */
+    /** Slot layout for caching (per-layer). */
     public getSlots(): CachedSlot[][] {
-        return this.layerSlots.map(slots =>
-            slots.map(s => ({
-                x: s.x,
-                y: s.y,
-                width: s.width,
-                height: s.height,
-            }))
-        );
+        return this.layerSlots.map(slots => slots.map(s => ({ x: s.x, y: s.y, width: s.width, height: s.height })));
     }
 
-    /**
-     * Get the maximum layer count for caching.
-     */
     public getMaxLayers(): number {
         return this.maxLayers;
     }
@@ -746,8 +518,8 @@ export class EntityTextureAtlas extends ShaderTexture {
         // Clear reserved regions - they'll be repopulated via registry
         this.reservedRegions = [];
 
-        // Reset GPU capacity to force reallocation on next upload
-        this.gpuCapacity = 0;
+        // Drop GPU textures — reallocated on next allocateDeferred/update
+        this.gpuStore.resetCapacities();
 
         const elapsed = performance.now() - start;
         EntityTextureAtlas.log.debug(`Restored atlas from cache: ${layerCount} layers in ${elapsed.toFixed(1)}ms`);
@@ -769,7 +541,7 @@ export class EntityTextureAtlas extends ShaderTexture {
         atlas.layerSlots = [];
         atlas.dirtyRegions = [];
         atlas.reservedRegions = [];
-        atlas.gpuCapacity = 0;
+        atlas.gpuStore.resetCapacities();
 
         for (let i = 0; i < layerCount; i++) {
             // Zero-filled layer — sprites appear transparent until real data arrives

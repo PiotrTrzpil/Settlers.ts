@@ -5,10 +5,12 @@ import { PALETTE_TEXTURE_WIDTH } from './palette-texture';
 import type { SpriteRenderManager } from './sprite-render-manager';
 import {
     TEXTURE_UNIT_SPRITE_ATLAS,
+    TEXTURE_UNIT_SPRITE_ATLAS_COUNT,
     TEXTURE_UNIT_PALETTE,
     MAX_BATCH_ENTITIES,
     FLOATS_PER_ENTITY,
 } from './entity-renderer-constants';
+import { MAX_LAYERS_PER_GPU_ARRAY } from './entity-texture-atlas-constants';
 
 import spriteVertCode from './shaders/entity-sprite-vert.glsl';
 import spriteFragCode from './shaders/entity-sprite-frag.glsl';
@@ -141,15 +143,25 @@ export class SpriteBatchRenderer {
         spriteManager: SpriteRenderManager,
         edgeAA: boolean
     ): void {
-        spriteManager.spriteAtlas!.bindForRendering(gl);
+        const atlas = spriteManager.spriteAtlas!;
+        atlas.bindForRendering(gl);
         spriteManager.paletteManager.bind(gl);
         this.beginSpriteBatch(
             gl,
             projection,
             PALETTE_TEXTURE_WIDTH,
             spriteManager.paletteManager.textureRowsPerPlayer,
-            edgeAA
+            edgeAA,
+            atlas.layersPerGpuArray
         );
+    }
+
+    /** Bind multi-array atlas samplers (u_spriteAtlas0..3) to consecutive texture units. */
+    private bindAtlasSamplers(program: ShaderProgram, layersPerArray: number): void {
+        for (let i = 0; i < TEXTURE_UNIT_SPRITE_ATLAS_COUNT; i++) {
+            program.bindTexture(`u_spriteAtlas${i}`, TEXTURE_UNIT_SPRITE_ATLAS + i);
+        }
+        program.setUniformInt('u_layersPerArray', layersPerArray);
     }
 
     /**
@@ -157,13 +169,15 @@ export class SpriteBatchRenderer {
      * @param paletteWidth Width of the 2D palette texture (e.g., 2048)
      * @param paletteRowsPerPlayer Number of texture rows per player section
      * @param edgeAA Whether to enable edge anti-aliasing
+     * @param layersPerArray Layers per GPU TEXTURE_2D_ARRAY (Metal 1 GiB cap → 32)
      */
     public beginSpriteBatch(
         gl: WebGL2RenderingContext,
         projection: Float32Array,
         paletteWidth: number,
         paletteRowsPerPlayer: number,
-        edgeAA: boolean
+        edgeAA: boolean,
+        layersPerArray: number = MAX_LAYERS_PER_GPU_ARRAY
     ): void {
         if (!this.spriteShaderProgram) {
             return;
@@ -171,7 +185,7 @@ export class SpriteBatchRenderer {
 
         this.spriteShaderProgram.use();
         this.spriteShaderProgram.setMatrix('projection', projection);
-        this.spriteShaderProgram.bindTexture('u_spriteAtlas', TEXTURE_UNIT_SPRITE_ATLAS);
+        this.bindAtlasSamplers(this.spriteShaderProgram, layersPerArray);
         this.spriteShaderProgram.bindTexture('u_palette', TEXTURE_UNIT_PALETTE);
         this.spriteShaderProgram.setUniformInt('u_paletteWidth', paletteWidth);
         this.spriteShaderProgram.setUniformInt('u_paletteRowsPerPlayer', paletteRowsPerPlayer);
@@ -183,12 +197,14 @@ export class SpriteBatchRenderer {
      * Begin a new blend batch. Call before adding blended sprites.
      * @param paletteWidth Width of the 2D palette texture (e.g., 2048)
      * @param paletteRowsPerPlayer Number of texture rows per player section
+     * @param layersPerArray Layers per GPU TEXTURE_2D_ARRAY (Metal 1 GiB cap → 32)
      */
     public beginBlendBatch(
         gl: WebGL2RenderingContext,
         projection: Float32Array,
         paletteWidth: number,
-        paletteRowsPerPlayer: number
+        paletteRowsPerPlayer: number,
+        layersPerArray: number = MAX_LAYERS_PER_GPU_ARRAY
     ): void {
         if (!this.spriteBlendShaderProgram) {
             return;
@@ -196,7 +212,7 @@ export class SpriteBatchRenderer {
 
         this.spriteBlendShaderProgram.use();
         this.spriteBlendShaderProgram.setMatrix('projection', projection);
-        this.spriteBlendShaderProgram.bindTexture('u_spriteAtlas', TEXTURE_UNIT_SPRITE_ATLAS);
+        this.bindAtlasSamplers(this.spriteBlendShaderProgram, layersPerArray);
         this.spriteBlendShaderProgram.bindTexture('u_palette', TEXTURE_UNIT_PALETTE);
         this.spriteBlendShaderProgram.setUniformInt('u_paletteWidth', paletteWidth);
         this.spriteBlendShaderProgram.setUniformInt('u_paletteRowsPerPlayer', paletteRowsPerPlayer);

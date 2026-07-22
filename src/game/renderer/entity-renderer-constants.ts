@@ -18,9 +18,11 @@ export const PATH_TARGET_RING_COLOR = [1.0, 0.6, 0.2, 0.5]; // Outer ring glow
 export const PREVIEW_VALID_COLOR = [0.3, 1.0, 0.3, 0.5]; // Green ghost building
 export const PREVIEW_INVALID_COLOR = [1.0, 0.3, 0.3, 0.5]; // Red ghost building
 
-// Texture unit assignments (landscape uses 0-2)
+// Texture unit assignments (landscape uses 0-3 with darkness).
+// Sprite atlas uses up to 4 consecutive TEXTURE_2D_ARRAY units (1 GiB each on Metal).
 export const TEXTURE_UNIT_SPRITE_ATLAS = 3;
-export const TEXTURE_UNIT_PALETTE = 4;
+export const TEXTURE_UNIT_SPRITE_ATLAS_COUNT = 4; // units 3–6
+export const TEXTURE_UNIT_PALETTE = 7;
 
 // Maximum path dots to show per selected unit
 export const MAX_PATH_DOTS = 30;

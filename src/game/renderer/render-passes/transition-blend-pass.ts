@@ -43,9 +43,16 @@ export class TransitionBlendPass implements IRenderPass {
             return;
         }
 
+        const atlas = ctx.spriteManager.spriteAtlas;
+        if (!atlas) {
+            return;
+        }
+        atlas.bindForRendering(gl);
+        ctx.spriteManager.paletteManager.bind(gl);
+
         const paletteWidth = PALETTE_TEXTURE_WIDTH;
         const rowsPerPlayer = ctx.spriteManager.paletteManager.textureRowsPerPlayer;
-        ctx.spriteBatchRenderer.beginBlendBatch(gl, projection, paletteWidth, rowsPerPlayer);
+        ctx.spriteBatchRenderer.beginBlendBatch(gl, projection, paletteWidth, rowsPerPlayer, atlas.layersPerGpuArray);
 
         for (const { entity, data } of this.queue) {
             const scaledOld = scaleSprite(data.oldSprite);

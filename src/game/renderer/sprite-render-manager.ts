@@ -6,7 +6,7 @@
 
 import { LogHandler } from '@/utilities/log-handler';
 import { FileManager } from '@/utilities/file-manager';
-import { EntityTextureAtlas } from './entity-texture-atlas';
+import { EntityTextureAtlas, MAX_GPU_ARRAYS, MAX_LAYERS_PER_GPU_ARRAY } from './entity-texture-atlas';
 import { PaletteTextureManager } from './palette-texture';
 import { TEXTURE_UNIT_PALETTE } from './entity-renderer-constants';
 import { debugStats } from '@/game/debug/debug-stats';
@@ -403,9 +403,11 @@ export class SpriteRenderManager {
         await this.registerPalettesForFiles(allFileIds, teamColorFileIds);
         const filePreload = t.lap();
 
-        // Create atlas and registry with larger capacity for multi-race sprites
+        // Create atlas and registry with larger capacity for multi-race sprites.
+        // GPU is split into arrays of ≤32 layers (1 GiB Metal limit); cap total layers to that budget.
+        const maxGpuLayers = MAX_GPU_ARRAYS * MAX_LAYERS_PER_GPU_ARRAY;
         const maxArrayLayers = gl.getParameter(gl.MAX_ARRAY_TEXTURE_LAYERS) as number;
-        const atlas = new EntityTextureAtlas(Math.min(256, maxArrayLayers), this.textureUnit);
+        const atlas = new EntityTextureAtlas(Math.min(maxGpuLayers, maxArrayLayers), this.textureUnit);
         const atlasAlloc = t.lap();
         const registry = new SpriteMetadataRegistry();
 
