@@ -78,38 +78,3 @@ export function getAvailableSupplies(
 
     return supplies;
 }
-
-/**
- * Check if any building has a supply of the specified material.
- *
- * @param inventoryManager The inventory manager for building inventories
- * @param materialType Type of material to check for
- * @param minAmount Minimum amount required (default: 1)
- * @returns True if at least one building has the material available
- */
-export function hasAnySupply(
-    inventoryManager: BuildingInventoryManager,
-    materialType: EMaterialType,
-    minAmount: number = 1
-): boolean {
-    const buildingIds = inventoryManager.getSourcesWithOutput(materialType, minAmount);
-    return buildingIds.length > 0;
-}
-
-/**
- * Get the total amount of a material available across all buildings.
- *
- * @param inventoryManager The inventory manager for building inventories
- * @param materialType Type of material to count
- * @returns Total amount available
- */
-export function getTotalSupply(inventoryManager: BuildingInventoryManager, materialType: EMaterialType): number {
-    const buildingIds = inventoryManager.getSourcesWithOutput(materialType, 1);
-    let total = 0;
-
-    for (const buildingId of buildingIds) {
-        total += inventoryManager.getOutputAmount(buildingId, materialType);
-    }
-
-    return total;
-}

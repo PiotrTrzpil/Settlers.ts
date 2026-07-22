@@ -9,7 +9,6 @@
 import type { GameState } from '../../game-state';
 import type { BuildingInventoryManager } from '../inventory';
 import {
-    matchRequestToSupply,
     findAllMatches,
     type FulfillmentMatch,
     type MatchableRequest,
@@ -49,6 +48,9 @@ export class RequestMatcher {
 
     matchFilter: LogisticsMatchFilter | null;
 
+    /** Last rejection stats from the most recent matchRequestCandidates call. */
+    lastRejectionStats: MatchRejectionStats | null = null;
+
     constructor(config: RequestMatcherConfig) {
         this.gameState = config.gameState;
         this.inventoryManager = config.inventoryManager;
@@ -60,45 +62,9 @@ export class RequestMatcher {
     }
 
     /**
-     * Find the best supply match for a pending request.
-     *
-     * @returns A match result, or null if no suitable supply was found.
-     */
-    matchRequest(request: MatchableRequest): RequestMatchResult | null {
-        const destBuilding = this.gameState.getEntityOrThrow(request.buildingId, 'requesting building');
-        const playerId = destBuilding.player;
-
-        const match = matchRequestToSupply(request, this.gameState, this.inventoryManager, {
-            playerId,
-            jobStore: this.jobStore,
-            storageFilterManager: this.storageFilterManager ?? undefined,
-        });
-
-        if (!match) {
-            return null;
-        }
-
-        // Generic policy filter — replaces hardcoded territory check
-        if (this.matchFilter) {
-            const sourceEntity = this.gameState.getEntityOrThrow(match.sourceBuilding, 'match filter source');
-            if (!this.matchFilter(sourceEntity, destBuilding, playerId)) {
-                return null;
-            }
-        }
-
-        return { ...match, playerId };
-    }
-
-    /**
      * Find the top N supply candidates for a pending request, sorted by source→dest distance.
      * Used for joint carrier+supply optimization (total trip distance).
-     *
-     * @param maxCandidates Maximum number of candidates to return.
-     * @returns Array of match results (may be empty), filtered by policy.
      */
-    /** Last rejection stats from the most recent matchRequestCandidates call. */
-    lastRejectionStats: MatchRejectionStats | null = null;
-
     matchRequestCandidates(request: MatchableRequest, maxCandidates: number): RequestMatchResult[] {
         const destBuilding = this.gameState.getEntityOrThrow(request.buildingId, 'requesting building');
         const playerId = destBuilding.player;

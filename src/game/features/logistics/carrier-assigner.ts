@@ -19,17 +19,11 @@ import * as TransportJobService from './transport-job-service';
 import type { TransportJobDeps } from './transport-job-service';
 import type { RequestMatchResult } from './request-matcher';
 import type { TransportJobBuilder } from './transport-job-builder';
-import type { ChoreoJobState } from '../../systems/choreo';
+import type { TaskDispatcher } from '../settler-tasks';
 import type { CarrierFilter } from './logistics-filter';
 import type { IdleCarrierPool } from '../carriers';
 import { TransportPhase } from './transport-job-record';
 import { travelCost } from './travel-cost';
-import type { Tile } from '@/game/core/coordinates';
-
-/** Assigns a job to a settler and optionally starts movement. */
-export interface JobAssigner {
-    assignJob(entityId: number, job: ChoreoJobState, moveTo?: Tile): boolean;
-}
 
 /** A demand being dispatched — destination, material, and amount to move. */
 export interface TransportDemand {
@@ -49,30 +43,29 @@ export interface CarrierAssignerConfig {
     gameState: GameState;
     eventBus: EventBus;
     idleCarrierPool: IdleCarrierPool;
-    jobAssigner: JobAssigner;
+    /** Same assignJob surface as TaskDispatcher (merged JobAssigner). */
+    taskDispatcher: Pick<TaskDispatcher, 'assignJob'>;
     transportJobBuilder: TransportJobBuilder;
     transportJobDeps: TransportJobDeps;
     carrierFilter?: CarrierFilter;
 }
 
-/** Result of a successful carrier assignment. */
-export interface AssignmentSuccess {
-    /** The created transport job record. */
-    record: TransportJobRecord;
-    /** Entity ID of the carrier that was assigned. */
-    carrierId: number;
-    /** True when the job was queued for a busy carrier (phase=Queued). */
-    queued: boolean;
-}
-
-/** Result of tryAssign / tryAssignBest — success, no carrier available, or hard failure. */
-export type AssignResult = AssignmentSuccess | 'no_carrier' | null;
+/**
+ * Discriminated result of tryAssignBest.
+ * - assigned: job created (active or queued follow-up)
+ * - no_carrier: supply exists but no eligible idle/busy carrier
+ * - failed: reservation or movement assignment failed
+ */
+export type AssignResult =
+    | { status: 'assigned'; record: TransportJobRecord; carrierId: number; queued: boolean }
+    | { status: 'no_carrier' }
+    | { status: 'failed'; reason: 'reservation' | 'movement' };
 
 export class CarrierAssigner {
     private readonly gameState: GameState;
     private readonly eventBus: EventBus;
     private readonly idleCarrierPool: IdleCarrierPool;
-    private readonly jobAssigner: JobAssigner;
+    private readonly taskDispatcher: Pick<TaskDispatcher, 'assignJob'>;
     private readonly transportJobBuilder: TransportJobBuilder;
     private readonly transportJobDeps: TransportJobDeps;
     carrierFilter: CarrierFilter | null;
@@ -81,7 +74,7 @@ export class CarrierAssigner {
         this.gameState = config.gameState;
         this.eventBus = config.eventBus;
         this.idleCarrierPool = config.idleCarrierPool;
-        this.jobAssigner = config.jobAssigner;
+        this.taskDispatcher = config.taskDispatcher;
         this.transportJobBuilder = config.transportJobBuilder;
         this.transportJobDeps = config.transportJobDeps;
         // eslint-disable-next-line no-restricted-syntax -- optional config/prop with sensible default
@@ -91,17 +84,17 @@ export class CarrierAssigner {
     /**
      * Try to assign the best (carrier, source) pair from the supply candidates.
      * Picks the pair with the lowest total trip cost: carrier→source + source→dest.
+     * Caller must pass a non-empty candidates list (supply already matched).
      */
-    // eslint-disable-next-line sonarjs/function-return-type -- discriminated union return is intentional
     tryAssignBest(demand: TransportDemand, candidates: readonly RequestMatchResult[]): AssignResult {
         if (candidates.length === 0) {
-            return null;
+            throw new Error('CarrierAssigner.tryAssignBest: empty candidates (caller must match supply first)');
         }
 
         const destBuilding = this.gameState.getEntityOrThrow(demand.buildingId, 'dest building');
         const ranked = this.rankByTotalTrip(candidates, destBuilding.x, destBuilding.y);
         if (!ranked) {
-            return 'no_carrier';
+            return { status: 'no_carrier' };
         }
 
         if (ranked.busyCarrier) {
@@ -162,7 +155,6 @@ export class CarrierAssigner {
         return bestMatch ? { match: bestMatch, idleCarrierId: bestIdle, busyCarrier: bestBusy } : null;
     }
 
-    // eslint-disable-next-line sonarjs/function-return-type -- discriminated union return is intentional
     private tryAssignIdle(demand: TransportDemand, match: RequestMatchResult, carrierId: number): AssignResult {
         const record = TransportJobService.activate(
             match.sourceBuilding,
@@ -175,20 +167,21 @@ export class CarrierAssigner {
 
         if (!record) {
             this.emitAssignmentFailed(demand, match, carrierId, 'reservation_failed');
-            return null;
+            return { status: 'failed', reason: 'reservation' };
         }
 
         const job = this.transportJobBuilder.build(record);
-        const success = this.jobAssigner.assignJob(carrierId, job, job.targetPos!);
+        // Reuse transport record id so entity.jobId === record.id (single numeric job identity).
+        const success = this.taskDispatcher.assignJob(carrierId, job, job.targetPos!, record.id);
 
         if (success) {
             this.emitAssigned(record);
-            return { record, carrierId, queued: false };
+            return { status: 'assigned', record, carrierId, queued: false };
         }
 
         this.emitAssignmentFailed(demand, match, carrierId, 'movement_failed');
         TransportJobService.cancel(record, 'assignment_failed', this.transportJobDeps);
-        return null;
+        return { status: 'failed', reason: 'movement' };
     }
 
     /**
@@ -235,7 +228,6 @@ export class CarrierAssigner {
      * counts as incoming at the destination, but the carrier's active job is
      * untouched. The dispatcher promotes it when the current delivery completes.
      */
-    // eslint-disable-next-line sonarjs/function-return-type -- discriminated union return is intentional
     private tryQueueForBusyCarrier(
         demand: TransportDemand,
         match: RequestMatchResult,
@@ -253,7 +245,7 @@ export class CarrierAssigner {
 
         if (!record) {
             this.emitAssignmentFailed(demand, match, busyCandidate.carrierId, 'reservation_failed');
-            return null;
+            return { status: 'failed', reason: 'reservation' };
         }
 
         this.emitAssigned(record);
@@ -265,7 +257,7 @@ export class CarrierAssigner {
             destBuilding: demand.buildingId,
         });
 
-        return { record, carrierId: busyCandidate.carrierId, queued: true };
+        return { status: 'assigned', record, carrierId: busyCandidate.carrierId, queued: true };
     }
 
     private emitAssigned(record: TransportJobRecord): void {

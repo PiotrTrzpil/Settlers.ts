@@ -101,7 +101,10 @@ export interface Entity {
      * completes or is interrupted. Undefined means the unit is idle.
      * Persisted with the entity.
      *
-     * Allocated from GameState.allocateJobId(). All job types share one ID space.
+     * Allocated from GameState.allocateJobId() (or reused from a domain record
+     * such as TransportJobRecord.id so entity.jobId matches the store key).
+     * All job types share one ID space. Only settler-task lifecycle
+     * (completeJob / interruptJob) clears this for live units.
      */
     jobId?: number;
 

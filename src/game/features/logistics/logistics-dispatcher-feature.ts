@@ -31,7 +31,7 @@ export const LogisticsDispatcherFeature: FeatureDefinition = {
         const { carrierRegistry, idleCarrierPool } = ctx.getFeature<CarrierFeatureExports>('carriers');
         const settlerTaskExports = ctx.getFeature<SettlerTaskExports>('settler-tasks');
         const { settlerTaskSystem, choreoSystem } = settlerTaskExports;
-        const taskDispatcher = settlerTaskSystem as unknown as TaskDispatcher;
+        const taskDispatcher: TaskDispatcher = settlerTaskSystem;
         const { demandLedger, jobStore } = ctx.getFeature<DemandLedgerExports>('logistics');
         const { inventoryManager, storageFilterManager } = ctx.getFeature<InventoryExports>('inventory');
         const { materialTransfer } = ctx.getFeature<MaterialTransferExports>('material-transfer');
@@ -48,11 +48,21 @@ export const LogisticsDispatcherFeature: FeatureDefinition = {
             handlerErrorLogger,
         };
 
+        const transportJobDeps = {
+            jobStore,
+            demandLedger,
+            eventBus: ctx.eventBus,
+            inventoryManager,
+            gameState: ctx.gameState,
+        };
+
         const transportCtx: TransportExecutorContext = {
             inventoryManager,
             materialTransfer,
             eventBus: ctx.eventBus,
             constructionSiteManager,
+            jobStore,
+            transportJobDeps,
         };
 
         registerTransportExecutors(choreoSystem, movementCtx, transportCtx);
@@ -62,7 +72,7 @@ export const LogisticsDispatcherFeature: FeatureDefinition = {
             eventBus: ctx.eventBus,
             carrierRegistry,
             idleCarrierPool,
-            jobAssigner: taskDispatcher,
+            taskDispatcher,
             positionResolver,
             demandLedger,
             jobStore,

@@ -142,7 +142,12 @@ export type WorkHandler = NullWorkHandler | EntityWorkHandler | PositionWorkHand
 
 /** Narrow interface for assigning tasks to units. Used by logistics, building-demand, siege, etc. */
 export interface TaskDispatcher {
-    assignJob(entityId: number, job: ChoreoJobState, moveTo?: Tile): boolean;
+    /**
+     * Assign a choreography job to a unit.
+     * @param numericJobId When set (e.g. transport record id), used as entity.jobId so the unit
+     *   and domain job share one numeric identity. When omitted, a new id is allocated.
+     */
+    assignJob(entityId: number, job: ChoreoJobState, moveTo?: Tile, numericJobId?: number): boolean;
     assignMoveTask(entityId: number, target: Tile): boolean;
     assignWorkerToBuilding(settlerId: number, buildingId: number): void;
     releaseWorkerAssignment(settlerId: number): void;

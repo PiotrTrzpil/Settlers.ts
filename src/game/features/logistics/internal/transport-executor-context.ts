@@ -1,9 +1,5 @@
 /**
- * Transport executor context — minimal context type for carrier transport executors.
- *
- * Defines the dependencies needed by TRANSPORT_PICKUP and TRANSPORT_DELIVER executors,
- * and exports the registration function that wires all 4 TRANSPORT_* task types onto
- * a ChoreoSystem instance.
+ * Transport executor context — dependencies for TRANSPORT_* choreography executors.
  */
 
 import type { ChoreoSystem } from '../../../systems/choreo';
@@ -13,6 +9,8 @@ import type { BuildingInventoryManager } from '../../inventory';
 import type { MaterialTransfer } from '../../material-transfer';
 import type { ConstructionSiteManager } from '../../building-construction/construction-site-manager';
 import type { MovementContext } from '../../settler-tasks';
+import type { TransportJobStore } from '../transport-job-store';
+import type { TransportJobDeps } from '../transport-job-service';
 
 import {
     executeTransportGoToSource,
@@ -22,33 +20,21 @@ import {
     executeTransportStandUp,
 } from './transport-executors';
 
-// ─────────────────────────────────────────────────────────────
-// TransportExecutorContext
-// ─────────────────────────────────────────────────────────────
-
 /**
- * Minimal context for inventory-phase transport executors (TRANSPORT_PICKUP, TRANSPORT_DELIVER).
- *
- * Movement-phase executors (TRANSPORT_GO_TO_SOURCE, TRANSPORT_GO_TO_DEST) use
- * MovementContext from settler-tasks.
+ * Context for inventory-phase transport executors (TRANSPORT_PICKUP, TRANSPORT_DELIVER).
+ * Includes job store + deps so lifecycle is pure lookups (no per-job ops closures).
  */
 export interface TransportExecutorContext {
     inventoryManager: BuildingInventoryManager;
     materialTransfer: MaterialTransfer;
     eventBus: EventBus;
     constructionSiteManager: ConstructionSiteManager;
+    jobStore: TransportJobStore;
+    transportJobDeps: TransportJobDeps;
 }
 
-// ─────────────────────────────────────────────────────────────
-// Registration
-// ─────────────────────────────────────────────────────────────
-
 /**
- * Register all 4 TRANSPORT_* choreography executors on the given ChoreoSystem.
- *
- * Call this from LogisticsDispatcherFeature.create() after building the contexts.
- * Movement executors (GO_TO_SOURCE/DEST) capture movementCtx; inventory executors
- * (PICKUP/DELIVER) capture transportCtx.
+ * Register all TRANSPORT_* choreography executors on the given ChoreoSystem.
  */
 export function registerTransportExecutors(
     choreoSystem: ChoreoSystem,

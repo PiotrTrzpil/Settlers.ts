@@ -266,6 +266,10 @@ export class MovementSystem implements TickSystem {
             controller.startPath(path);
         }
 
+        // Always emit — walk animation (and other listeners) react without callers
+        // needing to know about visuals. Verbose pathFound is diagnostics-only.
+        this.eventBus.emit('unit:movementStarted', { unitId: entityId });
+
         if (this.verbose) {
             this.eventBus.emit('movement:pathFound', {
                 unitId: entityId,

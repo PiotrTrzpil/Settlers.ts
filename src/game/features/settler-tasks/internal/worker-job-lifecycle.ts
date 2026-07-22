@@ -165,6 +165,7 @@ export class WorkerJobLifecycle {
             unitId: settler.id,
             unitType: settler.subType as UnitType,
             jobId: job.jobId,
+            kind: job.kind,
         });
 
         if (this.locationManager.isInside(settler.id) && runtime.homeAssignment) {
@@ -237,6 +238,7 @@ export class WorkerJobLifecycle {
             unitId: settler.id,
             unitType: settler.subType as UnitType,
             jobId: job.jobId,
+            kind: job.kind,
             nodeIndex: job.nodeIndex,
             failedStep,
             // eslint-disable-next-line no-restricted-syntax -- value is nullable by API contract; null coercion
@@ -288,7 +290,6 @@ export class WorkerJobLifecycle {
                 this.emitWaitingAtHome(settler, homeBuilding, reason);
             }
             this.gameState.movement.moveUnit(settler.id, door);
-            this.animController.startWalkAnimation(settler);
         }
     }
 
@@ -383,6 +384,8 @@ export class WorkerJobLifecycle {
     }
 
     private applyChoreoAnimation(settler: Entity, node: ChoreoNode): void {
+        // Empty jobPart is normal for synthetic builder GO_TO nodes — walk animation is
+        // owned by UnitStateMachine when the movement controller is moving, not by jobs.
         if (!node.jobPart) {
             return;
         }

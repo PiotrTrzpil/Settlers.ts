@@ -184,15 +184,17 @@ describe('Door pathfinding — every building, every race', { timeout: 15000 }, 
 
         for (const race of AVAILABLE_RACES) {
             it(`${race}: unit reaches every building door`, () => {
-                sim = createSimulation({ mapWidth: 512, mapHeight: 512 });
+                // 192² is enough for auto-placed buildings + towers; 512² only inflated pathfinding.
+                const mapSize = 192;
+                const center = mapSize / 2;
+                sim = createSimulation({ mapWidth: mapSize, mapHeight: mapSize });
                 (sim.state.playerRaces as Map<number, Race>).set(0, race);
 
                 // Extend territory coverage — many buildings are placed, auto-placer spirals outward.
-                // Place a grid of towers around center to cover a wide area.
-                for (const dx of [-25, 0, 25]) {
-                    for (const dy of [-25, 0, 25]) {
+                for (const dx of [-20, 0, 20]) {
+                    for (const dy of [-20, 0, 20]) {
                         if (dx === 0 && dy === 0) continue; // center has virtual Castle
-                        sim.placeBuildingAt(256 + dx, 256 + dy, BuildingType.GuardTowerBig);
+                        sim.placeBuildingAt(center + dx, center + dy, BuildingType.GuardTowerBig);
                     }
                 }
 

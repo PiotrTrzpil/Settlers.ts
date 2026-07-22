@@ -1,11 +1,13 @@
 import { UnitType } from '../../core/unit-types';
 import { choreo, type ChoreoJobState } from '../choreo';
+import { JobKind } from '../choreo/types';
 
 /**
  * Build a choreography job for a carrier to walk to a free pile and transform into a specialist.
  *
  * Nodes: GO_TO_TARGET (walk to pile) -> TRANSFORM_RECRUIT (withdraw tool, emit event).
  * The targetUnitType is stashed in `job.metadata.unitType`.
+ * JobKind.WorkplaceDispatch so BuildingDemand can own completion when committed.
  */
 export function createRecruitmentJob(
     pileEntityId: number,
@@ -13,7 +15,7 @@ export function createRecruitmentJob(
     pileY: number,
     targetUnitType: UnitType
 ): ChoreoJobState {
-    return choreo('AUTO_RECRUIT')
+    return choreo('AUTO_RECRUIT', JobKind.WorkplaceDispatch)
         .goTo({ x: pileX, y: pileY }, pileEntityId)
         .transformRecruit(targetUnitType)
         .target(pileEntityId)
@@ -27,5 +29,5 @@ export function createRecruitmentJob(
  * The targetUnitType is stashed in `job.metadata.unitType`.
  */
 export function createDirectTransformJob(targetUnitType: UnitType): ChoreoJobState {
-    return choreo('AUTO_RECRUIT').transformDirect(targetUnitType).build();
+    return choreo('AUTO_RECRUIT', JobKind.WorkplaceDispatch).transformDirect(targetUnitType).build();
 }

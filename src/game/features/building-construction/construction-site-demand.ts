@@ -19,6 +19,13 @@ import type { DispatchRecruitmentOpts } from '../../systems/recruit/recruit-syst
 import type { ConstructionSiteManager, IndexedTile } from './construction-site-manager';
 import { buildDigTileJob, buildBuildStepJob, buildRecruitDiggerJob, buildRecruitBuilderJob } from './construction-jobs';
 import { createLogger } from '@/utilities/logger';
+import {
+    IntervalDrain,
+    handleDemandJobCompleted,
+    handleDemandJobFailed,
+    type UnitDemandJobHandlers,
+} from '../../systems/unit-demand-loop';
+import { JobKind } from '../../systems/choreo/types';
 
 const log = createLogger('ConstructionSiteDemand');
 
@@ -54,10 +61,6 @@ export interface ConstructionSiteDemandConfig {
     dispatchRecruitment: (unitType: UnitType, player: number, opts?: DispatchRecruitmentOpts) => number | null;
 }
 
-// ─── Job ID constants ────────────────────────────────────────
-
-const CONSTRUCTION_JOB_IDS = new Set(['DIG_TILE', 'BUILD_STEP', 'RECRUIT_DIGGER', 'RECRUIT_BUILDER']);
-
 // ─── System ──────────────────────────────────────────────────
 
 export class ConstructionSiteDemandSystem implements TickSystem {
@@ -71,7 +74,27 @@ export class ConstructionSiteDemandSystem implements TickSystem {
 
     /** All demands keyed by siteId. */
     private readonly demands = new Map<number, ConstructionWorkerDemand[]>();
-    private timer = 0;
+    private readonly drain = new IntervalDrain(TICK_INTERVAL);
+
+    private readonly jobHandlers: UnitDemandJobHandlers<ConstructionWorkerDemand> = {
+        ownsKind: kind => kind === JobKind.Construction,
+        findByUnit: unitId => {
+            for (const siteDemands of this.demands.values()) {
+                for (const d of siteDemands) {
+                    if (d.workerId === unitId) {
+                        return d;
+                    }
+                }
+            }
+            return undefined;
+        },
+        onJobCompleted: (demand, unitId) => {
+            this.onWorkerJobCompleted(unitId, demand.siteId);
+        },
+        onJobFailed: (demand, unitId) => {
+            this.onWorkerJobFailed(unitId, demand.siteId);
+        },
+    };
 
     constructor(config: ConstructionSiteDemandConfig) {
         this.gameState = config.gameState;
@@ -247,24 +270,12 @@ export class ConstructionSiteDemandSystem implements TickSystem {
     // ================================================================
 
     registerEvents(): void {
-        this.subscriptions.subscribe(this.eventBus, 'settler:taskCompleted', ({ unitId, jobId }) => {
-            if (!CONSTRUCTION_JOB_IDS.has(jobId)) {
-                return;
-            }
-            const siteId = this.findSiteForWorker(unitId);
-            if (siteId !== null) {
-                this.onWorkerJobCompleted(unitId, siteId);
-            }
+        this.subscriptions.subscribe(this.eventBus, 'settler:taskCompleted', ({ unitId, kind }) => {
+            handleDemandJobCompleted(this.jobHandlers, unitId, kind);
         });
 
-        this.subscriptions.subscribe(this.eventBus, 'settler:taskFailed', ({ unitId, jobId }) => {
-            if (!CONSTRUCTION_JOB_IDS.has(jobId)) {
-                return;
-            }
-            const siteId = this.findSiteForWorker(unitId);
-            if (siteId !== null) {
-                this.onWorkerJobFailed(unitId, siteId);
-            }
+        this.subscriptions.subscribe(this.eventBus, 'settler:taskFailed', ({ unitId, kind }) => {
+            handleDemandJobFailed(this.jobHandlers, unitId, kind);
         });
 
         this.subscriptions.subscribe(this.eventBus, 'construction:levelingComplete', ({ buildingId }) => {
@@ -289,12 +300,9 @@ export class ConstructionSiteDemandSystem implements TickSystem {
     // ================================================================
 
     tick(dt: number): void {
-        this.timer += dt;
-        if (this.timer < TICK_INTERVAL) {
-            return;
+        if (this.drain.tick(dt)) {
+            this.drainDemands();
         }
-        this.timer -= TICK_INTERVAL;
-        this.drainDemands();
     }
 
     // ================================================================
@@ -526,17 +534,6 @@ export class ConstructionSiteDemandSystem implements TickSystem {
         }
         // eslint-disable-next-line no-restricted-syntax -- value is nullable by API contract; null coercion
         return siteDemands.find(d => d.workerId === workerId) ?? null;
-    }
-
-    private findSiteForWorker(workerId: number): number | null {
-        for (const [siteId, siteDemands] of this.demands) {
-            for (const d of siteDemands) {
-                if (d.workerId === workerId) {
-                    return siteId;
-                }
-            }
-        }
-        return null;
     }
 
     private removeDemand(demand: ConstructionWorkerDemand): void {

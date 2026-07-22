@@ -8,7 +8,7 @@
 import type { GameState } from '@/game/game-state';
 import type { TerrainData } from '@/game/terrain';
 import { findBuildingApproachTile } from '@/game/buildings/approach';
-import { ChoreoTaskType, createChoreoJobState, type ChoreoNode, type ChoreoJobState } from './types';
+import { ChoreoTaskType, JobKind, createChoreoJobState, type ChoreoNode, type ChoreoJobState } from './types';
 import type { UnitType } from '@/game/core/unit-types';
 import type { Tile, TileWithEntityOpt } from '@/game/core/coordinates';
 
@@ -58,6 +58,7 @@ export class ChoreoBuilder {
     private _targetPos: Tile | null = null;
     private _metadata: Record<string, number | string> | undefined;
     private _goToCount = 0;
+    private _kind: JobKind;
 
     /**
      * Inject context for building-aware helpers (goToDoor etc.).
@@ -68,7 +69,18 @@ export class ChoreoBuilder {
         return ChoreoBuilder;
     }
 
-    constructor(private readonly jobId: string) {}
+    constructor(
+        private readonly jobId: string,
+        kind: JobKind = JobKind.Work
+    ) {
+        this._kind = kind;
+    }
+
+    /** Override domain JobKind (for demand-system event routing). */
+    kind(kind: JobKind): this {
+        this._kind = kind;
+        return this;
+    }
 
     /** Add a GO_TO_TARGET node. First call sets targetPos; subsequent calls push waypoints. */
     goTo(tile: Tile, entityId?: number): this {
@@ -170,7 +182,7 @@ export class ChoreoBuilder {
 
     /** Build the final ChoreoJobState. */
     build(): ChoreoJobState {
-        const job = createChoreoJobState(this.jobId, this.nodes, true);
+        const job = createChoreoJobState(this.jobId, this.nodes, true, this._kind);
         if (this._targetId !== null) {
             job.targetId = this._targetId;
         }
@@ -187,7 +199,10 @@ export class ChoreoBuilder {
     }
 }
 
-/** Start building a choreography job. */
-export function choreo(jobId: string): ChoreoBuilder {
-    return new ChoreoBuilder(jobId);
+/**
+ * Start building a synthetic choreography job.
+ * @param kind Domain category for demand event routing (defaults to Work).
+ */
+export function choreo(jobId: string, kind: JobKind = JobKind.Work): ChoreoBuilder {
+    return new ChoreoBuilder(jobId, kind);
 }

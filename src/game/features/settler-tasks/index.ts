@@ -1,5 +1,6 @@
 export { SettlerTaskSystem } from './settler-task-system';
 export { SettlerLifecycleCoordinator } from './settler-lifecycle';
+export { UnitJobService } from './unit-job-service';
 export {
     JobType,
     TaskResult,

@@ -9,7 +9,7 @@
 import type { GameState } from '../../game-state';
 import type { EventBus } from '../../event-bus';
 import { EventSubscriptionManager } from '../../event-bus';
-import { UnitType, type Entity } from '../../entity';
+import { EntityType, UnitType, getEntityIfType, type Entity } from '../../entity';
 import { createLogger } from '@/utilities/logger';
 import { sortedEntries } from '@/utilities/collections';
 import { SettlerState, type SettlerConfig } from './types';
@@ -20,6 +20,7 @@ import type { UnitStateMachine, UnitRuntime } from './unit-state-machine';
 import type { IndexedMap } from '@/game/utils/indexed-map';
 import { type TickScheduler, type ScheduleHandle, NO_HANDLE } from '../../systems/tick-scheduler';
 import type { WorkHandlerRegistry } from './work-handler-registry';
+import type { IdleAnimationController } from './idle-animation-controller';
 import { buildAllSettlerConfigs } from '../../data/settler-data-access';
 
 const log = createLogger('SettlerLifecycleCoordinator');
@@ -45,6 +46,7 @@ export interface SettlerLifecycleConfig {
     locationManager: ISettlerBuildingLocationManager;
     inventoryManager: BuildingInventoryManager;
     handlerRegistry: WorkHandlerRegistry;
+    animController: IdleAnimationController;
     /**
      * Callback to interrupt or complete a settler job during cleanup.
      * Called when a settler is removed while a job is in progress.
@@ -70,6 +72,7 @@ export class SettlerLifecycleCoordinator {
     private readonly workerTracker: BuildingWorkerTracker;
     private readonly runtimes: IndexedMap<number, UnitRuntime>;
     private readonly handlerRegistry: WorkHandlerRegistry;
+    private readonly animController: IdleAnimationController;
     private readonly interruptJob: InterruptJobCallback;
     private readonly createRuntime: CreateRuntimeCallback;
     private readonly settlerConfigs: SettlerConfigs;
@@ -84,6 +87,7 @@ export class SettlerLifecycleCoordinator {
         this.workerTracker = config.workerTracker;
         this.runtimes = config.runtimes;
         this.handlerRegistry = config.handlerRegistry;
+        this.animController = config.animController;
         this.interruptJob = config.interruptJob;
         this.createRuntime = config.createRuntime;
         this.settlerConfigs = buildAllSettlerConfigs();
@@ -109,6 +113,14 @@ export class SettlerLifecycleCoordinator {
 
         this.subscriptions.subscribe(this.eventBus, 'unit:dismissed', ({ unitId }) => {
             this.handleUnitDismissed(unitId);
+        });
+
+        // Walk animation follows movement — any path start, regardless of who issued it.
+        this.subscriptions.subscribe(this.eventBus, 'unit:movementStarted', ({ unitId }) => {
+            const unit = getEntityIfType(this.gameState, unitId, EntityType.Unit);
+            if (unit) {
+                this.animController.ensureWalkAnimation(unit);
+            }
         });
 
         this.orphanHandle = this.tickScheduler.schedule(ORPHAN_CHECK_INTERVAL, () => this.orphanCheckAndReschedule());

@@ -18,6 +18,26 @@ import { createSlope } from '../../helpers/test-map';
 
 installRealGameData();
 
+/** Shared setup: residences, storage materials, tools, nearby diggers/builders. */
+function setupConstructionBase(sim: Simulation): { storageId: number } {
+    const residenceId = sim.placeBuilding(BuildingType.ResidenceSmall);
+    sim.placeBuilding(BuildingType.ResidenceMedium);
+
+    const storageId = sim.placeBuilding(BuildingType.StorageArea);
+    sim.injectOutput(storageId, EMaterialType.BOARD, 8);
+    sim.injectOutput(storageId, EMaterialType.STONE, 8);
+
+    sim.placeGoods(EMaterialType.SHOVEL, 8);
+    sim.placeGoods(EMaterialType.HAMMER, 8);
+
+    // Pre-spawn specialists near residences so top-up assigns without long recruit walks.
+    sim.spawnUnitNear(residenceId, UnitType.Digger, 4);
+    sim.spawnUnitNear(residenceId, UnitType.Builder, 4);
+    sim.spawnUnitNear(residenceId, UnitType.Carrier, 4);
+
+    return { storageId };
+}
+
 // ─── Digger & builder top-up ──────────────────────────────────────
 
 describe('Construction worker top-up – diggers & builders', { timeout: 30_000 }, () => {
@@ -30,26 +50,17 @@ describe('Construction worker top-up – diggers & builders', { timeout: 30_000 
 
     it('site recruits additional diggers when global cap frees up', () => {
         sim = createSimulation();
-
-        sim.placeBuilding(BuildingType.ResidenceSmall);
-        sim.placeBuilding(BuildingType.ResidenceMedium);
-
-        const storageId = sim.placeBuilding(BuildingType.StorageArea);
-        sim.injectOutput(storageId, EMaterialType.BOARD, 8);
-        sim.injectOutput(storageId, EMaterialType.STONE, 8);
-
-        sim.placeGoods(EMaterialType.SHOVEL, 8);
-        sim.placeGoods(EMaterialType.HAMMER, 8);
+        setupConstructionBase(sim);
 
         const site1Id = sim.placeBuilding(BuildingType.WoodcutterHut, 0, false);
 
-        sim.runTicks(60);
+        sim.runTicks(30);
 
         const site2Id = sim.placeBuilding(BuildingType.WoodcutterHut, 0, false);
 
         sim.waitForPhase(site1Id, BuildingConstructionPhase.WaitingForBuilders, 50_000);
 
-        sim.runTicks(200);
+        sim.runTicks(60);
 
         sim.waitForPhase(site2Id, BuildingConstructionPhase.WaitingForBuilders, 50_000);
 
@@ -58,16 +69,7 @@ describe('Construction worker top-up – diggers & builders', { timeout: 30_000 
 
     it('two sequential construction sites both complete when sharing digger cap', () => {
         sim = createSimulation();
-
-        sim.placeBuilding(BuildingType.ResidenceSmall);
-        sim.placeBuilding(BuildingType.ResidenceMedium);
-
-        const storageId = sim.placeBuilding(BuildingType.StorageArea);
-        sim.injectOutput(storageId, EMaterialType.BOARD, 8);
-        sim.injectOutput(storageId, EMaterialType.STONE, 8);
-
-        sim.placeGoods(EMaterialType.SHOVEL, 8);
-        sim.placeGoods(EMaterialType.HAMMER, 8);
+        setupConstructionBase(sim);
 
         const site1Id = sim.placeBuilding(BuildingType.WoodcutterHut, 0, false);
         const site2Id = sim.placeBuilding(BuildingType.WoodcutterHut, 0, false);
@@ -81,16 +83,7 @@ describe('Construction worker top-up – diggers & builders', { timeout: 30_000 
 
     it('site recruits additional builders when global cap frees up', () => {
         sim = createSimulation();
-
-        sim.placeBuilding(BuildingType.ResidenceSmall);
-        sim.placeBuilding(BuildingType.ResidenceMedium);
-
-        const storageId = sim.placeBuilding(BuildingType.StorageArea);
-        sim.injectOutput(storageId, EMaterialType.BOARD, 8);
-        sim.injectOutput(storageId, EMaterialType.STONE, 8);
-
-        sim.placeGoods(EMaterialType.SHOVEL, 8);
-        sim.placeGoods(EMaterialType.HAMMER, 8);
+        setupConstructionBase(sim);
 
         const site1Id = sim.placeBuilding(BuildingType.WoodcutterHut, 0, false);
         const site2Id = sim.placeBuilding(BuildingType.WoodcutterHut, 0, false);

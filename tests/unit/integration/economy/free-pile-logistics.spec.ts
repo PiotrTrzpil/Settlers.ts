@@ -199,4 +199,23 @@ describe('Free pile logistics (real game data)', { timeout: 30_000 }, () => {
         expect(sim.countEntities(EntityType.Unit, UnitType.Woodcutter)).toBe(1);
         expect(sim.errors).toHaveLength(0);
     });
+
+    it('transport assign reuses record id as entity.jobId (single numeric job identity)', () => {
+        sim = createSimulation();
+        sim.placeBuilding(BuildingType.ResidenceSmall);
+        const sawmillId = sim.placeBuilding(BuildingType.Sawmill);
+        sim.injectOutput(sawmillId, EMaterialType.BOARD, 3);
+        sim.placeBuilding(BuildingType.WoodcutterHut, 0, false);
+
+        sim.runUntil(() => sim.services.jobStore.jobs.size > 0, {
+            maxTicks: 50_000,
+            label: 'at least one transport job assigned',
+        });
+
+        for (const record of sim.services.jobStore.jobs.values()) {
+            const carrier = sim.state.getEntityOrThrow(record.carrierId, 'carrier with transport job');
+            // entity.jobId must match the transport record — not a second allocateJobId() value
+            expect(carrier.jobId).toBe(record.id);
+        }
+    });
 });

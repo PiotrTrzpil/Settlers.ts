@@ -31,13 +31,17 @@ import type { MaterialTransfer } from '../material-transfer/material-transfer';
 import { RequestMatcher } from './request-matcher';
 import type { LogisticsMatchFilter, CarrierFilter } from './logistics-filter';
 import type { StorageFilterManager } from '../../systems/inventory/storage-filter-manager';
-import { CarrierAssigner, type JobAssigner } from './carrier-assigner';
+import { CarrierAssigner } from './carrier-assigner';
+import type { TaskDispatcher } from '../settler-tasks';
 import { StallDetector } from './stall-detector';
 import { MatchDiagnostics } from './match-diagnostics';
 import { ThrottledEmitter } from './throttled-emitter';
 import { TransportJobBuilder, type TransportPositionResolver } from './transport-job-builder';
 import { clearJobId } from '../../entity';
 import { createLogger } from '@/utilities/logger';
+
+// clearJobId is only used in restore orphan cleanup. Live units clear jobId via
+// settler-task lifecycle (completeJob / interruptJob) — see docs/architecture/logistics-task-simplification.md.
 
 const log = createLogger('LogisticsDispatcher');
 
@@ -51,7 +55,8 @@ const EVENT_COOLDOWN_SEC = 5;
 export interface LogisticsDispatcherConfig extends CoreDeps {
     carrierRegistry: CarrierRegistry;
     idleCarrierPool: IdleCarrierPool;
-    jobAssigner: JobAssigner;
+    /** Settler job assignment (TaskDispatcher.assignJob). */
+    taskDispatcher: Pick<TaskDispatcher, 'assignJob'>;
     positionResolver: TransportPositionResolver;
     demandLedger: DemandLedger;
     jobStore: TransportJobStore;
@@ -77,6 +82,7 @@ export class LogisticsDispatcher implements TickSystem {
     private readonly materialTransfer: MaterialTransfer;
     private readonly requestMatcher: RequestMatcher;
     private readonly carrierAssigner: CarrierAssigner;
+    private readonly idleCarrierPool: IdleCarrierPool;
     private readonly stallDetector: StallDetector;
     private readonly matchDiagnostics: MatchDiagnostics;
     private readonly eventBus: EventBus;
@@ -90,8 +96,8 @@ export class LogisticsDispatcher implements TickSystem {
     /** Event subscription manager for cleanup */
     private readonly subscriptions = new EventSubscriptionManager();
 
-    /** Job assigner reference needed for flushing queued assignments and restoring jobs. */
-    private readonly jobAssigner: JobAssigner;
+    /** Job assignment for flushing queued follow-ups and restoring jobs. */
+    private readonly taskDispatcher: Pick<TaskDispatcher, 'assignJob'>;
 
     /** Builder for creating transport choreographies (assignment, flush, and restore). */
     private readonly transportJobBuilder: TransportJobBuilder;
@@ -103,8 +109,9 @@ export class LogisticsDispatcher implements TickSystem {
         this.eventBus = config.eventBus;
         this.demandLedger = config.demandLedger;
         this.jobStore = config.jobStore;
-        this.jobAssigner = config.jobAssigner;
+        this.taskDispatcher = config.taskDispatcher;
         this.carrierRegistry = config.carrierRegistry;
+        this.idleCarrierPool = config.idleCarrierPool;
         this.inventoryManager = config.inventoryManager;
         this.materialTransfer = config.materialTransfer;
 
@@ -135,7 +142,7 @@ export class LogisticsDispatcher implements TickSystem {
             gameState: config.gameState,
             eventBus: config.eventBus,
             idleCarrierPool: config.idleCarrierPool,
-            jobAssigner: config.jobAssigner,
+            taskDispatcher: config.taskDispatcher,
             transportJobBuilder: this.transportJobBuilder,
             transportJobDeps: this.transportJobDeps,
             carrierFilter: config.carrierFilter,
@@ -172,14 +179,10 @@ export class LogisticsDispatcher implements TickSystem {
      * before inventory removal (inventory data must exist while cancelling jobs).
      */
     registerEvents(eventBus: EventBus, cleanupRegistry: EntityCleanupRegistry): void {
-        // jobId is cleared (and any queued follow-up flushed) only when the carrier's
-        // task ends naturally — clearing earlier (e.g. on deliveryComplete) makes the
-        // carrier appear idle while its delivery animation is still running.
+        // Queued follow-up is activated when the carrier's choreography ends.
+        // entity.jobId is already cleared by WorkerJobLifecycle.completeJob before this event —
+        // lifecycle owns clearJobId for live units (do not clear here).
         this.subscriptions.subscribe(eventBus, 'settler:taskCompleted', ({ unitId }) => {
-            const entity = this.transportJobDeps.gameState.getEntity(unitId);
-            if (entity) {
-                clearJobId(entity);
-            }
             this.flushQueuedAssignment(unitId);
         });
 
@@ -230,8 +233,8 @@ export class LogisticsDispatcher implements TickSystem {
             this.restoreJob(record);
         }
 
-        // Carriers with a stale jobId from a non-transport task (or older snapshot)
-        // and no live record: release them back to the idle pool.
+        // Orphan jobId with no live transport record (and no choreo to run lifecycle):
+        // restore is the only path allowed to clearJobId outside settler-task lifecycle.
         for (const carrierId of this.carrierRegistry) {
             const entity = gameState.getEntityOrThrow(carrierId, 'restoreJobs carrier scan');
             if (entity.jobId == null || this.jobStore.getActiveJobForCarrier(carrierId)) {
@@ -268,7 +271,7 @@ export class LogisticsDispatcher implements TickSystem {
                 ? this.transportJobBuilder.buildDeliveryOnly(record)
                 : this.transportJobBuilder.build(record);
 
-        if (this.jobAssigner.assignJob(record.carrierId, job, job.targetPos!)) {
+        if (this.taskDispatcher.assignJob(record.carrierId, job, job.targetPos!, record.id)) {
             log.info(`Restored ${record.phase} job #${record.id} for carrier ${record.carrierId}`);
         } else {
             log.warn(`Failed to restore job #${record.id} for carrier ${record.carrierId} — cancelling`);
@@ -288,6 +291,8 @@ export class LogisticsDispatcher implements TickSystem {
         this.noCarrierEmitter.advance(dt);
         this.demandLedger.advanceTime(dt);
         this.matchDiagnostics.tick(dt);
+        // One spatial rebuild for all carrier lookups this tick (assign + ranking).
+        this.idleCarrierPool.beginFrame();
         this.assignPendingDemands();
         this.matchDiagnostics.markConsumed();
         this.stallDetector.tick(dt);
@@ -319,14 +324,15 @@ export class LogisticsDispatcher implements TickSystem {
             }
 
             const result = this.carrierAssigner.tryAssignBest(request, candidates);
-            if (result === 'no_carrier') {
+            if (result.status === 'no_carrier') {
                 this.emitNoCarrierThrottled(entry, candidates[0]!.sourceBuilding);
                 continue;
             }
-            if (result) {
+            if (result.status === 'assigned') {
                 this.demandLedger.markServed(entry);
                 assignmentCount++;
             }
+            // failed: reservation/movement — retry next tick; no markServed
         }
     }
 
@@ -373,7 +379,7 @@ export class LogisticsDispatcher implements TickSystem {
 
         TransportJobService.promoteQueued(record, this.transportJobDeps);
         const job = this.transportJobBuilder.build(record);
-        const success = this.jobAssigner.assignJob(carrierId, job, job.targetPos!);
+        const success = this.taskDispatcher.assignJob(carrierId, job, job.targetPos!, record.id);
         if (!success) {
             // Assignment failed (e.g. movement blocked) — cancel; the deficit re-opens.
             TransportJobService.cancel(record, 'assignment_failed', this.transportJobDeps);

@@ -43,7 +43,8 @@ describe('Economy – gatherer & production chains', { timeout: 5000 }, () => {
         sim.plantTreesFar(woodcutterId, 5);
 
         sim.runUntil(() => sim.getOutput(woodcutterId, EMaterialType.LOG) >= 3, { maxTicks: 300 * 30 });
-        sim.runTicks(60 * 30);
+        // Brief stability window — full 60s of padding only burned CPU after the condition already held.
+        sim.runTicks(90);
         expect(sim.getOutput(woodcutterId, EMaterialType.LOG)).toBe(3);
     });
 
@@ -59,7 +60,7 @@ describe('Economy – gatherer & production chains', { timeout: 5000 }, () => {
         sim.plantTreesNear(woodcutterId, 5);
 
         sim.runUntil(() => sim.getOutput(sawmillId, EMaterialType.BOARD) >= 5, { maxTicks: 300 * 30 });
-        sim.runTicks(30 * 30);
+        sim.runTicks(90);
         expect(sim.getOutput(sawmillId, EMaterialType.BOARD)).toBe(5);
     });
 
@@ -72,7 +73,7 @@ describe('Economy – gatherer & production chains', { timeout: 5000 }, () => {
         sim.plantTreesNear(woodcutterId, 5);
 
         sim.runUntil(() => sim.getOutput(woodcutterId, EMaterialType.LOG) >= 5, { maxTicks: 500 * 30 });
-        sim.runTicks(60 * 30);
+        sim.runTicks(90);
         expect(sim.getOutput(woodcutterId, EMaterialType.LOG)).toBe(5);
     });
 
@@ -159,14 +160,15 @@ describe('Economy – gatherer & production chains', { timeout: 5000 }, () => {
                 } else {
                     stableTicks++;
                 }
-                return stableTicks >= 60 * 30;
+                // Must have mined something, then stayed stable ~3s (not 60s of pure padding).
+                return lastCount > 0 && stableTicks >= 90;
             },
             { maxTicks: 500 * 30 }
         );
         const stonesFromNearby = sim.getOutput(stonecutterId, EMaterialType.STONE);
         expect(stonesFromNearby).toBeGreaterThan(0);
 
-        sim.runTicks(60 * 30);
+        sim.runTicks(90);
         expect(sim.getOutput(stonecutterId, EMaterialType.STONE)).toBe(stonesFromNearby);
     });
 

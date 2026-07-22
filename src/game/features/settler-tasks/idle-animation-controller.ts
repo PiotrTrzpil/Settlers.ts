@@ -60,18 +60,12 @@ export class IdleAnimationController {
     /**
      * Update idle behaviour for a unit that is not executing a job.
      * Handles the case where the unit might be moving (pushed) or standing.
+     * Walk animation is driven by movement state — not by job/dispatch callers.
      * @param movementState - current movement controller state ('idle' | 'moving' | undefined)
-     * @param movementDirection - current facing direction from the movement controller
      */
     updateIdleUnit(unit: Entity, idleState: IdleAnimationState, dt: number, movementState: string | undefined): void {
-        // If unit is moving (e.g., pushed), play walk animation
         if (movementState === 'moving') {
-            const vs = this.visualService.getState(unit.id);
-            const prefix = getPrefix(unit);
-            const walkKey = unit.carrying ? xmlKey(prefix, `WALK_${unit.carrying.material}`) : xmlKey(prefix, 'WALK');
-            if (!vs?.animation?.playing || vs.animation.sequenceKey !== walkKey) {
-                this.startWalkAnimation(unit);
-            }
+            this.ensureWalkAnimation(unit);
             idleState.idleTime = 0;
             return;
         }
@@ -118,20 +112,40 @@ export class IdleAnimationController {
     }
 
     /**
-     * Start walk animation for a unit (used for move tasks and external movement).
-     * Direction is already set on the controller by the caller — visual sync
-     * happens in updateDirectionTracking.
+     * Ensure the unit has a looping walk sequence for its type / carried material.
+     *
+     * Callers that issue movement should NOT set animation themselves — the per-tick
+     * movement visual sync (updateDirectionTracking / updateIdleUnit) owns this.
+     * Does not require `playing` so blocked (isWaiting) units keep the walk sequence
+     * without restarting every freeze tick.
+     */
+    ensureWalkAnimation(unit: Entity): void {
+        const vs = this.visualService.getState(unit.id);
+        const walkKey = this.walkSequenceKey(unit);
+        if (!vs?.animation || vs.animation.sequenceKey !== walkKey || !vs.animation.loop) {
+            this.startWalkAnimation(unit);
+        }
+    }
+
+    /**
+     * Start walk animation for a unit.
+     * Prefer ensureWalkAnimation — only call this when forcing a fresh walk cycle.
+     * Direction is synced from the movement controller in updateDirectionTracking.
      */
     startWalkAnimation(unit: Entity): void {
+        this.visualService.applyIntent(unit.id, {
+            sequence: this.walkSequenceKey(unit),
+            loop: true,
+            stopped: false,
+        });
+    }
+
+    private walkSequenceKey(unit: Entity): string {
         const prefix = getPrefix(unit);
-        let sequence: string;
         if (unit.carrying) {
-            sequence = xmlKey(prefix, `WALK_${unit.carrying.material}`);
-        } else {
-            sequence = xmlKey(prefix, 'WALK');
+            return xmlKey(prefix, `WALK_${unit.carrying.material}`);
         }
-        this.visualService.applyIntent(unit.id, { sequence, loop: true, stopped: false });
-        // Direction is read from the controller by the per-tick sync — no direct visual write.
+        return xmlKey(prefix, 'WALK');
     }
 
     /**

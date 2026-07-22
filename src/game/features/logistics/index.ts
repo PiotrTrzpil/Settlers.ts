@@ -11,13 +11,7 @@
  */
 
 // Resource supply types and helpers
-export {
-    type ResourceSupply,
-    type SupplySearchOptions,
-    getAvailableSupplies,
-    hasAnySupply,
-    getTotalSupply,
-} from './resource-supply';
+export { type ResourceSupply, type SupplySearchOptions, getAvailableSupplies } from './resource-supply';
 
 // Demand ledger (declarative standing orders; replaces the ticket-based DemandQueue)
 export { DemandLedger, type DemandTarget, type SetTargetOptions, DemandPriority } from './demand-ledger';
@@ -27,15 +21,7 @@ export { computeDeficit, deliverySpace } from './demand-deficit';
 export { travelCost } from './travel-cost';
 
 // Fulfillment matching
-export {
-    type FulfillmentMatch,
-    type MatchOptions,
-    type MatchableRequest,
-    matchRequestToSupply,
-    findAllMatches,
-    canPotentiallyFulfill,
-    estimateFulfillmentDistance,
-} from './fulfillment-matcher';
+export { type FulfillmentMatch, type MatchOptions, type MatchableRequest, findAllMatches } from './fulfillment-matcher';
 
 // Fulfillment diagnostics (debug panel support)
 export {
@@ -60,8 +46,7 @@ export { RequestMatcher, type RequestMatcherConfig, type RequestMatchResult } fr
 export {
     CarrierAssigner,
     type CarrierAssignerConfig,
-    type AssignmentSuccess,
-    type JobAssigner,
+    type AssignResult,
     type TransportDemand,
 } from './carrier-assigner';
 
@@ -72,7 +57,7 @@ export {
     type TransportPositionResolver,
 } from './transport-job-builder';
 
-// Stall detector (cancels timed-out in-progress requests)
+// Stall detector (diagnostic only — logs stalled carriers, does not cancel)
 export { StallDetector, type StallDetectorConfig } from './stall-detector';
 
 // Match diagnostics (throttled logging of unmatched requests)

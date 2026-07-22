@@ -19,7 +19,7 @@ import { type UnitType, getUnitTypeAtLevel } from '@/game/core/unit-types';
 import { BuildingType } from '@/game/buildings/building-type';
 import { getBuildingDoorPos } from '@/game/data/game-data-access';
 import { choreo, type ChoreoJobState } from '@/game/features/settler-tasks';
-import { ChoreoTaskType } from '@/game/systems/choreo';
+import { ChoreoTaskType, JobKind } from '@/game/systems/choreo';
 import type { RecruitSystem } from '@/game/systems/recruit/recruit-system';
 import { getTrainingRecipeSet, getTrainingRecipes } from './training-recipes';
 import type { TrainingRecipe, BarracksTrainingState } from './types';
@@ -264,7 +264,7 @@ function buildTrainingJob(
     const prefix = UNIT_XML_PREFIX[targetUnitType]!;
     const fightJobPart = xmlKey(prefix, 'FIGHT');
 
-    return choreo('BARRACKS_TRAINING')
+    return choreo('BARRACKS_TRAINING', JobKind.Barracks)
         .goTo({ x: doorX, y: doorY })
         .transformRecruitBuilding(targetUnitType, reservationId)
         .addNode(ChoreoTaskType.WAIT, { duration: durationFrames, jobPart: fightJobPart })

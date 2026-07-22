@@ -19,6 +19,7 @@ import { EMaterialType } from '../../economy/material-type';
 import type { UnitTransformer } from './unit-transformer';
 import type { ToolSourceResolver, MaterialCost, InventorySide } from './tool-source-resolver';
 import { choreo } from '../choreo/choreo-builder';
+import { JobKind } from '../choreo/types';
 import type { IdleCarrierPool } from '../idle-carrier-pool';
 import type { Race } from '../../core/race';
 import type { ChoreoJobState } from '../choreo';
@@ -283,7 +284,7 @@ export class RecruitSystem implements TickSystem {
         // 4. Build choreo: walk to building → withdraw + transform
         const job = opts?.buildJob
             ? opts.buildJob({ carrierId, toolPile: null, reservationId: handle.id })
-            : choreo('BUILDING_RECRUIT')
+            : choreo('BUILDING_RECRUIT', JobKind.WorkplaceDispatch)
                   .goTo(walkTo, buildingId)
                   .transformRecruitBuilding(unitType, handle.id)
                   .target(buildingId)
@@ -379,6 +380,8 @@ export class RecruitSystem implements TickSystem {
         this.queueTimer += dt;
         if (this.queueTimer >= QUEUE_DRAIN_INTERVAL) {
             this.queueTimer -= QUEUE_DRAIN_INTERVAL;
+            // Refresh spatial idle-carrier index once for all lookups this drain.
+            this.idleCarrierPool.beginFrame();
             this.drainQueue();
         }
     }

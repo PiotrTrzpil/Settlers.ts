@@ -1,14 +1,7 @@
 /**
  * Transport-specific choreography executors for carrier delivery jobs.
  *
- * Dedicated executors for TRANSPORT_* task types — no branching on transportData.
- * These are registered on ChoreoSystem by registerTransportExecutors() and only
- * run for carrier transport choreographies built by TransportJobBuilder.
- *
- * Movement executors (TRANSPORT_GO_TO_SOURCE/DEST) read positions from
- * job.transportData and delegate to moveToPosition from settler-tasks.
- * Inventory executors (TRANSPORT_PICKUP/DELIVER) handle the TransportJob
- * lifecycle via td.ops closures, material transfer, and carrier events.
+ * Lifecycle uses TransportJobStore + TransportJobService via context (pure transportData).
  */
 
 import type { Entity } from '../../../entity';
@@ -19,17 +12,13 @@ import type { ChoreoJobState, ChoreoNode, TransportData } from '../../../systems
 import type { MovementContext } from '../../settler-tasks';
 import type { TransportExecutorContext } from './transport-executor-context';
 import { moveToPosition } from '../../settler-tasks/internal/movement-executors';
+import * as TransportJobService from '../transport-job-service';
+import { TransportPhase } from '../transport-job-record';
 
 const log = createLogger('TransportExecutors');
 
-/** Carrier must step onto the exact pile tile. */
 const ARRIVAL_DIST_EXACT = 0;
-
-/**
- * Default animation cycle for inventory nodes with duration=0 (one pickup/dropoff animation).
- * Carrier pickup/dropoff animations are typically 4-5 frames at 100ms each.
- */
-const DEFAULT_INVENTORY_CYCLE_FRAMES = 5; // 0.5 seconds at CHOREO_FPS
+const DEFAULT_INVENTORY_CYCLE_FRAMES = 5;
 
 function resolveInventoryDuration(node: ChoreoNode): number {
     if (node.duration === 0) {
@@ -41,7 +30,6 @@ function resolveInventoryDuration(node: ChoreoNode): number {
     return framesToSeconds(node.duration);
 }
 
-/** Require transportData on the job — all TRANSPORT_* executors need it. */
 function requireTransportData(job: ChoreoJobState, context: string): TransportData {
     if (!job.transportData) {
         throw new Error(
@@ -51,11 +39,15 @@ function requireTransportData(job: ChoreoJobState, context: string): TransportDa
     return job.transportData;
 }
 
+/** True when the transport record still exists in the store. */
+function isJobLive(ctx: TransportExecutorContext, jobId: number): boolean {
+    return ctx.jobStore.get(jobId) !== undefined;
+}
+
 // ─────────────────────────────────────────────────────────────
 // Movement executors
 // ─────────────────────────────────────────────────────────────
 
-/** TRANSPORT_GO_TO_SOURCE — move to source building's output pile for pickup. */
 export function executeTransportGoToSource(
     settler: Entity,
     job: ChoreoJobState,
@@ -67,7 +59,6 @@ export function executeTransportGoToSource(
     return moveToPosition(settler, td.sourcePos.x, td.sourcePos.y, node, ctx, ARRIVAL_DIST_EXACT, job);
 }
 
-/** TRANSPORT_GO_TO_DEST — move to destination building's input pile for delivery. */
 export function executeTransportGoToDest(
     settler: Entity,
     job: ChoreoJobState,
@@ -85,12 +76,7 @@ export function executeTransportGoToDest(
 
 /**
  * TRANSPORT_PICKUP — withdraw material from source building.
- *
- * First tick: validates job via td.ops.isValid() and starts the pickup animation.
- * Animation end: advances phase to PickedUp and withdraws via materialTransfer.
- *
- * Phase stays Reserved during animation so getReservedAmount() keeps counting
- * this job's material — prevents double-dispatch of the same output stock.
+ * Phase stays Reserved during animation so getReservedAmount still counts this job.
  */
 export function executeTransportPickup(
     settler: Entity,
@@ -101,10 +87,8 @@ export function executeTransportPickup(
 ): TaskResult {
     if (!job.workStarted) {
         job.workStarted = true;
-
         const td = requireTransportData(job, 'TRANSPORT_PICKUP');
-
-        if (!td.ops.isValid()) {
+        if (!isJobLive(ctx, td.jobId)) {
             log.debug(`Carrier ${settler.id}: transport job ${td.jobId} no longer exists, aborting pickup`);
             return TaskResult.FAILED;
         }
@@ -114,21 +98,13 @@ export function executeTransportPickup(
 
     if (result === TaskResult.DONE) {
         const td = requireTransportData(job, 'TRANSPORT_PICKUP');
-
-        // Re-check validity — job may have been cancelled during the animation
-        // (e.g. source building destroyed). If so, material was already handled
-        // by the building's destruction cleanup.
-        if (!td.ops.isValid()) {
+        const record = ctx.jobStore.get(td.jobId);
+        if (!record || record.phase !== TransportPhase.Reserved) {
             log.debug(`Carrier ${settler.id}: transport job ${td.jobId} cancelled during pickup animation`);
             return TaskResult.FAILED;
         }
 
-        // Advance phase to PickedUp atomically with the withdrawal — this ensures
-        // getReservedAmount() counts the material until it's actually withdrawn.
-        if (!td.ops.pickUp()) {
-            log.debug(`Carrier ${settler.id}: transport job ${td.jobId} cancelled before pickup`);
-            return TaskResult.FAILED;
-        }
+        TransportJobService.pickUp(record, ctx.transportJobDeps);
 
         const { material, sourceBuildingId, amount: requestedAmount } = td;
         const withdrawn = ctx.materialTransfer.pickUpOutput(settler.id, sourceBuildingId, material, requestedAmount);
@@ -160,16 +136,6 @@ export function executeTransportPickup(
     return result;
 }
 
-/**
- * Deposit material from the carrier into the destination building, resolving
- * the landing slot(s) at delivery time (late slot binding — no reservation).
- *
- * Calls `inventoryManager.depositDelivery(buildingId, material, amount)`.
- * If the building cannot fit all material (overflow), the remainder is dropped
- * as a free pile via `materialTransfer.drop` after adjusting entity.carrying.
- *
- * Returns the amount successfully deposited.
- */
 function depositIntoBuilding(settler: Entity, buildingId: number, ctx: TransportExecutorContext): number {
     if (!settler.carrying) {
         throw new Error(`TransportExecutors.depositIntoBuilding: settler ${settler.id} is not carrying anything`);
@@ -180,8 +146,6 @@ function depositIntoBuilding(settler: Entity, buildingId: number, ctx: Transport
 
     const overflow = amount - deposited;
     if (overflow > 0) {
-        // Adjust carrying amount to the overflow so materialTransfer.drop creates
-        // a free pile with the correct quantity. clearCarrying is called inside drop.
         settler.carrying = { material, amount: overflow };
         ctx.materialTransfer.drop(settler.id);
     } else {
@@ -193,11 +157,6 @@ function depositIntoBuilding(settler: Entity, buildingId: number, ctx: Transport
 
 /**
  * TRANSPORT_DELIVER — deposit material at destination building.
- *
- * First tick: validates job via td.ops.isValid() and starts the dropoff animation.
- * Animation end: deposits via inventoryManager.deposit(slotId) into the targeted slot
- * from transportData, fulfills the transport job. Emits construction:materialDelivered
- * when delivering to a construction site.
  */
 export function executeTransportDeliver(
     settler: Entity,
@@ -208,10 +167,9 @@ export function executeTransportDeliver(
 ): TaskResult {
     if (!job.workStarted) {
         job.workStarted = true;
-
         const td = requireTransportData(job, 'TRANSPORT_DELIVER');
 
-        if (!td.ops.isValid()) {
+        if (!isJobLive(ctx, td.jobId)) {
             log.debug(`Carrier ${settler.id}: transport job ${td.jobId} no longer exists, dropping material`);
             ctx.materialTransfer.drop(settler.id);
             return TaskResult.FAILED;
@@ -233,7 +191,11 @@ export function executeTransportDeliver(
 
         const amount = settler.carrying!.amount;
         const deposited = depositIntoBuilding(settler, destBuildingId, ctx);
-        td.ops.deliver();
+
+        const record = ctx.jobStore.get(td.jobId);
+        if (record && record.phase === TransportPhase.PickedUp) {
+            TransportJobService.deliver(record, ctx.transportJobDeps);
+        }
 
         const overflow = amount - deposited;
         if (overflow > 0) {
@@ -269,12 +231,6 @@ export function executeTransportDeliver(
     return result;
 }
 
-/**
- * TRANSPORT_STAND_UP — cosmetic stand-up animation after delivery.
- *
- * Plays the C_DOWN_NONE animation in reverse (via node.forward=false) so the
- * carrier smoothly rises instead of snapping to idle. No material logic needed.
- */
 export function executeTransportStandUp(
     _settler: Entity,
     job: ChoreoJobState,

@@ -9,6 +9,7 @@ import type { GameState } from '@/game/game-state';
 import type { UnitReservationRegistry } from '@/game/systems/unit-reservation';
 import type { SettlerTaskSystem } from '@/game/features/settler-tasks';
 import { choreo } from '@/game/systems/choreo/choreo-builder';
+import { JobKind } from '@/game/systems/choreo/types';
 import { createLogger } from '@/utilities/logger';
 
 const log = createLogger('GarrisonDispatch');
@@ -34,7 +35,7 @@ export function dispatchUnitToGarrison(unitId: number, buildingId: number, deps:
     });
 
     try {
-        const job = choreo('WORKER_DISPATCH').goToDoorAndEnter(buildingId).build();
+        const job = choreo('WORKER_DISPATCH', JobKind.Garrison).goToDoorAndEnter(buildingId).build();
         const assigned = settlerTaskSystem.assignJob(unitId, job, job.targetPos ?? undefined);
 
         if (assigned) {

@@ -105,10 +105,17 @@ export interface GameEventsCore {
     // === Movement Events ===
 
     /**
+     * Emitted when a unit begins pathing (startPath or redirectPath).
+     * SettlerTaskSystem uses this to start walk animation immediately —
+     * jobs/commands only call moveUnit and never touch animation.
+     */
+    'unit:movementStarted': {
+        unitId: number;
+    };
+
+    /**
      * Emitted when a unit stops moving (becomes idle).
      * Used by CarrierSystem for arrival detection.
-     * Note: movementStarted and directionChanged were removed - animation
-     * is now handled by SettlerTaskSystem directly, not via events.
      */
     'unit:movementStopped': {
         unitId: number;

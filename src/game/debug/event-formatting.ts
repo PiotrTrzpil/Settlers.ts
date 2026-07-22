@@ -37,6 +37,7 @@ export const EventFmt = {
 
     'unit:spawned': (e: GameEvents['unit:spawned']) => `${e.unitType} at (${e.x},${e.y})`,
 
+    'unit:movementStarted': () => 'path started',
     'unit:movementStopped': (e: GameEvents['unit:movementStopped']) => `dir=${e.direction}`,
 
     // Verbose movement

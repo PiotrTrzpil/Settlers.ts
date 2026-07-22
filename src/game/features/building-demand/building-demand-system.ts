@@ -27,6 +27,13 @@ import { choreo } from '../../systems/choreo/choreo-builder';
 import { getBuildingWorkerInfo } from '../../data/game-data-access';
 import { createLogger } from '@/utilities/logger';
 import type { Tile } from '@/game/core/coordinates';
+import {
+    IntervalDrain,
+    handleDemandJobCompleted,
+    handleDemandJobFailed,
+    type UnitDemandJobHandlers,
+} from '../../systems/unit-demand-loop';
+import { JobKind } from '../../systems/choreo/types';
 
 const log = createLogger('BuildingDemand');
 
@@ -59,7 +66,27 @@ export class BuildingDemandSystem implements TickSystem {
     private readonly subscriptions = new EventSubscriptionManager();
 
     private readonly demands = new Map<number, BuildingDemand>();
-    private timer = 0;
+    private readonly drain = new IntervalDrain(TICK_INTERVAL);
+
+    private readonly jobHandlers: UnitDemandJobHandlers<BuildingDemand> = {
+        ownsKind: kind => kind === JobKind.WorkplaceDispatch,
+        findByUnit: unitId => {
+            for (const demand of this.demands.values()) {
+                if (demand.committedUnitId === unitId) {
+                    return demand;
+                }
+            }
+            return undefined;
+        },
+        onJobCompleted: (demand, unitId) => {
+            this.demands.delete(demand.buildingId);
+            log.debug(`Demand fulfilled: unit ${unitId} entered building ${demand.buildingId}`);
+        },
+        onJobFailed: (demand, unitId) => {
+            demand.committedUnitId = null;
+            log.debug(`Dispatch failed: unit ${unitId}, will retry building ${demand.buildingId}`);
+        },
+    };
 
     constructor(config: BuildingDemandSystemConfig) {
         this.gameState = config.gameState;
@@ -118,12 +145,12 @@ export class BuildingDemandSystem implements TickSystem {
             this.handleUnitTransformed(unitId);
         });
 
-        this.subscriptions.subscribe(this.eventBus, 'settler:taskCompleted', ({ unitId, jobId }) => {
-            this.handleJobFinished(unitId, jobId);
+        this.subscriptions.subscribe(this.eventBus, 'settler:taskCompleted', ({ unitId, kind }) => {
+            handleDemandJobCompleted(this.jobHandlers, unitId, kind);
         });
 
-        this.subscriptions.subscribe(this.eventBus, 'settler:taskFailed', ({ unitId, jobId }) => {
-            this.handleJobFailed(unitId, jobId);
+        this.subscriptions.subscribe(this.eventBus, 'settler:taskFailed', ({ unitId, kind }) => {
+            handleDemandJobFailed(this.jobHandlers, unitId, kind);
         });
     }
 
@@ -136,12 +163,9 @@ export class BuildingDemandSystem implements TickSystem {
     // ================================================================
 
     tick(dt: number): void {
-        this.timer += dt;
-        if (this.timer < TICK_INTERVAL) {
-            return;
+        if (this.drain.tick(dt)) {
+            this.drainDemands();
         }
-        this.timer -= TICK_INTERVAL;
-        this.drainDemands();
     }
 
     // ================================================================
@@ -225,7 +249,7 @@ export class BuildingDemandSystem implements TickSystem {
     }
 
     private dispatchSpecialist(unitId: number, demand: BuildingDemand): void {
-        const job = choreo('WORKER_DISPATCH').goToDoorAndEnter(demand.buildingId).build();
+        const job = choreo('WORKER_DISPATCH', JobKind.WorkplaceDispatch).goToDoorAndEnter(demand.buildingId).build();
 
         const assigned = this.assignJob(unitId, job);
         if (!assigned) {
@@ -251,44 +275,5 @@ export class BuildingDemandSystem implements TickSystem {
                 return;
             }
         }
-    }
-
-    private handleJobFinished(unitId: number, jobId: string): void {
-        if (!this.isDispatchJob(jobId)) {
-            return;
-        }
-
-        // Find and remove the demand committed to this unit
-        for (const [buildingId, demand] of this.demands) {
-            if (demand.committedUnitId === unitId) {
-                this.demands.delete(buildingId);
-                log.debug(`Demand fulfilled: unit ${unitId}` + ` entered building ${buildingId}`);
-                return;
-            }
-        }
-    }
-
-    private handleJobFailed(unitId: number, jobId: string): void {
-        if (!this.isDispatchJob(jobId)) {
-            return;
-        }
-
-        // Reset committed unit so demand can be retried
-        for (const demand of this.demands.values()) {
-            if (demand.committedUnitId === unitId) {
-                demand.committedUnitId = null;
-                log.debug(`Dispatch failed: unit ${unitId}, will retry` + ` building ${demand.buildingId}`);
-                return;
-            }
-        }
-    }
-
-    private isDispatchJob(jobId: string): boolean {
-        return (
-            jobId === 'WORKER_DISPATCH' ||
-            jobId === 'RECRUIT_TO_WORKPLACE' ||
-            jobId === 'DIRECT_RECRUIT_TO_WORKPLACE' ||
-            jobId === 'AUTO_RECRUIT'
-        );
     }
 }

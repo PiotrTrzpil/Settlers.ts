@@ -41,13 +41,15 @@ function injectStorageMaterial(sim: Simulation, storageId: number, material: EMa
     }
 }
 
+/** Compact map is enough for castle footprint + storage; 512² only inflated pathfinding. */
+const CASTLE_MAP = { mapWidth: 160, mapHeight: 160 } as const;
+
 function createCastleSite(extraCarriers = 0) {
-    const s = createScenario.constructionSite(BuildingType.Castle, [], {
-        mapWidth: 512,
-        mapHeight: 512,
-    });
+    const s = createScenario.constructionSite(BuildingType.Castle, [], CASTLE_MAP);
     if (extraCarriers > 0) {
         s.spawnUnitNear(s.storageId, UnitType.Carrier, extraCarriers);
+        // Also near site so deliveries start immediately
+        s.spawnUnitNear(s.siteId, UnitType.Carrier, Math.ceil(extraCarriers / 2));
     }
     const costs = getConstructionCosts(BuildingType.Castle, Race.Roman);
     for (const cost of costs) {
@@ -113,11 +115,9 @@ describe('Multi-pile construction delivery', { timeout: 60_000 }, () => {
         // The ledger target is the site's remaining cost (delivered throughput),
         // so slot space freed by builders consuming materials mid-delivery must
         // not be mistaken for needing more deliveries.
-        const s = createScenario.constructionSite(BuildingType.Castle, [], {
-            mapWidth: 1024,
-            mapHeight: 1024,
-        });
+        const s = createScenario.constructionSite(BuildingType.Castle, [], CASTLE_MAP);
         s.spawnUnitNear(s.storageId, UnitType.Carrier, 6);
+        s.spawnUnitNear(s.siteId, UnitType.Carrier, 4);
         const costs = getConstructionCosts(BuildingType.Castle, Race.Roman);
         for (const cost of costs) {
             injectStorageMaterial(s, s.storageId, cost.material, cost.count * 3);

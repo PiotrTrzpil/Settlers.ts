@@ -16,9 +16,10 @@ import type { ExecuteCommand } from '../../commands';
 import type { TaskResult, ChoreoJobState, ChoreoNode } from '../../systems/choreo';
 import type { ConstructionSiteManager } from '../building-construction/construction-site-manager';
 
-// Re-export everything from systems/choreo so existing importers don't need to change paths.
+// Re-export everything from systems/choreo (including JobKind) so existing importers don't need to change paths.
 export {
     ChoreoTaskType,
+    JobKind,
     parseChoreoTaskType,
     type ChoreoNode,
     type ChoreoJob,

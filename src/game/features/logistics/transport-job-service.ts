@@ -8,7 +8,6 @@
  * landing slot is resolved at delivery time.
  */
 
-import { clearJobId } from '../../entity';
 import { EMaterialType } from '../../economy/material-type';
 import type { EventBus } from '../../event-bus';
 import { TransportPhase, type TransportJobRecord } from './transport-job-record';
@@ -94,6 +93,10 @@ export function pickUp(record: TransportJobRecord, deps: TransportJobDeps): void
 /**
  * Mark the transport job as delivered, remove it from the store, and emit
  * the fulfillment event. Asserts phase===PickedUp.
+ *
+ * Does NOT clear entity.jobId — the carrier's choreography is still running
+ * (delivery animation / stand-up). Settler-task lifecycle clears jobId in
+ * completeJob when the choreo finishes.
  */
 export function deliver(record: TransportJobRecord, deps: TransportJobDeps): void {
     if (record.phase !== TransportPhase.PickedUp) {
@@ -101,9 +104,6 @@ export function deliver(record: TransportJobRecord, deps: TransportJobDeps): voi
     }
     record.phase = TransportPhase.Delivered;
     deps.jobStore.remove(record.id);
-    // Do NOT clearJobId here — the carrier's choreography task is still running its
-    // delivery animation. Clearing jobId makes the carrier appear idle, allowing
-    // recruitment to grab it mid-task. jobId is cleared on settler:taskCompleted instead.
     deps.eventBus.emit('logistics:demandFulfilled', {
         buildingId: record.destBuilding,
         materialType: record.material,
@@ -114,6 +114,12 @@ export function deliver(record: TransportJobRecord, deps: TransportJobDeps): voi
  * Cancel a transport job and remove it from the store.
  * Safe to call multiple times — subsequent calls are no-ops.
  * The deficit re-opens automatically on the next dispatch tick.
+ *
+ * Does NOT clear entity.jobId. For active (non-queued) jobs, emits
+ * `carrier:transportCancelled` so settler-task lifecycle can interrupt the
+ * choreography and clear jobId there (single ownership of clearJobId).
+ * Queued jobs were never the carrier's running task — entity.jobId belongs
+ * to the active record and must stay intact.
  */
 export function cancel(record: TransportJobRecord, reason: string, deps: TransportJobDeps): void {
     if (record.phase === TransportPhase.Cancelled || record.phase === TransportPhase.Delivered) {
@@ -123,20 +129,14 @@ export function cancel(record: TransportJobRecord, reason: string, deps: Transpo
     record.phase = TransportPhase.Cancelled;
     deps.jobStore.remove(record.id);
 
-    // A queued job was never the carrier's running task — its current job
-    // (and entity.jobId) belong to another record and must stay intact.
+    // Queued follow-ups never owned the running choreo — do not ask lifecycle to interrupt.
+    // Active jobs: emit so settler-task lifecycle interrupts the choreo and clears entity.jobId.
     if (!wasQueued) {
-        // Carrier may already be gone when cancellation runs inside entity-removal cleanup.
-        const carrier = deps.gameState.getEntity(record.carrierId);
-        if (carrier) {
-            clearJobId(carrier);
-        }
+        deps.eventBus.emit('carrier:transportCancelled', {
+            unitId: record.carrierId,
+            jobId: record.id,
+            reason,
+            level: 'warn',
+        });
     }
-
-    deps.eventBus.emit('carrier:transportCancelled', {
-        unitId: record.carrierId,
-        jobId: record.id,
-        reason,
-        level: 'warn',
-    });
 }

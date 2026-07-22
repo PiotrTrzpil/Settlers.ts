@@ -24,6 +24,7 @@ import { AutoGarrisonSystem } from './tower-garrison-auto-system';
 import { TowerCombatSystem } from './internal/tower-combat-system';
 import { isGarrisonBuildingType } from './internal/garrison-capacity';
 import { choreo } from '@/game/systems/choreo/choreo-builder';
+import { JobKind } from '@/game/systems/choreo/types';
 import {
     executeGarrisonUnitsCommand,
     executeUngarrisonUnitCommand,
@@ -186,7 +187,7 @@ export const TowerGarrisonFeature: FeatureDefinition = {
                             // reservation auto-released by registry
                         },
                     });
-                    const job = choreo('WORKER_DISPATCH').goToDoorAndEnter(towerId).build();
+                    const job = choreo('WORKER_DISPATCH', JobKind.Garrison).goToDoorAndEnter(towerId).build();
                     settlerTaskSystem.assignJob(unitId, job);
                 }
             },

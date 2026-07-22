@@ -145,22 +145,16 @@ export interface ChoreoJob {
 }
 
 // ─────────────────────────────────────────────────────────────
-// TransportData — carrier transport metadata
+// TransportData — carrier transport metadata (pure data, no closures)
 // ─────────────────────────────────────────────────────────────
 
-/** Per-job lifecycle operations for carrier transport — attached as closures by the job creator. */
-export interface TransportOps {
-    /** Check if the transport job still exists (not cancelled externally). */
-    isValid(): boolean;
-    /** Transition job to picked-up phase. Returns false if job was cancelled. */
-    pickUp(): boolean;
-    /** Transition job to delivered phase. Returns false if job was cancelled. */
-    deliver(): boolean;
-}
-
-/** Transport metadata stored on ChoreoJobState for carrier transport jobs. */
+/**
+ * Transport metadata on ChoreoJobState for carrier jobs.
+ * Lifecycle (pickUp/deliver/cancel) goes through TransportJobStore + TransportJobService
+ * via executor context — no per-job ops closures.
+ */
 export interface TransportData {
-    /** Transport job record ID — used for logging and event payloads. */
+    /** Transport job record ID — matches entity.jobId and TransportJobStore key. */
     jobId: number;
     /** Source building entity ID (pickup location). */
     sourceBuildingId: number;
@@ -174,8 +168,31 @@ export interface TransportData {
     sourcePos: Tile;
     /** Pre-resolved destination position (input pile / door for delivery). */
     destPos: Tile;
-    /** Lifecycle operations — closures over the specific TransportJobRecord, set by the job builder. */
-    ops: TransportOps;
+}
+
+// ─────────────────────────────────────────────────────────────
+// JobKind — domain category for demand routing (not the string jobId)
+// ─────────────────────────────────────────────────────────────
+
+/**
+ * Domain category of a choreography job. Demand systems filter completion/fail
+ * events by kind instead of matching magic string jobIds.
+ */
+export enum JobKind {
+    /** XML / autonomous worker jobs (default). */
+    Work = 'work',
+    /** Dispatch specialist or recruit carrier into a workplace building. */
+    WorkplaceDispatch = 'workplace-dispatch',
+    /** Construction digger/builder work and combined recruit+work. */
+    Construction = 'construction',
+    /** Carrier material transport. */
+    Transport = 'transport',
+    /** Barracks training transform. */
+    Barracks = 'barracks',
+    /** Enter tower / garrison commit. */
+    Garrison = 'garrison',
+    /** Generic recruitment not covered by WorkplaceDispatch (if needed). */
+    Recruit = 'recruit',
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -187,6 +204,11 @@ export interface ChoreoJobState {
     readonly type: 'choreo';
     /** Job definition ID (e.g., 'JOB_WOODCUTTER_WORK' or 'CARRIER_TRANSPORT') */
     jobId: string;
+    /**
+     * Domain category for event routing (building demand, construction, etc.).
+     * Defaults to Work for XML-driven jobs.
+     */
+    kind: JobKind;
     /** Resolved choreography nodes — populated at job start, never re-looked-up during execution. */
     nodes: ChoreoNode[];
     /** Current node index in the choreography sequence */
@@ -224,10 +246,16 @@ export interface ChoreoJobState {
 }
 
 /** Create a fresh ChoreoJobState for starting a job. */
-export function createChoreoJobState(jobId: string, nodes: ChoreoNode[], synthetic: boolean): ChoreoJobState {
+export function createChoreoJobState(
+    jobId: string,
+    nodes: ChoreoNode[],
+    synthetic: boolean,
+    kind: JobKind = JobKind.Work
+): ChoreoJobState {
     return {
         type: 'choreo',
         jobId,
+        kind,
         nodes,
         synthetic,
         nodeIndex: 0,

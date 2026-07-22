@@ -6,7 +6,7 @@
 
 import type { GameState } from '../../game-state';
 import type { TickSystem } from '../../core/tick-system';
-import { EntityType, UnitType, BuildingType, tileKey, type Entity, Tile, getEntityIfType } from '../../entity';
+import { EntityType, UnitType, type Entity, Tile, getEntityIfType } from '../../entity';
 import type { EventBus } from '../../event-bus';
 import { isAngelUnitType } from '../../core/unit-types';
 import { createLogger } from '@/utilities/logger';
@@ -21,7 +21,6 @@ import {
     type WorkerStateQuery,
 } from './types';
 import { buildAllSettlerConfigs } from '../../data/settler-data-access';
-import { getBuildingDoorPos } from '../../data/game-data-access';
 import type { BuildingInventoryManager } from '../inventory';
 import { createWorkplaceHandler, createCarrierHandler } from './work-handlers';
 import { WorkHandlerRegistry } from './work-handler-registry';
@@ -40,6 +39,7 @@ import { IndexedMap } from '@/game/utils/indexed-map';
 import type { TickScheduler } from '../../systems/tick-scheduler';
 import { type SettlerTaskSystemConfig, type SettlerDebugEntry } from './settler-task-config';
 import { SettlerLifecycleCoordinator } from './settler-lifecycle';
+import { UnitJobService } from './unit-job-service';
 import { dumpSettlerDebug, dumpWorkerAssignments, type SettlerDebugSource } from './internal/settler-debug';
 export type { SettlerTaskSystemConfig } from './settler-task-config';
 
@@ -65,6 +65,7 @@ export class SettlerTaskSystem implements TickSystem, TaskDispatcher, WorkerStat
     private lastSubTimings: Record<string, number> = {};
     private readonly locationManager: ISettlerBuildingLocationManager;
     private readonly lifecycleCoordinator: SettlerLifecycleCoordinator;
+    private readonly jobService: UnitJobService;
 
     constructor(config: SettlerTaskSystemConfig) {
         this.gameState = config.gameState;
@@ -144,6 +145,16 @@ export class SettlerTaskSystem implements TickSystem, TaskDispatcher, WorkerStat
             tickScheduler: this.tickScheduler,
         });
 
+        this.jobService = new UnitJobService({
+            gameState: this.gameState,
+            runtimes: this.runtimes,
+            settlerConfigs: this.settlerConfigs,
+            workerExecutor: this.workerExecutor,
+            workerTracker: this.workerTracker,
+            handlerRegistry: this.handlerRegistry,
+            getOrCreateRuntime: id => this.getOrCreateRuntime(id),
+        });
+
         this.lifecycleCoordinator = new SettlerLifecycleCoordinator({
             gameState: this.gameState,
             eventBus: this.eventBus,
@@ -154,7 +165,8 @@ export class SettlerTaskSystem implements TickSystem, TaskDispatcher, WorkerStat
             locationManager: this.locationManager,
             inventoryManager: this.inventoryManager,
             handlerRegistry: this.handlerRegistry,
-            interruptJob: (entity, cfg, runtime) => this.interruptJobForCleanup(entity, cfg, runtime),
+            animController: this.animController,
+            interruptJob: (entity, cfg, runtime) => this.jobService.interruptJobForCleanup(entity, cfg, runtime),
             createRuntime: () => ({
                 state: SettlerState.IDLE,
                 job: null,
@@ -302,92 +314,20 @@ export class SettlerTaskSystem implements TickSystem, TaskDispatcher, WorkerStat
     }
 
     assignMoveTask(entityId: number, target: Tile): boolean {
-        const entity = getEntityIfType(this.gameState, entityId, EntityType.Unit);
-        if (!entity) {
-            return false;
-        }
-
-        // When target is inside a building footprint, reroute to the building's door tile.
-        let moveTo: Tile = target;
-        if (this.gameState.buildingOccupancy.has(tileKey(moveTo))) {
-            const building = this.gameState.getGroundEntityAt(moveTo);
-            if (building && building.type === EntityType.Building) {
-                moveTo = getBuildingDoorPos(building, building.race, building.subType as BuildingType);
-            }
-        }
-
-        const moveSuccess = this.gameState.movement.moveUnit(entityId, moveTo);
-        if (!moveSuccess) {
-            return false;
-        }
-
-        const runtime = this.getOrCreateRuntime(entityId);
-
-        const unitConfig = this.settlerConfigs.get(entity.subType as UnitType);
-        if (runtime.job) {
-            if (unitConfig) {
-                this.interruptJobForCleanup(entity, unitConfig, runtime);
-            }
-            runtime.job = null;
-        }
-
-        if (unitConfig) {
-            const posHandler = this.handlerRegistry.getPositionHandler(unitConfig.plantSearch ?? unitConfig.search);
-            posHandler?.onSettlerRemoved?.(entityId, target.x, target.y);
-        }
-
-        this.workerTracker.release(entityId, runtime);
-
-        // Location manager is the sole owner of entity.hidden — no direct sets here.
-        runtime.moveTask = { type: 'move', targetX: target.x, targetY: target.y };
-        runtime.state = SettlerState.WORKING;
-
-        this.animController.startWalkAnimation(entity);
-
-        log.debug(`Unit ${entityId} assigned move task to (${target.x}, ${target.y})`);
-        return true;
+        return this.jobService.assignMoveTask(entityId, target);
     }
 
     cancelMoveTask(entityId: number): void {
-        const runtime = this.runtimes.get(entityId);
-        if (runtime?.moveTask) {
-            runtime.moveTask = null;
-        }
+        this.jobService.cancelMoveTask(entityId);
     }
 
-    assignJob(entityId: number, job: JobState, moveTo?: Tile): boolean {
-        const entity = this.gameState.getEntityOrThrow(entityId, 'unit for job assignment');
-        const runtime = this.getOrCreateRuntime(entityId);
-
-        if (runtime.job) {
-            const config = this.settlerConfigs.get(entity.subType as UnitType);
-            if (config) {
-                this.interruptJobForCleanup(entity, config, runtime);
-            }
-            runtime.job = null;
-        }
-
-        if (moveTo) {
-            const moveSuccess = this.gameState.movement.moveUnit(entityId, moveTo);
-            if (!moveSuccess) {
-                return false;
-            }
-        }
-
-        // Location manager is the sole owner of entity.hidden — no direct sets here.
-        runtime.state = SettlerState.WORKING;
-        runtime.job = job;
-        runtime.moveTask = null;
-
-        const jobNumericId = this.gameState.allocateJobId();
-        entity.jobId = jobNumericId;
-
-        if (moveTo) {
-            this.animController.startWalkAnimation(entity);
-        }
-
-        log.debug(`Unit ${entityId} assigned job ${job.jobId} (numeric id ${jobNumericId})`);
-        return true;
+    /**
+     * Assign a choreography job to a unit.
+     * @param numericJobId When set (e.g. transport record id), reused as entity.jobId so the unit
+     *   and domain job share one numeric identity. When omitted, allocates a new id.
+     */
+    assignJob(entityId: number, job: JobState, moveTo?: Tile, numericJobId?: number): boolean {
+        return this.jobService.assignJob(entityId, job, moveTo, numericJobId);
     }
 
     tick(dt: number): void {
@@ -456,13 +396,5 @@ export class SettlerTaskSystem implements TickSystem, TaskDispatcher, WorkerStat
             this.lifecycleCoordinator.scheduleIdleCooldown(entityId, stagger);
         }
         return runtime;
-    }
-
-    private interruptJobForCleanup(entity: Entity, config: SettlerConfig, runtime: UnitRuntime): void {
-        if (runtime.job!.nodeIndex >= runtime.job!.nodes.length) {
-            this.workerExecutor.completeJob(entity, runtime);
-        } else {
-            this.workerExecutor.interruptJob(entity, config, runtime);
-        }
     }
 }

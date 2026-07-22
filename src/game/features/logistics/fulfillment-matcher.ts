@@ -13,12 +13,9 @@ import { getAvailableSupplies } from './resource-supply';
 import type { TransportJobStore } from './transport-job-store';
 import type { BuildingInventoryManager } from '../inventory';
 import type { StorageFilterManager } from '../../systems/inventory/storage-filter-manager';
-/** Reasons a supply candidate was rejected during matching. */
-export type MatchRejection = 'self' | 'storage_blocked' | 'fully_reserved' | 'no_supply';
 
 /**
  * Minimal request shape needed by the matcher.
- * Both ResourceRequest and DemandEntry satisfy this interface.
  */
 export interface MatchableRequest {
     readonly buildingId: number;
@@ -39,24 +36,11 @@ export interface FulfillmentMatch {
 }
 
 /**
- * Default distance multiplier for preferring full-supply sources.
- * If a source with full quantity is within this multiple of the nearest source's distance,
- * prefer the full-supply source to avoid multiple trips.
- */
-export const DEFAULT_FULL_SUPPLY_DISTANCE_FACTOR = 1.5;
-
-/**
  * Options for matching.
  */
 export interface MatchOptions {
     /** Only consider sources owned by this player */
     playerId?: number;
-    /**
-     * Distance factor for preferring full-supply sources.
-     * A source with full quantity is preferred if within this multiple of nearest distance.
-     * Default: 1.5 (prefer full supply if within 50% extra distance)
-     */
-    fullSupplyDistanceFactor?: number;
     /**
      * Job store to account for already-reserved inventory.
      * If provided, reserved amounts are subtracted from available supply.
@@ -198,61 +182,8 @@ function collectSortedMatches(candidates: Generator<MatchCandidate>, requestAmou
 }
 
 /**
- * Match a resource request to the best available supply.
- *
- * Algorithm:
- * 1. Find all buildings with the requested material in their output slots
- * 2. Return the nearest source with sufficient quantity
- *
- * @param request The resource request to fulfill
- * @param gameState The game state with entities and inventories
- * @param inventoryManager The inventory manager for building inventories
- * @param options Matching options
- * @returns The best match, or null if no suitable source found
- */
-export function matchRequestToSupply(
-    request: MatchableRequest,
-    gameState: GameState,
-    inventoryManager: BuildingInventoryManager,
-    options: MatchOptions = {},
-    outStats?: MatchRejectionStats
-): FulfillmentMatch | null {
-    const fullSupplyDistanceFactor = options.fullSupplyDistanceFactor ?? DEFAULT_FULL_SUPPLY_DISTANCE_FACTOR;
-    const stats = outStats ?? createRejectionStats();
-    const candidates = iterateMatchCandidates(request, gameState, inventoryManager, options, stats);
-    const sorted = collectSortedMatches(candidates, request.amount);
-
-    if (sorted.length === 0) {
-        return null;
-    }
-
-    // Find the best candidate: prefer one with sufficient quantity, but accept partial
-    let best = sorted[0]!;
-
-    // Look for a candidate with enough material (accounting for reservations)
-    for (const match of sorted) {
-        if (match.amount >= request.amount) {
-            // Prefer full-supply source if within the configured distance factor
-            if (match.distance <= best.distance * fullSupplyDistanceFactor) {
-                best = match;
-                break;
-            }
-        }
-    }
-
-    return best;
-}
-
-/**
  * Find all possible matches for a request, sorted by distance.
- *
- * Useful when you want to present options or retry with different sources.
- *
- * @param request The resource request
- * @param gameState The game state
- * @param inventoryManager The inventory manager for building inventories
- * @param options Matching options
- * @returns Array of all possible matches, sorted by distance
+ * Used by RequestMatcher for joint carrier+supply ranking.
  */
 export function findAllMatches(
     request: MatchableRequest,
@@ -264,77 +195,4 @@ export function findAllMatches(
     const stats = outStats ?? createRejectionStats();
     const candidates = iterateMatchCandidates(request, gameState, inventoryManager, options, stats);
     return collectSortedMatches(candidates, request.amount);
-}
-
-/**
- * Check if a request can potentially be fulfilled.
- *
- * This is a quick check that doesn't do full matching -
- * just verifies that there's any supply of the material
- * and that the destination building exists.
- *
- * @param request The resource request
- * @param gameState The game state
- * @param inventoryManager The inventory manager for building inventories
- * @returns True if fulfillment is potentially possible
- */
-export function canPotentiallyFulfill(
-    request: MatchableRequest,
-    gameState: GameState,
-    inventoryManager: BuildingInventoryManager
-): boolean {
-    // Check destination exists
-    if (!gameState.getEntity(request.buildingId)) {
-        return false;
-    }
-
-    // Check there's any supply
-    const buildingIds = inventoryManager.getSourcesWithOutput(request.materialType, 1);
-
-    // Need at least one supply that isn't the destination
-    return buildingIds.some((id: number) => id !== request.buildingId);
-}
-
-/**
- * Estimate the best distance for fulfilling a request.
- *
- * Returns the distance to the nearest supply.
- * Useful for UI display or rough planning.
- *
- * @param request The resource request
- * @param gameState The game state
- * @param inventoryManager The inventory manager for building inventories
- * @returns The minimum distance, or Infinity if no supply exists
- */
-export function estimateFulfillmentDistance(
-    request: MatchableRequest,
-    gameState: GameState,
-    inventoryManager: BuildingInventoryManager
-): number {
-    const destBuilding = gameState.getEntity(request.buildingId);
-    if (!destBuilding) {
-        return Infinity;
-    }
-
-    const supplies = getAvailableSupplies(gameState, inventoryManager, request.materialType);
-    let minDistance = Infinity;
-
-    for (const supply of supplies) {
-        if (supply.buildingId === request.buildingId) {
-            continue;
-        }
-
-        const sourceBuilding = gameState.getEntity(supply.buildingId);
-        if (!sourceBuilding) {
-            continue;
-        }
-
-        const distance = travelCost(sourceBuilding.x, sourceBuilding.y, destBuilding.x, destBuilding.y);
-
-        if (distance < minDistance) {
-            minDistance = distance;
-        }
-    }
-
-    return minDistance;
 }

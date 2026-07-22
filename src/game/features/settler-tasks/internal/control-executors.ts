@@ -86,6 +86,7 @@ export function executeChangeJob(
     }
 
     job.jobId = newJobId;
+    // kind stays as-is (XML CHANGE_JOB stays Work)
     job.nodeIndex = 0;
     job.progress = 0;
     job.workStarted = false;

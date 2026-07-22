@@ -13,6 +13,7 @@ import type { EMaterialType } from './economy';
 import type { MapObjectType } from './types/map-object-types';
 import type { Entity, EntityType, Tile } from './entity';
 import type { GameEventBase, TrainingRecipe } from './event-types';
+import type { JobKind } from './systems/choreo/types';
 
 /** Feature-specific events — merged into GameEvents via intersection. */
 export interface GameEventsFeatures {
@@ -231,12 +232,16 @@ export interface GameEventsFeatures {
     'settler:taskCompleted': GameEventBase & {
         unitId: number;
         jobId: string;
+        /** Domain category for demand routing (see JobKind). */
+        kind: JobKind;
     };
 
     /** Emitted when a settler's job is interrupted (target lost, pathfinding failure, etc.) */
     'settler:taskFailed': GameEventBase & {
         unitId: number;
         jobId: string;
+        /** Domain category for demand routing (see JobKind). */
+        kind: JobKind;
         /** Index of the choreography node that was executing when the failure occurred. */
         nodeIndex: number;
         /** The choreography step type that failed (e.g. GO_TO_TARGET, WORK_ON_ENTITY). */

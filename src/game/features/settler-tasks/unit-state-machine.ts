@@ -144,7 +144,11 @@ export class UnitStateMachine {
     // ─────────────────────────────────────────────────────────────
 
     /**
-     * Detect direction changes and sync the animation direction accordingly.
+     * Sync visuals from movement controller: facing direction, walk cycle while moving,
+     * and freeze/unfreeze when blocked on an occupied tile.
+     *
+     * Walk animation is owned here (and in updateIdleUnit) so job/dispatch callers never
+     * touch animation — they only issue movement or choreography.
      */
     updateDirectionTracking(unit: Entity, runtime: UnitRuntime): void {
         const controller = this.gameState.movement.getController(unit.id);
@@ -162,12 +166,17 @@ export class UnitStateMachine {
             runtime.lastDirection = currentDirection;
         }
 
-        // Freeze walk animation when blocked waiting for an occupied tile
+        // Movement state drives walk animation for every unit (jobs, move tasks, pushes).
+        if (controller.state === 'moving') {
+            this.animController.ensureWalkAnimation(unit);
+        }
+
+        // Freeze walk frames while blocked; resume when the tile frees up.
         const vs = this.visualService.getState(unit.id);
-        if (vs?.animation) {
-            if (controller.isWaiting && vs.animation.playing) {
+        if (vs?.animation && controller.state === 'moving') {
+            if (controller.isWaiting) {
                 vs.animation.playing = false;
-            } else if (!controller.isWaiting && !vs.animation.playing && controller.state === 'moving') {
+            } else if (!vs.animation.playing) {
                 vs.animation.playing = true;
             }
         }
