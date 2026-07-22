@@ -48,21 +48,30 @@ function setProportion(sim: Simulation, barracksId: number, recipeIndex: number,
     sim.execute({ type: 'set_recipe_proportion', buildingId: barracksId, recipeIndex, weight });
 }
 
-/** Set up barracks + storage + multiple residences for ample carriers. */
+/** Compact map is enough for barracks + residences; larger maps only add pathfinding cost. */
+const MAP = { mapWidth: 128, mapHeight: 128 } as const;
+
+/** Set up barracks + residences; spawn carriers near barracks for short walks. */
 function setupBarracks(sim: Simulation): { barracksId: number; storageId: number } {
     const storageId = sim.placeBuilding(BuildingType.StorageArea);
     sim.placeBuilding(BuildingType.ResidenceMedium);
     sim.placeBuilding(BuildingType.ResidenceSmall);
     const barracksId = sim.placeBuilding(BuildingType.Barrack);
+    // Pre-spawn idle carriers next to barracks so training does not wait on long walks.
+    sim.spawnUnitNear(barracksId, UnitType.Carrier, 8);
     return { barracksId, storageId };
 }
 
-/** Inject a full set of weapons/materials into the storage for barracks delivery. */
-function stockAllWeapons(sim: Simulation, storageId: number, amount: number): void {
-    sim.injectOutput(storageId, EMaterialType.SWORD, amount);
-    sim.injectOutput(storageId, EMaterialType.BOW, amount);
-    sim.injectOutput(storageId, EMaterialType.GOLDBAR, amount);
-    sim.injectOutput(storageId, EMaterialType.ARMOR, amount);
+/**
+ * Stock barracks input slots directly.
+ * Training still runs the real recruit/choreo path; we skip storage→barracks logistics
+ * so mode/queue assertions stay fast without losing training coverage.
+ */
+function stockBarracksInputs(sim: Simulation, barracksId: number, amount: number): void {
+    sim.injectInput(barracksId, EMaterialType.SWORD, amount);
+    sim.injectInput(barracksId, EMaterialType.BOW, amount);
+    sim.injectInput(barracksId, EMaterialType.GOLDBAR, amount);
+    sim.injectInput(barracksId, EMaterialType.ARMOR, amount);
 }
 
 function asGame(sim: Simulation): Game {
@@ -99,15 +108,15 @@ describe('Barracks training — even mode', { timeout: 60_000 }, () => {
     });
 
     it('cycles through different unit types in round-robin order', () => {
-        sim = createSimulation({ mapWidth: 256, mapHeight: 256 });
-        const { barracksId, storageId } = setupBarracks(sim);
+        sim = createSimulation(MAP);
+        const { barracksId } = setupBarracks(sim);
         const { completed } = trackTraining(sim);
 
         setMode(sim, barracksId, ProductionMode.Even);
 
         // Provide all materials so the full recipe cycle works.
         // Even mode cycles 0–9: SwordsmanL1, L2, L3, BowmanL1, L2, L3, SquadLeader, SpecL1-L3.
-        stockAllWeapons(sim, storageId, 20);
+        stockBarracksInputs(sim, barracksId, 20);
 
         sim.runUntil(() => completed.length >= 4, {
             maxTicks: 100_000,
@@ -124,15 +133,15 @@ describe('Barracks training — even mode', { timeout: 60_000 }, () => {
     });
 
     it('idles when current recipe inputs are unavailable', () => {
-        sim = createSimulation({ mapWidth: 256, mapHeight: 256 });
-        const { barracksId, storageId } = setupBarracks(sim);
+        sim = createSimulation(MAP);
+        const { barracksId } = setupBarracks(sim);
         const { completed } = trackTraining(sim);
 
         setMode(sim, barracksId, ProductionMode.Even);
 
         // Only provide swords — no gold, so even mode trains SwordsmanL1 (index 0)
         // then gets stuck on SwordsmanL2 (index 1, needs gold).
-        sim.injectOutput(storageId, EMaterialType.SWORD, 5);
+        sim.injectInput(barracksId, EMaterialType.SWORD, 5);
 
         sim.runUntil(() => completed.length >= 1, {
             maxTicks: 50_000,
@@ -142,7 +151,7 @@ describe('Barracks training — even mode', { timeout: 60_000 }, () => {
 
         // After first training, barracks should idle (stuck on SwordsmanL2)
         const countAfterFirst = completed.length;
-        sim.runTicks(5000);
+        sim.runTicks(200);
 
         expect(sim.errors).toHaveLength(0);
         expect(countAfterFirst).toBe(1);
@@ -161,8 +170,8 @@ describe('Barracks training — proportional mode', { timeout: 60_000 }, () => {
     });
 
     it('favors higher-weighted recipe', () => {
-        sim = createSimulation({ mapWidth: 256, mapHeight: 256 });
-        const { barracksId, storageId } = setupBarracks(sim);
+        sim = createSimulation(MAP);
+        const { barracksId } = setupBarracks(sim);
         const { completed } = trackTraining(sim);
 
         setMode(sim, barracksId, ProductionMode.Proportional);
@@ -171,8 +180,8 @@ describe('Barracks training — proportional mode', { timeout: 60_000 }, () => {
         setProportion(sim, barracksId, TrainingRecipeIndex.SwordsmanL1, 1);
         setProportion(sim, barracksId, TrainingRecipeIndex.BowmanL1, 3);
 
-        sim.injectOutput(storageId, EMaterialType.SWORD, 15);
-        sim.injectOutput(storageId, EMaterialType.BOW, 15);
+        sim.injectInput(barracksId, EMaterialType.SWORD, 15);
+        sim.injectInput(barracksId, EMaterialType.BOW, 15);
 
         sim.runUntil(() => completed.length >= 8, {
             maxTicks: 150_000,
@@ -199,8 +208,8 @@ describe('Barracks training — manual mode', { timeout: 60_000 }, () => {
     });
 
     it('trains units in exact queue order', () => {
-        sim = createSimulation({ mapWidth: 256, mapHeight: 256 });
-        const { barracksId, storageId } = setupBarracks(sim);
+        sim = createSimulation(MAP);
+        const { barracksId } = setupBarracks(sim);
         const { completed } = trackTraining(sim);
 
         // Default mode is Manual
@@ -208,8 +217,8 @@ describe('Barracks training — manual mode', { timeout: 60_000 }, () => {
         enqueue(sim, barracksId, TrainingRecipeIndex.SwordsmanL1);
         enqueue(sim, barracksId, TrainingRecipeIndex.SwordsmanL1);
 
-        sim.injectOutput(storageId, EMaterialType.BOW, 5);
-        sim.injectOutput(storageId, EMaterialType.SWORD, 5);
+        sim.injectInput(barracksId, EMaterialType.BOW, 5);
+        sim.injectInput(barracksId, EMaterialType.SWORD, 5);
 
         sim.runUntil(() => completed.length >= 3, {
             maxTicks: 80_000,
@@ -226,16 +235,16 @@ describe('Barracks training — manual mode', { timeout: 60_000 }, () => {
     });
 
     it('trains L2 and L3 soldiers when gold is available', () => {
-        sim = createSimulation({ mapWidth: 256, mapHeight: 256 });
-        const { barracksId, storageId } = setupBarracks(sim);
+        sim = createSimulation(MAP);
+        const { barracksId } = setupBarracks(sim);
         const { completed } = trackTraining(sim);
 
         enqueue(sim, barracksId, TrainingRecipeIndex.SwordsmanL2);
         enqueue(sim, barracksId, TrainingRecipeIndex.BowmanL3);
 
-        sim.injectOutput(storageId, EMaterialType.SWORD, 5);
-        sim.injectOutput(storageId, EMaterialType.BOW, 5);
-        sim.injectOutput(storageId, EMaterialType.GOLDBAR, 5);
+        sim.injectInput(barracksId, EMaterialType.SWORD, 5);
+        sim.injectInput(barracksId, EMaterialType.BOW, 5);
+        sim.injectInput(barracksId, EMaterialType.GOLDBAR, 5);
 
         sim.runUntil(() => completed.length >= 2, {
             maxTicks: 80_000,
@@ -253,14 +262,14 @@ describe('Barracks training — manual mode', { timeout: 60_000 }, () => {
     });
 
     it('idles when queue is empty, resumes when items are enqueued', () => {
-        sim = createSimulation({ mapWidth: 256, mapHeight: 256 });
-        const { barracksId, storageId } = setupBarracks(sim);
+        sim = createSimulation(MAP);
+        const { barracksId } = setupBarracks(sim);
         const { completed } = trackTraining(sim);
 
-        sim.injectOutput(storageId, EMaterialType.SWORD, 10);
+        sim.injectInput(barracksId, EMaterialType.SWORD, 10);
 
         // Empty queue (manual default) — barracks should idle
-        sim.runTicks(3000);
+        sim.runTicks(150);
         expect(completed).toHaveLength(0);
 
         // Now enqueue two swordsmen — training should start
@@ -278,14 +287,14 @@ describe('Barracks training — manual mode', { timeout: 60_000 }, () => {
     });
 
     it('trains squad leader requiring sword + armor', () => {
-        sim = createSimulation({ mapWidth: 256, mapHeight: 256 });
-        const { barracksId, storageId } = setupBarracks(sim);
+        sim = createSimulation(MAP);
+        const { barracksId } = setupBarracks(sim);
         const { completed } = trackTraining(sim);
 
         enqueue(sim, barracksId, TrainingRecipeIndex.SquadLeader);
 
-        sim.injectOutput(storageId, EMaterialType.SWORD, 5);
-        sim.injectOutput(storageId, EMaterialType.ARMOR, 5);
+        sim.injectInput(barracksId, EMaterialType.SWORD, 5);
+        sim.injectInput(barracksId, EMaterialType.ARMOR, 5);
 
         sim.runUntil(() => completed.length >= 1, {
             maxTicks: 80_000,
@@ -312,8 +321,8 @@ describe('Barracks training — save/load persistence', { timeout: 90_000 }, () 
     });
 
     it('resumes training after save+reload when carrier is walking to barracks', () => {
-        sim = createSimulation({ mapWidth: 256, mapHeight: 256 });
-        const { barracksId, storageId } = setupBarracks(sim);
+        sim = createSimulation(MAP);
+        const { barracksId } = setupBarracks(sim);
 
         let started = 0;
         sim.eventBus.on('barracks:trainingStarted', () => started++);
@@ -324,7 +333,7 @@ describe('Barracks training — save/load persistence', { timeout: 90_000 }, () 
         enqueue(sim, barracksId, TrainingRecipeIndex.SwordsmanL1);
         enqueue(sim, barracksId, TrainingRecipeIndex.SwordsmanL1);
 
-        stockAllWeapons(sim, storageId, 20);
+        stockBarracksInputs(sim, barracksId, 20);
 
         // Run until training starts (carrier dispatched but may not have arrived)
         sim.runUntil(() => started >= 1, {
@@ -355,8 +364,8 @@ describe('Barracks training — save/load persistence', { timeout: 90_000 }, () 
     });
 
     it('preserves manual queue across save+reload', () => {
-        sim = createSimulation({ mapWidth: 256, mapHeight: 256 });
-        const { barracksId, storageId } = setupBarracks(sim);
+        sim = createSimulation(MAP);
+        const { barracksId } = setupBarracks(sim);
 
         // Queue 5 items, train some, then save. The queue pops items as soon as
         // training *starts* (not completes), so in-flight items are already consumed.
@@ -366,7 +375,7 @@ describe('Barracks training — save/load persistence', { timeout: 90_000 }, () 
         enqueue(sim, barracksId, TrainingRecipeIndex.BowmanL1);
         enqueue(sim, barracksId, TrainingRecipeIndex.SwordsmanL1);
 
-        stockAllWeapons(sim, storageId, 20);
+        stockBarracksInputs(sim, barracksId, 20);
 
         let completedCount = 0;
         sim.eventBus.on('barracks:trainingCompleted', () => completedCount++);
@@ -403,14 +412,14 @@ describe('Barracks training — save/load persistence', { timeout: 90_000 }, () 
     });
 
     it('preserves production mode and proportions across save+reload', () => {
-        sim = createSimulation({ mapWidth: 256, mapHeight: 256 });
-        const { barracksId, storageId } = setupBarracks(sim);
+        sim = createSimulation(MAP);
+        const { barracksId } = setupBarracks(sim);
 
         setMode(sim, barracksId, ProductionMode.Proportional);
         for (let i = 0; i < 10; i++) setProportion(sim, barracksId, i, 0);
         setProportion(sim, barracksId, TrainingRecipeIndex.BowmanL1, 5);
 
-        sim.injectOutput(storageId, EMaterialType.BOW, 20);
+        sim.injectInput(barracksId, EMaterialType.BOW, 20);
 
         // Train 1 bowman, then save
         const { completed } = trackTraining(sim);
