@@ -55,6 +55,12 @@ export interface GameSettings {
     cacheDisabled: boolean;
 }
 
+/**
+ * The subset of settings that affects simulation rules, handed to features via
+ * FeatureContext. Read live (the object is the reactive settings state), never copied.
+ */
+export type GameplaySettings = Readonly<Pick<GameSettings, 'combatControllable'>>;
+
 /** Default values for all settings */
 const DEFAULT_SETTINGS: GameSettings = {
     // Game

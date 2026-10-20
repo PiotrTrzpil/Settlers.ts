@@ -6,9 +6,8 @@ import { installTestGameData, resetTestGameData } from '../helpers/test-game-dat
 import { CommandHandlerRegistry, registerAllHandlers } from '@/game/commands';
 import { MapSize } from '@/utilities/map-size';
 import { EventBus } from '@/game/event-bus';
-import { ConstructionSiteManager } from '@/game/features/building-construction';
+import { executeMoveSelectedUnits, type MoveCommandDeps } from '@/game/features/settler-tasks';
 import { TerrainData } from '@/game/terrain';
-import { GameSettingsManager } from '@/game/game-settings';
 
 /**
  * Integration tests for unit placement, selection, and movement.
@@ -39,26 +38,24 @@ function createTestHarness() {
         movement.removeController(entityId);
     });
 
-    const constructionSiteManager = new ConstructionSiteManager(eventBus, state.rng, {} as any);
-    const settingsManager = new GameSettingsManager();
-    settingsManager.resetToDefaults();
     const registry = new CommandHandlerRegistry();
     registerAllHandlers(registry, {
         state,
         terrain,
         eventBus,
-        settings: settingsManager.state,
-        constructionSiteManager,
+    });
+    // move_selected_units is owned by the settler-tasks feature — bind it here with stubbed deps.
+    const moveDeps: MoveCommandDeps = {
+        state,
         settlerTaskSystem: {
             assignMoveTask: (id: number, target: Tile) => state.movement.moveUnit(id, target),
         } as any,
         combatSystem: { releaseFromCombat: () => {}, isInCombat: () => false, setPassive: () => {} } as any,
         unitReservation: { isReserved: () => false } as any,
-        recruitSystem: { enqueue: () => {}, dequeue: () => {}, getQueuedCount: () => 0, tick: () => {} } as any,
-        unitTransformer: { dismissSpecialist: () => false } as any,
-        getPlacementFilter: () => null,
+        isCombatControllable: () => true,
         getOwner: () => 0,
-    });
+    };
+    registry.register('move_selected_units', cmd => executeMoveSelectedUnits(moveDeps, cmd));
 
     return { state, terrain, registry };
 }

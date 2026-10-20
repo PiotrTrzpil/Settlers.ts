@@ -6,6 +6,7 @@
  */
 import { computed, type ComputedRef, type Ref } from 'vue';
 import type { Game } from '@/game/game';
+import type { SettlerLocationExports } from '@/game/features/settler-location';
 import { EntityType, BuildingType, getEntityIfType } from '@/game/entity';
 import { UnitType, getUnitLevel } from '@/game/core/unit-types';
 import { getGarrisonCapacity, getGarrisonRole } from '@/game/features/tower-garrison/internal/garrison-capacity';
@@ -82,7 +83,8 @@ export function useGarrison(
 
         const enRouteSwordsmen: GarrisonUnitInfo[] = [];
         const enRouteBowmen: GarrisonUnitInfo[] = [];
-        for (const unitId of g.services.locationManager.getApproaching(id)) {
+        const { locationManager } = g.services.getFeature<SettlerLocationExports>('settler-location');
+        for (const unitId of locationManager.getApproaching(id)) {
             const unitType = g.state.getEntityOrThrow(unitId, 'useGarrison:enRoute').subType as UnitType;
             const role = getGarrisonRole(unitType);
             const info = { unitId, level: getUnitLevel(unitType), unitType };

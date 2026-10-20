@@ -1,6 +1,8 @@
 /**
  * Recruit Feature — wires the RecruitSystem and UnitTransformer into the feature registry,
  * and registers TRANSFORM_RECRUIT / TRANSFORM_DIRECT choreography executors on the shared ChoreoSystem.
+ *
+ * Commands: recruit_specialist (enqueue recruitment, or dequeue/dismiss for negative counts).
  */
 
 import type { FeatureDefinition, FeatureContext } from '../feature';
@@ -18,6 +20,8 @@ import {
     createTransformDirectExecutor,
 } from './recruit-choreo-executors';
 import { TickPhase } from '../../core/tick-phase';
+import type { RecruitSpecialistCommand } from '../../commands/command-types';
+import { executeRecruitSpecialist } from './recruit-commands';
 
 export interface RecruitExports {
     recruitSystem: RecruitSystem;
@@ -75,6 +79,10 @@ export const RecruitFeature: FeatureDefinition = {
             tickPhase: TickPhase.Recruitment,
             persistence: [],
             exports: { recruitSystem, unitTransformer } satisfies RecruitExports,
+            commands: {
+                recruit_specialist: cmd =>
+                    executeRecruitSpecialist({ recruitSystem, unitTransformer }, cmd as RecruitSpecialistCommand),
+            },
             destroy: () => {
                 unitTransformer.unregisterEvents();
                 recruitSystem.unregisterEvents();

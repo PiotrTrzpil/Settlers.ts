@@ -502,6 +502,14 @@ gameState.addEntity(EntityType.Building, buildingType, x, y, player);
 
 **Why:** Enables replay, undo, and networked multiplayer.
 
+**Handler ownership:** a command whose handler mutates a feature's state is owned by that
+feature and registered through `FeatureInstance.commands` (e.g. `place_building` →
+building-placement, `move_unit` → settler-tasks, `recruit_specialist` → recruit). The central
+`registerAllHandlers` (`commands/register-handlers.ts`) only holds kernel-level commands that need
+nothing beyond state/terrain/eventBus (selection, raw spawning/removal, map-script commands).
+Registering one command type twice throws. Features read gameplay settings via
+`ctx.gameplaySettings`, never the whole settings object.
+
 ### Rule 6.3: Renderer Query Interface
 
 The renderer should receive data through a `RenderContext` interface:

@@ -52,6 +52,7 @@ import { GameSettingsManager } from '@/game/game-settings';
 import { Race } from '@/game/core/race';
 import type { MapBuildingData, MapSettlerData } from '@/resources/map/map-entity-data';
 import { BuildingConstructionPhase } from '@/game/features/building-construction/types';
+import type { BuildingConstructionExports } from '@/game/features/building-construction';
 import { createSnapshot, restoreFromSnapshot, type GameStateSnapshot } from '@/game/state/game-state-persistence';
 import type { Game } from '@/game/game';
 import type { OreType } from '@/game/features/ore-veins/ore-type';
@@ -131,18 +132,19 @@ export class Simulation {
             this.eventBus,
             ((cmd: Command) => this.commandRegistry.execute(cmd)) as ExecuteCommand,
             this.map.terrain,
-            null
+            null,
+            this.settings.state
         );
 
         registerSimulationCommands(this.commandRegistry, {
             state: this.state,
             services: this.services,
             eventBus: this.eventBus,
-            settings: this.settings,
             terrain: this.map.terrain,
         });
 
-        this.services.residenceSpawner.immediateMode = true;
+        const { residenceSpawner } = this.services.getFeature<BuildingConstructionExports>('building-construction');
+        residenceSpawner.immediateMode = true;
 
         // Establish territory for player 0 covering the entire test map (unless skipped).
         // Workers use the spatial grid's territory-aware queries, so they need

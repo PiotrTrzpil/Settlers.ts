@@ -98,6 +98,24 @@ import { restoreOriginalTerrain } from '../systems/terrain-leveling';
 restoreOriginalTerrain(bs, groundType, groundHeight, mapSize);
 ```
 
+#### 3b. Features Own Their Commands
+
+A command that mutates a feature's state is registered by that feature via
+`FeatureInstance.commands`, with its dependencies bound in `create()`:
+
+```typescript
+return {
+    // ...
+    commands: {
+        move_unit: cmd => executeMoveUnit(moveDeps, cmd as MoveUnitCommand),
+    },
+};
+```
+
+Only kernel-level commands (selection, raw entity spawn/remove, script commands) stay in the
+central `registerAllHandlers`. External code (UI, debug, CLI, tests) reaches feature services through
+the few widely-shared typed fields on `GameServices`, or `services.getFeature<XExports>('x')`.
+
 #### 4. Query Interface for Rendering
 
 Renderers query feature modules for display data:

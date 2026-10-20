@@ -41,6 +41,7 @@ import type { Persistable } from '../persistence';
 import type { TerrainData } from '../terrain';
 import type { RenderPassDefinition } from '../renderer/render-passes/types';
 import type { TickScheduler } from '../systems/tick-scheduler';
+import type { GameplaySettings } from '../game-settings';
 
 /**
  * Minimal shared dependencies injected into almost every system and manager.
@@ -93,6 +94,9 @@ export interface FeatureContext extends CoreDeps {
      * Nullable by design: synthetic maps (test map, empty map) carry no resource layer.
      */
     resourceData: Uint8Array | null;
+
+    /** Gameplay-rule settings (live view of the user's settings, e.g. combatControllable). */
+    gameplaySettings: GameplaySettings;
 
     /**
      * Get exports from another feature.

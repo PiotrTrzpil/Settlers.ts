@@ -17,17 +17,22 @@ import { Simulation, createSimulation, cleanupSimulation } from '../../helpers/t
 import { installRealGameData } from '../../helpers/test-game-data';
 import { EntityType, UnitType, Tile } from '@/game/entity';
 import { TERRAIN } from '../../helpers/test-map';
+import type { OreVeinExports } from '@/game/features/ore-veins';
 
 installRealGameData();
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
 /** Count prospected tiles within a square region. */
+function oreVeins(sim: Simulation) {
+    return sim.services.getFeature<OreVeinExports>('ore-veins').oreVeinData;
+}
+
 function countProspected(sim: Simulation, cx: number, cy: number, radius: number): number {
     let count = 0;
     for (let dy = -radius; dy <= radius; dy++) {
         for (let dx = -radius; dx <= radius; dx++) {
-            if (sim.services.oreVeinData.isProspected({ x: cx + dx, y: cy + dy })) count++;
+            if (oreVeins(sim).isProspected({ x: cx + dx, y: cy + dy })) count++;
         }
     }
     return count;
@@ -38,7 +43,7 @@ function getProspectedTiles(sim: Simulation, cx: number, cy: number, radius: num
     const tiles: Tile[] = [];
     for (let dy = -radius; dy <= radius; dy++) {
         for (let dx = -radius; dx <= radius; dx++) {
-            if (sim.services.oreVeinData.isProspected({ x: cx + dx, y: cy + dy })) {
+            if (oreVeins(sim).isProspected({ x: cx + dx, y: cy + dy })) {
                 tiles.push({ x: cx + dx, y: cy + dy });
             }
         }

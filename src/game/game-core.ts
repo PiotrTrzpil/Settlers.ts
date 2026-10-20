@@ -25,7 +25,11 @@ import { CommandJournal } from './persistence/command-journal';
 import { TerrainData } from './terrain';
 import { populateMapObjectsFromEntityData } from './systems/map-objects';
 import { expandTrees } from './features/trees/tree-expansion';
-import { populateMapBuildings, type MapBuildingEntry } from './features/building-construction';
+import {
+    populateMapBuildings,
+    type MapBuildingEntry,
+    type BuildingPlacementExports,
+} from './features/building-construction';
 import { EntityType, Tile } from './entity';
 import { populateMapSettlers } from './systems/map-settlers';
 import { populateMapStacks } from './systems/map-stacks';
@@ -61,15 +65,15 @@ export class GameCore {
     /** Command handler registry — handlers bound with specific deps at init */
     protected readonly commandRegistry: CommandHandlerRegistry;
 
-    /** Territory-based placement filter — created after terrain data is available */
-    private _placementFilter: PlacementFilter | null = null;
+    /** Building placement feature — owns the active placement filter and `place_building`. */
+    private readonly buildingPlacement: BuildingPlacementExports;
 
     /** Whether territory enforcement is active */
     private _territoryEnabled = false;
 
-    /** Public accessor for the current placement filter (used by renderer/UI) */
+    /** Current placement filter (used by renderer/UI); null when territory enforcement is off. */
     get placementFilter(): PlacementFilter | null {
-        return this._placementFilter;
+        return this.buildingPlacement.getPlacementFilter();
     }
 
     /** Simulation tick counter — incremented in tick(), used by journal + keyframes */
@@ -114,8 +118,10 @@ export class GameCore {
             ((cmd: Command) => this.commandRegistry.execute(cmd)) as ExecuteCommand,
             this.terrain,
             // eslint-disable-next-line no-restricted-syntax -- optional chaining; null when source is absent (synthetic maps)
-            mapLoader.landscape.getResourceData?.() ?? null
+            mapLoader.landscape.getResourceData?.() ?? null,
+            this.settings.state
         );
+        this.buildingPlacement = this.services.getFeature<BuildingPlacementExports>('building-placement');
 
         this.wireCommandHandlers();
         const mapBuildings = this.populate(mapLoader);
@@ -127,7 +133,7 @@ export class GameCore {
 
     // ─── Setup phases ─────────────────────────────────────────
 
-    /** WIRE — register feature command handlers and central handlers. */
+    /** WIRE — register feature-owned command handlers, then the central (kernel-level) handlers. */
     private wireCommandHandlers(): void {
         for (const [type, handler] of this.services.getFeatureCommandHandlers()) {
             this.commandRegistry.register(type, handler);
@@ -136,15 +142,6 @@ export class GameCore {
             state: this.state,
             terrain: this.terrain,
             eventBus: this.eventBus,
-            settings: this.settings.state,
-            settlerTaskSystem: this.services.settlerTaskSystem,
-            constructionSiteManager: this.services.constructionSiteManager,
-            combatSystem: this.services.combatSystem,
-            unitReservation: this.services.unitReservation,
-            getPlacementFilter: () => this._placementFilter,
-            recruitSystem: this.services.recruitSystem,
-            unitTransformer: this.services.unitTransformer,
-            getOwner: tile => this.services.territoryManager.getOwner(tile),
         });
     }
 
@@ -280,7 +277,9 @@ export class GameCore {
         this._territoryEnabled = enabled;
         const tm = this.services.territoryManager;
         const dispatcher = this.services.logisticsDispatcher;
-        this._placementFilter = enabled ? createTerritoryPlacementFilter(tm, this.playerRaces) : null;
+        this.buildingPlacement.setPlacementFilter(
+            enabled ? createTerritoryPlacementFilter(tm, this.playerRaces) : null
+        );
         dispatcher.setMatchFilter(enabled ? createTerritoryMatchFilter(tm) : null);
         dispatcher.setCarrierFilter(enabled ? createTerritoryCarrierFilter(tm) : null);
     }

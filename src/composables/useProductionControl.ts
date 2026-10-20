@@ -8,7 +8,12 @@ import type { Entity } from '@/game/entity';
 import { BuildingType, EntityType } from '@/game/entity';
 import { EMaterialType } from '@/game/economy/material-type';
 import { hasMultipleRecipes, getRecipeSet } from '@/game/economy/building-production';
-import { type ProductionMode, type ProductionState } from '@/game/features/production-control';
+import {
+    type ProductionMode,
+    type ProductionState,
+    type ProductionControlExports,
+} from '@/game/features/production-control';
+import type { BarracksExports } from '@/game/features/barracks';
 import { UNIT_TYPE_CONFIG } from '@/game/core/unit-types';
 import type { TrainingRecipe } from '@/game/features/barracks/types';
 
@@ -66,7 +71,7 @@ export function useProductionControl(
         }
 
         const bt = entity.subType as BuildingType;
-        const pcm = game.services.productionControlManager;
+        const pcm = game.services.getFeature<ProductionControlExports>('production-control').productionControlManager;
         const prodState = pcm.getProductionState(entity.id);
         if (!prodState) {
             return null;
@@ -163,7 +168,8 @@ function trainingRecipeName(recipe: TrainingRecipe): string {
 
 /** Build ProductionControlState for a barracks building using training recipes. */
 function buildBarracksState(game: Game, buildingId: number, prodState: ProductionState): ProductionControlState {
-    const trainingRecipes = game.services.barracksTrainingManager.getRecipes(buildingId);
+    const { barracksTrainingManager } = game.services.getFeature<BarracksExports>('barracks');
+    const trainingRecipes = barracksTrainingManager.getRecipes(buildingId);
 
     const recipes: RecipeInfo[] = [];
     for (let i = 0; i < trainingRecipes.length; i++) {

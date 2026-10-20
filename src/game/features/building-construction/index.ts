@@ -57,3 +57,4 @@ export { ConstructionRequestSystem } from './construction-request-system';
 
 // Feature definition (self-registering via FeatureRegistry)
 export { BuildingConstructionFeature, type BuildingConstructionExports } from './building-construction-feature';
+export { BuildingPlacementFeature, type BuildingPlacementExports } from './building-placement-feature';
