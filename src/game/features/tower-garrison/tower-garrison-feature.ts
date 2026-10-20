@@ -43,6 +43,7 @@ import type {
 } from '@/game/commands/command-types';
 import { COMMAND_OK, commandFailed } from '@/game/commands/command-types';
 import { createLogger } from '@/utilities/logger';
+import { TickPhase } from '../../core/tick-phase';
 
 const log = createLogger('TowerGarrisonFeature');
 
@@ -150,7 +151,7 @@ export const TowerGarrisonFeature: FeatureDefinition = {
 
         return {
             systems: [autoSystem, towerCombatSystem],
-            systemGroup: 'Military',
+            tickPhase: TickPhase.Military,
             exports: {
                 garrisonManager: manager,
                 towerCombatSystem,

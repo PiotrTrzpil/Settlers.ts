@@ -20,14 +20,13 @@
  *
  * ## Event ordering
  *
- * `UnitReservationRegistry` subscribes to `entity:removed` in its constructor, which must be
- * called before `EntityCleanupRegistry.registerEvents()`. This guarantees that `onForcedRelease`
+ * The forced-release handler is registered with the {@link EntityCleanupRegistry} at
+ * `CLEANUP_PRIORITY.RESERVATIONS` — the earliest priority. This guarantees that `onForcedRelease`
  * fires before any feature-level `cleanupRegistry.onEntityRemoved` handler — so by the time
  * those handlers run, reservation state is already clean.
  */
 
-import type { EventBus } from '../event-bus';
-import { EventSubscriptionManager } from '../event-bus';
+import { CLEANUP_PRIORITY, type EntityCleanupRegistry } from './entity-cleanup-registry';
 
 export interface ReservationInfo {
     /** Debug label identifying why this unit is reserved. Shown in the diagnostics panel. */
@@ -43,17 +42,16 @@ export interface ReservationInfo {
 
 export class UnitReservationRegistry {
     private readonly reservations = new Map<number, ReservationInfo>();
-    private readonly subscriptions = new EventSubscriptionManager();
 
-    constructor(eventBus: EventBus) {
-        this.subscriptions.subscribe(eventBus, 'entity:removed', ({ entityId }) => {
+    constructor(cleanupRegistry: EntityCleanupRegistry) {
+        cleanupRegistry.onEntityRemoved(entityId => {
             const info = this.reservations.get(entityId);
             if (!info) {
                 return;
             }
             this.reservations.delete(entityId);
             info.onForcedRelease?.(entityId);
-        });
+        }, CLEANUP_PRIORITY.RESERVATIONS);
     }
 
     /**

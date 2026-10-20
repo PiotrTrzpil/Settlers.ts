@@ -30,6 +30,7 @@
  */
 
 import type { TickSystem } from '../core/tick-system';
+import type { TickPhase } from '../core/tick-phase';
 import type { GameState } from '../game-state';
 import type { EventBus, EventHandler, GameEvents } from '../event-bus';
 import type { EntityVisualService } from '../animation/entity-visual-service';
@@ -161,8 +162,12 @@ export interface FeatureInstance {
     /** Tick systems to register with GameLoop */
     systems?: TickSystem[];
 
-    /** Group label for tick systems (e.g. 'Units', 'Buildings', 'Logistics'). Defaults to 'Other'. */
-    systemGroup?: string;
+    /**
+     * Tick phase all of this feature's `systems` run in. Required when `systems` is non-empty.
+     * Phases fix the tick order across features; within a phase, systems run in feature
+     * load order, then `systems` array order. See {@link TickPhase}.
+     */
+    tickPhase?: TickPhase;
 
     /**
      * Exports that other features can access via ctx.getFeature().

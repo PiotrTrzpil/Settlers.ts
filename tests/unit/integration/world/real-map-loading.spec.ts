@@ -10,6 +10,7 @@
  *   - Tick systems run without errors for ~10 simulated seconds
  */
 
+import { tickPhaseLabel } from '@/game/core/tick-phase';
 import { describe, it, expect, onTestFinished } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -75,15 +76,15 @@ function runAndCollectErrors(game: GameCore, mapName: string) {
 
     for (let tick = 0; tick < totalTicks; tick++) {
         tickCount = tick;
-        for (const { system, group } of tickSystems) {
+        for (const { system, phase } of tickSystems) {
             try {
                 system.tick(dt);
             } catch (e) {
                 const err = e instanceof Error ? e : new Error(String(e));
                 errors.push({ tick, error: err });
-                timeline.record({ tick, category: 'error', event: group, detail: err.message });
+                timeline.record({ tick, category: 'error', event: tickPhaseLabel(phase), detail: err.message });
                 if (errors.length <= 5) {
-                    console.error(`  [tick ${tick}] ${group}: ${err.message}`);
+                    console.error(`  [tick ${tick}] ${tickPhaseLabel(phase)}: ${err.message}`);
                 }
             }
         }

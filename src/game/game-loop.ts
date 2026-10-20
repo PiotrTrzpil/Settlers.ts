@@ -12,6 +12,7 @@ import { debugStats } from './debug/debug-stats';
 import type { GameSettings } from './game-settings';
 import type { GameViewState } from './ui/game-view-state';
 import type { TickSystem } from './core/tick-system';
+import { insertByTickPhase, tickPhaseLabel, type PhasedTickSystem, type TickPhase } from './core/tick-phase';
 import type { FrameRenderTiming } from './renderer/renderer';
 import { EntityVisualService } from './animation/entity-visual-service';
 import { toastError, toastClearThrottle } from './ui/toast-notifications';
@@ -113,8 +114,8 @@ export class GameLoop {
     /** When true, game logic (ticks) is paused but rendering continues */
     private _ticksPaused = true;
 
-    /** Registered tick systems */
-    private systems: TickSystem[] = [];
+    /** Registered tick systems, sorted by phase (stable: registration order within a phase) */
+    private systems: PhasedTickSystem[] = [];
 
     /** Standalone feature toggles (not tick systems, just on/off flags) */
     private featureToggles: FeatureToggle[] = [];
@@ -150,14 +151,16 @@ export class GameLoop {
         this._onTick = cb;
     }
 
-    /** Register a tick system to be updated each tick */
-    public registerSystem(system: TickSystem, group?: string): void {
-        this.systems.push(system);
+    /**
+     * Register a tick system to be updated each tick in the given phase.
+     * Systems run in phase order; within a phase, in registration order.
+     */
+    public registerSystem(system: TickSystem, phase: TickPhase): void {
+        insertByTickPhase(this.systems, { system, phase });
         const name = system.constructor.name || 'Unknown';
         this.systemErrors.set(system, {
             name,
-            // eslint-disable-next-line no-restricted-syntax -- nullable field with display/config default
-            group: group ?? 'Other',
+            group: tickPhaseLabel(phase),
             consecutiveFailures: 0,
             disabled: false,
             logger: new ThrottledLogger(GameLoop.log, 1000),
@@ -282,7 +285,7 @@ export class GameLoop {
 
     /** Notify all registered tick systems that an entity was removed */
     public notifyEntityRemoved(entityId: number): void {
-        for (const system of this.systems) {
+        for (const { system } of this.systems) {
             system.onEntityRemoved?.(entityId);
         }
     }
@@ -474,7 +477,7 @@ export class GameLoop {
 
         // Run each registered tick system with individual error isolation.
         // A failure in one system does not prevent others from running.
-        for (const system of this.systems) {
+        for (const { system } of this.systems) {
             const errorState = this.systemErrors.get(system);
             if (!errorState) {
                 throw new Error(`GameLoop: no error state for system in tick loop — system may not be registered`);

@@ -18,6 +18,7 @@ import { executePlantTree, executePlantTreesArea } from '../../commands/handlers
 import type { SettlerTaskExports } from '../settler-tasks';
 import { SearchType } from '../settler-tasks/types';
 import { createWoodcuttingHandler, createForesterHandler } from './work-handlers';
+import { TickPhase } from '../../core/tick-phase';
 
 /**
  * Exports provided by TreeFeature.
@@ -62,6 +63,7 @@ export const TreeFeature: FeatureDefinition = {
 
         return {
             systems: [treeSystem],
+            tickPhase: TickPhase.Nature,
             exports: { treeSystem } satisfies TreeFeatureExports,
             persistence: [treeSystem.persistentStore],
             commands: {

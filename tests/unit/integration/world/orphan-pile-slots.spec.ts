@@ -9,6 +9,7 @@
  * which is ~3× larger and made full-suite runs hang for many minutes.
  */
 
+import { tickPhaseLabel } from '@/game/core/tick-phase';
 import { describe, it, expect, afterEach } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -58,12 +59,12 @@ function runTicks(game: GameCore, count: number): string[] {
     const tickSystems = game.getTickSystems();
     const errors: string[] = [];
     for (let tick = 0; tick < count; tick++) {
-        for (const { system, group } of tickSystems) {
+        for (const { system, phase } of tickSystems) {
             try {
                 system.tick(dt);
             } catch (e) {
                 const msg = e instanceof Error ? e.message : String(e);
-                errors.push(`[tick ${tick}] ${group}: ${msg}`);
+                errors.push(`[tick ${tick}] ${tickPhaseLabel(phase)}: ${msg}`);
             }
         }
     }

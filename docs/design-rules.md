@@ -242,7 +242,15 @@ eventBus.on('building:placed', (payload) => {
 
 ### Rule 4.2: All Per-Frame Updates Use TickSystem
 
-Every per-frame update must go through `GameLoop.registerSystem()`:
+Every per-frame update must go through `GameLoop.registerSystem(system, phase)`.
+
+**Tick order is declared by `TickPhase`** (`src/game/core/tick-phase.ts`): systems run in ascending
+phase order; within one phase, in registration order (feature load order, then the feature's
+`systems` array order). Features declare `tickPhase` on their `FeatureInstance`; kernel systems
+(tick scheduler, movement) and scripting register with explicit phases. Never rely on
+`loadAll([...])` order or feature dependencies for tick order — pick (or add) a phase. Changing
+the order changes simulation results; `tests/unit/core/tick-order.spec.ts` pins the full sequence.
+Entity removal order is declared once, in the `CLEANUP_PRIORITY` doc comment.
 
 ```typescript
 // GOOD — all systems registered

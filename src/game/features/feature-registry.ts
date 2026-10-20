@@ -9,6 +9,7 @@
  */
 
 import type { TickSystem } from '../core/tick-system';
+import { insertByTickPhase, type PhasedTickSystem, type TickPhase } from '../core/tick-phase';
 import { EventSubscriptionManager } from '../event-bus';
 import type { EntityVisualService } from '../animation/entity-visual-service';
 import type { EntityCleanupRegistry } from '../systems/entity-cleanup-registry';
@@ -61,7 +62,8 @@ export class FeatureRegistry {
     private readonly exports = new Map<string, Record<string, unknown>>();
 
     /** All systems from loaded features, with group labels */
-    private readonly allSystems: { system: TickSystem; group: string }[] = [];
+    /** All tick systems, kept sorted by phase (stable: registration order within a phase). */
+    private readonly allSystems: PhasedTickSystem[] = [];
 
     /** Track loaded feature IDs for summary logging */
     private readonly loadedIds: string[] = [];
@@ -140,12 +142,14 @@ export class FeatureRegistry {
             this.exports.set(definition.id, instance.exports);
         }
 
-        // Collect systems with their group label
-        if (instance.systems) {
-            // eslint-disable-next-line no-restricted-syntax -- nullable field with display/config default
-            const group = instance.systemGroup ?? 'Other';
+        // Collect systems into their declared tick phase
+        if (instance.systems && instance.systems.length > 0) {
+            const phase = instance.tickPhase;
+            if (phase === undefined) {
+                throw new Error(`Feature '${definition.id}' provides tick systems but declares no tickPhase`);
+            }
             for (const system of instance.systems) {
-                this.allSystems.push({ system, group });
+                insertByTickPhase(this.allSystems, { system, phase });
             }
         }
 
@@ -172,15 +176,15 @@ export class FeatureRegistry {
     }
 
     /** Register an externally-created system (not owned by a feature). */
-    registerSystem(system: TickSystem, group: string): void {
-        this.allSystems.push({ system, group });
+    registerSystem(system: TickSystem, phase: TickPhase): void {
+        insertByTickPhase(this.allSystems, { system, phase });
     }
 
     /**
-     * Get all systems from loaded features, with group labels.
+     * Get all tick systems in tick order (sorted by phase; registration order within a phase).
      * Use this to register systems with GameLoop.
      */
-    getSystems(): readonly { system: TickSystem; group: string }[] {
+    getSystems(): readonly PhasedTickSystem[] {
         return this.allSystems;
     }
 

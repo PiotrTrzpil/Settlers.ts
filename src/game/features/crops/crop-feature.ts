@@ -20,6 +20,7 @@ import type { SettlerTaskExports } from '../settler-tasks';
 import { SearchType } from '../settler-tasks';
 import { createCropHarvestHandler } from './work-handlers';
 import { createPlantingHandler } from '../trees/work-handlers';
+import { TickPhase } from '../../core/tick-phase';
 
 export interface CropFeatureExports {
     cropSystem: CropSystem;
@@ -70,6 +71,7 @@ export const CropFeature: FeatureDefinition = {
 
         return {
             systems: [cropSystem],
+            tickPhase: TickPhase.Nature,
             exports: { cropSystem } satisfies CropFeatureExports,
             persistence: [cropSystem.persistentStore],
             commands: {

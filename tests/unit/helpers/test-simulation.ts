@@ -4,6 +4,7 @@
  * See test-scenarios.ts for pre-configured simulation setups (createScenario).
  */
 
+import { tickPhaseLabel } from '@/game/core/tick-phase';
 import { onTestFinished } from 'vitest';
 import { installRealGameData, resetTestGameData } from './test-game-data';
 import { createTestMap, TERRAIN } from './test-map';
@@ -32,9 +33,9 @@ import {
 import { EventBus, type GameEvents } from '@/game/event-bus';
 import { GameState } from '@/game/game-state';
 import { GameServices } from '@/game/game-services';
+import { registerSimulationCommands } from './simulation-commands';
 import {
     CommandHandlerRegistry,
-    registerAllHandlers,
     type Command,
     type CommandResult,
     type SpawnCommand,
@@ -123,7 +124,6 @@ export class Simulation {
 
         this.settings = new GameSettingsManager();
         this.settings.resetToDefaults();
-        const settings = this.settings;
 
         this.commandRegistry = new CommandHandlerRegistry();
         this.services = new GameServices(
@@ -134,25 +134,12 @@ export class Simulation {
             null
         );
 
-        // Register feature-provided command handlers first, then central handlers
-        for (const [type, handler] of this.services.getFeatureCommandHandlers()) {
-            this.commandRegistry.register(type, handler);
-        }
-        registerAllHandlers(this.commandRegistry, {
+        registerSimulationCommands(this.commandRegistry, {
             state: this.state,
-            terrain: this.map.terrain,
+            services: this.services,
             eventBus: this.eventBus,
-            settings: settings.state,
-            settlerTaskSystem: this.services.settlerTaskSystem,
-            constructionSiteManager: this.services.constructionSiteManager,
-            combatSystem: this.services.combatSystem,
-            storageFilterManager: this.services.storageFilterManager,
-            inventoryManager: this.services.inventoryManager,
-            unitReservation: this.services.unitReservation,
-            recruitSystem: this.services.recruitSystem,
-            unitTransformer: this.services.unitTransformer,
-            getPlacementFilter: () => null,
-            getOwner: tile => this.services.territoryManager.getOwner(tile),
+            settings: this.settings,
+            terrain: this.map.terrain,
         });
 
         this.services.residenceSpawner.immediateMode = true;
@@ -187,13 +174,18 @@ export class Simulation {
 
     tick(dt: number) {
         this.tickCount++;
-        for (const { system, group } of this.tickSystems) {
+        for (const { system, phase } of this.tickSystems) {
             try {
                 system.tick(dt);
             } catch (e) {
                 const err = e instanceof Error ? e : new Error(String(e));
-                this.errors.push({ tick: this.tickCount, system: group, error: err });
-                this.timeline.record({ tick: this.tickCount, category: 'error', event: group, detail: err.message });
+                this.errors.push({ tick: this.tickCount, system: tickPhaseLabel(phase), error: err });
+                this.timeline.record({
+                    tick: this.tickCount,
+                    category: 'error',
+                    event: tickPhaseLabel(phase),
+                    detail: err.message,
+                });
             }
         }
         if (this.tickCount % INVARIANT_CHECK_INTERVAL === 0) {

@@ -13,6 +13,7 @@ import { MaterialRequestSystem } from './material-request-system';
 import type { ConstructionSiteManager } from '../building-construction';
 import type { BuildingInventoryManager, StorageFilterManager } from '../inventory';
 import type { DemandLedgerExports } from '../logistics/demand-ledger-feature';
+import { TickPhase } from '../../core/tick-phase';
 
 export interface MaterialRequestExports {
     materialRequestSystem: MaterialRequestSystem;
@@ -43,6 +44,7 @@ export const MaterialRequestFeature: FeatureDefinition = {
 
         return {
             systems: [system],
+            tickPhase: TickPhase.MaterialRequests,
             exports: { materialRequestSystem: system } satisfies MaterialRequestExports,
             persistence: 'none',
             destroy: () => system.destroy(),

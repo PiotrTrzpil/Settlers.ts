@@ -17,6 +17,7 @@ import {
     createTransformRecruitBuildingExecutor,
     createTransformDirectExecutor,
 } from './recruit-choreo-executors';
+import { TickPhase } from '../../core/tick-phase';
 
 export interface RecruitExports {
     recruitSystem: RecruitSystem;
@@ -71,6 +72,7 @@ export const RecruitFeature: FeatureDefinition = {
 
         return {
             systems: [recruitSystem],
+            tickPhase: TickPhase.Recruitment,
             persistence: [],
             exports: { recruitSystem, unitTransformer } satisfies RecruitExports,
             destroy: () => {

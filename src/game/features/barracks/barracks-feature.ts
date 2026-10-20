@@ -13,6 +13,7 @@ import type { RecruitExports } from '../recruit';
 import { BarracksTrainingManager } from './barracks-training-manager';
 import { BuildingType } from '../../buildings/building-type';
 import { forEachCompletedBuilding } from '../restore-utils';
+import { TickPhase } from '../../core/tick-phase';
 
 export interface BarracksExports {
     barracksTrainingManager: BarracksTrainingManager;
@@ -49,7 +50,7 @@ export const BarracksFeature: FeatureDefinition = {
 
         return {
             systems: [barracksTrainingManager],
-            systemGroup: 'Military',
+            tickPhase: TickPhase.Military,
             exports: { barracksTrainingManager } satisfies BarracksExports,
             persistence: [],
             destroy: () => {

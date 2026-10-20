@@ -14,6 +14,7 @@ import type { TerritoryExports } from '../territory';
 import { createTerritoryPlacementFilter } from '../territory';
 import type { AiPlayerExports } from './types';
 import { AiPlayerSystemImpl } from './internal/ai-player-system';
+import { TickPhase } from '../../core/tick-phase';
 
 export const AiPlayerFeature: FeatureDefinition = {
     id: 'ai-player',
@@ -37,7 +38,7 @@ export const AiPlayerFeature: FeatureDefinition = {
 
         return {
             systems: [aiSystem],
-            systemGroup: 'AI',
+            tickPhase: TickPhase.AI,
             exports,
             persistence: 'none',
         };

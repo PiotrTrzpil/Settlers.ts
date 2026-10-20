@@ -18,6 +18,7 @@ import type { OreVeinExports } from './ore-vein-feature';
 import type { SettlerTaskExports } from '../settler-tasks';
 import { SearchType } from '../settler-tasks';
 import { createGeologistHandler } from './work-handlers';
+import { TickPhase } from '../../core/tick-phase';
 
 /** Exports provided by OreSignFeature. */
 export interface OreSignExports {
@@ -49,6 +50,7 @@ export const OreSignFeature: FeatureDefinition = {
 
         return {
             systems: [signSystem],
+            tickPhase: TickPhase.ResourceSigns,
             exports,
             persistence: 'none',
         };

@@ -11,7 +11,7 @@
 
 import { GameState } from './game-state';
 import type { TerrainData } from './terrain';
-import type { TickSystem } from './core/tick-system';
+import { TickPhase, type PhasedTickSystem } from './core/tick-phase';
 import { EntityType, UnitType, getUnitTypeSpeed } from './entity';
 import { MapObjectBlockingTracker } from './map-object-blocking';
 import { isAngelUnitType } from './core/unit-types';
@@ -155,9 +155,8 @@ export class GameServices {
         // Movement is owned by GameState (constructed with terrain); exposed here for consumers.
         this.movement = gameState.movement;
         // 1. Kernel services — created before features, provided via FeatureContext.
-        //    UnitReservationRegistry must subscribe to entity:removed BEFORE cleanupRegistry
-        //    so onForcedRelease fires before any feature-level cleanup handlers.
-        this.unitReservation = new UnitReservationRegistry(eventBus);
+        //    Removal order is declared by CLEANUP_PRIORITY (reservations release first).
+        this.unitReservation = new UnitReservationRegistry(this.cleanupRegistry);
         this.visualService = new EntityVisualService();
         this.subscriptions.subscribe(eventBus, 'entity:created', ({ entityId, variation }) =>
             this.visualService.init(entityId, variation)
@@ -235,11 +234,9 @@ export class GameServices {
             this.movement.removeController(entityId);
         });
 
-        // Register tick scheduler before movement so deferred callbacks fire first
-        this.featureRegistry.registerSystem(this.tickScheduler, 'Core');
-
-        // Register movement as a tick system
-        this.featureRegistry.registerSystem(this.movement, 'Units');
+        // Kernel tick systems — tick order is fixed by phase, not registration order.
+        this.featureRegistry.registerSystem(this.tickScheduler, TickPhase.Scheduler);
+        this.featureRegistry.registerSystem(this.movement, TickPhase.Movement);
 
         // Listed in resolved load order (loadAll would sort dependencies first anyway).
         // Tick systems tick in this order, so keep system-owning features where they are.
@@ -340,8 +337,8 @@ export class GameServices {
         this.cleanupRegistry.registerEvents(eventBus);
     }
 
-    /** Ordered tick systems for the frame loop, with group labels. */
-    public getTickSystems(): readonly { system: TickSystem; group: string }[] {
+    /** Tick systems in tick order (by phase), for the frame loop. */
+    public getTickSystems(): readonly PhasedTickSystem[] {
         return this.featureRegistry.getSystems();
     }
 
