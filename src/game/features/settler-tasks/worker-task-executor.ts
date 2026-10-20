@@ -416,7 +416,9 @@ export class WorkerTaskExecutor {
 
         const material = this.parseMaterial(outputNode.entity);
         if (material === null) {
-            return false;
+            // GOOD_NO_GOOD / missing entity: fall back to production-config output capacity
+            // (ToolSmith, WeaponSmith, and other multi-recipe interior jobs).
+            return !this.inventoryManager.canStoreOutput(homeBuilding.id);
         }
 
         const slot = this.inventoryManager.findOutputSlot(homeBuilding.id, material);

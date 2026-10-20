@@ -186,29 +186,27 @@ function depositWorkerGood(
         // material transfer — deposit the node's output material directly.
         const deposited = ctx.inventoryManager.depositOutput(buildingId, explicitMaterial, 1);
         if (deposited === 0) {
-            log.warn(
-                `PUT_GOOD: settler ${settler.id} — building ${buildingId} output full for ` +
-                    `${explicitMaterial}, material lost`
+            throw new Error(
+                `PUT_GOOD: settler ${settler.id} — building ${buildingId} output full for ${explicitMaterial}. ` +
+                    `Worker should have waited at home (isOutputFull / canStoreOutput) instead of starting this job.`
             );
-        } else {
-            log.debug(`PUT_GOOD: settler ${settler.id} deposited ${explicitMaterial} ` + `to building ${buildingId}`);
         }
-        clearCarrying(settler);
+        log.debug(`PUT_GOOD: settler ${settler.id} deposited ${explicitMaterial} ` + `to building ${buildingId}`);
     } else {
         // No explicit material (GOOD_NO_GOOD) — use the building's production config to determine output.
         // This handles multi-step XML choreographies (e.g. ToolSmith) where GET_GOOD_VIRTUAL consumes
         // inputs and WORK_VIRTUAL is a pure timer; the correct output comes from BUILDING_PRODUCTIONS.
         const produced = ctx.inventoryManager.produceOutput(buildingId);
         if (!produced) {
-            log.warn(
-                `PUT_GOOD: settler ${settler.id} — building ${buildingId} output full (produceOutput), material lost`
+            throw new Error(
+                `PUT_GOOD: settler ${settler.id} — building ${buildingId} output full (produceOutput). ` +
+                    `Worker should have waited at home (isOutputFull / canStoreOutput) instead of starting this job.`
             );
-        } else {
-            log.debug(`PUT_GOOD: settler ${settler.id} produced output at building ${buildingId}`);
         }
-        clearCarrying(settler);
+        log.debug(`PUT_GOOD: settler ${settler.id} produced output at building ${buildingId}`);
     }
 
+    clearCarrying(settler);
     job.carryingGood = null;
 }
 

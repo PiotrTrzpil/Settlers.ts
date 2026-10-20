@@ -26,11 +26,13 @@ import type { GameState } from '../../game-state';
 import type { BuildingInventoryManager } from '../../systems/inventory/building-inventory';
 
 /**
- * Resolves source pile positions for carrier transport (output pile at source building).
+ * Resolves pile positions for carrier transport.
+ * Pickup walks to the source building's OUTPUT pile (not the worker input pile).
  * Injected at construction so the builder has no direct dependency on settler-tasks internals.
  */
 export interface TransportPositionResolver {
-    getSourcePilePosition(buildingId: number, material: string): Tile | null;
+    /** Output / storage pile position used as the carrier pickup walk target. */
+    getDestinationPilePosition(buildingId: number, material: string): Tile | null;
 }
 
 export interface TransportJobBuilderConfig {
@@ -60,10 +62,7 @@ export class TransportJobBuilder {
      * Build a ChoreoJobState for a full carrier transport (source → dest).
      */
     build(record: TransportJobRecord): ChoreoJobState {
-        const sourcePos = this.resolvePilePos(
-            record.sourceBuilding,
-            this.positionResolver.getSourcePilePosition(record.sourceBuilding, record.material)
-        );
+        const sourcePos = this.resolveSourcePos(record);
         const destPos = this.resolveDestPos(record);
 
         const job = choreo('JOB_CARRIER_TRANSPORT_GOOD', JobKind.Transport)
@@ -85,10 +84,7 @@ export class TransportJobBuilder {
      */
     buildDeliveryOnly(record: TransportJobRecord): ChoreoJobState {
         const destPos = this.resolveDestPos(record);
-        const sourcePos = this.resolvePilePos(
-            record.sourceBuilding,
-            this.positionResolver.getSourcePilePosition(record.sourceBuilding, record.material)
-        );
+        const sourcePos = this.resolveSourcePos(record);
 
         const job = choreo('JOB_CARRIER_TRANSPORT_GOOD', JobKind.Transport)
             .addNode(ChoreoTaskType.TRANSPORT_GO_TO_DEST, { jobPart: 'C_WALK' })
@@ -100,6 +96,14 @@ export class TransportJobBuilder {
         job.carryingGood = record.material;
         this.attachTransportData(job, record, sourcePos, destPos);
         return job;
+    }
+
+    /** Pickup walk target: source output/storage pile, else the entity or door. */
+    private resolveSourcePos(record: TransportJobRecord): Tile {
+        return this.resolvePilePos(
+            record.sourceBuilding,
+            this.positionResolver.getDestinationPilePosition(record.sourceBuilding, record.material)
+        );
     }
 
     /**

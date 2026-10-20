@@ -139,8 +139,8 @@ export class CarrierAssigner {
                 }
             }
 
-            // Busy carriers in PickedUp phase
-            const busyResult = this.findBestBusyCarrier(source.x, source.y, candidate.playerId);
+            // Busy carriers in PickedUp phase (same territory/eligibility filter as idle)
+            const busyResult = this.findBestBusyCarrier(source.x, source.y, candidate.playerId, filter);
             if (busyResult) {
                 const total = busyResult.estimatedCost + sourceToDest;
                 if (total < bestTotal) {
@@ -170,18 +170,25 @@ export class CarrierAssigner {
             return { status: 'failed', reason: 'reservation' };
         }
 
-        const job = this.transportJobBuilder.build(record);
-        // Reuse transport record id so entity.jobId === record.id (single numeric job identity).
-        const success = this.taskDispatcher.assignJob(carrierId, job, job.targetPos!, record.id);
+        try {
+            const job = this.transportJobBuilder.build(record);
+            // Reuse transport record id so entity.jobId === record.id (single numeric job identity).
+            const success = this.taskDispatcher.assignJob(carrierId, job, job.targetPos!, record.id);
 
-        if (success) {
-            this.emitAssigned(record);
-            return { status: 'assigned', record, carrierId, queued: false };
+            if (success) {
+                this.emitAssigned(record);
+                return { status: 'assigned', record, carrierId, queued: false };
+            }
+
+            this.emitAssignmentFailed(demand, match, carrierId, 'movement_failed');
+            TransportJobService.cancel(record, 'assignment_failed', this.transportJobDeps);
+            return { status: 'failed', reason: 'movement' };
+        } catch (err) {
+            // Assignment threw (e.g. pathfinding) — release the source reservation so
+            // later ticks can match this supply again instead of seeing it as fully reserved.
+            TransportJobService.cancel(record, 'assignment_failed', this.transportJobDeps);
+            throw err;
         }
-
-        this.emitAssignmentFailed(demand, match, carrierId, 'movement_failed');
-        TransportJobService.cancel(record, 'assignment_failed', this.transportJobDeps);
-        return { status: 'failed', reason: 'movement' };
     }
 
     /**
@@ -189,7 +196,12 @@ export class CarrierAssigner {
      * compute estimated cost to reach the source after finishing their current
      * delivery, and return the best candidate without a queued follow-up.
      */
-    private findBestBusyCarrier(sourceX: number, sourceY: number, playerId: number): BusyCarrierCandidate | null {
+    private findBestBusyCarrier(
+        sourceX: number,
+        sourceY: number,
+        playerId: number,
+        filter?: (entityId: number) => boolean
+    ): BusyCarrierCandidate | null {
         const jobStore = this.transportJobDeps.jobStore;
         let best: BusyCarrierCandidate | null = null;
 
@@ -204,6 +216,9 @@ export class CarrierAssigner {
 
             const carrier = this.gameState.getEntityOrThrow(record.carrierId, 'busy carrier in PickedUp phase');
             if (carrier.player !== playerId) {
+                continue;
+            }
+            if (filter && !filter(carrier.id)) {
                 continue;
             }
             const dest = this.gameState.getEntityOrThrow(

@@ -67,11 +67,16 @@ export function getAvailableSupplies(
         const totalAmount = inventoryManager.getOutputAmount(buildingId, materialType);
         if (totalAmount >= minAmount) {
             const slot = inventoryManager.findOutputSlot(buildingId, materialType);
+            if (!slot) {
+                throw new Error(
+                    `getAvailableSupplies: building ${buildingId} listed as source for ${materialType} but has no output slot`
+                );
+            }
             supplies.push({
                 buildingId,
                 materialType,
                 availableAmount: totalAmount,
-                slotKind: slot?.kind ?? SlotKind.Storage,
+                slotKind: slot.kind,
             });
         }
     }
