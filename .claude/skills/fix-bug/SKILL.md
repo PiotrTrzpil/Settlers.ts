@@ -22,7 +22,7 @@ $ARGUMENTS
 **Goal: Get just enough context to write a failing test. Do NOT fully understand the bug yet.**
 
 - Read the bug description / stack trace / symptoms
-- 1-2 targeted lookups max (`find_definition`, `search_graph`, or a single file read of the relevant lines)
+- 1-2 targeted lookups max (`find_definition`, or a single file read of the relevant lines)
 - Form a rough hypothesis — it's OK to be wrong, the test will tell you
 - **Do NOT read entire files. Do NOT deep-dive. Stop as soon as you can write a test.**
 
@@ -47,7 +47,7 @@ $ARGUMENTS
 Now that you have a failing test, investigate properly:
 
 - Use the timeline DB to trace exactly what happened during the test
-- Use GitNexus (`gitnexus_context`, `gitnexus_impact`, `gitnexus_query`) and cclsp (`find_references`, `find_definition`) to understand the code flow
+- Use cclsp (`find_references`, `find_definition`) to understand the code flow
 - Read targeted code sections as needed
 
 Ask yourself:
@@ -64,9 +64,8 @@ Ask yourself:
 
 ### 5. Assess Blast Radius and Sweep for Similar Issues
 
-After editing, use the graph to validate your fix doesn't have unexpected impact:
-- `gitnexus_detect_changes({scope='unstaged'})` — maps your git diff to affected symbols + callers classified by risk
-- Use Grep to find similar code structures
+After editing, validate your fix doesn't have unexpected impact:
+- Use `find_references` on changed symbols and Grep to find similar code structures
 - Check if other modules have the same vulnerability
 - Fix any duplicates found
 

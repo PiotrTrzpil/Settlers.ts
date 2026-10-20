@@ -24,8 +24,6 @@ $ARGUMENTS
 - Identify the public API boundary: what do external consumers actually use?
 - Check for tests that cover the code being refactored. Read them to understand expected behavior.
 
-**Use GitNexus** for structural understanding. Run `gitnexus_context` and `gitnexus_impact` on affected symbols to map callers, callees, and blast radius before changing anything.
-
 ### 2. Identify the Target Architecture
 
 Consult `docs/design-rules.md` and `docs/architecture/feature-modules.md` for project conventions:
@@ -64,7 +62,7 @@ Consult `docs/design-rules.md` and `docs/architecture/feature-modules.md` for pr
 
 - Run targeted unit tests: `pnpm vitest run <relevant-test-file>`
 - Run lint: `pnpm lint`
-- `gitnexus_detect_changes({scope='unstaged'})` — verify blast radius matches expectations. CRITICAL-risk symbols need review; unexpected impacted symbols mean you missed a dependency.
+- Review `git diff` and `find_references` on changed symbols — unexpected callers mean you missed a dependency.
 - Verify no imports from `internal/` by external code
 - Check the pre-commit review checklist (CLAUDE.md): no optional chaining on required deps, use `getEntityOrThrow`, no silent fallbacks
 

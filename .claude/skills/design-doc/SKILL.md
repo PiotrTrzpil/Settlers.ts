@@ -39,13 +39,11 @@ Read `$ARGUMENTS`. This is either:
 
 If anything is ambiguous, ask the user ONE round of clarifying questions (use AskUserQuestion). Prefer making reasonable decisions over asking too many questions.
 
-### Step 2: Graph-Assisted Scouting
+### Step 2: Scouting
 
-**MUST use GitNexus first** — the graph gives structural answers in seconds. Run `gitnexus_query` to find related code, `gitnexus_context` on key symbols, and `gitnexus_impact` to understand blast radius. For refactorings, also run `gitnexus_detect_changes` to see existing WIP scope.
+Spawn 3 fast scout agents in parallel.
 
-#### Then spawn 3 fast scout agents in parallel
-
-Use the Agent tool (`subagent_type: "Explore"`). These gather pointers the graph can't provide (conventions from docs, code snippets, config files). Tell each agent to use `"quick"` thoroughness.
+Use the Agent tool (`subagent_type: "Explore"`). These gather conventions from docs, code snippets, and config files. Tell each agent to use `"quick"` thoroughness.
 
 **Agent 1 — Conventions Scout**: Read CLAUDE.md and referenced guidelines. Return key naming/file conventions, error handling philosophy, type strictness, and constraining rules. Under 20 lines.
 

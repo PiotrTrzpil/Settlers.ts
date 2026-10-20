@@ -42,5 +42,4 @@ scripts/map-analysis/results/
 
 # Benchmark/perf screenshots
 /*.png
-.gitnexus
 .claude/worktrees/
