@@ -58,10 +58,10 @@ Add a universal numeric `jobId` field to `Entity` so units are self-describing a
 | # | Subsystem | Responsibility | Depends On | Files |
 |---|-----------|---------------|------------|-------|
 | 1 | Entity field & global counter | Add `jobId` to Entity, `nextJobId` counter to GameState | — | `src/game/entity.ts`, `src/game/game-state.ts` |
-| 2 | Slot re-key | Change slot reservations from jobId to carrierId | — | `src/game/systems/inventory/pile-slot.ts`, `src/game/systems/inventory/building-inventory.ts` |
+| 2 | Slot re-key | Change slot reservations from jobId to carrierId | — | `src/game/features/inventory/pile-slot.ts`, `src/game/features/inventory/building-inventory.ts` |
 | 3 | Job store transient | Remove persistence from transport jobs, use global counter | 1, 2 | `src/game/features/logistics/transport-job-store.ts`, `src/game/features/logistics/transport-job-service.ts` |
 | 4 | Restore reconstruction | Rebuild transport jobs from entity state on restore | 1, 2, 3 | `src/game/features/logistics/logistics-dispatcher.ts`, `src/game/features/logistics/logistics-dispatcher-feature.ts` |
-| 5 | Busy check simplification | Derive `isTransportBusy` from entity.jobId | 1 | `src/game/features/carriers/carrier-feature.ts`, `src/game/systems/idle-carrier-pool.ts` |
+| 5 | Busy check simplification | Derive `isTransportBusy` from entity.jobId | 1 | `src/game/features/carriers/carrier-feature.ts`, `src/game/features/carriers/idle-carrier-pool.ts` |
 | 6 | Runtime sync | Set/clear entity.jobId in assignJob/completeJob/interruptJob | 1 | `src/game/features/settler-tasks/settler-task-system.ts`, `src/game/features/settler-tasks/internal/worker-job-lifecycle.ts` |
 | 7 | Garrison jobs | Proper job records for garrisoned units, restore from entity state | 1, 6 | `src/game/features/tower-garrison/tower-garrison-manager.ts`, `src/game/features/tower-garrison/tower-garrison-feature.ts` |
 
@@ -125,7 +125,7 @@ export interface GarrisonJobRecord {
 - Field is optional (undefined = idle) — consistent with `carrying`, `hidden`, `level`
 
 ### 2. Slot re-key
-**Files**: `src/game/systems/inventory/pile-slot.ts`, `src/game/systems/inventory/building-inventory.ts`
+**Files**: `src/game/features/inventory/pile-slot.ts`, `src/game/features/inventory/building-inventory.ts`
 **Key decisions**:
 - `SlotReservation` drops `jobId`, keeps `carrierId` as the primary key — carriers are the stable identity that survives restore
 - `reserveSlot` / `unreserveSlot` change signature: `carrierId` replaces `jobId` as the lookup key
@@ -160,7 +160,7 @@ export interface GarrisonJobRecord {
 - `rebuildFromEntities` must run after `carrierRegistry.rebuildFromEntities()` (carrier feature's onRestoreComplete) so carriers are registered
 
 ### 5. Busy check simplification
-**Files**: `src/game/features/carriers/carrier-feature.ts`, `src/game/systems/idle-carrier-pool.ts`
+**Files**: `src/game/features/carriers/carrier-feature.ts`, `src/game/features/carriers/idle-carrier-pool.ts`
 **Depends on**: Subsystem 1
 **Key decisions**:
 - `isTransportBusy` closure changes to `(carrierId) => gameState.getEntity(carrierId)?.jobId != null` — reads directly from entity, no job store lookup
@@ -202,14 +202,14 @@ None.
 |------|--------|
 | `src/game/entity.ts` | Add `jobId?: number` field, add `clearJobId()` helper |
 | `src/game/game-state.ts` | Add persisted `nextJobId` counter, `allocateJobId()` method |
-| `src/game/systems/inventory/pile-slot.ts` | Re-key `SlotReservation`: drop `jobId`, keep `carrierId` |
-| `src/game/systems/inventory/building-inventory.ts` | Update `reserveSlot`/`unreserveSlot` signatures, add `findReservationByCarrier()` |
+| `src/game/features/inventory/pile-slot.ts` | Re-key `SlotReservation`: drop `jobId`, keep `carrierId` |
+| `src/game/features/inventory/building-inventory.ts` | Update `reserveSlot`/`unreserveSlot` signatures, add `findReservationByCarrier()` |
 | `src/game/features/logistics/transport-job-store.ts` | `IndexedMap` instead of `PersistentIndexedMap`, remove `nextJobIdStore`, use `GameState.allocateJobId()` |
 | `src/game/features/logistics/transport-job-service.ts` | Update `reserveSlot`/`unreserveSlot` calls, clear `entity.jobId` in deliver/cancel |
 | `src/game/features/logistics/logistics-dispatcher.ts` | Replace `reconcileOrphanedJobs()` with `rebuildFromEntities()` |
 | `src/game/features/logistics/logistics-dispatcher-feature.ts` | Remove persistence array, update `onRestoreComplete` |
 | `src/game/features/carriers/carrier-feature.ts` | Simplify `isTransportBusy` to read `entity.jobId` |
-| `src/game/systems/idle-carrier-pool.ts` | Potentially read `entity.jobId` directly |
+| `src/game/features/carriers/idle-carrier-pool.ts` | Potentially read `entity.jobId` directly |
 | `src/game/features/settler-tasks/settler-task-system.ts` | Set `entity.jobId` via `allocateJobId()` in `assignJob()` |
 | `src/game/features/settler-tasks/internal/worker-job-lifecycle.ts` | Clear `entity.jobId` in `completeJob()` and `interruptJob()` |
 | `src/game/features/tower-garrison/types.ts` | Add `GarrisonJobRecord` interface |

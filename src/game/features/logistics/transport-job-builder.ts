@@ -23,7 +23,7 @@ import { type TransportJobRecord } from './transport-job-record';
 import * as TransportJobService from './transport-job-service';
 import type { TransportJobDeps } from './transport-job-service';
 import type { GameState } from '../../game-state';
-import type { BuildingInventoryManager } from '../../systems/inventory/building-inventory';
+import type { BuildingInventoryManager } from '../inventory';
 
 /**
  * Resolves pile positions for carrier transport.

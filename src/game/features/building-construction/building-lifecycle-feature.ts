@@ -16,7 +16,7 @@
 import { type EventBus, EventSubscriptionManager, type GameEvents } from '../../event-bus';
 import type { CoreDeps } from '../feature';
 import type { ConstructionSiteManager } from './construction-site-manager';
-import type { BuildingInventoryManager, SlotPositionResolver } from '../../systems/inventory/building-inventory';
+import type { BuildingInventoryManager, SlotPositionResolver } from '../inventory';
 import { getConstructionInventoryConfig } from '../inventory';
 import type { GameState } from '../../game-state';
 import type { EntityCleanupRegistry } from '../../systems/entity-cleanup-registry';

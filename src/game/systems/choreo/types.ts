@@ -3,7 +3,7 @@
  *
  * Defines the data model for choreography-based settler jobs: task types,
  * node structure, job runtime state, and the TaskResult enum.
- * These live in systems/ so any system (including systems/recruit/) can
+ * These live in systems/ so any system (and features such as recruit) can
  * import them without pulling in feature-layer code.
  */
 

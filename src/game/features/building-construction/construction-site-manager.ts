@@ -28,10 +28,10 @@ import { type ComponentStore, mapStore } from '../../ecs';
 import { BuildingConstructionPhase, type CapturedTerrainTile, type ConstructionSite } from './types';
 import { PersistentMap } from '@/game/persistence/persistent-store';
 import type { Tile } from '../../core/coordinates';
-import { assignConstructionPilePositions } from '../../systems/inventory/construction-pile-positions';
+import { assignConstructionPilePositions } from '../inventory';
 
 export type IndexedTile = Tile & { tileIndex: number };
-import type { BuildingInventoryManager } from '../../systems/inventory/building-inventory';
+import type { BuildingInventoryManager } from '../inventory';
 import { SlotKind } from '../../core/pile-kind';
 import {
     type SerializedConstructionSite,

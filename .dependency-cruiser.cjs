@@ -39,6 +39,17 @@ module.exports = {
             }
         },
         {
+            name: 'systems-no-feature-imports',
+            severity: 'error',
+            comment: 'systems/ is domain-free engine infrastructure and must never import from features/ (design-rules Rule 2.0)',
+            from: {
+                path: '^src/game/systems/'
+            },
+            to: {
+                path: '^src/game/features/'
+            }
+        },
+        {
             name: 'resources-no-game-imports',
             severity: 'error',
             comment: 'Resource loaders should be standalone and not depend on game logic',

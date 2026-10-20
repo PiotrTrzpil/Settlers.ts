@@ -14,14 +14,7 @@ import { EventSubscriptionManager } from '../event-bus';
 import type { EntityVisualService } from '../animation/entity-visual-service';
 import type { EntityCleanupRegistry } from '../systems/entity-cleanup-registry';
 import type { UnitReservationRegistry } from '../systems/unit-reservation';
-import type {
-    CoreDeps,
-    FeatureDefinition,
-    FeatureInstance,
-    FeatureContext,
-    BoundCommandHandler,
-    PersistenceEntry,
-} from './feature';
+import type { CoreDeps, FeatureDefinition, FeatureInstance, FeatureContext, BoundCommandHandler } from './feature';
 import type { CommandType, ExecuteCommand } from '../commands';
 import type { Persistable } from '../persistence';
 import type { TerrainData } from '../terrain';
@@ -85,25 +78,6 @@ export class FeatureRegistry {
 
     constructor(config: FeatureRegistryConfig) {
         this.config = config;
-    }
-
-    /**
-     * Register exports for a feature created outside the registry.
-     * Enables incremental migration: manually-created managers become
-     * accessible to registry features via ctx.getFeature().
-     */
-    registerExports(featureId: string, exports: Record<string, unknown>, persistence?: PersistenceEntry[]): void {
-        if (this.instances.has(featureId)) {
-            throw new Error(`Feature '${featureId}' already registered`);
-        }
-        // eslint-disable-next-line no-restricted-syntax -- nullable field with display/config default
-        const resolved = persistence ?? 'none';
-        this.instances.set(featureId, { exports, persistence: resolved });
-        this.exports.set(featureId, exports);
-        this.loadedIds.push(featureId);
-        if (resolved !== 'none') {
-            this.collectPersistables({ persistence: resolved } as FeatureInstance);
-        }
     }
 
     /**

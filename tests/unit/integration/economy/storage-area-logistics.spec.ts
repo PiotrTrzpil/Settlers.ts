@@ -13,7 +13,7 @@ import { describe, it, expect, afterEach } from 'vitest';
 import { BuildingType } from '@/game/entity';
 import { EMaterialType } from '@/game/economy';
 import { SlotKind } from '@/game/core/pile-kind';
-import { StorageDirection } from '@/game/systems/inventory/storage-filter-manager';
+import { StorageDirection } from '@/game/features/inventory/storage-filter-manager';
 import { DemandPriority } from '@/game/features/logistics/demand-ledger';
 import { computeDeficit } from '@/game/features/logistics/demand-deficit';
 import { createSimulation, createScenario, cleanupSimulation, type Simulation } from '../../helpers/test-simulation';

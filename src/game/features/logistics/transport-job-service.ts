@@ -13,7 +13,7 @@ import type { EventBus } from '../../event-bus';
 import { TransportPhase, type TransportJobRecord } from './transport-job-record';
 import type { TransportJobStore } from './transport-job-store';
 import type { DemandLedger } from './demand-ledger';
-import type { BuildingInventoryManager } from '../../systems/inventory/building-inventory';
+import type { BuildingInventoryManager } from '../inventory';
 import type { GameState } from '../../game-state';
 
 export interface TransportJobDeps {

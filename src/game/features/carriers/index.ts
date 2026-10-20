@@ -6,10 +6,11 @@
  *
  * Public API:
  * - CarrierRegistry (set-based carrier membership + ComponentStore)
+ * - IdleCarrierPool (spatial lookup of idle, unreserved carriers)
  * - CarrierFeature, CarrierFeatureExports
  */
 
-export { CarrierRegistry, type CarrierRegistryConfig } from '../../systems/carrier-registry';
+export { CarrierRegistry, type CarrierRegistryConfig } from './carrier-registry';
 export { CarrierFeature, type CarrierFeatureExports } from './carrier-feature';
-export { IdleCarrierPool, type CarrierEligibilityFilter } from '../../systems/idle-carrier-pool';
+export { IdleCarrierPool, type CarrierEligibilityFilter } from './idle-carrier-pool';
 export type { EntityProvider } from '../../entity';

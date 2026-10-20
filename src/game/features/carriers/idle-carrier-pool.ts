@@ -10,12 +10,12 @@
  * Candidates are re-checked for idle/reservation so mid-batch assigns stay correct.
  */
 
-import type { GameState } from '../game-state';
+import type { GameState } from '../../game-state';
 import type { CarrierRegistry } from './carrier-registry';
-import type { UnitReservationRegistry } from './unit-reservation';
-import { SpatialHash } from '../spatial-hash';
-import { query } from '../ecs';
-import { distSq } from '../core/distance';
+import type { UnitReservationRegistry } from '../../systems/unit-reservation';
+import { SpatialHash } from '../../spatial-hash';
+import { query } from '../../ecs';
+import { distSq } from '../../core/distance';
 
 /** Optional caller-specific filter (e.g. territory check). */
 export type CarrierEligibilityFilter = (entityId: number) => boolean;

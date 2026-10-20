@@ -34,9 +34,9 @@ Architectural rules and conventions for Settlers.ts. These rules ensure consiste
 ```
 Layer 0 (Pure Data):     coordinates, buildings/types, unit-types, economy/types
 Layer 1 (Algorithms):    pathfinding, ai, hex-directions, movement math
-Layer 2 (Infra):         movement, entity-cleanup-registry, spatial-search     ← systems/ directory
+Layer 2 (Infra):         movement, entity-cleanup-registry, spatial-search     ← systems/ directory (domain-free)
 Layer 3 (State):         game-state, event-bus
-Layer 4 (Domain):        building-construction, placement, carriers, logistics  ← features/ directory
+Layer 4 (Domain):        inventory, carriers, recruit, building-construction, logistics  ← features/ directory
 Layer 5 (Orchestration): game-loop, commands, game-services
 Layer 6 (I/O):           renderer, input, audio
 Layer 7 (Glue):          game.ts, Vue views/composables
@@ -58,24 +58,24 @@ Modules in Layer 1 (`pathfinding/`, `ai/behavior-tree/`, `coordinates/`) must no
 
 ## 2. Feature Module Rules
 
-### Rule 2.0: Features vs Systems — Classification by Dependency Direction
+### Rule 2.0: Features vs Systems — Domain-Free Engine vs Domain Concepts
 
-`systems/` and `features/` represent distinct architectural layers. The dividing line is **dependency direction**, not file count or complexity.
+`systems/` and `features/` are classified by **what a module is about**, not by which way its imports happen to point.
 
 | Location | Role | Dependency rule | Examples |
 |----------|------|-----------------|---------|
-| `systems/` | Kernel infrastructure | May be imported by features; must **never** import from `features/` | `movement`, `pathfinding`, `entity-cleanup-registry`, `spatial-search` |
-| `features/` | Domain modules | May import from `systems/`; participate in `FeatureRegistry` | `carriers`, `logistics`, `building-construction`, `trees`, `crops` |
+| `systems/` | Domain-free engine infrastructure | May be imported by anything; must **never** import from `features/` | `movement`, `pathfinding`, `spatial-search`, `hex-directions`, `coordinate-system`, `tick-scheduler`, `choreo` runtime, `entity-cleanup-registry`, `unit-reservation`, `placement` |
+| `features/` | Domain concepts — one concept per module | May import from `systems/` and from other features' barrels (declared in `dependencies` when accessed via `ctx.getFeature`) | `inventory`, `carriers`, `recruit`, `logistics`, `building-construction`, `trees`, `crops` |
 
-**The test:** If a module in `systems/` imports anything from `features/`, it is misclassified — move it to `features/`.
+**The test:** Does the module encode game rules about a specific concept (inventories, carriers, recruitment, construction, …)? Then it lives in that concept's feature module — **all** of its code, including low-level managers, registries and helpers. Only mechanics that know nothing about any particular domain concept belong in `systems/`.
 
-**The enforcing question:** Can any feature import it without creating a cycle?
-- Yes, and it imports nothing from `features/` → belongs in `systems/`
-- Depends on a feature → belongs in `features/`
+**Low-level features are fine.** A feature may be foundational and imported by many other features (e.g. `inventory`, `carriers`). That is what `FeatureDefinition.dependencies` and the feature barrel are for — layering is enforced between feature modules, not between the two directories.
 
-**Why this matters:** Systems are foundational infrastructure. Features are built on top of systems. If a "system" imports a feature, then every consumer of that system gains an implicit dependency on that feature — a coupling that destroys composability and testability.
+**Hard constraint:** A module in `systems/` must never import from `features/`. If an engine module needs domain behaviour, invert the dependency (callback, interface, registry hook) instead of importing the feature. Enforced by the dependency-cruiser rule `systems-no-feature-imports` (`pnpm analyze:deps`).
 
-**Note:** Complexity and file count are signals, not the rule. A multi-file module with its own registry belongs in `systems/` if it has zero feature dependencies. A 2-file module belongs in `features/` if it depends on inventory or carriers.
+**Shared helpers without a single owner** (used by several features, e.g. `growth/` for trees + crops, `unit-demand-loop` for building-demand + construction, map population helpers used at load time) may stay in `systems/` as long as they import nothing from `features/`. Prefer moving them into a feature once one feature clearly owns the concept.
+
+**Why this matters:** A concept split across `systems/X` and `features/X` cannot be found by name, and its barrels end up re-exporting each other. One feature per concept keeps each domain in one place with one public API (`index.ts`).
 
 ### Rule 2.1: Single Entry Point
 

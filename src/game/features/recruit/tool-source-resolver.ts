@@ -2,7 +2,7 @@ import type { GameState } from '../../game-state';
 import { EntityType } from '../../entity';
 import type { EMaterialType } from '../../economy/material-type';
 import { SlotKind } from '../../core/pile-kind';
-import type { BuildingInventoryManager } from '../../systems/inventory/building-inventory';
+import type { BuildingInventoryManager } from '../inventory';
 import type { Tile } from '../../core/coordinates';
 import { distSq } from '../../core/distance';
 import { createLogger } from '@/utilities/logger';

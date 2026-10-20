@@ -4,13 +4,14 @@ export {
     createTransformRecruitBuildingExecutor,
     createTransformDirectExecutor,
 } from './recruit-choreo-executors';
-// Low-level systems live in systems/recruit/
-export { RecruitSystem } from '../../systems/recruit/recruit-system';
-export { UnitTransformer, type UnitTransformerConfig } from '../../systems/recruit/unit-transformer';
+// Recruitment queue, tool sources and unit transformation
+export { RecruitSystem, type RecruitSystemConfig, type DispatchRecruitmentOpts } from './recruit-system';
+export { UnitTransformer, type UnitTransformerConfig } from './unit-transformer';
 export {
     ToolSourceResolver,
     type ToolSource,
     type MaterialCost,
     type BuildingReservationHandle,
-} from '../../systems/recruit/tool-source-resolver';
-export { createRecruitmentJob } from '../../systems/recruit/recruitment-job';
+} from './tool-source-resolver';
+export { createRecruitmentJob } from './recruitment-job';
+export { SPECIALIST_TOOL_MAP } from './specialist-tool-map';

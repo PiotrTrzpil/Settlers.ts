@@ -4,7 +4,7 @@ import { ProductionMode } from '../features/production-control';
 import type { Race } from '../core/race';
 import type { EMaterialType } from '../economy/material-type';
 import type { PileKind } from '../core/pile-kind';
-import { StorageDirection } from '../systems/inventory/storage-filter-manager';
+import { StorageDirection } from '../features/inventory';
 
 /**
  * Formation offsets for multi-unit movement commands.

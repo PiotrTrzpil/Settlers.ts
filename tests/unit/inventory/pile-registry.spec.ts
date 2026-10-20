@@ -6,7 +6,7 @@
  */
 
 import { describe, it, expect, beforeEach } from 'vitest';
-import { PileRegistry, type PileSlotKey } from '@/game/systems/inventory/pile-registry';
+import { PileRegistry, type PileSlotKey } from '@/game/features/inventory/pile-registry';
 import { EMaterialType } from '@/game/economy/material-type';
 import { EntityType } from '@/game/entity';
 import { Race } from '@/game/core/race';
@@ -14,7 +14,7 @@ import type { Entity } from '@/game/entity';
 import type { PileKind } from '@/game/core/pile-kind';
 import type { Tile } from '@/game/core/coordinates';
 import { SlotKind } from '@/game/core/pile-kind';
-import type { PileKindProvider } from '@/game/systems/inventory/pile-registry';
+import type { PileKindProvider } from '@/game/features/inventory/pile-registry';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Test helpers

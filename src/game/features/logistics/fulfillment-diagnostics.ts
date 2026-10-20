@@ -10,7 +10,7 @@
 
 import type { GameState } from '../../game-state';
 import type { BuildingInventoryManager } from '../inventory';
-import type { CarrierRegistry } from '../../systems/carrier-registry';
+import type { CarrierRegistry } from '../carriers';
 import type { TransportJobStore } from './transport-job-store';
 import type { EMaterialType } from '../../economy/material-type';
 import { getAvailableSupplies } from './resource-supply';

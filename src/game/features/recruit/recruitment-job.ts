@@ -1,6 +1,6 @@
 import { UnitType } from '../../core/unit-types';
-import { choreo, type ChoreoJobState } from '../choreo';
-import { JobKind } from '../choreo/types';
+import { choreo, type ChoreoJobState } from '../../systems/choreo';
+import { JobKind } from '../../systems/choreo/types';
 
 /**
  * Build a choreography job for a carrier to walk to a free pile and transform into a specialist.

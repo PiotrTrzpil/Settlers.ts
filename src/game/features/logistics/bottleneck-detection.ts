@@ -5,7 +5,7 @@
  */
 
 import type { GameState } from '../../game-state';
-import type { BuildingInventoryManager } from '../../systems/inventory/building-inventory';
+import type { BuildingInventoryManager } from '../inventory';
 import type { WorkerStateQuery } from '../settler-tasks';
 import type { SnapshotConfig } from './logistics-snapshot';
 import { EntityType } from '../../entity';

@@ -32,8 +32,6 @@ export function registerSimulationCommands(registry: CommandHandlerRegistry, dep
         settlerTaskSystem: services.settlerTaskSystem,
         constructionSiteManager: services.constructionSiteManager,
         combatSystem: services.combatSystem,
-        storageFilterManager: services.storageFilterManager,
-        inventoryManager: services.inventoryManager,
         unitReservation: services.unitReservation,
         recruitSystem: services.recruitSystem,
         unitTransformer: services.unitTransformer,

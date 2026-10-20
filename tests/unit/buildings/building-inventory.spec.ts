@@ -13,7 +13,7 @@ import { BuildingType } from '@/game/entity';
 import { Race } from '@/game/core/race';
 import { SlotKind } from '@/game/core/pile-kind';
 import { EventBus } from '@/game/event-bus';
-import type { SlotPositionResolver } from '@/game/systems/inventory/building-inventory';
+import type { SlotPositionResolver } from '@/game/features/inventory/building-inventory';
 
 beforeAll(() => installTestGameData());
 afterAll(() => resetTestGameData());

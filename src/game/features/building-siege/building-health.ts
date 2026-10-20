@@ -9,7 +9,7 @@
  * support any future mechanic that damages buildings (catapults, etc.).
  */
 
-import { BuildingType } from '../buildings/building-type';
+import { BuildingType } from '../../buildings/building-type';
 
 /** Max HP for each building type that can take structural damage. */
 const BUILDING_MAX_HEALTH: Partial<Record<BuildingType, number>> = {

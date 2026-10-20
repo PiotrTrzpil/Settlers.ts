@@ -7,9 +7,9 @@ import type { Game } from '@/game/game';
 import type { Entity } from '@/game/entity';
 import { BuildingType, EntityType, isStorageBuilding } from '@/game/entity';
 import { EMaterialType, DROPPABLE_MATERIALS } from '@/game/economy/material-type';
-import { StorageDirection } from '@/game/systems/inventory/storage-filter-manager';
+import { StorageDirection } from '@/game/features/inventory';
 
-export { StorageDirection } from '@/game/systems/inventory/storage-filter-manager';
+export { StorageDirection } from '@/game/features/inventory';
 
 export interface StorageFilterItem {
     material: EMaterialType;

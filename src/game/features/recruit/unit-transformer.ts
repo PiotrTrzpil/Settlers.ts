@@ -31,13 +31,13 @@
 import type { GameState } from '../../game-state';
 import type { EventBus } from '../../event-bus';
 import { EventSubscriptionManager } from '../../event-bus';
-import type { ChoreoJobState } from '../choreo';
+import type { ChoreoJobState } from '../../systems/choreo';
 import { EntityType, EXTENDED_OFFSETS, Tile } from '../../entity';
 
 import { UnitType } from '../../core/unit-types';
 import { EMaterialType } from '../../economy/material-type';
-import type { CarrierRegistry } from '../carrier-registry';
-import type { UnitReservationRegistry } from '../unit-reservation';
+import type { CarrierRegistry } from '../carriers';
+import type { UnitReservationRegistry } from '../../systems/unit-reservation';
 import { createLogger } from '@/utilities/logger';
 import { createDirectTransformJob } from './recruitment-job';
 import { ToolSourceResolver } from './tool-source-resolver';

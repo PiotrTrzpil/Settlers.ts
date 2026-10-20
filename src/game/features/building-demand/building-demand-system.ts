@@ -22,7 +22,7 @@ import { getBuildingMaxOccupants } from '../../buildings/types';
 import type { UnitType } from '../../core/unit-types';
 import type { Race } from '../../core/race';
 import type { ChoreoJobState } from '../../systems/choreo';
-import type { DispatchRecruitmentOpts } from '../../systems/recruit/recruit-system';
+import type { DispatchRecruitmentOpts } from '../recruit';
 import { choreo, type ChoreoBuilderContext } from '../../systems/choreo/choreo-builder';
 import type { TerrainData } from '../../terrain';
 import { getBuildingWorkerInfo } from '../../data/game-data-access';

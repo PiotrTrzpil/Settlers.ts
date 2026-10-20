@@ -11,8 +11,7 @@ import type { EMaterialType } from '../../economy/material-type';
 import { SlotKind } from '../../core/pile-kind';
 import { getAvailableSupplies } from './resource-supply';
 import type { TransportJobStore } from './transport-job-store';
-import type { BuildingInventoryManager } from '../inventory';
-import type { StorageFilterManager } from '../../systems/inventory/storage-filter-manager';
+import type { BuildingInventoryManager, StorageFilterManager } from '../inventory';
 
 /**
  * Minimal request shape needed by the matcher.

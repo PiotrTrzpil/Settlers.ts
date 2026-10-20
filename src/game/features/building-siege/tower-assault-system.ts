@@ -23,7 +23,7 @@ import { getCombatStats } from '../combat/combat-state';
 import { hexDistanceTo } from '../../systems/hex-directions';
 import { isIdleSwordsman, findNearbyEnemyGarrison, getBuildingPerimeterTiles } from './siege-helpers';
 import { BUILDING_SEARCH_RADIUS } from './siege-types';
-import { BuildingHealthTracker, getBuildingMaxHealth } from '../../systems/building-health';
+import { BuildingHealthTracker, getBuildingMaxHealth } from './building-health';
 import type { CombatSystem } from '../combat/combat-system';
 import type { SettlerTaskSystem } from '../settler-tasks';
 import type { TowerGarrisonManager } from '../tower-garrison/tower-garrison-manager';

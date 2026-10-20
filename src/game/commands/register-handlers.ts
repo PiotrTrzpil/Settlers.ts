@@ -5,12 +5,9 @@ import type { GameSettings } from '../game-settings';
 import type { ConstructionSiteManager } from '../features/building-construction';
 import type { SettlerTaskSystem } from '../features/settler-tasks';
 import type { CombatSystem } from '../features/combat';
-import type { StorageFilterManager } from '../systems/inventory/storage-filter-manager';
-import type { BuildingInventoryManager } from '../systems/inventory/building-inventory';
 import type { PlacementFilter } from '../systems/placement';
 import type { UnitReservationRegistry } from '../systems/unit-reservation';
-import type { RecruitSystem } from '../systems/recruit/recruit-system';
-import type { UnitTransformer } from '../systems/recruit/unit-transformer';
+import type { RecruitSystem, UnitTransformer } from '../features/recruit';
 import type { Tile } from '../entity';
 import { CommandHandlerRegistry } from './handler-registry';
 
@@ -29,12 +26,7 @@ import {
     executeRecruitSpecialist,
 } from './handlers/unit-handlers';
 import { executePlaceBuilding, executeRemoveEntity, executeSpawnBuildingUnits } from './handlers/building-handlers';
-import {
-    executePlacePile,
-    executeSpawnMapObject,
-    executeSpawnPile,
-    executeSetStorageFilter,
-} from './handlers/system-handlers';
+import { executeSpawnMapObject, executeSpawnPile } from './handlers/system-handlers';
 import { executeScriptAddGoods, executeScriptAddBuilding, executeScriptAddSettlers } from './handlers/script-handlers';
 
 /**
@@ -51,20 +43,18 @@ export interface CommandRegistrationDeps {
     settlerTaskSystem: SettlerTaskSystem;
     constructionSiteManager: ConstructionSiteManager;
     combatSystem: CombatSystem;
-    storageFilterManager: StorageFilterManager;
-    inventoryManager: BuildingInventoryManager;
     unitReservation: UnitReservationRegistry;
     /** Getter for placement filter — mutable, re-read on each place_building call */
     getPlacementFilter: () => PlacementFilter | null;
     recruitSystem: RecruitSystem;
     unitTransformer: UnitTransformer;
-    /** Territory owner lookup for assigning player to free piles */
+    /** Territory owner lookup (unit move and building placement ownership) */
     getOwner: (tile: Tile) => number;
 }
 
 /**
  * Register non-feature command handlers with their specific dependencies bound.
- * Feature-owned commands (trees, crops, production-control) are self-registered
+ * Feature-owned commands (trees, crops, production-control, inventory, …) are self-registered
  * via the feature plugin system — see FeatureInstance.commands.
  */
 export function registerAllHandlers(registry: CommandHandlerRegistry, deps: CommandRegistrationDeps): void {
@@ -76,8 +66,6 @@ export function registerAllHandlers(registry: CommandHandlerRegistry, deps: Comm
         settlerTaskSystem,
         constructionSiteManager,
         combatSystem,
-        storageFilterManager,
-        inventoryManager,
         unitReservation,
         getPlacementFilter,
         recruitSystem,
@@ -131,12 +119,8 @@ export function registerAllHandlers(registry: CommandHandlerRegistry, deps: Comm
     registry.register('spawn_building_units', cmd => executeSpawnBuildingUnits({ state, terrain, eventBus }, cmd));
 
     // System
-    registry.register('place_pile', cmd => executePlacePile({ state, terrain, eventBus, getOwner }, cmd));
     registry.register('spawn_pile', cmd => executeSpawnPile({ state, terrain, eventBus }, cmd));
     registry.register('spawn_map_object', cmd => executeSpawnMapObject({ state }, cmd));
-    registry.register('set_storage_filter', cmd =>
-        executeSetStorageFilter({ state, eventBus, storageFilterManager, inventoryManager }, cmd)
-    );
 
     // Script
     registry.register('script_add_goods', cmd => executeScriptAddGoods({ state, eventBus, terrain }, cmd));

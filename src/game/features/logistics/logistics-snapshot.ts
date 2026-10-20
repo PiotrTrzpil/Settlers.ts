@@ -8,10 +8,10 @@
 import type { GameState } from '../../game-state';
 import type { DemandLedger, DemandTarget } from './demand-ledger';
 import { computeDeficit } from './demand-deficit';
-import type { CarrierRegistry } from '../../systems/carrier-registry';
+import type { CarrierRegistry } from '../carriers';
 import type { LogisticsDispatcher } from './logistics-dispatcher';
 import type { WorkerStateQuery } from '../settler-tasks';
-import type { BuildingInventoryManager } from '../../systems/inventory/building-inventory';
+import type { BuildingInventoryManager } from '../inventory';
 import type { UnitReservationRegistry } from '../../systems/unit-reservation';
 import type { ConstructionSiteManager } from '../building-construction/construction-site-manager';
 import { DemandPriority } from './demand-ledger';

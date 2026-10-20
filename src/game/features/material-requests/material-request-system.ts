@@ -18,9 +18,13 @@ import type { CoreDeps } from '../feature';
 import type { GameState } from '../../game-state';
 import { EntityType, BuildingType } from '../../entity';
 import { DemandPriority, type DemandLedger } from '../logistics/demand-ledger';
-import { getInventoryConfig, type BuildingInventoryManager } from '../inventory';
+import {
+    getInventoryConfig,
+    type BuildingInventoryManager,
+    StorageDirection,
+    type StorageFilterManager,
+} from '../inventory';
 import { type ConstructionSiteManager } from '../building-construction';
-import { StorageDirection, type StorageFilterManager } from '../../systems/inventory/storage-filter-manager';
 import { EventSubscriptionManager } from '../../event-bus';
 
 /** Maximum concurrent incoming import jobs per material per StorageArea (parallel carrier cap). */

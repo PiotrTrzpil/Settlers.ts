@@ -1,13 +1,21 @@
 /**
- * Inventory Feature Module — re-exports
+ * Inventory Feature Module
  *
- * Core inventory types and managers now live in systems/inventory/.
- * This barrel re-exports them for convenience, plus the inventory-config
- * feature which wires pile entity management dependencies.
+ * Building inventories (PileSlots), inventory configs, XML pile positions,
+ * StorageArea filters and free piles. External code should only import from this file.
+ *
+ * Public API:
+ * - InventoryFeature / InventoryExports (BuildingInventoryManager + StorageFilterManager)
+ * - FreePilesFeature (free pile registration + place_pile command)
+ * - Slot helpers, inventory configs, pile registries, pile position resolution
  */
 
-// Re-export everything from the inventory system
-export type { InventorySlot, DepositResult, WithdrawResult } from '../../systems/inventory/inventory-slot';
+// Feature definitions
+export { InventoryFeature, type InventoryExports } from './inventory-feature';
+export { FreePilesFeature } from './free-piles-feature';
+
+// Slot types and helpers
+export type { InventorySlot, DepositResult, WithdrawResult } from './inventory-slot';
 export {
     createSlot,
     canAccept,
@@ -20,17 +28,20 @@ export {
     getAvailableSpace,
     isEmpty,
     isFull,
-} from '../../systems/inventory/inventory-slot';
+} from './inventory-slot';
 
-export type { BuildingInventoryView, BuildingInventoryDeps } from '../../systems/inventory/building-inventory';
-export { BuildingInventoryManager } from '../../systems/inventory/building-inventory';
+// Building inventory manager
+export type { BuildingInventoryView, BuildingInventoryDeps, SlotPositionResolver } from './building-inventory';
+export type { MaterialThroughput, SerializedBuildingInventory, SerializedPileSlot } from './building-inventory-helpers';
+export { BuildingInventoryManager } from './building-inventory';
 
-// Unified slot+pile type (new model)
-export type { PileSlot } from '../../systems/inventory/pile-slot';
+// Unified slot+pile type
+export type { PileSlot } from './pile-slot';
 
 export type { Recipe } from '@/game/economy/building-production';
 
-export type { SlotConfig, InventoryConfig } from '../../systems/inventory/inventory-configs';
+// Inventory configurations
+export type { SlotConfig, InventoryConfig } from './inventory-configs';
 export {
     SLOT_CAPACITY,
     getInventoryConfig,
@@ -38,15 +49,17 @@ export {
     hasInventory,
     isProductionBuilding,
     consumesMaterials,
-} from '../../systems/inventory/inventory-configs';
+} from './inventory-configs';
 
-export { BuildingPileRegistry } from '../../systems/inventory/building-pile-registry';
-export type { StoragePilePosition } from '../../systems/inventory/building-pile-registry';
-
-export { StorageFilterManager } from '../../systems/inventory/storage-filter-manager';
+// Building pile registry (XML-derived pile positions) and construction pile positions
+export { BuildingPileRegistry } from './building-pile-registry';
+export type { PileSlot as BuildingRegistryPileSlot, StoragePilePosition } from './building-pile-registry';
+export { assignConstructionPilePositions } from './construction-pile-positions';
 export { PilePositionResolver } from './pile-position-resolver';
+
+// StorageArea filters
+export { StorageFilterManager, StorageDirection } from './storage-filter-manager';
+
+// Pile kinds
 export type { PileKind, LinkedPileKind, LinkedSlotKind } from '../../core/pile-kind';
 export { SlotKind, isLinkedPile, getOwnerBuildingId } from '../../core/pile-kind';
-
-// Exports type (used by features accessing inventory via ctx.getFeature)
-export type { InventoryExports } from '../../systems/inventory';

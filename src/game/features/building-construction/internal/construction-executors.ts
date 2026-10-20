@@ -8,7 +8,7 @@
 import { ChoreoTaskType, TaskResult } from '../../../systems/choreo/types';
 import type { ChoreoSystem, ChoreoExecutor } from '../../../systems/choreo/choreo-system';
 import type { ConstructionSiteManager } from '../construction-site-manager';
-import type { BuildingInventoryManager } from '../../../systems/inventory/building-inventory';
+import type { BuildingInventoryManager } from '../../inventory';
 
 /** Number of build cycles before one material unit is consumed. */
 const BUILD_CYCLES_PER_MATERIAL = 10;

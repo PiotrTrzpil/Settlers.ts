@@ -20,7 +20,7 @@ import { BuildingType } from '@/game/buildings/building-type';
 import { getBuildingDoorPos } from '@/game/data/game-data-access';
 import { choreo, type ChoreoJobState } from '@/game/features/settler-tasks';
 import { ChoreoTaskType, JobKind } from '@/game/systems/choreo';
-import type { RecruitSystem } from '@/game/systems/recruit/recruit-system';
+import type { RecruitSystem } from '@/game/features/recruit';
 import { getTrainingRecipeSet, getTrainingRecipes } from './training-recipes';
 import type { TrainingRecipe, BarracksTrainingState } from './types';
 import { ProductionMode } from '@/game/features/production-control';

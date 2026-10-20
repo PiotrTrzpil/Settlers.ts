@@ -7,7 +7,7 @@
  */
 
 import type { GameState } from '../../game-state';
-import type { BuildingInventoryManager } from '../inventory';
+import type { BuildingInventoryManager, StorageFilterManager } from '../inventory';
 import {
     findAllMatches,
     type FulfillmentMatch,
@@ -15,7 +15,6 @@ import {
     type MatchRejectionStats,
 } from './fulfillment-matcher';
 import type { TransportJobStore } from './transport-job-store';
-import type { StorageFilterManager } from '../../systems/inventory/storage-filter-manager';
 import type { LogisticsMatchFilter } from './logistics-filter';
 
 export interface RequestMatcherConfig {

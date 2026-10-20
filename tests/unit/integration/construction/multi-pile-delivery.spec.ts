@@ -17,8 +17,8 @@ import { SlotKind } from '@/game/core/pile-kind';
 import { getConstructionCosts } from '@/game/economy/building-production';
 import { Race } from '@/game/core/race';
 import { UnitType } from '@/game/entity';
-import { SLOT_CAPACITY } from '@/game/systems/inventory';
-import { StorageDirection } from '@/game/systems/inventory/storage-filter-manager';
+import { SLOT_CAPACITY } from '@/game/features/inventory';
+import { StorageDirection } from '@/game/features/inventory/storage-filter-manager';
 
 installRealGameData();
 

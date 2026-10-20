@@ -11,7 +11,7 @@ import { getBuildingInfo } from '../../data/game-data-access';
 import { getBuildingFootprintFromInfo } from '@/resources/game-data';
 import { BuildingConstructionPhase, type ConstructionSite } from './types';
 import type { StoreSerializer } from '@/game/persistence/persistent-store';
-import { assignConstructionPilePositions } from '../../systems/inventory/construction-pile-positions';
+import { assignConstructionPilePositions } from '../inventory';
 
 // ── Serialization types ──
 

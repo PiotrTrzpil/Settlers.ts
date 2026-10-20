@@ -6,9 +6,9 @@
  * is all that's needed.
  */
 
-import type { EntityProvider } from '../entity';
-import { EntityType, UnitType } from '../entity';
-import { type ComponentStore, setStore } from '../ecs';
+import type { EntityProvider } from '../../entity';
+import { EntityType, UnitType } from '../../entity';
+import { type ComponentStore, setStore } from '../../ecs';
 import { createLogger } from '@/utilities/logger';
 
 const log = createLogger('CarrierRegistry');

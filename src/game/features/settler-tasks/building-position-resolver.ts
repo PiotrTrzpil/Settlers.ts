@@ -16,8 +16,7 @@
 
 import type { BuildingPositionResolver } from './choreo-types';
 import type { GameState } from '../../game-state';
-import type { BuildingPileRegistry } from '../../systems/inventory/building-pile-registry';
-import type { BuildingInventoryManager } from '../../systems/inventory/building-inventory';
+import type { BuildingPileRegistry, BuildingInventoryManager } from '../inventory';
 import type { WorkAreaStore } from '../work-areas/work-area-store';
 import type { ConstructionSiteManager } from '../building-construction/construction-site-manager';
 import { EntityType, BuildingType, type Entity, Tile, getEntityOfType } from '../../entity';

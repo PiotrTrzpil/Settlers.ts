@@ -17,9 +17,8 @@ import type {
 import type { UnitReservationRegistry } from '../../systems/unit-reservation';
 import { commandFailed, COMMAND_OK } from '../command-types';
 import type { RecruitSpecialistCommand } from '../command-types';
-import { SPECIALIST_TOOL_MAP } from '../../systems/recruit/specialist-tool-map';
-import type { RecruitSystem } from '../../systems/recruit/recruit-system';
-import type { UnitTransformer } from '../../systems/recruit/unit-transformer';
+import { SPECIALIST_TOOL_MAP } from '../../features/recruit';
+import type { RecruitSystem, UnitTransformer } from '../../features/recruit';
 
 export interface SpawnUnitDeps {
     state: GameState;

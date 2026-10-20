@@ -7,8 +7,8 @@
  */
 
 import type { FeatureDefinition, FeatureContext } from '../feature';
-import { CarrierRegistry } from '../../systems/carrier-registry';
-import { IdleCarrierPool } from '../../systems/idle-carrier-pool';
+import { CarrierRegistry } from './carrier-registry';
+import { IdleCarrierPool } from './idle-carrier-pool';
 import { UnitType } from '../../entity';
 
 export interface CarrierFeatureExports {

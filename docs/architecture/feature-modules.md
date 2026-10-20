@@ -11,7 +11,7 @@ Features that are scattered across many files create several issues:
 3. **Hard to remove** - Removing a feature means hunting through the codebase
 4. **Tight coupling** - Infrastructure systems know about every feature
 
-> **`features/` vs `systems/`:** See Rule 2.0 in `design-rules.md`. The short version: `systems/` is kernel infrastructure (movement, pathfinding, entity cleanup) that features depend on. `features/` is domain logic that depends on systems. A module belongs in `systems/` only if it can be imported by any feature without creating a cycle — i.e., it imports nothing from `features/`.
+> **`features/` vs `systems/`:** See Rule 2.0 in `design-rules.md`. The short version: `systems/` is domain-free engine infrastructure (movement, pathfinding, spatial search, tick scheduler, choreo runtime, entity cleanup) and never imports from `features/`. Every domain concept — including low-level ones like `inventory`, `carriers` and `recruit` that many other features build on — lives entirely in one feature module and is consumed through its `index.ts` barrel.
 
 **Example: Territory System (removed)**
 

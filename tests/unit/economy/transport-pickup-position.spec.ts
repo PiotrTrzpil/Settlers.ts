@@ -13,7 +13,7 @@ import { EMaterialType } from '@/game/economy';
 import { TransportJobBuilder } from '@/game/features/logistics/transport-job-builder';
 import { TransportPhase, type TransportJobRecord } from '@/game/features/logistics/transport-job-record';
 import type { GameState } from '@/game/game-state';
-import type { BuildingInventoryManager } from '@/game/systems/inventory/building-inventory';
+import type { BuildingInventoryManager } from '@/game/features/inventory/building-inventory';
 import type { TransportJobDeps } from '@/game/features/logistics/transport-job-service';
 
 const SOURCE = 10;

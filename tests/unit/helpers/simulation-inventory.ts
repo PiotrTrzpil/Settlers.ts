@@ -6,7 +6,7 @@
 import { BuildingType, isStorageBuilding } from '@/game/buildings/building-type';
 import { EMaterialType } from '@/game/economy/material-type';
 import { SlotKind } from '@/game/core/pile-kind';
-import { StorageDirection } from '@/game/systems/inventory/storage-filter-manager';
+import { StorageDirection } from '@/game/features/inventory/storage-filter-manager';
 import type { GameState } from '@/game/game-state';
 import type { GameServices } from '@/game/game-services';
 import type { EntityType } from '@/game/entity';

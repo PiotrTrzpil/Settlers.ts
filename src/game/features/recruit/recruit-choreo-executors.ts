@@ -12,7 +12,7 @@ import type { ChoreoJobState } from '../../systems/choreo';
 import type { EventBus } from '../../event-bus';
 import type { GameState } from '../../game-state';
 import type { BuildingInventoryManager } from '../inventory';
-import type { ToolSourceResolver } from '../../systems/recruit/tool-source-resolver';
+import type { ToolSourceResolver } from './tool-source-resolver';
 import { createLogger } from '@/utilities/logger';
 
 const log = createLogger('RecruitmentJob');

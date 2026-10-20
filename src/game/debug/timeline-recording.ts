@@ -11,7 +11,7 @@
 import { EntityType } from '@/game/entity';
 import { EventFmt } from '@/game/debug/event-formatting';
 import type { SerializedTimelineEntry } from '@/game/cli/types';
-import type { InventorySlot } from '@/game/systems/inventory/inventory-slot';
+import type { InventorySlot } from '@/game/features/inventory';
 
 // ─── Formatting helpers ──────────────────────────────────────────
 

@@ -53,8 +53,6 @@ function createTestHarness() {
             assignMoveTask: (id: number, target: Tile) => state.movement.moveUnit(id, target),
         } as any,
         combatSystem: { releaseFromCombat: () => {}, isInCombat: () => false, setPassive: () => {} } as any,
-        storageFilterManager: undefined as any,
-        inventoryManager: undefined as any,
         unitReservation: { isReserved: () => false } as any,
         recruitSystem: { enqueue: () => {}, dequeue: () => {}, getQueuedCount: () => 0, tick: () => {} } as any,
         unitTransformer: { dismissSpecialist: () => false } as any,

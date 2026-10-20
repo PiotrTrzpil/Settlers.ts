@@ -140,8 +140,6 @@ export class GameCore {
             settlerTaskSystem: this.services.settlerTaskSystem,
             constructionSiteManager: this.services.constructionSiteManager,
             combatSystem: this.services.combatSystem,
-            storageFilterManager: this.services.storageFilterManager,
-            inventoryManager: this.services.inventoryManager,
             unitReservation: this.services.unitReservation,
             getPlacementFilter: () => this._placementFilter,
             recruitSystem: this.services.recruitSystem,

@@ -26,11 +26,10 @@ import { TransportPhase, type TransportJobRecord } from './transport-job-record'
 import * as TransportJobService from './transport-job-service';
 import type { TransportJobDeps } from './transport-job-service';
 import type { TransportJobStore } from './transport-job-store';
-import type { BuildingInventoryManager } from '../inventory';
+import type { BuildingInventoryManager, StorageFilterManager } from '../inventory';
 import type { MaterialTransfer } from '../material-transfer/material-transfer';
 import { RequestMatcher } from './request-matcher';
 import type { LogisticsMatchFilter, CarrierFilter } from './logistics-filter';
-import type { StorageFilterManager } from '../../systems/inventory/storage-filter-manager';
 import { CarrierAssigner } from './carrier-assigner';
 import type { TaskDispatcher } from '../settler-tasks';
 import { StallDetector } from './stall-detector';

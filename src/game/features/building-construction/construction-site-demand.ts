@@ -20,7 +20,7 @@ import { EventSubscriptionManager } from '../../event-bus';
 import type { ChoreoJobState } from '../../systems/choreo/types';
 import { UnitType } from '../../core/unit-types';
 import { EntityType, Tile } from '../../entity';
-import type { DispatchRecruitmentOpts } from '../../systems/recruit/recruit-system';
+import type { DispatchRecruitmentOpts } from '../recruit';
 import type { ConstructionSiteListener, ConstructionSiteManager, IndexedTile } from './construction-site-manager';
 import type { ConstructionSite } from './types';
 import { buildDigTileJob, buildBuildStepJob, buildRecruitDiggerJob, buildRecruitBuilderJob } from './construction-jobs';

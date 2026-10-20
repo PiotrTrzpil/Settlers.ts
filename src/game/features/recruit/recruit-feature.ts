@@ -9,9 +9,9 @@ import type { SettlerTaskExports } from '../settler-tasks';
 import type { InventoryExports } from '../inventory';
 import type { TerritoryExports } from '../territory';
 import { ChoreoTaskType } from '../../systems/choreo';
-import { RecruitSystem } from '../../systems/recruit/recruit-system';
-import { UnitTransformer } from '../../systems/recruit/unit-transformer';
-import { ToolSourceResolver } from '../../systems/recruit/tool-source-resolver';
+import { RecruitSystem } from './recruit-system';
+import { UnitTransformer } from './unit-transformer';
+import { ToolSourceResolver } from './tool-source-resolver';
 import {
     createTransformRecruitExecutor,
     createTransformRecruitBuildingExecutor,

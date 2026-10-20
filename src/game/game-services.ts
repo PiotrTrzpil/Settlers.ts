@@ -18,7 +18,7 @@ import { isAngelUnitType } from './core/unit-types';
 import { EventBus, EventSubscriptionManager } from './event-bus';
 import { EntityVisualService } from './animation/entity-visual-service';
 import type { CommandType, ExecuteCommand } from './commands';
-import { EntityCleanupRegistry, CLEANUP_PRIORITY } from './systems/entity-cleanup-registry';
+import { EntityCleanupRegistry } from './systems/entity-cleanup-registry';
 import { UnitReservationRegistry } from './systems/unit-reservation';
 import { FeatureRegistry } from './features/feature-registry';
 import type { BoundCommandHandler } from './features/feature';
@@ -48,8 +48,7 @@ import { SettlerTaskFeature, type SettlerTaskExports } from './features/settler-
 import { RecruitFeature, type RecruitExports } from './features/recruit';
 import { BuildingDemandFeature } from './features/building-demand/building-demand-feature';
 import { ConstructionDemandFeature } from './features/building-construction/construction-demand-feature';
-import type { UnitTransformer } from './features/recruit';
-import type { RecruitSystem } from './systems/recruit';
+import type { UnitTransformer, RecruitSystem } from './features/recruit';
 
 import {
     LogisticsDispatcherFeature,
@@ -59,7 +58,7 @@ import { BarracksFeature, type BarracksExports } from './features/barracks/barra
 import { TowerGarrisonFeature, type TowerGarrisonExports } from './features/tower-garrison';
 import { SettlerLocationFeature } from './features/settler-location';
 import type { SettlerLocationExports } from './features/settler-location';
-import { FreePilesFeature } from './features/inventory/free-piles-feature';
+import { InventoryFeature, FreePilesFeature, type InventoryExports } from './features/inventory';
 import { TerritoryFeature, TerritoryConsequencesFeature, type TerritoryExports } from './features/territory';
 import { VictoryConditionsFeature, type VictoryConditionsExports } from './features/victory-conditions';
 import { BuildingSiegeFeature, type BuildingSiegeExports, TowerAssaultSystem } from './features/building-siege';
@@ -69,8 +68,7 @@ import { PioneerFeature } from './features/pioneer';
 
 // Re-export types that external code imports transitively via GameServices
 import type { CarrierRegistry } from './features/carriers';
-import { BuildingInventoryManager, StorageFilterManager } from './systems/inventory';
-import type { BuildingPileRegistry } from './systems/inventory/building-pile-registry';
+import type { BuildingInventoryManager, StorageFilterManager, BuildingPileRegistry } from './features/inventory';
 import type { DemandLedger, TransportJobStore, LogisticsDispatcher } from './features/logistics';
 import type { BuildingOverlayManager, OverlayRegistry } from './features/building-overlays';
 import type {
@@ -170,13 +168,7 @@ export class GameServices {
         // 1a. Tick scheduler — no dependencies, must tick before movement.
         this.tickScheduler = new TickScheduler();
 
-        // 2. Inventory system — instantiated directly (not a feature).
-        this.inventoryManager = new BuildingInventoryManager();
-        this.storageFilterManager = new StorageFilterManager();
-
-        // inventory:changed events are now emitted directly by BuildingInventoryManager via EventBus.
-
-        // 3. Feature registry — loads all game features in dependency order.
+        // 2. Feature registry — loads all game features in dependency order.
         this.featureRegistry = new FeatureRegistry({
             gameState,
             eventBus,
@@ -189,22 +181,7 @@ export class GameServices {
             resourceData,
         });
 
-        // Register inventory exports so features can access via ctx.getFeature('inventory')
-        this.featureRegistry.registerExports(
-            'inventory',
-            {
-                inventoryManager: this.inventoryManager,
-                storageFilterManager: this.storageFilterManager,
-            },
-            [
-                { persistable: this.inventoryManager.slotStore, after: ['constructionSites'] },
-                this.inventoryManager.nextSlotIdStore,
-                this.inventoryManager.throughputStore,
-                this.storageFilterManager.persistentStore,
-            ]
-        );
-
-        // 3a. Map object blocking — adds blocked tiles to buildingOccupancy so A* respects them.
+        // 2a. Map object blocking — adds blocked tiles to buildingOccupancy so A* respects them.
         this.mapObjectBlocking = new MapObjectBlockingTracker(gameState.buildingOccupancy);
         this.subscriptions.subscribe(eventBus, 'entity:created', ({ entityId, entityType, subType, x, y }) => {
             if (entityType === EntityType.MapObject) {
@@ -242,6 +219,7 @@ export class GameServices {
         // Tick systems tick in this order, so keep system-owning features where they are.
         this.featureRegistry.loadAll([
             // No feature dependencies
+            InventoryFeature,
             WorkAreaFeature,
             ProductionControlFeature,
             CarrierFeature,
@@ -280,6 +258,9 @@ export class GameServices {
         ]);
 
         // 4. Extract commonly-accessed exports for external consumers.
+        const inventoryExports = this.feat<InventoryExports>('inventory');
+        this.inventoryManager = inventoryExports.inventoryManager;
+        this.storageFilterManager = inventoryExports.storageFilterManager;
         this.carrierRegistry = this.feat<CarrierFeatureExports>('carriers').carrierRegistry;
         this.demandLedger = this.feat<DemandLedgerExports>('logistics').demandLedger;
         this.jobStore = this.feat<DemandLedgerExports>('logistics').jobStore;
@@ -322,16 +303,10 @@ export class GameServices {
         // Pile state derived from inventory slots — no separate persistence needed.
 
         // 6. Core entity lifecycle — too small to be a feature.
+        //    (Inventory registers its own pile / slot cleanup, see InventoryFeature.)
         this.cleanupRegistry.onEntityRemoved(entityId => {
             this.visualService.remove(entityId);
-            this.inventoryManager.onPileEntityRemoved(entityId);
         });
-
-        // 7. Late inventory removal — MUST happen after logistics cleanup.
-        this.cleanupRegistry.onEntityRemoved(
-            this.inventoryManager.destroySlots.bind(this.inventoryManager),
-            CLEANUP_PRIORITY.LATE
-        );
 
         // Wire the registry to the event bus — single subscription drives all cleanup handlers.
         this.cleanupRegistry.registerEvents(eventBus);

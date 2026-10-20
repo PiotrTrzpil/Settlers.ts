@@ -7,7 +7,7 @@ import type { CliArgs, CliCommand, CliContext, CliResult } from '../types';
 import type { Command } from '@/game/commands/command-types';
 import type { Game } from '@/game/game';
 import { ProductionMode } from '@/game/features/production-control';
-import { StorageDirection } from '@/game/systems/inventory/storage-filter-manager';
+import { StorageDirection } from '@/game/features/inventory';
 import { ok, fail } from './helpers';
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
