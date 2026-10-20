@@ -82,11 +82,4 @@ const isOpen = computed({
 .overlay-panel::-webkit-scrollbar {
     width: 4px;
 }
-.overlay-panel::-webkit-scrollbar-track {
-    background: var(--bg-darkest);
-}
-.overlay-panel::-webkit-scrollbar-thumb {
-    background: var(--border-mid);
-    border-radius: 2px;
-}
 </style>

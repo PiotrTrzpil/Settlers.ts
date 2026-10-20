@@ -395,16 +395,3 @@
 .gm-sidebar::-webkit-scrollbar {
     width: 6px;
 }
-
-.gm-sidebar::-webkit-scrollbar-track {
-    background: #1a1209;
-}
-
-.gm-sidebar::-webkit-scrollbar-thumb {
-    background: #4a3218;
-    border-radius: 3px;
-}
-
-.gm-sidebar::-webkit-scrollbar-thumb:hover {
-    background: #5c3d1a;
-}

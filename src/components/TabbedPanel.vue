@@ -157,11 +157,4 @@ function onTabClick(tabId: string): void {
 .tabbed-panel::-webkit-scrollbar {
     width: 4px;
 }
-.tabbed-panel::-webkit-scrollbar-track {
-    background: var(--bg-darkest);
-}
-.tabbed-panel::-webkit-scrollbar-thumb {
-    background: var(--border-mid);
-    border-radius: 2px;
-}
 </style>

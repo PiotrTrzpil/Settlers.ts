@@ -672,17 +672,4 @@ function startGame(): void {
 .map-list::-webkit-scrollbar {
     width: 6px;
 }
-
-.map-list::-webkit-scrollbar-track {
-    background: var(--bg-darkest);
-}
-
-.map-list::-webkit-scrollbar-thumb {
-    background: var(--border-mid);
-    border-radius: 3px;
-}
-
-.map-list::-webkit-scrollbar-thumb:hover {
-    background: var(--border-strong);
-}
 </style>

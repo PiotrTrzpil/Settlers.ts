@@ -159,6 +159,39 @@ body {
     min-height: 0;
 }
 
+/* Global brown-themed scrollbars (components may override only the width) */
+::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+::-webkit-scrollbar-track,
+::-webkit-scrollbar-corner {
+    background: var(--bg-darkest);
+}
+
+::-webkit-scrollbar-thumb {
+    background: var(--border-mid);
+    border: 1px solid var(--bg-darkest);
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: var(--border-hover);
+}
+
+::-webkit-scrollbar-thumb:active {
+    background: var(--text-dim);
+}
+
+/* Firefox has no ::-webkit-scrollbar — fall back to the standard properties */
+@supports not selector(::-webkit-scrollbar) {
+    * {
+        scrollbar-color: var(--border-mid) var(--bg-darkest);
+        scrollbar-width: thin;
+    }
+}
+
 /* Global dark-themed form controls */
 select {
     background: var(--bg-dark);

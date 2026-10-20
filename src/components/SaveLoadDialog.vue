@@ -369,13 +369,4 @@ onMounted(() => {
 .sld-list::-webkit-scrollbar {
     width: 5px;
 }
-
-.sld-list::-webkit-scrollbar-track {
-    background: #1a1209;
-}
-
-.sld-list::-webkit-scrollbar-thumb {
-    background: #4a3218;
-    border-radius: 3px;
-}
 </style>

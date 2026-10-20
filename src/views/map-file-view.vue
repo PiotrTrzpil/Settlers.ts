@@ -878,20 +878,4 @@ function getBarWidth(count: number, total: number): string {
     text-align: center;
     font-style: italic;
 }
-
-/* Scrollbar styling */
-::-webkit-scrollbar {
-    width: 8px;
-    height: 8px;
-}
-::-webkit-scrollbar-track {
-    background: var(--bg-darkest);
-}
-::-webkit-scrollbar-thumb {
-    background: var(--border);
-    border-radius: 4px;
-}
-::-webkit-scrollbar-thumb:hover {
-    background: #4a3820;
-}
 </style>
