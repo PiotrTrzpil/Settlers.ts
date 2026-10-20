@@ -78,7 +78,7 @@ export class BuildingConstructionSystem implements TickSystem {
     }
 
     /**
-     * Re-run terrain rebuild and worker re-emission for all restored sites.
+     * Re-run terrain rebuild for all restored sites.
      * Called via onRestoreComplete after snapshot deserialization — at that point
      * construction sites have been restored but setTerrainContext already ran
      * (before sites existed).
@@ -90,12 +90,12 @@ export class BuildingConstructionSystem implements TickSystem {
     }
 
     /**
-     * Rebuild terrain state for restored construction sites and re-emit worker-needed events.
+     * Rebuild terrain state for restored construction sites.
      *
-     * After deserialize, worker assignments are empty and mid-leveling sites have
-     * originalTerrain=null (terrain data isn't persisted). This method:
-     * 1. Re-captures terrain from the live map for TerrainLeveling sites
-     * 2. Re-emits construction:workerNeeded for all phases that need workers
+     * After deserialize, mid-leveling sites have originalTerrain=null (terrain data
+     * isn't persisted). This method re-captures terrain from the live map for
+     * TerrainLeveling sites and completes sites that finished before the save.
+     * Worker demands are rebuilt afterwards by ConstructionSiteDemandSystem.rebuildFromSites.
      */
     private rebuildTerrainForRestoredSites(ctx: TerrainContext): void {
         const { groundType, groundHeight, mapSize } = ctx.terrain;
@@ -110,7 +110,7 @@ export class BuildingConstructionSystem implements TickSystem {
         }
     }
 
-    /** Rebuild a single restored construction site: terrain data, completion, or worker re-emission. */
+    /** Rebuild a single restored construction site: terrain data and completion. */
     private rebuildSingleSite(
         site: ConstructionSite,
         groundType: Uint8Array,
@@ -132,20 +132,14 @@ export class BuildingConstructionSystem implements TickSystem {
         }
 
         // Complete buildings that finished construction but site wasn't removed before save
-        if (this.tryCompleteRestoredSite(site)) {
-            return;
-        }
-
-        // Re-emit worker-needed events — worker assignments are empty after restore
-        this.reemitWorkerNeeded(site);
+        this.tryCompleteRestoredSite(site);
     }
 
     /**
      * If a restored site was already fully constructed (or in a terminal phase),
      * re-emit building:completed so the lifecycle handler removes it.
-     * Returns true if the site was completed (and removed).
      */
-    private tryCompleteRestoredSite(site: ConstructionSite): boolean {
+    private tryCompleteRestoredSite(site: ConstructionSite): void {
         const isConstructionDone =
             site.phase === BuildingConstructionPhase.ConstructionRising && site.building.progress >= 1.0;
         const isTerminalPhase =
@@ -153,7 +147,7 @@ export class BuildingConstructionSystem implements TickSystem {
             site.phase === BuildingConstructionPhase.Completed;
 
         if (!isConstructionDone && !isTerminalPhase) {
-            return false;
+            return;
         }
 
         this.eventBus.emit('building:completed', {
@@ -163,31 +157,6 @@ export class BuildingConstructionSystem implements TickSystem {
             spawnWorker: false, // workers already spawned before save
             level: 'info',
         });
-        return true;
-    }
-
-    /** Re-emit construction:workerNeeded for a restored site so workers get re-assigned. */
-    private reemitWorkerNeeded(site: ConstructionSite): void {
-        if (!site.terrain.complete) {
-            this.eventBus.emit('construction:workerNeeded', {
-                role: 'digger' as const,
-                buildingId: site.buildingId,
-                x: site.tileX,
-                y: site.tileY,
-                player: site.player,
-            });
-        } else if (
-            site.phase === BuildingConstructionPhase.WaitingForBuilders ||
-            site.phase === BuildingConstructionPhase.ConstructionRising
-        ) {
-            this.eventBus.emit('construction:workerNeeded', {
-                role: 'builder' as const,
-                buildingId: site.buildingId,
-                x: site.tileX,
-                y: site.tileY,
-                player: site.player,
-            });
-        }
     }
 
     /** Set the residence spawner for interval-based carrier spawning */

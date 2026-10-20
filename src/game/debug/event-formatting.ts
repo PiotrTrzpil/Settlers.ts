@@ -194,9 +194,6 @@ export const EventFmt = {
 
     'construction:workerReleased': (e: GameEvents['construction:workerReleased']) => `${e.role} #${e.unitId}`,
 
-    'construction:workerNeeded': (e: GameEvents['construction:workerNeeded']) =>
-        `${e.role} @ (${e.x},${e.y}) player=${e.player}`,
-
     'construction:materialDelivered': (e: GameEvents['construction:materialDelivered']) => e.material,
 
     'construction:materialOverflowed': (e: GameEvents['construction:materialOverflowed']) =>

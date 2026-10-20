@@ -2,8 +2,13 @@
  * ConstructionSiteManager — central registry for active construction sites.
  *
  * Tracks every building currently under construction, from terrain leveling through
- * material delivery and builder progress to completion. Manages digger/builder slot
- * assignments and emits lifecycle events via the EventBus at each phase transition.
+ * material delivery and builder progress to completion. Owns physical site state only
+ * (terrain leveling, materials, build progress, pile layout, phase) and emits lifecycle
+ * events via the EventBus at each phase transition.
+ *
+ * Which worker is on which site (and which tile each digger holds) is owned by
+ * ConstructionSiteDemandSystem. The manager notifies it of demand-relevant transitions
+ * through a single injected ConstructionSiteListener.
  *
  * Follows the Manager pattern: owns state, provides CRUD and query operations.
  * Consumers (digger AI, builder AI, carrier logistics) read from and mutate through
@@ -37,6 +42,17 @@ import {
 
 export type { SerializedConstructionSite };
 
+/**
+ * Receives the site transitions that change construction worker demand.
+ * Implemented by ConstructionSiteDemandSystem and registered via `setListener`.
+ */
+export interface ConstructionSiteListener {
+    /** A new site was registered (diggers needed, or builders for mines that skip leveling). */
+    onSiteRegistered(buildingId: number): void;
+    /** Terrain leveling finished — diggers are done, builders are needed. */
+    onLevelingComplete(buildingId: number): void;
+}
+
 // ── ConstructionSiteManager ──
 
 /**
@@ -58,11 +74,30 @@ export class ConstructionSiteManager {
     private readonly eventBus: EventBus;
     private readonly rng: SeededRng;
     private readonly inventoryManager: BuildingInventoryManager;
+    private listener: ConstructionSiteListener | null = null;
 
     constructor(eventBus: EventBus, rng: SeededRng, inventoryManager: BuildingInventoryManager) {
         this.eventBus = eventBus;
         this.rng = rng;
         this.inventoryManager = inventoryManager;
+    }
+
+    /**
+     * Register the worker-demand listener. Called once by the construction-demand feature,
+     * which is created after this manager because it depends on settler-tasks + recruit.
+     */
+    setListener(listener: ConstructionSiteListener): void {
+        if (this.listener) {
+            throw new Error('ConstructionSiteManager.setListener: listener already registered');
+        }
+        this.listener = listener;
+    }
+
+    private getListener(context: string): ConstructionSiteListener {
+        if (!this.listener) {
+            throw new Error(`ConstructionSiteManager[${context}]: no ConstructionSiteListener registered`);
+        }
+        return this.listener;
     }
 
     // ── Private helpers ──
@@ -113,13 +148,12 @@ export class ConstructionSiteManager {
             tileY,
             phase: isMine ? BuildingConstructionPhase.WaitingForBuilders : BuildingConstructionPhase.WaitingForDiggers,
             terrain: {
-                slots: { required: workerCount, assigned: new Set(), started: false },
+                slots: { required: workerCount, started: false },
                 progress: isMine ? 1 : 0,
                 complete: isMine,
                 originalTerrain: null,
                 modified: isMine,
                 unleveledTiles: null,
-                reservedTiles: new Set(),
                 totalLevelingTiles: 0,
             },
             materials: {
@@ -127,7 +161,7 @@ export class ConstructionSiteManager {
                 totalCost,
             },
             building: {
-                slots: { required: workerCount, assigned: new Set(), started: false },
+                slots: { required: workerCount, started: false },
                 progress: 0,
             },
             pilePositions,
@@ -137,34 +171,17 @@ export class ConstructionSiteManager {
 
         if (isMine) {
             // Mines skip terrain leveling entirely — apply footprint blocking immediately via the
-            // existing levelingComplete handler, then request a builder instead of a digger.
+            // existing levelingComplete handler; the listener then requests builders instead of diggers.
             this.eventBus.emit('construction:levelingComplete', { buildingId });
-            this.eventBus.emit('construction:workerNeeded', {
-                role: 'builder',
-                buildingId,
-                x: tileX,
-                y: tileY,
-                player,
-            });
-        } else {
-            this.eventBus.emit('construction:workerNeeded', { role: 'digger', buildingId, x: tileX, y: tileY, player });
         }
+        this.getListener('registerSite').onSiteRegistered(buildingId);
     }
 
-    private emitBuilderNeededIfRequired(site: ConstructionSite): void {
-        if (
-            site.terrain.complete &&
-            site.building.slots.assigned.size < site.building.slots.required &&
-            this.hasAvailableMaterialsForSite(site)
-        ) {
-            this.eventBus.emit('construction:workerNeeded', {
-                role: 'builder',
-                buildingId: site.buildingId,
-                x: site.tileX,
-                y: site.tileY,
-                player: site.player,
-            });
-        }
+    /** Mark terrain leveling complete: emit the domain event, then notify the demand listener. */
+    private finishLeveling(site: ConstructionSite): void {
+        site.terrain.complete = true;
+        this.eventBus.emit('construction:levelingComplete', { buildingId: site.buildingId });
+        this.getListener('finishLeveling').onLevelingComplete(site.buildingId);
     }
 
     /**
@@ -174,18 +191,6 @@ export class ConstructionSiteManager {
         return this.inventoryManager
             .getSlots(site.buildingId)
             .some(s => s.kind === SlotKind.Input && s.currentAmount > 0);
-    }
-
-    private emitDiggerNeededIfRequired(site: ConstructionSite): void {
-        if (!site.terrain.complete && site.terrain.slots.assigned.size < site.terrain.slots.required) {
-            this.eventBus.emit('construction:workerNeeded', {
-                role: 'digger',
-                buildingId: site.buildingId,
-                x: site.tileX,
-                y: site.tileY,
-                player: site.player,
-            });
-        }
     }
 
     /** Remove the construction site record. No-op if it doesn't exist. */
@@ -217,35 +222,33 @@ export class ConstructionSiteManager {
         return this.persistentStore.values();
     }
 
-    // ── Digger management ──
-
-    /** True when there is at least one open digger slot on this site. */
-    getDiggerSlotAvailable(buildingId: number): boolean {
-        const site = this.getSiteOrThrow(buildingId, 'getDiggerSlotAvailable');
-        return site.terrain.slots.assigned.size < site.terrain.slots.required;
-    }
+    // ── Phase start ──
 
     /**
-     * Claim a digger slot for `diggerId`.
-     * Emits `construction:diggingStarted` when the first digger is assigned.
+     * Record that a digger was committed to this site.
+     * Emits `construction:diggingStarted` the first time.
      */
-    claimDiggerSlot(buildingId: number, diggerId: number): void {
-        const site = this.getSiteOrThrow(buildingId, 'claimDiggerSlot');
-        site.terrain.slots.assigned.add(diggerId);
-        this.eventBus.emit('construction:workerAssigned', { buildingId, unitId: diggerId, role: 'digger' });
+    markDiggingStarted(buildingId: number): void {
+        const site = this.getSiteOrThrow(buildingId, 'markDiggingStarted');
         if (!site.terrain.slots.started) {
             site.terrain.slots.started = true;
             this.eventBus.emit('construction:diggingStarted', { buildingId });
         }
     }
 
-    /** Release a digger slot previously claimed by `diggerId`. */
-    releaseDiggerSlot(buildingId: number, diggerId: number): void {
-        const site = this.getSiteOrThrow(buildingId, 'releaseDiggerSlot');
-        site.terrain.slots.assigned.delete(diggerId);
-        this.eventBus.emit('construction:workerReleased', { buildingId, unitId: diggerId, role: 'digger' });
-        this.emitDiggerNeededIfRequired(site);
+    /**
+     * Record that a builder was committed to this site.
+     * Emits `construction:buildingStarted` the first time.
+     */
+    markBuildingStarted(buildingId: number): void {
+        const site = this.getSiteOrThrow(buildingId, 'markBuildingStarted');
+        if (!site.building.slots.started) {
+            site.building.slots.started = true;
+            this.eventBus.emit('construction:buildingStarted', { buildingId });
+        }
     }
+
+    // ── Terrain leveling ──
 
     /**
      * Populate the per-tile tracking set from captured terrain data.
@@ -270,15 +273,14 @@ export class ConstructionSiteManager {
         site.terrain.totalLevelingTiles = unleveled.size;
         // If no tiles need leveling (flat terrain), immediately complete
         if (unleveled.size === 0) {
-            site.terrain.complete = true;
             site.terrain.progress = 1;
-            this.eventBus.emit('construction:levelingComplete', { buildingId });
-            this.emitBuilderNeededIfRequired(site);
+            this.finishLeveling(site);
         }
     }
 
     /**
-     * Reserve an unleveled tile for a digger to walk to and dig.
+     * Pick an unleveled tile for a digger to walk to and dig, skipping `reserved` tiles
+     * (those already held by other diggers — the caller owns that reservation set).
      * Prefers tiles with the largest height deviation from the target —
      * leveling the most extreme tiles first produces visually smooth
      * progressive flattening instead of random patchwork.
@@ -286,8 +288,8 @@ export class ConstructionSiteManager {
      * Among tiles with similar deviation (within 2 units), a random one
      * is picked so multiple diggers don't all cluster on the same spot.
      */
-    reserveUnleveledTile(buildingId: number): IndexedTile | null {
-        const site = this.getSiteOrThrow(buildingId, 'reserveUnleveledTile');
+    pickUnleveledTile(buildingId: number, reserved: ReadonlySet<number>): IndexedTile | null {
+        const site = this.getSiteOrThrow(buildingId, 'pickUnleveledTile');
         if (!site.terrain.unleveledTiles || site.terrain.unleveledTiles.size === 0) {
             return null;
         }
@@ -299,7 +301,7 @@ export class ConstructionSiteManager {
         let maxDev = 0;
         const unreserved: Array<{ idx: number; dev: number }> = [];
         for (const idx of site.terrain.unleveledTiles) {
-            if (site.terrain.reservedTiles.has(idx)) {
+            if (reserved.has(idx)) {
                 continue;
             }
             const dev = Math.abs(terrain.tiles[idx]!.originalGroundHeight - targetH);
@@ -317,25 +319,13 @@ export class ConstructionSiteManager {
         const candidates = unreserved.filter(t => t.dev >= threshold);
         const chosen = candidates[this.rng.nextInt(candidates.length)]!;
 
-        site.terrain.reservedTiles.add(chosen.idx);
         const tile = terrain.tiles[chosen.idx]!;
         return { tileIndex: chosen.idx, x: tile.x, y: tile.y };
     }
 
     /**
-     * Release a previously reserved tile without completing it.
-     * Called when a digger is interrupted before finishing the dig animation.
-     */
-    releaseReservedTile(buildingId: number, tileIndex: number): void {
-        const site = this.getSite(buildingId);
-        if (site) {
-            site.terrain.reservedTiles.delete(tileIndex);
-        }
-    }
-
-    /**
-     * Complete leveling for a specific tile (by index from reserveUnleveledTile).
-     * Removes it from unleveledTiles and reservedTiles, emits construction:tileCompleted,
+     * Complete leveling for a specific tile (by index from pickUnleveledTile).
+     * Removes it from unleveledTiles, emits construction:tileCompleted,
      * updates terrain.progress, and emits construction:levelingComplete when done.
      * Returns the completed tile data, or null if the tile was already completed.
      */
@@ -346,7 +336,6 @@ export class ConstructionSiteManager {
         }
 
         site.terrain.unleveledTiles.delete(tileIndex);
-        site.terrain.reservedTiles.delete(tileIndex);
 
         const tile = site.terrain.originalTerrain!.tiles[tileIndex]!;
 
@@ -366,43 +355,13 @@ export class ConstructionSiteManager {
 
         // Check completion
         if (site.terrain.unleveledTiles.size === 0) {
-            site.terrain.complete = true;
-            this.eventBus.emit('construction:levelingComplete', { buildingId });
-            this.emitBuilderNeededIfRequired(site);
+            this.finishLeveling(site);
         }
 
         return tile;
     }
 
-    // ── Builder management ──
-
-    /** True when there is at least one open builder slot on this site. */
-    getBuilderSlotAvailable(buildingId: number): boolean {
-        const site = this.getSiteOrThrow(buildingId, 'getBuilderSlotAvailable');
-        return site.building.slots.assigned.size < site.building.slots.required;
-    }
-
-    /**
-     * Claim a builder slot for `builderId`.
-     * Emits `construction:buildingStarted` when the first builder is assigned.
-     */
-    claimBuilderSlot(buildingId: number, builderId: number): void {
-        const site = this.getSiteOrThrow(buildingId, 'claimBuilderSlot');
-        site.building.slots.assigned.add(builderId);
-        this.eventBus.emit('construction:workerAssigned', { buildingId, unitId: builderId, role: 'builder' });
-        if (!site.building.slots.started) {
-            site.building.slots.started = true;
-            this.eventBus.emit('construction:buildingStarted', { buildingId });
-        }
-    }
-
-    /** Release a builder slot previously claimed by `builderId`. */
-    releaseBuilderSlot(buildingId: number, builderId: number): void {
-        const site = this.getSiteOrThrow(buildingId, 'releaseBuilderSlot');
-        site.building.slots.assigned.delete(builderId);
-        this.eventBus.emit('construction:workerReleased', { buildingId, unitId: builderId, role: 'builder' });
-        this.emitBuilderNeededIfRequired(site);
-    }
+    // ── Builder work ──
 
     /**
      * Get a random position along the lower border of the building footprint.
@@ -512,78 +471,5 @@ export class ConstructionSiteManager {
      */
     getConstructionPilePositions(buildingId: number, material: EMaterialType): readonly Tile[] | undefined {
         return this.persistentStore.get(buildingId)?.pilePositions.get(material);
-    }
-
-    // ── Worker queries ──
-
-    /**
-     * Find the nearest site for `player` that still needs a digger.
-     * Eligibility: terrain.complete is false AND terrain.slots.assigned.size < terrain.slots.required.
-     * Ties broken by buildingId (lower first) for determinism.
-     * Returns the buildingId, or undefined if none found.
-     */
-    findSiteNeedingDiggers(nearX: number, nearY: number, player: number): number | undefined {
-        let bestId: number | undefined;
-        let bestDist = Infinity;
-
-        for (const site of this.persistentStore.values()) {
-            if (site.player !== player) {
-                continue;
-            }
-            if (site.terrain.complete) {
-                continue;
-            }
-            if (site.terrain.slots.assigned.size >= site.terrain.slots.required) {
-                continue;
-            }
-
-            const dx = site.tileX - nearX;
-            const dy = site.tileY - nearY;
-            const dist = dx * dx + dy * dy;
-
-            if (dist < bestDist || (dist === bestDist && site.buildingId < bestId!)) {
-                bestDist = dist;
-                bestId = site.buildingId;
-            }
-        }
-
-        return bestId;
-    }
-
-    /**
-     * Find the nearest site for `player` that needs a builder.
-     * Eligibility: terrain.complete AND hasAvailableMaterials AND building.slots.assigned.size < building.slots.required.
-     * Ties broken by buildingId (lower first) for determinism.
-     * Returns the buildingId, or undefined if none found.
-     */
-    findSiteNeedingBuilders(nearX: number, nearY: number, player: number): number | undefined {
-        let bestId: number | undefined;
-        let bestDist = Infinity;
-
-        for (const site of this.persistentStore.values()) {
-            if (site.player !== player) {
-                continue;
-            }
-            if (!site.terrain.complete) {
-                continue;
-            }
-            if (site.building.slots.assigned.size >= site.building.slots.required) {
-                continue;
-            }
-            if (!this.hasAvailableMaterialsForSite(site)) {
-                continue;
-            }
-
-            const dx = site.tileX - nearX;
-            const dy = site.tileY - nearY;
-            const dist = dx * dx + dy * dy;
-
-            if (dist < bestDist || (dist === bestDist && site.buildingId < bestId!)) {
-                bestDist = dist;
-                bestId = site.buildingId;
-            }
-        }
-
-        return bestId;
     }
 }

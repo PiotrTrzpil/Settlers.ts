@@ -153,28 +153,17 @@ export interface GameEventsFeatures {
     'construction:progressComplete': {
         buildingId: number;
     };
-    /** Emitted when a digger or builder claims a slot on a construction site. */
+    /** Emitted by ConstructionSiteDemandSystem when a digger or builder is committed to a construction site. */
     'construction:workerAssigned': GameEventBase & {
         buildingId: number;
         unitId: number;
         role: 'digger' | 'builder';
     };
-    /** Emitted when a digger or builder releases their slot (finished or interrupted). */
+    /** Emitted by ConstructionSiteDemandSystem when a committed digger or builder is released (finished or interrupted). */
     'construction:workerReleased': GameEventBase & {
         buildingId: number;
         unitId: number;
         role: 'digger' | 'builder';
-    };
-    /**
-     * Emitted by ConstructionSiteManager when a site needs a worker it doesn't have.
-     * RecruitSystem subscribes to this instead of polling ConstructionSiteManager.
-     */
-    'construction:workerNeeded': GameEventBase & {
-        role: 'digger' | 'builder';
-        buildingId: number;
-        x: number;
-        y: number;
-        player: number;
     };
 
     // === Settler Task Events ===

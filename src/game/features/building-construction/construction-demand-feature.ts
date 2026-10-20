@@ -53,14 +53,8 @@ export const ConstructionDemandFeature: FeatureDefinition = {
         settlerTaskSystem.registerWorkHandler(SearchType.CONSTRUCTION, noopHandler);
         settlerTaskSystem.registerWorkHandler(SearchType.CONSTRUCTION_DIG, noopHandler);
 
-        // Wire site lifecycle → demand system
-        ctx.eventBus.on('construction:workerNeeded', ({ buildingId, role }) => {
-            if (role === 'digger') {
-                constructionDemandSystem.onSiteRegistered(buildingId);
-            } else {
-                constructionDemandSystem.onMaterialsDelivered(buildingId);
-            }
-        });
+        // Wire site lifecycle → demand system (direct listener, not the event bus)
+        constructionSiteManager.setListener(constructionDemandSystem);
 
         ctx.eventBus.on('construction:materialDelivered', ({ buildingId }) => {
             constructionDemandSystem.onMaterialsDelivered(buildingId);
@@ -74,6 +68,11 @@ export const ConstructionDemandFeature: FeatureDefinition = {
                 constructionDemandSystem,
             } satisfies ConstructionDemandExports,
             persistence: 'none',
+            // Runs after building-construction's onRestoreComplete (dependency order),
+            // so restored sites already have terrain rebuilt and finished sites removed.
+            onRestoreComplete() {
+                constructionDemandSystem.rebuildFromSites();
+            },
             destroy: () => {
                 constructionDemandSystem.unregisterEvents();
             },
