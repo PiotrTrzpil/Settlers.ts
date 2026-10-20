@@ -2,7 +2,9 @@
  * GameServices — composition root for all game managers and systems.
  *
  * Creates a FeatureRegistry, loads all game features in dependency order,
- * and exposes commonly-accessed managers/systems as typed properties.
+ * and exposes the widely-shared managers/systems (UI, renderer, debug, tests)
+ * as typed properties. Anything else is reached via `getFeature<Exports>(id)`,
+ * so adding a feature does not require new fields here.
  *
  * All domain logic lives in feature modules (src/game/features/).
  * This module contains no domain logic — only feature loading,
@@ -32,17 +34,21 @@ import { TickScheduler } from './systems/tick-scheduler';
 
 // Feature definitions
 import { WorkAreaFeature, type WorkAreaExports } from './features/work-areas/work-areas-feature';
-import { ProductionControlFeature, type ProductionControlExports } from './features/production-control';
+import { ProductionControlFeature } from './features/production-control';
 import { CarrierFeature, type CarrierFeatureExports } from './features/carriers';
 import { DemandLedgerFeature, type DemandLedgerExports } from './features/logistics';
 import { BuildingOverlayFeature, type BuildingOverlayFeatureExports } from './features/building-overlays';
-import { BuildingConstructionFeature, type BuildingConstructionExports } from './features/building-construction';
+import {
+    BuildingConstructionFeature,
+    BuildingPlacementFeature,
+    type BuildingConstructionExports,
+} from './features/building-construction';
 import { MaterialRequestFeature } from './features/material-requests';
 import { TreeFeature, type TreeFeatureExports } from './features/trees';
 import { StoneFeature, type StoneFeatureExports } from './features/stones';
 import { CropFeature } from './features/crops';
 import { CombatFeature, type CombatExports } from './features/combat';
-import { OreSignFeature, OreVeinFeature, type OreSignExports, type OreVeinExports } from './features/ore-veins';
+import { OreSignFeature, OreVeinFeature } from './features/ore-veins';
 import { MaterialTransferFeature } from './features/material-transfer/material-transfer-feature';
 import { SettlerTaskFeature, type SettlerTaskExports } from './features/settler-tasks';
 import { RecruitFeature, type RecruitExports } from './features/recruit';
@@ -55,50 +61,39 @@ import {
     LogisticsDispatcherFeature,
     type LogisticsDispatcherExports,
 } from './features/logistics/logistics-dispatcher-feature';
-import { BarracksFeature, type BarracksExports } from './features/barracks/barracks-feature';
+import { BarracksFeature } from './features/barracks/barracks-feature';
 import { TowerGarrisonFeature, type TowerGarrisonExports } from './features/tower-garrison';
 import { SettlerLocationFeature } from './features/settler-location';
-import type { SettlerLocationExports } from './features/settler-location';
 import { FreePilesFeature } from './features/inventory/free-piles-feature';
 import { TerritoryFeature, TerritoryConsequencesFeature, type TerritoryExports } from './features/territory';
 import { VictoryConditionsFeature, type VictoryConditionsExports } from './features/victory-conditions';
-import { BuildingSiegeFeature, type BuildingSiegeExports, TowerAssaultSystem } from './features/building-siege';
+import { BuildingSiegeFeature, type BuildingSiegeExports } from './features/building-siege';
 import type { BuildingSiegeSystem } from './features/building-siege/building-siege-system';
-import { AiPlayerFeature, type AiPlayerExports } from './features/ai-player';
+import type { GameplaySettings } from './game-settings';
+import { AiPlayerFeature } from './features/ai-player';
 import { PioneerFeature } from './features/pioneer';
 
 // Re-export types that external code imports transitively via GameServices
 import type { CarrierRegistry } from './features/carriers';
 import { BuildingInventoryManager, StorageFilterManager } from './systems/inventory';
-import type { BuildingPileRegistry } from './systems/inventory/building-pile-registry';
 import type { DemandLedger, TransportJobStore, LogisticsDispatcher } from './features/logistics';
 import type { BuildingOverlayManager, OverlayRegistry } from './features/building-overlays';
-import type {
-    ConstructionSiteManager,
-    BuildingConstructionSystem,
-    ResidenceSpawnerSystem,
-} from './features/building-construction';
+import type { ConstructionSiteManager } from './features/building-construction';
 import type { TerritoryManager } from './features/territory';
 import type { WorkAreaStore } from './features/work-areas';
-import type { ProductionControlManager } from './features/production-control';
-import type { BarracksTrainingManager } from './features/barracks';
 import type { TowerGarrisonManager } from './features/tower-garrison';
 import type { TreeSystem } from './features/trees';
 import type { StoneSystem } from './features/stones';
 import type { CombatSystem } from './features/combat';
-import type { OreVeinData, ResourceSignSystem } from './features/ore-veins';
 import type { SettlerTaskSystem } from './features/settler-tasks';
-import type { ISettlerBuildingLocationManager } from './features/settler-location';
 import type { VictoryConditionsSystem } from './features/victory-conditions';
-import type { AiPlayerSystem } from './features/ai-player/types';
 
 export class GameServices {
     // ===== Kernel services =====
     public readonly tickScheduler: TickScheduler;
     public readonly visualService: EntityVisualService;
 
-    // ===== Managers & systems (extracted from feature exports) =====
-    public readonly movement: MovementSystem;
+    // ===== Widely-shared managers & systems (extracted from feature exports) =====
     public readonly carrierRegistry: CarrierRegistry;
     public readonly inventoryManager: BuildingInventoryManager;
     public readonly storageFilterManager: StorageFilterManager;
@@ -107,50 +102,43 @@ export class GameServices {
     public readonly buildingOverlayManager: BuildingOverlayManager;
     public readonly overlayRegistry: OverlayRegistry;
     public readonly constructionSiteManager: ConstructionSiteManager;
-    public readonly constructionSystem: BuildingConstructionSystem;
-    public readonly residenceSpawner: ResidenceSpawnerSystem;
     public readonly workAreaStore: WorkAreaStore;
-    public readonly productionControlManager: ProductionControlManager;
     public readonly settlerTaskSystem: SettlerTaskSystem;
     public readonly logisticsDispatcher: LogisticsDispatcher;
-    public readonly barracksTrainingManager: BarracksTrainingManager;
     public readonly garrisonManager: TowerGarrisonManager;
     public readonly treeSystem: TreeSystem;
     public readonly stoneSystem: StoneSystem;
     public readonly combatSystem: CombatSystem;
     public readonly siegeSystem: BuildingSiegeSystem;
-    public readonly towerAssaultSystem: TowerAssaultSystem;
-    public readonly signSystem: ResourceSignSystem;
-    public readonly locationManager: ISettlerBuildingLocationManager;
 
     public readonly victorySystem: VictoryConditionsSystem;
     public readonly unitTransformer: UnitTransformer;
     public readonly recruitSystem: RecruitSystem;
-    public readonly pileRegistry: BuildingPileRegistry;
-    public readonly aiSystem: AiPlayerSystem;
     public readonly persistenceRegistry: PersistenceRegistry;
     public readonly territoryManager: TerritoryManager;
-    public readonly oreVeinData: OreVeinData;
 
     // ===== Internal =====
+    private readonly movement: MovementSystem;
     private readonly featureRegistry: FeatureRegistry;
     private readonly subscriptions = new EventSubscriptionManager();
     private readonly cleanupRegistry = new EntityCleanupRegistry();
     private readonly mapObjectBlocking: MapObjectBlockingTracker;
 
-    // ===== Shared kernel services (also exposed for command registration) =====
+    // ===== Shared kernel services =====
     public readonly unitReservation: UnitReservationRegistry;
 
     /**
      * @param terrain Map terrain — passed to every feature via FeatureContext at create() time.
      * @param resourceData Per-tile ore data from the map file; null for synthetic maps.
+     * @param gameplaySettings Live gameplay-rule settings, passed to features via FeatureContext.
      */
     constructor(
         gameState: GameState,
         eventBus: EventBus,
         executeCommand: ExecuteCommand,
         terrain: TerrainData,
-        resourceData: Uint8Array | null
+        resourceData: Uint8Array | null,
+        gameplaySettings: GameplaySettings
     ) {
         // Movement is owned by GameState (constructed with terrain); exposed here for consumers.
         this.movement = gameState.movement;
@@ -187,6 +175,7 @@ export class GameServices {
             tickScheduler: this.tickScheduler,
             terrain,
             resourceData,
+            gameplaySettings,
         });
 
         // Register inventory exports so features can access via ctx.getFeature('inventory')
@@ -255,6 +244,8 @@ export class GameServices {
             SettlerLocationFeature,
             OreVeinFeature,
             TerritoryFeature,
+            // Depends on construction + territory; no systems or subscriptions (owns place_building)
+            BuildingPlacementFeature,
             // Depends on construction, material-transfer, combat, settler-location, ore-veins, territory
             SettlerTaskFeature,
             // Depend on settler-tasks (+ territory / ore-veins / carriers)
@@ -279,40 +270,30 @@ export class GameServices {
             FreePilesFeature,
         ]);
 
-        // 4. Extract commonly-accessed exports for external consumers.
-        this.carrierRegistry = this.feat<CarrierFeatureExports>('carriers').carrierRegistry;
-        this.demandLedger = this.feat<DemandLedgerExports>('logistics').demandLedger;
-        this.jobStore = this.feat<DemandLedgerExports>('logistics').jobStore;
-        const overlayExports = this.feat<BuildingOverlayFeatureExports>('building-overlays');
+        // 4. Extract widely-shared exports for external consumers (the rest: getFeature()).
+        this.carrierRegistry = this.getFeature<CarrierFeatureExports>('carriers').carrierRegistry;
+        this.demandLedger = this.getFeature<DemandLedgerExports>('logistics').demandLedger;
+        this.jobStore = this.getFeature<DemandLedgerExports>('logistics').jobStore;
+        const overlayExports = this.getFeature<BuildingOverlayFeatureExports>('building-overlays');
         this.buildingOverlayManager = overlayExports.buildingOverlayManager;
         this.overlayRegistry = overlayExports.overlayRegistry;
-        const constrExports = this.feat<BuildingConstructionExports>('building-construction');
+        const constrExports = this.getFeature<BuildingConstructionExports>('building-construction');
         this.constructionSiteManager = constrExports.constructionSiteManager;
-        this.constructionSystem = constrExports.constructionSystem;
-        this.residenceSpawner = constrExports.residenceSpawner;
-        this.workAreaStore = this.feat<WorkAreaExports>('work-areas').workAreaStore;
-        this.productionControlManager =
-            this.feat<ProductionControlExports>('production-control').productionControlManager;
-        this.settlerTaskSystem = this.feat<SettlerTaskExports>('settler-tasks').settlerTaskSystem;
-        this.logisticsDispatcher = this.feat<LogisticsDispatcherExports>('logistics-dispatcher').logisticsDispatcher;
-        this.barracksTrainingManager = this.feat<BarracksExports>('barracks').barracksTrainingManager;
-        this.garrisonManager = this.feat<TowerGarrisonExports>('tower-garrison').garrisonManager;
-        this.treeSystem = this.feat<TreeFeatureExports>('trees').treeSystem;
-        this.stoneSystem = this.feat<StoneFeatureExports>('stones').stoneSystem;
-        this.combatSystem = this.feat<CombatExports>('combat').combatSystem;
-        this.siegeSystem = this.feat<BuildingSiegeExports>('building-siege').siegeSystem;
-        this.towerAssaultSystem = this.feat<BuildingSiegeExports>('building-siege').towerAssaultSystem;
-        this.signSystem = this.feat<OreSignExports>('ore-signs').signSystem;
-        this.locationManager = this.feat<SettlerLocationExports>('settler-location').locationManager;
-        this.victorySystem = this.feat<VictoryConditionsExports>('victory-conditions').victorySystem;
-        const arExports = this.feat<RecruitExports>('recruit');
+        this.workAreaStore = this.getFeature<WorkAreaExports>('work-areas').workAreaStore;
+        this.settlerTaskSystem = this.getFeature<SettlerTaskExports>('settler-tasks').settlerTaskSystem;
+        this.logisticsDispatcher =
+            this.getFeature<LogisticsDispatcherExports>('logistics-dispatcher').logisticsDispatcher;
+        this.garrisonManager = this.getFeature<TowerGarrisonExports>('tower-garrison').garrisonManager;
+        this.treeSystem = this.getFeature<TreeFeatureExports>('trees').treeSystem;
+        this.stoneSystem = this.getFeature<StoneFeatureExports>('stones').stoneSystem;
+        this.combatSystem = this.getFeature<CombatExports>('combat').combatSystem;
+        this.siegeSystem = this.getFeature<BuildingSiegeExports>('building-siege').siegeSystem;
+        this.victorySystem = this.getFeature<VictoryConditionsExports>('victory-conditions').victorySystem;
+        const arExports = this.getFeature<RecruitExports>('recruit');
 
         this.unitTransformer = arExports.unitTransformer;
-        this.aiSystem = this.feat<AiPlayerExports>('ai-player').aiSystem;
         this.recruitSystem = arExports.recruitSystem;
-        this.pileRegistry = constrExports.pileRegistry;
-        this.territoryManager = this.feat<TerritoryExports>('territory').territoryManager;
-        this.oreVeinData = this.feat<OreVeinExports>('ore-veins').oreVeinData;
+        this.territoryManager = this.getFeature<TerritoryExports>('territory').territoryManager;
 
         // 5. Persistence registry — register feature-declared persistables first, then manual ones.
         this.persistenceRegistry = new PersistenceRegistry();
@@ -335,6 +316,16 @@ export class GameServices {
 
         // Wire the registry to the event bus — single subscription drives all cleanup handlers.
         this.cleanupRegistry.registerEvents(eventBus);
+    }
+
+    /**
+     * Typed lookup of a loaded feature's exports, for consumers (UI, debug, CLI, tests)
+     * that need a feature service without a dedicated field. Throws if not loaded.
+     *
+     * @example services.getFeature<BarracksExports>('barracks').barracksTrainingManager
+     */
+    public getFeature<T>(featureId: string): T {
+        return this.featureRegistry.getFeatureExports<T>(featureId);
     }
 
     /** Tick systems in tick order (by phase), for the frame loop. */
@@ -377,9 +368,5 @@ export class GameServices {
         this.featureRegistry.destroy();
         this.cleanupRegistry.destroy();
         this.subscriptions.unsubscribeAll();
-    }
-
-    private feat<T>(featureId: string): T {
-        return this.featureRegistry.getFeatureExports<T>(featureId);
     }
 }

@@ -24,3 +24,4 @@ export { createEnterBuildingExecutor } from './internal/dispatch-executors';
 
 // Feature definition (self-registering via FeatureRegistry)
 export { SettlerTaskFeature, type SettlerTaskExports } from './settler-tasks-feature';
+export { executeMoveSelectedUnits, type MoveCommandDeps } from './move-commands';

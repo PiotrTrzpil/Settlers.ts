@@ -4,6 +4,8 @@
  *
  * The water handler (needs terrain) is registered here. Domain features
  * (trees, stones, crops, ore-signs, pioneer) register their own handlers.
+ *
+ * Commands: move_unit, move_selected_units (player moves become move tasks).
  */
 
 import type { FeatureDefinition, FeatureContext } from '../feature';
@@ -22,6 +24,8 @@ import { ChoreoSystem } from '../../systems/choreo';
 import { createWaterHandler } from './work-handlers';
 import { createSettlerTaskPersistence } from './settler-task-persistence';
 import { TickPhase } from '../../core/tick-phase';
+import type { MoveUnitCommand, MoveSelectedUnitsCommand } from '../../commands/command-types';
+import { executeMoveUnit, executeMoveSelectedUnits, type MoveCommandDeps } from './move-commands';
 
 export interface SettlerTaskExports {
     settlerTaskSystem: SettlerTaskSystem;
@@ -94,11 +98,24 @@ export const SettlerTaskFeature: FeatureDefinition = {
             getOrCreateRuntime: id => settlerTaskSystem.getOrCreateRuntime(id),
         });
 
+        const moveDeps: MoveCommandDeps = {
+            state: ctx.gameState,
+            settlerTaskSystem,
+            combatSystem,
+            unitReservation: ctx.unitReservation,
+            isCombatControllable: () => ctx.gameplaySettings.combatControllable,
+            getOwner: tile => territoryManager.getOwner(tile),
+        };
+
         return {
             systems: [settlerTaskSystem],
             tickPhase: TickPhase.SettlerTasks,
             exports,
             persistence: [{ persistable: settlerTaskPersistence, after: ['constructionSites'] }],
+            commands: {
+                move_unit: cmd => executeMoveUnit(moveDeps, cmd as MoveUnitCommand),
+                move_selected_units: cmd => executeMoveSelectedUnits(moveDeps, cmd as MoveSelectedUnitsCommand),
+            },
         };
     },
 };

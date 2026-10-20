@@ -14,7 +14,7 @@ import { MapLoader } from '@/resources/map/map-loader';
 import { GameCore } from '@/game/game-core';
 import { EntityType } from '@/game/entity';
 import { installRealGameData } from '../../helpers/test-game-data';
-import type { AiPlayerSystem } from '@/game/features/ai-player/types';
+import type { AiPlayerExports, AiPlayerSystem } from '@/game/features/ai-player';
 
 const MAP_DIR = path.resolve(__dirname, '../../../../public/Siedler4/Map');
 const CAMPAIGN_MAP = 'Campaign/roman01.map';
@@ -59,7 +59,7 @@ describe.skip('AI game simulation (integration)', { timeout: 30_000 }, () => {
         game.setTerritoryEnabled(true);
         game.services.victorySystem.setLocalPlayer(-1);
         players = [...game.state.playerRaces.keys()].sort((a, b) => a - b);
-        ai = game.services.aiSystem;
+        ai = game.services.getFeature<AiPlayerExports>('ai-player').aiSystem;
     });
 
     afterAll(() => game?.destroy());

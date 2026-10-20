@@ -13,10 +13,15 @@ import { UnitType } from '@/game/entity';
 import { BuildingType } from '@/game/buildings';
 import { Race } from '@/game/core/race';
 import type { Tile } from '@/game/core/coordinates';
+import type { BuildingSiegeExports } from '@/game/features/building-siege';
 
 installRealGameData();
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
+
+function towerAssault(sim: Simulation) {
+    return sim.services.getFeature<BuildingSiegeExports>('building-siege').towerAssaultSystem;
+}
 
 function garrisonUnits(sim: Simulation, buildingId: number, unitIds: number[]) {
     return sim.execute({ type: 'garrison_units', buildingId, unitIds });
@@ -44,8 +49,8 @@ function waitForBuildingDestroyed(sim: Simulation, buildingId: number, label: st
         maxTicks: 30_000,
         label,
         diagnose: () => {
-            const hp = sim.services.towerAssaultSystem.healthTracker.getHealth(buildingId);
-            return `health=${hp?.health ?? 'none'}, assault=${sim.services.towerAssaultSystem.getAssault(buildingId) ? 'active' : 'none'}`;
+            const hp = towerAssault(sim).healthTracker.getHealth(buildingId);
+            return `health=${hp?.health ?? 'none'}, assault=${towerAssault(sim).getAssault(buildingId) ? 'active' : 'none'}`;
         },
     });
 }
@@ -170,7 +175,7 @@ describe('Dark Tribe tower assault', { timeout: 60_000 }, () => {
         // Attacker should still be alive and no longer reserved
         const atk = sim.state.getEntity(atkId);
         expect(atk).toBeDefined();
-        expect(sim.services.towerAssaultSystem.getAssault(towerId)).toBeUndefined();
+        expect(towerAssault(sim).getAssault(towerId)).toBeUndefined();
         expect(sim.errors).toHaveLength(0);
     });
 });

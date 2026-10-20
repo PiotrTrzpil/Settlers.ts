@@ -27,6 +27,7 @@ import type { Persistable } from '../persistence';
 import type { TerrainData } from '../terrain';
 import type { RenderPassDefinition } from '../renderer/render-passes/types';
 import type { TickScheduler } from '../systems/tick-scheduler';
+import type { GameplaySettings } from '../game-settings';
 import { RenderDataRegistry } from './render-data-registry';
 import { DiagnosticsRegistry } from './diagnostics-registry';
 import { createLogger } from '@/utilities/logger';
@@ -44,6 +45,7 @@ export interface FeatureRegistryConfig extends CoreDeps {
     tickScheduler: TickScheduler;
     terrain: TerrainData;
     resourceData: Uint8Array | null;
+    gameplaySettings: GameplaySettings;
 }
 
 /**
@@ -343,6 +345,7 @@ export class FeatureRegistry {
             tickScheduler: this.config.tickScheduler,
             terrain: this.config.terrain,
             resourceData: this.config.resourceData,
+            gameplaySettings: this.config.gameplaySettings,
 
             getFeature: <T>(featureId: string): T => {
                 if (!allowedSet.has(featureId)) {

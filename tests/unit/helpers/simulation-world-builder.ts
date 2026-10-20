@@ -26,6 +26,7 @@ import type { ExecuteCommand } from '@/game/commands';
 import { formatSlots } from './simulation-timeline';
 import { TERRAIN, type TestMap } from './test-map';
 import type { OreType } from '@/game/features/ore-veins/ore-type';
+import type { OreVeinExports } from '@/game/features/ore-veins';
 
 // ─── Types ───────────────────────────────────────────────────────
 
@@ -410,12 +411,13 @@ export function fillOreSquare(
     mapWidth: number,
     mapHeight: number
 ): void {
+    const { oreVeinData } = services.getFeature<OreVeinExports>('ore-veins');
     for (let dy = -radius; dy <= radius; dy++) {
         for (let dx = -radius; dx <= radius; dx++) {
             const tx = cx + dx;
             const ty = cy + dy;
             if (tx >= 0 && tx < mapWidth && ty >= 0 && ty < mapHeight) {
-                services.oreVeinData.setOre({ x: tx, y: ty }, oreType, oreLevel);
+                oreVeinData.setOre({ x: tx, y: ty }, oreType, oreLevel);
             }
         }
     }

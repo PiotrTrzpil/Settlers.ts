@@ -328,7 +328,7 @@ function buildJsScope(ctx: CliContext): Record<string, unknown> {
         state: game.state,
         services: s,
         terrain: game.terrain,
-        movement: s.movement,
+        movement: game.state.movement,
         inventory: s.inventoryManager,
         construction: s.constructionSiteManager,
         tasks: s.settlerTaskSystem,

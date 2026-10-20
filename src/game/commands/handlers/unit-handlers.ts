@@ -1,20 +1,8 @@
-import { EntityType, UnitType, EXTENDED_OFFSETS, getUnitLevel, tileKey, isUnitTypeMilitary, Tile } from '../../entity';
-import { UnitCategory, getUnitCategory } from '../../core/unit-types';
+import { EntityType, EXTENDED_OFFSETS, getUnitLevel, tileKey, Tile } from '../../entity';
 import type { GameState } from '../../game-state';
 import type { TerrainData } from '../../terrain';
 import type { EventBus } from '../../event-bus';
-import type { SettlerTaskSystem } from '../../features/settler-tasks';
-import type { CombatSystem } from '../../features/combat';
-import { FORMATION_OFFSETS } from '../command-types';
-import type {
-    SpawnUnitCommand,
-    MoveUnitCommand,
-    MoveSelectedUnitsCommand,
-    CommandResult,
-    CommandFailure,
-    SpawnResult,
-} from '../command-types';
-import type { UnitReservationRegistry } from '../../systems/unit-reservation';
+import type { SpawnUnitCommand, CommandResult, CommandFailure, SpawnResult } from '../command-types';
 import { commandFailed, COMMAND_OK } from '../command-types';
 import type { RecruitSpecialistCommand } from '../command-types';
 import { SPECIALIST_TOOL_MAP } from '../../systems/recruit/specialist-tool-map';
@@ -25,28 +13,6 @@ export interface SpawnUnitDeps {
     state: GameState;
     terrain: TerrainData;
     eventBus: EventBus;
-}
-
-export interface MoveUnitDeps {
-    state: GameState;
-    settlerTaskSystem: SettlerTaskSystem;
-    combatSystem: CombatSystem;
-    unitReservation: UnitReservationRegistry;
-    /** Whether units in combat can be redirected by player commands. */
-    isCombatControllable: () => boolean;
-    /** Territory owner lookup — workers cannot move outside their territory. */
-    getOwner: (tile: Tile) => number;
-}
-
-export interface MoveSelectedUnitsDeps {
-    state: GameState;
-    settlerTaskSystem: SettlerTaskSystem;
-    combatSystem: CombatSystem;
-    unitReservation: UnitReservationRegistry;
-    /** Whether units in combat can be redirected by player commands. */
-    isCombatControllable: () => boolean;
-    /** Territory owner lookup — workers cannot move outside their territory. */
-    getOwner: (tile: Tile) => number;
 }
 
 function findValidSpawnTile(tile: Tile, isValid: (tile: Tile) => boolean): Tile | null {
@@ -102,145 +68,6 @@ export function executeSpawnUnit(deps: SpawnUnitDeps, cmd: SpawnUnitCommand): Sp
     });
 
     return { success: true, entityId: entity.id };
-}
-
-/**
- * If the target tile is inside a building footprint, find the nearest
- * walkable tile outside. Returns the original target if it's already clear.
- */
-function resolveTargetOutsideBuilding(state: GameState, tile: Tile): Tile {
-    if (!state.buildingOccupancy.has(tileKey(tile))) {
-        return tile;
-    }
-    for (const [dx, dy] of EXTENDED_OFFSETS) {
-        const candidate = { x: tile.x + dx, y: tile.y + dy };
-        if (!state.buildingOccupancy.has(tileKey(candidate))) {
-            return candidate;
-        }
-    }
-    return tile; // fallback — shouldn't happen
-}
-
-/** Check if there's an enemy military unit within 1 tile of a position. */
-function hasEnemyNearTarget(state: GameState, targetX: number, targetY: number, player: number): boolean {
-    return state.entityIndex
-        .query(EntityType.Unit)
-        .inRadius({ x: targetX, y: targetY }, 1.5)
-        .filter(e => e.player !== player && !e.hidden && isUnitTypeMilitary(e.subType as UnitType))
-        .some();
-}
-
-/** Workers (carriers, diggers, etc.) cannot be commanded to move outside their player's territory. */
-function isWorkerOutsideTerritory(
-    entity: { subType: string | number; player: number },
-    target: Tile,
-    getOwner: (tile: Tile) => number
-): boolean {
-    return getUnitCategory(entity.subType as UnitType) === UnitCategory.Worker && getOwner(target) !== entity.player;
-}
-
-export function executeMoveUnit(deps: MoveUnitDeps, cmd: MoveUnitCommand): CommandResult {
-    const entity = deps.state.getEntity(cmd.entityId);
-    if (!entity) {
-        return commandFailed(`Entity ${cmd.entityId} not found`);
-    }
-
-    if (deps.unitReservation.isReserved(cmd.entityId)) {
-        return commandFailed(`Unit ${cmd.entityId} is reserved and cannot be moved`);
-    }
-
-    if (!deps.isCombatControllable() && deps.combatSystem.isInCombat(cmd.entityId)) {
-        return commandFailed(`Unit ${cmd.entityId} is in combat and cannot be moved`);
-    }
-
-    if (deps.combatSystem.isInCombat(cmd.entityId)) {
-        deps.combatSystem.releaseFromCombat(cmd.entityId);
-    }
-
-    // Resolve target outside building footprint
-    const target = resolveTargetOutsideBuilding(deps.state, { x: cmd.targetX, y: cmd.targetY });
-
-    if (isWorkerOutsideTerritory(entity, target, deps.getOwner)) {
-        return commandFailed(`Worker ${cmd.entityId} cannot move outside territory`);
-    }
-
-    // March passively if target tile has no enemies — don't engage along the way
-    if (
-        deps.combatSystem.getState(cmd.entityId) &&
-        !hasEnemyNearTarget(deps.state, target.x, target.y, entity.player)
-    ) {
-        deps.combatSystem.setPassive(cmd.entityId);
-    }
-
-    const success = deps.settlerTaskSystem.assignMoveTask(cmd.entityId, target);
-
-    if (!success) {
-        return commandFailed(`Cannot move unit ${cmd.entityId} to (${cmd.targetX}, ${cmd.targetY})`);
-    }
-
-    return COMMAND_OK;
-}
-
-export function executeMoveSelectedUnits(deps: MoveSelectedUnitsDeps, cmd: MoveSelectedUnitsCommand): CommandResult {
-    const { state } = deps;
-
-    const selectedUnits = state.selection.getSelectedByType(EntityType.Unit);
-    if (selectedUnits.length === 0) {
-        return commandFailed('No units selected');
-    }
-
-    const combatControllable = deps.isCombatControllable();
-    const baseTarget = resolveTargetOutsideBuilding(state, { x: cmd.targetX, y: cmd.targetY });
-    const firstUnit = selectedUnits[0]!;
-    const passiveMarch = !hasEnemyNearTarget(state, baseTarget.x, baseTarget.y, firstUnit.player);
-
-    let movedCount = 0;
-    for (let i = 0; i < selectedUnits.length; i++) {
-        const unit = selectedUnits[i]!;
-        const offset = FORMATION_OFFSETS[Math.min(i, FORMATION_OFFSETS.length - 1)]!;
-        const target = resolveTargetOutsideBuilding(state, {
-            x: baseTarget.x + offset[0],
-            y: baseTarget.y + offset[1],
-        });
-        if (tryMoveSelectedUnit(deps, unit, target, combatControllable, passiveMarch)) {
-            movedCount++;
-        }
-    }
-
-    if (movedCount === 0) {
-        return commandFailed(`Could not move any of ${selectedUnits.length} selected units`);
-    }
-
-    return COMMAND_OK;
-}
-
-/** Attempt to move a single unit from a multi-select move command. */
-function tryMoveSelectedUnit(
-    deps: MoveSelectedUnitsDeps,
-    unit: { id: number; subType: string | number; player: number },
-    target: Tile,
-    combatControllable: boolean,
-    passiveMarch: boolean
-): boolean {
-    if (deps.unitReservation.isReserved(unit.id)) {
-        return false;
-    }
-    if (!combatControllable && deps.combatSystem.isInCombat(unit.id)) {
-        return false;
-    }
-    if (isWorkerOutsideTerritory(unit, target, deps.getOwner)) {
-        return false;
-    }
-
-    const inCombat = deps.combatSystem.isInCombat(unit.id);
-    if (inCombat) {
-        deps.combatSystem.releaseFromCombat(unit.id);
-    }
-    if (inCombat && passiveMarch) {
-        deps.combatSystem.setPassive(unit.id);
-    }
-
-    return deps.settlerTaskSystem.assignMoveTask(unit.id, target);
 }
 
 export interface RecruitSpecialistDeps {

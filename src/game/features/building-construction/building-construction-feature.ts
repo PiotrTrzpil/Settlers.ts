@@ -9,6 +9,8 @@
  * - ConstructionRequestSystem (material delivery demands for construction)
  * - BuildingLifecycleHandler (event-driven domain handlers)
  * - BuildingPileRegistry + PilePositionResolver (XML pile positions)
+ *
+ * Commands: spawn_building_units (issued by BuildingConstructionSystem on completion).
  */
 
 import type { FeatureDefinition, FeatureContext } from '../feature';
@@ -23,6 +25,8 @@ import { getGameDataLoader } from '@/resources/game-data';
 import { BuildingPileRegistry } from '../../systems/inventory/building-pile-registry';
 import { PilePositionResolver } from '../inventory/pile-position-resolver';
 import { TickPhase } from '../../core/tick-phase';
+import type { SpawnBuildingUnitsCommand } from '../../commands/command-types';
+import { executeSpawnBuildingUnits } from './internal/spawn-building-units-command';
 
 export interface BuildingConstructionExports {
     constructionSiteManager: ConstructionSiteManager;
@@ -93,6 +97,8 @@ export const BuildingConstructionFeature: FeatureDefinition = {
             eventBus: ctx.eventBus,
         });
 
+        const spawnDeps = { state: ctx.gameState, terrain: ctx.terrain, eventBus: ctx.eventBus };
+
         const exports: BuildingConstructionExports = {
             constructionSiteManager,
             constructionSystem,
@@ -106,6 +112,9 @@ export const BuildingConstructionFeature: FeatureDefinition = {
             tickPhase: TickPhase.Construction,
             exports,
             persistence: [constructionSiteManager.persistentStore],
+            commands: {
+                spawn_building_units: cmd => executeSpawnBuildingUnits(spawnDeps, cmd as SpawnBuildingUnitsCommand),
+            },
             onRestoreComplete() {
                 constructionSystem.rebuildAfterRestore();
             },
