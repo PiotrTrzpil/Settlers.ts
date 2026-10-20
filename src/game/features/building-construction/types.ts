@@ -60,15 +60,14 @@ export interface ConstructionSiteOriginalTerrain {
 }
 
 /**
- * Worker slot tracking — shared structure for both digger and builder phases.
- * Tracks assigned workers and the one-shot "started" event flag.
+ * Worker slot data — shared structure for both digger and builder phases.
+ * Holds the site-derived worker count and the one-shot "started" event flag.
+ * Which workers are committed to the site is owned by ConstructionSiteDemandSystem.
  */
 export interface WorkerSlots {
     /** Max concurrent workers for this phase (derived from building size) */
     required: number;
-    /** Entity IDs of workers currently assigned */
-    assigned: Set<number>;
-    /** Whether the first worker has been assigned (for one-shot event emission) */
+    /** Whether the first worker has been committed (for one-shot event emission) */
     started: boolean;
 }
 
@@ -88,8 +87,6 @@ export interface TerrainPhase {
     modified: boolean;
     /** Indices into originalTerrain.tiles[] for tiles that still need height leveling. Null before terrain capture. */
     unleveledTiles: Set<number> | null;
-    /** Tile indices currently reserved by a digger (claimed via reserveUnleveledTile, released on complete/interrupt). */
-    reservedTiles: Set<number>;
     /** Total number of tiles that needed leveling (for progress calculation). 0 before terrain capture. */
     totalLevelingTiles: number;
 }

@@ -17,8 +17,8 @@ import { assignConstructionPilePositions } from '../../systems/inventory/constru
 
 /**
  * Serialized form of a ConstructionSite for game state persistence.
- * Worker assignments (terrain.slots.assigned, building.slots.assigned) are NOT serialized —
- * workers are re-assigned by the settler task system on load.
+ * Worker assignments are not part of site state — ConstructionSiteDemandSystem owns them
+ * and rebuilds its demands from restored site state on load.
  */
 export interface SerializedConstructionSite {
     buildingType: BuildingType;
@@ -78,7 +78,6 @@ export function makeConstructionSiteSerializer(): StoreSerializer<ConstructionSi
                 terrain: {
                     slots: {
                         required: workerCount,
-                        assigned: new Set(),
                         started: data.levelingProgress > 0,
                     },
                     progress: data.levelingProgress,
@@ -86,7 +85,6 @@ export function makeConstructionSiteSerializer(): StoreSerializer<ConstructionSi
                     originalTerrain: null,
                     modified: data.terrainModified,
                     unleveledTiles: null,
-                    reservedTiles: new Set(),
                     totalLevelingTiles: 0,
                 },
                 materials: {
@@ -96,7 +94,6 @@ export function makeConstructionSiteSerializer(): StoreSerializer<ConstructionSi
                 building: {
                     slots: {
                         required: workerCount,
-                        assigned: new Set(),
                         started: data.constructionProgress > 0,
                     },
                     progress: data.constructionProgress,
