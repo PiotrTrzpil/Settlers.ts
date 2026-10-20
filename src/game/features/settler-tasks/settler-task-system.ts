@@ -32,9 +32,8 @@ import { BuildingPositionResolverImpl } from './building-position-resolver';
 import { JobPartResolverImpl } from './job-part-resolver';
 import { TriggerSystemImpl } from '../building-overlays/trigger-system';
 import { getGameDataLoader } from '@/resources/game-data';
-import type { OreVeinData } from '../ore-veins/ore-vein-data';
 import type { ISettlerBuildingLocationManager } from '../settler-location';
-import { BuildingWorkerTracker, type TerritoryConnectivityCheck } from './building-worker-tracker';
+import { BuildingWorkerTracker } from './building-worker-tracker';
 import { IndexedMap } from '@/game/utils/indexed-map';
 import type { TickScheduler } from '../../systems/tick-scheduler';
 import { type SettlerTaskSystemConfig, type SettlerDebugEntry } from './settler-task-config';
@@ -61,7 +60,6 @@ export class SettlerTaskSystem implements TickSystem, TaskDispatcher, WorkerStat
     readonly runtimes = new IndexedMap<number, UnitRuntime>();
     readonly workerTracker: BuildingWorkerTracker;
     private readonly tickScheduler: TickScheduler;
-    private oreVeinData: OreVeinData | undefined;
     private lastSubTimings: Record<string, number> = {};
     private readonly locationManager: ISettlerBuildingLocationManager;
     private readonly lifecycleCoordinator: SettlerLifecycleCoordinator;
@@ -86,7 +84,8 @@ export class SettlerTaskSystem implements TickSystem, TaskDispatcher, WorkerStat
             this.locationManager,
             this.gameState,
             this.eventBus,
-            byBuilding
+            byBuilding,
+            config.territoryCheck
         );
 
         const handlerErrorLogger = new ThrottledLogger(log, 2000);
@@ -102,7 +101,7 @@ export class SettlerTaskSystem implements TickSystem, TaskDispatcher, WorkerStat
         this.buildingPositionResolver = new BuildingPositionResolverImpl({
             gameState: this.gameState,
             inventoryManager: this.inventoryManager,
-            getPileRegistry: config.getPileRegistry,
+            pileRegistry: config.pileRegistry,
             workAreaStore: config.workAreaStore,
             constructionSiteManager: config.constructionSiteManager,
         });
@@ -186,7 +185,7 @@ export class SettlerTaskSystem implements TickSystem, TaskDispatcher, WorkerStat
                 this.gameState,
                 this.inventoryManager,
                 this.getAssignedWorkplace.bind(this),
-                () => this.oreVeinData,
+                config.oreVeinData,
                 config.getProductionControlManager
             )
         );
@@ -279,17 +278,8 @@ export class SettlerTaskSystem implements TickSystem, TaskDispatcher, WorkerStat
         return this.gameState.getEntity(buildingId) ?? null;
     }
 
-    setOreVeinData(data: OreVeinData): void {
-        this.oreVeinData = data;
-    }
-
     relocateUnitsFromFootprints(): void {
         this.workerTracker.relocateFromFootprints();
-    }
-
-    /** Inject territory connectivity check (called by TerritoryFeature after load). */
-    setTerritoryCheck(check: TerritoryConnectivityCheck): void {
-        this.workerTracker.setTerritoryCheck(check);
     }
 
     findIdleSpecialist(unitType: UnitType, player: number, nearX: number, nearY: number): number | null {

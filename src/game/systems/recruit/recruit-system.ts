@@ -79,6 +79,8 @@ export interface RecruitSystemConfig {
     unitTransformer: UnitTransformer;
     toolSourceResolver: ToolSourceResolver;
     assignJob: (unitId: number, job: ChoreoJobState, moveTo?: Tile) => boolean;
+    /** Rejects carriers in territory pockets disconnected from the reference tile. */
+    territoryCheck: (a: Tile, b: Tile, player: number) => boolean;
 }
 
 // ─── System ───────────────────────────────────────────────────────────
@@ -91,7 +93,7 @@ export class RecruitSystem implements TickSystem {
     private readonly toolSourceResolver: ToolSourceResolver;
     private readonly assignJob: RecruitSystemConfig['assignJob'];
     private readonly subscriptions = new EventSubscriptionManager();
-    private territoryCheck: ((a: Tile, b: Tile, player: number) => boolean) | null = null;
+    private readonly territoryCheck: RecruitSystemConfig['territoryCheck'];
 
     private readonly queue = new Map<UnitType, QueueEntry>();
     private queueTimer = 0;
@@ -103,20 +105,15 @@ export class RecruitSystem implements TickSystem {
         this.unitTransformer = config.unitTransformer;
         this.toolSourceResolver = config.toolSourceResolver;
         this.assignJob = config.assignJob;
-    }
-
-    /** Inject territory connectivity check (called by TerritoryFeature after load). */
-    setTerritoryCheck(check: (a: Tile, b: Tile, player: number) => boolean): void {
-        this.territoryCheck = check;
+        this.territoryCheck = config.territoryCheck;
     }
 
     /**
      * Build a carrier eligibility filter that rejects carriers in disconnected
-     * territory pockets. Returns undefined if no territory check is configured
-     * or no reference point is available.
+     * territory pockets. Returns undefined if no reference point is available.
      */
     private buildTerritoryFilter(ref: Tile | undefined, player: number): ((entityId: number) => boolean) | undefined {
-        if (!this.territoryCheck || !ref) {
+        if (!ref) {
             return undefined;
         }
         const check = this.territoryCheck;

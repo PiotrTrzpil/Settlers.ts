@@ -9,6 +9,7 @@ import type { TowerGarrisonManager } from '../tower-garrison/tower-garrison-mana
 import type { CombatSystem } from '../combat/combat-system';
 import type { UnitReservationRegistry } from '../../systems/unit-reservation';
 import type { SettlerTaskSystem } from '../settler-tasks';
+import type { TerrainData } from '../../terrain';
 
 // ── Siege role lookup ──────────────────────────
 
@@ -67,6 +68,7 @@ export interface DoorDefenderNotifier {
 }
 
 export interface BuildingSiegeSystemConfig extends CoreDeps {
+    terrain: TerrainData;
     garrisonManager: TowerGarrisonManager;
     combatSystem: CombatSystem;
     unitReservation: UnitReservationRegistry;

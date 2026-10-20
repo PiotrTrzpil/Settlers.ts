@@ -21,7 +21,6 @@ import type { TerrainData } from '@/game/terrain';
 import { SettlerBuildingStatus, type ISettlerBuildingLocationManager } from '@/game/features/settler-location';
 import { UnitType } from '@/game/core/unit-types';
 import { BuildingType } from '@/game/buildings/building-type';
-import { getBuildingDoorPos } from '@/game/data/game-data-access';
 import { createLogger } from '@/utilities/logger';
 import { findBuildingApproachTile } from '@/game/buildings/approach';
 import { getGarrisonCapacity, getGarrisonRole } from './internal/garrison-capacity';
@@ -32,6 +31,7 @@ import { PersistentMap } from '@/game/persistence/persistent-store';
 const log = createLogger('TowerGarrisonManager');
 
 export interface TowerGarrisonManagerConfig extends CoreDeps {
+    terrain: TerrainData;
     unitReservation: UnitReservationRegistry;
     locationManager: ISettlerBuildingLocationManager;
     releaseWorkerAssignment: (settlerId: number) => void;
@@ -43,7 +43,7 @@ export class TowerGarrisonManager {
     private readonly unitReservation: UnitReservationRegistry;
     private readonly locationManager: ISettlerBuildingLocationManager;
     private readonly releaseWorkerAssignment: (settlerId: number) => void;
-    private terrain: TerrainData | null = null;
+    private readonly terrain: TerrainData;
 
     /** Per-tower garrison state. Keyed by building entity ID. */
     private readonly garrisons = new Map<number, BuildingGarrisonState>();
@@ -54,13 +54,13 @@ export class TowerGarrisonManager {
     /**
      * Tracks unit→tower pairs where pathfinding failed, preventing repeated
      * dispatch attempts to unreachable towers. Keyed by `${unitId}:${towerId}`.
-     * Cleared on terrain changes (paths may open up).
      */
     private readonly failedDispatches = new Set<string>();
 
     constructor(config: TowerGarrisonManagerConfig) {
         this.gameState = config.gameState;
         this.eventBus = config.eventBus;
+        this.terrain = config.terrain;
         this.unitReservation = config.unitReservation;
         this.locationManager = config.locationManager;
         this.releaseWorkerAssignment = config.releaseWorkerAssignment;
@@ -96,11 +96,6 @@ export class TowerGarrisonManager {
             this.unitReservation.release(settlerId);
             log.debug(`Unit ${settlerId} approach interrupted — reservation released`);
         });
-    }
-
-    setTerrain(terrain: TerrainData): void {
-        this.terrain = terrain;
-        this.failedDispatches.clear();
     }
 
     /** Record that pathfinding failed for a unit→tower dispatch. */
@@ -438,13 +433,9 @@ export class TowerGarrisonManager {
      * (garrisoning, attacking, occupying, etc.).
      *
      * Checks the door tile first, then searches EXTENDED_OFFSETS. Falls back
-     * to the door position if terrain is not yet set or no free tile is found.
+     * to the door position if no free tile is found.
      */
     getApproachTile(building: Entity): Tile {
-        if (!this.terrain) {
-            log.warn(`getApproachTile: terrain not set for building ${building.id} — falling back to door pos`);
-            return getBuildingDoorPos(building, building.race, building.subType as BuildingType);
-        }
         return findBuildingApproachTile(building, this.terrain, this.gameState);
     }
 

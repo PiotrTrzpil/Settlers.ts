@@ -16,31 +16,14 @@ import type { TerritoryManager } from './territory-manager';
 export class TerritoryPersistence implements Persistable<Uint8Array> {
     readonly persistKey = 'territory';
 
-    private manager: TerritoryManager | null = null;
-    private pendingData: Uint8Array | null = null;
-
-    /** Called from onTerrainReady after TerritoryManager is created. */
-    setManager(manager: TerritoryManager): void {
-        this.manager = manager;
-        if (this.pendingData) {
-            manager.restoreGrid(unpackGrid(this.pendingData));
-            this.pendingData = null;
-        }
-    }
+    constructor(private readonly manager: TerritoryManager) {}
 
     serialize(): Uint8Array {
-        if (!this.manager) {
-            return new Uint8Array(0);
-        }
         return packGrid(this.manager.snapshotGrid());
     }
 
     deserialize(data: Uint8Array): void {
-        if (this.manager) {
-            this.manager.restoreGrid(unpackGrid(data));
-        } else {
-            this.pendingData = data;
-        }
+        this.manager.restoreGrid(unpackGrid(data));
     }
 }
 

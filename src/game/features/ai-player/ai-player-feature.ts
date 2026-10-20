@@ -22,17 +22,15 @@ export const AiPlayerFeature: FeatureDefinition = {
     create(ctx: FeatureContext) {
         const victoryExports = ctx.getFeature<VictoryConditionsExports>('victory-conditions');
         const constructionExports = ctx.getFeature<BuildingConstructionExports>('building-construction');
-        const territoryExports = ctx.getFeature<TerritoryExports>('territory');
+        const { territoryManager } = ctx.getFeature<TerritoryExports>('territory');
 
         const aiSystem = new AiPlayerSystemImpl({
             gameState: ctx.gameState,
+            terrain: ctx.terrain,
             executeCommand: ctx.executeCommand,
             isGameOver: () => victoryExports.victorySystem.getResult().ended,
-        });
-        aiSystem.setHasSite(id => constructionExports.constructionSiteManager.hasSite(id));
-        aiSystem.setPlacementFilter(() => {
-            const tm = territoryExports.territoryManager;
-            return tm ? createTerritoryPlacementFilter(tm, ctx.gameState.playerRaces) : null;
+            hasSite: id => constructionExports.constructionSiteManager.hasSite(id),
+            getPlacementFilter: () => createTerritoryPlacementFilter(territoryManager, ctx.gameState.playerRaces),
         });
 
         const exports: AiPlayerExports = { aiSystem };
@@ -42,9 +40,6 @@ export const AiPlayerFeature: FeatureDefinition = {
             systemGroup: 'AI',
             exports,
             persistence: 'none',
-            onTerrainReady(terrain) {
-                aiSystem.onTerrainReady(terrain);
-            },
         };
     },
 };

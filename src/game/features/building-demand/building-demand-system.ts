@@ -23,7 +23,8 @@ import type { UnitType } from '../../core/unit-types';
 import type { Race } from '../../core/race';
 import type { ChoreoJobState } from '../../systems/choreo';
 import type { DispatchRecruitmentOpts } from '../../systems/recruit/recruit-system';
-import { choreo } from '../../systems/choreo/choreo-builder';
+import { choreo, type ChoreoBuilderContext } from '../../systems/choreo/choreo-builder';
+import type { TerrainData } from '../../terrain';
 import { getBuildingWorkerInfo } from '../../data/game-data-access';
 import { createLogger } from '@/utilities/logger';
 import type { Tile } from '@/game/core/coordinates';
@@ -44,6 +45,7 @@ const TICK_INTERVAL = 1.0; // seconds between demand scans
 export interface BuildingDemandSystemConfig {
     gameState: GameState;
     eventBus: EventBus;
+    terrain: TerrainData;
     findIdleSpecialist: (unitType: UnitType, player: number, nearX: number, nearY: number) => number | null;
     assignJob: (unitId: number, job: ChoreoJobState, moveTo?: Tile) => boolean;
     assignWorkerToBuilding: (settlerId: number, buildingId: number) => void;
@@ -58,6 +60,7 @@ export interface BuildingDemandSystemConfig {
 export class BuildingDemandSystem implements TickSystem {
     private readonly gameState: GameState;
     private readonly eventBus: EventBus;
+    private readonly choreoCtx: ChoreoBuilderContext;
     private readonly findIdleSpecialist: BuildingDemandSystemConfig['findIdleSpecialist'];
     private readonly assignJob: BuildingDemandSystemConfig['assignJob'];
     private readonly assignWorkerToBuilding: BuildingDemandSystemConfig['assignWorkerToBuilding'];
@@ -91,6 +94,7 @@ export class BuildingDemandSystem implements TickSystem {
     constructor(config: BuildingDemandSystemConfig) {
         this.gameState = config.gameState;
         this.eventBus = config.eventBus;
+        this.choreoCtx = { gameState: config.gameState, terrain: config.terrain };
         this.findIdleSpecialist = config.findIdleSpecialist;
         this.assignJob = config.assignJob;
         this.assignWorkerToBuilding = config.assignWorkerToBuilding;
@@ -249,7 +253,9 @@ export class BuildingDemandSystem implements TickSystem {
     }
 
     private dispatchSpecialist(unitId: number, demand: BuildingDemand): void {
-        const job = choreo('WORKER_DISPATCH', JobKind.WorkplaceDispatch).goToDoorAndEnter(demand.buildingId).build();
+        const job = choreo('WORKER_DISPATCH', JobKind.WorkplaceDispatch)
+            .goToDoorAndEnter(demand.buildingId, this.choreoCtx)
+            .build();
 
         const assigned = this.assignJob(unitId, job);
         if (!assigned) {

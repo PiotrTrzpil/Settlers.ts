@@ -13,7 +13,7 @@ import type { UnitType } from '@/game/core/unit-types';
 import type { Tile, TileWithEntityOpt } from '@/game/core/coordinates';
 
 // ─────────────────────────────────────────────────────────────
-// Context injection for building-aware helpers
+// Context for building-aware helpers
 // ─────────────────────────────────────────────────────────────
 
 /** Context needed by goToDoor to resolve approach tiles at build time. */
@@ -21,8 +21,6 @@ export interface ChoreoBuilderContext {
     gameState: GameState;
     terrain: TerrainData;
 }
-
-let _context: ChoreoBuilderContext | null = null;
 
 // ─────────────────────────────────────────────────────────────
 // Node factory with defaults
@@ -59,15 +57,6 @@ export class ChoreoBuilder {
     private _metadata: Record<string, number | string> | undefined;
     private _goToCount = 0;
     private _kind: JobKind;
-
-    /**
-     * Inject context for building-aware helpers (goToDoor etc.).
-     * Called once at startup; reused across all subsequent builds.
-     */
-    static withContext(ctx: ChoreoBuilderContext): typeof ChoreoBuilder {
-        _context = ctx;
-        return ChoreoBuilder;
-    }
 
     constructor(
         private readonly jobId: string,
@@ -121,14 +110,9 @@ export class ChoreoBuilder {
      * GO_TO_TARGET node targeting the approach tile of the given building.
      * Resolves approach tile via findBuildingApproachTile at build time.
      */
-    goToDoor(buildingId: number): this {
-        if (!_context) {
-            throw new Error(
-                'ChoreoBuilder: context not set — call ' + 'ChoreoBuilder.withContext() before using goToDoor'
-            );
-        }
-        const building = _context.gameState.getEntityOrThrow(buildingId, 'ChoreoBuilder.goToDoor');
-        const tile = findBuildingApproachTile(building, _context.terrain, _context.gameState);
+    goToDoor(buildingId: number, ctx: ChoreoBuilderContext): this {
+        const building = ctx.gameState.getEntityOrThrow(buildingId, 'ChoreoBuilder.goToDoor');
+        const tile = findBuildingApproachTile(building, ctx.terrain, ctx.gameState);
         return this.goTo(tile, buildingId);
     }
 
@@ -136,8 +120,8 @@ export class ChoreoBuilder {
      * goToDoor + ENTER_BUILDING — walk to building and go inside.
      * Stashes buildingId in metadata as `enterBuildingId`.
      */
-    goToDoorAndEnter(buildingId: number): this {
-        return this.goToDoor(buildingId).meta({ enterBuildingId: buildingId }).enterBuilding();
+    goToDoorAndEnter(buildingId: number, ctx: ChoreoBuilderContext): this {
+        return this.goToDoor(buildingId, ctx).meta({ enterBuildingId: buildingId }).enterBuilding();
     }
 
     /** Add an ENTER_BUILDING node. */

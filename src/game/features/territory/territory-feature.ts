@@ -4,156 +4,67 @@
  * Towers (small, large) and castles create territory zones.
  * Territory boundary dots are rendered at the edges of these zones.
  *
- * The TerritoryManager is created in onTerrainReady (needs map dimensions).
- * Event wiring for building lifecycle happens after creation.
+ * Creates the TerritoryManager (sized from ctx.terrain) and the territory-aware
+ * SpatialGrid, and wires building lifecycle events into territory updates.
  *
- * When territory changes after a tower capture, buildings of the losing player
- * on lost territory are destroyed, and free civilian units (not assigned to
- * a building) are displaced to the nearest friendly territory tile.
+ * Consequences of territory loss (destroying buildings, displacing units) live in
+ * TerritoryConsequencesFeature, which depends on settler-tasks.
  */
 
 import type { FeatureDefinition, FeatureContext, FeatureDiagnostics } from '../feature';
 import { getBuildingFootprint, type BuildingType } from '../../buildings/types';
-import type { TerrainData } from '../../terrain';
 import { EntityType } from '../../entity';
-import type { Tile } from '../../core/coordinates';
-import { bfsFind } from '../../core/tile-search';
-import { isUnitTypeMilitary, UnitCategory, getUnitCategory, type UnitType } from '../../core/unit-types';
-import type { SettlerTaskExports } from '../settler-tasks';
-import type { RecruitExports } from '../recruit';
-import { TerritoryManager, type TerritoryChange } from './territory-manager';
+import { TerritoryManager } from './territory-manager';
 import { TerritoryPersistence } from './territory-persistence';
 import { SpatialGrid } from '../../spatial-grid';
 import { TERRITORY_BUILDINGS } from './territory-types';
 import { isDarkTribe } from '../../core/race';
-import { createLogger } from '@/utilities/logger';
-
-const log = createLogger('Territory');
-
-/**
- * BFS tile limit for the survival check. Workers with no friendly territory
- * within this range die immediately after a territory change.
- */
-const SURVIVAL_SEARCH_RADIUS = 1000;
 
 export interface TerritoryExports {
-    territoryManager: TerritoryManager | null;
+    territoryManager: TerritoryManager;
 }
 
 export const TerritoryFeature: FeatureDefinition = {
     id: 'territory',
-    dependencies: ['settler-tasks', 'recruit'],
+    dependencies: [],
 
     create(ctx: FeatureContext) {
-        const exports: TerritoryExports = { territoryManager: null };
-        const persistence = new TerritoryPersistence();
+        const territoryManager = new TerritoryManager(ctx.terrain.width, ctx.terrain.height);
+
+        // Create SpatialGrid and wire it into GameState
+        const spatialIndex = new SpatialGrid(
+            ctx.terrain.width,
+            ctx.terrain.height,
+            4,
+            id => ctx.gameState.getEntity(id),
+            tile => territoryManager.getOwner(tile)
+        );
+        ctx.gameState.initSpatialIndex(spatialIndex);
+
+        // Wire territory → spatial grid callbacks
+        territoryManager.onTileChanged = (tile, oldOwner, newOwner) => {
+            spatialIndex.onTileOwnerChanged(tile, oldOwner, newOwner);
+        };
+        territoryManager.onRecomputed = () => {
+            spatialIndex.rebuildAllCells();
+        };
+
+        registerBuildingEvents(ctx, territoryManager);
+
+        const exports: TerritoryExports = { territoryManager };
 
         return {
             exports,
-            persistence: [persistence],
-            onTerrainReady(terrain: TerrainData) {
-                const territoryManager = new TerritoryManager(terrain.width, terrain.height);
-                exports.territoryManager = territoryManager;
-                persistence.setManager(territoryManager);
-
-                // Inject territory connectivity check into worker assignment and recruitment.
-                // Workers/carriers in disconnected territory pockets must not be assigned
-                // to buildings in a different pocket — they can never reach them.
-                const connectivityCheck = (a: Tile, b: Tile, player: number) =>
-                    territoryManager.areConnected(a, b, player);
-                const { settlerTaskSystem } = ctx.getFeature<SettlerTaskExports>('settler-tasks');
-                settlerTaskSystem.setTerritoryCheck(connectivityCheck);
-                const { recruitSystem } = ctx.getFeature<RecruitExports>('recruit');
-                recruitSystem.setTerritoryCheck(connectivityCheck);
-
-                // Create SpatialGrid and wire it into GameState
-                const spatialIndex = new SpatialGrid(
-                    terrain.width,
-                    terrain.height,
-                    4,
-                    id => ctx.gameState.getEntity(id),
-                    tile => territoryManager.getOwner(tile)
-                );
-                ctx.gameState.initSpatialIndex(spatialIndex);
-
-                // Wire territory → spatial grid callbacks
-                territoryManager.onTileChanged = (tile, oldOwner, newOwner) => {
-                    spatialIndex.onTileOwnerChanged(tile, oldOwner, newOwner);
-                };
-                territoryManager.onRecomputed = () => {
-                    spatialIndex.rebuildAllCells();
-                };
-
-                // Wire territory change consequences (destroy buildings, displace units).
-                // Deferred to next tick: recompute fires lazily inside other systems'
-                // queries, so destroying buildings mid-query causes re-entrancy bugs.
-                territoryManager.onTerritoryChanged = (changes: TerritoryChange[]) => {
-                    ctx.tickScheduler.deferNextTick(() => {
-                        handleTerritoryChanges(ctx, territoryManager, changes);
-                    });
-                };
-
-                // Register territory when buildings complete construction
-                // Dark Tribe never generates territory — their towers exist but create no zones.
-                ctx.on('building:completed', ({ buildingId, buildingType }) => {
-                    if (TERRITORY_BUILDINGS.has(buildingType)) {
-                        const entity = ctx.gameState.getEntityOrThrow(buildingId, 'territory:building:completed');
-                        if (isDarkTribe(entity.race)) {
-                            return;
-                        }
-                        territoryManager.addBuilding(buildingId, entity, entity.player, buildingType);
-                    }
-                });
-
-                // On game load, buildings are created already operational — register those immediately
-                ctx.on('entity:created', ({ entityId, entityType: type, subType, player }) => {
-                    if (type === EntityType.Building && TERRITORY_BUILDINGS.has(subType as BuildingType)) {
-                        const entity = ctx.gameState.getEntityOrThrow(entityId, 'territory:entity:created');
-                        if (isDarkTribe(entity.race)) {
-                            return;
-                        }
-                        if (entity.operational) {
-                            territoryManager.addBuilding(entityId, entity, player, subType as BuildingType);
-                        }
-                    }
-                });
-
-                // Update territory when a building changes ownership (e.g. siege capture)
-                ctx.on('building:ownerChanged', ({ buildingId, buildingType, newPlayer }) => {
-                    if (TERRITORY_BUILDINGS.has(buildingType)) {
-                        const entity = ctx.gameState.getEntityOrThrow(buildingId, 'territory:building:ownerChanged');
-                        territoryManager.removeBuilding(buildingId);
-                        // Dark Tribe captures don't generate territory
-                        if (isDarkTribe(entity.race)) {
-                            return;
-                        }
-                        territoryManager.addBuilding(buildingId, entity, newPlayer, buildingType);
-                        // The building footprint itself must belong to the new owner immediately,
-                        // even if surrounding tiles are still contested by the old owner's other towers.
-                        const footprint = getBuildingFootprint(entity, buildingType, entity.race);
-                        territoryManager.claimTiles(footprint, newPlayer);
-                    }
-                });
-
-                // Territory persists when towers are destroyed — only ownership
-                // changes (siege capture) trigger territory recomputation.
-            },
+            persistence: [new TerritoryPersistence(territoryManager)],
             renderContributions: {
-                // eslint-disable-next-line no-restricted-syntax -- territoryManager is nullable before feature init; [] is correct when not yet loaded
-                territoryDots: () => exports.territoryManager?.getBoundaryDots() ?? [],
+                territoryDots: () => territoryManager.getBoundaryDots(),
             },
             diagnostics: (): FeatureDiagnostics => ({
                 label: 'Territory',
                 sections: [
                     {
                         label: 'Status',
-                        entries: [
-                            {
-                                key: 'Buildings',
-                                // eslint-disable-next-line no-restricted-syntax -- territoryManager is nullable before feature init; 0 is correct when not yet loaded
-                                value: exports.territoryManager?.buildingCount ?? 0,
-                            },
-                        ],
+                        entries: [{ key: 'Buildings', value: territoryManager.buildingCount }],
                     },
                 ],
             }),
@@ -161,154 +72,51 @@ export const TerritoryFeature: FeatureDefinition = {
     },
 };
 
-// ── Post-capture territory consequences ──────────────────────────────
-
 /**
- * Handle territory tile ownership changes after recomputation.
- * Finds buildings and units on tiles that changed from one player to another
- * and destroys/displaces them.
+ * Register building lifecycle handlers that add/remove territory zones.
+ * Dark Tribe never generates territory — their towers exist but create no zones.
+ * Territory persists when towers are destroyed — only ownership changes
+ * (siege capture) trigger territory recomputation.
  */
-function handleTerritoryChanges(
-    ctx: FeatureContext,
-    territoryManager: TerritoryManager,
-    changes: TerritoryChange[]
-): void {
-    // Build a set of (oldOwner → newOwner) player pairs that actually changed
-    // to quickly skip irrelevant entities
-    const affectedPlayers = new Set<number>();
-    for (const change of changes) {
-        if (change.oldOwner >= 0) {
-            affectedPlayers.add(change.oldOwner);
+function registerBuildingEvents(ctx: FeatureContext, territoryManager: TerritoryManager): void {
+    // Register territory when buildings complete construction
+    ctx.on('building:completed', ({ buildingId, buildingType }) => {
+        if (TERRITORY_BUILDINGS.has(buildingType)) {
+            const entity = ctx.gameState.getEntityOrThrow(buildingId, 'territory:building:completed');
+            if (isDarkTribe(entity.race)) {
+                return;
+            }
+            territoryManager.addBuilding(buildingId, entity, entity.player, buildingType);
         }
-    }
-    if (affectedPlayers.size === 0) {
-        return;
-    }
+    });
 
-    destroyBuildingsOnLostTerritory(ctx, territoryManager, affectedPlayers);
-    displaceOrKillUnitsOnLostTerritory(ctx, territoryManager, affectedPlayers);
-}
-
-/** Check if a non-territory building should be destroyed due to lost territory. */
-function isBuildingOnLostTerritory(ctx: FeatureContext, tm: TerritoryManager, id: number, player: number): boolean {
-    const entity = ctx.gameState.getEntity(id);
-    if (!entity) {
-        return false;
-    }
-    if (TERRITORY_BUILDINGS.has(entity.subType as BuildingType)) {
-        return false;
-    }
-    return !tm.isInTerritory(entity, player);
-}
-
-/**
- * Destroy non-territory buildings belonging to players who lost territory,
- * if those buildings no longer sit on their player's territory.
- */
-function destroyBuildingsOnLostTerritory(
-    ctx: FeatureContext,
-    tm: TerritoryManager,
-    affectedPlayers: ReadonlySet<number>
-): void {
-    const toRemove: number[] = [];
-
-    for (const player of affectedPlayers) {
-        const buildingIds = ctx.gameState.entityIndex.idsOfTypeAndPlayer(EntityType.Building, player);
-        for (const id of buildingIds) {
-            if (isBuildingOnLostTerritory(ctx, tm, id, player)) {
-                toRemove.push(id);
+    // On game load, buildings are created already operational — register those immediately
+    ctx.on('entity:created', ({ entityId, entityType: type, subType, player }) => {
+        if (type === EntityType.Building && TERRITORY_BUILDINGS.has(subType as BuildingType)) {
+            const entity = ctx.gameState.getEntityOrThrow(entityId, 'territory:entity:created');
+            if (isDarkTribe(entity.race)) {
+                return;
+            }
+            if (entity.operational) {
+                territoryManager.addBuilding(entityId, entity, player, subType as BuildingType);
             }
         }
-    }
+    });
 
-    for (const id of toRemove) {
-        log.info(`Destroying building ${id} — on lost territory`);
-        ctx.executeCommand({ type: 'remove_entity', entityId: id });
-    }
-}
-
-/** Check if a non-military unit is on lost territory. */
-function isUnitOnLostTerritory(ctx: FeatureContext, tm: TerritoryManager, id: number, player: number): boolean {
-    const entity = ctx.gameState.getEntity(id);
-    if (!entity || entity.hidden) {
-        return false;
-    }
-    if (isUnitTypeMilitary(entity.subType as UnitType)) {
-        return false;
-    }
-    return !tm.isInTerritory(entity, player);
-}
-
-/**
- * Handle non-military units on lost territory:
- * - Free civilians (no building assignment) are displaced to the nearest friendly tile.
- * - If no friendly territory exists within BFS range, the unit dies immediately
- *   (workers AND specialists — only military survives total territory loss).
- */
-function displaceOrKillUnitsOnLostTerritory(
-    ctx: FeatureContext,
-    tm: TerritoryManager,
-    affectedPlayers: ReadonlySet<number>
-): void {
-    const { settlerTaskSystem } = ctx.getFeature<SettlerTaskExports>('settler-tasks');
-    const getAssigned = settlerTaskSystem.getAssignedBuilding.bind(settlerTaskSystem);
-    const toKill: number[] = [];
-
-    for (const player of affectedPlayers) {
-        const unitIds = ctx.gameState.entityIndex.idsOfTypeAndPlayer(EntityType.Unit, player);
-        for (const id of unitIds) {
-            if (!isUnitOnLostTerritory(ctx, tm, id, player)) {
-                continue;
+    // Update territory when a building changes ownership (e.g. siege capture)
+    ctx.on('building:ownerChanged', ({ buildingId, buildingType, newPlayer }) => {
+        if (TERRITORY_BUILDINGS.has(buildingType)) {
+            const entity = ctx.gameState.getEntityOrThrow(buildingId, 'territory:building:ownerChanged');
+            territoryManager.removeBuilding(buildingId);
+            // Dark Tribe captures don't generate territory
+            if (isDarkTribe(entity.race)) {
+                return;
             }
-            const action = resolveUnitFate(ctx, tm, id, player, getAssigned);
-            if (action === 'kill') {
-                toKill.push(id);
-            }
+            territoryManager.addBuilding(buildingId, entity, newPlayer, buildingType);
+            // The building footprint itself must belong to the new owner immediately,
+            // even if surrounding tiles are still contested by the old owner's other towers.
+            const footprint = getBuildingFootprint(entity, buildingType, entity.race);
+            territoryManager.claimTiles(footprint, newPlayer);
         }
-    }
-
-    for (const id of toKill) {
-        log.info(`Killing unit ${id} — no friendly territory reachable`);
-        ctx.eventBus.emit('combat:unitDefeated', { unitId: id, defeatedBy: -1, level: 'info' });
-        ctx.executeCommand({ type: 'remove_entity', entityId: id });
-    }
-}
-
-/** Decide what happens to a non-military unit on lost territory. */
-function resolveUnitFate(
-    ctx: FeatureContext,
-    tm: TerritoryManager,
-    id: number,
-    player: number,
-    getAssigned: (unitId: number) => number | null
-): 'kill' | 'displace' | 'none' {
-    const entity = ctx.gameState.getEntity(id)!;
-    const nearby = findNearestFriendlyTile(tm, entity.x, entity.y, player, SURVIVAL_SEARCH_RADIUS);
-
-    if (!nearby && getUnitCategory(entity.subType as UnitType) === UnitCategory.Worker) {
-        return 'kill';
-    }
-
-    // Free civilian with reachable territory — displace
-    if (nearby && getAssigned(id) === null) {
-        const target = findNearestFriendlyTile(tm, entity.x, entity.y, player);
-        if (target) {
-            ctx.executeCommand({ type: 'move_unit', entityId: id, targetX: target.x, targetY: target.y });
-            return 'displace';
-        }
-    }
-
-    // Building-assigned workers with reachable territory: handled by their building
-    return 'none';
-}
-
-/** BFS search for the nearest tile owned by the given player. */
-function findNearestFriendlyTile(
-    tm: TerritoryManager,
-    startX: number,
-    startY: number,
-    player: number,
-    maxSearch = 2000
-): Tile | null {
-    return bfsFind({ x: startX, y: startY }, tile => tm.isInTerritory(tile, player), maxSearch);
+    });
 }

@@ -102,16 +102,22 @@ export class GameCore {
         );
 
         this.eventBus = new EventBus();
-        this.state = new GameState(this.eventBus, () => this.currentPlayer);
+        this.state = new GameState(this.eventBus, this.terrain, () => this.currentPlayer);
         this.settings = new GameSettingsManager();
 
         setDirectionRunLength(this.settings.state.pathStraightness);
 
         this.commandRegistry = new CommandHandlerRegistry();
-        this.services = new GameServices(this.state, this.eventBus, ((cmd: Command) =>
-            this.commandRegistry.execute(cmd)) as ExecuteCommand);
+        this.services = new GameServices(
+            this.state,
+            this.eventBus,
+            ((cmd: Command) => this.commandRegistry.execute(cmd)) as ExecuteCommand,
+            this.terrain,
+            // eslint-disable-next-line no-restricted-syntax -- optional chaining; null when source is absent (synthetic maps)
+            mapLoader.landscape.getResourceData?.() ?? null
+        );
 
-        this.wireCommandHandlers(mapLoader);
+        this.wireCommandHandlers();
         const mapBuildings = this.populate(mapLoader);
         this.reconcile();
         this.activate(mapBuildings);
@@ -121,10 +127,8 @@ export class GameCore {
 
     // ─── Setup phases ─────────────────────────────────────────
 
-    /** WIRE — register terrain data, feature command handlers, and central handlers. */
-    private wireCommandHandlers(mapLoader: IMapLoader): void {
-        this.services.setTerrainData(this.terrain, mapLoader.landscape.getResourceData?.());
-
+    /** WIRE — register feature command handlers and central handlers. */
+    private wireCommandHandlers(): void {
         for (const [type, handler] of this.services.getFeatureCommandHandlers()) {
             this.commandRegistry.register(type, handler);
         }

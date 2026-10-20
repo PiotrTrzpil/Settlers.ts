@@ -27,7 +27,7 @@ import { RenderDataRegistry } from './features/render-data-registry';
 import { DiagnosticsRegistry } from './features/diagnostics-registry';
 import { PersistenceRegistry, type Persistable } from './persistence';
 
-import { MovementSystem } from './systems/movement';
+import type { MovementSystem } from './systems/movement';
 import { TickScheduler } from './systems/tick-scheduler';
 
 // Feature definitions
@@ -42,13 +42,12 @@ import { TreeFeature, type TreeFeatureExports } from './features/trees';
 import { StoneFeature, type StoneFeatureExports } from './features/stones';
 import { CropFeature } from './features/crops';
 import { CombatFeature, type CombatExports } from './features/combat';
-import { OreSignFeature, type OreSignExports } from './features/ore-veins';
+import { OreSignFeature, OreVeinFeature, type OreSignExports, type OreVeinExports } from './features/ore-veins';
 import { MaterialTransferFeature } from './features/material-transfer/material-transfer-feature';
 import { SettlerTaskFeature, type SettlerTaskExports } from './features/settler-tasks';
 import { RecruitFeature, type RecruitExports } from './features/recruit';
 import { BuildingDemandFeature } from './features/building-demand/building-demand-feature';
 import { ConstructionDemandFeature } from './features/building-construction/construction-demand-feature';
-import { ChoreoBuilder } from './systems/choreo/choreo-builder';
 import type { UnitTransformer } from './features/recruit';
 import type { RecruitSystem } from './systems/recruit';
 
@@ -61,7 +60,7 @@ import { TowerGarrisonFeature, type TowerGarrisonExports } from './features/towe
 import { SettlerLocationFeature } from './features/settler-location';
 import type { SettlerLocationExports } from './features/settler-location';
 import { FreePilesFeature } from './features/inventory/free-piles-feature';
-import { TerritoryFeature, type TerritoryExports } from './features/territory';
+import { TerritoryFeature, TerritoryConsequencesFeature, type TerritoryExports } from './features/territory';
 import { VictoryConditionsFeature, type VictoryConditionsExports } from './features/victory-conditions';
 import { BuildingSiegeFeature, type BuildingSiegeExports, TowerAssaultSystem } from './features/building-siege';
 import type { BuildingSiegeSystem } from './features/building-siege/building-siege-system';
@@ -127,19 +126,11 @@ export class GameServices {
     public readonly victorySystem: VictoryConditionsSystem;
     public readonly unitTransformer: UnitTransformer;
     public readonly recruitSystem: RecruitSystem;
-    public readonly pileRegistry: BuildingPileRegistry | null;
+    public readonly pileRegistry: BuildingPileRegistry;
     public readonly aiSystem: AiPlayerSystem;
     public readonly persistenceRegistry: PersistenceRegistry;
-
-    /** Territory manager — available after setTerrainData(). */
-    public get territoryManager(): TerritoryManager {
-        return this.featureRegistry.getFeatureExports<TerritoryExports>('territory').territoryManager!;
-    }
-
-    /** Ore vein data — available after setTerrainData(). */
-    public get oreVeinData(): OreVeinData {
-        return this.featureRegistry.getFeatureExports<OreSignExports>('ore-signs').oreVeinData!;
-    }
+    public readonly territoryManager: TerritoryManager;
+    public readonly oreVeinData: OreVeinData;
 
     // ===== Internal =====
     private readonly featureRegistry: FeatureRegistry;
@@ -150,10 +141,19 @@ export class GameServices {
     // ===== Shared kernel services (also exposed for command registration) =====
     public readonly unitReservation: UnitReservationRegistry;
 
-    private readonly gameState: GameState;
-
-    constructor(gameState: GameState, eventBus: EventBus, executeCommand: ExecuteCommand) {
-        this.gameState = gameState;
+    /**
+     * @param terrain Map terrain — passed to every feature via FeatureContext at create() time.
+     * @param resourceData Per-tile ore data from the map file; null for synthetic maps.
+     */
+    constructor(
+        gameState: GameState,
+        eventBus: EventBus,
+        executeCommand: ExecuteCommand,
+        terrain: TerrainData,
+        resourceData: Uint8Array | null
+    ) {
+        // Movement is owned by GameState (constructed with terrain); exposed here for consumers.
+        this.movement = gameState.movement;
         // 1. Kernel services — created before features, provided via FeatureContext.
         //    UnitReservationRegistry must subscribe to entity:removed BEFORE cleanupRegistry
         //    so onForcedRelease fires before any feature-level cleanup handlers.
@@ -186,6 +186,8 @@ export class GameServices {
             unitReservation: this.unitReservation,
             executeCommand,
             tickScheduler: this.tickScheduler,
+            terrain,
+            resourceData,
         });
 
         // Register inventory exports so features can access via ctx.getFeature('inventory')
@@ -203,20 +205,7 @@ export class GameServices {
             ]
         );
 
-        // 3a. Movement system — instantiated directly (not a feature).
-        this.movement = new MovementSystem({
-            eventBus,
-            updatePosition: (id, newPos) => {
-                gameState.updateEntityPosition(id, newPos);
-                return true;
-            },
-            unitOccupancy: gameState.unitOccupancy,
-            buildingOccupancy: gameState.buildingOccupancy,
-            rng: gameState.rng,
-        });
-        gameState.initMovement(this.movement);
-
-        // 3b. Map object blocking — adds blocked tiles to buildingOccupancy so A* respects them.
+        // 3a. Map object blocking — adds blocked tiles to buildingOccupancy so A* respects them.
         this.mapObjectBlocking = new MapObjectBlockingTracker(gameState.buildingOccupancy);
         this.subscriptions.subscribe(eventBus, 'entity:created', ({ entityId, entityType, subType, x, y }) => {
             if (entityType === EntityType.MapObject) {
@@ -252,39 +241,43 @@ export class GameServices {
         // Register movement as a tick system
         this.featureRegistry.registerSystem(this.movement, 'Units');
 
+        // Listed in resolved load order (loadAll would sort dependencies first anyway).
+        // Tick systems tick in this order, so keep system-owning features where they are.
         this.featureRegistry.loadAll([
-            // Tier 0: no dependencies
+            // No feature dependencies
             WorkAreaFeature,
             ProductionControlFeature,
             CarrierFeature,
             DemandLedgerFeature,
             BuildingOverlayFeature,
+            // Depend on inventory / logistics
+            BuildingConstructionFeature,
+            MaterialTransferFeature,
+            // No feature dependencies
+            CombatFeature,
+            SettlerLocationFeature,
+            OreVeinFeature,
+            TerritoryFeature,
+            // Depends on construction, material-transfer, combat, settler-location, ore-veins, territory
+            SettlerTaskFeature,
+            // Depend on settler-tasks (+ territory / ore-veins / carriers)
             TreeFeature,
             StoneFeature,
             CropFeature,
-            CombatFeature,
             OreSignFeature,
-            TerritoryFeature,
-            SettlerLocationFeature,
-            // Tier 1: depend on tier-0 features
-            BuildingConstructionFeature,
-            MaterialTransferFeature,
+            RecruitFeature,
+            TerritoryConsequencesFeature,
             MaterialRequestFeature,
-            // Tier 2: depend on tier-0 and tier-1
-            SettlerTaskFeature,
-            // Tier 3: depend on settler-tasks
             PioneerFeature,
+            // Depend on settler-tasks + recruit / construction
             LogisticsDispatcherFeature,
-            // Tier 4: depend on logistics-dispatcher
             BarracksFeature,
             TowerGarrisonFeature,
             BuildingSiegeFeature,
-            RecruitFeature,
             BuildingDemandFeature,
             ConstructionDemandFeature,
-            // Independent chains
+            // Depend on construction / territory / victory-conditions
             VictoryConditionsFeature,
-            // AI — depends on combat, territory, victory-conditions, inventory
             AiPlayerFeature,
             FreePilesFeature,
         ]);
@@ -321,6 +314,8 @@ export class GameServices {
         this.aiSystem = this.feat<AiPlayerExports>('ai-player').aiSystem;
         this.recruitSystem = arExports.recruitSystem;
         this.pileRegistry = constrExports.pileRegistry;
+        this.territoryManager = this.feat<TerritoryExports>('territory').territoryManager;
+        this.oreVeinData = this.feat<OreVeinExports>('ore-veins').oreVeinData;
 
         // 5. Persistence registry — register feature-declared persistables first, then manual ones.
         this.persistenceRegistry = new PersistenceRegistry();
@@ -329,18 +324,13 @@ export class GameServices {
         }
         // Pile state derived from inventory slots — no separate persistence needed.
 
-        // 6. Wire pile registry to settler-tasks (cross-feature, conditional).
-        if (constrExports.pileRegistry) {
-            this.feat<SettlerTaskExports>('settler-tasks').setPileRegistry(constrExports.pileRegistry);
-        }
-
-        // 7. Core entity lifecycle — too small to be a feature.
+        // 6. Core entity lifecycle — too small to be a feature.
         this.cleanupRegistry.onEntityRemoved(entityId => {
             this.visualService.remove(entityId);
             this.inventoryManager.onPileEntityRemoved(entityId);
         });
 
-        // 8. Late inventory removal — MUST happen after logistics cleanup.
+        // 7. Late inventory removal — MUST happen after logistics cleanup.
         this.cleanupRegistry.onEntityRemoved(
             this.inventoryManager.destroySlots.bind(this.inventoryManager),
             CLEANUP_PRIORITY.LATE
@@ -348,13 +338,6 @@ export class GameServices {
 
         // Wire the registry to the event bus — single subscription drives all cleanup handlers.
         this.cleanupRegistry.registerEvents(eventBus);
-    }
-
-    /** Provide terrain data to all features that need it. */
-    public setTerrainData(terrain: TerrainData, resourceData?: Uint8Array): void {
-        ChoreoBuilder.withContext({ gameState: this.gameState, terrain });
-        this.movement.setTerrainData(terrain.groundType, terrain.width, terrain.height);
-        this.featureRegistry.setTerrainData(terrain, resourceData);
     }
 
     /** Ordered tick systems for the frame loop, with group labels. */

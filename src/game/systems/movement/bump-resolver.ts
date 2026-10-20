@@ -39,7 +39,7 @@ export interface BumpResolverDeps {
     buildingOccupancy: Set<string>;
     eventBus: EventBus;
     updatePositionFn: UpdatePositionFn;
-    terrain: PathfindingTerrain | undefined;
+    readonly terrain: PathfindingTerrain;
     verbose: boolean;
 }
 
@@ -164,14 +164,12 @@ export class BumpResolver {
      */
     isTilePassableForBump(tile: Tile): boolean {
         const terrain = this.deps.terrain;
-        if (terrain) {
-            if (!isInMapBounds(tile, terrain.mapWidth, terrain.mapHeight)) {
-                return false;
-            }
-            const idx = tile.x + tile.y * terrain.mapWidth;
-            if (!isPassable(terrain.groundType[idx]!)) {
-                return false;
-            }
+        if (!isInMapBounds(tile, terrain.mapWidth, terrain.mapHeight)) {
+            return false;
+        }
+        const idx = tile.x + tile.y * terrain.mapWidth;
+        if (!isPassable(terrain.groundType[idx]!)) {
+            return false;
         }
         return !this.deps.buildingOccupancy.has(tileKey(tile));
     }
@@ -266,11 +264,10 @@ export class BumpResolver {
 
     private repathBumpedOccupant(occupant: MovementController, dest: Tile): void {
         const goal = occupant.goal;
-        const terrain = this.deps.terrain;
-        if (!goal || !terrain) {
+        if (!goal) {
             return;
         }
-        const result = findPathAStar(dest, goal, terrain, this.deps.buildingOccupancy, occupant.entityId);
+        const result = findPathAStar(dest, goal, this.deps.terrain, this.deps.buildingOccupancy, occupant.entityId);
         if (result.ok && result.path.length > 0) {
             occupant.setPath(result.path, true);
         }

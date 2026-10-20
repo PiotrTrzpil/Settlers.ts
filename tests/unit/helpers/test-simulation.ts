@@ -111,7 +111,7 @@ export class Simulation {
         this.map = createTestMap(mapWidth, mapHeight);
         this.eventBus = new EventBus();
         this.eventBus.strict = true;
-        this.state = new GameState(this.eventBus, () => 0);
+        this.state = new GameState(this.eventBus, this.map.terrain, () => 0);
         this.state.playerRaces = new Map([
             [0, race],
             [1, race1],
@@ -126,9 +126,13 @@ export class Simulation {
         const settings = this.settings;
 
         this.commandRegistry = new CommandHandlerRegistry();
-        this.services = new GameServices(this.state, this.eventBus, ((cmd: Command) =>
-            this.commandRegistry.execute(cmd)) as ExecuteCommand);
-        this.services.setTerrainData(this.map.terrain);
+        this.services = new GameServices(
+            this.state,
+            this.eventBus,
+            ((cmd: Command) => this.commandRegistry.execute(cmd)) as ExecuteCommand,
+            this.map.terrain,
+            null
+        );
 
         // Register feature-provided command handlers first, then central handlers
         for (const [type, handler] of this.services.getFeatureCommandHandlers()) {

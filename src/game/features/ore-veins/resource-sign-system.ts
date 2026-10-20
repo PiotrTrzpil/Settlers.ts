@@ -6,7 +6,6 @@
  *   the appropriate MapObjectType and variation; tracks it for auto-expiry
  * - `tick(dt)` — removes signs whose lifetime has elapsed
  * - `onEntityRemoved(id)` — cleans up tracking if a sign is removed externally
- * - `setOreVeinData(data)` — called after terrain loads to inject ore data
  */
 
 import type { TickSystem } from '../../core/tick-system';
@@ -48,27 +47,21 @@ const ORE_TYPE_TO_MAP_OBJECT: Partial<Record<OreType, MapObjectType>> = {
 export interface ResourceSignSystemConfig {
     executeCommand: ExecuteCommand;
     getGroundEntityAt: (tile: Tile) => Entity | undefined;
+    oreVeinData: OreVeinData;
 }
 
 export class ResourceSignSystem implements TickSystem {
     /** Maps sign entity ID to its position and game-time expiry. */
     private readonly signs = new Map<number, SignEntry>();
     private elapsed = 0;
-    private oreVeinData!: OreVeinData; // OK: genuinely deferred — set via setOreVeinData() after terrain loads
+    private readonly oreVeinData: OreVeinData;
     private readonly executeCommand: ExecuteCommand;
     private readonly getGroundEntityAt: (tile: Tile) => Entity | undefined;
 
     constructor(cfg: ResourceSignSystemConfig) {
         this.executeCommand = cfg.executeCommand;
         this.getGroundEntityAt = cfg.getGroundEntityAt;
-    }
-
-    /**
-     * Inject the ore vein data after terrain has loaded.
-     * Must be called before any `placeSign` invocations.
-     */
-    setOreVeinData(data: OreVeinData): void {
-        this.oreVeinData = data;
+        this.oreVeinData = cfg.oreVeinData;
     }
 
     /**

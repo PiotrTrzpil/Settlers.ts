@@ -14,7 +14,6 @@
 import type { FeatureDefinition, FeatureContext } from '../feature';
 import type { InventoryExports } from '../inventory';
 import type { DemandLedgerExports } from '../logistics/demand-ledger-feature';
-import type { TerrainData } from '../../terrain';
 import { ConstructionSiteManager } from './construction-site-manager';
 import { BuildingConstructionSystem } from './construction-system';
 import { ResidenceSpawnerSystem } from './residence-spawner';
@@ -29,7 +28,7 @@ export interface BuildingConstructionExports {
     constructionSystem: BuildingConstructionSystem;
     constructionRequestSystem: ConstructionRequestSystem;
     residenceSpawner: ResidenceSpawnerSystem;
-    pileRegistry: BuildingPileRegistry | null;
+    pileRegistry: BuildingPileRegistry;
 }
 
 export const BuildingConstructionFeature: FeatureDefinition = {
@@ -61,14 +60,15 @@ export const BuildingConstructionFeature: FeatureDefinition = {
             ctx.eventBus
         );
 
-        // Create pile position resolver from XML game data (if loaded).
-        const dataLoader = getGameDataLoader();
-        let pileRegistry: BuildingPileRegistry | null = null;
-        let pilePositionResolver: PilePositionResolver | undefined;
-        if (dataLoader.isLoaded()) {
-            pileRegistry = new BuildingPileRegistry(dataLoader.getData());
-            pilePositionResolver = new PilePositionResolver(ctx.gameState, pileRegistry, constructionSiteManager);
-        }
+        constructionSystem.setTerrainContext({
+            terrain: ctx.terrain,
+            onTerrainModified: (reason, tile) =>
+                ctx.eventBus.emit('terrain:modified', { reason, x: tile.x, y: tile.y }),
+        });
+
+        // Pile positions from XML game data (always loaded before a game is created).
+        const pileRegistry = new BuildingPileRegistry(getGameDataLoader().getData());
+        const pilePositionResolver = new PilePositionResolver(ctx.gameState, pileRegistry, constructionSiteManager);
 
         // BuildingLifecycleHandler manages construction site registration,
         // inventory swaps on completion, and material delivery tracking.
@@ -78,7 +78,7 @@ export const BuildingConstructionFeature: FeatureDefinition = {
             constructionSiteManager,
             inventoryManager,
             cleanupRegistry: ctx.cleanupRegistry,
-            pilePositionResolver: pilePositionResolver!,
+            pilePositionResolver,
         });
         // Lifecycle must register before construction system so registerSite runs
         // before the building:placed handler that captures terrain data.
@@ -105,13 +105,6 @@ export const BuildingConstructionFeature: FeatureDefinition = {
             systemGroup: 'Buildings',
             exports,
             persistence: [constructionSiteManager.persistentStore],
-            onTerrainReady(terrain: TerrainData) {
-                constructionSystem.setTerrainContext({
-                    terrain,
-                    onTerrainModified: (reason, tile) =>
-                        ctx.eventBus.emit('terrain:modified', { reason, x: tile.x, y: tile.y }),
-                });
-            },
             onRestoreComplete() {
                 constructionSystem.rebuildAfterRestore();
             },

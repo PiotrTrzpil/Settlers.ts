@@ -4,7 +4,7 @@
  * Handles the full lifecycle of garrisoning military units in towers:
  * - building:completed → initTower for garrison buildings
  * - building:removed → removeTower (no-op for non-garrison buildings)
- * - onTerrainReady → re-builds WORKER_DISPATCH choreo jobs for en-route units
+ * - onRestoreComplete → re-builds WORKER_DISPATCH choreo jobs for en-route units
  *
  * Garrison dispatch uses WORKER_DISPATCH choreo jobs (goToDoorAndEnter).
  * The garrison manager listens for settler:taskCompleted to finalize.
@@ -66,6 +66,7 @@ export const TowerGarrisonFeature: FeatureDefinition = {
         const manager = new TowerGarrisonManager({
             gameState: ctx.gameState,
             eventBus: ctx.eventBus,
+            terrain: ctx.terrain,
             unitReservation: ctx.unitReservation,
             locationManager,
             releaseWorkerAssignment: (settlerId: number) => settlerTaskSystem.releaseWorkerAssignment(settlerId),
@@ -187,12 +188,11 @@ export const TowerGarrisonFeature: FeatureDefinition = {
                             // reservation auto-released by registry
                         },
                     });
-                    const job = choreo('WORKER_DISPATCH', JobKind.Garrison).goToDoorAndEnter(towerId).build();
+                    const job = choreo('WORKER_DISPATCH', JobKind.Garrison)
+                        .goToDoorAndEnter(towerId, { gameState: ctx.gameState, terrain: ctx.terrain })
+                        .build();
                     settlerTaskSystem.assignJob(unitId, job);
                 }
-            },
-            onTerrainReady(terrain) {
-                manager.setTerrain(terrain);
             },
             commands: {
                 garrison_units: cmd => {
@@ -201,6 +201,7 @@ export const TowerGarrisonFeature: FeatureDefinition = {
                         settlerTaskSystem,
                         locationManager,
                         gameState: ctx.gameState,
+                        terrain: ctx.terrain,
                         unitReservation: ctx.unitReservation,
                     };
                     return executeGarrisonUnitsCommand(cmd as GarrisonUnitsCommand, cmdCtx)
@@ -213,6 +214,7 @@ export const TowerGarrisonFeature: FeatureDefinition = {
                         settlerTaskSystem,
                         locationManager,
                         gameState: ctx.gameState,
+                        terrain: ctx.terrain,
                         unitReservation: ctx.unitReservation,
                     };
                     const result: GarrisonSelectedResult = executeGarrisonSelectedUnitsCommand(

@@ -1,6 +1,11 @@
 import { tileKey, type Tile } from '../../core/coordinates';
 import { MovementController, MovementState } from './movement-controller';
-import { findPathAStar, type PathfindingFailureInfo, type PathFindResult } from '../pathfinding';
+import {
+    findPathAStar,
+    type PathfindingFailureInfo,
+    type PathFindResult,
+    type PathfindingTerrain,
+} from '../pathfinding';
 import type { TickSystem } from '../../core/tick-system';
 import type { EventBus } from '../../event-bus';
 import { type ComponentStore, mapStore } from '../../ecs';
@@ -25,6 +30,7 @@ export interface MovementSystemConfig {
     unitOccupancy: Map<string, number>;
     buildingOccupancy: Set<string>;
     rng: SeededRng;
+    terrain: PathfindingTerrain;
 }
 
 /**
@@ -57,7 +63,7 @@ export class MovementSystem implements TickSystem {
             buildingOccupancy: config.buildingOccupancy,
             eventBus: config.eventBus,
             updatePositionFn: config.updatePosition,
-            terrain: undefined,
+            terrain: config.terrain,
             verbose: false,
         };
         this.bumpResolver = new BumpResolver(this.shared);
@@ -69,10 +75,6 @@ export class MovementSystem implements TickSystem {
 
     set verbose(value: boolean) {
         this.shared.verbose = value;
-    }
-
-    setTerrainData(groundType: Uint8Array, mapWidth: number, mapHeight: number): void {
-        this.shared.terrain = { groundType, mapWidth, mapHeight };
     }
 
     createController(entityId: number, tile: Tile, speed: number): MovementController {
@@ -317,11 +319,7 @@ export class MovementSystem implements TickSystem {
     }
 
     private findPath(from: Tile, to: Tile, entityId: number): PathFindResult {
-        const terrain = this.shared.terrain;
-        if (!terrain) {
-            throw new Error('MovementSystem.findPath: terrain data not set');
-        }
-        return findPathAStar(from, to, terrain, this.buildingOccupancy, entityId);
+        return findPathAStar(from, to, this.shared.terrain, this.buildingOccupancy, entityId);
     }
 
     private repathFromCurrent(controller: MovementController): void {

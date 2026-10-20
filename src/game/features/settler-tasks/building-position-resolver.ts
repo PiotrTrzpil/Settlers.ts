@@ -45,8 +45,7 @@ function parseMaterialString(material: string): EMaterialType | null {
 export interface BuildingPositionResolverConfig {
     gameState: GameState;
     inventoryManager: BuildingInventoryManager;
-    /** Lazy getter — the pile registry may not be available at construction time. */
-    getPileRegistry: () => BuildingPileRegistry | null;
+    pileRegistry: BuildingPileRegistry;
     workAreaStore: WorkAreaStore;
     constructionSiteManager: ConstructionSiteManager;
 }
@@ -74,14 +73,14 @@ export interface BuildingPositionResolverConfig {
 export class BuildingPositionResolverImpl implements BuildingPositionResolver {
     private readonly gameState: GameState;
     private readonly inventoryManager: BuildingInventoryManager;
-    private readonly getPileRegistry: () => BuildingPileRegistry | null;
+    private readonly pileRegistry: BuildingPileRegistry;
     private readonly workAreaStore: WorkAreaStore;
     private readonly constructionSiteManager: ConstructionSiteManager;
 
     constructor(config: BuildingPositionResolverConfig) {
         this.gameState = config.gameState;
         this.inventoryManager = config.inventoryManager;
-        this.getPileRegistry = config.getPileRegistry;
+        this.pileRegistry = config.pileRegistry;
         this.workAreaStore = config.workAreaStore;
         this.constructionSiteManager = config.constructionSiteManager;
     }
@@ -196,15 +195,7 @@ export class BuildingPositionResolverImpl implements BuildingPositionResolver {
         }
         assertIsBuilding(building, buildingId);
 
-        const registry = this.getPileRegistry();
-        if (!registry) {
-            throw new Error(
-                `BuildingPileRegistry not available when resolving ${slotType} pile ` +
-                    `for ${material} at building ${buildingId} (${String(building.subType)})`
-            );
-        }
-
-        const pos = registry.getPilePositionForSlot(
+        const pos = this.pileRegistry.getPilePositionForSlot(
             building.subType as BuildingType,
             building.race,
             slotType,
@@ -217,7 +208,7 @@ export class BuildingPositionResolverImpl implements BuildingPositionResolver {
         }
 
         // Storage buildings: look up the live pile slot via BuildingInventoryManager
-        if (registry.hasStoragePiles(building.subType as BuildingType, building.race)) {
+        if (this.pileRegistry.hasStoragePiles(building.subType as BuildingType, building.race)) {
             const slots = this.inventoryManager.getSlots(buildingId);
             const matchingSlot = slots.find(
                 s =>

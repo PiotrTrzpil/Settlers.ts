@@ -3,10 +3,6 @@
  *
  * Holds a Map<playerIndex, AiPlayerController>. Each tick iterates
  * controllers in deterministic (sorted) order and calls evaluate().
- *
- * TerrainData and hasSite are injected lazily:
- * - terrain via onTerrainReady() (called when terrain data is loaded)
- * - hasSite via setHasSite() (called after feature construction)
  */
 
 import type { GameState } from '@/game/game-state';
@@ -22,33 +18,24 @@ export class AiPlayerSystemImpl implements AiPlayerSystem {
     private readonly executeCommand: CommandExecutor;
     private readonly isGameOver: () => boolean;
 
-    private hasSite: (buildingId: number) => boolean = () => false;
-    private getPlacementFilter: () => PlacementFilter | null = () => null;
-    private terrain: TerrainData | null = null;
+    private readonly hasSite: (buildingId: number) => boolean;
+    private readonly getPlacementFilter: () => PlacementFilter;
+    private readonly terrain: TerrainData;
 
     constructor(deps: {
         gameState: GameState;
+        terrain: TerrainData;
         executeCommand: CommandExecutor;
         isGameOver: () => boolean;
+        hasSite: (buildingId: number) => boolean;
+        getPlacementFilter: () => PlacementFilter;
     }) {
         this.gameState = deps.gameState;
+        this.terrain = deps.terrain;
         this.executeCommand = deps.executeCommand;
         this.isGameOver = deps.isGameOver;
-    }
-
-    /** Inject construction site check. Called by feature after deps are ready. */
-    setHasSite(hasSite: (buildingId: number) => boolean): void {
-        this.hasSite = hasSite;
-    }
-
-    /** Inject placement filter (territory). Called by feature after deps are ready. */
-    setPlacementFilter(getter: () => PlacementFilter | null): void {
-        this.getPlacementFilter = getter;
-    }
-
-    /** Store terrain data. Called via onTerrainReady in the feature instance. */
-    onTerrainReady(terrain: TerrainData): void {
-        this.terrain = terrain;
+        this.hasSite = deps.hasSite;
+        this.getPlacementFilter = deps.getPlacementFilter;
     }
 
     // ── AiPlayerSystem interface ─────────────────────────────────
@@ -56,9 +43,6 @@ export class AiPlayerSystemImpl implements AiPlayerSystem {
     addPlayer(config: AiPlayerConfig): void {
         if (this.controllers.has(config.player)) {
             throw new Error(`AiPlayerSystem.addPlayer: player ${config.player} already has a controller`);
-        }
-        if (!this.terrain) {
-            throw new Error('AiPlayerSystem.addPlayer: terrain not loaded — wait for onTerrainReady()');
         }
 
         const race = this.gameState.playerRaces.get(config.player);

@@ -7,6 +7,7 @@ import type { FeatureDefinition, FeatureContext } from '../feature';
 import type { CarrierFeatureExports } from '../carriers';
 import type { SettlerTaskExports } from '../settler-tasks';
 import type { InventoryExports } from '../inventory';
+import type { TerritoryExports } from '../territory';
 import { ChoreoTaskType } from '../../systems/choreo';
 import { RecruitSystem } from '../../systems/recruit/recruit-system';
 import { UnitTransformer } from '../../systems/recruit/unit-transformer';
@@ -24,12 +25,13 @@ export interface RecruitExports {
 
 export const RecruitFeature: FeatureDefinition = {
     id: 'recruit',
-    dependencies: ['carriers', 'settler-tasks', 'inventory'],
+    dependencies: ['carriers', 'settler-tasks', 'inventory', 'territory'],
 
     create(ctx: FeatureContext) {
         const { carrierRegistry, idleCarrierPool } = ctx.getFeature<CarrierFeatureExports>('carriers');
         const { settlerTaskSystem, choreoSystem } = ctx.getFeature<SettlerTaskExports>('settler-tasks');
         const { inventoryManager } = ctx.getFeature<InventoryExports>('inventory');
+        const { territoryManager } = ctx.getFeature<TerritoryExports>('territory');
 
         const toolSourceResolver = new ToolSourceResolver(ctx.gameState, inventoryManager);
 
@@ -49,6 +51,7 @@ export const RecruitFeature: FeatureDefinition = {
             unitTransformer,
             toolSourceResolver,
             assignJob: (unitId, job, moveTo) => settlerTaskSystem.assignJob(unitId, job, moveTo),
+            territoryCheck: (a, b, player) => territoryManager.areConnected(a, b, player),
         });
 
         // Register recruit-specific choreography executors on the shared ChoreoSystem.

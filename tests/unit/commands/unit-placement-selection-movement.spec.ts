@@ -7,7 +7,6 @@ import { CommandHandlerRegistry, registerAllHandlers } from '@/game/commands';
 import { MapSize } from '@/utilities/map-size';
 import { EventBus } from '@/game/event-bus';
 import { ConstructionSiteManager } from '@/game/features/building-construction';
-import { MovementSystem } from '@/game/systems/movement/index';
 import { TerrainData } from '@/game/terrain';
 import { GameSettingsManager } from '@/game/game-settings';
 
@@ -26,18 +25,9 @@ function createTestHarness() {
     const groundHeight = new Uint8Array(64 * 64);
     groundType.fill(16); // all grass (passable & buildable)
     const eventBus = new EventBus();
-    const state = new GameState(eventBus, () => 0);
-    const movement = new MovementSystem({
-        eventBus,
-        updatePosition: (id, newPos) => {
-            state.updateEntityPosition(id, newPos);
-            return true;
-        },
-        unitOccupancy: state.unitOccupancy,
-        buildingOccupancy: state.buildingOccupancy,
-        rng: state.rng,
-    });
-    state.initMovement(movement);
+    const terrain = new TerrainData(groundType, groundHeight, mapSize);
+    const state = new GameState(eventBus, terrain, () => 0);
+    const movement = state.movement;
 
     eventBus.on('entity:created', ({ entityId, entityType: type, subType, x, y, hidden }) => {
         if (type === EntityType.Unit && !hidden) {
@@ -50,9 +40,6 @@ function createTestHarness() {
     });
 
     const constructionSiteManager = new ConstructionSiteManager(eventBus, state.rng, {} as any);
-    movement.setTerrainData(groundType, mapSize.width, mapSize.height);
-
-    const terrain = new TerrainData(groundType, groundHeight, mapSize);
     const settingsManager = new GameSettingsManager();
     settingsManager.resetToDefaults();
     const registry = new CommandHandlerRegistry();

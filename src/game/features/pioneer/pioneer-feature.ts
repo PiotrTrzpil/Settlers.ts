@@ -15,7 +15,6 @@
 import type { FeatureDefinition, FeatureContext } from '../feature';
 import type { SettlerTaskExports } from '../settler-tasks';
 import type { TerritoryExports } from '../territory';
-import type { TerrainData } from '../../terrain';
 import { SearchType } from '../settler-tasks';
 import { ChoreoTaskType, type ChoreoJob } from '../../systems/choreo';
 import { createPioneerHandler } from './work-handlers';
@@ -79,21 +78,18 @@ export const PioneerFeature: FeatureDefinition = {
     dependencies: ['settler-tasks', 'territory'],
 
     create(ctx: FeatureContext) {
-        return {
-            persistence: 'none',
-            onTerrainReady(terrain: TerrainData) {
-                const { settlerTaskSystem } = ctx.getFeature<SettlerTaskExports>('settler-tasks');
-                const { territoryManager } = ctx.getFeature<TerritoryExports>('territory');
+        const { settlerTaskSystem } = ctx.getFeature<SettlerTaskExports>('settler-tasks');
+        const { territoryManager } = ctx.getFeature<TerritoryExports>('territory');
 
-                // Register synthetic choreography job so selectJob can resolve it
-                settlerTaskSystem.getChoreographyStore().registerSyntheticJob(buildPioneerJob());
+        // Register synthetic choreography job so selectJob can resolve it
+        settlerTaskSystem.getChoreographyStore().registerSyntheticJob(buildPioneerJob());
 
-                // Register position work handler for TERRAIN search type
-                settlerTaskSystem.registerWorkHandler(
-                    SearchType.TERRAIN,
-                    createPioneerHandler(ctx.gameState, terrain, territoryManager!)
-                );
-            },
-        };
+        // Register position work handler for TERRAIN search type
+        settlerTaskSystem.registerWorkHandler(
+            SearchType.TERRAIN,
+            createPioneerHandler(ctx.gameState, ctx.terrain, territoryManager)
+        );
+
+        return { persistence: 'none' };
     },
 };

@@ -31,15 +31,14 @@ import { getRecipeSet } from '@/game/economy/building-production';
  * Create a handler for WORKPLACE search type.
  * Building workers find their workplace, wait for materials, then produce.
  *
- * When getOreVeinData returns data, mine buildings additionally check
- * that ore is available within {@link MINE_SEARCH_RADIUS} before
+ * Mine buildings additionally check that ore is available within {@link MINE_SEARCH_RADIUS} before
  * starting work and consume one ore level on completion.
  */
 export function createWorkplaceHandler(
     gameState: GameState,
     inventoryManager: BuildingInventoryManager,
     getAssignedBuilding: (settlerId: number) => Entity | null,
-    getOreVeinData?: () => OreVeinData | undefined,
+    oreVeinData: OreVeinData,
     getProductionControlManager?: () => ProductionControlManager | undefined
 ): EntityWorkHandler {
     // Tracks the recipe selected at onWorkStart so onWorkComplete produces the matching output.
@@ -90,21 +89,14 @@ export function createWorkplaceHandler(
             }
 
             // Mine buildings require ore in the surrounding mountain tiles
-            const oreDataForCanWork = getOreVeinData?.();
-            if (oreDataForCanWork) {
-                const building = gameState.getEntityOrThrow(targetId, 'mine ore check');
-                const bt = building.subType as BuildingType;
-                if (isMineBuilding(bt)) {
-                    const oreType = MINE_ORE_TYPE.get(bt);
-                    if (!oreType) {
-                        return false;
-                    }
-                    return oreDataForCanWork.hasOreInRadius(
-                        { x: building.x, y: building.y },
-                        MINE_SEARCH_RADIUS,
-                        oreType
-                    );
+            const building = gameState.getEntityOrThrow(targetId, 'mine ore check');
+            const bt = building.subType as BuildingType;
+            if (isMineBuilding(bt)) {
+                const oreType = MINE_ORE_TYPE.get(bt);
+                if (!oreType) {
+                    return false;
                 }
+                return oreVeinData.hasOreInRadius({ x: building.x, y: building.y }, MINE_SEARCH_RADIUS, oreType);
             }
             return true;
         },
@@ -133,20 +125,14 @@ export function createWorkplaceHandler(
 
         onWorkComplete: (targetId: number) => {
             // Mine buildings consume one ore level from a nearby tile
-            const oreDataForConsume = getOreVeinData?.();
-            if (oreDataForConsume) {
-                const building = gameState.getEntityOrThrow(targetId, 'mine ore consume');
-                const bt = building.subType as BuildingType;
-                if (isMineBuilding(bt)) {
-                    const oreType = MINE_ORE_TYPE.get(bt);
-                    if (oreType) {
-                        oreDataForConsume.consumeOreInRadius(
-                            { x: building.x, y: building.y },
-                            MINE_SEARCH_RADIUS,
-                            oreType,
-                            n => gameState.rng.nextInt(n)
-                        );
-                    }
+            const building = gameState.getEntityOrThrow(targetId, 'mine ore consume');
+            const bt = building.subType as BuildingType;
+            if (isMineBuilding(bt)) {
+                const oreType = MINE_ORE_TYPE.get(bt);
+                if (oreType) {
+                    oreVeinData.consumeOreInRadius({ x: building.x, y: building.y }, MINE_SEARCH_RADIUS, oreType, n =>
+                        gameState.rng.nextInt(n)
+                    );
                 }
             }
 

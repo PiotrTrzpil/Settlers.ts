@@ -1,8 +1,5 @@
 /**
  * FreePiles Feature — wraps FreePileHandler as a self-registering feature.
- *
- * Territory manager is accessed lazily because it's only available after
- * terrain data is loaded.
  */
 
 import type { FeatureDefinition, FeatureContext } from '../feature';
@@ -16,13 +13,13 @@ export const FreePilesFeature: FeatureDefinition = {
 
     create(ctx: FeatureContext) {
         const { inventoryManager } = ctx.getFeature<InventoryExports>('inventory');
-        const territoryExports = ctx.getFeature<TerritoryExports>('territory');
+        const { territoryManager } = ctx.getFeature<TerritoryExports>('territory');
 
         const freePileHandler = new FreePileHandler({
             gameState: ctx.gameState,
             eventBus: ctx.eventBus,
             inventoryManager,
-            getTerritoryManager: () => territoryExports.territoryManager!,
+            territoryManager,
         });
         freePileHandler.registerEvents();
 

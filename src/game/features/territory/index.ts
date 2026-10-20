@@ -5,13 +5,14 @@
  * Towers and castles create territory zones; boundary dots visualize edges.
  *
  * Public API:
- * - Feature: TerritoryFeature (FeatureDefinition with onTerrainReady)
+ * - Features: TerritoryFeature (zones + spatial grid), TerritoryConsequencesFeature (territory-loss effects)
  * - Manager: TerritoryManager (territory ownership queries, boundary dots)
  * - Types: TerritoryDot, TerritoryExports
  * - Constants: TERRITORY_BUILDINGS, TERRITORY_RADIUS
  */
 
 export { TerritoryFeature, type TerritoryExports } from './territory-feature';
+export { TerritoryConsequencesFeature } from './territory-consequences-feature';
 export { TerritoryManager } from './territory-manager';
 export type { TerritoryDot } from './territory-types';
 export { TERRITORY_BUILDINGS, TERRITORY_RADIUS } from './territory-types';

@@ -84,6 +84,15 @@ export interface FeatureContext extends CoreDeps {
     /** Shared tick scheduler for deferred callbacks. */
     tickScheduler: TickScheduler;
 
+    /** Map terrain (ground types, heights, dimensions). Available to all features at creation time. */
+    terrain: TerrainData;
+
+    /**
+     * Per-tile ore resource data from the map file.
+     * Nullable by design: synthetic maps (test map, empty map) carry no resource layer.
+     */
+    resourceData: Uint8Array | null;
+
     /**
      * Get exports from another feature.
      * Only available for features listed in dependencies.
@@ -160,13 +169,6 @@ export interface FeatureInstance {
      * Typically includes managers and key systems.
      */
     exports?: Record<string, any>;
-
-    /**
-     * Late-init callback invoked after terrain data is loaded.
-     * Called in dependency order so features can safely access
-     * terrain-dependent exports from their dependencies.
-     */
-    onTerrainReady?(terrain: TerrainData, resourceData?: Uint8Array): void;
 
     /**
      * Cleanup function called when the feature is destroyed.

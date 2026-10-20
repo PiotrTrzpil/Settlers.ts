@@ -28,7 +28,6 @@ export class BuildingWorkerTracker {
     readonly occupants = new Map<number, number>();
 
     private readonly byBuilding: Index<number, number>;
-    private territoryCheck: TerritoryConnectivityCheck | null = null;
 
     constructor(
         private readonly runtimes: IndexedMap<number, UnitRuntime>,
@@ -36,14 +35,10 @@ export class BuildingWorkerTracker {
         private readonly locationManager: ISettlerBuildingLocationManager,
         private readonly gameState: GameState,
         private readonly eventBus: EventBus,
-        byBuilding: Index<number, number>
+        byBuilding: Index<number, number>,
+        private readonly territoryCheck: TerritoryConnectivityCheck
     ) {
         this.byBuilding = byBuilding;
-    }
-
-    /** Inject territory connectivity check (called by TerritoryFeature after load). */
-    setTerritoryCheck(check: TerritoryConnectivityCheck): void {
-        this.territoryCheck = check;
     }
 
     /** Get the assigned building ID for a settler, or null if unassigned. */
@@ -165,7 +160,7 @@ export class BuildingWorkerTracker {
         if (!entity || entity.subType !== unitType || entity.player !== player) {
             return false;
         }
-        if (this.territoryCheck && !this.territoryCheck(entity, { x: nearX, y: nearY }, player)) {
+        if (!this.territoryCheck(entity, { x: nearX, y: nearY }, player)) {
             return false;
         }
         return true;

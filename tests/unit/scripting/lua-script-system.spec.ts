@@ -10,6 +10,7 @@ import { LuaScriptSystem } from '@/game/scripting/lua-script-system';
 import { GameState } from '@/game/game-state';
 import { ConstructionSiteManager } from '@/game/features/building-construction';
 import { EventBus } from '@/game/event-bus';
+import { createTestMap } from '../helpers/test-map';
 
 describe('LuaScriptSystem', () => {
     let gameState: GameState;
@@ -18,7 +19,7 @@ describe('LuaScriptSystem', () => {
 
     beforeEach(() => {
         const eventBus = new EventBus();
-        gameState = new GameState(eventBus, () => 0);
+        gameState = new GameState(eventBus, createTestMap(128, 128).terrain, () => 0);
         constructionSiteManager = new ConstructionSiteManager(eventBus, gameState.rng, {} as any);
         scriptSystem = new LuaScriptSystem({
             gameState,

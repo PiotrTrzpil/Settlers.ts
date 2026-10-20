@@ -33,6 +33,7 @@ export const BuildingSiegeFeature: FeatureDefinition = {
         const siegeSystem = new BuildingSiegeSystem({
             gameState: ctx.gameState,
             eventBus: ctx.eventBus,
+            terrain: ctx.terrain,
             garrisonManager,
             combatSystem,
             unitReservation: ctx.unitReservation,

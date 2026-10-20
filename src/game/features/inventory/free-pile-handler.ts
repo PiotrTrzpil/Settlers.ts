@@ -17,7 +17,7 @@ import type { TerritoryManager } from '../territory';
 
 export interface FreePileConfig extends CoreDeps {
     inventoryManager: BuildingInventoryManager;
-    getTerritoryManager: () => TerritoryManager;
+    territoryManager: TerritoryManager;
 }
 
 export class FreePileHandler {
@@ -25,13 +25,13 @@ export class FreePileHandler {
     private readonly gameState: GameState;
     private readonly eventBus: EventBus;
     private readonly inventoryManager: BuildingInventoryManager;
-    private readonly getTerritoryManager: () => TerritoryManager;
+    private readonly territoryManager: TerritoryManager;
 
     constructor(config: FreePileConfig) {
         this.gameState = config.gameState;
         this.eventBus = config.eventBus;
         this.inventoryManager = config.inventoryManager;
-        this.getTerritoryManager = config.getTerritoryManager;
+        this.territoryManager = config.territoryManager;
     }
 
     registerEvents(): void {
@@ -47,7 +47,7 @@ export class FreePileHandler {
 
         // Assign ownership based on territory — free piles belong to whoever controls the land.
         if (entity.player === 0) {
-            const owner = this.getTerritoryManager().getOwner(entity);
+            const owner = this.territoryManager.getOwner(entity);
             if (owner >= 0) {
                 entity.player = owner;
             }

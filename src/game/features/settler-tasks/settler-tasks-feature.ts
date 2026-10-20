@@ -2,8 +2,8 @@
  * SettlerTask Feature -- wraps SettlerTaskSystem and all work handlers
  * as a self-registering feature.
  *
- * Work handlers that need terrain (water) are registered in onTerrainReady.
- * Domain features (trees, stones, crops, ore-signs) register their own handlers.
+ * The water handler (needs terrain) is registered here. Domain features
+ * (trees, stones, crops, ore-signs, pioneer) register their own handlers.
  */
 
 import type { FeatureDefinition, FeatureContext } from '../feature';
@@ -14,9 +14,9 @@ import type { WorkAreaExports } from '../work-areas/work-areas-feature';
 import type { ProductionControlExports } from '../production-control';
 import type { MaterialTransferExports } from '../material-transfer/material-transfer-feature';
 import type { CombatExports } from '../combat';
-import type { BuildingPileRegistry } from '../inventory';
 import type { SettlerLocationExports } from '../settler-location';
-import type { TerrainData } from '../../terrain';
+import type { OreVeinExports } from '../ore-veins';
+import type { TerritoryExports } from '../territory';
 import { SettlerTaskSystem, SearchType } from './index';
 import { ChoreoSystem } from '../../systems/choreo';
 import { createWaterHandler } from './work-handlers';
@@ -26,8 +26,6 @@ export interface SettlerTaskExports {
     settlerTaskSystem: SettlerTaskSystem;
     /** Shared choreography executor registry — features register task types here. */
     choreoSystem: ChoreoSystem;
-    /** Inject BuildingPileRegistry once game data is loaded. */
-    setPileRegistry: (registry: BuildingPileRegistry) => void;
 }
 
 export const SettlerTaskFeature: FeatureDefinition = {
@@ -41,21 +39,22 @@ export const SettlerTaskFeature: FeatureDefinition = {
         'material-transfer',
         'combat',
         'settler-location',
+        'ore-veins',
+        'territory',
     ],
 
     create(ctx: FeatureContext) {
         const { inventoryManager } = ctx.getFeature<InventoryExports>('inventory');
         const { buildingOverlayManager } = ctx.getFeature<BuildingOverlayFeatureExports>('building-overlays');
-        const { constructionSiteManager } = ctx.getFeature<BuildingConstructionExports>('building-construction');
+        const { constructionSiteManager, pileRegistry } =
+            ctx.getFeature<BuildingConstructionExports>('building-construction');
         const { workAreaStore } = ctx.getFeature<WorkAreaExports>('work-areas');
         const { productionControlManager } = ctx.getFeature<ProductionControlExports>('production-control');
         const { materialTransfer } = ctx.getFeature<MaterialTransferExports>('material-transfer');
         const { combatSystem } = ctx.getFeature<CombatExports>('combat');
         const { locationManager } = ctx.getFeature<SettlerLocationExports>('settler-location');
-
-        // BuildingPileRegistry (XML pile positions) -- conditionally set later when game data loads.
-        // The lazy getter in SettlerTaskSystem tolerates null until then.
-        let pileRegistry: BuildingPileRegistry | null = null;
+        const { oreVeinData } = ctx.getFeature<OreVeinExports>('ore-veins');
+        const { territoryManager } = ctx.getFeature<TerritoryExports>('territory');
 
         // Shared choreography executor registry — core executors registered in WorkerTaskExecutor ctor;
         // domain features (recruit) register their task types after create() runs.
@@ -68,7 +67,7 @@ export const SettlerTaskFeature: FeatureDefinition = {
             visualService: ctx.visualService,
             inventoryManager,
             eventBus: ctx.eventBus,
-            getPileRegistry: () => pileRegistry,
+            pileRegistry,
             workAreaStore,
             buildingOverlayManager,
             getProductionControlManager: () => productionControlManager,
@@ -77,15 +76,14 @@ export const SettlerTaskFeature: FeatureDefinition = {
             materialTransfer,
             isInCombat: combatSystem.isInCombat.bind(combatSystem),
             locationManager,
+            oreVeinData,
+            territoryCheck: (a, b, player) => territoryManager.areConnected(a, b, player),
         });
 
-        const exports: SettlerTaskExports = {
-            settlerTaskSystem,
-            choreoSystem,
-            setPileRegistry: (registry: BuildingPileRegistry) => {
-                pileRegistry = registry;
-            },
-        };
+        // Water handler -- needs terrain to find river tiles
+        settlerTaskSystem.registerWorkHandler(SearchType.WATER, createWaterHandler(ctx.terrain));
+
+        const exports: SettlerTaskExports = { settlerTaskSystem, choreoSystem };
 
         const settlerTaskPersistence = createSettlerTaskPersistence({
             gameState: ctx.gameState,
@@ -100,10 +98,6 @@ export const SettlerTaskFeature: FeatureDefinition = {
             systemGroup: 'Units',
             exports,
             persistence: [{ persistable: settlerTaskPersistence, after: ['constructionSites'] }],
-            onTerrainReady(terrain: TerrainData) {
-                // Water handler -- needs terrain to find river tiles
-                settlerTaskSystem.registerWorkHandler(SearchType.WATER, createWaterHandler(terrain));
-            },
         };
     },
 };

@@ -1,8 +1,7 @@
 /**
  * Movement system — per-unit controllers, bump resolution, and pathfinding.
  *
- *   const system = new MovementSystem({ eventBus, updatePosition, unitOccupancy, buildingOccupancy, rng });
- *   system.setTerrainData(groundType, width, height);
+ *   const system = new MovementSystem({ eventBus, updatePosition, unitOccupancy, buildingOccupancy, rng, terrain });
  *   system.createController(entityId, tile, speed);
  *   system.moveUnit(entityId, target);
  *   system.update(deltaSec);

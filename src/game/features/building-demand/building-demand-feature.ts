@@ -33,6 +33,7 @@ export const BuildingDemandFeature: FeatureDefinition = {
         const buildingDemandSystem = new BuildingDemandSystem({
             gameState: ctx.gameState,
             eventBus: ctx.eventBus,
+            terrain: ctx.terrain,
             findIdleSpecialist: (unitType, player, nearX, nearY) =>
                 settlerTaskSystem.findIdleSpecialist(unitType, player, nearX, nearY),
             assignJob: (unitId, job, moveTo) => settlerTaskSystem.assignJob(unitId, job, moveTo),

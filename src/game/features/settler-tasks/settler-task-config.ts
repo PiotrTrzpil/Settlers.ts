@@ -18,13 +18,15 @@ import type { ISettlerBuildingLocationManager } from '../settler-location';
 import type { TickScheduler } from '../../systems/tick-scheduler';
 import type { UnitRuntime } from './unit-state-machine';
 import type { EMaterialType } from '../../economy';
+import type { OreVeinData } from '../ore-veins/ore-vein-data';
+import type { TerritoryConnectivityCheck } from './building-worker-tracker';
 
 export interface SettlerTaskSystemConfig extends CoreDeps {
     tickScheduler: TickScheduler;
     choreoSystem: ChoreoSystem;
     visualService: EntityVisualService;
     inventoryManager: BuildingInventoryManager;
-    getPileRegistry: () => BuildingPileRegistry | null;
+    pileRegistry: BuildingPileRegistry;
     workAreaStore: WorkAreaStore;
     buildingOverlayManager: BuildingOverlayManager;
     getProductionControlManager?: () => ProductionControlManager;
@@ -33,6 +35,9 @@ export interface SettlerTaskSystemConfig extends CoreDeps {
     materialTransfer: MaterialTransfer;
     isInCombat?: (entityId: number) => boolean;
     locationManager: ISettlerBuildingLocationManager;
+    oreVeinData: OreVeinData;
+    /** Rejects worker↔building pairs in disconnected territory pockets. */
+    territoryCheck: TerritoryConnectivityCheck;
 }
 
 export interface SettlerDebugEntry {

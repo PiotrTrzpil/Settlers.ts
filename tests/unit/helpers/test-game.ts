@@ -12,7 +12,7 @@ import { EntityType, BuildingType, UnitType, getUnitTypeSpeed, type Entity, Tile
 import { Race } from '@/game/core/race';
 import { createTestMap } from './test-map';
 import { EventBus } from '@/game/event-bus';
-import { MovementSystem } from '@/game/systems/movement/index';
+import type { MovementSystem } from '@/game/systems/movement/index';
 import { SpatialGrid } from '@/game/spatial-grid';
 import { installTestGameData } from './test-game-data';
 
@@ -24,7 +24,9 @@ export function createGameState(): GameState {
     installTestGameData();
     const eventBus = new EventBus();
     eventBus.strict = true;
-    const state = new GameState(eventBus, () => 0);
+    // Terrain so pathfinding and bump validation work in tests
+    const map = createTestMap(DEFAULT_TEST_MAP_SIZE, DEFAULT_TEST_MAP_SIZE);
+    const state = new GameState(eventBus, map.terrain, () => 0);
     state.playerRaces = new Map([
         [0, Race.Roman],
         [1, Race.Roman],
@@ -42,24 +44,8 @@ export function createGameState(): GameState {
     state.initSpatialIndex(spatialIndex);
     spatialIndex.rebuildAllCells();
 
-    const movement = new MovementSystem({
-        eventBus,
-        updatePosition: (id, newPos) => {
-            state.updateEntityPosition(id, newPos);
-            return true;
-        },
-        unitOccupancy: state.unitOccupancy,
-        buildingOccupancy: state.buildingOccupancy,
-        rng: state.rng,
-    });
-    state.initMovement(movement);
-
-    // Set terrain data so pathfinding and bump validation work in tests
-    const map = createTestMap(DEFAULT_TEST_MAP_SIZE, DEFAULT_TEST_MAP_SIZE);
-    movement.setTerrainData(map.groundType, map.mapSize.width, map.mapSize.height);
-
     // Wire entity lifecycle events (mirrors GameServices subscriptions)
-    wireEntityLifecycleEvents(eventBus, movement, state);
+    wireEntityLifecycleEvents(eventBus, state.movement, state);
     return state;
 }
 

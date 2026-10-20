@@ -41,6 +41,8 @@ export interface FeatureRegistryConfig extends CoreDeps {
     unitReservation: UnitReservationRegistry;
     executeCommand: ExecuteCommand;
     tickScheduler: TickScheduler;
+    terrain: TerrainData;
+    resourceData: Uint8Array | null;
 }
 
 /**
@@ -219,18 +221,6 @@ export class FeatureRegistry {
     }
 
     /**
-     * Forward terrain data to all features that declared onTerrainReady.
-     * Called in load order so features can safely access terrain-dependent
-     * exports from their dependencies.
-     */
-    setTerrainData(terrain: TerrainData, resourceData?: Uint8Array): void {
-        for (const id of this.loadedIds) {
-            const instance = this.instances.get(id);
-            instance?.onTerrainReady?.(terrain, resourceData);
-        }
-    }
-
-    /**
      * Notify all features that snapshot restoration is complete.
      * Called after entity table + all feature stores have been deserialized.
      * Features use this to rebuild derived state (spatial indices, caches, etc.).
@@ -347,6 +337,8 @@ export class FeatureRegistry {
             unitReservation: this.config.unitReservation,
             executeCommand: this.config.executeCommand,
             tickScheduler: this.config.tickScheduler,
+            terrain: this.config.terrain,
+            resourceData: this.config.resourceData,
 
             getFeature: <T>(featureId: string): T => {
                 if (!allowedSet.has(featureId)) {

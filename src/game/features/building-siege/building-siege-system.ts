@@ -16,6 +16,7 @@
 
 import type { TickSystem } from '../../core/tick-system';
 import type { GameState } from '../../game-state';
+import type { TerrainData } from '../../terrain';
 import type { EventBus } from '../../event-bus';
 import { EntityType, UnitType, BuildingType, type Entity, type Tile, tileKey, getEntityIfType } from '../../entity';
 import { isDarkTribe } from '../../core/race';
@@ -56,6 +57,7 @@ export class BuildingSiegeSystem implements TickSystem {
     private readonly sieges = new Map<number, SiegeState>();
     private readonly gameState: GameState;
     private readonly eventBus: EventBus;
+    private readonly terrain: TerrainData;
     private readonly garrisonManager: TowerGarrisonManager;
     private readonly combatSystem: CombatSystem;
     private readonly unitReservation: UnitReservationRegistry;
@@ -70,6 +72,7 @@ export class BuildingSiegeSystem implements TickSystem {
     constructor(cfg: BuildingSiegeSystemConfig) {
         this.gameState = cfg.gameState;
         this.eventBus = cfg.eventBus;
+        this.terrain = cfg.terrain;
         this.garrisonManager = cfg.garrisonManager;
         this.combatSystem = cfg.combatSystem;
         this.unitReservation = cfg.unitReservation;
@@ -483,6 +486,7 @@ export class BuildingSiegeSystem implements TickSystem {
 
         dispatchUnitToGarrison(capturer.id, buildingId, {
             gameState: this.gameState,
+            terrain: this.terrain,
             unitReservation: this.unitReservation,
             settlerTaskSystem: this.settlerTaskSystem,
         });

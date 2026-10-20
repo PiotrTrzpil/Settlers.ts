@@ -13,7 +13,8 @@ import {
     clearBuildingFootprintBlock as clearBuildingFootprintBlockFn,
     restoreBuildingFootprintBlock as restoreBuildingFootprintBlockFn,
 } from './state/building-footprint-block';
-import type { MovementSystem } from './systems/movement/index';
+import { MovementSystem } from './systems/movement/index';
+import type { TerrainData } from './terrain';
 import { SeededRng, createGameRng } from './core/rng';
 import { EventBus } from './event-bus';
 import { SelectionManager } from './ui/selection-manager';
@@ -68,7 +69,7 @@ export interface AddBuildingOptions {
  *
  * Extracted concerns (owned here but encapsulated in dedicated classes):
  * - Selection state → SelectionManager
- * - Movement → MovementSystem (created externally, set via initMovement)
+ * - Movement → MovementSystem (created in the constructor; GameState owns its occupancy maps and rng)
  */
 export class GameState {
     public entities: Entity[] = [];
@@ -84,11 +85,11 @@ export class GameState {
     /** Spatial hash with territory-aware cell states — set via initSpatialIndex() */
     public spatialIndex!: SpatialGrid;
 
-    /** Movement system for all units — set by GameServices before adding entities */
-    public movement!: MovementSystem;
+    /** Movement system for all units */
+    public readonly movement: MovementSystem;
 
     /** Adapter providing UnitStateView lookup — wraps movement system */
-    public unitStates!: UnitStateMap;
+    public readonly unitStates: UnitStateMap;
 
     /** Seeded RNG for deterministic game logic — use this instead of Math.random() */
     public readonly rng: SeededRng;
@@ -119,10 +120,22 @@ export class GameState {
     /** Event bus for entity lifecycle events */
     private readonly eventBus: EventBus;
 
-    constructor(eventBus: EventBus, currentPlayerFn: () => number, seed?: number) {
+    constructor(eventBus: EventBus, terrain: TerrainData, currentPlayerFn: () => number, seed?: number) {
         this.eventBus = eventBus;
         this.rng = createGameRng(seed);
         this.selection = new SelectionManager(this, currentPlayerFn);
+        this.movement = new MovementSystem({
+            eventBus,
+            updatePosition: (id, newPos) => {
+                this.updateEntityPosition(id, newPos);
+                return true;
+            },
+            unitOccupancy: this.unitOccupancy,
+            buildingOccupancy: this.buildingOccupancy,
+            rng: this.rng,
+            terrain: { groundType: terrain.groundType, mapWidth: terrain.width, mapHeight: terrain.height },
+        });
+        this.unitStates = new UnitStateMap(this.movement);
     }
 
     /**
@@ -131,15 +144,6 @@ export class GameState {
      */
     public allocateJobId(): number {
         return this.nextJobId++;
-    }
-
-    /**
-     * Initialize the movement system (and legacy unitStates adapter).
-     * Called by GameServices before any entities are added.
-     */
-    public initMovement(movement: MovementSystem): void {
-        this.movement = movement;
-        this.unitStates = new UnitStateMap(movement);
     }
 
     /**

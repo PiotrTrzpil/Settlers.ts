@@ -6,6 +6,7 @@
  */
 
 import type { GameState } from '@/game/game-state';
+import type { TerrainData } from '@/game/terrain';
 import type { UnitReservationRegistry } from '@/game/systems/unit-reservation';
 import type { SettlerTaskSystem } from '@/game/features/settler-tasks';
 import { choreo } from '@/game/systems/choreo/choreo-builder';
@@ -16,6 +17,7 @@ const log = createLogger('GarrisonDispatch');
 
 export interface GarrisonDispatchDeps {
     gameState: GameState;
+    terrain: TerrainData;
     unitReservation: UnitReservationRegistry;
     settlerTaskSystem: SettlerTaskSystem;
 }
@@ -27,7 +29,7 @@ export interface GarrisonDispatchDeps {
  * On failure, all partial state is rolled back (reservation, worker assignment).
  */
 export function dispatchUnitToGarrison(unitId: number, buildingId: number, deps: GarrisonDispatchDeps): boolean {
-    const { gameState, unitReservation, settlerTaskSystem } = deps;
+    const { gameState, terrain, unitReservation, settlerTaskSystem } = deps;
 
     unitReservation.reserve(unitId, {
         purpose: 'garrison-en-route',
@@ -35,7 +37,9 @@ export function dispatchUnitToGarrison(unitId: number, buildingId: number, deps:
     });
 
     try {
-        const job = choreo('WORKER_DISPATCH', JobKind.Garrison).goToDoorAndEnter(buildingId).build();
+        const job = choreo('WORKER_DISPATCH', JobKind.Garrison)
+            .goToDoorAndEnter(buildingId, { gameState, terrain })
+            .build();
         const assigned = settlerTaskSystem.assignJob(unitId, job, job.targetPos ?? undefined);
 
         if (assigned) {

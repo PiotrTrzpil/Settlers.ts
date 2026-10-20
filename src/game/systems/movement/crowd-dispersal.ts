@@ -63,14 +63,10 @@ export function runCrowdDispersal(
     controllers: Iterable<MovementController>,
     unitOccupancy: Map<string, number>,
     buildingOccupancy: Set<string>,
-    terrain: PathfindingTerrain | undefined,
+    terrain: PathfindingTerrain,
     rng: SeededRng,
     deltaSec: number
 ): void {
-    if (!terrain) {
-        return;
-    }
-
     for (const ctrl of controllers) {
         if (ctrl.state !== 'idle' || ctrl.busy || ctrl.goal) {
             continue;
