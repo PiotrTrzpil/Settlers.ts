@@ -1,61 +1,48 @@
 /**
- * Crowd dispersal — prevents idle units from clumping by nudging
- * crowded units to random free neighbors (flocking repulsion).
+ * Crowd dispersal — idle units in a clump step to a free neighbor.
  */
 
-import { tileKey, isInMapBounds, type Tile } from '../../entity';
+import { tileKey, isInMapBounds, type Tile } from '../../core/coordinates';
 import { getAllNeighbors } from '../hex-directions';
 import { isPassable } from '../../terrain';
+import type { SeededRng } from '../../core/rng';
+import type { PathfindingTerrain } from '../pathfinding';
 import type { MovementController } from './movement-controller';
 import type { MovementSystem } from './movement-system';
 
-/** Minimum occupied neighbors to trigger dispersal. */
 const CROWD_THRESHOLD = 3;
-
-/** Cooldown range in seconds to prevent jitter. */
 const MIN_COOLDOWN = 0.5;
 const MAX_COOLDOWN = 1.0;
 
 const dispersalCooldowns = new Map<number, number>();
 
-/** Clean up cooldown entry when a controller is removed. */
 export function clearDispersalCooldown(entityId: number): void {
     dispersalCooldowns.delete(entityId);
 }
 
-/** Check if a neighbor tile is in-bounds and passable (not building-blocked). */
-function isValidNeighbor(
-    n: Tile,
-    terrainGroundType: Uint8Array,
-    terrainMapWidth: number,
-    terrainMapHeight: number,
-    buildingOccupancy: Set<string>
-): boolean {
-    if (!isInMapBounds(n, terrainMapWidth, terrainMapHeight)) {
+function isValidNeighbor(n: Tile, terrain: PathfindingTerrain, buildingOccupancy: Set<string>): boolean {
+    if (!isInMapBounds(n, terrain.mapWidth, terrain.mapHeight)) {
         return false;
     }
-    const nIdx = n.x + n.y * terrainMapWidth;
-    if (!isPassable(terrainGroundType[nIdx]!)) {
+    const nIdx = n.x + n.y * terrain.mapWidth;
+    if (!isPassable(terrain.groundType[nIdx]!)) {
         return false;
     }
     return !buildingOccupancy.has(tileKey(n));
 }
 
-/** Classify valid neighbors into occupied vs free buckets. Returns true if dispersal should trigger. */
 function shouldDisperseAt(
     ctrl: MovementController,
     unitOccupancy: Map<string, number>,
     buildingOccupancy: Set<string>,
-    terrainGroundType: Uint8Array,
-    terrainMapWidth: number,
-    terrainMapHeight: number,
+    terrain: PathfindingTerrain,
     outFree: Tile[]
 ): boolean {
     const neighbors = getAllNeighbors({ x: ctrl.tileX, y: ctrl.tileY });
     let occupiedCount = 0;
 
     for (const n of neighbors) {
-        if (!isValidNeighbor(n, terrainGroundType, terrainMapWidth, terrainMapHeight, buildingOccupancy)) {
+        if (!isValidNeighbor(n, terrain, buildingOccupancy)) {
             continue;
         }
         if (unitOccupancy.has(tileKey(n))) {
@@ -69,20 +56,18 @@ function shouldDisperseAt(
 }
 
 /**
- * Run one dispersal pass over idle controllers.
- * Call after the main movement update loop.
+ * One dispersal pass over idle controllers. Call after the main movement update.
  */
 export function runCrowdDispersal(
     movementSystem: MovementSystem,
     controllers: Iterable<MovementController>,
     unitOccupancy: Map<string, number>,
     buildingOccupancy: Set<string>,
-    terrainGroundType: Uint8Array | undefined,
-    terrainMapWidth: number,
-    terrainMapHeight: number,
+    terrain: PathfindingTerrain | undefined,
+    rng: SeededRng,
     deltaSec: number
 ): void {
-    if (!terrainGroundType) {
+    if (!terrain) {
         return;
     }
 
@@ -91,7 +76,6 @@ export function runCrowdDispersal(
             continue;
         }
 
-        // Tick cooldown — no entry means no cooldown active
         const cooldown = dispersalCooldowns.get(ctrl.entityId);
         // eslint-disable-next-line no-restricted-syntax -- cooldown is nullable by design; 0 means "just expired"
         const remaining = (cooldown ?? 0) - deltaSec;
@@ -105,27 +89,12 @@ export function runCrowdDispersal(
         }
 
         const freeNeighbors: Tile[] = [];
-        if (
-            !shouldDisperseAt(
-                ctrl,
-                unitOccupancy,
-                buildingOccupancy,
-                terrainGroundType,
-                terrainMapWidth,
-                terrainMapHeight,
-                freeNeighbors
-            )
-        ) {
+        if (!shouldDisperseAt(ctrl, unitOccupancy, buildingOccupancy, terrain, freeNeighbors)) {
             continue;
         }
 
-        // Pick a random free neighbor and move there
-        // eslint-disable-next-line sonarjs/pseudo-random -- game dispersal, not security-sensitive
-        const dest = freeNeighbors[Math.floor(Math.random() * freeNeighbors.length)]!;
+        const dest = rng.pick(freeNeighbors)!;
         movementSystem.moveUnit(ctrl.entityId, dest);
-
-        // Set randomized cooldown
-        // eslint-disable-next-line sonarjs/pseudo-random -- game dispersal, not security-sensitive
-        dispersalCooldowns.set(ctrl.entityId, MIN_COOLDOWN + Math.random() * (MAX_COOLDOWN - MIN_COOLDOWN));
+        dispersalCooldowns.set(ctrl.entityId, MIN_COOLDOWN + rng.next() * (MAX_COOLDOWN - MIN_COOLDOWN));
     }
 }

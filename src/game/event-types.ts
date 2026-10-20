@@ -105,7 +105,7 @@ export interface GameEventsCore {
     // === Movement Events ===
 
     /**
-     * Emitted when a unit begins pathing (startPath or redirectPath).
+     * Emitted when a unit begins pathing (MovementController.setPath).
      * SettlerTaskSystem uses this to start walk animation immediately —
      * jobs/commands only call moveUnit and never touch animation.
      */

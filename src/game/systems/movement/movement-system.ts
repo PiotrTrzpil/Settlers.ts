@@ -1,161 +1,85 @@
-import { EntityType, tileKey, type Tile } from '../../entity';
+import { tileKey, type Tile } from '../../core/coordinates';
 import { MovementController, MovementState } from './movement-controller';
-import { PathfindingService } from './pathfinding-service';
+import { findPathAStar, type PathfindingFailureInfo, type PathFindResult } from '../pathfinding';
 import type { TickSystem } from '../../core/tick-system';
 import type { EventBus } from '../../event-bus';
 import { type ComponentStore, mapStore } from '../../ecs';
 import { LogHandler } from '@/utilities/log-handler';
-import { consumeLastPathfindingFailure, setPathfindingEntityContext } from '../pathfinding';
-import { BumpResolver } from './bump-resolver';
+import type { SeededRng } from '../../core/rng';
+import { BumpResolver, type BumpResolverDeps } from './bump-resolver';
 import { runCrowdDispersal, clearDispersalCooldown } from './crowd-dispersal';
+import { occupantAt, relocateOccupant } from './occupancy';
 
 const log = new LogHandler('MovementSystem');
 
-type TileWithEntityType = Tile & { type: EntityType };
+/** After waiting this long, repath around the blocker. */
+const REPATH_WAIT_TIMEOUT = 0.5;
+/** After this long, clear the path and let the task system reassign. */
+const GIVEUP_WAIT_TIMEOUT = 2.0;
 
-/** After waiting this long, repath to find an alternative route around terrain */
-const REPATH_WAIT_TIMEOUT = 0.5; // seconds
-
-/** After this long, clear path and let the task system reassign */
-const GIVEUP_WAIT_TIMEOUT = 2.0; // seconds
-
-/**
- * Callback for updating entity position in the game state.
- * Returns true if the update was successful.
- */
 export type UpdatePositionFn = (entityId: number, newPos: Tile) => boolean;
 
-/**
- * Callback for getting entity information.
- */
-export type GetEntityFn = (entityId: number) => TileWithEntityType | undefined;
-
-/**
- * Configuration for MovementSystem dependencies.
- */
 export interface MovementSystemConfig {
     eventBus: EventBus;
     updatePosition: UpdatePositionFn;
-    getEntity: GetEntityFn;
     unitOccupancy: Map<string, number>;
     buildingOccupancy: Set<string>;
-    buildingFootprint: Set<string>;
+    rng: SeededRng;
 }
 
 /**
- * MovementSystem manages all unit movement controllers and coordinates
- * their updates, bump resolution, and pathfinding.
- *
- * Responsibilities:
- *   - Controller lifecycle (create / get / remove)
- *   - Per-tick update loop (advance, move, finalize)
- *   - Delegating collision resolution to BumpResolver
- *   - Delegating pathfinding to PathfindingService
- *   - Emitting movement-stopped events
+ * Coordinates per-unit controllers, bump resolution, and pathfinding.
  */
 export class MovementSystem implements TickSystem {
-    private controllers: Map<number, MovementController> = new Map();
-
-    /** Uniform read-only view for cross-cutting queries */
+    private readonly controllers: Map<number, MovementController> = new Map();
     readonly store: ComponentStore<MovementController> = mapStore(this.controllers);
 
-    // Terrain and occupancy references
     private readonly unitOccupancy: Map<string, number>;
     private readonly buildingOccupancy: Set<string>;
-    private readonly buildingFootprint: Set<string>;
-
-    // Event bus for notifying other systems of movement changes
     private readonly eventBus: EventBus;
-
-    /** Enable verbose movement events (pathFound, pathFailed, bump, wait) */
-    private _verbose = false;
-
-    get verbose(): boolean {
-        return this._verbose;
-    }
-
-    set verbose(value: boolean) {
-        this._verbose = value;
-        this.bumpResolverDeps.verbose = value;
-    }
-
-    // Pathfinding service
-    private readonly pathfinder: PathfindingService;
-
-    // Bump resolution
-    private readonly bumpResolverDeps: {
-        controllers: Map<number, MovementController>;
-        unitOccupancy: Map<string, number>;
-        buildingOccupancy: Set<string>;
-        eventBus: EventBus;
-        pathfinder: PathfindingService;
-        updatePositionFn: UpdatePositionFn;
-        terrainGroundType: Uint8Array | undefined;
-        terrainMapWidth: number;
-        terrainMapHeight: number;
-        verbose: boolean;
-    };
-
-    private readonly bumpResolver: BumpResolver;
-
-    // Cached callbacks
     private readonly updatePositionFn: UpdatePositionFn;
-    private readonly getEntityFn: GetEntityFn;
+    private readonly rng: SeededRng;
+    private readonly prevStates: Map<number, MovementState> = new Map();
 
-    // Previous movement state per controller for change detection
-    private prevStates: Map<number, MovementState> = new Map();
+    private readonly shared: BumpResolverDeps;
+    private readonly bumpResolver: BumpResolver;
 
     constructor(config: MovementSystemConfig) {
         this.eventBus = config.eventBus;
         this.updatePositionFn = config.updatePosition;
-        this.getEntityFn = config.getEntity;
         this.unitOccupancy = config.unitOccupancy;
         this.buildingOccupancy = config.buildingOccupancy;
-        this.buildingFootprint = config.buildingFootprint;
-        this.pathfinder = new PathfindingService();
-        this.pathfinder.setBuildingOccupancy(config.buildingOccupancy);
-        this.pathfinder.setUnitOccupancy(config.unitOccupancy);
+        this.rng = config.rng;
 
-        this.bumpResolverDeps = {
+        this.shared = {
             controllers: this.controllers,
             unitOccupancy: config.unitOccupancy,
             buildingOccupancy: config.buildingOccupancy,
             eventBus: config.eventBus,
-            pathfinder: this.pathfinder,
             updatePositionFn: config.updatePosition,
-            terrainGroundType: undefined,
-            terrainMapWidth: 0,
-            terrainMapHeight: 0,
-            verbose: this._verbose,
+            terrain: undefined,
+            verbose: false,
         };
-        this.bumpResolver = new BumpResolver(this.bumpResolverDeps);
+        this.bumpResolver = new BumpResolver(this.shared);
     }
 
-    // -------------------------------------------------------------------------
-    // Setup
-    // -------------------------------------------------------------------------
-
-    /**
-     * Set the terrain data for pathfinding and bump validation.
-     */
-    setTerrainData(groundType: Uint8Array, groundHeight: Uint8Array, mapWidth: number, mapHeight: number): void {
-        this.pathfinder.setTerrainData(groundType, groundHeight, mapWidth, mapHeight);
-        this.bumpResolverDeps.terrainGroundType = groundType;
-        this.bumpResolverDeps.terrainMapWidth = mapWidth;
-        this.bumpResolverDeps.terrainMapHeight = mapHeight;
+    get verbose(): boolean {
+        return this.shared.verbose;
     }
 
-    // -------------------------------------------------------------------------
-    // Controller lifecycle
-    // -------------------------------------------------------------------------
+    set verbose(value: boolean) {
+        this.shared.verbose = value;
+    }
+
+    setTerrainData(groundType: Uint8Array, mapWidth: number, mapHeight: number): void {
+        this.shared.terrain = { groundType, mapWidth, mapHeight };
+    }
 
     createController(entityId: number, tile: Tile, speed: number): MovementController {
         const controller = new MovementController(entityId, tile, speed);
         this.controllers.set(entityId, controller);
         const existing = this.unitOccupancy.get(tileKey(tile));
         if (existing !== undefined && existing !== entityId) {
-            // Overwriting desyncs the other unit: it keeps standing here but becomes
-            // invisible to bump/push logic. Callers must clear the tile first.
             log.warn(
                 `createController: unit ${entityId} overwrites occupancy of unit ${existing} at (${tile.x},${tile.y})`
             );
@@ -190,49 +114,33 @@ export class MovementSystem implements TickSystem {
     }
 
     /**
-     * Repath all moving units whose remaining path passes through any of the given tiles.
-     * Used when building footprint is blocked mid-game (e.g. construction site evacuation)
-     * so in-flight units route around the newly blocked area.
+     * Repath moving units whose remaining path crosses any of `blockedKeys`.
+     * Used when a building footprint becomes blocked mid-game.
      */
     repathUnitsThrough(blockedKeys: Set<string>, excludeIds?: Set<number>): void {
         for (const ctrl of this.controllers.values()) {
-            if (excludeIds?.has(ctrl.entityId)) {
-                continue;
-            }
-            if (ctrl.state !== 'moving' || !ctrl.hasPath) {
+            if (excludeIds?.has(ctrl.entityId) || ctrl.state !== 'moving' || !ctrl.hasPath) {
                 continue;
             }
             const remaining = ctrl.path.slice(ctrl.pathIndex);
-            const passesThrough = remaining.some(wp => blockedKeys.has(tileKey(wp)));
-            if (!passesThrough) {
+            if (!remaining.some(wp => blockedKeys.has(tileKey(wp)))) {
                 continue;
             }
-
             const goal = ctrl.goal;
             if (!goal) {
                 continue;
             }
-            setPathfindingEntityContext(ctrl.entityId);
-            this.pathfinder.setPathfindingEntityId(ctrl.entityId);
-            const newPath = this.pathfinder.findPath(ctrl.tileX, ctrl.tileY, goal.x, goal.y);
-            setPathfindingEntityContext(undefined);
-            this.pathfinder.setPathfindingEntityId(undefined);
-            if (newPath && newPath.length > 0) {
-                ctrl.replacePath(newPath);
+            const result = this.findPath({ x: ctrl.tileX, y: ctrl.tileY }, goal, ctrl.entityId);
+            if (result.ok && result.path.length > 0) {
+                ctrl.setPath(result.path, true);
             } else {
                 ctrl.clearPath();
             }
         }
     }
 
-    // -------------------------------------------------------------------------
-    // Movement commands
-    // -------------------------------------------------------------------------
-
     /**
-     * Issue a move command to a unit.
-     * Calculates path and sets up the controller for movement.
-     * @returns true if a valid path was found
+     * Issue a move command. Returns true if a path was found (including already-at-goal).
      */
     moveUnit(entityId: number, target: Tile): boolean {
         const controller = this.controllers.get(entityId);
@@ -240,102 +148,58 @@ export class MovementSystem implements TickSystem {
             return false;
         }
 
-        const fromX = controller.tileX;
-        const fromY = controller.tileY;
-
-        setPathfindingEntityContext(entityId);
-        this.pathfinder.setPathfindingEntityId(entityId);
-        const path = this.pathfinder.findPath(fromX, fromY, target.x, target.y);
-        setPathfindingEntityContext(undefined);
-        this.pathfinder.setPathfindingEntityId(undefined);
-
-        if (!path) {
-            this.emitPathFailed(entityId, fromX, fromY, target.x, target.y);
+        const from: Tile = { x: controller.tileX, y: controller.tileY };
+        const result = this.findPath(from, target, entityId);
+        if (!result.ok) {
+            this.emitPathFailed(entityId, from, target, result.failure);
             return false;
         }
-
-        // Already at goal — no movement needed, report success
-        if (path.length === 0) {
+        if (result.path.length === 0) {
             return true;
         }
 
-        const redirect = controller.isInTransit;
-        if (redirect) {
-            controller.redirectPath(path);
-        } else {
-            controller.startPath(path);
-        }
-
-        // Always emit — walk animation (and other listeners) react without callers
-        // needing to know about visuals. Verbose pathFound is diagnostics-only.
+        controller.setPath(result.path);
         this.eventBus.emit('unit:movementStarted', { unitId: entityId });
 
         if (this.verbose) {
             this.eventBus.emit('movement:pathFound', {
                 unitId: entityId,
-                fromX,
-                fromY,
+                fromX: from.x,
+                fromY: from.y,
                 toX: target.x,
                 toY: target.y,
-                pathLength: path.length,
-                redirect,
+                pathLength: result.path.length,
+                redirect: controller.isInTransit,
             });
         }
 
         return true;
     }
 
-    private emitPathFailed(unitId: number, fromX: number, fromY: number, toX: number, toY: number): void {
-        const diag = consumeLastPathfindingFailure();
+    private emitPathFailed(unitId: number, from: Tile, to: Tile, failure: PathfindingFailureInfo): void {
         this.eventBus.emit('movement:pathFailed', {
             unitId,
-            fromX,
-            fromY,
-            toX,
-            toY,
-            x: fromX,
-            y: fromY,
+            fromX: from.x,
+            fromY: from.y,
+            toX: to.x,
+            toY: to.y,
+            x: from.x,
+            y: from.y,
             level: 'warn',
-            // eslint-disable-next-line no-restricted-syntax -- diag is optional pathfinding diagnostic data; fallbacks are sentinel defaults when diagnostics are unavailable
-            startPassable: diag?.startPassable ?? true,
-            // eslint-disable-next-line no-restricted-syntax -- diag is optional pathfinding diagnostic data; fallbacks are sentinel defaults when diagnostics are unavailable
-            goalPassable: diag?.goalPassable ?? true,
-            // eslint-disable-next-line no-restricted-syntax -- diag is optional pathfinding diagnostic data; fallbacks are sentinel defaults when diagnostics are unavailable
-            startInBuilding: diag?.startInBuilding ?? false,
-            // eslint-disable-next-line no-restricted-syntax -- diag is optional pathfinding diagnostic data; fallbacks are sentinel defaults when diagnostics are unavailable
-            goalInBuilding: diag?.goalInBuilding ?? false,
-            nodesSearched: diag?.nodesSearched ?? -1,
-            // eslint-disable-next-line no-restricted-syntax -- diag is optional pathfinding diagnostic data; fallbacks are sentinel defaults when diagnostics are unavailable
-            exhausted: diag?.exhausted ?? false,
-            // eslint-disable-next-line no-restricted-syntax -- diag is optional pathfinding diagnostic data; empty string is the correct default when no neighbor info available
-            neighborInfo: diag?.neighborInfo ?? '',
+            ...failure,
         });
     }
 
-    /**
-     * Push any unit standing at (x, y) to a free passable neighbor tile.
-     * Used when spawning a unit at a specific tile (e.g. building door).
-     * Returns true if the tile is now free (was empty or push succeeded).
-     */
+    /** Push any unit standing at `tile` to a free neighbor. */
     pushUnitAt(tile: Tile): boolean {
         return this.bumpResolver.pushUnitAt(tile);
     }
 
-    // -------------------------------------------------------------------------
-    // Tick
-    // -------------------------------------------------------------------------
-
-    /** TickSystem interface — delegates to update(). */
     tick(dt: number): void {
         this.update(dt);
     }
 
-    /**
-     * Update all movement controllers for one tick.
-     * @param deltaSec Time since last tick in seconds
-     */
     update(deltaSec: number): void {
-        // Sort by entity ID for deterministic iteration order
         const sortedIds = [...this.controllers.keys()].sort((a, b) => a - b);
         for (const entityId of sortedIds) {
             const controller = this.controllers.get(entityId);
@@ -354,9 +218,8 @@ export class MovementSystem implements TickSystem {
             this.controllers.values(),
             this.unitOccupancy,
             this.buildingOccupancy,
-            this.bumpResolverDeps.terrainGroundType,
-            this.bumpResolverDeps.terrainMapWidth,
-            this.bumpResolverDeps.terrainMapHeight,
+            this.shared.terrain,
+            this.rng,
             deltaSec
         );
     }
@@ -372,8 +235,6 @@ export class MovementSystem implements TickSystem {
                 break;
             }
 
-            // If next waypoint is building-blocked and the unit is NOT on a blocked tile
-            // itself (i.e. it's trying to enter, not escape), repath around it.
             const wpKey = tileKey(wp);
             if (this.buildingOccupancy.has(wpKey)) {
                 const currentKey = tileKey({ x: controller.tileX, y: controller.tileY });
@@ -383,8 +244,7 @@ export class MovementSystem implements TickSystem {
                 }
             }
 
-            const occupantId = this.getUnitAt(tileKey(wp), controller.entityId);
-
+            const occupantId = occupantAt(this.unitOccupancy, wpKey, controller.entityId);
             if (occupantId === undefined) {
                 this.stepForward(controller);
             } else if (!this.resolveCollision(controller, occupantId, deltaSec)) {
@@ -394,38 +254,18 @@ export class MovementSystem implements TickSystem {
 
         controller.finalizeTick();
         this.detectTeleport(controller, prevState);
-
         controller.updateLastVisualPosition();
         this.emitMovementStopped(controller, prevState);
         this.prevStates.set(controller.entityId, controller.state);
     }
 
-    // -------------------------------------------------------------------------
-    // Tile occupancy queries
-    // -------------------------------------------------------------------------
-
-    private getUnitAt(key: string, selfId: number): number | undefined {
-        const occupant = this.unitOccupancy.get(key);
-        if (occupant !== undefined && occupant !== selfId) {
-            return occupant;
-        }
-        return undefined;
-    }
-
-    // -------------------------------------------------------------------------
-    // Step & collision helpers
-    // -------------------------------------------------------------------------
-
     private stepForward(controller: MovementController): void {
-        const oldKey = tileKey({ x: controller.tileX, y: controller.tileY });
+        const from: Tile = { x: controller.tileX, y: controller.tileY };
         const newPos = controller.executeMove();
         if (newPos) {
-            if (this.unitOccupancy.get(oldKey) === controller.entityId) {
-                this.unitOccupancy.delete(oldKey);
-            }
-            this.unitOccupancy.set(tileKey(newPos), controller.entityId);
+            relocateOccupant(this.unitOccupancy, controller.entityId, from, newPos);
             this.updatePositionFn(controller.entityId, newPos);
-            if (this._verbose) {
+            if (this.verbose) {
                 this.eventBus.emit('movement:step', {
                     unitId: controller.entityId,
                     x: newPos.x,
@@ -447,28 +287,22 @@ export class MovementSystem implements TickSystem {
         }
 
         if (controller.cumulativeWaitTime > GIVEUP_WAIT_TIMEOUT) {
-            if (this._verbose) {
-                this.eventBus.emit('movement:escalation', {
-                    unitId: controller.entityId,
-                    result: 'gave_up',
-                });
+            if (this.verbose) {
+                this.eventBus.emit('movement:escalation', { unitId: controller.entityId, result: 'gave_up' });
             }
             controller.clearPath();
             return false;
         }
 
         if (controller.waitTime > REPATH_WAIT_TIMEOUT) {
-            if (this._verbose) {
-                this.eventBus.emit('movement:escalation', {
-                    unitId: controller.entityId,
-                    result: 'repath',
-                });
+            if (this.verbose) {
+                this.eventBus.emit('movement:escalation', { unitId: controller.entityId, result: 'repath' });
             }
             this.repathFromCurrent(controller);
             return false;
         }
 
-        if (this._verbose) {
+        if (this.verbose) {
             const wp = controller.nextWaypoint!;
             this.eventBus.emit('movement:blocked', {
                 unitId: controller.entityId,
@@ -482,29 +316,28 @@ export class MovementSystem implements TickSystem {
         return false;
     }
 
+    private findPath(from: Tile, to: Tile, entityId: number): PathFindResult {
+        const terrain = this.shared.terrain;
+        if (!terrain) {
+            throw new Error('MovementSystem.findPath: terrain data not set');
+        }
+        return findPathAStar(from, to, terrain, this.buildingOccupancy, entityId);
+    }
+
     private repathFromCurrent(controller: MovementController): void {
         const goal = controller.goal;
         if (goal) {
-            setPathfindingEntityContext(controller.entityId);
-            this.pathfinder.setPathfindingEntityId(controller.entityId);
-            const newPath = this.pathfinder.findPath(controller.tileX, controller.tileY, goal.x, goal.y);
-            setPathfindingEntityContext(undefined);
-            this.pathfinder.setPathfindingEntityId(undefined);
-            if (newPath && newPath.length > 0) {
-                controller.replacePath(newPath);
+            const result = this.findPath({ x: controller.tileX, y: controller.tileY }, goal, controller.entityId);
+            if (result.ok && result.path.length > 0) {
+                controller.setPath(result.path, true);
             }
         }
         controller.resetWaitTime();
     }
 
-    // -------------------------------------------------------------------------
-    // Diagnostics
-    // -------------------------------------------------------------------------
-
     private detectTeleport(controller: MovementController, prevState: MovementState): void {
         const teleportDist = controller.detectTeleport();
         const steps = Math.max(1, controller.stepsTakenThisTick);
-        // Diagonal steps cover sqrt(2) ≈ 1.414 tile-coords, so use that as the per-step base
         const threshold = 1.5 * Math.SQRT2 * steps + 0.01;
         if (teleportDist > threshold) {
             console.warn(

@@ -7,14 +7,14 @@
  * Extracted from MovementSystem to keep file sizes manageable.
  */
 
-import { Tile, tileKey, isInMapBounds } from '../../entity';
+import { tileKey, isInMapBounds, type Tile } from '../../core/coordinates';
 import type { EventBus, GameEvents } from '../../event-bus';
 import { getAllNeighbors } from '../hex-directions';
 import { isPassable } from '../../terrain';
 import { MovementController } from './movement-controller';
-import type { IPathfinder } from './pathfinding-service';
 import type { UpdatePositionFn } from './movement-system';
-import { setPathfindingEntityContext } from '../pathfinding';
+import { findPathAStar, type PathfindingTerrain } from '../pathfinding';
+import { occupantAt, relocateOccupant } from './occupancy';
 
 /**
  * Score a candidate bump destination. Higher is better.
@@ -38,11 +38,8 @@ export interface BumpResolverDeps {
     unitOccupancy: Map<string, number>;
     buildingOccupancy: Set<string>;
     eventBus: EventBus;
-    pathfinder: IPathfinder;
     updatePositionFn: UpdatePositionFn;
-    terrainGroundType: Uint8Array | undefined;
-    terrainMapWidth: number;
-    terrainMapHeight: number;
+    terrain: PathfindingTerrain | undefined;
     verbose: boolean;
 }
 
@@ -155,12 +152,8 @@ export class BumpResolver {
 
     /** Relocate a pushed occupant to the target tile, keeping occupancy in sync. */
     private movePushedOccupant(occupant: MovementController, occupantId: number, target: Tile): void {
-        const oldKey = tileKey({ x: occupant.tileX, y: occupant.tileY });
-        if (this.deps.unitOccupancy.get(oldKey) === occupantId) {
-            this.deps.unitOccupancy.delete(oldKey);
-        }
+        relocateOccupant(this.deps.unitOccupancy, occupantId, { x: occupant.tileX, y: occupant.tileY }, target);
         occupant.handlePush(target.x, target.y);
-        this.deps.unitOccupancy.set(tileKey(target), occupantId);
         this.deps.updatePositionFn(occupantId, target);
         this.repathBumpedOccupant(occupant, target);
     }
@@ -170,30 +163,24 @@ export class BumpResolver {
      * in bounds, passable terrain, not blocked by a completed building.
      */
     isTilePassableForBump(tile: Tile): boolean {
-        if (!isInMapBounds(tile, this.deps.terrainMapWidth, this.deps.terrainMapHeight)) {
-            return false;
-        }
-        if (this.deps.terrainGroundType) {
-            const idx = tile.x + tile.y * this.deps.terrainMapWidth;
-            if (!isPassable(this.deps.terrainGroundType[idx]!)) {
+        const terrain = this.deps.terrain;
+        if (terrain) {
+            if (!isInMapBounds(tile, terrain.mapWidth, terrain.mapHeight)) {
+                return false;
+            }
+            const idx = tile.x + tile.y * terrain.mapWidth;
+            if (!isPassable(terrain.groundType[idx]!)) {
                 return false;
             }
         }
-        if (this.deps.buildingOccupancy.has(tileKey(tile))) {
-            return false;
-        }
-        return true;
+        return !this.deps.buildingOccupancy.has(tileKey(tile));
     }
 
     // ── Internal ──────────────────────────────────────────────────────────────
 
     /** Find the unit occupying a tile, excluding selfId. */
     private getUnitAt(key: string, selfId: number): number | undefined {
-        const occupant = this.deps.unitOccupancy.get(key);
-        if (occupant !== undefined && occupant !== selfId) {
-            return occupant;
-        }
-        return undefined;
+        return occupantAt(this.deps.unitOccupancy, key, selfId);
     }
 
     private canBumpOccupant(bumper: MovementController, occupant: MovementController): boolean {
@@ -262,12 +249,8 @@ export class BumpResolver {
                 toY: dest.y,
             });
         }
-        const oldKey = tileKey({ x: occupant.tileX, y: occupant.tileY });
-        if (this.deps.unitOccupancy.get(oldKey) === occupantId) {
-            this.deps.unitOccupancy.delete(oldKey);
-        }
+        relocateOccupant(this.deps.unitOccupancy, occupantId, { x: occupant.tileX, y: occupant.tileY }, dest);
         occupant.handlePush(dest.x, dest.y);
-        this.deps.unitOccupancy.set(tileKey(dest), occupantId);
         this.deps.updatePositionFn(occupantId, dest);
         this.repathBumpedOccupant(occupant, dest);
     }
@@ -283,14 +266,13 @@ export class BumpResolver {
 
     private repathBumpedOccupant(occupant: MovementController, dest: Tile): void {
         const goal = occupant.goal;
-        if (!goal) {
+        const terrain = this.deps.terrain;
+        if (!goal || !terrain) {
             return;
         }
-        setPathfindingEntityContext(occupant.entityId);
-        const newPath = this.deps.pathfinder.findPath(dest.x, dest.y, goal.x, goal.y);
-        setPathfindingEntityContext(undefined);
-        if (newPath && newPath.length > 0) {
-            occupant.replacePath(newPath);
+        const result = findPathAStar(dest, goal, terrain, this.deps.buildingOccupancy, occupant.entityId);
+        if (result.ok && result.path.length > 0) {
+            occupant.setPath(result.path, true);
         }
     }
 

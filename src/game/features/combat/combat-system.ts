@@ -16,13 +16,13 @@ import type { EventBus } from '../../event-bus';
 import type { Entity } from '../../entity';
 import { isUnitTypeMilitary, UnitType } from '../../entity';
 import {
-    resolveOutsideBuilding,
     findNearestEnemy as findNearestEnemyHelper,
     hasNearbyThreats as hasNearbyThreatsHelper,
     FIGHT_RANGE,
     RANGED_MELEE_THRESHOLD,
     SHOOT_RANGE,
 } from './combat-helpers';
+import { resolveOutsideBuilding } from '../../buildings/approach';
 import { hexDistanceTo } from '../../systems/hex-directions';
 import { CombatState, CombatStatus, createCombatState, getCombatStats, isRangedUnitType } from './combat-state';
 import { CombatVisuals } from './combat-animations';

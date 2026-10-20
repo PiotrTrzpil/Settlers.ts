@@ -1,42 +1,27 @@
 /**
- * A* Pathfinding Algorithm for Hex Grids.
+ * A* pathfinding on the isometric diamond grid.
  *
- * This module provides the core A* implementation optimized for hex grids
- * with uniform movement costs. Key features:
- *
- * - Uses bucket priority queue for O(1) operations on uniform-cost grids
- * - Hex-aware heuristic (cube coordinate distance)
- * - Tie-breaking to prevent zigzag paths
- * - Path smoothing post-processing
- *
- * Usage:
- *   const path = findPath(startX, startY, goalX, goalY, terrain);
- *   // Returns array of waypoints from start (exclusive) to goal (inclusive)
+ * Uniform-cost search with a bucket priority queue, hex-distance heuristic,
+ * and a direction-alignment tie-breaker. Path smoothing removes zigzags
+ * after the search. Units never block — collisions are resolved at movement time.
  */
 
-import { tileKey, Tile, isInMapBounds } from '../../entity';
+import { tileKey, isInMapBounds, type Tile } from '../../core/coordinates';
 import { isPassable } from '../../terrain';
 import { GRID_DELTAS, NUMBER_OF_DIRECTIONS, hexDistance, getDirectionToward } from '../hex-directions';
 import { BucketPriorityQueue } from './bucket-priority-queue';
 import { smoothPath } from './path-smoothing';
 
 // ═══════════════════════════════════════════════════════════════════════════
-// REUSABLE BUFFERS (avoid per-call TypedArray allocation)
+// Reusable buffers (JS is single-threaded — fill-reset beats alloc + GC)
 // ═══════════════════════════════════════════════════════════════════════════
 
-/**
- * Module-level buffers reused across all findPathAStar calls.
- * JavaScript is single-threaded so this is safe. Each call reset via fill()
- * which is an order of magnitude cheaper than allocation + GC.
- */
 let _bufferSize = 0;
 let _gCost = new Float32Array(0);
 let _parent = new Int32Array(0);
 let _flags = new Uint8Array(0);
-/** Integer-indexed building occupancy bitmap — avoids tileKey string creation in hot loop. */
+/** Integer-indexed building occupancy — avoids tileKey strings in the hot loop. */
 let _buildingBitmap = new Uint8Array(0);
-/** Integer-indexed unit occupancy bitmap — penalizes crowded tiles without blocking them. */
-let _unitOccupancyBitmap = new Uint8Array(0);
 const _openQueue = new BucketPriorityQueue();
 
 function prepareBuffers(totalTiles: number): void {
@@ -45,7 +30,6 @@ function prepareBuffers(totalTiles: number): void {
         _parent = new Int32Array(totalTiles);
         _flags = new Uint8Array(totalTiles);
         _buildingBitmap = new Uint8Array(totalTiles);
-        _unitOccupancyBitmap = new Uint8Array(totalTiles);
         _bufferSize = totalTiles;
     }
     _gCost.fill(Infinity, 0, totalTiles);
@@ -54,7 +38,6 @@ function prepareBuffers(totalTiles: number): void {
     _openQueue.clear();
 }
 
-/** Snapshot the string-keyed building occupancy Set into the integer-indexed bitmap. */
 function populateBuildingBitmap(buildingOccupancy: Set<string>, mapWidth: number, totalTiles: number): void {
     _buildingBitmap.fill(0, 0, totalTiles);
     for (const key of buildingOccupancy) {
@@ -68,41 +51,18 @@ function populateBuildingBitmap(buildingOccupancy: Set<string>, mapWidth: number
     }
 }
 
-/** Snapshot the Map-keyed unit occupancy into the integer-indexed bitmap. */
-function populateUnitOccupancyBitmap(
-    unitOccupancy: Map<string, number>,
-    mapWidth: number,
-    totalTiles: number,
-    excludeEntityId?: number
-): void {
-    _unitOccupancyBitmap.fill(0, 0, totalTiles);
-    for (const [key, entityId] of unitOccupancy) {
-        if (entityId === excludeEntityId) {
-            continue;
-        }
-        const comma = key.indexOf(',');
-        const x = +key.slice(0, comma);
-        const y = +key.slice(comma + 1);
-        const idx = x + y * mapWidth;
-        if (idx >= 0 && idx < totalTiles) {
-            _unitOccupancyBitmap[idx] = 1;
-        }
-    }
+const MAX_SEARCH_NODES = 50_000;
+const COST_SCALE = 10;
+const MOVE_COST = 10;
+const FLAG_OPEN = 1;
+const FLAG_CLOSED = 2;
+
+export interface PathfindingTerrain {
+    groundType: Uint8Array;
+    mapWidth: number;
+    mapHeight: number;
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-// CONFIGURATION
-// ═══════════════════════════════════════════════════════════════════════════
-
-/** Maximum nodes to search before giving up (prevents runaway on large maps).
- *  Needs to be high enough to route around building footprints in dense settlements. */
-const MAX_SEARCH_NODES = 50_000;
-
-// ═══════════════════════════════════════════════════════════════════════════
-// FAILURE DIAGNOSTICS (module-level side-channel, safe in single-threaded JS)
-// ═══════════════════════════════════════════════════════════════════════════
-
-/** Diagnostic info from the most recent pathfinding failure. */
 export interface PathfindingFailureInfo {
     startPassable: boolean;
     goalPassable: boolean;
@@ -113,212 +73,94 @@ export interface PathfindingFailureInfo {
     neighborInfo: string;
 }
 
-let _lastFailure: PathfindingFailureInfo | null = null;
+export type PathFindResult = { ok: true; path: Tile[] } | { ok: false; failure: PathfindingFailureInfo };
 
-/** Read and clear the last pathfinding failure diagnostics. */
-export function consumeLastPathfindingFailure(): PathfindingFailureInfo | null {
-    const f = _lastFailure;
-    _lastFailure = null;
-    return f;
-}
-
-/** Optional entity context for diagnostic logging — set before calling findPathAStar. */
-let _entityContext: number | undefined;
-
-/** Set the entity ID that will be included in pathfinding failure warnings. */
-export function setPathfindingEntityContext(entityId: number | undefined): void {
-    _entityContext = entityId;
-}
-
-/** Cost multiplier for integer arithmetic (10 = 0.1 precision) */
-const COST_SCALE = 10;
-
-/** Base movement cost per tile (uniform for Settlers-style games) */
-const MOVE_COST = 10;
-
-// ═══════════════════════════════════════════════════════════════════════════
-// TYPES
-// ═══════════════════════════════════════════════════════════════════════════
-
-/** Bit flags for node state tracking */
-const FLAG_OPEN = 1;
-const FLAG_CLOSED = 2;
-
-/**
- * Terrain information needed for pathfinding.
- */
-export interface PathfindingTerrain {
-    groundType: Uint8Array;
-    groundHeight: Uint8Array;
-    mapWidth: number;
-    mapHeight: number;
-}
-
-/**
- * Internal context for A* search.
- * Grouped to reduce parameter passing overhead.
- */
 interface SearchContext {
     terrain: PathfindingTerrain;
-    goalX: number;
-    goalY: number;
+    goal: Tile;
     goalIdx: number;
-    buildingBitmap: Uint8Array;
-    unitOccupancyBitmap: Uint8Array;
     gCost: Float32Array;
     parent: Int32Array;
     flags: Uint8Array;
     openQueue: BucketPriorityQueue;
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-// CORE A* IMPLEMENTATION
-// ═══════════════════════════════════════════════════════════════════════════
+function tileIndex(tile: Tile, mapWidth: number): number {
+    return tile.x + tile.y * mapWidth;
+}
 
-/**
- * Check if a tile can be entered.
- * Only considers terrain passability and building footprints for blocking.
- * Unit-occupied tiles are penalized (1.5x cost) but not blocked.
- */
-function canEnterTile(_nx: number, _ny: number, nIdx: number, ctx: SearchContext): boolean {
-    // Already processed?
+function canEnterTile(nIdx: number, ctx: SearchContext): boolean {
     if (ctx.flags[nIdx]! & FLAG_CLOSED) {
         return false;
     }
-
-    // Impassable terrain?
     if (!isPassable(ctx.terrain.groundType[nIdx]!)) {
         return false;
     }
-
-    // Goal tile is always enterable (for building interaction / final position)
+    // Goal is always enterable (doors / building interaction)
     if (nIdx === ctx.goalIdx) {
         return true;
     }
-
-    // Building footprints block — integer-indexed bitmap (no string creation)
-    if (ctx.buildingBitmap[nIdx]) {
-        return false;
-    }
-
-    return true;
+    return !_buildingBitmap[nIdx];
 }
 
-/**
- * Compute the priority for a node (f = g + h + tie-breaker).
- *
- * @param cx Current X (where we're coming from)
- * @param cy Current Y (where we're coming from)
- * @param nx Neighbor X (where we're going)
- * @param ny Neighbor Y (where we're going)
- * @param gCost Cost to reach neighbor
- * @param direction Direction of move (0-5)
- * @param ctx Search context
- */
-function computePriority(
-    cx: number,
-    cy: number,
-    nx: number,
-    ny: number,
-    gCost: number,
-    direction: number,
-    ctx: SearchContext
-): number {
-    // Heuristic: hex distance scaled to match movement cost
-    const h = hexDistance(nx, ny, ctx.goalX, ctx.goalY) * COST_SCALE;
-
-    // Tie-breaker: Prefer moves aligned with goal direction.
-    // Must be >= 1 to affect bucket priority queue assignment (integer floors).
-    // Range 0-6 vs MOVE_COST=10 gives meaningful guidance without bad paths.
-    const targetDir = getDirectionToward(cx, cy, ctx.goalX, ctx.goalY);
+function computePriority(from: Tile, neighbor: Tile, gCost: number, direction: number, ctx: SearchContext): number {
+    const h = hexDistance(neighbor.x, neighbor.y, ctx.goal.x, ctx.goal.y) * COST_SCALE;
+    const targetDir = getDirectionToward(from.x, from.y, ctx.goal.x, ctx.goal.y);
     let dirDiff = Math.abs(direction - targetDir);
     if (dirDiff > 3) {
         dirDiff = 6 - dirDiff;
     }
-    const directionPenalty = dirDiff * 2;
-
-    return gCost + h + directionPenalty;
+    return gCost + h + dirDiff * 2;
 }
 
-/**
- * Process a single neighbor during A* expansion.
- */
-function processNeighbor(cx: number, cy: number, currentIdx: number, direction: number, ctx: SearchContext): void {
+function processNeighbor(current: Tile, currentIdx: number, direction: number, ctx: SearchContext): void {
     const [dx, dy] = GRID_DELTAS[direction]!;
-    const nx = cx + dx;
-    const ny = cy + dy;
-
-    // Bounds check
+    const neighbor: Tile = { x: current.x + dx, y: current.y + dy };
     const { mapWidth, mapHeight } = ctx.terrain;
-    if (!isInMapBounds({ x: nx, y: ny }, mapWidth, mapHeight)) {
+    if (!isInMapBounds(neighbor, mapWidth, mapHeight)) {
         return;
     }
 
-    const nIdx = nx + ny * mapWidth;
-
-    // Passability check
-    if (!canEnterTile(nx, ny, nIdx, ctx)) {
+    const nIdx = tileIndex(neighbor, mapWidth);
+    if (!canEnterTile(nIdx, ctx)) {
         return;
     }
 
-    // Compute tentative g-cost — penalize unit-occupied tiles (1.5x) unless it's the goal
-    const occupancyPenalty = nIdx !== ctx.goalIdx && ctx.unitOccupancyBitmap[nIdx] ? 5 : 0;
-    const tentativeG = ctx.gCost[currentIdx]! + MOVE_COST + occupancyPenalty;
-
-    // Only update if this is a better path
-    if (tentativeG < ctx.gCost[nIdx]!) {
-        ctx.gCost[nIdx] = tentativeG;
-        ctx.parent[nIdx] = currentIdx;
-        ctx.flags[nIdx]! |= FLAG_OPEN;
-
-        const priority = computePriority(cx, cy, nx, ny, tentativeG, direction, ctx);
-        ctx.openQueue.insert(nIdx, priority);
+    const tentativeG = ctx.gCost[currentIdx]! + MOVE_COST;
+    if (tentativeG >= ctx.gCost[nIdx]!) {
+        return;
     }
+
+    ctx.gCost[nIdx] = tentativeG;
+    ctx.parent[nIdx] = currentIdx;
+    ctx.flags[nIdx]! |= FLAG_OPEN;
+    ctx.openQueue.insert(nIdx, computePriority(current, neighbor, tentativeG, direction, ctx));
 }
 
-/**
- * Reconstruct path from parent array.
- * Returns waypoints from start (exclusive) to goal (inclusive).
- */
 function reconstructPath(goalIdx: number, parent: Int32Array, mapWidth: number): Tile[] {
     const path: Tile[] = [];
     let idx = goalIdx;
-
     while (parent[idx]! !== -1) {
         const x = idx % mapWidth;
         const y = (idx - x) / mapWidth;
         path.push({ x, y });
         idx = parent[idx]!;
     }
-
     path.reverse();
     return path;
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-// DIAGNOSTICS
-// ═══════════════════════════════════════════════════════════════════════════
-
-/** Debug hook: captures raw (pre-smoothing) and smoothed paths for diagnostics. */
 let _debugPathCallback: ((raw: Tile[], smoothed: Tile[]) => void) | undefined;
 
-/** Set a callback to inspect raw vs smoothed paths. Pass undefined to clear. */
+/** Inspect raw vs smoothed paths. Pass undefined to clear. */
 export function setPathDebugHook(cb: ((raw: Tile[], smoothed: Tile[]) => void) | undefined): void {
     _debugPathCallback = cb;
 }
 
-/** Diagnose why a single neighbor was rejected. */
-function diagnoseNeighbor(
-    d: number,
-    startX: number,
-    startY: number,
-    groundType: Uint8Array,
-    mapWidth: number,
-    mapHeight: number
-): string {
+function diagnoseNeighbor(d: number, start: Tile, groundType: Uint8Array, mapWidth: number, mapHeight: number): string {
     const [dx, dy] = GRID_DELTAS[d]!;
-    const nx = startX + dx;
-    const ny = startY + dy;
+    const nx = start.x + dx;
+    const ny = start.y + dy;
     const pos = `d${d}(${nx},${ny})`;
     if (!isInMapBounds({ x: nx, y: ny }, mapWidth, mapHeight)) {
         return pos + ':OOB';
@@ -333,12 +175,9 @@ function diagnoseNeighbor(
     return pos + ':closed';
 }
 
-/** Log detailed diagnostic info when pathfinding fails, and store it for callers. */
-function logPathfindingFailure(
-    startX: number,
-    startY: number,
-    goalX: number,
-    goalY: number,
+function makeFailure(
+    start: Tile,
+    goal: Tile,
     startIdx: number,
     goalIdx: number,
     nodesSearched: number,
@@ -346,52 +185,39 @@ function logPathfindingFailure(
     mapWidth: number,
     mapHeight: number,
     buildingOccupancy: Set<string>
-): void {
-    const startKey = tileKey({ x: startX, y: startY });
-    const goalKey = tileKey({ x: goalX, y: goalY });
-    const startInBuilding = buildingOccupancy.has(startKey);
-    const goalInBuilding = buildingOccupancy.has(goalKey);
-    const startPassable = isPassable(groundType[startIdx]!);
-    const goalPassable = isPassable(groundType[goalIdx]!);
-    const exhausted = nodesSearched >= MAX_SEARCH_NODES;
-
+): PathfindingFailureInfo {
     let neighborInfo = '';
     if (nodesSearched <= 1) {
         const reasons: string[] = [];
         for (let d = 0; d < NUMBER_OF_DIRECTIONS; d++) {
-            reasons.push(diagnoseNeighbor(d, startX, startY, groundType, mapWidth, mapHeight));
+            reasons.push(diagnoseNeighbor(d, start, groundType, mapWidth, mapHeight));
         }
         neighborInfo = ' neighbors=[' + reasons.join(', ') + ']';
     }
-
-    _lastFailure = {
-        startPassable,
-        goalPassable,
-        startInBuilding,
-        goalInBuilding,
+    return {
+        startPassable: isPassable(groundType[startIdx]!),
+        goalPassable: isPassable(groundType[goalIdx]!),
+        startInBuilding: buildingOccupancy.has(tileKey(start)),
+        goalInBuilding: buildingOccupancy.has(tileKey(goal)),
         nodesSearched,
-        exhausted,
+        exhausted: nodesSearched >= MAX_SEARCH_NODES,
         neighborInfo,
     };
+}
 
-    const entityTag = _entityContext !== undefined ? ` entity=${_entityContext}` : '';
+function logFailure(start: Tile, goal: Tile, failure: PathfindingFailureInfo, entityId: number | undefined): void {
+    const entityTag = entityId !== undefined ? ` entity=${entityId}` : '';
     console.warn(
-        `[A*] No path (${startX},${startY})->(${goalX},${goalY}):${entityTag} ` +
-            `searched=${nodesSearched}/${MAX_SEARCH_NODES} ${exhausted ? 'EXHAUSTED' : 'EMPTY_QUEUE'} ` +
-            `start[passable=${startPassable}, inBuilding=${startInBuilding}] ` +
-            `goal[passable=${goalPassable}, inBuilding=${goalInBuilding}]${neighborInfo}`
+        `[A*] No path (${start.x},${start.y})->(${goal.x},${goal.y}):${entityTag} ` +
+            `searched=${failure.nodesSearched}/${MAX_SEARCH_NODES} ${failure.exhausted ? 'EXHAUSTED' : 'EMPTY_QUEUE'} ` +
+            `start[passable=${failure.startPassable}, inBuilding=${failure.startInBuilding}] ` +
+            `goal[passable=${failure.goalPassable}, inBuilding=${failure.goalInBuilding}]${failure.neighborInfo}`
     );
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-// PUBLIC API
-// ═══════════════════════════════════════════════════════════════════════════
-
-/** Reconstruct, smooth, and return the final path once the goal is reached. */
 function buildFinalPath(
     goalIdx: number,
-    startX: number,
-    startY: number,
+    start: Tile,
     parent: Int32Array,
     mapWidth: number,
     groundType: Uint8Array,
@@ -399,11 +225,7 @@ function buildFinalPath(
     buildingOccupancy: Set<string>
 ): Tile[] {
     const rawPath = reconstructPath(goalIdx, parent, mapWidth);
-    const smoothed = smoothPath(
-        rawPath,
-        { x: startX, y: startY },
-        { groundType, mapWidth, mapHeight, buildingOccupancy }
-    );
+    const smoothed = smoothPath(rawPath, start, { groundType, mapWidth, mapHeight, buildingOccupancy });
     if (_debugPathCallback) {
         _debugPathCallback(rawPath, smoothed);
     }
@@ -411,131 +233,88 @@ function buildFinalPath(
 }
 
 /**
- * Find a path from start to goal on a hex grid.
+ * Find a path from start to goal.
  *
- * Uses A* with hex distance heuristic and bucket priority queue.
- * Applies path smoothing to remove unnecessary zigzags.
+ * Terrain and building/map-object blocking tiles obstruct. The goal tile is
+ * always enterable. Units are ignored — bump/wait handles collisions.
  *
- * A* considers terrain, building footprints, and map object blocking areas for blocking.
- * Unit-occupied tiles are penalized (1.5x cost) but not blocked — collisions are resolved
- * at movement time. Map object blocking uses the `blocking` field from objectInfo.xml,
- * interpreted as a tile count, expanded outward from the object's center via BFS.
- *
- * @param startX Starting tile X coordinate
- * @param startY Starting tile Y coordinate
- * @param goalX Goal tile X coordinate
- * @param goalY Goal tile Y coordinate
- * @param terrain Terrain data (ground type, height, dimensions)
- * @param buildingOccupancy Set of tiles occupied by building footprints
- * @returns Array of waypoints from start (exclusive) to goal (inclusive), or null if no path
+ * @returns `{ ok: true, path }` (empty path = already there) or `{ ok: false, failure }`
  */
 export function findPathAStar(
-    startX: number,
-    startY: number,
-    goalX: number,
-    goalY: number,
+    start: Tile,
+    goal: Tile,
     terrain: PathfindingTerrain,
     buildingOccupancy: Set<string>,
-    unitOccupancy?: Map<string, number>,
-    pathfindingEntityId?: number
-): Tile[] | null {
-    // Trivial case: already at goal
-    if (startX === goalX && startY === goalY) {
-        return [];
+    entityId?: number
+): PathFindResult {
+    if (start.x === goal.x && start.y === goal.y) {
+        return { ok: true, path: [] };
     }
 
-    // Check if goal is reachable at all
     const { mapWidth, mapHeight, groundType } = terrain;
-    const goalIdx = goalX + goalY * mapWidth;
+    const goalIdx = tileIndex(goal, mapWidth);
+    const startIdx = tileIndex(start, mapWidth);
+
     if (!isPassable(groundType[goalIdx]!)) {
-        _lastFailure = {
-            startPassable: isPassable(groundType[startX + startY * mapWidth]!),
-            goalPassable: false,
-            startInBuilding: false,
-            goalInBuilding: false,
-            nodesSearched: 0,
-            exhausted: false,
-            neighborInfo: '',
+        return {
+            ok: false,
+            failure: {
+                startPassable: isPassable(groundType[startIdx]!),
+                goalPassable: false,
+                startInBuilding: false,
+                goalInBuilding: false,
+                nodesSearched: 0,
+                exhausted: false,
+                neighborInfo: '',
+            },
         };
-        return null;
     }
 
-    // Prepare reusable buffers (fill-reset is far cheaper than per-call allocation)
     const totalTiles = mapWidth * mapHeight;
     prepareBuffers(totalTiles);
     populateBuildingBitmap(buildingOccupancy, mapWidth, totalTiles);
-    if (unitOccupancy) {
-        populateUnitOccupancyBitmap(unitOccupancy, mapWidth, totalTiles, pathfindingEntityId);
-    } else {
-        _unitOccupancyBitmap.fill(0, 0, totalTiles);
-    }
-    const gCost = _gCost;
-    const parent = _parent;
-    const flags = _flags;
-    const openQueue = _openQueue;
 
     const ctx: SearchContext = {
         terrain,
-        goalX,
-        goalY,
+        goal,
         goalIdx,
-        buildingBitmap: _buildingBitmap,
-        unitOccupancyBitmap: _unitOccupancyBitmap,
-        gCost,
-        parent,
-        flags,
-        openQueue,
+        gCost: _gCost,
+        parent: _parent,
+        flags: _flags,
+        openQueue: _openQueue,
     };
 
-    // Initialize start node
-    const startIdx = startX + startY * mapWidth;
+    _gCost[startIdx] = 0;
+    _flags[startIdx] = FLAG_OPEN;
+    _openQueue.insert(startIdx, hexDistance(start.x, start.y, goal.x, goal.y) * COST_SCALE);
 
-    gCost[startIdx] = 0;
-    flags[startIdx] = FLAG_OPEN;
-    openQueue.insert(startIdx, hexDistance(startX, startY, goalX, goalY) * COST_SCALE);
-
-    // A* main loop
     let nodesSearched = 0;
-
-    while (!openQueue.isEmpty && nodesSearched < MAX_SEARCH_NODES) {
-        const currentIdx = openQueue.popMin();
-
-        // Skip if already processed (can happen with duplicate insertions)
-        if (flags[currentIdx]! & FLAG_CLOSED) {
+    while (!_openQueue.isEmpty && nodesSearched < MAX_SEARCH_NODES) {
+        const currentIdx = _openQueue.popMin();
+        if (_flags[currentIdx]! & FLAG_CLOSED) {
             continue;
         }
-        flags[currentIdx] = FLAG_CLOSED;
+        _flags[currentIdx] = FLAG_CLOSED;
         nodesSearched++;
 
-        // Convert index to coordinates
         const cx = currentIdx % mapWidth;
         const cy = (currentIdx - cx) / mapWidth;
-
-        // Goal reached?
-        if (cx === goalX && cy === goalY) {
-            return buildFinalPath(
-                currentIdx,
-                startX,
-                startY,
-                parent,
-                mapWidth,
-                groundType,
-                mapHeight,
-                buildingOccupancy
-            );
+        if (cx === goal.x && cy === goal.y) {
+            return {
+                ok: true,
+                path: buildFinalPath(currentIdx, start, _parent, mapWidth, groundType, mapHeight, buildingOccupancy),
+            };
         }
 
-        // Expand all 6 neighbors
+        const current: Tile = { x: cx, y: cy };
         for (let d = 0; d < NUMBER_OF_DIRECTIONS; d++) {
-            processNeighbor(cx, cy, currentIdx, d, ctx);
+            processNeighbor(current, currentIdx, d, ctx);
         }
     }
 
-    logPathfindingFailure(
-        startX,
-        startY,
-        goalX,
-        goalY,
+    const failure = makeFailure(
+        start,
+        goal,
         startIdx,
         goalIdx,
         nodesSearched,
@@ -544,5 +323,6 @@ export function findPathAStar(
         mapHeight,
         buildingOccupancy
     );
-    return null;
+    logFailure(start, goal, failure, entityId);
+    return { ok: false, failure };
 }

@@ -11,13 +11,8 @@
 
 import { EntityType, BuildingType, tileKey, type Entity, type Tile } from '../../../entity';
 import { getBuildingDoorPos } from '../../../data/game-data-access';
-import {
-    hexDistance,
-    getDirectionToward,
-    NUMBER_OF_DIRECTIONS,
-    GRID_DELTAS,
-    type EDirection,
-} from '../../../systems/hex-directions';
+import { hexDistance, getDirectionToward, type EDirection } from '../../../systems/hex-directions';
+import { findAdjacentWalkableTile } from '../../../buildings/approach';
 import { createLogger } from '@/utilities/logger';
 import { TaskResult } from '../types';
 import type { ChoreoNode, MovementExecutorFn, ChoreoJobState, MovementContext } from '../choreo-types';
@@ -180,24 +175,6 @@ function findMaterialInAdjacentNode(job: ChoreoJobState, taskType: ChoreoTaskTyp
 // ─────────────────────────────────────────────────────────────
 
 /**
- * Find a reachable adjacent tile near a target, preferring the side closest to the settler.
- * Skips tiles inside building footprints (which block pathfinding).
- */
-function findApproachTile(settler: Entity, targetTile: Tile, ctx: MovementContext): Tile | null {
-    const bestDir = getDirectionToward(targetTile.x, targetTile.y, settler.x, settler.y);
-    // Try the closest direction first, then rotate through all 6 neighbors
-    for (let offset = 0; offset < NUMBER_OF_DIRECTIONS; offset++) {
-        const dir = (bestDir + offset) % NUMBER_OF_DIRECTIONS;
-        const [dx, dy] = GRID_DELTAS[dir]!;
-        const tile: Tile = { x: targetTile.x + dx, y: targetTile.y + dy };
-        if (!ctx.gameState.buildingOccupancy.has(tileKey(tile))) {
-            return tile;
-        }
-    }
-    return null;
-}
-
-/**
  * Move adjacent to a target tile and face it on arrival.
  * Used for map objects (stones, trees) and position targets (planting tiles).
  *
@@ -213,7 +190,7 @@ function moveAdjacentToTarget(
     ctx: MovementContext
 ): TaskResult {
     if (!job.approachPos) {
-        const approach = findApproachTile(settler, targetTile, ctx);
+        const approach = findAdjacentWalkableTile(targetTile, ctx.gameState.buildingOccupancy, settler);
         if (!approach) {
             log.warn(`moveAdjacentToTarget: no free adjacent tile near (${targetTile.x},${targetTile.y})`);
             return TaskResult.FAILED;

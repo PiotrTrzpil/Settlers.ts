@@ -48,16 +48,15 @@ export function createGameState(): GameState {
             state.updateEntityPosition(id, newPos);
             return true;
         },
-        getEntity: id => state.getEntity(id),
         unitOccupancy: state.unitOccupancy,
         buildingOccupancy: state.buildingOccupancy,
-        buildingFootprint: state.buildingFootprint,
+        rng: state.rng,
     });
     state.initMovement(movement);
 
     // Set terrain data so pathfinding and bump validation work in tests
     const map = createTestMap(DEFAULT_TEST_MAP_SIZE, DEFAULT_TEST_MAP_SIZE);
-    movement.setTerrainData(map.groundType, map.groundHeight, map.mapSize.width, map.mapSize.height);
+    movement.setTerrainData(map.groundType, map.mapSize.width, map.mapSize.height);
 
     // Wire entity lifecycle events (mirrors GameServices subscriptions)
     wireEntityLifecycleEvents(eventBus, movement, state);
@@ -129,7 +128,7 @@ export function addUnitWithPath(
     const controller = state.movement.getController(entity.id);
     if (controller) {
         controller.setSpeed(speed);
-        controller.startPath(path);
+        controller.setPath(path);
     }
     return { entity, unitState };
 }

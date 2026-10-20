@@ -2,23 +2,10 @@
  * Combat helper functions — pure queries extracted from combat-system.ts.
  */
 
-import { tileKey, Tile, EntityType, isUnitTypeMilitary, UnitType, type Entity } from '../../entity';
-import { bfsFind } from '../../core/tile-search';
+import { EntityType, isUnitTypeMilitary, UnitType, type Entity } from '../../entity';
 import type { GameState } from '../../game-state';
 import type { CombatState } from './combat-state';
 import { findNearestByHexDistance } from '../../systems/hex-directions';
-
-/**
- * If (x,y) is inside a building footprint, BFS outward to find the nearest
- * tile outside. Searches up to 2 rings (18 tiles) to handle large buildings.
- */
-export function resolveOutsideBuilding(tile: Tile, buildingOccupancy: ReadonlySet<string>): Tile {
-    if (!buildingOccupancy.has(tileKey(tile))) {
-        return tile;
-    }
-    // BFS outward to find nearest tile outside any building footprint (max ~54 tiles = 3 rings)
-    return bfsFind(tile, t => !buildingOccupancy.has(tileKey(t)), 54) ?? tile;
-}
 
 /** Detection range: how far a unit scans for enemies (in hex tiles). */
 export const DETECTION_RANGE = 17;

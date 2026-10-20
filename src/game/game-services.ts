@@ -210,10 +210,9 @@ export class GameServices {
                 gameState.updateEntityPosition(id, newPos);
                 return true;
             },
-            getEntity: gameState.getEntity.bind(gameState),
             unitOccupancy: gameState.unitOccupancy,
             buildingOccupancy: gameState.buildingOccupancy,
-            buildingFootprint: gameState.buildingFootprint,
+            rng: gameState.rng,
         });
         gameState.initMovement(this.movement);
 
@@ -354,7 +353,7 @@ export class GameServices {
     /** Provide terrain data to all features that need it. */
     public setTerrainData(terrain: TerrainData, resourceData?: Uint8Array): void {
         ChoreoBuilder.withContext({ gameState: this.gameState, terrain });
-        this.movement.setTerrainData(terrain.groundType, terrain.groundHeight, terrain.width, terrain.height);
+        this.movement.setTerrainData(terrain.groundType, terrain.width, terrain.height);
         this.featureRegistry.setTerrainData(terrain, resourceData);
     }
 

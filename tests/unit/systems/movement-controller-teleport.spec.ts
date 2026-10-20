@@ -28,9 +28,9 @@ function simulateTick(ctrl: MovementController, dt: number) {
 describe('MovementController teleport detection', () => {
     it('multi-step tick: stepsTakenThisTick tracks correctly', () => {
         const ctrl = new MovementController(1, { x: 20, y: 60 }, 60);
-        ctrl.startPath(diagonalPath);
+        ctrl.setPath(diagonalPath);
 
-        // startPath sets progress=1 — first step is immediate
+        // setPath from standstill sets progress=1 — first step is immediate
         simulateTick(ctrl, 1 / 20); // high speed → multiple steps
 
         expect(ctrl.stepsTakenThisTick).toBeGreaterThanOrEqual(2);
@@ -38,10 +38,10 @@ describe('MovementController teleport detection', () => {
 
     it('multi-step tick does not cause false teleport at scaled threshold', () => {
         const ctrl = new MovementController(1, { x: 20, y: 60 }, 60);
-        ctrl.startPath(diagonalPath);
+        ctrl.setPath(diagonalPath);
 
         // Tick 1: take first step, record visual
-        simulateTick(ctrl, 0); // progress was already 1 from startPath
+        simulateTick(ctrl, 0); // progress was already 1 from setPath
         ctrl.updateLastVisualPosition();
 
         // Tick 2: high dt → 2+ diagonal steps
@@ -59,7 +59,7 @@ describe('MovementController teleport detection', () => {
 
     it('handlePush mid-transit logs warning via warnIfTeleported', () => {
         const ctrl = new MovementController(1, { x: 20, y: 60 }, 2);
-        ctrl.startPath(diagonalPath);
+        ctrl.setPath(diagonalPath);
 
         // Take first step, advance partway into transit
         simulateTick(ctrl, 0); // first step
@@ -80,9 +80,9 @@ describe('MovementController teleport detection', () => {
         expect(pushWarnings.length).toBeGreaterThanOrEqual(1);
     });
 
-    it('replacePath mid-transit logs warning via warnIfTeleported', () => {
+    it('setPath mid-transit logs warning via warnIfTeleported', () => {
         const ctrl = new MovementController(1, { x: 20, y: 60 }, 2);
-        ctrl.startPath(diagonalPath);
+        ctrl.setPath(diagonalPath);
 
         // Take first step, advance partway
         simulateTick(ctrl, 0);
@@ -92,25 +92,26 @@ describe('MovementController teleport detection', () => {
         const origWarn = console.warn;
         console.warn = (msg: string) => warnings.push(msg);
         try {
-            // replacePath with a path that starts elsewhere won't change visual
-            // position (it only changes the path array), but if visual state
-            // was inconsistent it would fire
-            ctrl.replacePath([
-                { x: 22, y: 62 },
-                { x: 23, y: 63 },
-            ]);
+            // setPath mid-transit only changes the path array, not visual position
+            ctrl.setPath(
+                [
+                    { x: 22, y: 62 },
+                    { x: 23, y: 63 },
+                ],
+                true
+            );
         } finally {
             console.warn = origWarn;
         }
 
-        // replacePath doesn't change tile/prev/progress, so no teleport expected
-        const replaceWarnings = warnings.filter(w => w.includes('replacePath'));
-        expect(replaceWarnings.length).toBe(0);
+        // setPath mid-transit doesn't change tile/prev/progress, so no teleport expected
+        const pathWarnings = warnings.filter(w => w.includes('setPath'));
+        expect(pathWarnings.length).toBe(0);
     });
 
     it('stepsTakenThisTick resets on advanceProgress', () => {
         const ctrl = new MovementController(1, { x: 20, y: 60 }, 60);
-        ctrl.startPath(diagonalPath);
+        ctrl.setPath(diagonalPath);
 
         simulateTick(ctrl, 1 / 20);
         expect(ctrl.stepsTakenThisTick).toBeGreaterThanOrEqual(1);

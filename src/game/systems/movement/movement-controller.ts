@@ -181,47 +181,36 @@ export class MovementController {
     // Path management
     // =====================================================================
 
-    /** Start following a new path from stationary state. */
-    startPath(path: Tile[]): void {
-        if (path.length === 0) {
-            return;
-        }
-
-        const visualBefore = this.computeVisualPosition();
-
-        this._phase = { tag: 'moving', path: [...path], pathIndex: 0, waitTime: 0 };
-        this._cumulativeWaitTime = 0;
-
-        if (!this.isInTransit) {
-            this._prevTileX = this._tileX;
-            this._prevTileY = this._tileY;
-            this._progress = 1; // Trigger immediate first step
-        }
-
-        this.warnIfTeleported(visualBefore, 'startPath');
-    }
-
-    /** Redirect to a new path while potentially in motion. */
-    redirectPath(path: Tile[]): void {
+    /**
+     * Follow `path`. Empty path clears to idle.
+     *
+     * From a standstill, the first step fires immediately (progress = 1).
+     * Mid-transit, interpolation of the current step is preserved.
+     *
+     * @param keepGiveUpTimer When true (collision repath), cumulative wait is not reset.
+     */
+    setPath(path: Tile[], keepGiveUpTimer = false): void {
         if (path.length === 0) {
             this.clearPath();
             return;
         }
 
         const visualBefore = this.computeVisualPosition();
-        this._phase = { tag: 'moving', path: [...path], pathIndex: 0, waitTime: 0 };
-        this._cumulativeWaitTime = 0;
-        this.warnIfTeleported(visualBefore, 'redirectPath');
-    }
+        // New commands from a standstill fire the first step immediately.
+        // Collision repaths keep current progress so a waiting unit doesn't hop.
+        const kickoff = !keepGiveUpTimer && !this.isInTransit;
 
-    /** Replace entire remaining path. */
-    replacePath(newPath: Tile[]): void {
-        const visualBefore = this.computeVisualPosition();
-        const p = this.activePathPhase();
-        p.path = [...newPath];
-        p.pathIndex = 0;
-        p.waitTime = 0;
-        this.warnIfTeleported(visualBefore, 'replacePath');
+        this._phase = { tag: 'moving', path: [...path], pathIndex: 0, waitTime: 0 };
+        if (!keepGiveUpTimer) {
+            this._cumulativeWaitTime = 0;
+        }
+        if (kickoff) {
+            this._prevTileX = this._tileX;
+            this._prevTileY = this._tileY;
+            this._progress = 1;
+        }
+
+        this.warnIfTeleported(visualBefore, 'setPath');
     }
 
     /** Clear the current path and transition to idle. */

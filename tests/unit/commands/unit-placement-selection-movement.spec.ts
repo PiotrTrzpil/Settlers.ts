@@ -33,10 +33,9 @@ function createTestHarness() {
             state.updateEntityPosition(id, newPos);
             return true;
         },
-        getEntity: id => state.getEntity(id),
         unitOccupancy: state.unitOccupancy,
         buildingOccupancy: state.buildingOccupancy,
-        buildingFootprint: state.buildingFootprint,
+        rng: state.rng,
     });
     state.initMovement(movement);
 
@@ -51,7 +50,7 @@ function createTestHarness() {
     });
 
     const constructionSiteManager = new ConstructionSiteManager(eventBus, state.rng, {} as any);
-    movement.setTerrainData(groundType, groundHeight, mapSize.width, mapSize.height);
+    movement.setTerrainData(groundType, mapSize.width, mapSize.height);
 
     const terrain = new TerrainData(groundType, groundHeight, mapSize);
     const settingsManager = new GameSettingsManager();
@@ -333,7 +332,7 @@ describe('Unit Movement Integration', () => {
         const controller = state.movement.getController(unit.id)!;
         const unitState = state.unitStates.get(unit.id)!;
 
-        controller.startPath([
+        controller.setPath([
             { x: 6, y: 5 },
             { x: 7, y: 5 },
             { x: 8, y: 5 },
@@ -353,7 +352,7 @@ describe('Unit Movement Integration', () => {
         const unit = state.addEntity(EntityType.Unit, UnitType.Carrier, { x: 5, y: 5 }, 0, { race: Race.Roman });
         const controller = state.movement.getController(unit.id)!;
         const unitState = state.unitStates.get(unit.id)!;
-        controller.startPath([{ x: 6, y: 5 }]);
+        controller.setPath([{ x: 6, y: 5 }]);
         controller.setSpeed(10);
 
         state.movement.update(1.0);

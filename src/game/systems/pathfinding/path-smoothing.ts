@@ -5,7 +5,7 @@
  * checks to find shortcuts through the path.
  */
 
-import { Tile, tileKey, isInMapBounds } from '../../entity';
+import { tileKey, isInMapBounds, type Tile } from '../../core/coordinates';
 import { isPassable } from '../../terrain';
 import { getHexLine } from './hex-line';
 

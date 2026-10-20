@@ -14,7 +14,7 @@
  *   Different-sign   → axis-aligned only → |dx|+|dy| steps
  */
 
-import { Tile } from '../../entity';
+import type { Tile } from '../../core/coordinates';
 
 /**
  * Bresenham-style even interleave of two direction types.
@@ -221,27 +221,4 @@ export function groupDirectionRuns(tiles: Tile[], maxRunLength?: number): Tile[]
     const grouped = interleaveRuns(a, a.count, b, b.count, startWithA, runLen);
 
     return rebuildTilesFromDirs(tiles[0]!, grouped);
-}
-
-/**
- * Check if all tiles along a hex line are passable.
- *
- * @param startX Line start X
- * @param startY Line start Y
- * @param endX Line end X
- * @param endY Line end Y
- * @param isPassableFn Function to check if a tile is passable
- * @returns true if all tiles along the line are passable
- */
-export function isHexLinePassable(start: Tile, end: Tile, isPassableFn: (tile: Tile) => boolean): boolean {
-    const tiles = getHexLine(start, end);
-
-    // Check all tiles (skip start since we're already there)
-    for (let i = 1; i < tiles.length; i++) {
-        if (!isPassableFn(tiles[i]!)) {
-            return false;
-        }
-    }
-
-    return true;
 }

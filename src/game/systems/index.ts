@@ -62,12 +62,12 @@ export {
 // Pathfinding (re-exports from pathfinding/)
 // ============================================================================
 export {
-    findPath,
     findPathAStar,
     type PathfindingTerrain,
+    type PathFindResult,
+    type PathfindingFailureInfo,
     BucketPriorityQueue,
     getHexLine,
-    isHexLinePassable,
     smoothPath,
     type PathSmoothingParams,
 } from './pathfinding';
