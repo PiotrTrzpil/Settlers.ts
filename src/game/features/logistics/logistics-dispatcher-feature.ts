@@ -18,6 +18,7 @@ import { ThrottledLogger } from '@/utilities/throttled-logger';
 import { createLogger } from '@/utilities/logger';
 import { LogisticsDispatcher } from './logistics-dispatcher';
 import { registerTransportExecutors, type TransportExecutorContext } from './internal/transport-executor-context';
+import { TickPhase } from '../../core/tick-phase';
 
 export interface LogisticsDispatcherExports {
     logisticsDispatcher: LogisticsDispatcher;
@@ -84,7 +85,7 @@ export const LogisticsDispatcherFeature: FeatureDefinition = {
 
         return {
             systems: [logisticsDispatcher],
-            systemGroup: 'Logistics',
+            tickPhase: TickPhase.Logistics,
             persistence: [],
             exports: { logisticsDispatcher } satisfies LogisticsDispatcherExports,
             onRestoreComplete() {

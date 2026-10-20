@@ -11,6 +11,7 @@ import type { FeatureDefinition, FeatureContext } from '../feature';
 import { BuildingOverlayManager } from './building-overlay-manager';
 import { OverlayRegistry } from './overlay-registry';
 import { populateOverlayRegistry } from './overlay-data-loader';
+import { TickPhase } from '../../core/tick-phase';
 
 /**
  * Exports provided by BuildingOverlayFeature.
@@ -42,6 +43,7 @@ export const BuildingOverlayFeature: FeatureDefinition = {
 
         return {
             systems: [buildingOverlayManager],
+            tickPhase: TickPhase.BuildingOverlays,
             exports: { buildingOverlayManager, overlayRegistry } satisfies BuildingOverlayFeatureExports,
             persistence: 'none',
         };

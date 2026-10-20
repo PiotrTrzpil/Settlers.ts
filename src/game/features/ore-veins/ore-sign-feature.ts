@@ -22,6 +22,7 @@ import { populateOreVeins, loadOreVeinsFromResourceData } from './populate-ore-v
 import type { SettlerTaskExports } from '../settler-tasks';
 import { SearchType } from '../settler-tasks';
 import { createGeologistHandler } from './work-handlers';
+import { TickPhase } from '../../core/tick-phase';
 
 /**
  * Exports provided by OreSignFeature.
@@ -49,6 +50,7 @@ export const OreSignFeature: FeatureDefinition = {
 
         return {
             systems: [signSystem],
+            tickPhase: TickPhase.ResourceSigns,
             exports,
             persistence: [oreVeinPersistence],
             onTerrainReady(terrain: TerrainData, resourceData?: Uint8Array) {

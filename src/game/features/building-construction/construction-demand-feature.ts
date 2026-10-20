@@ -14,6 +14,7 @@ import type { BuildingConstructionExports } from './building-construction-featur
 import type { InventoryExports } from '../inventory';
 import { ConstructionSiteDemandSystem } from './construction-site-demand';
 import { registerConstructionExecutors } from './internal/construction-executors';
+import { TickPhase } from '../../core/tick-phase';
 
 export interface ConstructionDemandExports {
     constructionDemandSystem: ConstructionSiteDemandSystem;
@@ -70,6 +71,7 @@ export const ConstructionDemandFeature: FeatureDefinition = {
 
         return {
             systems: [constructionDemandSystem],
+            tickPhase: TickPhase.Demand,
             exports: {
                 constructionDemandSystem,
             } satisfies ConstructionDemandExports,

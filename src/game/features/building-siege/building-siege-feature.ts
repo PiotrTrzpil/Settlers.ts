@@ -15,6 +15,7 @@ import type { SettlerTaskExports } from '@/game/features/settler-tasks';
 import { isDarkTribe } from '@/game/core/race';
 import { BuildingSiegeSystem } from './building-siege-system';
 import { TowerAssaultSystem } from './tower-assault-system';
+import { TickPhase } from '../../core/tick-phase';
 
 export interface BuildingSiegeExports {
     siegeSystem: BuildingSiegeSystem;
@@ -85,7 +86,7 @@ export const BuildingSiegeFeature: FeatureDefinition = {
 
         return {
             systems: [siegeSystem, towerAssaultSystem],
-            systemGroup: 'Military',
+            tickPhase: TickPhase.Military,
             exports: { siegeSystem, towerAssaultSystem } satisfies BuildingSiegeExports,
             persistence: 'none',
         };

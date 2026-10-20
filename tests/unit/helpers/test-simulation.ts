@@ -4,6 +4,7 @@
  * See test-scenarios.ts for pre-configured simulation setups (createScenario).
  */
 
+import { tickPhaseLabel } from '@/game/core/tick-phase';
 import { onTestFinished } from 'vitest';
 import { installRealGameData, resetTestGameData } from './test-game-data';
 import { createTestMap, TERRAIN } from './test-map';
@@ -183,13 +184,18 @@ export class Simulation {
 
     tick(dt: number) {
         this.tickCount++;
-        for (const { system, group } of this.tickSystems) {
+        for (const { system, phase } of this.tickSystems) {
             try {
                 system.tick(dt);
             } catch (e) {
                 const err = e instanceof Error ? e : new Error(String(e));
-                this.errors.push({ tick: this.tickCount, system: group, error: err });
-                this.timeline.record({ tick: this.tickCount, category: 'error', event: group, detail: err.message });
+                this.errors.push({ tick: this.tickCount, system: tickPhaseLabel(phase), error: err });
+                this.timeline.record({
+                    tick: this.tickCount,
+                    category: 'error',
+                    event: tickPhaseLabel(phase),
+                    detail: err.message,
+                });
             }
         }
         if (this.tickCount % INVARIANT_CHECK_INTERVAL === 0) {

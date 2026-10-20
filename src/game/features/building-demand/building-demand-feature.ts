@@ -15,6 +15,7 @@ import { createEnterBuildingExecutor } from '../settler-tasks';
 import { BuildingType } from '../../entity';
 import { BUILDING_SPAWN_ON_COMPLETE } from '../building-construction/spawn-units';
 import { forEachCompletedBuilding } from '../restore-utils';
+import { TickPhase } from '../../core/tick-phase';
 
 export interface BuildingDemandExports {
     buildingDemandSystem: BuildingDemandSystem;
@@ -49,6 +50,7 @@ export const BuildingDemandFeature: FeatureDefinition = {
 
         return {
             systems: [buildingDemandSystem],
+            tickPhase: TickPhase.Demand,
             exports: {
                 buildingDemandSystem,
             } satisfies BuildingDemandExports,

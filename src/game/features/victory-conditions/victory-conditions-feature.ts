@@ -12,6 +12,7 @@ import { VictoryConditionsSystem } from './victory-conditions-system';
 import type { GameResult } from './victory-conditions-system';
 import { BuildingType } from '../../buildings/building-type';
 import { forEachCompletedBuilding } from '../restore-utils';
+import { TickPhase } from '../../core/tick-phase';
 
 export interface VictoryConditionsExports {
     victorySystem: VictoryConditionsSystem;
@@ -53,7 +54,7 @@ export const VictoryConditionsFeature: FeatureDefinition = {
 
         return {
             systems: [victorySystem],
-            systemGroup: 'Victory',
+            tickPhase: TickPhase.Victory,
             exports,
             persistence: 'none',
             onRestoreComplete() {

@@ -11,10 +11,8 @@
  * - Features register callbacks with an optional numeric priority (lower = earlier).
  * - Handlers at the same priority run in registration order (stable).
  *
- * Priority constants are exported so callers use named values, not magic numbers:
- *   CLEANUP_PRIORITY.LOGISTICS  — must release inventory reservations before inventory removal
- *   CLEANUP_PRIORITY.DEFAULT    — general-purpose cleanup (building state, overlays, etc.)
- *   CLEANUP_PRIORITY.LATE       — runs after all DEFAULT handlers (e.g. inventory removal)
+ * Priority constants are exported so callers use named values, not magic numbers.
+ * See {@link CLEANUP_PRIORITY} for the full removal order.
  *
  * Usage:
  * ```ts
@@ -34,10 +32,26 @@ const log = createLogger('EntityCleanupRegistry');
 // ─────────────────────────────────────────────────────────────
 
 /**
- * Named priority levels for entity cleanup order.
- * Lower numbers execute first.
+ * Named priority levels for entity cleanup order. Lower numbers execute first; handlers with
+ * equal priority run in registration order (GameServices kernel handlers, then feature load order).
+ *
+ * Full order of work on `entity:removed`:
+ *  1. RESERVATIONS — `UnitReservationRegistry` drops the unit's reservation and fires its
+ *     `onForcedRelease` callback, so every later handler sees clean reservation state.
+ *  2. EARLY        — material-transfer drops a removed carrier's carried material as a free pile.
+ *  3. DEFAULT      — all general cleanup: map-object blocking, movement controller, feature state
+ *     (buildings, overlays, carriers, settler locations, …), visual state and pile slots.
+ *  4. LOGISTICS    — logistics dispatcher cancels transport jobs / releases inventory reservations
+ *     for a destroyed building (inventory data must still exist).
+ *  5. LATE         — `BuildingInventoryManager.destroySlots` removes the entity's inventory.
+ *
+ * Afterwards (separate `entity:removed` bus subscription made by `Game` after GameServices is
+ * built), `GameLoop.notifyEntityRemoved` calls `TickSystem.onEntityRemoved` in tick order.
  */
 export const CLEANUP_PRIORITY = {
+    /** Reservation release — runs before every other handler (see UnitReservationRegistry) */
+    RESERVATIONS: -100,
+
     /** Early cleanup — for handlers that other systems depend on having run first */
     EARLY: 0,
 

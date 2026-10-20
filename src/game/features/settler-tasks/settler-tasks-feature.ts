@@ -21,6 +21,7 @@ import { SettlerTaskSystem, SearchType } from './index';
 import { ChoreoSystem } from '../../systems/choreo';
 import { createWaterHandler } from './work-handlers';
 import { createSettlerTaskPersistence } from './settler-task-persistence';
+import { TickPhase } from '../../core/tick-phase';
 
 export interface SettlerTaskExports {
     settlerTaskSystem: SettlerTaskSystem;
@@ -97,7 +98,7 @@ export const SettlerTaskFeature: FeatureDefinition = {
 
         return {
             systems: [settlerTaskSystem],
-            systemGroup: 'Units',
+            tickPhase: TickPhase.SettlerTasks,
             exports,
             persistence: [{ persistable: settlerTaskPersistence, after: ['constructionSites'] }],
             onTerrainReady(terrain: TerrainData) {

@@ -14,6 +14,7 @@ import { EDirection } from '../../systems/hex-directions';
 import { CombatSystem } from './combat-system';
 import { DeathAngelSystem } from './death-angel-system';
 import { createLogger } from '@/utilities/logger';
+import { TickPhase } from '../../core/tick-phase';
 
 const log = createLogger('CombatFeature');
 
@@ -93,6 +94,7 @@ export const CombatFeature: FeatureDefinition = {
 
         return {
             systems: [combatSystem, deathAngelSystem],
+            tickPhase: TickPhase.Combat,
             exports: { combatSystem } satisfies CombatExports,
             persistence: [],
         };

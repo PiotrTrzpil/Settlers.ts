@@ -19,6 +19,7 @@ import { connectCliWs } from '@/game/cli/ws-client';
 import { TimelineCapture } from '@/game/debug/timeline-capture';
 
 import { readStartResources, mapNeedsStartResources } from './state/game-mode-settings';
+import { TickPhase } from './core/tick-phase';
 
 // Scripting is loaded dynamically to avoid bundling Lua when disabled
 type ScriptLoadResult = { success: boolean; scriptPath: string | null; error?: string };
@@ -94,8 +95,8 @@ export class Game extends GameCore {
             this.currentTick++;
             this.journal.advanceTick();
         });
-        for (const { system, group } of this.services.getTickSystems()) {
-            this._gameLoop.registerSystem(system, group);
+        for (const { system, phase } of this.services.getTickSystems()) {
+            this._gameLoop.registerSystem(system, phase);
         }
 
         // Register feature toggles
@@ -240,7 +241,7 @@ export class Game extends GameCore {
                     executeCommand: this.execute.bind(this),
                 });
                 await service.initialize();
-                this._gameLoop.registerSystem(service, 'Scripting');
+                this._gameLoop.registerSystem(service, TickPhase.Scripting);
                 this.scriptService = service;
 
                 // Execute start resources for multiplayer/coop maps (campaign maps have entities baked in)
