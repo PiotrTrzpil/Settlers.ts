@@ -29,8 +29,7 @@
  * ```
  */
 
-import type { TickSystem } from '../core/tick-system';
-import type { TickPhase } from '../core/tick-phase';
+import type { FeatureTickSystem, TickPhase } from '../core/tick-phase';
 import type { GameState } from '../game-state';
 import type { EventBus, EventHandler, GameEvents } from '../event-bus';
 import type { EntityVisualService } from '../animation/entity-visual-service';
@@ -171,13 +170,19 @@ export interface DiagnosticEntry {
 export interface FeatureInstance {
     // === Existing (unchanged) ===
 
-    /** Tick systems to register with GameLoop */
-    systems?: TickSystem[];
+    /**
+     * Tick systems to register with GameLoop. A bare system runs in the feature's `tickPhase`;
+     * a `{ system, phase }` entry runs in its own phase (for a feature whose systems belong
+     * to different points of the tick).
+     *
+     * @example systems: [constructionSystem, { system: demandSystem, phase: TickPhase.ConstructionDemand }]
+     */
+    systems?: FeatureTickSystem[];
 
     /**
-     * Tick phase all of this feature's `systems` run in. Required when `systems` is non-empty.
-     * Phases fix the tick order across features; within a phase, systems run in feature
-     * load order, then `systems` array order. See {@link TickPhase}.
+     * Default tick phase for this feature's bare `systems` entries. Required when any entry
+     * is a bare system. Phases fix the tick order across features; within a phase, systems
+     * run in feature load order, then `systems` array order. See {@link TickPhase}.
      */
     tickPhase?: TickPhase;
 

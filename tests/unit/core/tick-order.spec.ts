@@ -35,7 +35,7 @@ const EXPECTED_TICK_ORDER = [
     'BuildingSiegeSystem @ Military',
     'TowerAssaultSystem @ Military',
     'BuildingDemandSystem @ Demand',
-    'ConstructionSiteDemandSystem @ Demand',
+    'ConstructionSiteDemandSystem @ ConstructionDemand',
     'VictoryConditionsSystem @ Victory',
     'AiPlayerSystemImpl @ AI',
 ];

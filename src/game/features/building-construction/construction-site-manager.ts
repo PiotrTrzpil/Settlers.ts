@@ -7,8 +7,8 @@
  * events via the EventBus at each phase transition.
  *
  * Which worker is on which site (and which tile each digger holds) is owned by
- * ConstructionSiteDemandSystem. The manager notifies it of demand-relevant transitions
- * through a single injected ConstructionSiteListener.
+ * ConstructionWorkerDemands. The manager notifies it of demand-relevant transitions
+ * through the ConstructionSiteListener passed to its constructor.
  *
  * Follows the Manager pattern: owns state, provides CRUD and query operations.
  * Consumers (digger AI, builder AI, carrier logistics) read from and mutate through
@@ -43,13 +43,13 @@ export type { SerializedConstructionSite };
 
 /**
  * Receives the site transitions that change construction worker demand.
- * Implemented by ConstructionSiteDemandSystem and registered via `setListener`.
+ * Implemented by ConstructionWorkerDemands; passed to the ConstructionSiteManager constructor.
  */
 export interface ConstructionSiteListener {
     /** A new site was registered (diggers needed, or builders for mines that skip leveling). */
-    onSiteRegistered(buildingId: number): void;
+    onSiteRegistered(site: ConstructionSite): void;
     /** Terrain leveling finished — diggers are done, builders are needed. */
-    onLevelingComplete(buildingId: number): void;
+    onLevelingComplete(site: ConstructionSite): void;
 }
 
 // ── ConstructionSiteManager ──
@@ -73,30 +73,18 @@ export class ConstructionSiteManager {
     private readonly eventBus: EventBus;
     private readonly rng: SeededRng;
     private readonly inventoryManager: BuildingInventoryManager;
-    private listener: ConstructionSiteListener | null = null;
+    private readonly listener: ConstructionSiteListener;
 
-    constructor(eventBus: EventBus, rng: SeededRng, inventoryManager: BuildingInventoryManager) {
+    constructor(
+        eventBus: EventBus,
+        rng: SeededRng,
+        inventoryManager: BuildingInventoryManager,
+        listener: ConstructionSiteListener
+    ) {
         this.eventBus = eventBus;
         this.rng = rng;
         this.inventoryManager = inventoryManager;
-    }
-
-    /**
-     * Register the worker-demand listener. Called once by the construction-demand feature,
-     * which is created after this manager because it depends on settler-tasks + recruit.
-     */
-    setListener(listener: ConstructionSiteListener): void {
-        if (this.listener) {
-            throw new Error('ConstructionSiteManager.setListener: listener already registered');
-        }
         this.listener = listener;
-    }
-
-    private getListener(context: string): ConstructionSiteListener {
-        if (!this.listener) {
-            throw new Error(`ConstructionSiteManager[${context}]: no ConstructionSiteListener registered`);
-        }
-        return this.listener;
     }
 
     // ── Private helpers ──
@@ -171,14 +159,14 @@ export class ConstructionSiteManager {
             // existing levelingComplete handler; the listener then requests builders instead of diggers.
             this.eventBus.emit('construction:levelingComplete', { buildingId });
         }
-        this.getListener('registerSite').onSiteRegistered(buildingId);
+        this.listener.onSiteRegistered(site);
     }
 
     /** Mark terrain leveling complete: emit the domain event, then notify the demand listener. */
     private finishLeveling(site: ConstructionSite): void {
         site.terrain.complete = true;
         this.eventBus.emit('construction:levelingComplete', { buildingId: site.buildingId });
-        this.getListener('finishLeveling').onLevelingComplete(site.buildingId);
+        this.listener.onLevelingComplete(site);
     }
 
     /**

@@ -5,7 +5,12 @@
  * phase order. Within one phase, systems run in registration order (for feature systems:
  * feature load order, then the order of the feature's `systems` array). Phases are what
  * pin simulation order — reordering `FeatureRegistry.loadAll([...])` or adding a feature
- * dependency only affects systems that share a phase.
+ * dependency only affects systems that share a phase. When two systems from different
+ * features must run in a fixed relative order, give them distinct phases instead of
+ * relying on load order.
+ *
+ * A feature declares a default `tickPhase` for its systems; an individual system can run
+ * in another phase via a `{ system, phase }` entry in the feature's `systems` array.
  *
  * Changing this order changes simulation results (determinism, replays). The full
  * expected sequence is asserted by `tests/unit/core/tick-order.spec.ts`.
@@ -22,7 +27,7 @@ export enum TickPhase {
     Movement,
     /** Building overlay animations. */
     BuildingOverlays,
-    /** Construction progress, residence spawning, construction material requests. */
+    /** Construction progress, residence spawning, construction material requests (building-construction). */
     Construction,
     /** Unit combat and death angels. */
     Combat,
@@ -40,8 +45,10 @@ export enum TickPhase {
     Logistics,
     /** Barracks training, garrisons, tower combat, sieges. */
     Military,
-    /** Worker/tool demand for buildings and construction sites. */
+    /** Worker/tool demand for operational buildings (BuildingDemandSystem). */
     Demand,
+    /** Digger/builder demand for construction sites (ConstructionSiteDemandSystem) — after building demand. */
+    ConstructionDemand,
     /** Victory/defeat evaluation. */
     Victory,
     /** AI players. */
@@ -54,6 +61,14 @@ export enum TickPhase {
 export interface PhasedTickSystem {
     readonly system: TickSystem;
     readonly phase: TickPhase;
+}
+
+/** A feature `systems` entry: a bare system (runs in the feature's `tickPhase`) or a system with its own phase. */
+export type FeatureTickSystem = TickSystem | PhasedTickSystem;
+
+/** True when the entry carries its own phase (`{ system, phase }`), false for a bare TickSystem. */
+export function isPhasedTickSystem(entry: FeatureTickSystem): entry is PhasedTickSystem {
+    return 'system' in entry && 'phase' in entry;
 }
 
 /** Display label for a phase (the enum member name). */

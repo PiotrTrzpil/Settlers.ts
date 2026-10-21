@@ -253,9 +253,12 @@ Every per-frame update must go through `GameLoop.registerSystem(system, phase)`.
 
 **Tick order is declared by `TickPhase`** (`src/game/core/tick-phase.ts`): systems run in ascending
 phase order; within one phase, in registration order (feature load order, then the feature's
-`systems` array order). Features declare `tickPhase` on their `FeatureInstance`; kernel systems
-(tick scheduler, movement) and scripting register with explicit phases. Never rely on
-`loadAll([...])` order or feature dependencies for tick order — pick (or add) a phase. Changing
+`systems` array order). Features declare a default `tickPhase` on their `FeatureInstance`; a
+system that belongs elsewhere in the tick is listed as `{ system, phase }` in `systems` (e.g.
+building-construction's `ConstructionSiteDemandSystem` runs in `ConstructionDemand`, after
+`Demand`). Kernel systems (tick scheduler, movement) and scripting register with explicit phases.
+Never rely on `loadAll([...])` order or feature dependencies for tick order — when two systems of
+different features must keep a relative order, give them distinct phases (or add one). Changing
 the order changes simulation results; `tests/unit/core/tick-order.spec.ts` pins the full sequence.
 Entity removal order is declared once, in the `CLEANUP_PRIORITY` doc comment.
 

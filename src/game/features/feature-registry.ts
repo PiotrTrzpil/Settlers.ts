@@ -9,7 +9,7 @@
  */
 
 import type { TickSystem } from '../core/tick-system';
-import { insertByTickPhase, type PhasedTickSystem, type TickPhase } from '../core/tick-phase';
+import { insertByTickPhase, isPhasedTickSystem, type PhasedTickSystem, type TickPhase } from '../core/tick-phase';
 import { EventSubscriptionManager } from '../event-bus';
 import type { EntityVisualService } from '../animation/entity-visual-service';
 import type { EntityCleanupRegistry } from '../systems/entity-cleanup-registry';
@@ -58,7 +58,6 @@ export class FeatureRegistry {
     /** Feature exports by ID */
     private readonly exports = new Map<string, Record<string, unknown>>();
 
-    /** All systems from loaded features, with group labels */
     /** All tick systems, kept sorted by phase (stable: registration order within a phase). */
     private readonly allSystems: PhasedTickSystem[] = [];
 
@@ -120,16 +119,7 @@ export class FeatureRegistry {
             this.exports.set(definition.id, instance.exports);
         }
 
-        // Collect systems into their declared tick phase
-        if (instance.systems && instance.systems.length > 0) {
-            const phase = instance.tickPhase;
-            if (phase === undefined) {
-                throw new Error(`Feature '${definition.id}' provides tick systems but declares no tickPhase`);
-            }
-            for (const system of instance.systems) {
-                insertByTickPhase(this.allSystems, { system, phase });
-            }
-        }
+        this.collectSystems(definition.id, instance);
 
         // Collect plugin hooks (persistence, commands, render, diagnostics)
         this.collectPluginHooks(definition.id, instance);
@@ -253,6 +243,29 @@ export class FeatureRegistry {
         this.persistables.length = 0;
         this.commandHandlers.clear();
         this.renderPassDefinitions.length = 0;
+    }
+
+    /**
+     * Collect the feature's tick systems into their phases: an entry's own phase, else the
+     * feature's default `tickPhase`. Stable within a phase (feature load order, then array order).
+     */
+    private collectSystems(featureId: string, instance: FeatureInstance): void {
+        if (!instance.systems) {
+            return;
+        }
+        for (const entry of instance.systems) {
+            if (isPhasedTickSystem(entry)) {
+                insertByTickPhase(this.allSystems, entry);
+                continue;
+            }
+            const phase = instance.tickPhase;
+            if (phase === undefined) {
+                throw new Error(
+                    `Feature '${featureId}' provides a tick system without its own phase but declares no tickPhase`
+                );
+            }
+            insertByTickPhase(this.allSystems, { system: entry, phase });
+        }
     }
 
     /**

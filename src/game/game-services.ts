@@ -54,7 +54,6 @@ import { MaterialTransferFeature } from './features/material-transfer/material-t
 import { SettlerTaskFeature, type SettlerTaskExports } from './features/settler-tasks';
 import { RecruitFeature, type RecruitExports } from './features/recruit';
 import { BuildingDemandFeature } from './features/building-demand/building-demand-feature';
-import { ConstructionDemandFeature } from './features/building-construction/construction-demand-feature';
 import type { UnitTransformer, RecruitSystem } from './features/recruit';
 
 import {
@@ -215,7 +214,8 @@ export class GameServices {
         this.featureRegistry.registerSystem(this.movement, TickPhase.Movement);
 
         // Listed in resolved load order (loadAll would sort dependencies first anyway).
-        // Tick systems tick in this order, so keep system-owning features where they are.
+        // Tick order is fixed by TickPhase; load order still fixes the order of event handlers
+        // and cleanup handlers across features, so move a feature only after checking its subscriptions.
         this.featureRegistry.loadAll([
             // No feature dependencies
             InventoryFeature,
@@ -223,16 +223,13 @@ export class GameServices {
             CarrierFeature,
             DemandLedgerFeature,
             BuildingOverlayFeature,
-            // Depend on inventory / logistics
-            BuildingConstructionFeature,
+            // Depends on inventory
             MaterialTransferFeature,
             // No feature dependencies
             CombatFeature,
             SettlerLocationFeature,
             OreVeinFeature,
             TerritoryFeature,
-            // Depends on construction + territory; no systems or subscriptions (owns place_building)
-            BuildingPlacementFeature,
             // Depends on inventory, overlays, material-transfer, combat, settler-location, work-areas, territory
             SettlerTaskFeature,
             // Depend on settler-tasks (+ inventory / territory / ore-veins / carriers)
@@ -242,6 +239,11 @@ export class GameServices {
             CropFeature,
             OreSignFeature,
             RecruitFeature,
+            // Depends on inventory / logistics / settler-tasks / recruit (worker dispatch)
+            BuildingConstructionFeature,
+            // Depends on construction + territory; no systems or subscriptions (owns place_building)
+            BuildingPlacementFeature,
+            // Depend on settler-tasks / territory / construction
             TerritoryConsequencesFeature,
             MaterialRequestFeature,
             PioneerFeature,
@@ -251,7 +253,6 @@ export class GameServices {
             TowerGarrisonFeature,
             BuildingSiegeFeature,
             BuildingDemandFeature,
-            ConstructionDemandFeature,
             // Depend on construction / territory / victory-conditions
             VictoryConditionsFeature,
             AiPlayerFeature,
