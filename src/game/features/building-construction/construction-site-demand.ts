@@ -3,39 +3,39 @@
  *
  * The demand records live in ConstructionWorkerDemands (created by the ConstructionSiteManager's
  * listener callbacks). This system drains unfulfilled demands on a ~1s interval — idle specialist
- * first, carrier recruitment second — and pushes the next work assignment when a worker's job
- * completes. Global recruitment cap: 4 diggers and 4 builders per player across all sites.
+ * first, carrier recruitment second — and dispatches owned `Construction` jobs. As the kind's
+ * {@link ConstructionJobOwner} it is called back directly: a completed job chains the next
+ * DIG/BUILD job, a failed / preempted job or a removed unit releases the demand. Global
+ * recruitment cap: 4 diggers and 4 builders per player across all sites.
  */
 
 import type { TickSystem } from '../../core/tick-system';
 import type { GameState } from '../../game-state';
 import type { EventBus } from '../../event-bus';
 import { EventSubscriptionManager } from '../../event-bus';
-import type { ChoreoJobState } from '../../systems/choreo/types';
 import { UnitType } from '../../core/unit-types';
-import { EntityType, Tile } from '../../entity';
+import { EntityType } from '../../entity';
+import { JobKind } from '../../systems/choreo';
+import { IntervalDrain } from '../../systems/unit-demand-loop';
 import type { DispatchRecruitmentOpts } from '../recruit';
+import type { JobService } from '../settler-tasks';
 import type { ConstructionSiteManager, IndexedTile } from './construction-site-manager';
 import type {
     ConstructionWorkerDemand,
     ConstructionWorkerDemands,
     ConstructionWorkerRole,
 } from './construction-worker-demands';
-import { buildDigTileJob, buildBuildStepJob, buildRecruitDiggerJob, buildRecruitBuilderJob } from './construction-jobs';
+import { constructionJobSpec, type ConstructionJobOwner, type ConstructionJobParams } from './construction-job-kind';
 import { createLogger } from '@/utilities/logger';
-import {
-    IntervalDrain,
-    handleDemandJobCompleted,
-    handleDemandJobFailed,
-    type UnitDemandJobHandlers,
-} from '../../systems/unit-demand-loop';
-import { JobKind } from '../../systems/choreo/types';
 
 const log = createLogger('ConstructionSiteDemand');
 
 const TICK_INTERVAL = 1.0;
 const MAX_DIGGERS_PER_PLAYER = 4;
 const MAX_BUILDERS_PER_PLAYER = 4;
+
+/** A job's work part — its params without the recruit segment. */
+type ConstructionWork = Omit<ConstructionJobParams, 'recruit'>;
 
 // ─── Config ──────────────────────────────────────────────────
 
@@ -45,30 +45,23 @@ export interface ConstructionSiteDemandConfig {
     siteManager: ConstructionSiteManager;
     demands: ConstructionWorkerDemands;
     findIdleSpecialist: (unitType: UnitType, player: number, nearX: number, nearY: number) => number | null;
-    assignJob: (unitId: number, job: ChoreoJobState, moveTo?: Tile) => boolean;
-    /** Full recruitment dispatch — find candidate, build choreo, assign job, register transform. */
-    dispatchRecruitment: (unitType: UnitType, player: number, opts?: DispatchRecruitmentOpts) => number | null;
+    jobs: JobService;
+    /** Full recruitment dispatch — find candidate, reserve its source, assign the `buildSpec` job. */
+    dispatchRecruitment: (unitType: UnitType, player: number, opts: DispatchRecruitmentOpts) => number | null;
 }
 
 // ─── System ──────────────────────────────────────────────────
 
-export class ConstructionSiteDemandSystem implements TickSystem {
+export class ConstructionSiteDemandSystem implements TickSystem, ConstructionJobOwner {
     private readonly gameState: GameState;
     private readonly eventBus: EventBus;
     private readonly siteManager: ConstructionSiteManager;
     private readonly demands: ConstructionWorkerDemands;
     private readonly findIdleSpecialist: ConstructionSiteDemandConfig['findIdleSpecialist'];
-    private readonly assignJob: ConstructionSiteDemandConfig['assignJob'];
+    private readonly jobs: JobService;
     private readonly dispatchRecruitment: ConstructionSiteDemandConfig['dispatchRecruitment'];
     private readonly subscriptions = new EventSubscriptionManager();
     private readonly drain = new IntervalDrain(TICK_INTERVAL);
-
-    private readonly jobHandlers: UnitDemandJobHandlers<ConstructionWorkerDemand> = {
-        ownsKind: kind => kind === JobKind.Construction,
-        findByUnit: unitId => this.demands.getDemandForWorker(unitId),
-        onJobCompleted: demand => this.onWorkerJobCompleted(demand),
-        onJobFailed: (demand, unitId) => this.onWorkerJobFailed(demand, unitId),
-    };
 
     constructor(config: ConstructionSiteDemandConfig) {
         this.gameState = config.gameState;
@@ -76,7 +69,7 @@ export class ConstructionSiteDemandSystem implements TickSystem {
         this.siteManager = config.siteManager;
         this.demands = config.demands;
         this.findIdleSpecialist = config.findIdleSpecialist;
-        this.assignJob = config.assignJob;
+        this.jobs = config.jobs;
         this.dispatchRecruitment = config.dispatchRecruitment;
     }
 
@@ -85,16 +78,8 @@ export class ConstructionSiteDemandSystem implements TickSystem {
     // ================================================================
 
     registerEvents(): void {
-        this.subscriptions.subscribe(this.eventBus, 'settler:taskCompleted', ({ unitId, kind }) => {
-            handleDemandJobCompleted(this.jobHandlers, unitId, kind);
-        });
-
-        this.subscriptions.subscribe(this.eventBus, 'settler:taskFailed', ({ unitId, kind }) => {
-            handleDemandJobFailed(this.jobHandlers, unitId, kind);
-        });
-
         this.subscriptions.subscribe(this.eventBus, 'building:removed', ({ buildingId }) => {
-            this.demands.removeSite(buildingId);
+            this.removeSite(buildingId);
         });
 
         this.subscriptions.subscribe(this.eventBus, 'construction:materialDelivered', ({ buildingId }) => {
@@ -121,6 +106,39 @@ export class ConstructionSiteDemandSystem implements TickSystem {
     }
 
     // ================================================================
+    // ConstructionJobOwner — called by the Construction kind handler
+    // ================================================================
+
+    isBound(unitId: number, siteId: number): boolean {
+        return this.demands.demandOf(siteId, unitId) !== undefined;
+    }
+
+    /** A worker's job completed — push the next assignment (its demand may already be released). */
+    onWorkerJobCompleted(unitId: number, siteId: number): void {
+        const demand = this.demands.demandOf(siteId, unitId);
+        if (!demand) {
+            // Released meanwhile: leveling finished (digger demands replaced) or the site is gone.
+            return;
+        }
+        if (demand.role === 'digger') {
+            this.pushNextDiggerJob(demand);
+        } else {
+            this.pushNextBuilderJob(demand);
+        }
+    }
+
+    /** A worker's job failed / was preempted / the worker died — release and re-demand. */
+    onWorkerJobEnded(unitId: number, siteId: number): void {
+        const demand = this.demands.demandOf(siteId, unitId);
+        if (!demand) {
+            return;
+        }
+        // Reset to unfulfilled (tile + worker released) so drain picks it up again
+        this.demands.release(demand);
+        log.debug(`Worker ${unitId} left site ${siteId}, demand reset`);
+    }
+
+    // ================================================================
     // Internal — events
     // ================================================================
 
@@ -136,31 +154,23 @@ export class ConstructionSiteDemandSystem implements TickSystem {
         this.demands.addVacantBuilderDemands(site);
     }
 
-    /** A worker's choreo job completed — push next assignment. */
-    private onWorkerJobCompleted(demand: ConstructionWorkerDemand): void {
-        if (demand.role === 'digger') {
-            this.pushNextDiggerJob(demand);
-        } else {
-            this.pushNextBuilderJob(demand);
-        }
-    }
-
-    /** A worker's choreo job failed — release and re-demand. */
-    private onWorkerJobFailed(demand: ConstructionWorkerDemand, unitId: number): void {
-        // Reset to unfulfilled (tile + worker released) so drain picks it up again
-        this.demands.release(demand);
-        log.debug(`Worker ${unitId} failed at site ${demand.siteId}, demand reset`);
-    }
-
     // ================================================================
     // Internal — demand fulfillment
     // ================================================================
+
+    /** Site gone (building removed / construction finished): cancel its workers' jobs, drop its demands. */
+    private removeSite(siteId: number): void {
+        for (const unitId of this.jobs.commitments.unitsOwnedBy(JobKind.Construction, siteId)) {
+            this.jobs.cancel(unitId, JobKind.Construction);
+        }
+        this.demands.removeSite(siteId);
+    }
 
     private drainDemands(): void {
         for (const [siteId, siteDemands] of this.demands.sites()) {
             // Discard if site no longer exists
             if (!this.siteManager.getSite(siteId)) {
-                this.demands.removeSite(siteId);
+                this.removeSite(siteId);
                 continue;
             }
 
@@ -190,12 +200,12 @@ export class ConstructionSiteDemandSystem implements TickSystem {
     }
 
     private dispatchSpecialist(unitId: number, demand: ConstructionWorkerDemand): void {
-        const job = this.buildFirstJob(demand);
-        if (!job) {
+        const work = this.nextWork(demand);
+        if (!work) {
             return;
         }
 
-        const assigned = this.assignJob(unitId, job);
+        const assigned = this.jobs.assign(unitId, constructionJobSpec({ ...work, recruit: null }));
         if (!assigned) {
             this.demands.release(demand);
             return;
@@ -231,29 +241,8 @@ export class ConstructionSiteDemandSystem implements TickSystem {
 
         const carrierId = this.dispatchRecruitment(unitType, demand.player, {
             target: { x: siteX, y: siteY },
-            buildJob: candidate => {
-                const toolPile = candidate.toolPile!;
-                if (demand.role === 'digger') {
-                    return buildRecruitDiggerJob(
-                        toolPile.x,
-                        toolPile.y,
-                        toolPile.pileEntityId,
-                        reservedTile!.x,
-                        reservedTile!.y,
-                        demand.siteId,
-                        reservedTile!.tileIndex
-                    );
-                }
-                const pos = this.siteManager.getRandomBuilderWorkPos(demand.siteId);
-                return buildRecruitBuilderJob(
-                    toolPile.x,
-                    toolPile.y,
-                    toolPile.pileEntityId,
-                    pos.x,
-                    pos.y,
-                    demand.siteId
-                );
-            },
+            buildSpec: (_carrierId, segment) =>
+                constructionJobSpec({ ...this.workAt(demand, reservedTile), recruit: segment }),
         });
 
         if (carrierId === null) {
@@ -263,40 +252,38 @@ export class ConstructionSiteDemandSystem implements TickSystem {
 
         this.bindWorker(demand, carrierId);
         log.debug(
-            `Carrier ${carrierId} dispatched with combined recruit+work choreo ` +
+            `Carrier ${carrierId} dispatched with combined recruit+work job ` +
                 `as ${demand.role} for site ${demand.siteId}`
         );
     }
 
     // ================================================================
-    // Internal — job building
+    // Internal — job params
     // ================================================================
 
-    private buildFirstJob(demand: ConstructionWorkerDemand): ChoreoJobState | null {
+    /** The demand's next work: a freshly reserved tile (digger) or a work position (builder with materials). */
+    private nextWork(demand: ConstructionWorkerDemand): ConstructionWork | null {
         if (demand.role === 'digger') {
-            return this.buildDiggerJob(demand);
+            const tile = this.reserveTile(demand);
+            return tile ? this.workAt(demand, tile) : null;
         }
-        return this.buildBuilderJob(demand);
-    }
-
-    private buildDiggerJob(demand: ConstructionWorkerDemand): ChoreoJobState | null {
-        const tile = this.reserveTile(demand);
-        if (!tile) {
-            return null;
-        }
-        return buildDigTileJob(tile.x, tile.y, demand.siteId, tile.tileIndex);
-    }
-
-    private buildBuilderJob(demand: ConstructionWorkerDemand): ChoreoJobState | null {
         if (!this.siteManager.hasAvailableMaterials(demand.siteId)) {
             return null;
         }
-        const pos = this.siteManager.getRandomBuilderWorkPos(demand.siteId);
-        return buildBuildStepJob(pos.x, pos.y, demand.siteId);
+        return this.workAt(demand, null);
+    }
+
+    /** Work on `tile` (digger), or at a random builder position of the site (`tile` null). */
+    private workAt(demand: ConstructionWorkerDemand, tile: IndexedTile | null): ConstructionWork {
+        const { siteId, role } = demand;
+        if (tile) {
+            return { siteId, role, tileIndex: tile.tileIndex, workPos: { x: tile.x, y: tile.y } };
+        }
+        return { siteId, role, tileIndex: null, workPos: this.siteManager.getRandomBuilderWorkPos(siteId) };
     }
 
     // ================================================================
-    // Internal — next assignment push
+    // Internal — next assignment push (from inside onCompleted)
     // ================================================================
 
     private pushNextDiggerJob(demand: ConstructionWorkerDemand): void {
@@ -310,20 +297,14 @@ export class ConstructionSiteDemandSystem implements TickSystem {
             return;
         }
 
-        const tile = this.reserveTile(demand);
-        if (!tile) {
+        const work = this.nextWork(demand);
+        if (!work) {
             // No more tiles — worker done with this site
             log.debug(`Digger ${demand.workerId} finished all tiles at site ${demand.siteId}`);
             this.demands.retire(demand);
             return;
         }
-
-        const workerId = demand.workerId!;
-        const job = buildDigTileJob(tile.x, tile.y, demand.siteId, tile.tileIndex);
-        if (!this.assignJob(workerId, job)) {
-            this.demands.release(demand);
-            log.debug(`Failed to assign next dig job to worker ${workerId}`);
-        }
+        this.assignNext(demand, work);
     }
 
     private pushNextBuilderJob(demand: ConstructionWorkerDemand): void {
@@ -333,13 +314,15 @@ export class ConstructionSiteDemandSystem implements TickSystem {
             this.demands.retire(demand);
             return;
         }
+        this.assignNext(demand, this.workAt(demand, null));
+    }
 
+    /** Chain the bound worker's next job (no recruit: it already is a specialist). */
+    private assignNext(demand: ConstructionWorkerDemand, work: ConstructionWork): void {
         const workerId = demand.workerId!;
-        const pos = this.siteManager.getRandomBuilderWorkPos(demand.siteId);
-        const job = buildBuildStepJob(pos.x, pos.y, demand.siteId);
-        if (!this.assignJob(workerId, job)) {
+        if (!this.jobs.assign(workerId, constructionJobSpec({ ...work, recruit: null }))) {
             this.demands.release(demand);
-            log.debug(`Failed to assign next build job to worker ${workerId}`);
+            log.debug(`Failed to assign next ${demand.role} job to worker ${workerId}`);
         }
     }
 

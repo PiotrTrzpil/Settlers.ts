@@ -147,11 +147,13 @@ export class JobServiceImpl implements JobService {
         if (!commitment || !commitment.hasJob) {
             return undefined;
         }
-        const job = this.runtimes.get(unitId)!.job;
-        if (job) {
-            return job.synthetic ? undefined : job.params;
+        // A restored, not yet resumed job: the unit may have no runtime yet (e.g. a carrier without a home).
+        const pending = this.pendingResumes.get(unitId);
+        if (pending) {
+            return pending.params;
         }
-        return this.pendingResumes.get(unitId)!.params;
+        const job = this.runtimes.get(unitId)!.job!;
+        return job.synthetic ? undefined : job.params;
     }
 
     releaseHold(unitId: number, owner: CommitmentOwner): void {

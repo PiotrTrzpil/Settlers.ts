@@ -8,9 +8,10 @@
  * - ResidenceSpawnerSystem (carrier spawning from residences)
  * - ConstructionRequestSystem (material delivery demands for construction)
  * - ConstructionWorkerDemands + ConstructionSiteDemandSystem (digger/builder demand and dispatch)
+ * - the `Construction` JobKind handler (owned dig / build jobs, optionally with a recruit prefix)
  * - BuildingLifecycleHandler (event-driven domain handlers)
  * - BuildingPileRegistry + PilePositionResolver (pile tiles, fixed at slot creation)
- * - DIG_TILE / BUILD_STEP choreo executors
+ * - DIG_TILE / BUILD_STEP choreo executors (irreversible node hooks)
  *
  * Commands: spawn_building_units (issued by BuildingConstructionSystem on completion).
  *
@@ -29,6 +30,8 @@ import type { DemandLedgerExports } from '../logistics/demand-ledger-feature';
 import type { SettlerTaskExports } from '../settler-tasks';
 import { SearchType, WorkHandlerType } from '../settler-tasks/types';
 import type { RecruitExports } from '../recruit';
+import { JobKind } from '../../systems/choreo';
+import { createConstructionJobKind, type ConstructionJobParams } from './construction-job-kind';
 import { ConstructionSiteManager } from './construction-site-manager';
 import { ConstructionWorkerDemands } from './construction-worker-demands';
 import { ConstructionSiteDemandSystem } from './construction-site-demand';
@@ -53,7 +56,8 @@ export interface BuildingConstructionExports {
 }
 
 /**
- * Create the worker demand system: idle specialists via settler-tasks, carrier recruitment via recruit.
+ * Create the worker demand system (idle specialists via settler-tasks, carrier recruitment via
+ * recruit) and register it as the owner of the `Construction` job kind.
  * Builders and diggers are dispatched by this system, not by the idle-scan work-handler path — the
  * no-op CONSTRUCTION / CONSTRUCTION_DIG handlers only suppress "No work handler registered" warnings.
  */
@@ -62,23 +66,35 @@ function createConstructionDemandSystem(
     siteManager: ConstructionSiteManager,
     demands: ConstructionWorkerDemands
 ): ConstructionSiteDemandSystem {
-    const { settlerTaskSystem, jobRunner, workerAssignments } = ctx.getFeature<SettlerTaskExports>('settler-tasks');
-    const { recruitSystem } = ctx.getFeature<RecruitExports>('recruit');
+    const { settlerTaskSystem, jobs, workerAssignments } = ctx.getFeature<SettlerTaskExports>('settler-tasks');
+    const { recruitSystem, recruitSegments } = ctx.getFeature<RecruitExports>('recruit');
 
     const noopHandler = { type: WorkHandlerType.NULL as const, shouldWaitForWork: true };
     settlerTaskSystem.registerWorkHandler(SearchType.CONSTRUCTION, noopHandler);
     settlerTaskSystem.registerWorkHandler(SearchType.CONSTRUCTION_DIG, noopHandler);
 
-    return new ConstructionSiteDemandSystem({
+    const system = new ConstructionSiteDemandSystem({
         gameState: ctx.gameState,
         eventBus: ctx.eventBus,
         siteManager,
         demands,
         findIdleSpecialist: (unitType, player, nearX, nearY) =>
             workerAssignments.findIdleSpecialist(unitType, player, nearX, nearY),
-        assignJob: (unitId, job, moveTo) => jobRunner.assignJob(unitId, job, moveTo),
+        jobs,
         dispatchRecruitment: (unitType, player, opts) => recruitSystem.dispatchRecruitment(unitType, player, opts),
     });
+    jobs.registerKind(createConstructionJobKind(recruitSegments, system));
+    return system;
+}
+
+/** Restore: the params of every restored Construction job, by ascending unit id (jobs not built yet). */
+function restoredConstructionWorkers(ctx: FeatureContext): Map<number, ConstructionJobParams> {
+    const { jobs } = ctx.getFeature<SettlerTaskExports>('settler-tasks');
+    const workers = new Map<number, ConstructionJobParams>();
+    for (const unitId of jobs.commitments.unitsOwnedBy(JobKind.Construction)) {
+        workers.set(unitId, jobs.paramsOf(unitId)! as ConstructionJobParams);
+    }
+    return workers;
 }
 
 export const BuildingConstructionFeature: FeatureDefinition = {
@@ -185,10 +201,13 @@ export const BuildingConstructionFeature: FeatureDefinition = {
             onRestoreComplete() {
                 // Completes finished sites first, so demands are rebuilt only for live sites.
                 constructionSystem.rebuildAfterRestore();
+                // Restored workers are rebound to their demands (with their tiles); their jobs
+                // resume in settler-tasks' onRestoreResume. Nothing is assigned here.
                 constructionWorkerDemands.rebuildFromSites(
                     constructionSiteManager
                         .getAllSiteIds()
-                        .map(id => constructionSiteManager.getSiteOrThrow(id, 'rebuildFromSites'))
+                        .map(id => constructionSiteManager.getSiteOrThrow(id, 'rebuildFromSites')),
+                    restoredConstructionWorkers(ctx)
                 );
             },
             destroy: () => {
