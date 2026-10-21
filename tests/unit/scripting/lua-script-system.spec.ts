@@ -8,7 +8,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { LuaScriptSystem } from '@/game/scripting/lua-script-system';
 import { GameState } from '@/game/game-state';
-import { ConstructionSiteManager } from '@/game/features/building-construction';
+import { ConstructionSiteManager, ConstructionWorkerDemands } from '@/game/features/building-construction';
 import { EventBus } from '@/game/event-bus';
 import { createTestMap } from '../helpers/test-map';
 
@@ -20,7 +20,12 @@ describe('LuaScriptSystem', () => {
     beforeEach(() => {
         const eventBus = new EventBus();
         gameState = new GameState(eventBus, createTestMap(128, 128).terrain, () => 0);
-        constructionSiteManager = new ConstructionSiteManager(eventBus, gameState.rng, {} as any);
+        constructionSiteManager = new ConstructionSiteManager(
+            eventBus,
+            gameState.rng,
+            {} as any,
+            new ConstructionWorkerDemands(eventBus)
+        );
         scriptSystem = new LuaScriptSystem({
             gameState,
             constructionSiteManager,

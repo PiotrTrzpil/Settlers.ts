@@ -116,6 +116,27 @@ Only kernel-level commands (selection, raw entity spawn/remove, script commands)
 central `registerAllHandlers`. External code (UI, debug, CLI, tests) reaches feature services through
 the few widely-shared typed fields on `GameServices`, or `services.getFeature<XExports>('x')`.
 
+#### 3b'. Features Declare Tick Phases
+
+Tick order is fixed by `TickPhase` (`core/tick-phase.ts`), not by feature load order. A feature
+declares a default `tickPhase` for its `systems`; a system that must run at another point of the
+tick is listed with its own phase:
+
+```typescript
+return {
+    systems: [
+        constructionSystem, // tickPhase (Construction)
+        residenceSpawner,
+        { system: constructionDemandSystem, phase: TickPhase.ConstructionDemand },
+    ],
+    tickPhase: TickPhase.Construction,
+};
+```
+
+Within a phase, systems run in feature load order, then `systems` array order. If two systems
+from different features must keep a relative order, give them distinct phases rather than relying
+on load order. `tests/unit/core/tick-order.spec.ts` pins the full sequence.
+
 #### 3c. Features Register Their Own Choreography Executors
 
 `ChoreoSystem` (`systems/choreo`) is a kernel service on `FeatureContext.choreoSystem`, created by
@@ -135,7 +156,7 @@ create(ctx) {
 | settler-tasks (domain-free runtime) | GO_TO_*, GO_HOME, GO_VIRTUAL, SEARCH, WORK*, PLANT, PRODUCE_VIRTUAL, WAIT*, CHECKIN, CHANGE_JOB* |
 | material-transfer | GET_GOOD*, PUT_GOOD*, RESOURCE_GATHERING*, LOAD_GOOD |
 | logistics | TRANSPORT_* |
-| building-construction (construction-demand) | DIG_TILE, BUILD_STEP |
+| building-construction | DIG_TILE, BUILD_STEP |
 | recruit | TRANSFORM_RECRUIT, TRANSFORM_RECRUIT_BUILDING, TRANSFORM_DIRECT |
 | combat | HEAL_ENTITY, ATTACK_REACTION |
 | settler-location | ENTER_BUILDING |
