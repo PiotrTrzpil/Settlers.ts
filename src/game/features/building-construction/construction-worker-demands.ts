@@ -2,19 +2,21 @@
  * ConstructionWorkerDemands — the digger/builder demand records of every construction site.
  *
  * Sole owner of construction worker assignment state: which worker is committed to which
- * site, and which unleveled tile each digger holds. Owns a Map<siteId, ConstructionWorkerDemand[]>
- * plus an O(1) unit → demand index.
+ * site, and which unleveled tile each digger holds. Owns a Map<siteId, ConstructionWorkerDemand[]>;
+ * a worker's demand is found through its Construction job's ref (= siteId), so no unit index.
  *
  * Pure bookkeeping (no settler-task or recruit access), so the ConstructionSiteManager can take
  * it as its ConstructionSiteListener at construction time: demands are created when the manager
  * registers a site or finishes leveling. ConstructionSiteDemandSystem fulfills them (finds and
  * dispatches workers) and drives bind/release/retire. Demands are derived state — on restore
- * they are rebuilt from site state.
+ * they are rebuilt from site state, then rebound to the workers whose Construction jobs were
+ * restored (so those workers resume instead of being re-dispatched).
  */
 
 import type { EventBus } from '../../event-bus';
 import type { ConstructionSiteListener } from './construction-site-manager';
 import type { ConstructionSite } from './types';
+import type { ConstructionJobParams } from './construction-job-kind';
 import { createLogger } from '@/utilities/logger';
 
 const log = createLogger('ConstructionWorkerDemands');
@@ -40,8 +42,6 @@ export class ConstructionWorkerDemands implements ConstructionSiteListener {
 
     /** All demands keyed by siteId. */
     private readonly demands = new Map<number, ConstructionWorkerDemand[]>();
-    /** Committed worker → its demand. Kept in sync by bind/release only. */
-    private readonly demandByWorker = new Map<number, ConstructionWorkerDemand>();
 
     constructor(eventBus: EventBus) {
         this.eventBus = eventBus;
@@ -79,15 +79,18 @@ export class ConstructionWorkerDemands implements ConstructionSiteListener {
     // ================================================================
 
     /**
-     * Rebuild all demands from restored site state. Demands are not persisted and
-     * in-flight construction jobs are not restored, so every demand starts unbound
-     * and the drain loop re-dispatches workers.
+     * Rebuild all demands from restored site state, then rebind the restored workers: each one
+     * (ascending ids) takes the first unbound demand of its site and role, with its tile
+     * reservation (emits construction:workerAssigned like any bind). A worker without a matching demand stays unbound — its job is then not
+     * restorable and ends with onFailed('restoreFailed').
      */
-    rebuildFromSites(sites: Iterable<ConstructionSite>): void {
+    rebuildFromSites(sites: Iterable<ConstructionSite>, workers: ReadonlyMap<number, ConstructionJobParams>): void {
         this.demands.clear();
-        this.demandByWorker.clear();
         for (const site of sites) {
             this.createFromSiteState(site);
+        }
+        for (const [unitId, params] of workers) {
+            this.rebind(unitId, params);
         }
     }
 
@@ -136,9 +139,10 @@ export class ConstructionWorkerDemands implements ConstructionSiteListener {
         return this.demands.get(siteId);
     }
 
-    /** The demand a worker is committed to, if any. */
-    getDemandForWorker(unitId: number): ConstructionWorkerDemand | undefined {
-        return this.demandByWorker.get(unitId);
+    /** The demand of `siteId` the worker is committed to. Nullable by design: released / site gone. */
+    demandOf(siteId: number, unitId: number): ConstructionWorkerDemand | undefined {
+        const siteDemands = this.demands.get(siteId);
+        return siteDemands ? siteDemands.find(d => d.workerId === unitId) : undefined;
     }
 
     get demandCount(): number {
@@ -166,7 +170,7 @@ export class ConstructionWorkerDemands implements ConstructionSiteListener {
 
     /** Commit `unitId` to `demand`. Emits construction:workerAssigned. */
     bind(demand: ConstructionWorkerDemand, unitId: number): void {
-        const current = this.demandByWorker.get(unitId);
+        const current = this.findCommitted(unitId);
         if (current) {
             throw new Error(
                 `ConstructionWorkerDemands.bind: unit ${unitId} already committed to site ${current.siteId} ` +
@@ -174,7 +178,6 @@ export class ConstructionWorkerDemands implements ConstructionSiteListener {
             );
         }
         demand.workerId = unitId;
-        this.demandByWorker.set(unitId, demand);
         this.eventBus.emit('construction:workerAssigned', { buildingId: demand.siteId, unitId, role: demand.role });
     }
 
@@ -186,7 +189,6 @@ export class ConstructionWorkerDemands implements ConstructionSiteListener {
         }
         const unitId = demand.workerId;
         demand.workerId = null;
-        this.demandByWorker.delete(unitId);
         this.eventBus.emit('construction:workerReleased', { buildingId: demand.siteId, unitId, role: demand.role });
     }
 
@@ -209,6 +211,29 @@ export class ConstructionWorkerDemands implements ConstructionSiteListener {
     // ================================================================
     // Internal
     // ================================================================
+
+    /** Restore: bind a restored worker to an unbound demand of its site + role, with its tile. */
+    private rebind(unitId: number, params: ConstructionJobParams): void {
+        const siteDemands = this.demands.get(params.siteId);
+        const demand = siteDemands ? siteDemands.find(d => d.role === params.role && d.workerId === null) : undefined;
+        if (!demand) {
+            log.debug(`Restored ${params.role} ${unitId}: no open demand on site ${params.siteId}`);
+            return;
+        }
+        this.bind(demand, unitId);
+        demand.reservedTileIndex = params.tileIndex;
+    }
+
+    /** The demand a unit is committed to on any site — bind's assertion (lookups go per site, via the job's ref). */
+    private findCommitted(unitId: number): ConstructionWorkerDemand | undefined {
+        for (const siteDemands of this.demands.values()) {
+            const demand = siteDemands.find(d => d.workerId === unitId);
+            if (demand) {
+                return demand;
+            }
+        }
+        return undefined;
+    }
 
     /** Diggers while terrain still needs leveling, builders once it is complete. */
     private createFromSiteState(site: ConstructionSite): void {

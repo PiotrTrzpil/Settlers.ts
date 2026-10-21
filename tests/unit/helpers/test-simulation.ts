@@ -560,9 +560,11 @@ export class Simulation {
     }
 
     /** Snapshot → restore into a fresh Simulation → run replay ticks. Caller must destroy. */
-    saveAndRestore(replayTicks = 300): Simulation {
+    /** `prepare` runs on the fresh Simulation before the restore (e.g. to attach event listeners). */
+    saveAndRestore(replayTicks = 300, prepare: (sim: Simulation) => void = () => {}): Simulation {
         const snapshot = this.createSnapshot();
         const sim2 = new Simulation({ mapWidth: this.mapWidth, mapHeight: this.mapHeight });
+        prepare(sim2);
         restoreFromSnapshot(sim2.asGame(), snapshot);
         sim2.runTicks(replayTicks);
         return sim2;

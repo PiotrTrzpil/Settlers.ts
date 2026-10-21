@@ -1033,3 +1033,43 @@ releases).
 - **Tests**: `tests/unit/integration/jobs/barracks-job.spec.ts` (commitment; carrier killed / job preempted
   mid-walk → interrupted + next recipe trains — failed before; saved mid-walk and mid-FIGHT-wait → completes
   once, no second transform, stock withdrawn once; barracks removed mid-walk → carrier idles).
+
+## Construction migration notes (as shipped on `refactor/jobs-construction`)
+
+- **Kind** in `features/building-construction/construction-job-kind.ts` (absorbs the deleted
+  `construction-jobs.ts`): `type ConstructionJobParams = { siteId, role: 'digger' | 'builder', tileIndex: number | null,
+  workPos: {x, y}, recruit: RecruitSegment | null }`; `constructionJobSpec(params)` = `{ kind: Construction, ref: siteId,
+  params, reserved: recruit !== null }`. `build` = `goTo(workPos)` + DIG_TILE `{ args: digTile }` / BUILD_STEP
+  `{ args: buildStep }`, wrapped in `segments.prefix(recruit, …)` for recruits. Job ids kept: `DIG_TILE`, `BUILD_STEP`,
+  `RECRUIT_DIGGER`, `RECRUIT_BUILDER`. `workPos` is in params (not re-rolled in `build`), so a rebuild is
+  deterministic.
+- **Owner** = `ConstructionSiteDemandSystem` (implements `ConstructionJobOwner`): `onCompleted` → find the demand via
+  `demandOf(ref, unitId)` and chain the next DIG/BUILD job (`jobs.assign` from inside the callback) or retire it;
+  `onFailed` (incl. `preempted`, `restoreFailed`) and `onUnitRemoved` → release the demand and its tile.
+  A missing demand means it was already released (leveling finished, site gone) — nothing to do.
+- **`demandByWorker` deleted**: lookups are per site via the job's ref (`ConstructionWorkerDemands.demandOf(siteId,
+  unitId)`, O(slots)); `bind` keeps its double-commit assertion via a scan.
+- **Site removal** (`building:removed`, and the drain finding a site gone after completion) cancels
+  `unitsOwnedBy(Construction, siteId)` before dropping the demands. DIG_TILE throws on a missing site (FAILED);
+  BUILD_STEP returns DONE on a missing site — the site legitimately completes while other builders still walk, and
+  completion happens inside a BUILD_STEP executor, so cancelling there would re-enter the running job.
+- **Restore**: `onRestoreComplete` = `rebuildAfterRestore` → demands from site state → each restored worker
+  (`unitsOwnedBy(Construction)` + `paramsOf`, ascending ids) takes the first unbound demand of its site + role with
+  `reservedTileIndex = params.tileIndex`, emitting `construction:workerAssigned` like any bind. `restorable` ⇔ the
+  unit got rebound, so a worker whose site completed / role changed is abandoned (`restoreFailed`) instead of resumed.
+- **Hooks**: DIG_TILE and BUILD_STEP registered `irreversible`.
+- **Deleted**: the `settler:taskCompleted/Failed` subscriptions and the `unit-demand-loop` handler use (only
+  `IntervalDrain` is still imported from it); `assignJob` / `buildJob` legacy dispatch.
+- **Core fix** (identical to the one merged with Workplace-dispatch): `JobService.paramsOf` checks `pendingResumes`
+  first — a restored unit without a home has no runtime until resume.
+- **Tests**: `tests/unit/integration/jobs/construction-restore.spec.ts` (digger / builder saved on the way resume with
+  the same demand + tile and are not re-dispatched; recruit-digger saved before the transform keeps its shovel and
+  transforms once; saved after it resumes at the walk past TRANSFORM), `construction-removal.spec.ts` (digger killed →
+  demand + tile released and re-dispatched; player move → `preempted` releases; recruit killed before transform frees
+  demand + shovel; site removed → `cancelled`, no failure, no executor crash). Helper
+  `tests/unit/helpers/construction-job-helpers.ts`; `sim.saveAndRestore(ticks, prepare?)` gained an optional
+  pre-restore hook. `construction/worker-assignment.spec.ts`'s two restore tests now attach the tracker in `prepare`
+  (they asserted re-dispatch, which Decision 5 replaced with resume).
+- **For Cleanup**: `ChoreoBuilder.meta()` has no construction callers left; `IntervalDrain` import moves with
+  `unit-demand-loop.ts`. The BUILD_STEP executor's per-site `cycleCounters` map is unpersisted and never pruned
+  (pre-existing).

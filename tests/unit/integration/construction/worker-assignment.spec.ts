@@ -4,7 +4,8 @@
  * ConstructionSiteDemandSystem is the single owner of which worker is committed to
  * which site. These tests verify the observable commitment stream stays consistent
  * across the digging → building lifecycle and that demands are rebuilt from site
- * state after save/restore (in-flight construction jobs are not persisted).
+ * state after save/restore, with the restored workers rebound to them (their jobs resume).
+ * The tracker is attached before the restore so it sees those rebinds.
  */
 
 import { describe, it, expect, afterEach } from 'vitest';
@@ -83,8 +84,8 @@ describe('Construction worker assignment', { timeout: 60_000 }, () => {
             { maxTicks: 50_000, label: 'leveling in progress' }
         );
 
-        restored = sim.saveAndRestore(0);
-        const tracker = new ConstructionAssignmentTracker(restored);
+        let tracker!: ConstructionAssignmentTracker;
+        restored = sim.saveAndRestore(0, s => (tracker = new ConstructionAssignmentTracker(s)));
         const site = restored.services.constructionSiteManager.getSiteOrThrow(siteId, 'test');
         expect(site.terrain.complete).toBe(false);
 
@@ -104,8 +105,8 @@ describe('Construction worker assignment', { timeout: 60_000 }, () => {
 
         sim.waitForPhase(siteId, BuildingConstructionPhase.ConstructionRising, 80_000);
 
-        restored = sim.saveAndRestore(0);
-        const tracker = new ConstructionAssignmentTracker(restored);
+        let tracker!: ConstructionAssignmentTracker;
+        restored = sim.saveAndRestore(0, s => (tracker = new ConstructionAssignmentTracker(s)));
 
         restored.waitForConstructionComplete(siteId, 80_000);
         expect(tracker.totalAssignments(siteId, 'builder')).toBeGreaterThan(0);
