@@ -64,7 +64,7 @@ Modules in Layer 1 (`pathfinding/`, `ai/behavior-tree/`, `coordinates/`) must no
 
 | Location | Role | Dependency rule | Examples |
 |----------|------|-----------------|---------|
-| `systems/` | Domain-free engine infrastructure | May be imported by anything; must **never** import from `features/` | `movement`, `pathfinding`, `spatial-search`, `hex-directions`, `coordinate-system`, `tick-scheduler`, `choreo` runtime, `entity-cleanup-registry`, `unit-reservation`, `placement` |
+| `systems/` | Domain-free engine infrastructure | May be imported by anything; must **never** import from `features/` | `movement`, `pathfinding`, `spatial-search`, `hex-directions`, `coordinate-system`, `tick-scheduler`, `choreo` runtime, `entity-cleanup-registry`, `unit-commitment`, `placement` |
 | `features/` | Domain concepts — one concept per module | May import from `systems/` and from other features' barrels (declared in `dependencies` when accessed via `ctx.getFeature`) | `inventory`, `carriers`, `recruit`, `logistics`, `building-construction`, `trees`, `crops` |
 
 **The test:** Does the module encode game rules about a specific concept (inventories, carriers, recruitment, construction, …)? Then it lives in that concept's feature module — **all** of its code, including low-level managers, registries and helpers. Only mechanics that know nothing about any particular domain concept belong in `systems/`.
@@ -73,7 +73,7 @@ Modules in Layer 1 (`pathfinding/`, `ai/behavior-tree/`, `coordinates/`) must no
 
 **Hard constraint:** A module in `systems/` must never import from `features/`. If an engine module needs domain behaviour, invert the dependency (callback, interface, registry hook) instead of importing the feature. Enforced by the dependency-cruiser rule `systems-no-feature-imports` (`pnpm analyze:deps`).
 
-**Shared helpers without a single owner** (used by several features, e.g. `growth/` for trees + crops, `unit-demand-loop` for building-demand + construction, map population helpers used at load time) may stay in `systems/` as long as they import nothing from `features/`. Prefer moving them into a feature once one feature clearly owns the concept.
+**Shared helpers without a single owner** (used by several features, e.g. `growth/` for trees + crops, `interval-drain` for building-demand + construction, map population helpers used at load time) may stay in `systems/` as long as they import nothing from `features/`. Prefer moving them into a feature once one feature clearly owns the concept.
 
 **Why this matters:** A concept split across `systems/X` and `features/X` cannot be found by name, and its barrels end up re-exporting each other. One feature per concept keeps each domain in one place with one public API (`index.ts`).
 
@@ -481,6 +481,27 @@ if (!unit) return;
 
 Both accept any `EntityProvider` (GameState, or any interface with `getEntity`/`getEntityOrThrow`).
 
+### Rule 6.0c: "Idle" Has One Meaning — No Commitment — CRITICAL
+
+A unit is idle **if and only if** it has no commitment: `ctx.unitCommitments.isIdle(id)`
+(⇔ `unitCommitments.get(id) === undefined`). Never derive "idle" or "busy" from anything else — not
+from an empty movement path, `UnitRuntime.state`, a job id, an owner-local map or `entity.hidden`.
+"May the player move it" is `unitCommitments.isReserved(id)`. Readers may narrow the definition
+(the AI: idle and not hidden; `findIdleSpecialist`: idle and no home), never replace it.
+
+```typescript
+// BAD — a second, drifting definition of idle
+const idle = controller.path.length === 0 && runtime.state === SettlerState.IDLE;
+
+// GOOD
+const idle = ctx.unitCommitments.isIdle(unitId);
+const ownedBy = ctx.unitCommitments.get(unitId); // { owner, ref, reserved, hasJob } | undefined
+```
+
+Commitments are written only by settler-tasks' `JobService` (`assign` / `cancel` / `hold` /
+`releaseHold`). See `docs/designs/job-ownership.md` (Invariants) and
+`docs/architecture/feature-modules.md` §3d.
+
 ### Rule 6.1: No Side Effects in Queries
 
 Functions starting with `get*`, `find*`, `has*`, `is*`, `can*` MUST be pure:
@@ -855,6 +876,7 @@ class SpriteLoader {
 | Query immutability | TypeScript `Readonly<T>` return types |
 | Test patterns | Code review + `testing/guide.md` |
 | Race fallbacks | grep for `Race.Roman` as default/fallback; ESLint no-param-defaults for race |
+| Idle definition / job routing | grep: no `settler:taskCompleted\|settler:taskFailed` subscriptions outside `debug/`, timeline and tests |
 
 ---
 

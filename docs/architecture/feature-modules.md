@@ -170,6 +170,58 @@ Rules:
 - Work handlers (`SearchType` → handler) follow the same rule: the domain feature registers its handler
   (production-control → WORKPLACE, trees → TREE, …) via `settlerTaskSystem.registerWorkHandler()`.
 
+#### 3d. Features Own Their Units' Jobs (JobKind handlers and holds)
+
+A feature that sends units to do something registers itself as the **owner** of that job kind
+(`JobKind` in `systems/choreo/job-kind.ts`) with settler-tasks' `JobService`, once, in `create()`.
+The runtime calls the owner directly on every outcome — features never subscribe to
+`settler:taskCompleted` / `settler:taskFailed` for routing (those are notifications for timeline,
+debug and tests). Full contract: [`docs/designs/job-ownership.md`](../designs/job-ownership.md).
+
+```typescript
+// features/my-feature/internal/my-job-kind.ts
+type MyJobParams = { readonly buildingId: number }; // a type alias (not an interface): plain JSON, no closures
+
+export function createMyJobKind(deps: MyJobKindDeps): JobKindHandler<MyJobParams> {
+    return {
+        kind: JobKind.WorkplaceDispatch,          // each JobKind has exactly one owner (asserted at startup)
+        persist: true,                            // saved as { kind, params, nodeIndex, targets }; nodes never are
+        restorable: (_unit, _ref, p) => deps.buildings.has(p.buildingId), // optional: false ⇒ onFailed('restoreFailed')
+        build: (_unit, p) =>                      // pure function of params + current world
+            choreo('WORKER_DISPATCH').goToDoorAndEnter(p.buildingId, deps.ctx).toJobBuild(),
+        onCompleted: (unitId, ref) => deps.demands.fulfil(ref, unitId), // may assign the next job
+        onFailed: (unitId, ref, _p, info) => deps.demands.reopen(ref, unitId, info.reason), // 'failed' | 'preempted' | 'restoreFailed'
+        onUnitRemoved: (unitId, ref) => deps.demands.reopen(ref, unitId), // entity already gone — bookkeeping only
+    };
+}
+
+// features/my-feature/my-feature.ts
+create(ctx) {
+    const { jobs } = ctx.getFeature<SettlerTaskExports>('settler-tasks');
+    jobs.registerKind(createMyJobKind({ ... }));
+    // dispatch: ref = the owner's own key; reserved ⇒ player move commands are rejected
+    jobs.assign(unitId, { kind: JobKind.WorkplaceDispatch, ref: buildingId, params: { buildingId }, reserved: false });
+    // stop (building removed, …) — the owner is NOT called back for its own cancel
+    for (const id of jobs.commitments.unitsOwnedBy(JobKind.WorkplaceDispatch, buildingId)) {
+        jobs.cancel(id, JobKind.WorkplaceDispatch);
+    }
+}
+```
+
+Rules:
+- **Owned without a job** (a garrisoned unit, a siege participant) is a *hold*: register a
+  `HoldOwnerHandler` (`{ owner, persist, onUnitRemoved, onPreempted }`) with `jobs.registerHoldOwner`,
+  then `jobs.hold(unitId, owner, ref, reserved)` / `jobs.releaseHold(unitId, owner)`. A JobKind
+  handler is not implicitly a hold owner.
+- Node data goes into the nodes (`node.args`, `node.goal` from `ChoreoBuilder.toJobBuild()`), never
+  into params that can't be rebuilt. Irreversible task types and per-node cleanup are `ChoreoNodeHooks`
+  (`irreversible`, `onAbort`, `onRestore`) registered with the executor (3c).
+- Restore: in `onRestoreComplete` rebuild domain state from `jobs.commitments.unitsOwnedBy(kind)` +
+  `jobs.paramsOf(unitId)` (jobs are not built yet); never assign there. Jobs resume by themselves in
+  `onRestoreResume`.
+- Only `JobService` writes commitments (`ctx.claimUnitCommitmentWriter()` is settler-tasks' alone).
+  Everyone reads `ctx.unitCommitments` (`get`, `isIdle`, `isReserved`, `unitsOwnedBy`).
+
 #### 4. Query Interface for Rendering
 
 Renderers query feature modules for display data:

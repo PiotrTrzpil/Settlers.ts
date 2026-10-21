@@ -1,5 +1,12 @@
 # Entity Job ID — Design
 
+> **Superseded (2026-10-21) by [`job-ownership.md`](job-ownership.md).** `entity.jobId`, `clearJobId`,
+> `GameState.nextJobId` / `allocateJobId` and the snapshot fields are deleted. A unit's current owner is
+> its **commitment** (`ctx.unitCommitments.get(id)` → `{ owner, ref, reserved, hasJob }`; idle ⇔ none),
+> transport identity is the commitment `ref` (= `TransportJobRecord.id`, counter persisted by the
+> `TransportJobStore`), garrisoned units are Garrison holds, and every job kind is saved and restored
+> uniformly as `{ kind, params, nodeIndex, targets }`. Kept below as history.
+
 ## Overview
 
 Add a universal numeric `jobId` field to `Entity` so units are self-describing about their current activity. This eliminates the dual-state problem where `TransportJobStore` (persistent) and `ChoreoSystem` (transient) independently track what a carrier is doing — diverging on hot-reload or save/load. Transport jobs become fully transient (not persisted), and on restore the system reconstructs them from entity state + slot reservations. Garrison units also get proper job IDs — both en-route and inside towers — enabling reliable restore from entity state alone.

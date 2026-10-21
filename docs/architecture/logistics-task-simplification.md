@@ -2,6 +2,17 @@
 
 Review of logistics, task assignment, material requests, building/construction demand, and related settler-task plumbing. Goal: fewer error-prone paths, clearer ownership, useful abstractions.
 
+> **Partly superseded (2026-10-21) by [`docs/designs/job-ownership.md`](../designs/job-ownership.md).**
+> Job ownership, the "is this unit idle" question and the invariants now live there. Superseded here:
+> `entity.jobId` (deleted — a unit's commitment `{ owner, ref }` is its identity; for a transport,
+> `ref` = record id), `clearJobId` / `numericJobId` / `allocateJobId`, `TransportJobBuilder` (now the
+> `Transport` JobKind handler, `features/logistics/transport-job-kind.ts`), `onCancel` / `transportData`
+> (node `args` + `TransportJobStore`), the `carrier:transportCancelled` → lifecycle round-trip (cancel calls
+> `jobs.cancel` directly; the event is a notification), `UnitDemandJobHandlers` (owners get direct
+> handler calls), `unit-demand-loop.ts` (only `IntervalDrain` remains, in `systems/interval-drain.ts`) and
+> `TaskDispatcher.assignJob` (jobs go through `JobService.assign`). Sections below that describe those
+> are kept as history; the P2 items are still open.
+
 ---
 
 ## Mental model (current)
@@ -200,16 +211,14 @@ Further extract **`UnitJobService`** (`assignJob` / `assignMoveTask` / interrupt
 
 ---
 
-## Invariants (document and keep)
+## Invariants
 
-1. **Standing order** exists ⇒ dispatcher may open jobs; deficit is derived, never stored.
-2. **Job phase is reservation** — Queued/Reserved claim source stock; PickedUp is dest-incoming only.
-3. **One active transport + one queued** per carrier max.
-4. **`entity.jobId != null` ⇒ not idle** (carriers, specialists, garrison).
-5. **Deliver does not free the carrier** — task complete (after stand-up) does.
-6. **Construction complete cancels dest jobs**; standing orders replaced by material-request system on same event (order-independent by design).
-7. **Null work handlers** (carrier, builder, digger) never self-assign — external systems push jobs.
-8. **`entity.jobId` ownership** — only settler-task lifecycle (`completeJob` / `interruptJob`) clears it for live units. Transport cancel emits an event; lifecycle interrupts. Restore may clear orphan ids with no active record.
+**Moved to [`docs/designs/job-ownership.md` → "Invariants"](../designs/job-ownership.md#invariants-replace-invariants-in-docsarchitecturelogistics-task-simplificationmd).**
+The logistics invariants of this review (standing order ⇒ dispatcher may open jobs; phase is the
+reservation; one active + one queued transport per carrier; deliver does not free the carrier;
+construction complete cancels destination jobs; null work handlers never self-assign) are kept there
+as invariants 9–14. The former invariants 4 and 8 (`entity.jobId` as the busy flag and its ownership)
+are replaced by invariants 1–3 (idle ⇔ no commitment; only `JobService` writes commitments).
 
 ---
 
@@ -218,14 +227,14 @@ Further extract **`UnitJobService`** (`assignJob` / `assignMoveTask` / interrupt
 | Item | Status |
 |------|--------|
 | This document | Done |
-| P0.1 Unify numeric job id | Done |
-| P0.2 Single `clearJobId` ownership | Done |
+| P0.1 Unify numeric job id | Done; superseded (`entity.jobId` deleted — job-ownership.md) |
+| P0.2 Single `clearJobId` ownership | Done; superseded (commitments — job-ownership.md) |
 | P0.3 Discriminated `AssignResult` | Done |
-| P1.6 Pure `transportData` (no TransportOps) | Done |
-| P1.7 Unit demand loop helpers | Done (`systems/unit-demand-loop.ts`) |
+| P1.6 Pure `transportData` (no TransportOps) | Done; superseded (node args — job-ownership.md) |
+| P1.7 Unit demand loop helpers | Done; superseded (only `IntervalDrain` left, `systems/interval-drain.ts`) |
 | P1.8 `UnitJobService` extract | Done |
-| P1.9 Merge JobAssigner → TaskDispatcher | Done |
-| P0.4 JobKind enum | Done |
+| P1.9 Merge JobAssigner → TaskDispatcher | Done; superseded (`JobService.assign`) |
+| P0.4 JobKind enum | Done; extended (one `JobKindHandler` per kind — job-ownership.md) |
 | P0.5 Delete dead logistics exports | Done |
 | P2.10 Spatial idle-carrier index | Done (`SpatialHash` + `IdleCarrierPool`) |
 | P2.11 DestCapacity snapshot | Not started |

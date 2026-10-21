@@ -1,5 +1,9 @@
 # Restore Path Cleanup — Design
 
+> **Partly superseded (2026-10-21) by [`job-ownership.md`](job-ownership.md):** `entity.jobId` and
+> `nextJobId` are deleted (items about them no longer apply); unit jobs and commitments are restored
+> uniformly by settler-tasks.
+
 ## Overview
 
 Clean up persistence/restore code after the entity-job-id feature. Fix stale comments, remove sentinel hacks, consolidate duplicated building scans, and add missing validation. This is purely cleanup — no behavioral changes.

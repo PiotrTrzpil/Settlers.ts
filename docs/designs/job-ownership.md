@@ -1,5 +1,25 @@
 # Job Ownership & Unit Commitment — Design
 
+> **Status: Implemented (2026-10-21).** Core, all seven migrations and Cleanup are merged; the legacy
+> job path, `UnitReservationRegistry` and `entity.jobId` are gone. The "Core implementation notes" and
+> per-migration notes at the end describe the API as shipped (they supersede the sketches in "Shared
+> Contracts"); "Cleanup notes" lists what was deleted and what was kept.
+>
+> | Subsystem | Branch | Status |
+> |---|---|---|
+> | Core: commitment & job runtime | `refactor/job-ownership-core` | Done |
+> | Garrison migration | `refactor/jobs-garrison` | Done |
+> | Recruit migration | `refactor/jobs-recruit` | Done |
+> | Readers & siege migration | `refactor/jobs-siege` | Done |
+> | Workplace-dispatch migration | `refactor/jobs-workplace` | Done |
+> | Barracks migration | `refactor/jobs-barracks` | Done |
+> | Construction migration | `refactor/jobs-construction` | Done |
+> | Transport migration | `refactor/jobs-transport` | Done |
+> | Cleanup | `refactor/jobs-cleanup` | Done |
+>
+> How-to for new code: `docs/architecture/feature-modules.md` §3d (register a JobKind handler / hold
+> owner) and `docs/design-rules.md` Rule 6.0c (idle ⇔ no commitment).
+
 ## Overview
 
 Every unit gets **one commitment record** (who owns it, which demand/record/tower, whether the player may move it), and every
@@ -1116,3 +1136,47 @@ releases).
   `carrier:transportCancelled` handler (no-op for owned jobs; the event stays a notification), the
   `numericJobId` parameter (no caller left in logistics), and update `logistics-task-simplification.md` /
   `entity-job-id.md` (they still describe `TransportJobBuilder`, `onCancel` and `entity.jobId === record.id`).
+
+## Cleanup notes (as shipped on `refactor/jobs-cleanup`)
+
+- **Deleted — legacy job path**: `ChoreoJobState.{synthetic, onCancel, metadata, transportData, waypoints}`
+  and every `synthetic` branch (`JobOutcomes.complete/fail`, `internal/unit-removal.ts` — including the
+  legacy `settler:taskFailed` on removal —, `settler-task-persistence.ts`, `JobService.paramsOf`);
+  `TransportData`; `JobRunner.assignJob` / `TaskDispatcher.assignJob` (TaskDispatcher is move tasks only)
+  and `numericJobId`; `ChoreoBuilder.build()`, `meta()`, `transformRecruit()`,
+  `transformRecruitBuilding()`, `transformDirect()`, and the `kind` argument / `kind()` method of the
+  builder (only `build()` read it); `createChoreoJobState(jobId, nodes, owner)` lost its `synthetic` flag
+  and the legacy `JobKind`-only owner form; the waypoint branch of GO_TO_TARGET, the metadata branch of
+  ENTER_BUILDING and of the TRANSFORM_* executors; `TRANSITIONAL_UNOWNED_KINDS` (every `JobKind` is now
+  asserted at startup); `settler-lifecycle.ts`'s `carrier:transportCancelled` handler (the event stays a
+  notification from `TransportJobService`).
+- **Deleted — legacy recruit**: `DispatchRecruitmentOpts.buildJob` (`buildSpec` is now required on
+  `dispatchRecruitment` / `dispatchRecruitmentFromPile`), the default AUTO_RECRUIT legacy job and
+  `executeLegacy*` / `assignLegacy`, `dispatchRecruitmentFromBuilding`, `recruitment-job.ts`
+  (`createRecruitmentJob`, `createDirectTransformJob`), `RecruitmentCandidate.reservationId`,
+  `UnitTransformerConfig.unitReservation`, `reserveTransform`'s `legacyReserved`, and `RecruitSystem`'s
+  `unitTransformer` / `assignJob` config.
+- **Deleted — reservation registry**: `systems/unit-reservation.ts`, `ctx.unitReservation`,
+  `GameServices.unitReservation`, `CLEANUP_PRIORITY.RESERVATIONS`, the legacy OR in
+  `UnitCommitments.isIdle/isReserved` (+ its constructor argument). `MoveCommandDeps.unitReservation`
+  is renamed `unitCommitments`.
+- **Deleted — numeric job id**: `entity.jobId`, `clearJobId`, `GameState.nextJobId` / `allocateJobId`,
+  and the snapshot fields `entities[].jobId` / `nextJobId`. `SNAPSHOT_VERSION` stays 18 (v18 had not
+  shipped).
+- **Moved**: `IntervalDrain` → `systems/interval-drain.ts`; the rest of `systems/unit-demand-loop.ts`
+  (`UnitDemandJobHandlers`, `handleDemandJobCompleted/Failed`) is deleted.
+- **Renamed**: `JobChoreographyStore.registerSyntheticJob` → `registerCodeDefinedJob`.
+- **Kept**: `features/restore-utils.ts` (`forEachCompletedBuilding` is used by barracks, tower-garrison,
+  building-demand and victory-conditions); `RecruitSystem.dispatchRecruitmentFromPile` (owned-only now; no
+  caller yet).
+- **Grep gate**: no `settler:taskCompleted|settler:taskFailed` subscriptions in `src/` outside
+  `src/game/debug/` and timeline code (only the emitters in `settler-tasks/internal/job-events.ts`).
+- **BUILD_STEP cycle counter** (pre-existing leak): the per-site counter moved from the executor's closure
+  map into `ConstructionSiteManager` (`advanceBuildCycle` / `getBuildCycle`) and `removeSite` drops it
+  (test: `construction/building-lifecycle.spec.ts`). It is still **not persisted**: after a load the
+  current material's BUILD_STEP cycles restart from 0, so a save straddling a build step can differ from an
+  unsaved run by less than one material's worth of progress. Unchanged behaviour; persist it with the site
+  if save/load determinism of construction progress is ever required.
+- **Tests converted**: legacy `assignJob(choreo().build())` preemption → `jobRunner.assignMoveTask`;
+  `unitReservation.reserve/release` → a reserved `'player-move'` hold (`jobs.hold/releaseHold`);
+  `entity.jobId === record.id` → commitment `{ owner: Transport, ref: record.id }`.
