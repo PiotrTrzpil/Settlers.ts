@@ -116,6 +116,39 @@ Only kernel-level commands (selection, raw entity spawn/remove, script commands)
 central `registerAllHandlers`. External code (UI, debug, CLI, tests) reaches feature services through
 the few widely-shared typed fields on `GameServices`, or `services.getFeature<XExports>('x')`.
 
+#### 3c. Features Register Their Own Choreography Executors
+
+`ChoreoSystem` (`systems/choreo`) is a kernel service on `FeatureContext.choreoSystem`, created by
+`GameServices` before any feature. A feature registers the executors for the choreography task types
+whose domain it owns — it never asks settler-tasks to do it, and needs no dependency on settler-tasks
+just to register:
+
+```typescript
+create(ctx) {
+    registerGoodsExecutors(ctx.choreoSystem, { materialTransfer, inventoryManager });
+    ctx.choreoSystem.register(ChoreoTaskType.ENTER_BUILDING, createEnterBuildingExecutor(locationManager));
+}
+```
+
+| Owner | Task types |
+|-------|------------|
+| settler-tasks (domain-free runtime) | GO_TO_*, GO_HOME, GO_VIRTUAL, SEARCH, WORK*, PLANT, PRODUCE_VIRTUAL, WAIT*, CHECKIN, CHANGE_JOB* |
+| material-transfer | GET_GOOD*, PUT_GOOD*, RESOURCE_GATHERING*, LOAD_GOOD |
+| logistics | TRANSPORT_* |
+| building-construction (construction-demand) | DIG_TILE, BUILD_STEP |
+| recruit | TRANSFORM_RECRUIT, TRANSFORM_RECRUIT_BUILDING, TRANSFORM_DIRECT |
+| combat | HEAL_ENTITY, ATTACK_REACTION |
+| settler-location | ENTER_BUILDING |
+
+Rules:
+- Executors are closures over stable services captured at registration. Per-unit state — the unit's
+  workplace (`homeBuildingId`) and its work handlers — arrives as the explicit `ChoreoExecutionScope`
+  argument `(settler, job, node, dt, scope)`. Never stash per-unit state in a shared, mutable context.
+- Each task type has exactly one owner: `register()` throws on a duplicate, and `GameServices` calls
+  `choreoSystem.assertAllRegistered()` after loading features, so a missing executor fails at startup.
+- Work handlers (`SearchType` → handler) follow the same rule: the domain feature registers its handler
+  (production-control → WORKPLACE, trees → TREE, …) via `settlerTaskSystem.registerWorkHandler()`.
+
 #### 4. Query Interface for Rendering
 
 Renderers query feature modules for display data:

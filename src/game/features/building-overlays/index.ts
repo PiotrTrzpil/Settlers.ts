@@ -38,6 +38,9 @@ export { OverlayRegistry } from './overlay-registry';
 // Manager
 export { BuildingOverlayManager, type BuildingOverlayManagerConfig } from './building-overlay-manager';
 
+// Choreography triggers → overlay working state
+export { TriggerSystemImpl, type TriggerSystem, type TriggerSystemConfig } from './trigger-system';
+
 // Data loader
 export { populateOverlayRegistry } from './overlay-data-loader';
 

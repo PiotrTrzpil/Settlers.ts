@@ -41,6 +41,7 @@ import type { Persistable } from '../persistence';
 import type { TerrainData } from '../terrain';
 import type { RenderPassDefinition } from '../renderer/render-passes/types';
 import type { TickScheduler } from '../systems/tick-scheduler';
+import type { ChoreoSystem } from '../systems/choreo';
 import type { GameplaySettings } from '../game-settings';
 
 /**
@@ -85,6 +86,13 @@ export interface FeatureContext extends CoreDeps {
 
     /** Shared tick scheduler for deferred callbacks. */
     tickScheduler: TickScheduler;
+
+    /**
+     * Choreography executor registry. Each feature registers the executors for the task
+     * types whose domain it owns (goods → material-transfer, DIG_TILE → construction, …).
+     * Every ChoreoTaskType must be registered by the end of feature loading (asserted at startup).
+     */
+    choreoSystem: ChoreoSystem;
 
     /** Map terrain (ground types, heights, dimensions). Available to all features at creation time. */
     terrain: TerrainData;

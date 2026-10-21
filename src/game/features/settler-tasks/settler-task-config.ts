@@ -8,17 +8,14 @@ import type { CoreDeps } from '../feature';
 import type { BuildingInventoryManager, BuildingPileRegistry } from '../inventory';
 import type { EntityVisualService } from '../../animation/entity-visual-service';
 import type { WorkAreaStore } from '../work-areas/work-area-store';
-import type { BuildingOverlayManager } from '../building-overlays/building-overlay-manager';
-import type { ProductionControlManager } from '../production-control';
+import type { TriggerSystem } from '../building-overlays';
 import type { ConstructionSiteManager } from '../building-construction/construction-site-manager';
-import type { ExecuteCommand } from '../../commands';
 import type { MaterialTransfer } from '../material-transfer';
 import type { ChoreoSystem } from '../../systems/choreo';
 import type { ISettlerBuildingLocationManager } from '../settler-location';
 import type { TickScheduler } from '../../systems/tick-scheduler';
 import type { UnitRuntime } from './unit-state-machine';
 import type { EMaterialType } from '../../economy';
-import type { OreVeinData } from '../ore-veins/ore-vein-data';
 import type { TerritoryConnectivityCheck } from './building-worker-tracker';
 
 export interface SettlerTaskSystemConfig extends CoreDeps {
@@ -28,14 +25,12 @@ export interface SettlerTaskSystemConfig extends CoreDeps {
     inventoryManager: BuildingInventoryManager;
     pileRegistry: BuildingPileRegistry;
     workAreaStore: WorkAreaStore;
-    buildingOverlayManager: BuildingOverlayManager;
-    getProductionControlManager?: () => ProductionControlManager;
+    triggerSystem: TriggerSystem;
+    /** Only for BuildingPositionResolver's construction-pile lookup. */
     constructionSiteManager: ConstructionSiteManager;
-    executeCommand: ExecuteCommand;
     materialTransfer: MaterialTransfer;
-    isInCombat?: (entityId: number) => boolean;
+    isInCombat: (entityId: number) => boolean;
     locationManager: ISettlerBuildingLocationManager;
-    oreVeinData: OreVeinData;
     /** Rejects worker↔building pairs in disconnected territory pockets. */
     territoryCheck: TerritoryConnectivityCheck;
 }

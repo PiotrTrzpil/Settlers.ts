@@ -15,7 +15,13 @@ import { hexDistance, getDirectionToward, type EDirection } from '../../../syste
 import { findAdjacentWalkableTile } from '../../../buildings/approach';
 import { createLogger } from '@/utilities/logger';
 import { TaskResult } from '../types';
-import type { ChoreoNode, MovementExecutorFn, ChoreoJobState, MovementContext } from '../choreo-types';
+import type {
+    ChoreoNode,
+    MovementExecutorFn,
+    ChoreoJobState,
+    MovementContext,
+    ChoreoExecutionScope,
+} from '../choreo-types';
 import { ChoreoTaskType, resolveSearchArea } from '../choreo-types';
 import { safeCall } from '../safe-call';
 
@@ -331,12 +337,18 @@ export const executeGoToDestinationPile: MovementExecutorFn = (settler, job, nod
     return moveToPosition(settler, job.targetPos.x, job.targetPos.y, node, ctx, ARRIVAL_DIST, job);
 };
 
-/** Try entity handler search. Returns null when entityHandler is absent. */
-function searchViaEntityHandler(settler: Entity, job: ChoreoJobState, ctx: MovementContext): TaskResult | null {
-    if (!ctx.entityHandler) {
+/** Try entity handler search. Returns null when the unit has no entity handler. */
+function searchViaEntityHandler(
+    settler: Entity,
+    job: ChoreoJobState,
+    ctx: MovementContext,
+    scope: ChoreoExecutionScope
+): TaskResult | null {
+    const { entityHandler } = scope;
+    if (!entityHandler) {
         return null;
     }
-    const { entityHandler, handlerErrorLogger } = ctx;
+    const { handlerErrorLogger } = ctx;
     const homeId = ctx.getWorkerHomeBuilding(settler.id);
     const area = resolveSearchArea(settler, homeId, ctx.buildingPositionResolver);
 
@@ -363,12 +375,18 @@ function searchViaEntityHandler(settler: Entity, job: ChoreoJobState, ctx: Movem
     return TaskResult.FAILED;
 }
 
-/** Try position handler search. Returns null when positionHandler is absent. */
-function searchViaPositionHandler(settler: Entity, job: ChoreoJobState, ctx: MovementContext): TaskResult | null {
-    if (!ctx.positionHandler) {
+/** Try position handler search. Returns null when the unit has no position handler. */
+function searchViaPositionHandler(
+    settler: Entity,
+    job: ChoreoJobState,
+    ctx: MovementContext,
+    scope: ChoreoExecutionScope
+): TaskResult | null {
+    const { positionHandler } = scope;
+    if (!positionHandler) {
         return null;
     }
-    const { positionHandler, handlerErrorLogger } = ctx;
+    const { handlerErrorLogger } = ctx;
     const homeId = ctx.getWorkerHomeBuilding(settler.id);
     const area = resolveSearchArea(settler, homeId, ctx.buildingPositionResolver);
 
@@ -397,23 +415,23 @@ function searchViaPositionHandler(settler: Entity, job: ChoreoJobState, ctx: Mov
 /**
  * SEARCH — find a target entity or position via the registered work handler.
  *
- * Tries entityHandler first, then positionHandler.
+ * Tries the scope's entityHandler first, then its positionHandler.
  * - DONE when a target is found.
  * - CONTINUE when nothing found and shouldWaitForWork is true.
  * - FAILED when nothing found and shouldWaitForWork is false.
  */
-export const executeSearch: MovementExecutorFn = (settler, job, _node, _dt, ctx) => {
-    const entityResult = searchViaEntityHandler(settler, job, ctx);
+export const executeSearch: MovementExecutorFn = (settler, job, _node, _dt, ctx, scope) => {
+    const entityResult = searchViaEntityHandler(settler, job, ctx, scope);
     if (entityResult !== null) {
         return entityResult;
     }
 
-    const posResult = searchViaPositionHandler(settler, job, ctx);
+    const posResult = searchViaPositionHandler(settler, job, ctx, scope);
     if (posResult !== null) {
         return posResult;
     }
 
-    log.warn(`executeSearch: settler ${settler.id} has no handler in context`);
+    log.warn(`executeSearch: settler ${settler.id} has no work handler in scope`);
     return TaskResult.FAILED;
 };
 

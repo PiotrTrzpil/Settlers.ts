@@ -1,13 +1,20 @@
 /**
- * Choreography executor registration — registers all core executors on a ChoreoSystem.
+ * Core choreography executor registration — the domain-free part of the job runtime.
  *
- * Call registerCoreExecutors() once during WorkerTaskExecutor construction to wire
- * all built-in task types. Domain features (e.g. recruit) register their own
- * task types independently on the same ChoreoSystem instance.
+ * settler-tasks registers only the executors that know nothing about a specific domain:
+ * movement (GO_TO_*, GO_HOME, GO_VIRTUAL, SEARCH), work timing + work-handler callbacks
+ * (WORK*, PLANT, PRODUCE_VIRTUAL) and control flow (WAIT*, CHECKIN, CHANGE_JOB*).
+ *
+ * Domain executors are registered on the same kernel ChoreoSystem by their owning features:
+ * goods (material-transfer), construction (DIG_TILE/BUILD_STEP), recruit (TRANSFORM_*),
+ * logistics (TRANSPORT_*), combat (HEAL_ENTITY/ATTACK_REACTION), settler-location (ENTER_BUILDING).
  */
 
-import { ChoreoSystem, ChoreoTaskType } from '../../systems/choreo';
-import type { MovementContext, WorkContext, InventoryExecutorContext, ControlContext } from './choreo-types';
+import { ChoreoTaskType, type ChoreoSystem } from '../../systems/choreo';
+import type { GameState } from '../../game-state';
+import type { ThrottledLogger } from '@/utilities/throttled-logger';
+import type { TriggerSystem } from '../building-overlays';
+import type { MovementContext, WorkContext, BuildingPositionResolver } from './choreo-types';
 
 // Movement
 import {
@@ -31,106 +38,79 @@ import {
     executeProduceVirtual,
 } from './internal/work-executors';
 
-// Inventory
-import {
-    executeGetGood,
-    executePutGood,
-    executeResourceGathering,
-    executeLoadGood,
-} from './internal/inventory-executors';
-
 // Control
-import {
-    executeWait,
-    executeCheckin,
-    executeChangeJob,
-    executeHealEntity,
-    executeAttackReaction,
-} from './internal/control-executors';
+import { executeWait, executeCheckin, executeChangeJob } from './internal/control-executors';
 
-export { ChoreoSystem };
+/** Stable services captured by the core executors. */
+export interface CoreExecutorDeps {
+    gameState: GameState;
+    buildingPositionResolver: BuildingPositionResolver;
+    triggerSystem: TriggerSystem;
+    handlerErrorLogger: ThrottledLogger;
+    getWorkerHomeBuilding: (settlerId: number) => number | null;
+}
 
-// ─────────────────────────────────────────────────────────────
-// Core executor registration
-// ─────────────────────────────────────────────────────────────
+function registerMovementExecutors(choreoSystem: ChoreoSystem, movCtx: MovementContext): void {
+    const movementExecutors = [
+        [ChoreoTaskType.GO_TO_TARGET, executeGoToTarget],
+        [ChoreoTaskType.GO_TO_TARGET_ROUGHLY, executeGoToTargetRoughly],
+        [ChoreoTaskType.GO_TO_POS, executeGoToPos],
+        [ChoreoTaskType.GO_TO_POS_ROUGHLY, executeGoToPosRoughly],
+        [ChoreoTaskType.GO_TO_SOURCE_PILE, executeGoToSourcePile],
+        [ChoreoTaskType.GO_TO_DESTINATION_PILE, executeGoToDestinationPile],
+        [ChoreoTaskType.GO_HOME, executeGoHome],
+        [ChoreoTaskType.GO_VIRTUAL, executeGoVirtual],
+        [ChoreoTaskType.SEARCH, executeSearch],
+    ] as const;
+    for (const [taskType, fn] of movementExecutors) {
+        choreoSystem.register(taskType, (s, j, n, dt, scope) => fn(s, j, n, dt, movCtx, scope));
+    }
+}
 
-/**
- * Register all core choreography executors on a ChoreoSystem instance.
- *
- * Executors are closures that capture their context objects by reference.
- * Contexts are mutated in-place per tick (zero allocation) — mutations are
- * visible to already-registered closures.
- *
- * TRANSFORM_RECRUIT and TRANSFORM_DIRECT are NOT registered here.
- * The recruit feature registers those on the same ChoreoSystem after creation.
- */
-export function registerCoreExecutors(
-    choreoSystem: ChoreoSystem,
-    movCtx: MovementContext,
-    workCtx: WorkContext,
-    invCtx: InventoryExecutorContext,
-    ctrlCtx: ControlContext
-): void {
-    // ── Movement ──────────────────────────────────────────────
-    choreoSystem.register(ChoreoTaskType.GO_TO_TARGET, (s, j, n, dt) => executeGoToTarget(s, j, n, dt, movCtx));
-    choreoSystem.register(ChoreoTaskType.GO_TO_TARGET_ROUGHLY, (s, j, n, dt) =>
-        executeGoToTargetRoughly(s, j, n, dt, movCtx)
-    );
-    choreoSystem.register(ChoreoTaskType.GO_TO_POS, (s, j, n, dt) => executeGoToPos(s, j, n, dt, movCtx));
-    choreoSystem.register(ChoreoTaskType.GO_TO_POS_ROUGHLY, (s, j, n, dt) =>
-        executeGoToPosRoughly(s, j, n, dt, movCtx)
-    );
-    choreoSystem.register(ChoreoTaskType.GO_TO_SOURCE_PILE, (s, j, n, dt) =>
-        executeGoToSourcePile(s, j, n, dt, movCtx)
-    );
-    choreoSystem.register(ChoreoTaskType.GO_TO_DESTINATION_PILE, (s, j, n, dt) =>
-        executeGoToDestinationPile(s, j, n, dt, movCtx)
-    );
-    choreoSystem.register(ChoreoTaskType.GO_HOME, (s, j, n, dt) => executeGoHome(s, j, n, dt, movCtx));
-    choreoSystem.register(ChoreoTaskType.GO_VIRTUAL, (s, j, n, dt) => executeGoVirtual(s, j, n, dt, movCtx));
-    choreoSystem.register(ChoreoTaskType.SEARCH, (s, j, n, dt) => executeSearch(s, j, n, dt, movCtx));
+function registerWorkExecutors(choreoSystem: ChoreoSystem, workCtx: WorkContext): void {
+    const workExecutors = [
+        [ChoreoTaskType.WORK, executeWork],
+        [ChoreoTaskType.WORK_ON_ENTITY, executeWorkOnEntity],
+        [ChoreoTaskType.WORK_VIRTUAL, executeWorkVirtual],
+        [ChoreoTaskType.WORK_ON_ENTITY_VIRTUAL, executeWorkOnEntityVirtual],
+        [ChoreoTaskType.PRODUCE_VIRTUAL, executeProduceVirtual],
+        [ChoreoTaskType.PLANT, executeWork],
+    ] as const;
+    for (const [taskType, fn] of workExecutors) {
+        choreoSystem.register(taskType, (s, j, n, dt, scope) => fn(s, j, n, dt, workCtx, scope));
+    }
+}
 
-    // ── Work ──────────────────────────────────────────────────
-    choreoSystem.register(ChoreoTaskType.WORK, (s, j, n, dt) => executeWork(s, j, n, dt, workCtx));
-    choreoSystem.register(ChoreoTaskType.WORK_ON_ENTITY, (s, j, n, dt) => executeWorkOnEntity(s, j, n, dt, workCtx));
-    choreoSystem.register(ChoreoTaskType.WORK_VIRTUAL, (s, j, n, dt) => executeWorkVirtual(s, j, n, dt, workCtx));
-    choreoSystem.register(ChoreoTaskType.WORK_ON_ENTITY_VIRTUAL, (s, j, n, dt) =>
-        executeWorkOnEntityVirtual(s, j, n, dt, workCtx)
-    );
-    choreoSystem.register(ChoreoTaskType.PRODUCE_VIRTUAL, (s, j, n, dt) => executeProduceVirtual(s, j, n, dt, workCtx));
-    choreoSystem.register(ChoreoTaskType.PLANT, (s, j, n, dt) => executeWork(s, j, n, dt, workCtx));
-
-    // ── Inventory ─────────────────────────────────────────────
-    choreoSystem.register(ChoreoTaskType.GET_GOOD, (s, j, n, dt) => executeGetGood(s, j, n, dt, invCtx));
-    choreoSystem.register(ChoreoTaskType.GET_GOOD_VIRTUAL, (s, j, n, dt) => {
-        j.visible = false;
-        return executeGetGood(s, j, n, dt, invCtx);
-    });
-    choreoSystem.register(ChoreoTaskType.PUT_GOOD, (s, j, n, dt) => executePutGood(s, j, n, dt, invCtx));
-    choreoSystem.register(ChoreoTaskType.PUT_GOOD_VIRTUAL, (s, j, n, dt) => {
-        j.visible = false;
-        return executePutGood(s, j, n, dt, invCtx);
-    });
-    choreoSystem.register(ChoreoTaskType.RESOURCE_GATHERING, (s, j, n, dt) =>
-        executeResourceGathering(s, j, n, dt, invCtx)
-    );
-    choreoSystem.register(ChoreoTaskType.RESOURCE_GATHERING_VIRTUAL, (s, j, n, dt) => {
-        j.visible = false;
-        return executeResourceGathering(s, j, n, dt, invCtx);
-    });
-    choreoSystem.register(ChoreoTaskType.LOAD_GOOD, (s, j, n, dt) => executeLoadGood(s, j, n, dt, invCtx));
-
-    // ── Control ───────────────────────────────────────────────
-    choreoSystem.register(ChoreoTaskType.WAIT, (s, j, n, dt) => executeWait(s, j, n, dt, ctrlCtx));
+function registerControlExecutors(choreoSystem: ChoreoSystem): void {
+    choreoSystem.register(ChoreoTaskType.WAIT, executeWait);
     choreoSystem.register(ChoreoTaskType.WAIT_VIRTUAL, (s, j, n, dt) => {
         j.visible = false;
-        return executeWait(s, j, n, dt, ctrlCtx);
+        return executeWait(s, j, n, dt);
     });
-    choreoSystem.register(ChoreoTaskType.CHECKIN, (s, j, n, dt) => executeCheckin(s, j, n, dt, ctrlCtx));
-    choreoSystem.register(ChoreoTaskType.CHANGE_JOB, (s, j, n, dt) => executeChangeJob(s, j, n, dt, ctrlCtx));
-    choreoSystem.register(ChoreoTaskType.CHANGE_JOB_COME_TO_WORK, (s, j, n, dt) =>
-        executeChangeJob(s, j, n, dt, ctrlCtx)
-    );
-    choreoSystem.register(ChoreoTaskType.HEAL_ENTITY, (s, j, n, dt) => executeHealEntity(s, j, n, dt, ctrlCtx));
-    choreoSystem.register(ChoreoTaskType.ATTACK_REACTION, (s, j, n, dt) => executeAttackReaction(s, j, n, dt, ctrlCtx));
+    choreoSystem.register(ChoreoTaskType.CHECKIN, executeCheckin);
+    choreoSystem.register(ChoreoTaskType.CHANGE_JOB, executeChangeJob);
+    choreoSystem.register(ChoreoTaskType.CHANGE_JOB_COME_TO_WORK, executeChangeJob);
+}
+
+/**
+ * Register all core (domain-free) choreography executors on the kernel ChoreoSystem.
+ * Executors are closures over immutable service contexts; per-unit state arrives via
+ * the ChoreoExecutionScope argument.
+ */
+export function registerCoreExecutors(choreoSystem: ChoreoSystem, deps: CoreExecutorDeps): void {
+    const movCtx: MovementContext = {
+        gameState: deps.gameState,
+        buildingPositionResolver: deps.buildingPositionResolver,
+        getWorkerHomeBuilding: deps.getWorkerHomeBuilding,
+        handlerErrorLogger: deps.handlerErrorLogger,
+    };
+    const workCtx: WorkContext = {
+        gameState: deps.gameState,
+        triggerSystem: deps.triggerSystem,
+        handlerErrorLogger: deps.handlerErrorLogger,
+    };
+
+    registerMovementExecutors(choreoSystem, movCtx);
+    registerWorkExecutors(choreoSystem, workCtx);
+    registerControlExecutors(choreoSystem);
 }

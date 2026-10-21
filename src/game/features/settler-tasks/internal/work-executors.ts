@@ -6,12 +6,20 @@
  *   - Phase 2D: WORK_VIRTUAL, WORK_ON_ENTITY_VIRTUAL, PRODUCE_VIRTUAL (settler invisible)
  *
  * All executors conform to WorkExecutorFn and must not throw — handler
- * errors are caught and reported via ctx.handlerErrorLogger.
+ * errors are caught and reported via ctx.handlerErrorLogger. The unit's work handlers
+ * and home building come from the per-call ChoreoExecutionScope.
  */
 
 import { createLogger } from '@/utilities/logger';
 import { TaskResult } from '../types';
-import { framesToSeconds, tickDuration, type ChoreoJobState, type ChoreoNode, type WorkContext } from '../choreo-types';
+import {
+    framesToSeconds,
+    tickDuration,
+    type ChoreoJobState,
+    type ChoreoNode,
+    type ChoreoExecutionScope,
+    type WorkContext,
+} from '../choreo-types';
 import { EntityType, type Entity } from '../../../entity';
 import { getDirectionToward, type EDirection } from '../../../systems/hex-directions';
 import type { EntityWorkHandler } from '../types';
@@ -64,9 +72,15 @@ function applyDirectionConstraint(settler: Entity, node: ChoreoNode, job: Choreo
 }
 
 /** Fire the node trigger once (guarded by !workStarted). */
-function fireTriggerOnStart(settler: Entity, node: ChoreoNode, job: ChoreoJobState, ctx: WorkContext): void {
+function fireTriggerOnStart(
+    settler: Entity,
+    node: ChoreoNode,
+    job: ChoreoJobState,
+    ctx: WorkContext,
+    scope: ChoreoExecutionScope
+): void {
     if (node.trigger && !job.workStarted) {
-        const buildingId = ctx.getWorkerHomeBuilding(settler.id);
+        const buildingId = scope.homeBuildingId;
         if (buildingId !== null) {
             ctx.triggerSystem.fireTrigger(buildingId, node.trigger);
         } else {
@@ -76,13 +90,20 @@ function fireTriggerOnStart(settler: Entity, node: ChoreoNode, job: ChoreoJobSta
 }
 
 /** Call positionHandler.onWorkAtPositionComplete with error handling. */
-function callPositionComplete(settler: Entity, job: ChoreoJobState, ctx: WorkContext, label: string): void {
-    if (!ctx.positionHandler) {
+function callPositionComplete(
+    settler: Entity,
+    job: ChoreoJobState,
+    ctx: WorkContext,
+    scope: ChoreoExecutionScope,
+    label: string
+): void {
+    const { positionHandler } = scope;
+    if (!positionHandler) {
         return;
     }
     // Use targetPos if available; fall back to settler's current position
     // (targetPos may have been cleared between nodes, but the settler is already at the target)
-    const { positionHandler, handlerErrorLogger } = ctx;
+    const { handlerErrorLogger } = ctx;
     const tile = job.targetPos ?? { x: settler.x, y: settler.y };
     safeCall(
         () => positionHandler.onWorkAtPositionComplete(tile, settler.id),
@@ -179,17 +200,19 @@ export function executeWork(
     job: ChoreoJobState,
     node: ChoreoNode,
     dt: number,
-    ctx: WorkContext
+    ctx: WorkContext,
+    scope: ChoreoExecutionScope
 ): TaskResult {
     applyDirectionConstraint(settler, node, job, ctx);
-    fireTriggerOnStart(settler, node, job, ctx);
+    fireTriggerOnStart(settler, node, job, ctx, scope);
 
     // Entity handler path (digger/builder construction work)
-    if (ctx.entityHandler && job.targetId !== null) {
-        if (!startEntityWork(settler, job, ctx.entityHandler, ctx, '')) {
+    const { entityHandler } = scope;
+    if (entityHandler && job.targetId !== null) {
+        if (!startEntityWork(settler, job, entityHandler, ctx, '')) {
             return TaskResult.FAILED;
         }
-        return tickEntityWork(settler, job, node, dt, ctx.entityHandler, ctx, '');
+        return tickEntityWork(settler, job, node, dt, entityHandler, ctx, '');
     }
 
     // Position handler path
@@ -199,7 +222,7 @@ export function executeWork(
 
     const result = tickDuration(job, dt, resolveDurationSeconds(node));
     if (result === TaskResult.DONE) {
-        callPositionComplete(settler, job, ctx, 'onWorkAtPositionComplete');
+        callPositionComplete(settler, job, ctx, scope, 'onWorkAtPositionComplete');
     }
     return result;
 }
@@ -214,9 +237,11 @@ export function executeWorkOnEntity(
     job: ChoreoJobState,
     node: ChoreoNode,
     dt: number,
-    ctx: WorkContext
+    ctx: WorkContext,
+    scope: ChoreoExecutionScope
 ): TaskResult {
-    if (!ctx.entityHandler) {
+    const { entityHandler } = scope;
+    if (!entityHandler) {
         log.warn(`executeWorkOnEntity: no entityHandler for settler ${settler.id}`);
         return TaskResult.FAILED;
     }
@@ -226,12 +251,12 @@ export function executeWorkOnEntity(
     }
 
     applyDirectionConstraint(settler, node, job, ctx);
-    fireTriggerOnStart(settler, node, job, ctx);
+    fireTriggerOnStart(settler, node, job, ctx, scope);
 
-    if (!startEntityWork(settler, job, ctx.entityHandler, ctx, '')) {
+    if (!startEntityWork(settler, job, entityHandler, ctx, '')) {
         return TaskResult.FAILED;
     }
-    return tickEntityWork(settler, job, node, dt, ctx.entityHandler, ctx, '');
+    return tickEntityWork(settler, job, node, dt, entityHandler, ctx, '');
 }
 
 // ─────────────────────────────────────────────────────
@@ -248,21 +273,22 @@ export function executeWorkVirtual(
     job: ChoreoJobState,
     node: ChoreoNode,
     dt: number,
-    ctx: WorkContext
+    ctx: WorkContext,
+    scope: ChoreoExecutionScope
 ): TaskResult {
     if (!job.workStarted) {
         job.visible = false;
     }
 
     applyDirectionConstraint(settler, node, job, ctx);
-    fireTriggerOnStart(settler, node, job, ctx);
+    fireTriggerOnStart(settler, node, job, ctx, scope);
     if (!job.workStarted) {
         job.workStarted = true;
     }
 
     const result = tickDuration(job, dt, resolveDurationSeconds(node));
     if (result === TaskResult.DONE) {
-        callPositionComplete(settler, job, ctx, 'onWorkAtPositionComplete (virtual)');
+        callPositionComplete(settler, job, ctx, scope, 'onWorkAtPositionComplete (virtual)');
     }
     return result;
 }
@@ -275,9 +301,11 @@ export function executeWorkOnEntityVirtual(
     job: ChoreoJobState,
     node: ChoreoNode,
     dt: number,
-    ctx: WorkContext
+    ctx: WorkContext,
+    scope: ChoreoExecutionScope
 ): TaskResult {
-    if (!ctx.entityHandler) {
+    const { entityHandler } = scope;
+    if (!entityHandler) {
         log.warn(`executeWorkOnEntityVirtual: no entityHandler for settler ${settler.id}`);
         return TaskResult.FAILED;
     }
@@ -291,12 +319,12 @@ export function executeWorkOnEntityVirtual(
     }
 
     applyDirectionConstraint(settler, node, job, ctx);
-    fireTriggerOnStart(settler, node, job, ctx);
+    fireTriggerOnStart(settler, node, job, ctx, scope);
 
-    if (!startEntityWork(settler, job, ctx.entityHandler, ctx, '(virtual)')) {
+    if (!startEntityWork(settler, job, entityHandler, ctx, '(virtual)')) {
         return TaskResult.FAILED;
     }
-    return tickEntityWork(settler, job, node, dt, ctx.entityHandler, ctx, '(virtual)');
+    return tickEntityWork(settler, job, node, dt, entityHandler, ctx, '(virtual)');
 }
 
 /**
@@ -310,11 +338,12 @@ export function executeProduceVirtual(
     job: ChoreoJobState,
     node: ChoreoNode,
     dt: number,
-    ctx: WorkContext
+    ctx: WorkContext,
+    scope: ChoreoExecutionScope
 ): TaskResult {
     if (!job.workStarted) {
         job.visible = false;
-        fireTriggerOnStart(settler, node, job, ctx);
+        fireTriggerOnStart(settler, node, job, ctx, scope);
         job.workStarted = true;
     }
     return tickDuration(job, dt, resolveDurationSeconds(node));

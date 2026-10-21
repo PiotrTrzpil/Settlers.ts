@@ -6,7 +6,7 @@
 
 import type { GameState } from '../../game-state';
 import type { TickSystem } from '../../core/tick-system';
-import { EntityType, UnitType, type Entity, Tile, getEntityIfType } from '../../entity';
+import { EntityType, UnitType, Tile, getEntityIfType } from '../../entity';
 import type { EventBus } from '../../event-bus';
 import { isAngelUnitType } from '../../core/unit-types';
 import { createLogger } from '@/utilities/logger';
@@ -22,7 +22,7 @@ import {
 } from './types';
 import { buildAllSettlerConfigs } from '../../data/settler-data-access';
 import type { BuildingInventoryManager } from '../inventory';
-import { createWorkplaceHandler, createCarrierHandler } from './work-handlers';
+import { createCarrierHandler } from './work-handlers';
 import { WorkHandlerRegistry } from './work-handler-registry';
 import { IdleAnimationController } from './idle-animation-controller';
 import { WorkerTaskExecutor } from './worker-task-executor';
@@ -30,8 +30,6 @@ import { UnitStateMachine, TickCategory, type UnitRuntime } from './unit-state-m
 import { JobChoreographyStore } from './job-choreography-store';
 import { BuildingPositionResolverImpl } from './building-position-resolver';
 import { JobPartResolverImpl } from './job-part-resolver';
-import { TriggerSystemImpl } from '../building-overlays/trigger-system';
-import { getGameDataLoader } from '@/resources/game-data';
 import type { ISettlerBuildingLocationManager } from '../settler-location';
 import { BuildingWorkerTracker } from './building-worker-tracker';
 import { IndexedMap } from '@/game/utils/indexed-map';
@@ -92,11 +90,6 @@ export class SettlerTaskSystem implements TickSystem, TaskDispatcher, WorkerStat
         const missingHandlerLogger = new ThrottledLogger(log, 5000);
 
         const jobPartResolver = new JobPartResolverImpl();
-        const triggerSystem = new TriggerSystemImpl({
-            setWorkingOverlay: (buildingId, working) => config.buildingOverlayManager.setWorking(buildingId, working),
-            gameState: this.gameState,
-            dataLoader: getGameDataLoader(),
-        });
 
         this.buildingPositionResolver = new BuildingPositionResolverImpl({
             gameState: this.gameState,
@@ -125,12 +118,10 @@ export class SettlerTaskSystem implements TickSystem, TaskDispatcher, WorkerStat
             eventBus: config.eventBus,
             inventoryManager: this.inventoryManager,
             buildingPositionResolver: this.buildingPositionResolver,
-            triggerSystem,
+            triggerSystem: config.triggerSystem,
             getWorkerHomeBuilding: this.getAssignedBuilding.bind(this),
             jobPartResolver,
             materialTransfer: config.materialTransfer,
-            constructionSiteManager: config.constructionSiteManager,
-            executeCommand: config.executeCommand,
             locationManager: this.locationManager,
         });
 
@@ -140,7 +131,7 @@ export class SettlerTaskSystem implements TickSystem, TaskDispatcher, WorkerStat
             settlerConfigs: this.settlerConfigs,
             animController: this.animController,
             workerExecutor: this.workerExecutor,
-            isInCombat: config.isInCombat ?? (() => false),
+            isInCombat: config.isInCombat,
             tickScheduler: this.tickScheduler,
         });
 
@@ -178,17 +169,6 @@ export class SettlerTaskSystem implements TickSystem, TaskDispatcher, WorkerStat
         });
 
         this.lifecycleCoordinator.registerEvents();
-
-        this.handlerRegistry.register(
-            SearchType.WORKPLACE,
-            createWorkplaceHandler(
-                this.gameState,
-                this.inventoryManager,
-                this.getAssignedWorkplace.bind(this),
-                config.oreVeinData,
-                config.getProductionControlManager
-            )
-        );
 
         this.handlerRegistry.register(SearchType.GOOD, createCarrierHandler());
 
@@ -267,15 +247,6 @@ export class SettlerTaskSystem implements TickSystem, TaskDispatcher, WorkerStat
 
     getWorkersForBuilding(buildingId: number): ReadonlySet<number> {
         return this.workerTracker.getWorkersForBuilding(buildingId);
-    }
-
-    private getAssignedWorkplace(settlerId: number): Entity | null {
-        const buildingId = this.getAssignedBuilding(settlerId);
-        if (buildingId === null) {
-            return null;
-        }
-        // eslint-disable-next-line no-restricted-syntax -- value is nullable by API contract; null coercion
-        return this.gameState.getEntity(buildingId) ?? null;
     }
 
     relocateUnitsFromFootprints(): void {

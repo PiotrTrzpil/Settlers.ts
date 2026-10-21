@@ -27,7 +27,7 @@ export const ConstructionDemandFeature: FeatureDefinition = {
     create(ctx: FeatureContext) {
         const { constructionSiteManager } = ctx.getFeature<BuildingConstructionExports>('building-construction');
         const { inventoryManager } = ctx.getFeature<InventoryExports>('inventory');
-        const { settlerTaskSystem, choreoSystem } = ctx.getFeature<SettlerTaskExports>('settler-tasks');
+        const { settlerTaskSystem } = ctx.getFeature<SettlerTaskExports>('settler-tasks');
         const { recruitSystem } = ctx.getFeature<RecruitExports>('recruit');
 
         const constructionDemandSystem = new ConstructionSiteDemandSystem({
@@ -40,8 +40,8 @@ export const ConstructionDemandFeature: FeatureDefinition = {
             dispatchRecruitment: (unitType, player, opts) => recruitSystem.dispatchRecruitment(unitType, player, opts),
         });
 
-        // Register DIG_TILE and BUILD_STEP executors on shared ChoreoSystem
-        registerConstructionExecutors(choreoSystem, constructionSiteManager, inventoryManager);
+        // Register DIG_TILE and BUILD_STEP executors on the kernel ChoreoSystem
+        registerConstructionExecutors(ctx.choreoSystem, constructionSiteManager, inventoryManager);
 
         // Register no-op work handlers for CONSTRUCTION / CONSTRUCTION_DIG.
         // Idle builders/diggers are dispatched by the demand system, not by

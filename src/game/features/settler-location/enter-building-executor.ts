@@ -1,18 +1,16 @@
 /**
- * Choreo executors for building-unit dispatch.
+ * ENTER_BUILDING choreography executor — finalizes a unit entering a building
+ * (worker dispatch to its workplace, garrison entry, …).
  *
- * ENTER_BUILDING — finalizes a worker entering their workplace.
- *
- * Instant (single-tick) executor registered on ChoreoSystem
- * by the feature's create() function.
+ * Instant (single-tick) executor registered on the kernel ChoreoSystem by the
+ * settler-location feature, which owns "who is inside which building".
  */
 
-import type { ChoreoExecutor } from '../../../systems/choreo';
-import { TaskResult } from '../../../systems/choreo';
-import type { ISettlerBuildingLocationManager } from '../../settler-location';
+import { TaskResult, type ChoreoExecutor } from '../../systems/choreo';
+import type { ISettlerBuildingLocationManager } from './types';
 import { createLogger } from '@/utilities/logger';
 
-const log = createLogger('DispatchExecutors');
+const log = createLogger('EnterBuildingExecutor');
 
 /**
  * Create an ENTER_BUILDING executor.

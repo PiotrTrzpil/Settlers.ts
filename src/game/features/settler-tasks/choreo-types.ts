@@ -7,14 +7,9 @@
 
 import type { Entity, Tile } from '../../entity';
 import type { GameState } from '../../game-state';
-import type { EventBus } from '../../event-bus';
-import type { BuildingInventoryManager } from '../inventory';
 import type { ThrottledLogger } from '@/utilities/throttled-logger';
-import type { EntityWorkHandler, PositionWorkHandler } from './types';
-import type { MaterialTransfer } from '../material-transfer';
-import type { ExecuteCommand } from '../../commands';
-import type { TaskResult, ChoreoJobState, ChoreoNode } from '../../systems/choreo';
-import type { ConstructionSiteManager } from '../building-construction/construction-site-manager';
+import type { TriggerSystem } from '../building-overlays';
+import type { TaskResult, ChoreoJobState, ChoreoNode, ChoreoExecutionScope, SearchArea } from '../../systems/choreo';
 
 // Re-export everything from systems/choreo (including JobKind) so existing importers don't need to change paths.
 export {
@@ -32,6 +27,12 @@ export {
     choreo,
     node,
     ChoreoBuilder,
+    type ChoreoExecutionScope,
+    type BoundedArea,
+    type SelfArea,
+    type SearchArea,
+    asBounded,
+    asSelf,
 } from '../../systems/choreo';
 
 // ─────────────────────────────────────────────────────────────
@@ -72,38 +73,6 @@ export interface BuildingPositionResolver {
 // Search area resolution
 // ─────────────────────────────────────────────────────────────
 
-/** Bounded work area: building-centered with required radius. */
-export interface BoundedArea {
-    type: 'bounded';
-    center: Tile;
-    radius: number;
-}
-
-/** Self-centered area: settler's current position, no radius constraint. */
-export interface SelfArea {
-    type: 'self';
-    origin: Tile;
-}
-
-/** Discriminated search area — handlers switch on type to get the right fields. */
-export type SearchArea = BoundedArea | SelfArea;
-
-/** Assert area is bounded — throws with context if wrong variant. */
-export function asBounded(area: SearchArea): BoundedArea {
-    if (area.type !== 'bounded') {
-        throw new Error(`Expected bounded search area, got '${area.type}'`);
-    }
-    return area;
-}
-
-/** Assert area is self — throws with context if wrong variant. */
-export function asSelf(area: SearchArea): SelfArea {
-    if (area.type !== 'self') {
-        throw new Error(`Expected self search area, got '${area.type}'`);
-    }
-    return area;
-}
-
 /**
  * Resolve the search area for a work handler.
  *
@@ -125,70 +94,29 @@ export function resolveSearchArea(
     return { type: 'self', origin: settler };
 }
 
-/** Fires building overlay animations from trigger IDs. */
-export interface TriggerSystem {
-    fireTrigger(buildingId: number, triggerId: string): void;
-    stopTrigger(buildingId: number, triggerId: string): void;
-}
-
 // ─────────────────────────────────────────────────────────────
 // Executor context interfaces — each typed to the minimum needed
 // ─────────────────────────────────────────────────────────────
 
 /**
  * Context required by movement-phase executors (GO_TO_TARGET, GO_HOME, SEARCH, …).
+ * Stable services only — per-unit state (work handlers) arrives via ChoreoExecutionScope.
  */
 export interface MovementContext {
     gameState: GameState;
     buildingPositionResolver: BuildingPositionResolver;
     getWorkerHomeBuilding: (settlerId: number) => number | null;
     handlerErrorLogger: ThrottledLogger;
-    entityHandler?: EntityWorkHandler;
-    positionHandler?: PositionWorkHandler;
 }
 
 /**
  * Context required by work-phase executors (WORK, WORK_ON_ENTITY, PRODUCE_VIRTUAL, …).
+ * Stable services only — the home building and work handlers arrive via ChoreoExecutionScope.
  */
 export interface WorkContext {
     gameState: GameState;
     triggerSystem: TriggerSystem;
-    getWorkerHomeBuilding: (settlerId: number) => number | null;
     handlerErrorLogger: ThrottledLogger;
-    entityHandler?: EntityWorkHandler;
-    positionHandler?: PositionWorkHandler;
-}
-
-/**
- * Context required by inventory executors (GET_GOOD, PUT_GOOD, RESOURCE_GATHERING, …).
- */
-export interface InventoryContext {
-    inventoryManager: BuildingInventoryManager;
-    getWorkerHomeBuilding: (settlerId: number) => number | null;
-}
-
-/**
- * Extended inventory context for executors that handle both worker and carrier paths.
- */
-export interface InventoryExecutorContext extends InventoryContext {
-    materialTransfer: MaterialTransfer;
-    eventBus: EventBus;
-    /** Used by TRANSPORT_DELIVER to emit construction:materialDelivered on construction sites. */
-    constructionSiteManager: ConstructionSiteManager;
-}
-
-/**
- * Context for control executors (WAIT, CHECKIN, CHANGE_JOB, military stubs).
- * Minimal — most control nodes are timers or state transitions.
- */
-export interface ControlContext {
-    gameState: GameState;
-    eventBus: EventBus;
-    handlerErrorLogger: ThrottledLogger;
-    /** Command executor — needed by TRANSFORM_RECRUIT. */
-    executeCommand?: ExecuteCommand;
-    /** Inventory manager — needed by TRANSFORM_RECRUIT for pile withdrawal. */
-    inventoryManager?: BuildingInventoryManager;
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -201,7 +129,8 @@ export type MovementExecutorFn = (
     job: ChoreoJobState,
     node: ChoreoNode,
     dt: number,
-    ctx: MovementContext
+    ctx: MovementContext,
+    scope: ChoreoExecutionScope
 ) => TaskResult;
 
 /** Work executor — WORK, WORK_ON_ENTITY, PLANT, *_VIRTUAL, PRODUCE_VIRTUAL */
@@ -210,23 +139,6 @@ export type WorkExecutorFn = (
     job: ChoreoJobState,
     node: ChoreoNode,
     dt: number,
-    ctx: WorkContext
-) => TaskResult;
-
-/** Inventory executor — GET_GOOD, PUT_GOOD, RESOURCE_GATHERING, LOAD_GOOD, *_VIRTUAL */
-export type InventoryExecutorFn = (
-    settler: Entity,
-    job: ChoreoJobState,
-    node: ChoreoNode,
-    dt: number,
-    ctx: InventoryExecutorContext
-) => TaskResult;
-
-/** Control executor — WAIT, CHECKIN, CHANGE_JOB, military stubs */
-export type ControlExecutorFn = (
-    settler: Entity,
-    job: ChoreoJobState,
-    node: ChoreoNode,
-    dt: number,
-    ctx: ControlContext
+    ctx: WorkContext,
+    scope: ChoreoExecutionScope
 ) => TaskResult;

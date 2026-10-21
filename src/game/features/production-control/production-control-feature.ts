@@ -4,10 +4,18 @@
  * Handles its own building lifecycle:
  * - building:completed with a recipe set → initBuilding
  * - entity:removed → removeBuilding
+ *
+ * Owns production work: registers the WORKPLACE work handler (recipe selection,
+ * production inputs/outputs, mine ore) on the settler task system.
  */
 
 import type { FeatureDefinition, FeatureContext } from '../feature';
+import type { SettlerTaskExports } from '../settler-tasks';
+import type { InventoryExports } from '../inventory';
+import type { OreVeinExports } from '../ore-veins';
+import { SearchType } from '../settler-tasks/types';
 import { ProductionControlManager } from './production-control-manager';
+import { createWorkplaceHandler } from './workplace-work-handler';
 import { getRecipeSet } from '../../economy/building-production';
 import type {
     SetProductionModeCommand,
@@ -28,9 +36,28 @@ export interface ProductionControlExports {
 
 export const ProductionControlFeature: FeatureDefinition = {
     id: 'production-control',
+    dependencies: ['settler-tasks', 'inventory', 'ore-veins'],
 
     create(ctx: FeatureContext) {
+        const { settlerTaskSystem } = ctx.getFeature<SettlerTaskExports>('settler-tasks');
+        const { inventoryManager } = ctx.getFeature<InventoryExports>('inventory');
+        const { oreVeinData } = ctx.getFeature<OreVeinExports>('ore-veins');
         const productionControlManager = new ProductionControlManager();
+
+        settlerTaskSystem.registerWorkHandler(
+            SearchType.WORKPLACE,
+            createWorkplaceHandler({
+                gameState: ctx.gameState,
+                inventoryManager,
+                productionControlManager,
+                oreVeinData,
+                getAssignedWorkplace: settlerId => {
+                    const buildingId = settlerTaskSystem.getAssignedBuilding(settlerId);
+                    // eslint-disable-next-line no-restricted-syntax -- value is nullable by API contract; null coercion
+                    return buildingId === null ? null : (ctx.gameState.getEntity(buildingId) ?? null);
+                },
+            })
+        );
 
         ctx.on('building:completed', ({ buildingId, buildingType }) => {
             const recipeSet = getRecipeSet(buildingType);

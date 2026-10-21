@@ -2,7 +2,8 @@
  * Combat Feature — self-registering feature that tracks military units and runs combat.
  *
  * Registers military units on spawn, cleans up on removal, and provides the
- * CombatSystem as a tick system for the game loop.
+ * CombatSystem as a tick system for the game loop. Registers the military choreography
+ * executors (HEAL_ENTITY, ATTACK_REACTION).
  */
 
 import type { FeatureDefinition } from '../feature';
@@ -13,6 +14,7 @@ import { UNIT_XML_PREFIX } from '../../renderer/sprite-metadata';
 import { EDirection } from '../../systems/hex-directions';
 import { CombatSystem } from './combat-system';
 import { DeathAngelSystem } from './death-angel-system';
+import { registerCombatExecutors } from './combat-choreo-executors';
 import { createLogger } from '@/utilities/logger';
 import { TickPhase } from '../../core/tick-phase';
 
@@ -91,6 +93,9 @@ export const CombatFeature: FeatureDefinition = {
         });
 
         ctx.cleanupRegistry.onEntityRemoved(deathAngelSystem.unregister.bind(deathAngelSystem));
+
+        // Military choreography nodes (HEAL_ENTITY, ATTACK_REACTION)
+        registerCombatExecutors(ctx.choreoSystem, ctx.gameState);
 
         return {
             systems: [combatSystem, deathAngelSystem],

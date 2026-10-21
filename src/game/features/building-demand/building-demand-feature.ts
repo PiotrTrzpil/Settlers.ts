@@ -9,9 +9,6 @@ import type { SettlerTaskExports } from '../settler-tasks';
 import type { RecruitExports } from '../recruit';
 import type { BuildingConstructionExports } from '../building-construction';
 import { BuildingDemandSystem } from './building-demand-system';
-import type { SettlerLocationExports } from '../settler-location';
-import { ChoreoTaskType } from '@/game/systems/choreo';
-import { createEnterBuildingExecutor } from '../settler-tasks';
 import { BuildingType } from '../../entity';
 import { BUILDING_SPAWN_ON_COMPLETE } from '../building-construction/spawn-units';
 import { forEachCompletedBuilding } from '../restore-utils';
@@ -23,11 +20,10 @@ export interface BuildingDemandExports {
 
 export const BuildingDemandFeature: FeatureDefinition = {
     id: 'building-demand',
-    dependencies: ['settler-tasks', 'recruit', 'settler-location', 'building-construction'],
+    dependencies: ['settler-tasks', 'recruit', 'building-construction'],
 
     create(ctx: FeatureContext) {
-        const { settlerTaskSystem, choreoSystem } = ctx.getFeature<SettlerTaskExports>('settler-tasks');
-        const { locationManager } = ctx.getFeature<SettlerLocationExports>('settler-location');
+        const { settlerTaskSystem } = ctx.getFeature<SettlerTaskExports>('settler-tasks');
         const { recruitSystem } = ctx.getFeature<RecruitExports>('recruit');
         const { constructionSiteManager } = ctx.getFeature<BuildingConstructionExports>('building-construction');
 
@@ -43,9 +39,6 @@ export const BuildingDemandFeature: FeatureDefinition = {
             dispatchRecruitment: (unitType, player, opts) => recruitSystem.dispatchRecruitment(unitType, player, opts),
             getOccupantCount: buildingId => settlerTaskSystem.getOccupantCount(buildingId),
         });
-
-        // Register ENTER_BUILDING executor on shared ChoreoSystem
-        choreoSystem.register(ChoreoTaskType.ENTER_BUILDING, createEnterBuildingExecutor(locationManager));
 
         buildingDemandSystem.registerEvents();
 

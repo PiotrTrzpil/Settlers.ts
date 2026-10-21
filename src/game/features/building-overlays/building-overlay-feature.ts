@@ -4,13 +4,16 @@
  * Manages layered sprite overlays on buildings:
  * - Creates overlay instances when buildings complete construction
  * - Removes overlay instances on entity removal
- * - Exposes BuildingOverlayManager and OverlayRegistry for renderer and settler tasks
+ * - Exposes BuildingOverlayManager and OverlayRegistry for the renderer, and the
+ *   choreography TriggerSystem for settler work executors
  */
 
 import type { FeatureDefinition, FeatureContext } from '../feature';
 import { BuildingOverlayManager } from './building-overlay-manager';
 import { OverlayRegistry } from './overlay-registry';
 import { populateOverlayRegistry } from './overlay-data-loader';
+import { TriggerSystemImpl, type TriggerSystem } from './trigger-system';
+import { getGameDataLoader } from '@/resources/game-data';
 import { TickPhase } from '../../core/tick-phase';
 
 /**
@@ -19,6 +22,8 @@ import { TickPhase } from '../../core/tick-phase';
 export interface BuildingOverlayFeatureExports {
     buildingOverlayManager: BuildingOverlayManager;
     overlayRegistry: OverlayRegistry;
+    /** Fires/stops overlay animations from choreography node triggers (used by work executors). */
+    triggerSystem: TriggerSystem;
 }
 
 export const BuildingOverlayFeature: FeatureDefinition = {
@@ -34,6 +39,12 @@ export const BuildingOverlayFeature: FeatureDefinition = {
             entityProvider: ctx.gameState,
         });
 
+        const triggerSystem = new TriggerSystemImpl({
+            setWorkingOverlay: (buildingId, working) => buildingOverlayManager.setWorking(buildingId, working),
+            gameState: ctx.gameState,
+            dataLoader: getGameDataLoader(),
+        });
+
         ctx.on('building:completed', ({ buildingId, buildingType }) => {
             const entity = ctx.gameState.getEntityOrThrow(buildingId, 'building completed for overlay setup');
             buildingOverlayManager.addBuilding(buildingId, buildingType, entity.race);
@@ -44,7 +55,7 @@ export const BuildingOverlayFeature: FeatureDefinition = {
         return {
             systems: [buildingOverlayManager],
             tickPhase: TickPhase.BuildingOverlays,
-            exports: { buildingOverlayManager, overlayRegistry } satisfies BuildingOverlayFeatureExports,
+            exports: { buildingOverlayManager, overlayRegistry, triggerSystem } satisfies BuildingOverlayFeatureExports,
             persistence: 'none',
         };
     },

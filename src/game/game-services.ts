@@ -31,6 +31,7 @@ import { PersistenceRegistry, type Persistable } from './persistence';
 
 import type { MovementSystem } from './systems/movement';
 import { TickScheduler } from './systems/tick-scheduler';
+import { ChoreoSystem } from './systems/choreo';
 
 // Feature definitions
 import { WorkAreaFeature, type WorkAreaExports } from './features/work-areas/work-areas-feature';
@@ -90,6 +91,8 @@ import type { VictoryConditionsSystem } from './features/victory-conditions';
 export class GameServices {
     // ===== Kernel services =====
     public readonly tickScheduler: TickScheduler;
+    /** Choreography executor registry — features register the executors for the task types they own. */
+    public readonly choreoSystem: ChoreoSystem;
     public readonly visualService: EntityVisualService;
 
     // ===== Widely-shared managers & systems (extracted from feature exports) =====
@@ -157,6 +160,9 @@ export class GameServices {
         // 1a. Tick scheduler — no dependencies, must tick before movement.
         this.tickScheduler = new TickScheduler();
 
+        // 1b. Choreography executor registry — filled by features during loadAll().
+        this.choreoSystem = new ChoreoSystem();
+
         // 2. Feature registry — loads all game features in dependency order.
         this.featureRegistry = new FeatureRegistry({
             gameState,
@@ -166,6 +172,7 @@ export class GameServices {
             unitReservation: this.unitReservation,
             executeCommand,
             tickScheduler: this.tickScheduler,
+            choreoSystem: this.choreoSystem,
             terrain,
             resourceData,
             gameplaySettings,
@@ -211,7 +218,6 @@ export class GameServices {
             // No feature dependencies
             InventoryFeature,
             WorkAreaFeature,
-            ProductionControlFeature,
             CarrierFeature,
             DemandLedgerFeature,
             BuildingOverlayFeature,
@@ -225,9 +231,10 @@ export class GameServices {
             TerritoryFeature,
             // Depends on construction + territory; no systems or subscriptions (owns place_building)
             BuildingPlacementFeature,
-            // Depends on construction, material-transfer, combat, settler-location, ore-veins, territory
+            // Depends on inventory, overlays, material-transfer, combat, settler-location, work-areas, territory
             SettlerTaskFeature,
-            // Depend on settler-tasks (+ territory / ore-veins / carriers)
+            // Depend on settler-tasks (+ inventory / territory / ore-veins / carriers)
+            ProductionControlFeature,
             TreeFeature,
             StoneFeature,
             CropFeature,
@@ -248,6 +255,9 @@ export class GameServices {
             AiPlayerFeature,
             FreePilesFeature,
         ]);
+
+        // 3. Every task type a job can contain must have an executor by now — fail at startup, not mid-game.
+        this.choreoSystem.assertAllRegistered();
 
         // 4. Extract widely-shared exports for external consumers (the rest: getFeature()).
         const inventoryExports = this.getFeature<InventoryExports>('inventory');

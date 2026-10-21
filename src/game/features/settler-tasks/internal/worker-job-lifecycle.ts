@@ -16,12 +16,10 @@ import {
     type ChoreoNode,
     type ChoreoJob,
     type JobPartResolution,
-    type MovementContext,
-    type WorkContext,
-    type TriggerSystem,
     type JobPartResolver,
 } from '../choreo-types';
-import type { ChoreoSystem } from '../../../systems/choreo';
+import type { ChoreoSystem, ChoreoExecutionScope } from '../../../systems/choreo';
+import type { TriggerSystem } from '../../building-overlays';
 import type { WorkHandlerRegistry } from '../work-handler-registry';
 import type { IdleAnimationController } from '../idle-animation-controller';
 import type { GameState } from '../../../game-state';
@@ -48,9 +46,6 @@ export interface WorkerJobLifecycleCfg {
     handlerErrorLogger: ThrottledLogger;
     eventBus: EventBus;
     getWorkerHomeBuilding: (id: number) => number | null;
-    /** Mutable context objects shared with WorkerTaskExecutor — mutated in-place each tick */
-    movementCtx: MovementContext;
-    workCtx: WorkContext;
     /** Dynamic getter for verbose flag */
     getVerbose: () => boolean;
 }
@@ -67,8 +62,6 @@ export class WorkerJobLifecycle {
     private readonly handlerErrorLogger: ThrottledLogger;
     private readonly eventBus: EventBus;
     private readonly getWorkerHomeBuilding: (id: number) => number | null;
-    private readonly movementCtx: MovementContext;
-    private readonly workCtx: WorkContext;
     private readonly getVerbose: () => boolean;
 
     constructor(cfg: WorkerJobLifecycleCfg) {
@@ -83,8 +76,6 @@ export class WorkerJobLifecycle {
         this.handlerErrorLogger = cfg.handlerErrorLogger;
         this.eventBus = cfg.eventBus;
         this.getWorkerHomeBuilding = cfg.getWorkerHomeBuilding;
-        this.movementCtx = cfg.movementCtx;
-        this.workCtx = cfg.workCtx;
         this.getVerbose = cfg.getVerbose;
     }
 
@@ -293,7 +284,7 @@ export class WorkerJobLifecycle {
         }
     }
 
-    prepareNodeTick(settler: Entity, config: SettlerConfig, job: ChoreoJobState, node: ChoreoNode): void {
+    prepareNodeTick(settler: Entity, job: ChoreoJobState, node: ChoreoNode): void {
         if (job.progress < 0) {
             this.applyChoreoAnimation(settler, node);
             if (this.verbose) {
@@ -321,13 +312,18 @@ export class WorkerJobLifecycle {
 
             job.progress = 0;
         }
+    }
 
-        const entityHandler = this.handlerRegistry.getEntityHandler(config.search);
-        const positionHandler = this.handlerRegistry.getPositionHandler(config.plantSearch ?? config.search);
-        this.movementCtx.entityHandler = entityHandler;
-        this.movementCtx.positionHandler = positionHandler;
-        this.workCtx.entityHandler = entityHandler;
-        this.workCtx.positionHandler = positionHandler;
+    /**
+     * Resolve the per-call execution scope for a unit's current node: its workplace and the
+     * work handlers registered for its search types. Passed explicitly to the executor.
+     */
+    createExecutionScope(settler: Entity, config: SettlerConfig): ChoreoExecutionScope {
+        return {
+            homeBuildingId: this.getWorkerHomeBuilding(settler.id),
+            entityHandler: this.handlerRegistry.getEntityHandler(config.search),
+            positionHandler: this.handlerRegistry.getPositionHandler(config.plantSearch ?? config.search),
+        };
     }
 
     advanceToNextNode(settler: Entity, job: ChoreoJobState, nodes: readonly ChoreoNode[]): void {
@@ -371,9 +367,15 @@ export class WorkerJobLifecycle {
         }
     }
 
-    executeNode(settler: Entity, job: ChoreoJobState, node: ChoreoNode, dt: number): TaskResult {
+    executeNode(
+        settler: Entity,
+        job: ChoreoJobState,
+        node: ChoreoNode,
+        dt: number,
+        scope: ChoreoExecutionScope
+    ): TaskResult {
         try {
-            return this.choreoSystem.execute(settler, job, node, dt);
+            return this.choreoSystem.execute(settler, job, node, dt, scope);
         } catch (e) {
             this.handlerErrorLogger.error(
                 `Executor crash: settler=${settler.id} job=${job.jobId} nodeIdx=${job.nodeIndex} task=${node.task}`,

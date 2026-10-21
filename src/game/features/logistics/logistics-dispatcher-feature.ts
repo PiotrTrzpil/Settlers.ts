@@ -2,7 +2,7 @@
  * LogisticsDispatcher Feature — wraps LogisticsDispatcher as a self-registering feature.
  *
  * Connects demand queue to carriers for material delivery.
- * Registers transport choreography executors on ChoreoSystem (moved from settler-tasks).
+ * Registers the TRANSPORT_* choreography executors on the kernel ChoreoSystem.
  */
 
 import type { FeatureDefinition, FeatureContext } from '../feature';
@@ -30,8 +30,7 @@ export const LogisticsDispatcherFeature: FeatureDefinition = {
 
     create(ctx: FeatureContext) {
         const { carrierRegistry, idleCarrierPool } = ctx.getFeature<CarrierFeatureExports>('carriers');
-        const settlerTaskExports = ctx.getFeature<SettlerTaskExports>('settler-tasks');
-        const { settlerTaskSystem, choreoSystem } = settlerTaskExports;
+        const { settlerTaskSystem } = ctx.getFeature<SettlerTaskExports>('settler-tasks');
         const taskDispatcher: TaskDispatcher = settlerTaskSystem;
         const { demandLedger, jobStore } = ctx.getFeature<DemandLedgerExports>('logistics');
         const { inventoryManager, storageFilterManager } = ctx.getFeature<InventoryExports>('inventory');
@@ -66,7 +65,7 @@ export const LogisticsDispatcherFeature: FeatureDefinition = {
             transportJobDeps,
         };
 
-        registerTransportExecutors(choreoSystem, movementCtx, transportCtx);
+        registerTransportExecutors(ctx.choreoSystem, movementCtx, transportCtx);
 
         const logisticsDispatcher = new LogisticsDispatcher({
             gameState: ctx.gameState,

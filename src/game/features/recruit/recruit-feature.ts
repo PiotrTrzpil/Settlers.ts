@@ -34,7 +34,7 @@ export const RecruitFeature: FeatureDefinition = {
 
     create(ctx: FeatureContext) {
         const { carrierRegistry, idleCarrierPool } = ctx.getFeature<CarrierFeatureExports>('carriers');
-        const { settlerTaskSystem, choreoSystem } = ctx.getFeature<SettlerTaskExports>('settler-tasks');
+        const { settlerTaskSystem } = ctx.getFeature<SettlerTaskExports>('settler-tasks');
         const { inventoryManager } = ctx.getFeature<InventoryExports>('inventory');
         const { territoryManager } = ctx.getFeature<TerritoryExports>('territory');
 
@@ -59,17 +59,17 @@ export const RecruitFeature: FeatureDefinition = {
             territoryCheck: (a, b, player) => territoryManager.areConnected(a, b, player),
         });
 
-        // Register recruit-specific choreography executors on the shared ChoreoSystem.
+        // Register recruit-specific choreography executors on the kernel ChoreoSystem.
         // These depend on inventory + eventBus, which are feature-layer concerns.
-        choreoSystem.register(
+        ctx.choreoSystem.register(
             ChoreoTaskType.TRANSFORM_RECRUIT,
             createTransformRecruitExecutor(ctx.gameState, ctx.eventBus, inventoryManager)
         );
-        choreoSystem.register(
+        ctx.choreoSystem.register(
             ChoreoTaskType.TRANSFORM_RECRUIT_BUILDING,
             createTransformRecruitBuildingExecutor(ctx.eventBus, toolSourceResolver)
         );
-        choreoSystem.register(ChoreoTaskType.TRANSFORM_DIRECT, createTransformDirectExecutor(ctx.eventBus));
+        ctx.choreoSystem.register(ChoreoTaskType.TRANSFORM_DIRECT, createTransformDirectExecutor(ctx.eventBus));
 
         unitTransformer.registerEvents();
         recruitSystem.registerEvents();

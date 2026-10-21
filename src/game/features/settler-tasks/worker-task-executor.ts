@@ -18,16 +18,8 @@ import {
     type PositionWorkHandler,
     type HomeAssignment,
 } from './types';
-import type {
-    ChoreoJob,
-    MovementContext,
-    WorkContext,
-    InventoryExecutorContext,
-    ControlContext,
-    BuildingPositionResolver,
-    TriggerSystem,
-    JobPartResolver,
-} from './choreo-types';
+import type { ChoreoJob, BuildingPositionResolver, JobPartResolver } from './choreo-types';
+import type { TriggerSystem } from '../building-overlays';
 import { resolveSearchArea } from './choreo-types';
 import { ChoreoTaskType } from './choreo-types';
 import { registerCoreExecutors } from './choreo-executors';
@@ -39,15 +31,12 @@ import type { GameState } from '../../game-state';
 import type { EventBus } from '../../event-bus';
 import type { BuildingInventoryManager } from '../inventory';
 import type { MaterialTransfer } from '../material-transfer';
-import type { ExecuteCommand } from '../../commands';
-import type { ConstructionSiteManager } from '../building-construction/construction-site-manager';
 import { EMaterialType } from '../../economy';
 import { getWorkerBuildingTypes } from '../../data/game-data-access';
 import type { ISettlerBuildingLocationManager } from '../settler-location';
 import { JobSelector } from './job-selector';
 import { safeCall } from './safe-call';
 import { WorkerJobLifecycle } from './internal/worker-job-lifecycle';
-import { buildExecutorContexts } from './internal/executor-context-factory';
 
 /** Per-unit state needed by the worker executor (subset of UnitRuntime). */
 export interface WorkerRuntimeState {
@@ -70,8 +59,6 @@ export interface WorkerTaskExecutorConfig extends CoreDeps {
     jobPartResolver: JobPartResolver;
     materialTransfer: MaterialTransfer;
     locationManager: ISettlerBuildingLocationManager;
-    constructionSiteManager: ConstructionSiteManager;
-    executeCommand?: ExecuteCommand;
 }
 
 export class WorkerTaskExecutor {
@@ -86,12 +73,6 @@ export class WorkerTaskExecutor {
     private readonly getWorkerHomeBuilding: (settlerId: number) => number | null;
     private readonly buildingPositionResolver: BuildingPositionResolver;
     private readonly locationManager: ISettlerBuildingLocationManager;
-
-    // Pre-built context objects — handler fields updated in-place per tick (no allocation)
-    private readonly movementCtx: MovementContext;
-    private readonly workCtx: WorkContext;
-    private readonly inventoryCtx: InventoryExecutorContext;
-    private readonly controlCtx: ControlContext;
 
     private readonly lifecycle: WorkerJobLifecycle;
 
@@ -118,26 +99,6 @@ export class WorkerTaskExecutor {
         this.buildingPositionResolver = cfg.buildingPositionResolver;
         this.locationManager = cfg.locationManager;
 
-        const contexts = buildExecutorContexts({
-            gameState: cfg.gameState,
-            eventBus: cfg.eventBus,
-            inventoryManager: cfg.inventoryManager,
-            materialTransfer: cfg.materialTransfer,
-            constructionSiteManager: cfg.constructionSiteManager,
-            buildingPositionResolver: cfg.buildingPositionResolver,
-            jobPartResolver: cfg.jobPartResolver,
-            triggerSystem: cfg.triggerSystem,
-            locationManager: cfg.locationManager,
-            handlerErrorLogger: cfg.handlerErrorLogger,
-            executeCommand: cfg.executeCommand,
-            getWorkerHomeBuilding: cfg.getWorkerHomeBuilding,
-        });
-
-        this.movementCtx = contexts.movement;
-        this.workCtx = contexts.work;
-        this.inventoryCtx = contexts.inventory;
-        this.controlCtx = contexts.control;
-
         this.lifecycle = new WorkerJobLifecycle({
             choreoSystem: cfg.choreoSystem,
             handlerRegistry: cfg.handlerRegistry,
@@ -150,13 +111,17 @@ export class WorkerTaskExecutor {
             handlerErrorLogger: cfg.handlerErrorLogger,
             eventBus: cfg.eventBus,
             getWorkerHomeBuilding: cfg.getWorkerHomeBuilding,
-            movementCtx: this.movementCtx,
-            workCtx: this.workCtx,
             getVerbose: () => this.verbose,
         });
 
-        // Register core executors — TRANSFORM_RECRUIT/DIRECT are registered by recruit feature later.
-        registerCoreExecutors(cfg.choreoSystem, this.movementCtx, this.workCtx, this.inventoryCtx, this.controlCtx);
+        // Domain-free executors only — domain features register their own task types.
+        registerCoreExecutors(cfg.choreoSystem, {
+            gameState: cfg.gameState,
+            buildingPositionResolver: cfg.buildingPositionResolver,
+            triggerSystem: cfg.triggerSystem,
+            handlerErrorLogger: cfg.handlerErrorLogger,
+            getWorkerHomeBuilding: cfg.getWorkerHomeBuilding,
+        });
     }
 
     /**
@@ -320,7 +285,8 @@ export class WorkerTaskExecutor {
 
         const node = nodes[job.nodeIndex]!;
 
-        this.lifecycle.prepareNodeTick(settler, config, job, node);
+        this.lifecycle.prepareNodeTick(settler, job, node);
+        const scope = this.lifecycle.createExecutionScope(settler, config);
 
         const isPileAction = node.task === ChoreoTaskType.GET_GOOD || node.task === ChoreoTaskType.PUT_GOOD;
         const controller = isPileAction ? this.gameState.movement.getController(settler.id) : undefined;
@@ -328,7 +294,7 @@ export class WorkerTaskExecutor {
             controller.busy = true;
         }
 
-        const result = this.lifecycle.executeNode(settler, job, node, dt);
+        const result = this.lifecycle.executeNode(settler, job, node, dt, scope);
 
         if (controller && result !== TaskResult.CONTINUE) {
             controller.busy = false;

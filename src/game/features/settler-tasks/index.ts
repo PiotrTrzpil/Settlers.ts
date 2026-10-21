@@ -15,12 +15,8 @@ export {
     type TaskDispatcher,
     type WorkerStateQuery,
 } from './types';
-export type { ChoreoJobState, MovementContext, TriggerSystem } from './choreo-types';
+export type { ChoreoJobState, MovementContext } from './choreo-types';
 export { choreo } from './choreo-types';
-export type { ChoreoSystem } from '../../systems/choreo';
-
-// Dispatch executors (used by building-demand feature)
-export { createEnterBuildingExecutor } from './internal/dispatch-executors';
 
 // Feature definition (self-registering via FeatureRegistry)
 export { SettlerTaskFeature, type SettlerTaskExports } from './settler-tasks-feature';

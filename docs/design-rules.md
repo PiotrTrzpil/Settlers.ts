@@ -109,6 +109,13 @@ import { updateBuildingConstruction } from './buildings/construction';
 updateBuildingConstruction(state, dt, ctx);
 ```
 
+**Choreography executors follow the same rule.** Every feature registers the executors for the task types
+it owns on the kernel `FeatureContext.choreoSystem` (goods → material-transfer, DIG_TILE/BUILD_STEP →
+construction, HEAL_ENTITY → combat, …). settler-tasks registers only domain-free runtime executors
+(movement, wait, work timing). Per-unit state reaches executors through the explicit
+`ChoreoExecutionScope` argument, never through a shared context mutated before each call.
+See `docs/architecture/feature-modules.md` §3c.
+
 ### Rule 2.4: Module Documentation Header
 
 Every feature module's `index.ts` MUST have a JSDoc comment listing the public API:
