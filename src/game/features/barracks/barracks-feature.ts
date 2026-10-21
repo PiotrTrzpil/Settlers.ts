@@ -3,14 +3,19 @@
  *
  * Handles its own building lifecycle:
  * - building:completed for Barrack buildings -> initBarracks
- * - entity:removed -> removeBarracks
+ * - entity:removed -> removeBarracks (cancels its training jobs)
+ *
+ * Owns the `Barracks` job kind (training carriers) and registers the barracks' recruit charge
+ * (recipe inputs, input side) for its TRANSFORM_RECRUIT_BUILDING nodes.
  */
 
 import type { FeatureDefinition, FeatureContext } from '../feature';
 import type { ProductionControlExports } from '../production-control';
 import type { BuildingConstructionExports } from '../building-construction';
 import type { RecruitExports } from '../recruit';
+import type { SettlerTaskExports } from '../settler-tasks';
 import { BarracksTrainingManager } from './barracks-training-manager';
+import { createBarracksJobKind, createBarracksRecruitCharge } from './barracks-job-kind';
 import { BuildingType } from '../../buildings/building-type';
 import { forEachCompletedBuilding } from '../restore-utils';
 import { TickPhase } from '../../core/tick-phase';
@@ -21,19 +26,30 @@ export interface BarracksExports {
 
 export const BarracksFeature: FeatureDefinition = {
     id: 'barracks',
-    dependencies: ['production-control', 'building-construction', 'recruit'],
+    dependencies: ['production-control', 'building-construction', 'recruit', 'settler-tasks'],
 
     create(ctx: FeatureContext) {
         const { productionControlManager } = ctx.getFeature<ProductionControlExports>('production-control');
         const { constructionSiteManager } = ctx.getFeature<BuildingConstructionExports>('building-construction');
-        const { recruitSystem } = ctx.getFeature<RecruitExports>('recruit');
+        const { recruitSystem, recruitSegments } = ctx.getFeature<RecruitExports>('recruit');
+        const { jobs } = ctx.getFeature<SettlerTaskExports>('settler-tasks');
 
         const barracksTrainingManager = new BarracksTrainingManager({
             gameState: ctx.gameState,
             productionControlManager,
             eventBus: ctx.eventBus,
             recruitSystem,
+            jobs,
         });
+
+        recruitSegments.registerBuildingCharge(BuildingType.Barrack, createBarracksRecruitCharge(ctx.gameState));
+        jobs.registerKind(
+            createBarracksJobKind({
+                gameState: ctx.gameState,
+                segments: recruitSegments,
+                manager: barracksTrainingManager,
+            })
+        );
 
         barracksTrainingManager.registerEvents();
 
@@ -62,6 +78,8 @@ export const BarracksFeature: FeatureDefinition = {
                         barracksTrainingManager.initBarracks(e.id, e.race);
                     }
                 });
+                // Barracks jobs resume by themselves in onRestoreResume — only the training state is rebuilt.
+                barracksTrainingManager.rebuildFromCommitments();
             },
         };
     },

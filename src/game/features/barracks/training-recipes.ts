@@ -10,7 +10,7 @@
  */
 
 import { EMaterialType } from '@/game/economy/material-type';
-import { UnitType } from '@/game/core/unit-types';
+import { UnitType, getUnitTypeAtLevel } from '@/game/core/unit-types';
 import { Race } from '@/game/core/race';
 import type { TrainingRecipe, TrainingRecipeSet } from './types';
 
@@ -178,4 +178,18 @@ export function getSpecialistUnitType(race: Race): UnitType | undefined {
 /** Get the specialist weapon material for a race (undefined for DarkTribe). */
 export function getSpecialistWeapon(race: Race): EMaterialType | undefined {
     return SPECIALIST_WEAPONS.get(race);
+}
+
+/** The unit type a recipe trains (base type at the recipe's soldier level, e.g. Swordsman2). */
+export function getRecipeTargetUnitType(recipe: TrainingRecipe): UnitType {
+    return getUnitTypeAtLevel(recipe.unitType, recipe.soldierLevel);
+}
+
+/** The recipe of `race` that trains `targetUnitType` (unique per race); throws if none does. */
+export function getRecipeForTargetUnitType(race: Race, targetUnitType: UnitType): TrainingRecipe {
+    const recipe = getTrainingRecipes(race).find(r => getRecipeTargetUnitType(r) === targetUnitType);
+    if (!recipe) {
+        throw new Error(`No ${race} barracks recipe trains unit type ${targetUnitType}`);
+    }
+    return recipe;
 }

@@ -3,39 +3,36 @@
  *
  * Manages the training lifecycle for all barracks buildings:
  * 1. Checks recipe selection via ProductionControlManager
- * 2. Dispatches recruitment via RecruitSystem (carrier finding, material
- *    reservation from building input inventory, job assignment, transform)
- * 3. Tracks active training state per barracks
- * 4. Listens for unit:recruited to emit barracks-specific completion events
+ * 2. Dispatches a Barracks job via RecruitSystem (carrier finding, material
+ *    reservation from the building's input inventory, job assignment)
+ * 3. Tracks active training state per barracks — from dispatch until the transform
+ *    (unit:recruited), or until the Barracks job handler reports the job ended early
+ * 4. Rebuilds the active trainings from Barracks commitments after a load
  */
 
 import type { GameState } from '@/game/game-state';
 import type { CoreDeps } from '../feature';
 import type { ProductionControlManager } from '@/game/features/production-control';
-import type { EventBus } from '@/game/event-bus';
+import type { EventBus, GameEvents } from '@/game/event-bus';
 import { EventSubscriptionManager } from '@/game/event-bus';
 import { type Race } from '@/game/core/race';
-import { type UnitType, getUnitTypeAtLevel } from '@/game/core/unit-types';
-import { BuildingType } from '@/game/buildings/building-type';
-import { getBuildingDoorPos } from '@/game/data/game-data-access';
-import { choreo, type ChoreoJobState } from '@/game/features/settler-tasks';
-import { ChoreoTaskType, JobKind } from '@/game/systems/choreo';
+import type { JobService } from '@/game/features/settler-tasks';
+import { JobKind } from '@/game/systems/choreo';
 import type { RecruitSystem } from '@/game/features/recruit';
-import { getTrainingRecipeSet, getTrainingRecipes } from './training-recipes';
+import { getRecipeTargetUnitType, getTrainingRecipeSet, getTrainingRecipes } from './training-recipes';
 import type { TrainingRecipe, BarracksTrainingState } from './types';
+import { barracksJobSpec, type BarracksJobParams } from './barracks-job-kind';
 import { ProductionMode } from '@/game/features/production-control';
 import { createLogger } from '@/utilities/logger';
-import { UNIT_XML_PREFIX } from '@/game/renderer/sprite-metadata';
-import { xmlKey } from '@/game/animation/animation';
 
 const log = createLogger('BarracksTraining');
 
-/** Training duration in animation frames (at 10fps = 3 seconds). */
-export const TRAINING_DURATION_FRAMES = 30;
+type InterruptReason = GameEvents['barracks:trainingInterrupted']['reason'];
 
 export interface BarracksTrainingManagerConfig extends CoreDeps {
     productionControlManager: ProductionControlManager;
     recruitSystem: RecruitSystem;
+    jobs: JobService;
 }
 
 export class BarracksTrainingManager {
@@ -43,6 +40,7 @@ export class BarracksTrainingManager {
     private readonly pcm: ProductionControlManager;
     private readonly eventBus: EventBus;
     private readonly recruitSystem: RecruitSystem;
+    private readonly jobs: JobService;
     private readonly subscriptions = new EventSubscriptionManager();
 
     /** Per-barracks race mapping (set at initBarracks). */
@@ -56,6 +54,7 @@ export class BarracksTrainingManager {
         this.pcm = config.productionControlManager;
         this.eventBus = config.eventBus;
         this.recruitSystem = config.recruitSystem;
+        this.jobs = config.jobs;
     }
 
     // =========================================================================
@@ -76,8 +75,11 @@ export class BarracksTrainingManager {
         this.pcm.initBuilding(buildingId, recipeSet.recipes.length, ProductionMode.Manual);
     }
 
-    /** Unregister a barracks building and clean up all associated state. */
+    /** Unregister a barracks building, cancel its training jobs and clean up all associated state. */
     removeBarracks(buildingId: number): void {
+        for (const unitId of this.jobs.commitments.unitsOwnedBy(JobKind.Barracks, buildingId)) {
+            this.jobs.cancel(unitId, JobKind.Barracks);
+        }
         this.barracksRaces.delete(buildingId);
         this.activeTrainings.delete(buildingId);
         this.pcm.removeBuilding(buildingId);
@@ -102,10 +104,8 @@ export class BarracksTrainingManager {
 
     private tickBarracks(buildingId: number): void {
         if (this.activeTrainings.has(buildingId)) {
-            // Choreography system drives progression — nothing else to do while active.
-            // If the carrier is killed, UnitTransformer's onForcedRelease clears the
-            // building reservation; unit:recruited won't fire so activeTrainings stays
-            // until barracks:trainingInterrupted is emitted below.
+            // The Barracks job drives progression; it ends the training at the transform
+            // (unit:recruited) or, when it ends early, through interruptTraining().
             return;
         }
 
@@ -131,30 +131,13 @@ export class BarracksTrainingManager {
             return;
         }
 
-        // 2. Dispatch recruitment via RecruitSystem — handles carrier finding,
-        //    material reservation from building input inventory, job assignment,
-        //    and carrier transform registration.
+        // 2. Dispatch a Barracks job via RecruitSystem — handles carrier finding, material
+        //    reservation from the building's input inventory (the barracks' registered
+        //    recruit charge = recipe inputs) and job assignment.
         const barracks = this.gameState.getEntityOrThrow(buildingId, 'barracks for training');
-        const targetUnitType = getUnitTypeAtLevel(recipe.unitType, recipe.soldierLevel);
-        const doorPos = getBuildingDoorPos(barracks, barracks.race, BuildingType.Barrack);
-
-        const carrierId = this.recruitSystem.dispatchRecruitmentFromBuilding(
-            targetUnitType,
-            barracks.player,
-            buildingId,
-            recipe.inputs,
-            {
-                buildJob: candidate =>
-                    buildTrainingJob(
-                        buildingId,
-                        doorPos.x,
-                        doorPos.y,
-                        targetUnitType,
-                        candidate.reservationId!,
-                        TRAINING_DURATION_FRAMES
-                    ),
-            },
-            'input'
+        const unitType = getRecipeTargetUnitType(recipe);
+        const carrierId = this.recruitSystem.dispatchBuildingRecruitment(unitType, barracks.player, buildingId, () =>
+            barracksJobSpec({ barracksId: buildingId, recipeIndex, unitType })
         );
         if (carrierId === null) {
             return;
@@ -194,26 +177,75 @@ export class BarracksTrainingManager {
         this.subscriptions.unsubscribeAll();
     }
 
+    /** The transform of a Barracks job happened: the training is complete (the FIGHT wait follows). */
     private handleUnitRecruited(unitId: number): void {
-        for (const [buildingId, state] of this.activeTrainings) {
-            if (state.carrierId !== unitId) {
+        // Nullable by design: carriers of other owners (and idle direct transforms) recruit too.
+        const commitment = this.jobs.commitments.get(unitId);
+        if (!commitment || commitment.owner !== JobKind.Barracks) {
+            return;
+        }
+        const buildingId = commitment.ref;
+        const state = this.activeTrainings.get(buildingId);
+        if (!state || state.carrierId !== unitId) {
+            throw new Error(`Barracks ${buildingId}: carrier ${unitId} transformed without an active training`);
+        }
+
+        this.activeTrainings.delete(buildingId);
+
+        this.eventBus.emit('barracks:trainingCompleted', {
+            buildingId,
+            unitType: state.recipe.unitType,
+            soldierLevel: state.recipe.soldierLevel,
+            unitId,
+        });
+
+        log.debug(
+            `Barracks ${buildingId}: training completed, carrier ${unitId} → ` +
+                `${state.recipe.unitType} L${state.recipe.soldierLevel}`
+        );
+    }
+
+    // =========================================================================
+    // Job outcomes (called by the Barracks job handler)
+    // =========================================================================
+
+    /**
+     * The Barracks job of `unitId` ended early (failed, preempted, abandoned on restore, carrier
+     * removed). Frees the barracks for its next recipe — the interrupted recipe stays consumed.
+     * No-op when the job ended after its transform (the training already completed).
+     */
+    interruptTraining(buildingId: number, unitId: number, reason: InterruptReason): void {
+        const state = this.activeTrainings.get(buildingId);
+        if (!state || state.carrierId !== unitId) {
+            return;
+        }
+        this.activeTrainings.delete(buildingId);
+        this.eventBus.emit('barracks:trainingInterrupted', { buildingId, reason });
+        log.debug(`Barracks ${buildingId}: training of carrier ${unitId} interrupted (${reason})`);
+    }
+
+    // =========================================================================
+    // Restore
+    // =========================================================================
+
+    /**
+     * Rebuild the active trainings from the restored Barracks commitments (their jobs resume later,
+     * in onRestoreResume). Skips units that already transformed (saved in the FIGHT wait — their
+     * training completed) and jobs of barracks that are not registered (abandoned on resume).
+     */
+    rebuildFromCommitments(): void {
+        for (const unitId of this.jobs.commitments.unitsOwnedBy(JobKind.Barracks)) {
+            const params = this.jobs.paramsOf(unitId) as BarracksJobParams;
+            const race = this.barracksRaces.get(params.barracksId);
+            const unit = this.gameState.getEntityOrThrow(unitId, 'restored barracks trainee');
+            if (race === undefined || unit.subType === params.unitType) {
                 continue;
             }
-
-            this.activeTrainings.delete(buildingId);
-
-            this.eventBus.emit('barracks:trainingCompleted', {
-                buildingId,
-                unitType: state.recipe.unitType,
-                soldierLevel: state.recipe.soldierLevel,
-                unitId,
-            });
-
-            log.debug(
-                `Barracks ${buildingId}: training completed, carrier ${unitId} → ` +
-                    `${state.recipe.unitType} L${state.recipe.soldierLevel}`
-            );
-            return;
+            if (this.activeTrainings.has(params.barracksId)) {
+                throw new Error(`Barracks ${params.barracksId}: two restored trainings (carrier ${unitId})`);
+            }
+            const recipe = getTrainingRecipeSet(race).recipes[params.recipeIndex]!;
+            this.activeTrainings.set(params.barracksId, { recipe, carrierId: unitId });
         }
     }
 
@@ -235,39 +267,13 @@ export class BarracksTrainingManager {
         return getTrainingRecipes(race);
     }
 
+    /** Returns true if `buildingId` is a registered (trainable) barracks. */
+    isBarracks(buildingId: number): boolean {
+        return this.barracksRaces.has(buildingId);
+    }
+
     /** Returns true if a barracks has an active training session in progress. */
     isTraining(buildingId: number): boolean {
         return this.activeTrainings.has(buildingId);
     }
-}
-
-// =========================================================================
-// Training choreography job builder
-// =========================================================================
-
-/**
- * Build a ChoreoJobState for a barracks training cycle.
- *
- * Nodes:
- *   1. GO_TO_TARGET              — carrier walks to the barracks door
- *   2. TRANSFORM_RECRUIT_BUILDING — withdraw materials + emit recruitment:completed
- *   3. WAIT (FIGHT)              — now-soldier plays fighting animation at the door
- */
-function buildTrainingJob(
-    barracksId: number,
-    doorX: number,
-    doorY: number,
-    targetUnitType: UnitType,
-    reservationId: number,
-    durationFrames: number
-): ChoreoJobState {
-    const prefix = UNIT_XML_PREFIX[targetUnitType]!;
-    const fightJobPart = xmlKey(prefix, 'FIGHT');
-
-    return choreo('BARRACKS_TRAINING', JobKind.Barracks)
-        .goTo({ x: doorX, y: doorY })
-        .transformRecruitBuilding(targetUnitType, reservationId)
-        .addNode(ChoreoTaskType.WAIT, { duration: durationFrames, jobPart: fightJobPart })
-        .target(barracksId)
-        .build();
 }
