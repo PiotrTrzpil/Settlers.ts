@@ -790,3 +790,46 @@ Everything below is what migrations build on. "TRANSITIONAL" marks code that exi
 `TRANSITIONAL_UNOWNED_KINDS`; the legacy-registry OR in `UnitCommitments` (+ its constructor arg);
 `CLEANUP_PRIORITY.RESERVATIONS`; `ctx.unitReservation` / `GameServices.unitReservation`; `entity.jobId`
 (still set by `startAssignedJob`, cleared on job end) and `nextJobId`.
+
+### Transport migration notes (as shipped on `refactor/jobs-transport`)
+
+- **Handler**: `features/logistics/transport-job-kind.ts` — `TransportJobKind` (registered in
+  `logistics-dispatcher-feature.ts`; replaces the deleted `transport-job-builder.ts`). `ref` = `params.recordId` =
+  record id; `reserved: false`; `persist: true`. It also implements `TransportJobAssigner.assign(record)` (used by
+  `CarrierAssigner` and the follow-up flush; `moveTo` = source walk target, as before).
+- **Build = always the full 5-node layout** (GO_TO_SOURCE, PICKUP, GO_TO_DEST, DELIVER, STAND_UP), so a saved raw
+  node index means the same node after load. Phase picks the leg: Reserved → goals on both walks; PickedUp → the
+  delivery leg (the source walk has no `goal` — the source may be gone — and `resumeIndex` returns
+  `max(snapped, index of GO_TO_DEST)`). All nodes carry `args: { task: 'transport', recordId }`; executors read
+  buildings / material / amount from the record and walks from `node.goal`. `TransportData` is no longer used by
+  anything (Cleanup deletes the type and `ChoreoJobState.transportData`).
+- **Irreversible**: TRANSPORT_PICKUP / TRANSPORT_DELIVER (`internal/transport-executor-context.ts`).
+- **restorable**: record exists, belongs to the unit, and is Reserved, or PickedUp with the carrier still carrying
+  its material. A job saved during STAND_UP (record already delivered) is therefore abandoned on load
+  (`restoreFailed` → carrier idle) — harmless, only the stand-up animation is lost.
+- **Outcomes**: `onCompleted` flushes the queued follow-up (promote + assign; cancel on failure;
+  `logistics:preAssignFlushed`). `onFailed` and `onUnitRemoved` discard the active record (if still there) **and the
+  queued follow-up** — fixes the queued-record leak on carrier death / preemption / any failure (previously only a
+  pickup failure cancelled it). Pickup failure (withdrawn 0) just returns FAILED; the dispatcher's
+  `carrier:pickupFailed` and unfiltered `settler:taskCompleted` subscriptions are deleted.
+- **Cancel**: `TransportJobService.cancel` = `discard` (remove record; `carrier:transportCancelled` is emitted for
+  active records as a *notification only*) + `deps.jobs.cancel(carrierId, JobKind.Transport)` for active records.
+  `discard` alone is used where the job already ended (handler callbacks) or was never resumed (restore orphans).
+  `TransportJobDeps.gameState` is replaced by `jobs: TransportJobControl` (`Pick<JobService, 'cancel'>`).
+- **Restore**: `LogisticsDispatcher.restoreJobs()` (onRestoreComplete) only discards Queued records and orphans (active
+  records whose carrier has no `Transport` commitment with `ref === record.id`). Rebuild branch and clearJobId scan
+  deleted; dispatcher no longer depends on `taskDispatcher`, `carrierRegistry`, `materialTransfer`.
+- **Record ids**: `TransportJobStore.allocateId()` from the persisted `nextIdStore` (`'transportJobNextId'`);
+  `gameState.allocateJobId` is no longer used by logistics (only garrison / `startAssignedJob` remain).
+- **Readers**: `IdleCarrierPool` = `ctx.unitCommitments.isIdle` (a carrier on a player move is never picked);
+  `SnapshotConfig.unitReservation` → `unitCommitments` (one-line updates in `useLogisticsDebug.ts` and
+  `cli/commands/economy.ts`); carrier summary status / idle-busy stats and `fulfillment-diagnostics` read commitments.
+- **Tests**: `tests/unit/integration/jobs/transport-job-restore.spec.ts` (save in each phase, queued cancel on load,
+  persisted id counter), `transport-unit-removal.spec.ts` (kill in each phase, kill / player-move takeover with a
+  queued follow-up, player-move carrier never picked), shared `transport-fixture.ts`. The carrier expectations in
+  Core's `unit-removal.spec.ts` and `commitment-lifecycle.spec.ts` now expect the owned path (`jobAborted`, no
+  legacy `taskFailed`).
+- **For Cleanup**: delete `TransportData` + `ChoreoJobState.transportData`, `settler-lifecycle.ts`'s
+  `carrier:transportCancelled` handler (no-op for owned jobs; the event stays a notification), the
+  `numericJobId` parameter (no caller left in logistics), and update `logistics-task-simplification.md` /
+  `entity-job-id.md` (they still describe `TransportJobBuilder`, `onCancel` and `entity.jobId === record.id`).
