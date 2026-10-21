@@ -285,10 +285,13 @@ export interface GameEventsFeatures {
         unitId: number;
     };
 
-    /** Emitted when a training cycle is interrupted (e.g. carrier killed en route). */
+    /**
+     * Emitted when a training cycle ends before the transform: carrier killed en route, or its
+     * Barracks job failed / was preempted / could not be resumed after a load.
+     */
     'barracks:trainingInterrupted': {
         buildingId: number;
-        reason: 'carrier_killed';
+        reason: 'carrier_killed' | JobFailureReason;
     };
 
     // === Auto-Recruit Events ===

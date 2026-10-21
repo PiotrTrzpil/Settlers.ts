@@ -7,7 +7,9 @@
  * Public API:
  * - Types: TrainingRecipe, TrainingRecipeSet, BarracksTrainingState
  * - Manager: BarracksTrainingManager, BarracksTrainingManagerConfig
- * - Recipes: getTrainingRecipes, getTrainingRecipeSet, getSpecialistUnitType, getSpecialistWeapon
+ * - Job kind: BarracksJobParams, barracksJobSpec
+ * - Recipes: getTrainingRecipes, getTrainingRecipeSet, getSpecialistUnitType, getSpecialistWeapon,
+ *   getRecipeTargetUnitType, getRecipeForTargetUnitType
  * - Recipe indices: TrainingRecipeIndex
  * - Constants: TRAINING_DURATION_FRAMES
  */
@@ -16,8 +18,11 @@
 export type { TrainingRecipe, TrainingRecipeSet, BarracksTrainingState } from './types';
 
 // Manager
-export { BarracksTrainingManager, TRAINING_DURATION_FRAMES } from './barracks-training-manager';
+export { BarracksTrainingManager } from './barracks-training-manager';
 export type { BarracksTrainingManagerConfig } from './barracks-training-manager';
+
+// Job kind
+export { TRAINING_DURATION_FRAMES, barracksJobSpec, type BarracksJobParams } from './barracks-job-kind';
 
 // Feature definition (self-registering via FeatureRegistry)
 export { BarracksFeature, type BarracksExports } from './barracks-feature';
@@ -28,6 +33,8 @@ export {
     getTrainingRecipeSet,
     getSpecialistUnitType,
     getSpecialistWeapon,
+    getRecipeTargetUnitType,
+    getRecipeForTargetUnitType,
     TrainingRecipeIndex,
 } from './training-recipes';
 export type { TrainingRecipeIndexValue } from './training-recipes';

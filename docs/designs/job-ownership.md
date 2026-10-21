@@ -994,3 +994,42 @@ releases).
   recruit saved mid-walk resume and fill the building once (no second unit; failed before: the jobs were lost on
   load); specialist / recruit killed mid-walk → new dispatch; building removed mid-walk cancels the job
   (recruit case failed before: the carrier kept walking and transformed).
+
+## Barracks migration notes (as shipped on `refactor/jobs-barracks`)
+
+- **Kind** in `features/barracks/barracks-job-kind.ts`, registered in the feature's `create()` (barracks now
+  depends on `'settler-tasks'`; load and tick order unchanged — it already loaded after it via `recruit`).
+  Job: `barracksJobSpec({ barracksId, recipeIndex, unitType })` = `{ kind: Barracks, ref: barracksId, params,
+  reserved: true }`; `unitType` is the levelled target (e.g. Swordsman2). Build = `segments.prefix({ source:
+  'building', sourceId: barracksId, at: door }, choreo('BARRACKS_TRAINING').addNode(WAIT FIGHT).target(id))`.
+  `restorable` ⇔ the barracks is registered with the manager.
+- **Recruit charge**: `registerBuildingCharge(Barrack, createBarracksRecruitCharge(gameState))` — costs = the
+  inputs of the race's recipe that trains the target type (`getRecipeForTargetUnitType`, unique per race),
+  side `'input'`. Dispatch: `recruitSystem.dispatchBuildingRecruitment(target, player, barracksId, () =>
+  barracksJobSpec(...))`. The material reservation is the TRANSFORM node's; the barracks never releases it.
+- **Training lifetime**: dispatch → transform. `unit:recruited` still ends the training (and emits
+  `barracks:trainingCompleted`, timing unchanged), but the barracks is found via the unit's Barracks commitment
+  (O(1), no scan; a Barracks transform without a matching active training throws). The WAIT(FIGHT) that
+  follows is part of the job but not of the training, so the barracks may already dispatch the next carrier
+  (as before). `onCompleted` is a no-op.
+- **Early end** (`onFailed` any reason, `onUnitRemoved`) → `interruptTraining(barracksId, unitId, reason)`:
+  clears `activeTrainings` and emits `barracks:trainingInterrupted` with reason `'carrier_killed'` or the
+  `JobFailureReason` — no-op if that carrier's training already completed (ended in the FIGHT wait). Fixes
+  the barracks stuck "training" forever. Recipe stays consumed (Decision 3).
+- **Barracks removed**: `removeBarracks` cancels every `unitsOwnedBy(Barracks, id)` job (carrier idles, node
+  `onAbort` releases the materials).
+- **Restore**: `onRestoreComplete` = `initBarracks` for every completed barracks, then
+  `rebuildFromCommitments()` from `unitsOwnedBy(Barracks)` + `paramsOf` — skipping units that already
+  transformed (`subType === params.unitType`: saved in the FIGHT wait) and barracks that are not registered
+  (abandoned by `restorable`). Resume never crosses the completed transform, so no double transform.
+- **Removed**: `buildTrainingJob` (legacy `ChoreoJobState`, `transformRecruitBuilding`), the
+  `dispatchRecruitmentFromBuilding` call. Barracks had no `settler:task*` subscriptions or `unitReservation`
+  use. `TRAINING_DURATION_FRAMES` moved to `barracks-job-kind.ts` (still exported from the feature index).
+- **Outside scope**: `event-types-features.ts` — `barracks:trainingInterrupted.reason` widened to
+  `'carrier_killed' | JobFailureReason`. `settler-tasks/job-service.ts` — the `paramsOf` fix identical to
+  the one merged with Workplace-dispatch (pending resumes first; a restored carrier has no runtime yet).
+- **For Cleanup**: `RecruitSystem.dispatchRecruitmentFromBuilding` and `candidate.reservationId` now have no
+  callers; `ChoreoBuilder.transformRecruitBuilding` has none outside recruit's legacy default.
+- **Tests**: `tests/unit/integration/jobs/barracks-job.spec.ts` (commitment; carrier killed / job preempted
+  mid-walk → interrupted + next recipe trains — failed before; saved mid-walk and mid-FIGHT-wait → completes
+  once, no second transform, stock withdrawn once; barracks removed mid-walk → carrier idles).
