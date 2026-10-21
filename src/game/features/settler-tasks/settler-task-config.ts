@@ -5,11 +5,10 @@
  */
 
 import type { CoreDeps } from '../feature';
-import type { BuildingInventoryManager, BuildingPileRegistry } from '../inventory';
+import type { BuildingInventoryManager } from '../inventory';
 import type { EntityVisualService } from '../../animation/entity-visual-service';
 import type { WorkAreaStore } from '../work-areas/work-area-store';
 import type { TriggerSystem } from '../building-overlays';
-import type { ConstructionSiteManager } from '../building-construction/construction-site-manager';
 import type { MaterialTransfer } from '../material-transfer';
 import type { ChoreoSystem } from '../../systems/choreo';
 import type { ISettlerBuildingLocationManager } from '../settler-location';
@@ -23,11 +22,8 @@ export interface SettlerTaskSystemConfig extends CoreDeps {
     choreoSystem: ChoreoSystem;
     visualService: EntityVisualService;
     inventoryManager: BuildingInventoryManager;
-    pileRegistry: BuildingPileRegistry;
     workAreaStore: WorkAreaStore;
     triggerSystem: TriggerSystem;
-    /** Only for BuildingPositionResolver's construction-pile lookup. */
-    constructionSiteManager: ConstructionSiteManager;
     materialTransfer: MaterialTransfer;
     isInCombat: (entityId: number) => boolean;
     locationManager: ISettlerBuildingLocationManager;

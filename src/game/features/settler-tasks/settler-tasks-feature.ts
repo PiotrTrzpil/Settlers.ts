@@ -12,7 +12,6 @@
 import type { FeatureDefinition, FeatureContext } from '../feature';
 import type { InventoryExports } from '../inventory';
 import type { BuildingOverlayFeatureExports } from '../building-overlays';
-import type { BuildingConstructionExports } from '../building-construction';
 import type { WorkAreaExports } from '../work-areas/work-areas-feature';
 import type { MaterialTransferExports } from '../material-transfer/material-transfer-feature';
 import type { CombatExports } from '../combat';
@@ -36,8 +35,6 @@ export const SettlerTaskFeature: FeatureDefinition = {
         'inventory',
         // Work-node triggers → building overlay animations
         'building-overlays',
-        // Only BuildingPositionResolver pile inputs (pileRegistry + construction-pile fallback)
-        'building-construction',
         // Work-area centers for useWork offsets / search areas
         'work-areas',
         // Drop carried goods on job interrupt
@@ -51,8 +48,6 @@ export const SettlerTaskFeature: FeatureDefinition = {
     create(ctx: FeatureContext) {
         const { inventoryManager } = ctx.getFeature<InventoryExports>('inventory');
         const { triggerSystem } = ctx.getFeature<BuildingOverlayFeatureExports>('building-overlays');
-        const { constructionSiteManager, pileRegistry } =
-            ctx.getFeature<BuildingConstructionExports>('building-construction');
         const { workAreaStore } = ctx.getFeature<WorkAreaExports>('work-areas');
         const { materialTransfer } = ctx.getFeature<MaterialTransferExports>('material-transfer');
         const { combatSystem } = ctx.getFeature<CombatExports>('combat');
@@ -66,10 +61,8 @@ export const SettlerTaskFeature: FeatureDefinition = {
             visualService: ctx.visualService,
             inventoryManager,
             eventBus: ctx.eventBus,
-            pileRegistry,
             workAreaStore,
             triggerSystem,
-            constructionSiteManager,
             materialTransfer,
             isInCombat: combatSystem.isInCombat.bind(combatSystem),
             locationManager,
