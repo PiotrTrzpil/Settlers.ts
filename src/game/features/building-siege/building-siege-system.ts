@@ -21,7 +21,6 @@ import type { EventBus } from '../../event-bus';
 import { EntityType, UnitType, BuildingType, type Entity, type Tile, tileKey, getEntityIfType } from '../../entity';
 import { isDarkTribe } from '../../core/race';
 import { hexDistanceTo } from '../../systems/hex-directions';
-import { dispatchUnitToGarrison } from '../tower-garrison/internal/garrison-dispatch';
 import { getBuildingDoorPos } from '../../data/game-data-access';
 import { sortedEntries } from '@/utilities/collections';
 import { createLogger } from '@/utilities/logger';
@@ -486,13 +485,7 @@ export class BuildingSiegeSystem implements TickSystem {
         // Siege is done — garrisoning code handles the rest
         this.removeSiege(buildingId);
 
-        dispatchUnitToGarrison(capturer.id, buildingId, {
-            gameState: this.gameState,
-            terrain: this.terrain,
-            unitReservation: this.unitReservation,
-            taskDispatcher: this.taskDispatcher,
-            workerAssignments: this.workerAssignments,
-        });
+        this.garrisonManager.dispatchUnitToGarrison(capturer.id, buildingId);
     }
 
     // ── Helpers ──────────────────────────

@@ -4,13 +4,11 @@
  * Handles the full lifecycle of garrisoning military units in towers:
  * - building:completed → initTower for garrison buildings
  * - building:removed → removeTower (no-op for non-garrison buildings)
- * - onRestoreComplete → re-builds WORKER_DISPATCH choreo jobs for en-route units
+ * - onRestoreComplete → initTower for every garrison building, slots rebuilt from Garrison holds
  *
- * Garrison dispatch uses WORKER_DISPATCH choreo jobs (goToDoorAndEnter).
- * The garrison manager listens for settler:taskCompleted to finalize.
- *
- * Entity removal cleanup (killed en-route / killed while garrisoned) is handled
- * automatically by UnitReservationRegistry.onForcedRelease.
+ * Owns the `Garrison` job kind (en-route units: goToDoor + ENTER_BUILDING) and the Garrison hold
+ * owner (garrisoned units) — see internal/garrison-job-kind.ts. Outcomes (entered, failed, unit
+ * removed, preempted) arrive as direct handler calls; en-route jobs resume after load by themselves.
  */
 
 import type { FeatureDefinition, FeatureContext, FeatureInstance } from '../feature';
@@ -23,8 +21,7 @@ import { TowerGarrisonManager } from './tower-garrison-manager';
 import { AutoGarrisonSystem } from './tower-garrison-auto-system';
 import { TowerCombatSystem } from './internal/tower-combat-system';
 import { isGarrisonBuildingType } from './internal/garrison-capacity';
-import { choreo } from '@/game/systems/choreo/choreo-builder';
-import { JobKind } from '@/game/systems/choreo/types';
+import { createGarrisonHoldOwner, createGarrisonJobKind } from './internal/garrison-job-kind';
 import {
     executeGarrisonUnitsCommand,
     executeUngarrisonUnitCommand,
@@ -59,7 +56,7 @@ export const TowerGarrisonFeature: FeatureDefinition = {
     dependencies: ['settler-tasks', 'settler-location', 'combat', 'building-construction'],
 
     create(ctx: FeatureContext): FeatureInstance {
-        const { jobRunner, workerAssignments } = ctx.getFeature<SettlerTaskExports>('settler-tasks');
+        const { jobs, workerAssignments } = ctx.getFeature<SettlerTaskExports>('settler-tasks');
         const { locationManager } = ctx.getFeature<SettlerLocationExports>('settler-location');
         const { combatSystem } = ctx.getFeature<CombatExports>('combat');
         const { constructionSiteManager } = ctx.getFeature<BuildingConstructionExports>('building-construction');
@@ -68,14 +65,16 @@ export const TowerGarrisonFeature: FeatureDefinition = {
             gameState: ctx.gameState,
             eventBus: ctx.eventBus,
             terrain: ctx.terrain,
-            unitReservation: ctx.unitReservation,
+            jobs,
             locationManager,
-            releaseWorkerAssignment: (settlerId: number) => workerAssignments.releaseAssignment(settlerId),
+            workerAssignments,
         });
+        jobs.registerKind(createGarrisonJobKind({ gameState: ctx.gameState, terrain: ctx.terrain, manager }));
+        jobs.registerHoldOwner(createGarrisonHoldOwner(manager));
 
         const autoSystem = new AutoGarrisonSystem({
             manager,
-            unitReservation: ctx.unitReservation,
+            unitCommitments: ctx.unitCommitments,
             executeCommand: ctx.executeCommand,
             gameState: ctx.gameState,
         });
@@ -100,21 +99,7 @@ export const TowerGarrisonFeature: FeatureDefinition = {
 
         // When a tower changes owner (siege capture), cancel en-route units of the old player
         ctx.on('building:ownerChanged', ({ buildingId, oldPlayer }) => {
-            const cancelled = manager.getCancelledEnRouteUnits(buildingId, oldPlayer);
-            for (const unitId of cancelled) {
-                ctx.unitReservation.release(unitId);
-                locationManager.cancelApproach(unitId);
-                workerAssignments.releaseAssignment(unitId);
-            }
-        });
-
-        // Clean up when a dispatch job fails for a garrison-bound unit
-        ctx.on('settler:taskFailed', ({ unitId }) => {
-            if (manager.isEnRoute(unitId)) {
-                ctx.unitReservation.release(unitId);
-                locationManager.cancelApproach(unitId);
-                workerAssignments.releaseAssignment(unitId);
-            }
+            manager.cancelEnRouteUnitsOf(buildingId, oldPlayer);
         });
 
         // When an enemy unit enters an empty garrison, capture the building.
@@ -159,67 +144,27 @@ export const TowerGarrisonFeature: FeatureDefinition = {
             // Both swordsmen and bowmen are rendered via overlay-resolution.ts
             // (AboveBuilding layer) as static standing poses.
             renderPasses: [],
-            persistence: [manager.garrisonJobs],
+            // Garrison state is persisted as commitments (Garrison jobs + holds) by settler-tasks.
+            persistence: 'none',
             onRestoreComplete() {
-                // Step 1: Register all garrison towers.
                 forEachCompletedBuilding(ctx.gameState, constructionSiteManager, e => {
                     const bt = e.subType as BuildingType;
                     if (isGarrisonBuildingType(bt)) {
                         manager.initTower(e.id, bt);
                     }
                 });
-
-                // Step 2: Rebuild garrison slots and reservations from persisted garrisonJobs.
-                manager.rebuildFromGarrisonJobs();
-
-                // Step 3: Re-build WORKER_DISPATCH choreo jobs for units that were
-                // en-route when the game was saved. Approaching state is persisted
-                // by SettlerBuildingLocationManager; reservations and jobs are
-                // restored here after feature stores have been deserialized.
-                for (const { unitId, towerId } of manager.getEnRouteEntries()) {
-                    const building = ctx.gameState.getEntity(towerId);
-                    if (!building) {
-                        ctx.unitReservation.release(unitId);
-                        workerAssignments.releaseAssignment(unitId);
-                        continue;
-                    }
-                    ctx.unitReservation.reserve(unitId, {
-                        purpose: 'garrison-en-route',
-                        onForcedRelease: () => {
-                            // reservation auto-released by registry
-                        },
-                    });
-                    const job = choreo('WORKER_DISPATCH', JobKind.Garrison)
-                        .goToDoorAndEnter(towerId, { gameState: ctx.gameState, terrain: ctx.terrain })
-                        .build();
-                    jobRunner.assignJob(unitId, job);
-                }
+                // En-route Garrison jobs are resumed by settler-tasks in onRestoreResume.
+                manager.rebuildFromHolds();
             },
             commands: {
                 garrison_units: cmd => {
-                    const cmdCtx: GarrisonCommandContext = {
-                        manager,
-                        taskDispatcher: jobRunner,
-                        workerAssignments,
-                        locationManager,
-                        gameState: ctx.gameState,
-                        terrain: ctx.terrain,
-                        unitReservation: ctx.unitReservation,
-                    };
+                    const cmdCtx: GarrisonCommandContext = { manager, gameState: ctx.gameState };
                     return executeGarrisonUnitsCommand(cmd as GarrisonUnitsCommand, cmdCtx)
                         ? COMMAND_OK
                         : commandFailed('no units fit available garrison slots');
                 },
                 garrison_selected_units: cmd => {
-                    const cmdCtx: GarrisonCommandContext = {
-                        manager,
-                        taskDispatcher: jobRunner,
-                        workerAssignments,
-                        locationManager,
-                        gameState: ctx.gameState,
-                        terrain: ctx.terrain,
-                        unitReservation: ctx.unitReservation,
-                    };
+                    const cmdCtx: GarrisonCommandContext = { manager, gameState: ctx.gameState };
                     const result: GarrisonSelectedResult = executeGarrisonSelectedUnitsCommand(
                         cmd as GarrisonSelectedUnitsCommand,
                         cmdCtx

@@ -790,3 +790,31 @@ Everything below is what migrations build on. "TRANSITIONAL" marks code that exi
 `TRANSITIONAL_UNOWNED_KINDS`; the legacy-registry OR in `UnitCommitments` (+ its constructor arg);
 `CLEANUP_PRIORITY.RESERVATIONS`; `ctx.unitReservation` / `GameServices.unitReservation`; `entity.jobId`
 (still set by `startAssignedJob`, cleared on job end) and `nextJobId`.
+
+### Garrison migration notes (as shipped on `refactor/jobs-garrison`)
+
+- **Kind + hold owner** in `features/tower-garrison/internal/garrison-job-kind.ts`, both registered in the feature's
+  `create()`. Job: `{ kind: Garrison, ref: towerId, params: { towerId }, reserved: true }`, build =
+  `choreo('WORKER_DISPATCH', Garrison).goToDoorAndEnter(towerId).toJobBuild()`; `restorable` ⇔ the tower is registered.
+  `onCompleted` → `finalizeGarrison` → `jobs.hold(unit, Garrison, towerId, true)` + slot. `onFailed` → release the home
+  assignment + `cancelApproach`. `onUnitRemoved` (job) is a no-op: Core drops the home, settler-location the location
+  record, and en-route counts are derived from commitments. Hold owner (`persist: true`): `onUnitRemoved` frees the
+  slot; `onPreempted` vacates the slot and exits the building (unit leaves the tower).
+- **Derived from commitments**: `isEnRoute`, `getTowerIdForEnRouteUnit`, `getEnRouteSlotCounts`, `needsAutoGarrison`
+  (no Garrison commitment for the tower), ownership-change cancel (`cancelEnRouteUnitsOf` → `jobs.cancel`). Removed:
+  `garrisonJobs` (feature `persistence: 'none'`), `getEnRouteEntries`, `getCancelledEnRouteUnits`,
+  `rebuildFromGarrisonJobs` (→ `rebuildFromHolds`), the `settler:taskCompleted` / `settler:taskFailed` /
+  `settler-location:approachInterrupted` subscriptions, all `unitReservation` use, `entity.jobId` writes.
+- **Restore**: `onRestoreComplete` = `initTower` for every completed garrison building, then slots from the holds
+  (slot order after a load = ascending unit id; before it was garrison order). En-route jobs resume in Core's
+  `onRestoreResume`; nothing is assigned in `onRestoreComplete`.
+- **Dispatch**: `TowerGarrisonManager.dispatchUnitToGarrison(unitId, towerId)` (wraps `internal/garrison-dispatch.ts`)
+  — `jobs.assign` with `moveTo` = approach tile (none when already standing on it), then `assignWorker`. A failed
+  dispatch assigns nothing, so the commands no longer roll back an approach. Auto-garrison skips
+  `ctx.unitCommitments.isReserved` units (covers en-route and garrisoned).
+- **Outside scope**: `features/building-siege/building-siege-system.ts` — `dispatchCapturer` calls
+  `this.garrisonManager.dispatchUnitToGarrison(...)` instead of importing the internal function (its `terrain` /
+  `workerAssignments` fields are now unused there; the Readers & siege migration can drop them).
+- **For Readers & siege / Cleanup**: combat (`combat-feature.ts`) and siege (`isIdleSwordsman`, `findSwordsmanAtDoor`,
+  `hasDoorCloserThan`) still read the legacy `ctx.unitReservation`, which no longer contains garrison units — they must
+  switch to `ctx.unitCommitments.isReserved` (garrisoned units are hidden, so only en-route units are affected).

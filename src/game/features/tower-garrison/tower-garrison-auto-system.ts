@@ -8,16 +8,16 @@
  * Preference: Swordsman (any level) over Bowman. Within a role, picks the
  * closest unit by Chebyshev distance to the tower door tile.
  *
- * The garrison_units command calls manager.markEnRoute() immediately on
- * acceptance, so the next iteration of the scan will see needsAutoGarrison()
- * == false — preventing double-dispatch within the same scan.
+ * The garrison_units command assigns a Garrison job immediately on acceptance,
+ * so the next iteration of the scan will see needsAutoGarrison() == false —
+ * preventing double-dispatch within the same scan.
  */
 
 import type { TickSystem } from '@/game/core/tick-system';
 import type { GameState } from '@/game/game-state';
 import { EntityType, BuildingType } from '@/game/entity';
 import { UnitType } from '@/game/core/unit-types';
-import type { UnitReservationRegistry } from '@/game/systems/unit-reservation';
+import type { UnitReservationQuery } from '@/game/systems/unit-commitment';
 import type { CommandExecutor } from '@/game/commands';
 import { getBuildingDoorPos } from '@/game/data/game-data-access';
 import { createLogger } from '@/utilities/logger';
@@ -36,14 +36,14 @@ const AUTO_GARRISON_SEARCH_RADIUS = 40;
 
 export interface AutoGarrisonSystemConfig {
     manager: TowerGarrisonManager;
-    unitReservation: UnitReservationRegistry;
+    unitCommitments: UnitReservationQuery;
     executeCommand: CommandExecutor;
     gameState: GameState;
 }
 
 export class AutoGarrisonSystem implements TickSystem {
     private readonly manager: TowerGarrisonManager;
-    private readonly unitReservation: UnitReservationRegistry;
+    private readonly unitCommitments: UnitReservationQuery;
     private readonly executeCommand: CommandExecutor;
     private readonly gameState: GameState;
 
@@ -51,7 +51,7 @@ export class AutoGarrisonSystem implements TickSystem {
 
     constructor(config: AutoGarrisonSystemConfig) {
         this.manager = config.manager;
-        this.unitReservation = config.unitReservation;
+        this.unitCommitments = config.unitCommitments;
         this.executeCommand = config.executeCommand;
         this.gameState = config.gameState;
     }
@@ -131,13 +131,8 @@ export class AutoGarrisonSystem implements TickSystem {
         if (!getGarrisonRole(unitType)) {
             return false;
         }
-        if (this.unitReservation.isReserved(entityId)) {
-            return false;
-        }
-        // After state restore, reservations aren't persisted but the location
-        // manager already tracks approaching settlers. Checking isEnRoute
-        // prevents re-dispatching a unit that's already walking to a tower.
-        if (this.manager.isEnRoute(entityId)) {
+        // Units walking to (or inside) a tower are reserved by their Garrison commitment.
+        if (this.unitCommitments.isReserved(entityId)) {
             return false;
         }
         if (this.manager.hasDispatchFailed(entityId, buildingId)) {

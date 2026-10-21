@@ -9,28 +9,19 @@ import type {
 import { commandFailed } from '@/game/commands/command-types';
 import { EntityType, getUnitLevel } from '@/game/entity';
 import type { GameState } from '@/game/game-state';
-import type { TerrainData } from '@/game/terrain';
 import type { EventBus } from '@/game/event-bus';
-import type { TaskDispatcher, WorkerAssignments } from '@/game/features/settler-tasks';
 import { BuildingType } from '@/game/buildings/building-type';
 import { UnitType } from '@/game/core/unit-types';
 import { createLogger } from '@/utilities/logger';
-import type { UnitReservationRegistry } from '@/game/systems/unit-reservation';
-import { type ISettlerBuildingLocationManager, SettlerBuildingStatus } from '@/game/features/settler-location';
+import type { ISettlerBuildingLocationManager } from '@/game/features/settler-location';
 import type { TowerGarrisonManager } from '../tower-garrison-manager';
-import { dispatchUnitToGarrison } from './garrison-dispatch';
 import { getGarrisonCapacity, getGarrisonRole } from './garrison-capacity';
 import type { GarrisonRole } from '../types';
 
 /** Shared context for garrison command execution. */
 export interface GarrisonCommandContext {
     manager: TowerGarrisonManager;
-    taskDispatcher: TaskDispatcher;
-    workerAssignments: WorkerAssignments;
     gameState: GameState;
-    terrain: TerrainData;
-    unitReservation: UnitReservationRegistry;
-    locationManager: ISettlerBuildingLocationManager;
 }
 
 const log = createLogger('GarrisonCommands');
@@ -96,11 +87,11 @@ function filterAcceptedUnits(
  * 3. Slot availability accounts for both garrisoned units AND en-route units, preventing over-commitment.
  * 4. Greedily allocate: fill available swordsman slots first, then bowman slots. Stop each role when full.
  * 5. If no units survive filtering: return false.
- * 6. For each accepted unit: reserve → assign worker to building → assign WORKER_DISPATCH choreo job.
+ * 6. For each accepted unit: assign a Garrison job (walk to the door, enter) and mark it approaching.
  * 7. Return true.
  */
 export function executeGarrisonUnitsCommand(cmd: GarrisonUnitsCommand, ctx: GarrisonCommandContext): boolean {
-    const { manager, taskDispatcher, workerAssignments, gameState, terrain, unitReservation, locationManager } = ctx;
+    const { manager, gameState } = ctx;
     const building = gameState.getEntity(cmd.buildingId);
     if (!building) {
         log.warn(`garrison_units: building ${cmd.buildingId} not found`);
@@ -153,20 +144,13 @@ export function executeGarrisonUnitsCommand(cmd: GarrisonUnitsCommand, ctx: Garr
         return false;
     }
 
-    const dispatchDeps = { gameState, terrain, unitReservation, taskDispatcher, workerAssignments };
     let anyDispatched = false;
 
     for (const unitId of acceptedUnitIds) {
-        if (dispatchUnitToGarrison(unitId, cmd.buildingId, dispatchDeps)) {
+        if (manager.dispatchUnitToGarrison(unitId, cmd.buildingId)) {
             anyDispatched = true;
         } else {
-            // Blacklist so auto-garrison doesn't retry the same pair.
-            // The unit may already be Inside if the choreo entered the building
-            // before dispatch failed — cancelApproach only handles Approaching.
-            const loc = locationManager.getLocation(unitId);
-            if (!loc || loc.status !== SettlerBuildingStatus.Inside) {
-                locationManager.cancelApproach(unitId);
-            }
+            // Blacklist so auto-garrison doesn't retry the same pair (a failed dispatch assigns nothing).
             manager.recordDispatchFailure(unitId, cmd.buildingId);
         }
     }
@@ -278,7 +262,7 @@ export interface FillGarrisonContext {
  *
  * Spawns the requested units and immediately garrisons them — no walking.
  * Each unit is created via addUnit, hidden via locationManager.enterBuilding
- * and calls finalizeGarrison directly to set the garrison jobId.
+ * and calls finalizeGarrison directly, which holds it and fills its slot.
  *
  * Returns the number of units actually garrisoned.
  */
@@ -328,7 +312,7 @@ export function executeFillGarrisonCommand(
             player: building.player,
         });
 
-        // enterBuilding hides the unit; finalizeGarrison sets the garrison jobId
+        // enterBuilding hides the unit; finalizeGarrison holds it (Garrison hold)
         // and adds the unit to the garrison slot set.
         locationManager.enterBuilding(entity.id, cmd.buildingId);
         manager.finalizeGarrison(entity.id, cmd.buildingId);

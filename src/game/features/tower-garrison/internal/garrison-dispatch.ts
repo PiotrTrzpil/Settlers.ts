@@ -1,68 +1,49 @@
 /**
- * Shared garrison dispatch utility — sends a unit to a building door and enters.
+ * Garrison dispatch — sends a unit to a tower door to enter it, as an owned `Garrison` job.
  *
- * Used by both garrison commands (player-initiated) and the siege system (capture).
- * Handles the common pattern: reserve → assignWorker → choreo → at-door fallback.
+ * Used by garrison commands (player-initiated / auto-garrison) and, through
+ * `TowerGarrisonManager.dispatchUnitToGarrison`, by the siege system (capture).
  */
 
 import type { GameState } from '@/game/game-state';
 import type { TerrainData } from '@/game/terrain';
-import type { UnitReservationRegistry } from '@/game/systems/unit-reservation';
-import type { TaskDispatcher, WorkerAssignments } from '@/game/features/settler-tasks';
-import { choreo } from '@/game/systems/choreo/choreo-builder';
-import { JobKind } from '@/game/systems/choreo/types';
+import type { JobService, WorkerAssignments } from '@/game/features/settler-tasks';
+import { JobKind, type JobSpec } from '@/game/systems/choreo';
+import { findBuildingApproachTile } from '@/game/buildings/approach';
 import { createLogger } from '@/utilities/logger';
+import type { GarrisonJobParams } from './garrison-job-kind';
 
 const log = createLogger('GarrisonDispatch');
 
 export interface GarrisonDispatchDeps {
     gameState: GameState;
     terrain: TerrainData;
-    unitReservation: UnitReservationRegistry;
-    taskDispatcher: TaskDispatcher;
+    jobs: JobService;
     workerAssignments: WorkerAssignments;
 }
 
+/** The Garrison job of a unit walking into `towerId` (reserved: player moves are rejected). */
+export function garrisonJobSpec(towerId: number): JobSpec<GarrisonJobParams> {
+    return { kind: JobKind.Garrison, ref: towerId, params: { towerId }, reserved: true };
+}
+
 /**
- * Reserve a unit, assign it to a building, and dispatch it to walk to the door and enter.
+ * Assign the unit a Garrison job (walk to the door, enter) and mark it approaching the tower.
  *
- * Returns true if the unit was successfully dispatched (walking or already at door).
- * On failure, all partial state is rolled back (reservation, worker assignment).
+ * Returns true if the unit was dispatched (walking, or already at the door). False when the door
+ * is unreachable — nothing is assigned then.
  */
-export function dispatchUnitToGarrison(unitId: number, buildingId: number, deps: GarrisonDispatchDeps): boolean {
-    const { gameState, terrain, unitReservation, taskDispatcher, workerAssignments } = deps;
+export function dispatchUnitToGarrison(unitId: number, towerId: number, deps: GarrisonDispatchDeps): boolean {
+    const { gameState, terrain, jobs, workerAssignments } = deps;
+    const tower = gameState.getEntityOrThrow(towerId, 'garrison dispatch target');
+    const unit = gameState.getEntityOrThrow(unitId, 'garrison dispatch');
+    const door = findBuildingApproachTile(tower, terrain, gameState);
+    const atDoor = unit.x === door.x && unit.y === door.y;
 
-    unitReservation.reserve(unitId, {
-        purpose: 'garrison-en-route',
-        onForcedRelease: () => {},
-    });
-
-    try {
-        const job = choreo('WORKER_DISPATCH', JobKind.Garrison)
-            .goToDoorAndEnter(buildingId, { gameState, terrain })
-            .build();
-        const assigned = taskDispatcher.assignJob(unitId, job, job.targetPos ?? undefined);
-
-        if (assigned) {
-            workerAssignments.assignWorker(unitId, buildingId);
-            return true;
-        }
-
-        // Path not found — check if unit is already at the door
-        const unit = gameState.getEntityOrThrow(unitId, 'garrison dispatch');
-        if (job.targetPos && unit.x === job.targetPos.x && unit.y === job.targetPos.y) {
-            taskDispatcher.assignJob(unitId, job);
-            workerAssignments.assignWorker(unitId, buildingId);
-            return true;
-        }
-
-        // Genuinely unreachable — roll back
-        unitReservation.release(unitId);
-        log.warn(`Dispatch failed: unit ${unitId} cannot reach building ${buildingId}`);
-        return false;
-    } catch (e) {
-        unitReservation.release(unitId);
-        log.error(`Dispatch error: unit ${unitId} to building ${buildingId}`, e);
+    if (!jobs.assign(unitId, garrisonJobSpec(towerId), atDoor ? undefined : { moveTo: door })) {
+        log.warn(`Dispatch failed: unit ${unitId} cannot reach building ${towerId}`);
         return false;
     }
+    workerAssignments.assignWorker(unitId, towerId);
+    return true;
 }
