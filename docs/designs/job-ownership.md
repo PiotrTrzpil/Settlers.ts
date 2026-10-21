@@ -932,3 +932,29 @@ failed before the fix) and `recruit-restore.spec.ts` (saved on the way: same own
 reserved, transforms once; pile gone on load: abandoned, carrier idles; resume never crosses a
 completed transform; building source saved on the way re-reserves and withdraws once; killed
 releases).
+
+### Readers & siege migration notes (as shipped on `refactor/jobs-siege`)
+
+- **Siege holds**: the ejected defender and every door attacker are `jobs.hold(unit, 'siege', buildingId, true)`
+  (`features/building-siege/siege-participants.ts`: `join` = hold + movement `busy`; `release` = clear busy, unlock,
+  release from combat, `releaseHold(unit, 'siege')` — never touches another owner's commitment). Invariant: a unit is
+  listed in a `SiegeState` ⇔ it holds a `'siege'` commitment for that building; every path that drops a unit from a
+  siege releases it (including attackers that left the door tiles — before, they stayed reserved and busy).
+- **Hold owner** `'siege'` (`persist: false`, registered by `building-siege-feature.ts`): `onUnitRemoved` → the unit leaves
+  its siege like a defeat (defender: release the door attackers and eject the next defender — **fixes the attacker
+  leak** when the defender is removed outside combat); `onPreempted` → release the unit and leave the siege. The
+  DEFAULT-priority siege cleanup handler and the "defender entity missing" tick branch are deleted (the hold owner
+  covers them). `combat:unitDefeated` looks the siege up by the commitment `ref` (`findSiegeRole` deleted).
+- **Door attackers**: a unit reserved by another owner (another siege, a Garrison walk) is skipped instead of being
+  shared. An attacker joined while its player move is still ending keeps walking under the siege hold; released
+  mid-walk it finishes as an unreserved `'player-move'` (Core semantics).
+- **Readers**: siege (`hasDoorCloserThan`, `isIdleSwordsman`, `findSwordsmanAtDoor`, `onMovementStopped`), tower assault
+  and combat (`isUnitReserved`) read `ctx.unitCommitments.isReserved`. The AI idle check
+  (`military-planner.ts#getIdleMilitaryUnits`) is `unitCommitments.isIdle(id) && !hidden` (was "empty path"); the
+  dependency is threaded through `ai-player-feature.ts` → `AiPlayerSystemImpl` → `AiPlayerController`.
+- **Not migrated (blocked on Transport)**: `src/composables/useLogisticsDebug.ts` and `src/game/cli/commands/economy.ts`
+  only fill `SnapshotConfig.unitReservation` (`features/logistics/logistics-snapshot.ts`, Transport's file). When Transport
+  switches `SnapshotConfig` to `unitCommitments`, both builders change by one line (or Cleanup does it).
+- **Tests**: `tests/unit/integration/jobs/siege-holds.spec.ts` — holds shape, defender removed outside combat frees the
+  attackers, attacker removed leaves the siege, building removed releases everyone, holds not saved, a swordsman
+  walking to garrison its own tower is ignored by siege and combat.

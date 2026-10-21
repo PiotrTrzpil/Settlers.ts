@@ -12,6 +12,7 @@ import type { GameState } from '@/game/game-state';
 import type { TerrainData } from '@/game/terrain';
 import type { CommandExecutor } from '@/game/commands/command-types';
 import type { PlacementFilter } from '@/game/systems/placement/types';
+import type { UnitCommitmentQuery } from '@/game/systems/unit-commitment';
 import type { Node } from '@/game/ai/behavior-tree';
 import type { AiPlayerConfig, AiPlayerState } from '../types';
 import { EconomyPlanner } from './economy-planner';
@@ -40,6 +41,7 @@ export class AiPlayerController {
         gameState: GameState;
         terrain: TerrainData;
         executeCommand: CommandExecutor;
+        unitCommitments: UnitCommitmentQuery;
         getPlacementFilter: () => PlacementFilter | null;
         hasSite: (buildingId: number) => boolean;
         isGameOver: () => boolean;
@@ -65,6 +67,7 @@ export class AiPlayerController {
             gameState: deps.gameState,
             hasSite: deps.hasSite,
             executeCommand: deps.executeCommand,
+            unitCommitments: deps.unitCommitments,
             player: this.player,
             race: deps.race,
         });

@@ -27,7 +27,7 @@ import { BuildingHealthTracker, getBuildingMaxHealth } from './building-health';
 import type { CombatSystem } from '../combat/combat-system';
 import type { TaskDispatcher } from '../settler-tasks';
 import type { TowerGarrisonManager } from '../tower-garrison/tower-garrison-manager';
-import type { UnitReservationRegistry } from '../../systems/unit-reservation';
+import type { UnitReservationQuery } from '../../systems/unit-commitment';
 import type { CommandExecutor } from '../../commands';
 import { createLogger } from '@/utilities/logger';
 import { sortedEntries } from '@/utilities/collections';
@@ -46,7 +46,7 @@ export interface TowerAssaultSystemConfig {
     gameState: GameState;
     eventBus: EventBus;
     combatSystem: CombatSystem;
-    unitReservation: UnitReservationRegistry;
+    unitCommitments: UnitReservationQuery;
     taskDispatcher: TaskDispatcher;
     garrisonManager: TowerGarrisonManager;
     executeCommand: CommandExecutor;
@@ -59,7 +59,7 @@ export class TowerAssaultSystem implements TickSystem {
     private readonly gameState: GameState;
     private readonly eventBus: EventBus;
     private readonly combatSystem: CombatSystem;
-    private readonly unitReservation: UnitReservationRegistry;
+    private readonly unitCommitments: UnitReservationQuery;
     private readonly taskDispatcher: TaskDispatcher;
     private readonly garrisonManager: TowerGarrisonManager;
     private readonly executeCommand: CommandExecutor;
@@ -70,7 +70,7 @@ export class TowerAssaultSystem implements TickSystem {
         this.gameState = cfg.gameState;
         this.eventBus = cfg.eventBus;
         this.combatSystem = cfg.combatSystem;
-        this.unitReservation = cfg.unitReservation;
+        this.unitCommitments = cfg.unitCommitments;
         this.taskDispatcher = cfg.taskDispatcher;
         this.garrisonManager = cfg.garrisonManager;
         this.executeCommand = cfg.executeCommand;
@@ -173,7 +173,7 @@ export class TowerAssaultSystem implements TickSystem {
             if (!unit || unit.player === building.player || !isDarkTribe(unit.race)) {
                 continue;
             }
-            if (!isIdleSwordsman(unit, this.unitReservation, this.combatSystem, this.gameState)) {
+            if (!isIdleSwordsman(unit, this.unitCommitments, this.combatSystem, this.gameState)) {
                 continue;
             }
             attackers.push(unit);
@@ -253,7 +253,7 @@ export class TowerAssaultSystem implements TickSystem {
             if (!isDarkTribe(entity.race)) {
                 continue;
             }
-            if (!isIdleSwordsman(entity, this.unitReservation, this.combatSystem, this.gameState)) {
+            if (!isIdleSwordsman(entity, this.unitCommitments, this.combatSystem, this.gameState)) {
                 continue;
             }
             this.tryStartAssault(entity);

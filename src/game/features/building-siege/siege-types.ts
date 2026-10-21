@@ -7,27 +7,7 @@
 import type { CoreDeps } from '../feature';
 import type { TowerGarrisonManager } from '../tower-garrison/tower-garrison-manager';
 import type { CombatSystem } from '../combat/combat-system';
-import type { UnitReservationRegistry } from '../../systems/unit-reservation';
-import type { TaskDispatcher, WorkerAssignments } from '../settler-tasks';
-import type { TerrainData } from '../../terrain';
-
-// ── Siege role lookup ──────────────────────────
-
-/** Role of an entity within an active siege. */
-export type SiegeRole = { role: 'defender'; buildingId: number } | { role: 'door-attacker'; buildingId: number };
-
-/** Find which siege (if any) an entity participates in and what role it plays. */
-export function findSiegeRole(entityId: number, sieges: ReadonlyMap<number, SiegeState>): SiegeRole | undefined {
-    for (const [buildingId, siege] of sieges) {
-        if (siege.activeDefenderId === entityId) {
-            return { role: 'defender', buildingId };
-        }
-        if (siege.doorAttackerIds.includes(entityId)) {
-            return { role: 'door-attacker', buildingId };
-        }
-    }
-    return undefined;
-}
+import type { JobService, TaskDispatcher } from '../settler-tasks';
 
 // ── Constants ──────────────────────────
 
@@ -53,9 +33,9 @@ export const MAX_DOOR_ATTACKERS = 2;
  */
 export interface SiegeState {
     buildingId: number;
-    /** Currently ejected defender entity ID (reserved to stay at door) */
+    /** Currently ejected defender entity ID (a reserved 'siege' hold, so it stays at the door) */
     activeDefenderId: number | null;
-    /** Enemy unit IDs currently allowed to fight the door defender (max MAX_DOOR_ATTACKERS). */
+    /** Enemy units fighting the door defender (max MAX_DOOR_ATTACKERS), each a reserved 'siege' hold. */
     doorAttackerIds: number[];
 }
 
@@ -68,11 +48,9 @@ export interface DoorDefenderNotifier {
 }
 
 export interface BuildingSiegeSystemConfig extends CoreDeps {
-    terrain: TerrainData;
     garrisonManager: TowerGarrisonManager;
     combatSystem: CombatSystem;
-    unitReservation: UnitReservationRegistry;
+    jobs: JobService;
     taskDispatcher: TaskDispatcher;
-    workerAssignments: WorkerAssignments;
     doorDefenderNotifier: DoorDefenderNotifier;
 }

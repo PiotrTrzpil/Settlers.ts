@@ -5,7 +5,9 @@
  * - unit:movementStopped — forwarded to siege system for attacker arrival detection
  * - combat:unitDefeated — forwarded to siege system for defender death / attacker death
  * - building:removed — cancels any active siege on the destroyed building
- * - entity:removed (via cleanupRegistry) — removes dead attackers from siege state
+ *
+ * Registers the 'siege' hold owner (persist: false — siege state is not saved, so participants
+ * load idle): a participant removed or taken over outside combat leaves its siege.
  */
 
 import type { FeatureDefinition, FeatureContext, FeatureInstance } from '../feature';
@@ -15,6 +17,7 @@ import type { SettlerTaskExports } from '@/game/features/settler-tasks';
 import { isDarkTribe } from '@/game/core/race';
 import { BuildingSiegeSystem } from './building-siege-system';
 import { TowerAssaultSystem } from './tower-assault-system';
+import { SIEGE_OWNER } from './siege-participants';
 import { TickPhase } from '../../core/tick-phase';
 
 export interface BuildingSiegeExports {
@@ -29,25 +32,30 @@ export const BuildingSiegeFeature: FeatureDefinition = {
     create(ctx: FeatureContext): FeatureInstance {
         const { garrisonManager, towerCombatSystem } = ctx.getFeature<TowerGarrisonExports>('tower-garrison');
         const { combatSystem } = ctx.getFeature<CombatExports>('combat');
-        const { jobRunner, workerAssignments } = ctx.getFeature<SettlerTaskExports>('settler-tasks');
+        const { jobs, jobRunner } = ctx.getFeature<SettlerTaskExports>('settler-tasks');
 
         const siegeSystem = new BuildingSiegeSystem({
             gameState: ctx.gameState,
             eventBus: ctx.eventBus,
-            terrain: ctx.terrain,
             garrisonManager,
             combatSystem,
-            unitReservation: ctx.unitReservation,
+            jobs,
             taskDispatcher: jobRunner,
-            workerAssignments,
             doorDefenderNotifier: towerCombatSystem,
+        });
+
+        jobs.registerHoldOwner({
+            owner: SIEGE_OWNER,
+            persist: false,
+            onUnitRemoved: (unitId, buildingId) => siegeSystem.onParticipantRemoved(unitId, buildingId),
+            onPreempted: (unitId, buildingId) => siegeSystem.onParticipantPreempted(unitId, buildingId),
         });
 
         const towerAssaultSystem = new TowerAssaultSystem({
             gameState: ctx.gameState,
             eventBus: ctx.eventBus,
             combatSystem,
-            unitReservation: ctx.unitReservation,
+            unitCommitments: ctx.unitCommitments,
             taskDispatcher: jobRunner,
             garrisonManager,
             executeCommand: ctx.executeCommand,
@@ -79,11 +87,6 @@ export const BuildingSiegeFeature: FeatureDefinition = {
         ctx.on('building:removed', ({ buildingId }) => {
             siegeSystem.cancelSiege(buildingId);
             towerAssaultSystem.cancelAssault(buildingId);
-        });
-
-        // Clean up dead attackers from siege state
-        ctx.cleanupRegistry.onEntityRemoved(entityId => {
-            siegeSystem.onEntityRemoved(entityId);
         });
 
         return {

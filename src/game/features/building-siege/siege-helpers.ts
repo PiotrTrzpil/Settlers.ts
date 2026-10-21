@@ -14,7 +14,7 @@ import { isGarrisonBuildingType } from '../tower-garrison';
 import { getBuildingDoorPos } from '../../data/game-data-access';
 import { DOOR_ARRIVAL_DISTANCE } from './siege-types';
 import type { TileWithPlayer } from '../ai-player/internal/ai-world-queries';
-import type { UnitReservationRegistry } from '../../systems/unit-reservation';
+import type { UnitReservationQuery } from '../../systems/unit-commitment';
 
 export type BuildingLike = Tile & { race: Race; subType: number | string };
 export type OwnedBuildingLike = BuildingLike & { player: number };
@@ -121,7 +121,7 @@ export function findUnitsAttacking(defenderId: number, gameState: GameState, com
  */
 export function isIdleSwordsman(
     entity: Entity,
-    unitReservation: UnitReservationRegistry,
+    commitments: UnitReservationQuery,
     combatSystem: CombatSystem,
     gameState: GameState
 ): boolean {
@@ -131,7 +131,7 @@ export function isIdleSwordsman(
     if (!isSwordsman(entity.subType as UnitType)) {
         return false;
     }
-    if (unitReservation.isReserved(entity.id) || combatSystem.isInCombat(entity.id)) {
+    if (commitments.isReserved(entity.id) || combatSystem.isInCombat(entity.id)) {
         return false;
     }
     const controller = gameState.movement.getController(entity.id);

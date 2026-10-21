@@ -9,6 +9,7 @@ import type { GameState } from '@/game/game-state';
 import type { TerrainData } from '@/game/terrain';
 import type { CommandExecutor } from '@/game/commands/command-types';
 import type { PlacementFilter } from '@/game/systems/placement/types';
+import type { UnitCommitmentQuery } from '@/game/systems/unit-commitment';
 import type { AiPlayerConfig, AiPlayerState, AiPlayerSystem } from '../types';
 import { AiPlayerController } from './ai-player-controller';
 
@@ -16,6 +17,7 @@ export class AiPlayerSystemImpl implements AiPlayerSystem {
     private readonly controllers = new Map<number, AiPlayerController>();
     private readonly gameState: GameState;
     private readonly executeCommand: CommandExecutor;
+    private readonly unitCommitments: UnitCommitmentQuery;
     private readonly isGameOver: () => boolean;
 
     private readonly hasSite: (buildingId: number) => boolean;
@@ -26,6 +28,7 @@ export class AiPlayerSystemImpl implements AiPlayerSystem {
         gameState: GameState;
         terrain: TerrainData;
         executeCommand: CommandExecutor;
+        unitCommitments: UnitCommitmentQuery;
         isGameOver: () => boolean;
         hasSite: (buildingId: number) => boolean;
         getPlacementFilter: () => PlacementFilter;
@@ -33,6 +36,7 @@ export class AiPlayerSystemImpl implements AiPlayerSystem {
         this.gameState = deps.gameState;
         this.terrain = deps.terrain;
         this.executeCommand = deps.executeCommand;
+        this.unitCommitments = deps.unitCommitments;
         this.isGameOver = deps.isGameOver;
         this.hasSite = deps.hasSite;
         this.getPlacementFilter = deps.getPlacementFilter;
@@ -56,6 +60,7 @@ export class AiPlayerSystemImpl implements AiPlayerSystem {
             gameState: this.gameState,
             terrain: this.terrain,
             executeCommand: this.executeCommand,
+            unitCommitments: this.unitCommitments,
             getPlacementFilter: this.getPlacementFilter,
             hasSite: this.hasSite,
             isGameOver: this.isGameOver,
