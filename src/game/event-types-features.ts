@@ -13,7 +13,7 @@ import type { EMaterialType } from './economy';
 import type { MapObjectType } from './types/map-object-types';
 import type { Entity, EntityType, Tile } from './entity';
 import type { GameEventBase, TrainingRecipe } from './event-types';
-import type { JobKind } from './systems/choreo/types';
+import type { JobFailureReason, JobKind } from './systems/choreo/job-kind';
 
 /** Feature-specific events — merged into GameEvents via intersection. */
 export interface GameEventsFeatures {
@@ -217,20 +217,32 @@ export interface GameEventsFeatures {
         homeBuilding: number | null;
     };
 
-    /** Emitted when a settler completes a choreography job and returns to idle. */
+    /**
+     * Emitted when a settler completes a choreography job and returns to idle.
+     * Notification only for owned jobs (owners get JobKindHandler.onCompleted first).
+     */
     'settler:taskCompleted': GameEventBase & {
         unitId: number;
         jobId: string;
-        /** Domain category for demand routing (see JobKind). */
+        /** Owner kind of the job (see JobKind). */
         kind: JobKind;
+        /** Owner's key (record / demand / tower id); -1 for legacy jobs. */
+        ref: number;
     };
 
-    /** Emitted when a settler's job is interrupted (target lost, pathfinding failure, etc.) */
+    /**
+     * Emitted when a settler's job is interrupted (target lost, pathfinding failure, preemption, …).
+     * Notification only for owned jobs (owners get JobKindHandler.onFailed first).
+     */
     'settler:taskFailed': GameEventBase & {
         unitId: number;
         jobId: string;
-        /** Domain category for demand routing (see JobKind). */
+        /** Owner kind of the job (see JobKind). */
         kind: JobKind;
+        /** Owner's key (record / demand / tower id); -1 for legacy jobs. */
+        ref: number;
+        /** Why the job failed. */
+        reason: JobFailureReason;
         /** Index of the choreography node that was executing when the failure occurred. */
         nodeIndex: number;
         /** The choreography step type that failed (e.g. GO_TO_TARGET, WORK_ON_ENTITY). */
@@ -241,6 +253,19 @@ export interface GameEventsFeatures {
         workStarted: boolean;
         /** Whether the unit was carrying material that was lost. */
         wasCarrying: boolean;
+    };
+
+    /**
+     * Notification: a job ended without completing or failing — its unit was removed, its owner
+     * cancelled it, or a restored job could not resume (the owner already got onFailed then).
+     */
+    'settler:jobAborted': GameEventBase & {
+        unitId: number;
+        /** Display id of the job; '' for a restored job that was never rebuilt. */
+        jobId: string;
+        kind: JobKind;
+        ref: number;
+        reason: 'unitRemoved' | 'cancelled' | 'restoreFailed';
     };
 
     // === Barracks Training Events ===

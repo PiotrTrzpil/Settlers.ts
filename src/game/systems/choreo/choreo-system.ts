@@ -38,6 +38,19 @@ export type ChoreoExecutor = (
     scope: ChoreoExecutionScope
 ) => TaskResult;
 
+/**
+ * Per-task-type lifecycle hooks, registered next to the executor by the feature that owns the task.
+ * Run by the job runtime for every job containing the node (owned and legacy alike).
+ */
+export interface ChoreoNodeHooks {
+    /** The node's side effect is irreversible once it completed — resume never snaps back across it. */
+    readonly irreversible?: boolean;
+    /** The job ended (failed / preempted / cancelled / unit removed) before this node completed. */
+    onAbort?(unitId: number, node: ChoreoNode): void;
+    /** Restore: the job resumes at or before this node. false ⇒ resume impossible (→ 'restoreFailed'). */
+    onRestore?(unitId: number, node: ChoreoNode): boolean;
+}
+
 /** All declared task types (string and numeric enum members, without numeric reverse-mapping keys). */
 function allTaskTypes(): ChoreoTaskType[] {
     return Object.keys(ChoreoTaskType)
@@ -47,13 +60,22 @@ function allTaskTypes(): ChoreoTaskType[] {
 
 export class ChoreoSystem {
     private readonly executors = new Map<ChoreoTaskType, ChoreoExecutor>();
+    private readonly hooks = new Map<ChoreoTaskType, ChoreoNodeHooks>();
 
-    /** Register an executor for a task type. Throws if the task type already has one. */
-    register(taskType: ChoreoTaskType, executor: ChoreoExecutor): void {
+    /** Register an executor (and optional node hooks) for a task type. Throws if the task type already has one. */
+    register(taskType: ChoreoTaskType, executor: ChoreoExecutor, hooks?: ChoreoNodeHooks): void {
         if (this.executors.has(taskType)) {
             throw new Error(`Choreo executor already registered for task: ${String(taskType)}`);
         }
         this.executors.set(taskType, executor);
+        if (hooks) {
+            this.hooks.set(taskType, hooks);
+        }
+    }
+
+    /** Hooks registered for a task type. Nullable by design: most task types have none. */
+    hooksFor(taskType: ChoreoTaskType): ChoreoNodeHooks | undefined {
+        return this.hooks.get(taskType);
     }
 
     /**

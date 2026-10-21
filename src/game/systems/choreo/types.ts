@@ -9,6 +9,10 @@
 
 import { EMaterialType } from '../../economy';
 import type { Tile, TileWithEntityOpt } from '@/game/core/coordinates';
+import type { UnitType } from '@/game/core/unit-types';
+import { JobKind, type JobParams } from './job-kind';
+
+export { JobKind } from './job-kind';
 
 // ─────────────────────────────────────────────────────────────
 // ChoreoTaskType — 1:1 mapping from jobInfo.xml
@@ -123,6 +127,18 @@ export function parseChoreoTaskType(taskString: string): ChoreoTaskType {
 // ChoreoNode — single step in a job choreography
 // ─────────────────────────────────────────────────────────────
 
+/**
+ * Typed per-node data for synthetic (builder-made) nodes — replaces job.metadata / transportData.
+ * Ids only. ENTER_BUILDING / TRANSFORM_* are shared by several kinds, so their data belongs to
+ * the node, not to any kind's params.
+ */
+export type ChoreoNodeArgs =
+    | { readonly task: 'enterBuilding'; readonly buildingId: number }
+    | { readonly task: 'digTile'; readonly siteId: number; readonly tileIndex: number }
+    | { readonly task: 'buildStep'; readonly siteId: number }
+    | { readonly task: 'transform'; readonly unitType: UnitType; readonly sourceId: number | null }
+    | { readonly task: 'transport'; readonly recordId: number };
+
 /** Single choreography node — direct mapping from jobInfo.xml <node>. */
 export interface ChoreoNode {
     task: ChoreoTaskType;
@@ -136,6 +152,14 @@ export interface ChoreoNode {
     useWork: boolean;
     entity: string;
     trigger: string;
+    /**
+     * Walk goal for synthetic GO_TO_TARGET / TRANSPORT_GO_TO_* nodes — replaces job.waypoints index
+     * counting. Nullable by design: XML nodes never carry one. When set, the GO_TO_TARGET executor
+     * sets `job.targetPos = goal` and `job.targetId = goal.entityId ?? null` before walking.
+     */
+    goal?: TileWithEntityOpt;
+    /** Typed node data (see {@link ChoreoNodeArgs}). Nullable by design: only synthetic nodes carry it. */
+    args?: ChoreoNodeArgs;
 }
 
 /** A complete job choreography definition. */
@@ -171,44 +195,23 @@ export interface TransportData {
 }
 
 // ─────────────────────────────────────────────────────────────
-// JobKind — domain category for demand routing (not the string jobId)
-// ─────────────────────────────────────────────────────────────
-
-/**
- * Domain category of a choreography job. Demand systems filter completion/fail
- * events by kind instead of matching magic string jobIds.
- */
-export enum JobKind {
-    /** XML / autonomous worker jobs (default). */
-    Work = 'work',
-    /** Dispatch specialist or recruit carrier into a workplace building. */
-    WorkplaceDispatch = 'workplace-dispatch',
-    /** Construction digger/builder work and combined recruit+work. */
-    Construction = 'construction',
-    /** Carrier material transport. */
-    Transport = 'transport',
-    /** Barracks training transform. */
-    Barracks = 'barracks',
-    /** Enter tower / garrison commit. */
-    Garrison = 'garrison',
-    /** Generic recruitment not covered by WorkplaceDispatch (if needed). */
-    Recruit = 'recruit',
-}
-
-// ─────────────────────────────────────────────────────────────
 // ChoreoJobState — runtime state for an active choreography job
 // ─────────────────────────────────────────────────────────────
 
 /** Runtime state for an active choreography job. */
 export interface ChoreoJobState {
     readonly type: 'choreo';
-    /** Job definition ID (e.g., 'JOB_WOODCUTTER_WORK' or 'CARRIER_TRANSPORT') */
+    /** Job definition ID (e.g., 'JOB_WOODCUTTER_WORK' or 'CARRIER_TRANSPORT') — display / XML id. */
     jobId: string;
+    /** Owner kind — the JobKindHandler that is called on completion / failure / unit removal. */
+    readonly kind: JobKind;
+    /** Owner's key (record / demand / tower id). -1 for legacy jobs. */
+    readonly ref: number;
     /**
-     * Domain category for event routing (building demand, construction, etc.).
-     * Defaults to Work for XML-driven jobs.
+     * Plain params the owner rebuilds the job from (persisted). `{}` for legacy jobs.
+     * Mutable only for CHANGE_JOB, which re-targets a Work job to another XML id.
      */
-    kind: JobKind;
+    params: JobParams;
     /** Resolved choreography nodes — populated at job start, never re-looked-up during execution. */
     nodes: ChoreoNode[];
     /** Current node index in the choreography sequence */
@@ -241,21 +244,43 @@ export interface ChoreoJobState {
     metadata?: Record<string, number | string>;
     /** Called when the job is interrupted/cancelled. Feature-provided cleanup hook. */
     onCancel?: () => void;
-    /** True for builder-created jobs (WORKER_DISPATCH, AUTO_RECRUIT, etc.) — not persisted. */
+    /**
+     * TRANSITIONAL (deleted in Cleanup): true for legacy jobs built with `choreo().build()` and assigned
+     * via `TaskDispatcher.assignJob` — no owner handler; routed by the `settler:task*` broadcast and
+     * `onCancel`; not persisted. False for owned jobs (JobSpec / Work).
+     */
     readonly synthetic: boolean;
 }
 
-/** Create a fresh ChoreoJobState for starting a job. */
+/** Owner identity of a new job state (see {@link createChoreoJobState}). */
+export interface ChoreoJobOwner {
+    readonly kind: JobKind;
+    readonly ref: number;
+    readonly params: JobParams;
+}
+
+/** Owner identity of legacy builder jobs — no ref, no params. */
+const LEGACY_OWNER_PARAMS: JobParams = {};
+
+/**
+ * Create a fresh ChoreoJobState for starting a job.
+ * @param synthetic true ⇔ legacy builder job (see {@link ChoreoJobState.synthetic}).
+ * @param owner kind/ref/params; legacy jobs pass only a kind (ref -1, params {}).
+ */
 export function createChoreoJobState(
     jobId: string,
     nodes: ChoreoNode[],
     synthetic: boolean,
-    kind: JobKind = JobKind.Work
+    owner: ChoreoJobOwner | JobKind = JobKind.Work
 ): ChoreoJobState {
+    const { kind, ref, params } =
+        typeof owner === 'string' ? { kind: owner, ref: -1, params: LEGACY_OWNER_PARAMS } : owner;
     return {
         type: 'choreo',
         jobId,
         kind,
+        ref,
+        params,
         nodes,
         synthetic,
         nodeIndex: 0,

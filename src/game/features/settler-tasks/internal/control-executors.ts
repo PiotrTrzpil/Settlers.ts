@@ -8,7 +8,8 @@
 
 import type { Entity } from '../../../entity';
 import { TaskResult } from '../types';
-import { framesToSeconds, tickDuration, type ChoreoJobState, type ChoreoNode } from '../choreo-types';
+import { JobKind, framesToSeconds, tickDuration, type ChoreoJobState, type ChoreoNode } from '../choreo-types';
+import type { WorkJobParams } from '../work-job-kind';
 
 // ─────────────────────────────────────────────────────────────
 // Wait executors
@@ -60,7 +61,11 @@ export function executeChangeJob(settler: Entity, job: ChoreoJobState, node: Cho
     }
 
     job.jobId = newJobId;
-    // kind stays as-is (XML CHANGE_JOB stays Work)
+    // kind stays as-is (XML CHANGE_JOB stays Work); a Work job saves the XML id it switched to.
+    if (job.kind === JobKind.Work) {
+        const params: WorkJobParams = { choreoJobId: newJobId };
+        job.params = params;
+    }
     job.nodeIndex = 0;
     job.progress = 0;
     job.workStarted = false;

@@ -14,6 +14,7 @@ import { EventSubscriptionManager } from '../event-bus';
 import type { EntityVisualService } from '../animation/entity-visual-service';
 import type { EntityCleanupRegistry } from '../systems/entity-cleanup-registry';
 import type { UnitReservationRegistry } from '../systems/unit-reservation';
+import type { UnitCommitments } from '../systems/unit-commitment';
 import type { CoreDeps, FeatureDefinition, FeatureInstance, FeatureContext, BoundCommandHandler } from './feature';
 import type { CommandType, ExecuteCommand } from '../commands';
 import type { Persistable } from '../persistence';
@@ -35,6 +36,7 @@ export interface FeatureRegistryConfig extends CoreDeps {
     visualService: EntityVisualService;
     cleanupRegistry: EntityCleanupRegistry;
     unitReservation: UnitReservationRegistry;
+    unitCommitments: UnitCommitments;
     executeCommand: ExecuteCommand;
     tickScheduler: TickScheduler;
     choreoSystem: ChoreoSystem;
@@ -206,6 +208,17 @@ export class FeatureRegistry {
     }
 
     /**
+     * Second restore pass, after every `onRestoreComplete`: features resume work that needs
+     * all domain state rebuilt first (settler-tasks builds and resumes restored jobs).
+     */
+    notifyRestoreResume(): void {
+        for (const id of this.loadedIds) {
+            const instance = this.instances.get(id);
+            instance?.onRestoreResume?.();
+        }
+    }
+
+    /**
      * Get exports from a loaded feature.
      */
     getFeatureExports<T>(featureId: string): T {
@@ -330,6 +343,8 @@ export class FeatureRegistry {
             visualService: this.config.visualService,
             cleanupRegistry: this.config.cleanupRegistry,
             unitReservation: this.config.unitReservation,
+            unitCommitments: this.config.unitCommitments,
+            claimUnitCommitmentWriter: () => this.config.unitCommitments.claimWriter(),
             executeCommand: this.config.executeCommand,
             tickScheduler: this.config.tickScheduler,
             choreoSystem: this.config.choreoSystem,

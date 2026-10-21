@@ -17,8 +17,8 @@ const STORAGE_KEY = 'settlers_game_state';
 const INITIAL_STATE_KEY = 'settlers_initial_state';
 const LAST_MAP_KEY = 'settlers_last_map';
 const AUTO_SAVE_INTERVAL_MS = 5000; // Save every 5 seconds
-// Bumped: Added nextJobId counter and entity.jobId field for Entity Job ID feature
-const SNAPSHOT_VERSION = 17;
+// Bumped: job ownership — settlerTasks saves commitments + owned jobs ({ kind, params, nodeIndex })
+const SNAPSHOT_VERSION = 18;
 
 /**
  * Snapshot format: metadata + entity table + terrain + dynamic feature data.
@@ -449,6 +449,10 @@ export function restoreFromSnapshot(game: GameCore, snapshot: GameStateSnapshot)
     // re-emit worker-needed events, etc. Must run AFTER all entities and feature
     // stores are deserialized (step 5) and derived state is rebuilt (step 6).
     game.services.notifyRestoreComplete();
+
+    // 8. Resume restored jobs — after every owner rebuilt its domain state from commitments (step 7),
+    // so a resume failure reaches owners whose state is consistent.
+    game.services.notifyRestoreResume();
 
     console.log(
         `[${performance.now().toFixed(0)}ms] GameState: Restored ${snapshot.entities.length} entities from snapshot`

@@ -8,6 +8,7 @@ import type { Tile, TileWithEntity } from '../../../entity';
 import { ChoreoTaskType, createChoreoJobState, type ChoreoJob, type ChoreoNode } from '../choreo-types';
 import type { JobState } from '../types';
 import type { UnitRuntime } from '../unit-runtime';
+import { workJobOwner } from '../work-job-kind';
 
 /**
  * Node types whose next node still needs the job's targetPos:
@@ -23,13 +24,17 @@ const KEEPS_TARGET_POS: ReadonlySet<ChoreoTaskType> = new Set([
     ChoreoTaskType.PLANT,
 ]);
 
-/** Fresh job state for a selected choreography, aimed at the entity target or else the position target. */
+/**
+ * Fresh Work job state for a selected choreography, aimed at the entity target or else the position target.
+ * @param ref the unit's home building id, or -1.
+ */
 export function createTargetedJobState(
     selected: ChoreoJob,
     entityTarget: TileWithEntity | null,
-    positionTarget: Tile | null
+    positionTarget: Tile | null,
+    ref: number
 ): JobState {
-    const jobState = createChoreoJobState(selected.id, selected.nodes, false);
+    const jobState = createChoreoJobState(selected.id, selected.nodes, false, workJobOwner(selected.id, ref));
     if (entityTarget) {
         jobState.targetId = entityTarget.entityId;
         jobState.targetPos = { x: entityTarget.x, y: entityTarget.y };

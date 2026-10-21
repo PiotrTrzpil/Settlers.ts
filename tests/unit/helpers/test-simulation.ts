@@ -58,6 +58,7 @@ import type { Game } from '@/game/game';
 import type { OreType } from '@/game/features/ore-veins/ore-type';
 import type { TestMap } from './test-map';
 import { simulateMovement } from './simulation-movement';
+import { spawnUnit as spawnUnitFn, killUnit as killUnitFn } from './simulation-units';
 import {
     injectInput as injectInputFn,
     injectOutput as injectOutputFn,
@@ -463,18 +464,12 @@ export class Simulation {
     // ─── Unit management ──────────────────────────────────────────
 
     spawnUnit(tile: Tile, unitType = UnitType.Carrier, player = 0, race?: Race): number {
-        const result = this.execute({
-            type: 'spawn_unit',
-            unitType,
-            x: tile.x,
-            y: tile.y,
-            player,
-            race: race ?? this.state.playerRaces.get(player) ?? Race.Roman,
-        });
-        if (!result.success) {
-            throw new Error(`Failed to spawn ${unitType} at (${tile.x}, ${tile.y}): ${result.error}`);
-        }
-        return result.entityId;
+        return spawnUnitFn(this.state, cmd => this.execute(cmd), tile, unitType, player, race);
+    }
+
+    /** Remove a unit through the command pipeline, like combat death (see simulation-units.ts). */
+    killUnit(unitId: number): void {
+        killUnitFn(this.state, cmd => this.execute(cmd), unitId);
     }
 
     spawnUnitNear(buildingId: number, unitType: UnitType, count = 1, player = 0): number[] {

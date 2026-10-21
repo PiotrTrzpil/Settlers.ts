@@ -1,36 +1,24 @@
 /**
  * JobRunner — runs a unit's work.
  *
- * The only place a choreography job is started, advanced node by node, completed or
- * interrupted, and the only owner of `entity.jobId` for live units (set on assign,
- * cleared on complete / interrupt). Also runs player move tasks.
+ * The only place a choreography job is started and advanced node by node; how a job ends
+ * (complete / fail / preempt / cancel) is JobOutcomes. Sets the unit's commitment when a job
+ * or move starts, and owns `entity.jobId` for live units (TRANSITIONAL, deleted in Cleanup).
+ * Move tasks (player / siege moves) run in MoveTaskRunner.
  *
  * Implements TaskDispatcher (external job and move assignment) and WorkerStateQuery.
  * Node execution goes to the kernel ChoreoSystem with an explicit ChoreoExecutionScope
  * (the unit's home building + its work handlers). Never decides *what* to work on —
- * that is WorkerAutonomy (idle search) or an external dispatcher.
+ * that is WorkerAutonomy (idle search), JobService (owned jobs) or a legacy dispatcher.
  */
 
-import {
-    EntityType,
-    UnitType,
-    BuildingType,
-    clearJobId,
-    getEntityIfType,
-    tileKey,
-    type Entity,
-    type Tile,
-    type TileWithEntity,
-} from '../../entity';
+import { UnitType, type Entity, type Tile, type TileWithEntity } from '../../entity';
 import { createLogger } from '@/utilities/logger';
 import type { ThrottledLogger } from '@/utilities/throttled-logger';
-import { hexDistance } from '../../systems/hex-directions';
-import { getBuildingDoorPos } from '../../data/game-data-access';
 import type { GameState } from '../../game-state';
 import type { EventBus } from '../../event-bus';
-import type { ChoreoSystem, ChoreoExecutionScope } from '../../systems/choreo';
-import type { TriggerSystem } from '../building-overlays';
-import type { MaterialTransfer } from '../material-transfer';
+import { JobKind, type ChoreoSystem, type ChoreoExecutionScope } from '../../systems/choreo';
+import type { CommitmentOwner, UnitCommitmentWriter } from '../../systems/unit-commitment';
 import type { ISettlerBuildingLocationManager } from '../settler-location';
 import {
     TaskResult,
@@ -44,16 +32,11 @@ import { ChoreoTaskType, type ChoreoJob, type ChoreoNode, type JobPartResolver }
 import type { WorkHandlerRegistry } from './work-handler-registry';
 import type { IdleAnimationController } from './idle-animation-controller';
 import type { UnitRuntime, UnitRuntimeStore } from './unit-runtime';
-import type { WorkerAssignments } from './worker-assignments';
-import { safeCall } from './safe-call';
 import { createTargetedJobState, homeBuildingIdOf, isPileActionNode, resetForNextNode } from './internal/job-progress';
-import {
-    emitTaskStarted,
-    emitTaskFailed,
-    emitNodeStarted,
-    emitNodeCompleted,
-    emitAnimationApplied,
-} from './internal/job-events';
+import { emitTaskStarted, emitNodeStarted, emitNodeCompleted, emitAnimationApplied } from './internal/job-events';
+import type { JobOutcomes } from './internal/job-outcomes';
+import { stopActiveTrigger, type JobTeardownDeps } from './internal/job-teardown';
+import type { MoveTaskRunner } from './internal/move-tasks';
 
 const log = createLogger('JobRunner');
 
@@ -62,14 +45,14 @@ export interface JobRunnerConfig {
     eventBus: EventBus;
     choreoSystem: ChoreoSystem;
     runtimes: UnitRuntimeStore;
-    assignments: WorkerAssignments;
-    settlerConfigs: ReadonlyMap<UnitType, SettlerConfig>;
     handlerRegistry: WorkHandlerRegistry;
     animController: IdleAnimationController;
     jobPartResolver: JobPartResolver;
     locationManager: ISettlerBuildingLocationManager;
-    triggerSystem: TriggerSystem;
-    materialTransfer: MaterialTransfer;
+    outcomes: JobOutcomes;
+    moveTasks: MoveTaskRunner;
+    commitmentWriter: UnitCommitmentWriter;
+    teardown: JobTeardownDeps;
     handlerErrorLogger: ThrottledLogger;
 }
 
@@ -78,14 +61,14 @@ export class JobRunner implements TaskDispatcher, WorkerStateQuery {
     private readonly eventBus: EventBus;
     private readonly choreoSystem: ChoreoSystem;
     private readonly runtimes: UnitRuntimeStore;
-    private readonly assignments: WorkerAssignments;
-    private readonly settlerConfigs: ReadonlyMap<UnitType, SettlerConfig>;
     private readonly handlerRegistry: WorkHandlerRegistry;
     private readonly animController: IdleAnimationController;
     private readonly jobPartResolver: JobPartResolver;
     private readonly locationManager: ISettlerBuildingLocationManager;
-    private readonly triggerSystem: TriggerSystem;
-    private readonly materialTransfer: MaterialTransfer;
+    private readonly outcomes: JobOutcomes;
+    private readonly moveTasks: MoveTaskRunner;
+    private readonly writer: UnitCommitmentWriter;
+    private readonly teardown: JobTeardownDeps;
     private readonly handlerErrorLogger: ThrottledLogger;
 
     /** Enable verbose choreography events (nodeStarted, nodeCompleted, animationApplied, waitingAtHome) */
@@ -96,14 +79,14 @@ export class JobRunner implements TaskDispatcher, WorkerStateQuery {
         this.eventBus = cfg.eventBus;
         this.choreoSystem = cfg.choreoSystem;
         this.runtimes = cfg.runtimes;
-        this.assignments = cfg.assignments;
-        this.settlerConfigs = cfg.settlerConfigs;
         this.handlerRegistry = cfg.handlerRegistry;
         this.animController = cfg.animController;
         this.jobPartResolver = cfg.jobPartResolver;
         this.locationManager = cfg.locationManager;
-        this.triggerSystem = cfg.triggerSystem;
-        this.materialTransfer = cfg.materialTransfer;
+        this.outcomes = cfg.outcomes;
+        this.moveTasks = cfg.moveTasks;
+        this.writer = cfg.commitmentWriter;
+        this.teardown = cfg.teardown;
         this.handlerErrorLogger = cfg.handlerErrorLogger;
     }
 
@@ -140,21 +123,35 @@ export class JobRunner implements TaskDispatcher, WorkerStateQuery {
     // ─────────────────────────────────────────────────────────────
 
     /**
-     * Assign a choreography job to a unit, ending any current job first.
+     * TRANSITIONAL (deleted in Cleanup): assign a legacy job built with `choreo().build()`, ending any
+     * current job first. Legacy jobs have no owner handler — they are routed by the `settler:task*`
+     * broadcast and `onCancel`, and are not persisted. Owned jobs go through `JobService.assign`.
      * @param numericJobId When set (e.g. transport record id), reused as entity.jobId so the unit
      *   and domain job share one numeric identity. When omitted, allocates a new id.
      */
     assignJob(entityId: number, job: JobState, moveTo?: Tile, numericJobId?: number): boolean {
+        if (!job.synthetic) {
+            throw new Error(`assignJob: job '${job.jobId}' (${job.kind}) is owned — use JobService.assign`);
+        }
+        return this.startAssignedJob(entityId, job, false, moveTo, numericJobId);
+    }
+
+    /**
+     * Start a job on a unit, preempting whatever owns it now (its owner gets onFailed 'preempted' /
+     * onPreempted), and commit the unit to the job's owner. Returns false when `moveTo` is unreachable
+     * (the previous job has ended by then).
+     */
+    startAssignedJob(
+        entityId: number,
+        job: JobState,
+        reserved: boolean,
+        moveTo?: Tile,
+        numericJobId?: number
+    ): boolean {
         const entity = this.gameState.getEntityOrThrow(entityId, 'unit for job assignment');
         const runtime = this.runtimes.getOrCreate(entityId);
 
-        if (runtime.job) {
-            const config = this.settlerConfigs.get(entity.subType as UnitType);
-            if (config) {
-                this.endJobForTakeover(entity, config, runtime);
-            }
-            runtime.job = null;
-        }
+        this.outcomes.takeOver(entity, runtime, job.kind);
 
         if (moveTo) {
             const moveSuccess = this.gameState.movement.moveUnit(entityId, moveTo);
@@ -166,101 +163,25 @@ export class JobRunner implements TaskDispatcher, WorkerStateQuery {
         runtime.state = SettlerState.WORKING;
         runtime.job = job;
         runtime.moveTask = null;
+        this.writer.set(entityId, { owner: job.kind, ref: job.ref, reserved, hasJob: true });
 
         const jobNumericId = numericJobId ?? this.gameState.allocateJobId();
         entity.jobId = jobNumericId;
 
-        log.debug(`Unit ${entityId} assigned job ${job.jobId} (numeric id ${jobNumericId})`);
+        log.debug(`Unit ${entityId} assigned job ${job.jobId} (${job.kind}, numeric id ${jobNumericId})`);
         return true;
     }
 
-    /** Player-style move: ends the current job, releases the home assignment, walks to `target`. */
-    assignMoveTask(entityId: number, target: Tile): boolean {
-        const entity = getEntityIfType(this.gameState, entityId, EntityType.Unit);
-        if (!entity) {
-            return false;
-        }
-
-        let moveTo: Tile = target;
-        if (this.gameState.buildingOccupancy.has(tileKey(moveTo))) {
-            const building = this.gameState.getGroundEntityAt(moveTo);
-            if (building && building.type === EntityType.Building) {
-                moveTo = getBuildingDoorPos(building, building.race, building.subType as BuildingType);
-            }
-        }
-
-        const moveSuccess = this.gameState.movement.moveUnit(entityId, moveTo);
-        if (!moveSuccess) {
-            return false;
-        }
-
-        const runtime = this.runtimes.getOrCreate(entityId);
-        const unitConfig = this.settlerConfigs.get(entity.subType as UnitType);
-        if (runtime.job) {
-            if (unitConfig) {
-                this.endJobForTakeover(entity, unitConfig, runtime);
-            }
-            runtime.job = null;
-        }
-
-        if (unitConfig) {
-            const posHandler = this.handlerRegistry.getPositionHandler(unitConfig.plantSearch ?? unitConfig.search);
-            posHandler?.onSettlerRemoved?.(entityId, target.x, target.y);
-        }
-
-        this.assignments.release(entityId, runtime);
-
-        runtime.moveTask = { type: 'move', targetX: target.x, targetY: target.y };
-        runtime.state = SettlerState.WORKING;
-
-        log.debug(`Unit ${entityId} assigned move task to (${target.x}, ${target.y})`);
-        return true;
-    }
-
-    cancelMoveTask(entityId: number): void {
-        const runtime = this.runtimes.get(entityId);
-        if (runtime?.moveTask) {
-            runtime.moveTask = null;
-        }
-    }
-
-    /**
-     * End the current job so another owner can take over: complete it when all nodes ran,
-     * otherwise interrupt it. Caller drops `runtime.job` afterwards.
-     */
-    endJobForTakeover(entity: Entity, config: SettlerConfig, runtime: UnitRuntime): void {
-        if (runtime.job!.nodeIndex >= runtime.job!.nodes.length) {
-            this.completeJob(entity, runtime);
-        } else {
-            this.interruptJob(entity, config, runtime);
-        }
+    /** Move task (player move / siege move) — see MoveTaskRunner. */
+    assignMoveTask(entityId: number, target: Tile, owner: CommitmentOwner = 'player-move'): boolean {
+        return this.moveTasks.assign(entityId, target, owner);
     }
 
     // ─────────────────────────────────────────────────────────────
     // Per-tick execution
     // ─────────────────────────────────────────────────────────────
 
-    /** Advance a user-initiated move task; ends it when the unit stops moving. */
-    tickMoveTask(unit: Entity, runtime: UnitRuntime): void {
-        const controller = this.gameState.movement.getController(unit.id);
-        if (!controller) {
-            // No movement controller — cancel task
-            runtime.moveTask = null;
-            runtime.state = SettlerState.IDLE;
-            this.animController.setIdleAnimation(unit);
-            return;
-        }
-
-        if (controller.state === 'idle') {
-            runtime.moveTask = null;
-            runtime.state = SettlerState.IDLE;
-            this.animController.setIdleAnimation(unit);
-            runtime.idleState.idleTime = 0;
-            log.debug(`Unit ${unit.id} completed move task`);
-        }
-    }
-
-    /** Run the current node of a WORKING unit's job; completes, advances or interrupts as the node reports. */
+    /** Run the current node of a WORKING unit's job; completes, advances or fails as the node reports. */
     tickJob(settler: Entity, config: SettlerConfig, runtime: UnitRuntime, dt: number): void {
         if (!runtime.job) {
             throw new Error(
@@ -272,7 +193,7 @@ export class JobRunner implements TaskDispatcher, WorkerStateQuery {
         const job = runtime.job;
         const nodes = job.nodes;
         if (job.nodeIndex >= nodes.length) {
-            this.completeJob(settler, runtime);
+            this.outcomes.complete(settler, runtime);
             return;
         }
 
@@ -296,24 +217,23 @@ export class JobRunner implements TaskDispatcher, WorkerStateQuery {
                 this.advanceToNextNode(settler, runtime, job);
                 break;
             case TaskResult.FAILED:
-                this.interruptJob(settler, config, runtime);
+                this.outcomes.fail(settler, runtime, 'failed');
                 break;
             case TaskResult.CONTINUE:
                 break;
         }
     }
 
-    /** An interrupted unit returns to idle on its next tick. */
+    /** An interrupted unit returns to idle on its next tick (its job was cleared when it ended). */
     clearInterrupted(runtime: UnitRuntime): void {
         runtime.state = SettlerState.IDLE;
-        runtime.job = null;
     }
 
     // ─────────────────────────────────────────────────────────────
     // Job lifecycle
     // ─────────────────────────────────────────────────────────────
 
-    /** Start a job chosen by the unit's own idle search (WorkerAutonomy). */
+    /** Start a Work job chosen by the unit's own idle search (WorkerAutonomy). */
     startJob(
         settler: Entity,
         runtime: UnitRuntime,
@@ -327,8 +247,10 @@ export class JobRunner implements TaskDispatcher, WorkerStateQuery {
         }
         runtime.state = SettlerState.WORKING;
 
-        const jobState = createTargetedJobState(selected, entityTarget, positionTarget);
+        const ref = homeBuilding?.id ?? -1;
+        const jobState = createTargetedJobState(selected, entityTarget, positionTarget, ref);
         runtime.job = jobState;
+        this.writer.set(settler.id, { owner: JobKind.Work, ref, reserved: false, hasJob: true });
 
         const posStr = positionTarget ? `(${positionTarget.x},${positionTarget.y})` : 'none';
         log.debug(
@@ -340,101 +262,6 @@ export class JobRunner implements TaskDispatcher, WorkerStateQuery {
         );
 
         emitTaskStarted(this.eventBus, settler, jobState, homeBuilding);
-    }
-
-    private completeJob(settler: Entity, runtime: UnitRuntime): void {
-        if (!runtime.job) {
-            return;
-        }
-        const job = runtime.job;
-
-        this.stopActiveTrigger(runtime, job);
-
-        const controller = this.gameState.movement.getController(settler.id);
-        if (controller) {
-            controller.busy = false;
-        }
-
-        log.debug(`Settler ${settler.id} completed job ${job.jobId}`);
-
-        // Clear job reference and state BEFORE emitting, so that listeners calling
-        // assignJob won't see a stale job and recurse into endJobForTakeover.
-        runtime.state = SettlerState.IDLE;
-        runtime.job = null;
-        clearJobId(settler);
-
-        this.eventBus.emit('settler:taskCompleted', {
-            unitId: settler.id,
-            unitType: settler.subType as UnitType,
-            jobId: job.jobId,
-            kind: job.kind,
-        });
-
-        if (this.locationManager.isInside(settler.id) && runtime.homeAssignment) {
-            // Workers with a home assignment exit to search for new work.
-            // Units placed inside by dispatch jobs (garrison, worker dispatch)
-            // stay inside — the job intentionally placed them there.
-            this.locationManager.exitBuilding(settler.id);
-        }
-        // No else — location manager is the sole owner of entity.hidden.
-        // If settler is not inside a building, it's already visible.
-        this.animController.setIdleAnimation(settler);
-
-        if (runtime.homeAssignment) {
-            const home = this.gameState.getEntity(runtime.homeAssignment.buildingId);
-            if (home) {
-                const door = getBuildingDoorPos(home, home.race, home.subType as BuildingType);
-                if (hexDistance(settler.x, settler.y, door.x, door.y) <= 1) {
-                    this.locationManager.enterBuilding(settler.id, home.id);
-                }
-            }
-        }
-    }
-
-    /**
-     * Interrupt a job (target gone, pathfinding failure, reassignment, …).
-     * Must NOT be called when the job has already completed all nodes — use completeJob.
-     */
-    private interruptJob(settler: Entity, config: SettlerConfig, runtime: UnitRuntime): void {
-        if (!runtime.job) {
-            return;
-        }
-
-        const entityHandler = this.handlerRegistry.getEntityHandler(config.search);
-        const job = runtime.job;
-
-        job.onCancel?.();
-
-        if (entityHandler && job.targetId && job.workStarted) {
-            safeCall(
-                () => entityHandler.onWorkInterrupt?.(job.targetId!, settler.id),
-                this.handlerErrorLogger,
-                `onWorkInterrupt failed for target ${job.targetId}`
-            );
-        }
-
-        this.materialTransfer.drop(settler.id);
-
-        this.stopActiveTrigger(runtime, job);
-
-        // Only exit building for workers with a home assignment. Garrisoned units
-        // (no homeAssignment) must stay inside — mirrors the completeJob logic.
-        if (this.locationManager.isInside(settler.id) && runtime.homeAssignment) {
-            this.locationManager.exitBuilding(settler.id);
-        }
-
-        const controller = this.gameState.movement.getController(settler.id);
-        if (controller) {
-            controller.busy = false;
-        }
-
-        log.debug(`Settler ${settler.id} interrupted job ${job.jobId}`);
-
-        clearJobId(settler);
-        emitTaskFailed(this.eventBus, settler, job);
-
-        runtime.state = SettlerState.INTERRUPTED;
-        this.animController.setIdleAnimation(settler);
     }
 
     // ─────────────────────────────────────────────────────────────
@@ -504,21 +331,10 @@ export class JobRunner implements TaskDispatcher, WorkerStateQuery {
             emitNodeCompleted(this.eventBus, settler, job);
         }
         if (job.activeTrigger) {
-            this.stopActiveTrigger(runtime, job);
+            stopActiveTrigger(this.teardown, runtime, job);
             job.activeTrigger = '';
         }
         resetForNextNode(job);
-    }
-
-    /** Stop the building overlay trigger a work node started, if the unit still has a home. */
-    private stopActiveTrigger(runtime: UnitRuntime, job: JobState): void {
-        if (!job.activeTrigger) {
-            return;
-        }
-        const homeId = homeBuildingIdOf(runtime);
-        if (homeId !== null) {
-            this.triggerSystem.stopTrigger(homeId, job.activeTrigger);
-        }
     }
 
     private applyChoreoAnimation(settler: Entity, node: ChoreoNode): void {

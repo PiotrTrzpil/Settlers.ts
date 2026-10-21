@@ -4,6 +4,7 @@
  */
 
 import type { EMaterialType } from '../../../economy';
+import type { CommitmentOwner, UnitCommitmentQuery } from '../../../systems/unit-commitment';
 import type { WorkerStateQuery } from '../types';
 import type { UnitRuntime } from '../unit-runtime';
 
@@ -17,11 +18,17 @@ export interface SettlerDebugEntry {
     targetId: number | null;
     carryingGood: EMaterialType | null;
     assignedBuilding: number | null;
+    /** Commitment owner — null when idle. */
+    owner: CommitmentOwner | null;
+    /** Owner's key (record / demand / tower id) — null when idle. */
+    ownerRef: number | null;
+    /** Player moves rejected (commitment or legacy reservation). */
+    reserved: boolean;
 }
 
 type RuntimeEntries = Iterable<[number, UnitRuntime]>;
 
-function buildDebugEntry(entityId: number, runtime: UnitRuntime): SettlerDebugEntry {
+function buildDebugEntry(entityId: number, runtime: UnitRuntime, commitments: UnitCommitmentQuery): SettlerDebugEntry {
     const job = runtime.job;
     return {
         entityId,
@@ -40,6 +47,20 @@ function buildDebugEntry(entityId: number, runtime: UnitRuntime): SettlerDebugEn
         carryingGood: job?.carryingGood ?? null,
         // eslint-disable-next-line no-restricted-syntax -- optional chaining; null when source is absent
         assignedBuilding: runtime.homeAssignment?.buildingId ?? null,
+        ...commitmentDebugFields(entityId, commitments),
+    };
+}
+
+/** Owner / ref / reserved of a unit's commitment (null owner and ref when idle). */
+function commitmentDebugFields(
+    entityId: number,
+    commitments: UnitCommitmentQuery
+): Pick<SettlerDebugEntry, 'owner' | 'ownerRef' | 'reserved'> {
+    const commitment = commitments.get(entityId);
+    return {
+        owner: commitment ? commitment.owner : null,
+        ownerRef: commitment ? commitment.ref : null,
+        reserved: commitments.isReserved(entityId),
     };
 }
 
@@ -47,10 +68,10 @@ function buildDebugEntry(entityId: number, runtime: UnitRuntime): SettlerDebugEn
  * Build a debug entry array for all active settlers.
  * Returns one SettlerDebugEntry per runtime, in iteration order.
  */
-export function dumpSettlerDebug(runtimes: RuntimeEntries): SettlerDebugEntry[] {
+export function dumpSettlerDebug(runtimes: RuntimeEntries, commitments: UnitCommitmentQuery): SettlerDebugEntry[] {
     const result: SettlerDebugEntry[] = [];
     for (const [entityId, runtime] of runtimes) {
-        result.push(buildDebugEntry(entityId, runtime));
+        result.push(buildDebugEntry(entityId, runtime, commitments));
     }
     return result;
 }

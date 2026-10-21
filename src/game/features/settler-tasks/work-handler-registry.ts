@@ -6,7 +6,6 @@
  * exactly one handler (entity, position, or null).
  */
 
-import type { SettlerConfig } from './types';
 import {
     SearchType,
     WorkHandlerType,
@@ -14,10 +13,6 @@ import {
     type PositionWorkHandler,
     type WorkHandler,
 } from './types';
-import type { UnitType } from '../../entity';
-
-/** Map of UnitType to settler configuration (for reverse-lookup by job ID). */
-export type SettlerConfigMap = ReadonlyMap<UnitType, SettlerConfig>;
 
 export class WorkHandlerRegistry {
     private readonly handlers = new Map<SearchType, WorkHandler>();
@@ -46,18 +41,5 @@ export class WorkHandlerRegistry {
 
     hasAnyHandler(searchType: SearchType): boolean {
         return this.handlers.has(searchType);
-    }
-
-    /**
-     * Reverse-lookup: find the entity work handler for a given XML job ID (e.g. 'JOB_WOODCUTTER_WORK').
-     * Used during cleanup to call onWorkInterrupt when a settler entity is removed.
-     */
-    findEntityHandlerForJob(jobId: string, settlerConfigs: SettlerConfigMap): EntityWorkHandler | undefined {
-        for (const [, config] of settlerConfigs) {
-            if (config.jobs.includes(jobId)) {
-                return this.getEntityHandler(config.search);
-            }
-        }
-        return undefined;
     }
 }

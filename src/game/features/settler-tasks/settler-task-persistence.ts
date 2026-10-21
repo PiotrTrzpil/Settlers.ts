@@ -1,153 +1,123 @@
 /**
- * SettlerTaskPersistence — Persistable implementation for unit runtimes.
+ * SettlerTaskPersistence — Persistable for unit runtimes and commitments.
  *
- * Serializes the minimal state needed to resume settler activity after a
- * save/load: building assignments, move tasks, and job intent (jobId +
- * safe nodeIndex + target).
+ * Saves per unit: its home assignment and its commitment — `{ owner, ref, reserved }` plus the
+ * owned job as `{ kind, params, nodeIndex, targets }` (nodes are never saved), or the move target,
+ * or nothing (a hold). Every kind saves and restores the same way.
  *
- * Jobs are NOT serialized in full — only the intent is saved so the job
- * can re-acquire runtime state (animation, handlers, callbacks) naturally
- * by re-walking to its target from the snapped nodeIndex.
+ * Restore (deserialize, `after: ['constructionSites']`): home assignments, move tasks and the
+ * commitment records are applied right away; jobs are only queued in PendingJobResumes and are
+ * built + resumed in the final restore pass (`onRestoreResume`), after every owner rebuilt its
+ * domain state from commitments in `onRestoreComplete`.
  *
- * Transport jobs (carriers) use synthetic choreos and are excluded — their state
- * is reconstructed from entity.jobId + entity.carrying on restore.
+ * Not saved (the unit loads idle): commitments of `persist: false` owners and TRANSITIONAL legacy
+ * jobs (`choreo().build()` + `assignJob`), which their features rebuild themselves, as before.
  */
 
 import { createLogger } from '@/utilities/logger';
 import type { Persistable } from '../../persistence/types';
-import type { SerializedUnitRuntime, SerializedJobIntent } from '../../state/persistence-types';
+import type { SerializedCommitment, SerializedJob, SerializedUnitRuntime } from '../../state/persistence-types';
 import type { GameState } from '../../game-state';
+import type { UnitCommitmentQuery, UnitCommitmentWriter } from '../../systems/unit-commitment';
+import type { JobKind } from '../../systems/choreo';
 import type { UnitRuntime, UnitRuntimeStore } from './unit-runtime';
 import type { WorkerAssignments } from './worker-assignments';
-import type { JobChoreographyStore } from './job-choreography-store';
-import { SettlerState } from './types';
-import { ChoreoTaskType, createChoreoJobState } from './choreo-types';
-import { raceToRaceId } from '../../data/game-data-access';
-import type { Tile } from '@/game/core/coordinates';
+import type { JobState } from './types';
+import type { JobOwnerRegistry } from './internal/job-owners';
+import type { MoveTaskRunner } from './internal/move-tasks';
+import type { PendingJobResumes } from './internal/job-resume';
 
 const log = createLogger('SettlerTaskPersistence');
 
-// ─────────────────────────────────────────────────────────────
-// Movement/search task types — safe points to resume a job from
-// ─────────────────────────────────────────────────────────────
-
-/**
- * Choreography task types that represent movement or search steps —
- * these are "safe resume points" where re-starting the node will
- * naturally re-acquire any runtime state (animation, target acquisition).
- */
-const SAFE_RESUME_TASKS = new Set<ChoreoTaskType>([
-    ChoreoTaskType.GO_TO_TARGET,
-    ChoreoTaskType.GO_TO_TARGET_ROUGHLY,
-    ChoreoTaskType.GO_TO_POS,
-    ChoreoTaskType.GO_TO_POS_ROUGHLY,
-    ChoreoTaskType.GO_TO_SOURCE_PILE,
-    ChoreoTaskType.GO_TO_DESTINATION_PILE,
-    ChoreoTaskType.GO_HOME,
-    ChoreoTaskType.SEARCH,
-]);
-
-// ─────────────────────────────────────────────────────────────
-// Serialize helpers
-// ─────────────────────────────────────────────────────────────
-
-/**
- * Snap nodeIndex back to the nearest prior safe resume node.
- * Returns 0 if no safe node is found before the current index.
- */
-function snapToSafeNode(nodes: readonly { task: ChoreoTaskType }[], currentIndex: number): number {
-    const clampedIndex = Math.min(currentIndex, nodes.length - 1);
-    for (let i = clampedIndex; i >= 0; i--) {
-        if (SAFE_RESUME_TASKS.has(nodes[i]!.task)) {
-            return i;
-        }
-    }
-    return 0;
+export interface SettlerTaskPersistenceConfig {
+    gameState: GameState;
+    runtimes: UnitRuntimeStore;
+    assignments: WorkerAssignments;
+    owners: JobOwnerRegistry;
+    commitments: UnitCommitmentQuery;
+    commitmentWriter: UnitCommitmentWriter;
+    moveTasks: MoveTaskRunner;
+    pendingResumes: PendingJobResumes;
 }
 
-function serializeJobIntent(runtime: UnitRuntime): SerializedJobIntent | undefined {
-    const job = runtime.job;
-    if (!job) {
-        return undefined;
-    }
+// ─────────────────────────────────────────────────────────────
+// Serialize
+// ─────────────────────────────────────────────────────────────
 
-    // Skip synthetic (builder-created) jobs — they can't be restored from the choreography store
-    if (job.synthetic) {
-        return undefined;
-    }
-
-    const safeNodeIndex = snapToSafeNode(job.nodes, job.nodeIndex);
-
-    const intent: SerializedJobIntent = {
-        jobId: job.jobId,
-        nodeIndex: safeNodeIndex,
-    };
-
+function serializeJob(job: JobState): SerializedJob {
+    const saved: SerializedJob = { kind: job.kind, params: job.params, nodeIndex: job.nodeIndex };
     if (job.targetId !== null) {
-        intent.targetId = job.targetId;
+        saved.targetId = job.targetId;
     }
     if (job.targetPos !== null) {
-        intent.targetPos = job.targetPos;
+        saved.targetPos = job.targetPos;
     }
     if (job.approachPos !== null) {
-        intent.approachPos = job.approachPos;
+        saved.approachPos = job.approachPos;
     }
-
-    return intent;
+    return saved;
 }
 
-function buildSerializedRuntime(entityId: number, runtime: UnitRuntime): SerializedUnitRuntime | null {
-    const isIdle = runtime.state === SettlerState.IDLE;
-    const hasMoveTask = runtime.moveTask !== null;
-    const hasJob = runtime.job !== null && !runtime.job.synthetic;
-    const hasHome = runtime.homeAssignment !== null;
+function serializeCommitment(
+    entityId: number,
+    runtime: UnitRuntime,
+    config: SettlerTaskPersistenceConfig
+): SerializedCommitment | undefined {
+    const commitment = config.commitments.get(entityId);
+    if (!commitment) {
+        return undefined;
+    }
+    // TRANSITIONAL: legacy jobs are rebuilt by their own features after load (not persisted).
+    if (runtime.job && runtime.job.synthetic) {
+        return undefined;
+    }
+    const persisted = commitment.hasJob
+        ? config.owners.persistsJobs(commitment.owner as JobKind)
+        : config.owners.persistsHolds(commitment.owner);
+    if (!persisted) {
+        return undefined;
+    }
+    const saved: SerializedCommitment = { owner: commitment.owner, ref: commitment.ref, reserved: commitment.reserved };
+    if (commitment.hasJob) {
+        saved.job = serializeJob(runtime.job!);
+    } else if (runtime.moveTask) {
+        saved.moveTarget = { x: runtime.moveTask.targetX, y: runtime.moveTask.targetY };
+    }
+    return saved;
+}
 
-    // Skip truly idle units with no persistent state to save
-    if (isIdle && !hasHome && !hasMoveTask && !hasJob) {
+function buildSerializedRuntime(
+    entityId: number,
+    runtime: UnitRuntime,
+    config: SettlerTaskPersistenceConfig
+): SerializedUnitRuntime | null {
+    const commitment = serializeCommitment(entityId, runtime, config);
+    if (!commitment && !runtime.homeAssignment) {
         return null;
     }
-
-    const serialized: SerializedUnitRuntime = {
-        id: entityId,
-        state: runtime.state,
-    };
-
-    if (hasMoveTask) {
-        serialized.moveTarget = {
-            x: runtime.moveTask!.targetX,
-            y: runtime.moveTask!.targetY,
-        };
-    } else if (hasJob) {
-        serialized.job = serializeJobIntent(runtime);
-    }
-
-    if (hasHome) {
+    const serialized: SerializedUnitRuntime = { id: entityId };
+    if (runtime.homeAssignment) {
         serialized.home = {
-            buildingId: runtime.homeAssignment!.buildingId,
-            hasVisited: runtime.homeAssignment!.hasVisited,
+            buildingId: runtime.homeAssignment.buildingId,
+            hasVisited: runtime.homeAssignment.hasVisited,
         };
     }
-
+    if (commitment) {
+        serialized.commitment = commitment;
+    }
     return serialized;
 }
 
 // ─────────────────────────────────────────────────────────────
-// Deserialize helpers
+// Deserialize
 // ─────────────────────────────────────────────────────────────
-
-interface RestoreContext {
-    gameState: GameState;
-    runtimes: UnitRuntimeStore;
-    assignments: WorkerAssignments;
-    choreographyStore: JobChoreographyStore;
-}
 
 function restoreHomeAssignment(
     entityId: number,
     home: { buildingId: number; hasVisited: boolean },
-    ctx: RestoreContext
+    config: SettlerTaskPersistenceConfig
 ): void {
-    const building = ctx.gameState.getEntity(home.buildingId);
+    const building = config.gameState.getEntity(home.buildingId);
     if (!building) {
         log.warn(`Skipping home assignment for unit ${entityId}: building ${home.buildingId} not found`);
         return;
@@ -155,108 +125,51 @@ function restoreHomeAssignment(
 
     // If the settler was inside the building at save time (hidden + hasVisited),
     // restore it as Inside so the location manager matches entity.hidden state.
-    const entity = ctx.gameState.getEntity(entityId);
-    if (entity?.hidden && home.hasVisited) {
-        ctx.assignments.assignWorkerInside(entityId, home.buildingId);
+    const entity = config.gameState.getEntityOrThrow(entityId, 'unit with saved home assignment');
+    if (entity.hidden && home.hasVisited) {
+        config.assignments.assignWorkerInside(entityId, home.buildingId);
     } else {
-        ctx.assignments.assignWorker(entityId, home.buildingId);
-        const runtime = ctx.runtimes.get(entityId);
-        if (runtime?.homeAssignment) {
-            runtime.homeAssignment.hasVisited = home.hasVisited;
+        config.assignments.assignWorker(entityId, home.buildingId);
+        config.runtimes.get(entityId)!.homeAssignment!.hasVisited = home.hasVisited;
+    }
+}
+
+/** Apply a saved commitment: jobs are queued for resume, moves restart, holds are set as-is. */
+function restoreCommitment(entityId: number, saved: SerializedCommitment, config: SettlerTaskPersistenceConfig): void {
+    const { owner, ref, reserved } = saved;
+    if (saved.job) {
+        config.commitmentWriter.set(entityId, { owner, ref, reserved, hasJob: true });
+        config.pendingResumes.add(entityId, saved.job);
+        return;
+    }
+    config.owners.holdOwner(owner);
+    if (saved.moveTarget && !config.moveTasks.restore(entityId, saved.moveTarget)) {
+        log.debug(`Move task restore failed for unit ${entityId} (pathfinding blocked), leaving IDLE`);
+        if (owner === 'player-move') {
+            return;
         }
     }
+    config.commitmentWriter.set(entityId, { owner, ref, reserved, hasJob: false });
 }
 
-function restoreMoveTask(entityId: number, target: Tile, ctx: RestoreContext): void {
-    const entity = ctx.gameState.getEntity(entityId);
-    if (!entity) {
-        log.warn(`Skipping move task for unit ${entityId}: entity not found`);
-        return;
-    }
-
-    const runtime = ctx.runtimes.getOrCreate(entityId);
-
-    const moveSuccess = ctx.gameState.movement.moveUnit(entityId, target);
-    if (!moveSuccess) {
-        log.debug(`Move task restore failed for unit ${entityId} (pathfinding blocked), leaving IDLE`);
-        runtime.state = SettlerState.IDLE;
-        return;
-    }
-
-    runtime.moveTask = { type: 'move', targetX: target.x, targetY: target.y };
-    runtime.state = SettlerState.WORKING;
-
-    // Start walk animation using the current movement controller direction
-    const controller = ctx.gameState.movement.getController(entityId);
-    if (controller) {
-        log.debug(`Restored move task for unit ${entityId} to (${target.x}, ${target.y})`);
-    }
-}
-
-function restoreJobIntent(entityId: number, intent: SerializedJobIntent, ctx: RestoreContext): void {
-    const entity = ctx.gameState.getEntity(entityId);
-    if (!entity) {
-        log.warn(`Skipping job restore for unit ${entityId}: entity not found`);
-        return;
-    }
-
-    const runtime = ctx.runtimes.getOrCreate(entityId);
-
-    const raceId = raceToRaceId(entity.race);
-    const choreoJob = ctx.choreographyStore.getJob(raceId, intent.jobId);
-    if (!choreoJob) {
-        log.warn(`Skipping job restore for unit ${entityId}: job ${intent.jobId} not found for race ${raceId}`);
-        return;
-    }
-
-    const jobState = createChoreoJobState(intent.jobId, choreoJob.nodes, false);
-    jobState.nodeIndex = Math.min(intent.nodeIndex, choreoJob.nodes.length - 1);
-    // eslint-disable-next-line no-restricted-syntax -- value is nullable by API contract; null coercion
-    jobState.targetId = intent.targetId ?? null;
-    // eslint-disable-next-line no-restricted-syntax -- value is nullable by API contract; null coercion
-    jobState.targetPos = intent.targetPos ?? null;
-    // eslint-disable-next-line no-restricted-syntax -- value is nullable by API contract; null coercion
-    jobState.approachPos = intent.approachPos ?? null;
-
-    runtime.job = jobState;
-    runtime.state = SettlerState.WORKING;
-    runtime.moveTask = null;
-
-    log.debug(`Restored job ${intent.jobId} for unit ${entityId} at node ${jobState.nodeIndex}`);
-}
-
-function restoreUnitRuntime(serialized: SerializedUnitRuntime, ctx: RestoreContext): void {
+function restoreUnitRuntime(serialized: SerializedUnitRuntime, config: SettlerTaskPersistenceConfig): void {
     const { id } = serialized;
-
-    // Verify entity exists before restoring state
-    if (!ctx.gameState.getEntity(id)) {
+    // Snapshot data is external input: a unit missing from the entity table is skipped.
+    if (!config.gameState.getEntity(id)) {
         log.warn(`Skipping runtime restore for unit ${id}: entity not found`);
         return;
     }
-
-    // Step 1: restore home assignment (sets assignment index + occupant count)
     if (serialized.home) {
-        restoreHomeAssignment(id, serialized.home, ctx);
+        restoreHomeAssignment(id, serialized.home, config);
     }
-
-    // Step 2: restore move task OR job (mutually exclusive)
-    if (serialized.moveTarget) {
-        restoreMoveTask(id, serialized.moveTarget, ctx);
-    } else if (serialized.job) {
-        restoreJobIntent(id, serialized.job, ctx);
+    if (serialized.commitment) {
+        restoreCommitment(id, serialized.commitment, config);
     }
 }
 
 // ─────────────────────────────────────────────────────────────
 // SettlerTaskPersistence — Persistable factory
 // ─────────────────────────────────────────────────────────────
-
-export interface SettlerTaskPersistenceConfig {
-    gameState: GameState;
-    runtimes: UnitRuntimeStore;
-    assignments: WorkerAssignments;
-    choreographyStore: JobChoreographyStore;
-}
 
 /** Create the Persistable for settler task runtimes (created by the feature from the system's peers). */
 export function createSettlerTaskPersistence(
@@ -268,7 +181,7 @@ export function createSettlerTaskPersistence(
         serialize(): SerializedUnitRuntime[] {
             const result: SerializedUnitRuntime[] = [];
             for (const [entityId, runtime] of config.runtimes) {
-                const serialized = buildSerializedRuntime(entityId, runtime);
+                const serialized = buildSerializedRuntime(entityId, runtime, config);
                 if (serialized !== null) {
                     result.push(serialized);
                 }
@@ -277,15 +190,9 @@ export function createSettlerTaskPersistence(
         },
 
         deserialize(data: SerializedUnitRuntime[]): void {
-            const ctx: RestoreContext = {
-                gameState: config.gameState,
-                runtimes: config.runtimes,
-                assignments: config.assignments,
-                choreographyStore: config.choreographyStore,
-            };
             for (const serialized of data) {
                 try {
-                    restoreUnitRuntime(serialized, ctx);
+                    restoreUnitRuntime(serialized, config);
                 } catch (e) {
                     const err = e instanceof Error ? e : new Error(String(e));
                     log.error(`Failed to restore runtime for unit ${serialized.id}`, err);

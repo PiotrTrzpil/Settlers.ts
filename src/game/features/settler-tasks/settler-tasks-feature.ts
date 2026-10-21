@@ -3,7 +3,11 @@
  * as a self-registering feature.
  *
  * Exports the system plus its peers that other features use directly:
- * JobRunner (TaskDispatcher / WorkerStateQuery) and WorkerAssignments.
+ * JobService (job ownership: registerKind / assign / cancel / hold), JobRunner
+ * (TaskDispatcher / WorkerStateQuery) and WorkerAssignments.
+ *
+ * Claims the unit-commitment write side (only JobService writes commitments) and registers
+ * the COMMITMENTS-priority unit-removal handler. `onRestoreResume` resumes restored jobs.
  *
  * The water handler (needs terrain) is registered here. Domain features
  * (production-control, trees, stones, crops, ore-signs, pioneer) register their own handlers.
@@ -23,6 +27,8 @@ import type { TerritoryExports } from '../territory';
 import { SettlerTaskSystem } from './settler-task-system';
 import type { JobRunner } from './job-runner';
 import type { WorkerAssignments } from './worker-assignments';
+import type { JobService } from './job-service';
+import { CLEANUP_PRIORITY } from '../../systems/entity-cleanup-registry';
 import { SearchType } from './types';
 import { createWaterHandler } from './work-handlers';
 import { createSettlerTaskPersistence } from './settler-task-persistence';
@@ -32,7 +38,9 @@ import { executeMoveUnit, executeMoveSelectedUnits, type MoveCommandDeps } from 
 
 export interface SettlerTaskExports {
     settlerTaskSystem: SettlerTaskSystem;
-    /** Job / move-task assignment (TaskDispatcher) and job-state queries (WorkerStateQuery). */
+    /** Job ownership: register a JobKind handler / hold owner, assign / cancel / hold units, commitments. */
+    jobs: JobService;
+    /** Move-task assignment and TRANSITIONAL legacy assignJob (TaskDispatcher); job-state queries. */
     jobRunner: JobRunner;
     /** Home-building assignments, occupant counts, idle-specialist lookup. */
     workerAssignments: WorkerAssignments;
@@ -64,6 +72,7 @@ export const SettlerTaskFeature: FeatureDefinition = {
         const { locationManager } = ctx.getFeature<SettlerLocationExports>('settler-location');
         const { territoryManager } = ctx.getFeature<TerritoryExports>('territory');
 
+        const commitmentWriter = ctx.claimUnitCommitmentWriter();
         const settlerTaskSystem = new SettlerTaskSystem({
             tickScheduler: ctx.tickScheduler,
             choreoSystem: ctx.choreoSystem,
@@ -77,26 +86,38 @@ export const SettlerTaskFeature: FeatureDefinition = {
             isInCombat: combatSystem.isInCombat.bind(combatSystem),
             locationManager,
             territoryCheck: (a, b, player) => territoryManager.areConnected(a, b, player),
+            commitments: ctx.unitCommitments,
+            commitmentWriter,
         });
+
+        // Unit removal reaches the job / commitment owner before every other cleanup handler.
+        ctx.cleanupRegistry.onEntityRemoved(
+            (entityId, entity) => settlerTaskSystem.unitRemoval.onEntityRemoved(entityId, entity),
+            CLEANUP_PRIORITY.COMMITMENTS
+        );
 
         // Water handler -- needs terrain to find river tiles
         settlerTaskSystem.registerWorkHandler(SearchType.WATER, createWaterHandler(ctx.terrain));
 
-        const { jobRunner, assignments: workerAssignments } = settlerTaskSystem;
-        const exports: SettlerTaskExports = { settlerTaskSystem, jobRunner, workerAssignments };
+        const { jobRunner, jobs, assignments: workerAssignments } = settlerTaskSystem;
+        const exports: SettlerTaskExports = { settlerTaskSystem, jobs, jobRunner, workerAssignments };
 
         const settlerTaskPersistence = createSettlerTaskPersistence({
             gameState: ctx.gameState,
             runtimes: settlerTaskSystem.runtimes,
             assignments: workerAssignments,
-            choreographyStore: settlerTaskSystem.getChoreographyStore(),
+            owners: settlerTaskSystem.owners,
+            commitments: ctx.unitCommitments,
+            commitmentWriter,
+            moveTasks: settlerTaskSystem.moveTasks,
+            pendingResumes: settlerTaskSystem.pendingResumes,
         });
 
         const moveDeps: MoveCommandDeps = {
             state: ctx.gameState,
             taskDispatcher: jobRunner,
             combatSystem,
-            unitReservation: ctx.unitReservation,
+            unitReservation: ctx.unitCommitments,
             isCombatControllable: () => ctx.gameplaySettings.combatControllable,
             getOwner: tile => territoryManager.getOwner(tile),
         };
@@ -106,6 +127,7 @@ export const SettlerTaskFeature: FeatureDefinition = {
             tickPhase: TickPhase.SettlerTasks,
             exports,
             persistence: [{ persistable: settlerTaskPersistence, after: ['constructionSites'] }],
+            onRestoreResume: () => settlerTaskSystem.resumeRestoredJobs(),
             commands: {
                 move_unit: cmd => executeMoveUnit(moveDeps, cmd as MoveUnitCommand),
                 move_selected_units: cmd => executeMoveSelectedUnits(moveDeps, cmd as MoveSelectedUnitsCommand),

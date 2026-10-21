@@ -12,6 +12,7 @@ import type { ChoreoSystem } from '../../systems/choreo';
 import type { ISettlerBuildingLocationManager } from '../settler-location';
 import type { TickScheduler } from '../../systems/tick-scheduler';
 import type { TerritoryConnectivityCheck } from './worker-assignments';
+import type { UnitCommitmentQuery, UnitCommitmentWriter } from '../../systems/unit-commitment';
 
 export interface SettlerTaskSystemConfig extends CoreDeps {
     tickScheduler: TickScheduler;
@@ -25,4 +26,7 @@ export interface SettlerTaskSystemConfig extends CoreDeps {
     locationManager: ISettlerBuildingLocationManager;
     /** Rejects worker↔building pairs in disconnected territory pockets. */
     territoryCheck: TerritoryConnectivityCheck;
+    /** Unit commitments — read side (FeatureContext) and the write side claimed by this feature. */
+    commitments: UnitCommitmentQuery;
+    commitmentWriter: UnitCommitmentWriter;
 }

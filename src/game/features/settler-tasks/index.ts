@@ -3,18 +3,21 @@
  *
  * Peers (each one responsibility):
  * - SettlerTaskSystem: tick loop + composition root, work-handler registration, debug
- * - JobRunner: job lifecycle (assign/start/advance/complete/interrupt), entity.jobId, move tasks;
- *   implements TaskDispatcher and WorkerStateQuery
+ * - JobService: job ownership API — JobKind handlers / hold owners, assign / cancel / hold
+ * - JobRunner: job start + node advance, entity.jobId; implements TaskDispatcher and WorkerStateQuery
+ *   (internal: JobOutcomes = complete/fail/preempt/cancel, MoveTaskRunner, UnitRemovalHandler, job resume)
  * - WorkerAssignments: home-building assignments, occupants, idle-specialist lookup;
  *   implements WorkerAssignmentQuery
  * - WorkerAutonomy: idle work search, job selection, waiting at home, search pacing
  * - UnitVisualSync: direction / walk / idle animation following movement
- * - SettlerLifecycleCoordinator: reactions to removal, cancellation, dismissal events
+ * - SettlerLifecycleCoordinator: reactions to workplace removal, cancellation, dismissal events
  * - UnitRuntimeStore: the per-unit runtime records (single factory)
  */
 export { SettlerTaskSystem } from './settler-task-system';
 export { JobRunner } from './job-runner';
 export { WorkerAssignments } from './worker-assignments';
+export type { JobService, JobAssignOptions, HoldOwnerHandler } from './job-service';
+export type { WorkJobParams } from './work-job-kind';
 export {
     JobType,
     TaskResult,

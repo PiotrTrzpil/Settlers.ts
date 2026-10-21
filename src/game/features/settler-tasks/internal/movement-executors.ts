@@ -248,8 +248,13 @@ function moveAdjacentToTarget(
 /** GO_TO_TARGET / GO_TO_TARGET_ROUGHLY — move to entity or position target. */
 function makeGoToTarget(arrivalDist: number): MovementExecutorFn {
     return (settler, job, node, _dt, ctx) => {
-        // Consume waypoint for multi-destination jobs
-        if (job.waypoints) {
+        if (node.goal) {
+            // Owned synthetic jobs: the node carries its own walk goal.
+            job.targetPos = { x: node.goal.x, y: node.goal.y };
+            // eslint-disable-next-line no-restricted-syntax -- goal.entityId is optional by design (tile goals)
+            job.targetId = node.goal.entityId ?? null;
+        } else if (job.waypoints) {
+            // TRANSITIONAL (deleted in Cleanup): legacy multi-destination jobs consume the next waypoint.
             let wpIndex = 0;
             for (let i = 0; i < job.nodeIndex; i++) {
                 if (job.nodes[i]!.task === ChoreoTaskType.GO_TO_TARGET) {

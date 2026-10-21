@@ -12,14 +12,18 @@ import type { FeatureDefinition, FeatureContext } from '../feature';
 import { SettlerBuildingLocationManager } from './settler-building-location-manager';
 import type { SettlerLocationExports } from './types';
 import { ChoreoTaskType } from '../../systems/choreo';
-import { createEnterBuildingExecutor } from './enter-building-executor';
+import { createEnterBuildingExecutor, ENTER_BUILDING_HOOKS } from './enter-building-executor';
 
 export const SettlerLocationFeature: FeatureDefinition = {
     id: 'settler-location',
     dependencies: [], // No feature dependencies — only core services from FeatureContext
     create(ctx: FeatureContext) {
         const locationManager = new SettlerBuildingLocationManager(ctx);
-        ctx.choreoSystem.register(ChoreoTaskType.ENTER_BUILDING, createEnterBuildingExecutor(locationManager));
+        ctx.choreoSystem.register(
+            ChoreoTaskType.ENTER_BUILDING,
+            createEnterBuildingExecutor(locationManager),
+            ENTER_BUILDING_HOOKS
+        );
         return {
             exports: { locationManager } satisfies SettlerLocationExports,
             persistence: [locationManager.locationStore],

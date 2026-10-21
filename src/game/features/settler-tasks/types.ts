@@ -5,6 +5,7 @@
 import type { ChoreoJobState } from './choreo-types';
 import type { BuildingType } from '../../buildings/building-type';
 import type { Tile } from '../../entity';
+import type { CommitmentOwner } from '../../systems/unit-commitment';
 
 /** Search types - what a settler looks for */
 export enum SearchType {
@@ -103,17 +104,20 @@ export enum SettlerState {
 
 /**
  * Narrow interface for assigning work to units (logistics, building demand, siege, garrison, …).
- * Implemented by JobRunner.
+ * Implemented by JobRunner. Owned jobs go through `JobService.assign` instead.
  */
 export interface TaskDispatcher {
     /**
-     * Assign a choreography job to a unit.
+     * TRANSITIONAL (deleted in Cleanup): assign a legacy `choreo().build()` job to a unit.
      * @param numericJobId When set (e.g. transport record id), used as entity.jobId so the unit
      *   and domain job share one numeric identity. When omitted, a new id is allocated.
      */
     assignJob(entityId: number, job: ChoreoJobState, moveTo?: Tile, numericJobId?: number): boolean;
-    /** Player-style move: drops the current job and home assignment, then walks to `target`. */
-    assignMoveTask(entityId: number, target: Tile): boolean;
+    /**
+     * Move task: drops the current job and home assignment, then walks to `target`.
+     * `owner` 'player-move' (default) or 'siege' (the unit must be held by the siege already).
+     */
+    assignMoveTask(entityId: number, target: Tile, owner?: CommitmentOwner): boolean;
 }
 
 /** Narrow read-only interface for querying a unit's job state. Implemented by JobRunner. */

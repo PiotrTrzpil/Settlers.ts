@@ -35,6 +35,7 @@ import type { EventBus, EventHandler, GameEvents } from '../event-bus';
 import type { EntityVisualService } from '../animation/entity-visual-service';
 import type { EntityCleanupRegistry } from '../systems/entity-cleanup-registry';
 import type { UnitReservationRegistry } from '../systems/unit-reservation';
+import type { UnitCommitmentQuery, UnitCommitmentWriter } from '../systems/unit-commitment';
 import type { Command, CommandResult, CommandType, ExecuteCommand } from '../commands';
 import type { Persistable } from '../persistence';
 import type { TerrainData } from '../terrain';
@@ -70,15 +71,23 @@ export interface FeatureContext extends CoreDeps {
     cleanupRegistry: EntityCleanupRegistry;
 
     /**
-     * Registry for units committed to a feature-managed task.
-     * Reserve a unit to prevent player move commands from interrupting it.
-     * Release when the task completes, is cancelled, or the unit is removed.
-     *
-     * @example
-     * ctx.unitReservation.reserve(unitId);   // unit is walking to barracks / tower
-     * ctx.unitReservation.release(unitId);   // training done / garrison arrived
+     * TRANSITIONAL (deleted in Cleanup): legacy registry for units committed to a feature-managed task.
+     * Migrated owners use `JobSpec.reserved` / `JobService.hold(…, reserved)` instead; reads go
+     * through `unitCommitments.isReserved`, which ORs this registry until Cleanup.
      */
     unitReservation: UnitReservationRegistry;
+
+    /**
+     * Who owns each unit (read side). `get(id) === undefined` ⇔ idle — the one idle definition.
+     * Written only by settler-tasks' JobService (assign / cancel / hold / releaseHold).
+     */
+    unitCommitments: UnitCommitmentQuery;
+
+    /**
+     * Claim the commitment write side. Called exactly once per game, by settler-tasks (JobService);
+     * any second call throws (Invariant 3 of docs/designs/job-ownership.md).
+     */
+    claimUnitCommitmentWriter(): UnitCommitmentWriter;
 
     /** Execute a game command. Available to all features at creation time. */
     executeCommand: ExecuteCommand;
@@ -243,6 +252,13 @@ export interface FeatureInstance {
      * persisted independently. Called in feature-load (dependency) order.
      */
     onRestoreComplete?(): void;
+
+    /**
+     * Called after every feature's `onRestoreComplete`, in feature-load order. settler-tasks uses it
+     * to build and resume the restored jobs, so a `restoreFailed` reaches owners whose domain state
+     * is already rebuilt (see "Restore ordering" in docs/designs/job-ownership.md).
+     */
+    onRestoreResume?(): void;
 }
 
 /**

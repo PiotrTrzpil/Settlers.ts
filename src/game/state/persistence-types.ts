@@ -11,7 +11,8 @@
 
 import type { TreeStage } from '../features/trees/tree-system';
 import type { StoneStage } from '../features/stones/stone-system';
-import type { SettlerState } from '../features/settler-tasks/types';
+import type { CommitmentOwner } from '../systems/unit-commitment';
+import type { JobKind, JobParams } from '../systems/choreo/job-kind';
 import type { Tile } from '@/game/core/coordinates';
 
 export interface SerializedTree {
@@ -45,33 +46,34 @@ export interface SerializedProductionControl {
     productionCounts: Map<number, number>;
 }
 
-/** Serialized unit runtime — minimal state for resume-on-load. */
+/** Serialized unit runtime — minimal state for resume-on-load. Idle units without a home are not saved. */
 export interface SerializedUnitRuntime {
     /** Entity ID of the unit */
     id: number;
-    /** Settler state at save time */
-    state: SettlerState;
-    /** Move task target (if unit was moving via player command) */
-    moveTarget?: Tile;
-    /** Active job intent (if unit was working) */
-    job?: SerializedJobIntent;
     /** Building assignment */
     home?: { buildingId: number; hasVisited: boolean };
+    /** Who owned the unit at save time. Absent ⇔ idle (or owned by a `persist: false` owner / a legacy job). */
+    commitment?: SerializedCommitment;
 }
 
-/**
- * Minimal job state for resuming a choreography job.
- * Stores the job ID and current node index so the job can
- * restart from the beginning of the current (or previous movement) node.
- */
-export interface SerializedJobIntent {
-    jobId: string;
-    /** Node index to resume from (snapped back to last movement/search node). */
+/** A unit's commitment: a job, a move task, or a hold (neither). */
+export interface SerializedCommitment {
+    owner: CommitmentOwner;
+    ref: number;
+    reserved: boolean;
+    /** The owned job. Absent ⇒ hold (or move). */
+    job?: SerializedJob;
+    /** Move target for owner 'player-move' / 'siege' move commitments. */
+    moveTarget?: Tile;
+}
+
+/** An owned job: rebuilt on load through `JobKindHandler.build(params)`; nodes are never saved. */
+export interface SerializedJob {
+    kind: JobKind;
+    params: JobParams;
+    /** Raw node index at save time; snapping to a safe node happens on resume. */
     nodeIndex: number;
-    /** Target entity ID if the job had acquired one (e.g., tree to chop). */
     targetId?: number;
-    /** Target position if the job had one. */
     targetPos?: Tile;
-    /** Approach position (adjacent tile for movement when target is non-walkable). */
     approachPos?: Tile;
 }

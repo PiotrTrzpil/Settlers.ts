@@ -126,6 +126,8 @@ export const EventFmt = {
             e.wasCarrying && 'wasCarrying'
         ),
 
+    'settler:jobAborted': (e: GameEvents['settler:jobAborted']) => parts(e.jobId, e.kind, `ref=${e.ref}`, e.reason),
+
     'carrier:arrivedForPickup': (e: GameEvents['carrier:arrivedForPickup']) => `at #${e.buildingId}`,
 
     'carrier:arrivedForDelivery': (e: GameEvents['carrier:arrivedForDelivery']) => `at #${e.buildingId}`,

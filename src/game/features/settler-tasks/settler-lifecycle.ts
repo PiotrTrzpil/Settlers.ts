@@ -1,28 +1,25 @@
 /**
  * SettlerLifecycleCoordinator — how settler-task state reacts when the world changes
- * under a unit: the unit or its workplace is removed, its transport is cancelled, its
- * approach to the workplace is interrupted, it is dismissed to carrier, a worker is
- * spawned inside a building, and the periodic orphan-runtime sweep.
+ * under a unit: its workplace is removed, its (legacy) transport is cancelled, its approach
+ * to the workplace is interrupted, it is dismissed to carrier, a worker is spawned inside a
+ * building, and the periodic orphan-runtime sweep.
  *
- * Ends jobs through JobRunner and changes assignments through WorkerAssignments.
+ * Unit removal itself is internal/unit-removal.ts (COMMITMENTS cleanup priority).
+ * Ends jobs through JobOutcomes and changes assignments through WorkerAssignments.
  */
 
 import type { GameState } from '../../game-state';
 import type { EventBus } from '../../event-bus';
 import { EventSubscriptionManager } from '../../event-bus';
-import { UnitType, type Entity } from '../../entity';
-import { createLogger } from '@/utilities/logger';
 import { sortedEntries } from '@/utilities/collections';
 import { seconds } from '../../core/tick-rate';
-import { SettlerState, type SettlerConfig } from './types';
+import { SettlerState } from './types';
 import type { WorkerAssignments } from './worker-assignments';
-import type { JobRunner } from './job-runner';
-import type { UnitRuntime, UnitRuntimeStore } from './unit-runtime';
+import type { UnitRuntimeStore } from './unit-runtime';
 import { type TickScheduler, type ScheduleHandle, NO_HANDLE } from '../../systems/tick-scheduler';
-import type { WorkHandlerRegistry } from './work-handler-registry';
 import type { IdleSearchCooldowns } from './idle-search-cooldowns';
-
-const log = createLogger('SettlerLifecycleCoordinator');
+import type { JobOutcomes } from './internal/job-outcomes';
+import type { MoveTaskRunner } from './internal/move-tasks';
 
 const ORPHAN_CHECK_INTERVAL = seconds(2);
 
@@ -31,11 +28,10 @@ export interface SettlerLifecycleConfig {
     eventBus: EventBus;
     tickScheduler: TickScheduler;
     runtimes: UnitRuntimeStore;
-    jobRunner: JobRunner;
+    outcomes: JobOutcomes;
+    moveTasks: MoveTaskRunner;
     assignments: WorkerAssignments;
     idleCooldowns: IdleSearchCooldowns;
-    handlerRegistry: WorkHandlerRegistry;
-    settlerConfigs: ReadonlyMap<UnitType, SettlerConfig>;
 }
 
 export class SettlerLifecycleCoordinator {
@@ -43,11 +39,10 @@ export class SettlerLifecycleCoordinator {
     private readonly eventBus: EventBus;
     private readonly tickScheduler: TickScheduler;
     private readonly runtimes: UnitRuntimeStore;
-    private readonly jobRunner: JobRunner;
+    private readonly outcomes: JobOutcomes;
+    private readonly moveTasks: MoveTaskRunner;
     private readonly assignments: WorkerAssignments;
     private readonly idleCooldowns: IdleSearchCooldowns;
-    private readonly handlerRegistry: WorkHandlerRegistry;
-    private readonly settlerConfigs: ReadonlyMap<UnitType, SettlerConfig>;
     private readonly subscriptions = new EventSubscriptionManager();
     private orphanHandle: ScheduleHandle = NO_HANDLE;
 
@@ -56,11 +51,10 @@ export class SettlerLifecycleCoordinator {
         this.eventBus = config.eventBus;
         this.tickScheduler = config.tickScheduler;
         this.runtimes = config.runtimes;
-        this.jobRunner = config.jobRunner;
+        this.outcomes = config.outcomes;
+        this.moveTasks = config.moveTasks;
         this.assignments = config.assignments;
         this.idleCooldowns = config.idleCooldowns;
-        this.handlerRegistry = config.handlerRegistry;
-        this.settlerConfigs = config.settlerConfigs;
     }
 
     /** Subscribe to all lifecycle events and start the orphan sweep. Call once during feature init. */
@@ -89,38 +83,13 @@ export class SettlerLifecycleCoordinator {
     }
 
     /**
-     * Handle entity removal — cleanup runtime, release worker assignments.
-     * Called by the cleanup registry when any entity is removed.
+     * TickSystem removal hook (after every cleanup-registry handler): a removed workplace releases
+     * its workers. Removed units were already handled at COMMITMENTS priority (unit-removal.ts).
      */
     onEntityRemoved(entityId: number): void {
         if (this.assignments.hasOccupants(entityId)) {
             this.onBuildingRemoved(entityId);
         }
-
-        const runtime = this.runtimes.get(entityId);
-        if (!runtime) {
-            return;
-        }
-
-        const entity = this.gameState.getEntity(entityId);
-        if (entity) {
-            this.cleanupSettlerHandlers(entity, entityId, runtime);
-        } else if (runtime.job?.targetId && runtime.job.workStarted) {
-            const entityHandler = this.handlerRegistry.findEntityHandlerForJob(runtime.job.jobId, this.settlerConfigs);
-            if (entityHandler) {
-                try {
-                    entityHandler.onWorkInterrupt?.(runtime.job.targetId, entityId);
-                } catch (e) {
-                    const err = e instanceof Error ? e : new Error(String(e));
-                    log.error(`onWorkInterrupt failed for entity ${entityId}`, err);
-                }
-            }
-        }
-
-        this.idleCooldowns.cancelAll(entityId);
-
-        this.assignments.release(entityId, runtime);
-        this.runtimes.delete(entityId);
     }
 
     /** Unsubscribe from all events and cancel the scheduled orphan check. */
@@ -134,24 +103,14 @@ export class SettlerLifecycleCoordinator {
     // Private event handlers
     // ─────────────────────────────────────────────────────────────
 
+    /** TRANSITIONAL (deleted in Cleanup): a legacy transport job ends when its record is cancelled. */
     private handleTransportCancelled(carrierId: number): void {
         const runtime = this.runtimes.get(carrierId);
-        if (!runtime?.job) {
+        if (!runtime?.job || !runtime.job.synthetic) {
             return;
         }
-
-        const entity = this.gameState.getEntity(carrierId);
-        if (!entity) {
-            return;
-        }
-
-        const unitConfig = this.settlerConfigs.get(entity.subType as UnitType);
-        if (!unitConfig) {
-            return;
-        }
-
-        this.jobRunner.endJobForTakeover(entity, unitConfig, runtime);
-        runtime.job = null;
+        const entity = this.gameState.getEntityOrThrow(carrierId, 'carrier whose transport was cancelled');
+        this.outcomes.endJob(entity, runtime, 'failed');
     }
 
     private handleApproachInterrupted(settlerId: number, buildingId: number): void {
@@ -168,14 +127,10 @@ export class SettlerLifecycleCoordinator {
 
         if (runtime.job) {
             const entity = this.gameState.getEntityOrThrow(settlerId, 'settler whose approach was interrupted');
-            const unitConfig = this.settlerConfigs.get(entity.subType as UnitType);
-            if (unitConfig) {
-                this.jobRunner.endJobForTakeover(entity, unitConfig, runtime);
-            }
-            runtime.job = null;
+            this.outcomes.endJob(entity, runtime, 'failed');
         }
 
-        runtime.moveTask = null;
+        this.moveTasks.end(settlerId, runtime);
         this.gameState.movement.getController(settlerId)?.clearPath();
     }
 
@@ -187,15 +142,11 @@ export class SettlerLifecycleCoordinator {
 
         const entity = this.gameState.getEntityOrThrow(unitId, 'unit being dismissed to Carrier');
         if (runtime.job) {
-            const unitConfig = this.settlerConfigs.get(UnitType.Carrier);
-            if (unitConfig) {
-                this.jobRunner.endJobForTakeover(entity, unitConfig, runtime);
-            }
-            runtime.job = null;
+            this.outcomes.endJob(entity, runtime, 'failed');
         }
         this.assignments.release(unitId, runtime);
         runtime.state = SettlerState.IDLE;
-        runtime.moveTask = null;
+        this.moveTasks.end(unitId, runtime);
     }
 
     private onBuildingRemoved(buildingId: number): void {
@@ -208,39 +159,29 @@ export class SettlerLifecycleCoordinator {
             this.assignments.forgetHome(settlerId, runtime);
 
             if (runtime.job) {
-                const entity = this.gameState.getEntity(settlerId);
-                if (entity) {
-                    const config = this.settlerConfigs.get(entity.subType as UnitType);
-                    if (config) {
-                        this.jobRunner.endJobForTakeover(entity, config, runtime);
-                    }
-                }
-                runtime.job = null;
+                const entity = this.gameState.getEntityOrThrow(settlerId, 'worker of a removed building');
+                this.outcomes.endJob(entity, runtime, 'failed');
             }
 
-            runtime.moveTask = null;
+            this.moveTasks.end(settlerId, runtime);
             this.gameState.movement.getController(settlerId)?.clearPath();
         }
     }
 
-    private cleanupSettlerHandlers(entity: Entity, entityId: number, runtime: UnitRuntime): void {
-        const config = this.settlerConfigs.get(entity.subType as UnitType);
-        if (!config) {
-            return;
-        }
-        if (runtime.job) {
-            this.jobRunner.endJobForTakeover(entity, config, runtime);
-        }
-        const posHandler = this.handlerRegistry.getPositionHandler(config.plantSearch ?? config.search);
-        posHandler?.onSettlerRemoved?.(entityId);
-    }
-
+    /** Runtimes created for ids that are no entity (any more) — drop them. */
     private orphanCheckAndReschedule(): void {
         for (const id of this.runtimes.keys()) {
             if (!this.gameState.getEntity(id)) {
-                this.onEntityRemoved(id);
+                this.dropOrphanRuntime(id);
             }
         }
         this.orphanHandle = this.tickScheduler.schedule(ORPHAN_CHECK_INTERVAL, () => this.orphanCheckAndReschedule());
+    }
+
+    private dropOrphanRuntime(id: number): void {
+        const runtime = this.runtimes.get(id)!;
+        this.idleCooldowns.cancelAll(id);
+        this.assignments.releaseRemovedUnit(id, runtime);
+        this.runtimes.delete(id);
     }
 }

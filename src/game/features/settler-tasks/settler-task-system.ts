@@ -1,10 +1,11 @@
 /**
  * SettlerTaskSystem — the settler-tasks tick system and composition root.
  *
- * Builds the feature's peers (UnitRuntimeStore, WorkerAssignments, JobRunner,
- * WorkerAutonomy, UnitVisualSync, SettlerLifecycleCoordinator) and runs the per-unit
- * tick loop that dispatches each unit to them. Owns only the tick, its sub-timings and
- * the feature-level registration / debug surface.
+ * Builds the feature's peers (UnitRuntimeStore, WorkerAssignments, JobOwnerRegistry,
+ * JobOutcomes, MoveTaskRunner, JobRunner, JobService, WorkerAutonomy, UnitVisualSync,
+ * SettlerLifecycleCoordinator, UnitRemovalHandler) and runs the per-unit tick loop that
+ * dispatches each unit to them. Owns only the tick, its sub-timings and the feature-level
+ * registration / debug surface.
  */
 
 import type { GameState } from '../../game-state';
@@ -20,17 +21,22 @@ import { WorkHandlerRegistry } from './work-handler-registry';
 import { IdleAnimationController } from './idle-animation-controller';
 import { JobChoreographyStore } from './job-choreography-store';
 import { BuildingPositionResolverImpl } from './building-position-resolver';
-import { JobPartResolverImpl } from './job-part-resolver';
 import { registerCoreExecutors } from './choreo-executors';
 import { IdleSearchCooldowns } from './idle-search-cooldowns';
 import { UnitRuntimeStore, type UnitRuntime } from './unit-runtime';
 import { WorkerAssignments } from './worker-assignments';
-import { JobRunner } from './job-runner';
+import type { JobRunner } from './job-runner';
 import { WorkerAutonomy } from './worker-autonomy';
 import { UnitVisualSync } from './unit-visual-sync';
 import { SettlerLifecycleCoordinator } from './settler-lifecycle';
 import type { SettlerTaskSystemConfig } from './settler-task-config';
 import { dumpSettlerDebug, dumpWorkerAssignments, type SettlerDebugEntry } from './internal/settler-debug';
+import type { JobOwnerRegistry } from './internal/job-owners';
+import type { MoveTaskRunner } from './internal/move-tasks';
+import type { UnitRemovalHandler } from './internal/unit-removal';
+import { PendingJobResumes, resumePendingJobs, type JobResumeDeps } from './internal/job-resume';
+import { createJobRuntime } from './internal/job-runtime';
+import type { JobServiceImpl } from './job-service';
 export type { SettlerTaskSystemConfig } from './settler-task-config';
 
 const log = createLogger('SettlerTaskSystem');
@@ -53,6 +59,13 @@ export class SettlerTaskSystem implements TickSystem {
     readonly runtimes: UnitRuntimeStore;
     readonly assignments: WorkerAssignments;
     readonly jobRunner: JobRunner;
+    readonly jobs: JobServiceImpl;
+    readonly owners: JobOwnerRegistry;
+    readonly moveTasks: MoveTaskRunner;
+    /** Restored owned jobs waiting for the final restore pass (filled by settler-task persistence). */
+    readonly pendingResumes = new PendingJobResumes();
+    /** COMMITMENTS-priority unit removal (registered with the cleanup registry by the feature). */
+    readonly unitRemoval: UnitRemovalHandler;
 
     private readonly gameState: GameState;
     private readonly isInCombat: (entityId: number) => boolean;
@@ -64,6 +77,7 @@ export class SettlerTaskSystem implements TickSystem {
     private readonly autonomy: WorkerAutonomy;
     private readonly visualSync: UnitVisualSync;
     private readonly lifecycleCoordinator: SettlerLifecycleCoordinator;
+    private readonly resumeDeps: JobResumeDeps;
     private lastSubTimings: Record<string, number> = {};
 
     constructor(config: SettlerTaskSystemConfig) {
@@ -92,23 +106,34 @@ export class SettlerTaskSystem implements TickSystem {
             config.locationManager,
             this.gameState,
             config.eventBus,
-            config.territoryCheck
+            config.territoryCheck,
+            config.commitments
         );
-        this.jobRunner = new JobRunner({
+        const jobRuntime = createJobRuntime({
             gameState: this.gameState,
             eventBus: config.eventBus,
             choreoSystem: config.choreoSystem,
+            triggerSystem: config.triggerSystem,
+            materialTransfer: config.materialTransfer,
+            locationManager: config.locationManager,
             runtimes: this.runtimes,
             assignments: this.assignments,
             settlerConfigs: this.settlerConfigs,
             handlerRegistry: this.handlerRegistry,
+            choreographyStore: this.choreographyStore,
             animController,
-            jobPartResolver: new JobPartResolverImpl(),
-            locationManager: config.locationManager,
-            triggerSystem: config.triggerSystem,
-            materialTransfer: config.materialTransfer,
+            idleCooldowns: this.idleCooldowns,
             handlerErrorLogger,
+            commitments: config.commitments,
+            commitmentWriter: config.commitmentWriter,
+            pendingResumes: this.pendingResumes,
         });
+        this.owners = jobRuntime.owners;
+        this.moveTasks = jobRuntime.moveTasks;
+        this.jobRunner = jobRuntime.jobRunner;
+        this.jobs = jobRuntime.jobs;
+        this.unitRemoval = jobRuntime.unitRemoval;
+        this.resumeDeps = jobRuntime.resumeDeps;
         this.autonomy = new WorkerAutonomy({
             gameState: this.gameState,
             eventBus: config.eventBus,
@@ -129,11 +154,10 @@ export class SettlerTaskSystem implements TickSystem {
             eventBus: config.eventBus,
             tickScheduler: config.tickScheduler,
             runtimes: this.runtimes,
-            jobRunner: this.jobRunner,
+            outcomes: jobRuntime.outcomes,
+            moveTasks: this.moveTasks,
             assignments: this.assignments,
             idleCooldowns: this.idleCooldowns,
-            handlerRegistry: this.handlerRegistry,
-            settlerConfigs: this.settlerConfigs,
         });
 
         // Domain-free executors only — domain features register their own task types.
@@ -161,6 +185,11 @@ export class SettlerTaskSystem implements TickSystem {
     /** Domain features plug in their work handlers (production-control → WORKPLACE, trees → TREE, …). */
     registerWorkHandler(searchType: SearchType, handler: WorkHandler): void {
         this.handlerRegistry.register(searchType, handler);
+    }
+
+    /** Final restore pass: build and resume the restored owned jobs (see job-resume.ts). */
+    resumeRestoredJobs(): void {
+        resumePendingJobs(this.resumeDeps, this.pendingResumes);
     }
 
     getPositionResolver(): BuildingPositionResolverImpl {
@@ -194,7 +223,7 @@ export class SettlerTaskSystem implements TickSystem {
     }
 
     getDebugInfo(): SettlerDebugEntry[] {
-        return dumpSettlerDebug(this.runtimes);
+        return dumpSettlerDebug(this.runtimes, this.jobs.commitments);
     }
 
     dumpWorkerAssignments(): string {
@@ -253,7 +282,7 @@ export class SettlerTaskSystem implements TickSystem {
     private updateUnit(unit: Entity, runtime: UnitRuntime, dt: number): TickCategory {
         if (runtime.moveTask) {
             this.visualSync.syncWithMovement(unit, runtime);
-            this.jobRunner.tickMoveTask(unit, runtime);
+            this.moveTasks.tick(unit, runtime);
             return TickCategory.MOVE_TASK;
         }
 

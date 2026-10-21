@@ -10,7 +10,7 @@ import { EntityType, UnitType, EXTENDED_OFFSETS, tileKey, isUnitTypeMilitary, Ti
 import { UnitCategory, getUnitCategory } from '../../core/unit-types';
 import type { GameState } from '../../game-state';
 import type { CombatSystem } from '../combat';
-import type { UnitReservationRegistry } from '../../systems/unit-reservation';
+import type { UnitReservationQuery } from '../../systems/unit-commitment';
 import { FORMATION_OFFSETS, commandFailed, COMMAND_OK } from '../../commands/command-types';
 import type { MoveUnitCommand, MoveSelectedUnitsCommand, CommandResult } from '../../commands/command-types';
 import type { TaskDispatcher } from './types';
@@ -19,7 +19,8 @@ export interface MoveCommandDeps {
     state: GameState;
     taskDispatcher: TaskDispatcher;
     combatSystem: CombatSystem;
-    unitReservation: UnitReservationRegistry;
+    /** Reserved units reject move commands (`ctx.unitCommitments` — ORs the legacy registry until Cleanup). */
+    unitReservation: UnitReservationQuery;
     /** Whether units in combat can be redirected by player commands (live game setting). */
     isCombatControllable: () => boolean;
     /** Territory owner lookup — workers cannot move outside their territory. */

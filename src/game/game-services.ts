@@ -22,6 +22,7 @@ import { EntityVisualService } from './animation/entity-visual-service';
 import type { CommandType, ExecuteCommand } from './commands';
 import { EntityCleanupRegistry } from './systems/entity-cleanup-registry';
 import { UnitReservationRegistry } from './systems/unit-reservation';
+import { UnitCommitments } from './systems/unit-commitment';
 import { FeatureRegistry } from './features/feature-registry';
 import type { BoundCommandHandler } from './features/feature';
 import type { RenderPassDefinition } from './renderer/render-passes/types';
@@ -128,7 +129,10 @@ export class GameServices {
     private readonly mapObjectBlocking: MapObjectBlockingTracker;
 
     // ===== Shared kernel services =====
+    /** TRANSITIONAL (deleted in Cleanup): legacy reservations; read through `unitCommitments.isReserved`. */
     public readonly unitReservation: UnitReservationRegistry;
+    /** Who owns each unit (idle ⇔ no commitment). Written only by settler-tasks' JobService. */
+    public readonly unitCommitments: UnitCommitments;
 
     /**
      * @param terrain Map terrain — passed to every feature via FeatureContext at create() time.
@@ -148,6 +152,7 @@ export class GameServices {
         // 1. Kernel services — created before features, provided via FeatureContext.
         //    Removal order is declared by CLEANUP_PRIORITY (reservations release first).
         this.unitReservation = new UnitReservationRegistry(this.cleanupRegistry);
+        this.unitCommitments = new UnitCommitments(this.unitReservation);
         this.visualService = new EntityVisualService();
         this.subscriptions.subscribe(eventBus, 'entity:created', ({ entityId, variation }) =>
             this.visualService.init(entityId, variation)
@@ -171,6 +176,7 @@ export class GameServices {
             visualService: this.visualService,
             cleanupRegistry: this.cleanupRegistry,
             unitReservation: this.unitReservation,
+            unitCommitments: this.unitCommitments,
             executeCommand,
             tickScheduler: this.tickScheduler,
             choreoSystem: this.choreoSystem,
@@ -279,6 +285,8 @@ export class GameServices {
         this.settlerTaskSystem = settlerTaskExports.settlerTaskSystem;
         this.jobRunner = settlerTaskExports.jobRunner;
         this.workerAssignments = settlerTaskExports.workerAssignments;
+        // Every JobKind has exactly one owner by now (Invariant 4) — fail at startup, not mid-game.
+        this.settlerTaskSystem.jobs.assertAllRegistered();
         this.logisticsDispatcher =
             this.getFeature<LogisticsDispatcherExports>('logistics-dispatcher').logisticsDispatcher;
         this.garrisonManager = this.getFeature<TowerGarrisonExports>('tower-garrison').garrisonManager;
@@ -353,6 +361,11 @@ export class GameServices {
     /** Notify all features that snapshot restoration is complete (dependency order). */
     public notifyRestoreComplete(): void {
         this.featureRegistry.notifyRestoreComplete();
+    }
+
+    /** Second restore pass, after notifyRestoreComplete: resume restored jobs (dependency order). */
+    public notifyRestoreResume(): void {
+        this.featureRegistry.notifyRestoreResume();
     }
 
     /** Clean up all event subscriptions and system state. */

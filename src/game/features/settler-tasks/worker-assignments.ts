@@ -18,6 +18,7 @@ import { relocateUnitsFromFootprints } from './initial-worker-assignment';
 import { SettlerBuildingStatus, type ISettlerBuildingLocationManager } from '../settler-location';
 import type { Index } from '@/game/utils/indexed-map';
 import { distSq } from '@/game/core/distance';
+import type { UnitCommitmentQuery } from '../../systems/unit-commitment';
 
 const log = createLogger('WorkerAssignments');
 
@@ -36,7 +37,8 @@ export class WorkerAssignments implements WorkerAssignmentQuery {
         private readonly locationManager: ISettlerBuildingLocationManager,
         private readonly gameState: GameState,
         private readonly eventBus: EventBus,
-        private readonly territoryCheck: TerritoryConnectivityCheck
+        private readonly territoryCheck: TerritoryConnectivityCheck,
+        private readonly commitments: UnitCommitmentQuery
     ) {
         // eslint-disable-next-line no-restricted-syntax -- optional chaining; null when source is absent
         this.byBuilding = runtimes.addIndex<number>((_id, runtime) => runtime.homeAssignment?.buildingId ?? null);
@@ -82,15 +84,7 @@ export class WorkerAssignments implements WorkerAssignmentQuery {
             return;
         }
         const buildingId = runtime.homeAssignment.buildingId;
-        const count = this.occupants.get(buildingId);
-        if (count === undefined) {
-            throw new Error(`No occupant count for building ${buildingId} in WorkerAssignments.release`);
-        }
-        if (count <= 1) {
-            this.occupants.delete(buildingId);
-        } else {
-            this.occupants.set(buildingId, count - 1);
-        }
+        this.decrementOccupants(buildingId);
 
         if (this.locationManager.isInside(settlerId)) {
             this.locationManager.exitBuilding(settlerId);
@@ -102,6 +96,34 @@ export class WorkerAssignments implements WorkerAssignmentQuery {
 
         runtime.homeAssignment = null;
         this.runtimes.reindex(settlerId);
+    }
+
+    /**
+     * Release the home assignment of a unit that was just removed from the game (unit-removal
+     * handler). No location bookkeeping: the entity is gone and settler-location drops its
+     * location record in its own cleanup handler.
+     */
+    releaseRemovedUnit(settlerId: number, runtime: UnitRuntime): void {
+        if (!runtime.homeAssignment) {
+            return;
+        }
+        const buildingId = runtime.homeAssignment.buildingId;
+        this.decrementOccupants(buildingId);
+        this.emitWorkerLost(buildingId, settlerId);
+        runtime.homeAssignment = null;
+        this.runtimes.reindex(settlerId);
+    }
+
+    private decrementOccupants(buildingId: number): void {
+        const count = this.occupants.get(buildingId);
+        if (count === undefined) {
+            throw new Error(`No occupant count for building ${buildingId} in WorkerAssignments.release`);
+        }
+        if (count <= 1) {
+            this.occupants.delete(buildingId);
+        } else {
+            this.occupants.set(buildingId, count - 1);
+        }
     }
 
     /** Emit building:workerLost if the building still exists (not being destroyed). */
@@ -135,8 +157,8 @@ export class WorkerAssignments implements WorkerAssignmentQuery {
     // ─────────────────────────────────────────────────────────────
 
     /**
-     * Find nearest idle specialist of given type with no home assignment.
-     * Returns entity ID or null.
+     * Find nearest idle specialist (no commitment, not mid-interruption) of given type with no home
+     * assignment. Returns entity ID or null.
      */
     findIdleSpecialist(unitType: UnitType, player: number, nearX: number, nearY: number): number | null {
         let bestId: number | null = null;
@@ -165,7 +187,11 @@ export class WorkerAssignments implements WorkerAssignmentQuery {
         nearX: number,
         nearY: number
     ): boolean {
-        if (runtime.state !== SettlerState.IDLE || runtime.homeAssignment !== null) {
+        if (
+            runtime.state !== SettlerState.IDLE ||
+            runtime.homeAssignment !== null ||
+            !this.commitments.isIdle(entityId)
+        ) {
             return false;
         }
         const entity = this.gameState.getEntity(entityId);
