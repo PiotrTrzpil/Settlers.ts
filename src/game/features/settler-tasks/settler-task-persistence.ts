@@ -10,8 +10,7 @@
  * built + resumed in the final restore pass (`onRestoreResume`), after every owner rebuilt its
  * domain state from commitments in `onRestoreComplete`.
  *
- * Not saved (the unit loads idle): commitments of `persist: false` owners and TRANSITIONAL legacy
- * jobs (`choreo().build()` + `assignJob`), which their features rebuild themselves, as before.
+ * Not saved (the unit loads idle): commitments of `persist: false` owners.
  */
 
 import { createLogger } from '@/utilities/logger';
@@ -65,10 +64,6 @@ function serializeCommitment(
 ): SerializedCommitment | undefined {
     const commitment = config.commitments.get(entityId);
     if (!commitment) {
-        return undefined;
-    }
-    // TRANSITIONAL: legacy jobs are rebuilt by their own features after load (not persisted).
-    if (runtime.job && runtime.job.synthetic) {
         return undefined;
     }
     const persisted = commitment.hasJob

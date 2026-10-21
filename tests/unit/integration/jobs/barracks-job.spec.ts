@@ -15,7 +15,6 @@ import { BuildingType } from '@/game/buildings/building-type';
 import { EntityType, UnitType } from '@/game/entity';
 import { EMaterialType } from '@/game/economy/material-type';
 import { JobKind } from '@/game/systems/choreo';
-import { choreo } from '@/game/features/settler-tasks';
 import { TrainingRecipeIndex, type BarracksExports, type BarracksTrainingManager } from '@/game/features/barracks';
 
 installRealGameData();
@@ -130,7 +129,8 @@ describe('Barracks job ownership', { timeout: 60_000 }, () => {
         const log = trackTraining(sim);
         const first = runUntilStarted(sim, log, 1);
 
-        sim.services.jobRunner.assignJob(first, choreo('TEST_PREEMPT').wait(1).build());
+        const carrier = sim.state.getEntityOrThrow(first, 'training carrier');
+        expect(sim.services.jobRunner.assignMoveTask(first, { x: carrier.x + 2, y: carrier.y })).toBe(true);
 
         expect(log.interrupted).toEqual(['preempted']);
         expect(manager(sim).isTraining(barracksId)).toBe(false);

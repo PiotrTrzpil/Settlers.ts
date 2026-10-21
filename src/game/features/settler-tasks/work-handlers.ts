@@ -21,7 +21,7 @@ import type { TerrainData } from '../../terrain';
  * Create a handler for GOOD search type (carriers).
  *
  * Carriers don't find work themselves — they get jobs assigned externally
- * by LogisticsDispatcher via assignJob(). This null handler exists to
+ * as Transport jobs (`JobService.assign`). This null handler exists to
  * suppress "no handler registered" warnings while keeping idle carriers silent.
  */
 export function createCarrierHandler(): NullWorkHandler {

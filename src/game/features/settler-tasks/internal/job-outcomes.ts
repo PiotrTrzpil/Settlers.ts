@@ -10,12 +10,10 @@
  *   again) → taskFailed;
  * - cancel: teardown + node onAbort → clear commitment, INTERRUPTED → jobAborted (owner NOT called).
  *
- * TRANSITIONAL: legacy jobs (`job.synthetic`, built with `choreo().build()`) have no owner handler —
- * failure runs their `onCancel` first and they are routed only by the broadcast, as before.
  * Unit removal lives in unit-removal.ts.
  */
 
-import { BuildingType, clearJobId, type Entity } from '../../../entity';
+import { BuildingType, type Entity } from '../../../entity';
 import type { GameState } from '../../../game-state';
 import type { EventBus } from '../../../event-bus';
 import { createLogger } from '@/utilities/logger';
@@ -134,12 +132,9 @@ export class JobOutcomes {
         // that assigns the next job sees a clean runtime (construction chaining, logistics flush).
         runtime.state = SettlerState.IDLE;
         runtime.job = null;
-        clearJobId(settler);
         this.clearJobCommitment(settler.id, job);
 
-        if (!job.synthetic) {
-            this.owners.kind(job.kind).onCompleted(settler.id, job.ref, job.params);
-        }
+        this.owners.kind(job.kind).onCompleted(settler.id, job.ref, job.params);
         emitTaskCompleted(this.eventBus, settler, job);
         this.afterCompletion(settler, runtime);
     }
@@ -148,10 +143,6 @@ export class JobOutcomes {
     fail(settler: Entity, runtime: UnitRuntime, reason: JobFailureReason): void {
         const job = runtime.job!;
         runtime.job = null;
-        if (job.synthetic) {
-            // TRANSITIONAL legacy kind-level cleanup (e.g. cancel the transport record).
-            job.onCancel?.();
-        }
         this.tearDownLive(settler, runtime, job);
         this.clearJobCommitment(settler.id, job);
         runtime.state = SettlerState.INTERRUPTED;
@@ -159,13 +150,11 @@ export class JobOutcomes {
 
         log.debug(`Settler ${settler.id} interrupted job ${job.jobId} (${reason})`);
 
-        if (!job.synthetic) {
-            this.owners.kind(job.kind).onFailed(settler.id, job.ref, job.params, {
-                reason,
-                nodeIndex: job.nodeIndex,
-                failedStep: currentStepName(job),
-            });
-        }
+        this.owners.kind(job.kind).onFailed(settler.id, job.ref, job.params, {
+            reason,
+            nodeIndex: job.nodeIndex,
+            failedStep: currentStepName(job),
+        });
         emitTaskFailed(this.eventBus, settler, job, reason);
     }
 
@@ -220,7 +209,6 @@ export class JobOutcomes {
             this.locationManager.exitBuilding(settler.id);
         }
         this.releaseController(settler.id);
-        clearJobId(settler);
         runAbortHooks(this.teardown.choreoSystem, settler.id, job);
     }
 

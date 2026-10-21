@@ -109,7 +109,7 @@ export class JobServiceImpl implements JobService {
 
     assign<P extends JobParams>(unitId: number, spec: JobSpec<P>, opts?: JobAssignOptions): boolean {
         const build = this.owners.kind(spec.kind).build(unitId, spec.params);
-        const job = createChoreoJobState(build.jobId, build.nodes, false, {
+        const job = createChoreoJobState(build.jobId, build.nodes, {
             kind: spec.kind,
             ref: spec.ref,
             params: spec.params,
@@ -152,8 +152,7 @@ export class JobServiceImpl implements JobService {
         if (pending) {
             return pending.params;
         }
-        const job = this.runtimes.get(unitId)!.job!;
-        return job.synthetic ? undefined : job.params;
+        return this.runtimes.get(unitId)!.job!.params;
     }
 
     releaseHold(unitId: number, owner: CommitmentOwner): void {

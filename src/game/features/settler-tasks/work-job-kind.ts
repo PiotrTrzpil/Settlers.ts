@@ -14,7 +14,7 @@ import type { GameState } from '../../game-state';
 import { raceToRaceId } from '../../data/game-data-access';
 import type { JobChoreographyStore } from './job-choreography-store';
 
-/** Params of a Work job: the XML (or registered synthetic) choreography id. */
+/** Params of a Work job: the XML (or registered code-defined) choreography id. */
 export type WorkJobParams = { readonly choreoJobId: string };
 
 /** Owner identity of a Work job state. */

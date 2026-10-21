@@ -15,16 +15,12 @@ const log = createLogger('EnterBuildingExecutor');
 /** Entering is irreversible: a restored job never snaps back across a completed ENTER_BUILDING. */
 export const ENTER_BUILDING_HOOKS: ChoreoNodeHooks = { irreversible: true };
 
-/** The building a node enters: `node.args.enterBuilding` (owned jobs) or legacy `metadata.enterBuildingId`. */
-function enteredBuildingId(node: ChoreoNode, metadata: Record<string, number | string> | undefined): number {
-    if (node.args) {
-        if (node.args.task !== 'enterBuilding') {
-            throw new Error(`ENTER_BUILDING node has args for '${node.args.task}'`);
-        }
-        return node.args.buildingId;
+/** The building a node enters: `node.args.enterBuilding`. */
+function enteredBuildingId(node: ChoreoNode): number {
+    if (!node.args || node.args.task !== 'enterBuilding') {
+        throw new Error(`ENTER_BUILDING node has no enterBuilding args`);
     }
-    // TRANSITIONAL (deleted in Cleanup): legacy jobs stash the building in metadata.
-    return metadata!['enterBuildingId'] as number;
+    return node.args.buildingId;
 }
 
 /**
@@ -34,8 +30,8 @@ function enteredBuildingId(node: ChoreoNode, metadata: Record<string, number | s
  * and returns DONE. The settler is now inside the building.
  */
 export function createEnterBuildingExecutor(locationManager: ISettlerBuildingLocationManager): ChoreoExecutor {
-    return (settler, job, node) => {
-        const buildingId = enteredBuildingId(node, job.metadata);
+    return (settler, _job, node) => {
+        const buildingId = enteredBuildingId(node);
         log.debug(`ENTER_BUILDING: settler ${settler.id}` + ` entering building ${buildingId}`);
         locationManager.enterBuilding(settler.id, buildingId);
         return TaskResult.DONE;

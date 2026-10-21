@@ -4,13 +4,13 @@
  * Peers (each one responsibility):
  * - SettlerTaskSystem: tick loop + composition root, work-handler registration, debug
  * - JobService: job ownership API — JobKind handlers / hold owners, assign / cancel / hold
- * - JobRunner: job start + node advance, entity.jobId; implements TaskDispatcher and WorkerStateQuery
+ * - JobRunner: job start + node advance; implements TaskDispatcher and WorkerStateQuery
  *   (internal: JobOutcomes = complete/fail/preempt/cancel, MoveTaskRunner, UnitRemovalHandler, job resume)
  * - WorkerAssignments: home-building assignments, occupants, idle-specialist lookup;
  *   implements WorkerAssignmentQuery
  * - WorkerAutonomy: idle work search, job selection, waiting at home, search pacing
  * - UnitVisualSync: direction / walk / idle animation following movement
- * - SettlerLifecycleCoordinator: reactions to workplace removal, cancellation, dismissal events
+ * - SettlerLifecycleCoordinator: reactions to workplace removal, approach interruption, dismissal events
  * - UnitRuntimeStore: the per-unit runtime records (single factory)
  */
 export { SettlerTaskSystem } from './settler-task-system';
@@ -34,7 +34,6 @@ export {
     type WorkerAssignmentQuery,
 } from './types';
 export type { ChoreoJobState, MovementContext } from './choreo-types';
-export { choreo } from './choreo-types';
 
 // Feature definition (self-registering via FeatureRegistry)
 export { SettlerTaskFeature, type SettlerTaskExports } from './settler-tasks-feature';

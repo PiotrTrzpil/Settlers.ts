@@ -20,20 +20,6 @@ export interface HoldOwnerHandler {
     onPreempted(unitId: number, ref: number): void;
 }
 
-/**
- * TRANSITIONAL (deleted in Cleanup, which then asserts every JobKind): kinds that may still run
- * only as legacy `choreo().build()` jobs and therefore need no handler at startup. A kind that is
- * assigned through JobService always needs its handler — `kind()` throws otherwise.
- */
-const TRANSITIONAL_UNOWNED_KINDS: ReadonlySet<JobKind> = new Set([
-    JobKind.Transport,
-    JobKind.WorkplaceDispatch,
-    JobKind.Construction,
-    JobKind.Garrison,
-    JobKind.Barracks,
-    JobKind.Recruit,
-]);
-
 export class JobOwnerRegistry {
     private readonly kinds = new Map<JobKind, JobKindHandler>();
     private readonly holdOwners = new Map<CommitmentOwner, HoldOwnerHandler>();
@@ -84,11 +70,9 @@ export class JobOwnerRegistry {
         return this.holdOwner(owner).persist;
     }
 
-    /** Startup assertion (Invariant 4): every JobKind not still legacy-only has a handler. */
+    /** Startup assertion (Invariant 4): every JobKind has a handler. */
     assertAllRegistered(): void {
-        const missing = Object.values(JobKind).filter(
-            kind => !this.kinds.has(kind) && !TRANSITIONAL_UNOWNED_KINDS.has(kind)
-        );
+        const missing = Object.values(JobKind).filter(kind => !this.kinds.has(kind));
         if (missing.length > 0) {
             throw new Error(`No JobKind handler registered for kinds: ${missing.join(', ')}`);
         }

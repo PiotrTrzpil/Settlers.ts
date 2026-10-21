@@ -1,7 +1,6 @@
 /**
  * SettlerLifecycleCoordinator — how settler-task state reacts when the world changes
- * under a unit: its workplace is removed, its (legacy) transport is cancelled, its approach
- * to the workplace is interrupted, it is dismissed to carrier, a worker is spawned inside a
+ * under a unit: its workplace is removed, its approach to the workplace is interrupted, it is dismissed to carrier, a worker is spawned inside a
  * building, and the periodic orphan-runtime sweep.
  *
  * Unit removal itself is internal/unit-removal.ts (COMMITMENTS cleanup priority).
@@ -59,10 +58,6 @@ export class SettlerLifecycleCoordinator {
 
     /** Subscribe to all lifecycle events and start the orphan sweep. Call once during feature init. */
     registerEvents(): void {
-        this.subscriptions.subscribe(this.eventBus, 'carrier:transportCancelled', ({ unitId: carrierId }) => {
-            this.handleTransportCancelled(carrierId);
-        });
-
         this.subscriptions.subscribe(
             this.eventBus,
             'settler-location:approachInterrupted',
@@ -102,16 +97,6 @@ export class SettlerLifecycleCoordinator {
     // ─────────────────────────────────────────────────────────────
     // Private event handlers
     // ─────────────────────────────────────────────────────────────
-
-    /** TRANSITIONAL (deleted in Cleanup): a legacy transport job ends when its record is cancelled. */
-    private handleTransportCancelled(carrierId: number): void {
-        const runtime = this.runtimes.get(carrierId);
-        if (!runtime?.job || !runtime.job.synthetic) {
-            return;
-        }
-        const entity = this.gameState.getEntityOrThrow(carrierId, 'carrier whose transport was cancelled');
-        this.outcomes.endJob(entity, runtime, 'failed');
-    }
 
     private handleApproachInterrupted(settlerId: number, buildingId: number): void {
         if (!this.runtimes.has(settlerId)) {

@@ -7,7 +7,7 @@
  *
  * This feature registers:
  * - A PositionWorkHandler for TERRAIN search type
- * - A synthetic choreography job (SEARCH → GO_TO_POS → WORK) for pioneers
+ * - A code-defined choreography job (SEARCH → GO_TO_POS → WORK) for pioneers
  *
  * Public API (via exports): none (self-contained).
  */
@@ -19,13 +19,13 @@ import { SearchType } from '../settler-tasks';
 import { ChoreoTaskType, type ChoreoJob } from '../../systems/choreo';
 import { createPioneerHandler } from './work-handlers';
 
-/** Job ID for the synthetic pioneer choreography. */
+/** Job ID for the code-defined pioneer choreography. */
 const PIONEER_JOB_ID = 'PIONEER_CLAIM_TILE';
 
 /** Duration of the pioneer work animation in frames (converted to seconds by the executor). */
 const WORK_DURATION_FRAMES = 30;
 
-/** Build the synthetic choreography job: SEARCH → GO_TO_POS → WORK. */
+/** Build the code-defined choreography job: SEARCH → GO_TO_POS → WORK. */
 function buildPioneerJob(): ChoreoJob {
     return {
         id: PIONEER_JOB_ID,
@@ -81,8 +81,8 @@ export const PioneerFeature: FeatureDefinition = {
         const { settlerTaskSystem } = ctx.getFeature<SettlerTaskExports>('settler-tasks');
         const { territoryManager } = ctx.getFeature<TerritoryExports>('territory');
 
-        // Register synthetic choreography job so selectJob can resolve it
-        settlerTaskSystem.getChoreographyStore().registerSyntheticJob(buildPioneerJob());
+        // Register the code-defined choreography job so selectJob can resolve it
+        settlerTaskSystem.getChoreographyStore().registerCodeDefinedJob(buildPioneerJob());
 
         // Register position work handler for TERRAIN search type
         settlerTaskSystem.registerWorkHandler(

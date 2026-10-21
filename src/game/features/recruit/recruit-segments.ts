@@ -161,7 +161,7 @@ export class RecruitSegmentsImpl implements RecruitSegments {
     /**
      * Node hooks for TRANSFORM_* task types: irreversible once done; `onAbort` releases the
      * carrier's reservation; `onRestore` re-reserves it (false when the source is gone / taken).
-     * Hooks run for legacy jobs too — the release is keyed by the unit, so it happens exactly once.
+     * The release is keyed by the unit, so it happens exactly once.
      */
     createTransformHooks(): ChoreoNodeHooks {
         return {

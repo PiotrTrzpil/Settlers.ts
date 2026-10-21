@@ -44,12 +44,9 @@ export interface GameStateSnapshot {
         carrying?: CarryingState;
         hidden?: boolean;
         operational?: boolean;
-        jobId?: number;
     }>;
     /** Entity ID counter — ensures new entities don't collide with restored ones */
     nextId: number;
-    /** Job ID counter — ensures job IDs don't collide with entity.jobId values after save/load */
-    nextJobId: number;
     /** RNG state for deterministic replay */
     rngSeed: number;
     /** Modified terrain ground types (base64-encoded Uint8Array) — full copy, used in initial state */
@@ -199,7 +196,6 @@ export function createSnapshot(game: GameCore): GameStateSnapshot {
         carrying: e.carrying,
         hidden: e.hidden || undefined,
         operational: e.operational,
-        jobId: e.jobId,
     }));
 
     return {
@@ -208,7 +204,6 @@ export function createSnapshot(game: GameCore): GameStateSnapshot {
         mapId: currentMapId,
         entities,
         nextId: gameState.nextId,
-        nextJobId: gameState.nextJobId,
         rngSeed: gameState.rng.getState(),
         ...terrainSnapshotFields(game),
         ...game.services.persistenceRegistry.serializeAll(),
@@ -348,9 +343,6 @@ function restoreEntities(game: GameCore, snapshot: GameStateSnapshot): void {
         if (e.carrying) {
             entity.carrying = e.carrying;
         }
-        if (e.jobId !== undefined) {
-            entity.jobId = e.jobId;
-        }
     }
     // Ensure nextId is correct — the loop mutates it per-entity, so reset to the snapshot value.
     state.nextId = snapshot.nextId;
@@ -421,16 +413,6 @@ export function restoreFromSnapshot(game: GameCore, snapshot: GameStateSnapshot)
 
     // 3. Recreate entities (emits entity:created → systems create default state).
     restoreEntities(game, snapshot);
-
-    // Ensure nextJobId counter is above all persisted entity.jobId values.
-    // Prevents ID collisions if the counter was somehow corrupted.
-    let maxJobId = snapshot.nextJobId;
-    for (const e of snapshot.entities) {
-        if (e.jobId !== undefined && e.jobId >= maxJobId) {
-            maxJobId = e.jobId + 1;
-        }
-    }
-    game.state.nextJobId = maxJobId;
 
     // 4. Restore terrain modifications (raw ground, leveling)
     restoreTerrain(game, snapshot);

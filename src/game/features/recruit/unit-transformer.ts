@@ -1,8 +1,7 @@
 /**
  * UnitTransformer — owns the carrier-to-specialist transform state, keyed by carrier.
  *
- * Lifecycle of one transform (every path — owned RecruitSegments jobs and the TRANSITIONAL legacy
- * dispatch — goes through the same three calls):
+ * Lifecycle of one transform (RecruitSegments jobs of every kind go through the same three calls):
  *
  *   reserveTransform(carrier, …)     before the job is assigned: reserves the source (tool pile /
  *                                    building materials, keyed by the carrier) + pending record
@@ -24,7 +23,6 @@ import { EntityType, EXTENDED_OFFSETS } from '../../entity';
 import { UnitType } from '../../core/unit-types';
 import { EMaterialType } from '../../economy/material-type';
 import type { CarrierRegistry } from '../carriers';
-import type { UnitReservationRegistry } from '../../systems/unit-reservation';
 import { createLogger } from '@/utilities/logger';
 import type { InventorySide, MaterialCost, ToolSourceResolver } from './tool-source-resolver';
 import { SPECIALIST_TOOL_MAP } from './specialist-tool-map';
@@ -47,15 +45,11 @@ export interface UnitTransformerConfig {
     eventBus: EventBus;
     carrierRegistry: CarrierRegistry;
     toolSourceResolver: ToolSourceResolver;
-    /** TRANSITIONAL (deleted in Cleanup): reserves legacy-dispatched carriers against player moves. */
-    unitReservation: UnitReservationRegistry;
 }
 
 interface PendingTransform {
     readonly targetUnitType: UnitType;
     readonly source: TransformSource['kind'];
-    /** TRANSITIONAL: the carrier runs a legacy job and holds a legacy unit reservation. */
-    readonly legacyReserved: boolean;
 }
 
 export class UnitTransformer {
@@ -63,7 +57,6 @@ export class UnitTransformer {
     private readonly eventBus: EventBus;
     private readonly carrierRegistry: CarrierRegistry;
     private readonly toolSourceResolver: ToolSourceResolver;
-    private readonly unitReservation: UnitReservationRegistry;
     private readonly subscriptions = new EventSubscriptionManager();
 
     /** Carriers on their way to transform, keyed by carrier id. */
@@ -74,7 +67,6 @@ export class UnitTransformer {
         this.eventBus = config.eventBus;
         this.carrierRegistry = config.carrierRegistry;
         this.toolSourceResolver = config.toolSourceResolver;
-        this.unitReservation = config.unitReservation;
     }
 
     // =========================================================================
@@ -84,24 +76,15 @@ export class UnitTransformer {
     /**
      * Reserve `source` for `carrierId`'s transform into `targetUnitType` and record it as pending.
      * False (nothing reserved) when the source is gone or already taken.
-     * `legacyReserved` (TRANSITIONAL): also hold a legacy unit reservation for a legacy job.
      */
-    reserveTransform(
-        carrierId: number,
-        targetUnitType: UnitType,
-        source: TransformSource,
-        legacyReserved = false
-    ): boolean {
+    reserveTransform(carrierId: number, targetUnitType: UnitType, source: TransformSource): boolean {
         if (this.pending.has(carrierId)) {
             throw new Error(`Carrier ${carrierId} already has a pending transform`);
         }
         if (!this.reserveSource(carrierId, targetUnitType, source)) {
             return false;
         }
-        this.pending.set(carrierId, { targetUnitType, source: source.kind, legacyReserved });
-        if (legacyReserved) {
-            this.unitReservation.reserve(carrierId, { purpose: 'unit-transform' });
-        }
+        this.pending.set(carrierId, { targetUnitType, source: source.kind });
         log.debug(`Pending transform: carrier ${carrierId} → ${targetUnitType} (${source.kind})`);
         return true;
     }
@@ -140,16 +123,13 @@ export class UnitTransformer {
         }
     }
 
-    /** Remove and return the carrier's pending record (and its legacy unit reservation). */
+    /** Remove and return the carrier's pending record. */
     private takePending(carrierId: number): PendingTransform {
         const p = this.pending.get(carrierId);
         if (!p) {
             throw new Error(`Carrier ${carrierId} has no pending transform`);
         }
         this.pending.delete(carrierId);
-        if (p.legacyReserved) {
-            this.unitReservation.release(carrierId);
-        }
         return p;
     }
 

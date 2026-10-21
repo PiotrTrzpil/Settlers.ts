@@ -103,16 +103,10 @@ export enum SettlerState {
 }
 
 /**
- * Narrow interface for assigning work to units (logistics, building demand, siege, garrison, …).
- * Implemented by JobRunner. Owned jobs go through `JobService.assign` instead.
+ * Narrow interface for move tasks (player moves, siege moves). Implemented by JobRunner.
+ * Jobs go through `JobService.assign`.
  */
 export interface TaskDispatcher {
-    /**
-     * TRANSITIONAL (deleted in Cleanup): assign a legacy `choreo().build()` job to a unit.
-     * @param numericJobId When set (e.g. transport record id), used as entity.jobId so the unit
-     *   and domain job share one numeric identity. When omitted, a new id is allocated.
-     */
-    assignJob(entityId: number, job: ChoreoJobState, moveTo?: Tile, numericJobId?: number): boolean;
     /**
      * Move task: drops the current job and home assignment, then walks to `target`.
      * `owner` 'player-move' (default) or 'siege' (the unit must be held by the siege already).

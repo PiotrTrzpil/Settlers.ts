@@ -249,22 +249,10 @@ function moveAdjacentToTarget(
 function makeGoToTarget(arrivalDist: number): MovementExecutorFn {
     return (settler, job, node, _dt, ctx) => {
         if (node.goal) {
-            // Owned synthetic jobs: the node carries its own walk goal.
+            // Builder-made jobs: the node carries its own walk goal.
             job.targetPos = { x: node.goal.x, y: node.goal.y };
             // eslint-disable-next-line no-restricted-syntax -- goal.entityId is optional by design (tile goals)
             job.targetId = node.goal.entityId ?? null;
-        } else if (job.waypoints) {
-            // TRANSITIONAL (deleted in Cleanup): legacy multi-destination jobs consume the next waypoint.
-            let wpIndex = 0;
-            for (let i = 0; i < job.nodeIndex; i++) {
-                if (job.nodes[i]!.task === ChoreoTaskType.GO_TO_TARGET) {
-                    wpIndex++;
-                }
-            }
-            const wp = job.waypoints[wpIndex]!;
-            job.targetPos = { x: wp.x, y: wp.y };
-            // eslint-disable-next-line no-restricted-syntax -- value is nullable by API contract; null coercion
-            job.targetId = wp.entityId ?? null;
         }
 
         if (job.targetId !== null) {

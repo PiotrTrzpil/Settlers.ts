@@ -99,9 +99,6 @@ export class GameState {
 
     public nextId = 1;
 
-    /** Global monotonic counter for job IDs — persisted so IDs never collide after save/load. */
-    public nextJobId = 1;
-
     /** Ground-layer occupancy: buildings (footprints), map objects, stacked piles */
     public groundOccupancy: Map<string, number> = new Map();
 
@@ -136,14 +133,6 @@ export class GameState {
             terrain: { groundType: terrain.groundType, mapWidth: terrain.width, mapHeight: terrain.height },
         });
         this.unitStates = new UnitStateMap(this.movement);
-    }
-
-    /**
-     * Allocate a unique numeric job ID. Monotonically increasing — IDs are never reused.
-     * Called by settler-task-system when assigning a job to a unit.
-     */
-    public allocateJobId(): number {
-        return this.nextJobId++;
     }
 
     /**

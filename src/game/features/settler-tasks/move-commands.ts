@@ -19,8 +19,8 @@ export interface MoveCommandDeps {
     state: GameState;
     taskDispatcher: TaskDispatcher;
     combatSystem: CombatSystem;
-    /** Reserved units reject move commands (`ctx.unitCommitments` — ORs the legacy registry until Cleanup). */
-    unitReservation: UnitReservationQuery;
+    /** Reserved units reject move commands (`ctx.unitCommitments`). */
+    unitCommitments: UnitReservationQuery;
     /** Whether units in combat can be redirected by player commands (live game setting). */
     isCombatControllable: () => boolean;
     /** Territory owner lookup — workers cannot move outside their territory. */
@@ -68,7 +68,7 @@ export function executeMoveUnit(deps: MoveCommandDeps, cmd: MoveUnitCommand): Co
         return commandFailed(`Entity ${cmd.entityId} not found`);
     }
 
-    if (deps.unitReservation.isReserved(cmd.entityId)) {
+    if (deps.unitCommitments.isReserved(cmd.entityId)) {
         return commandFailed(`Unit ${cmd.entityId} is reserved and cannot be moved`);
     }
 
@@ -145,7 +145,7 @@ function tryMoveSelectedUnit(
     combatControllable: boolean,
     passiveMarch: boolean
 ): boolean {
-    if (deps.unitReservation.isReserved(unit.id)) {
+    if (deps.unitCommitments.isReserved(unit.id)) {
         return false;
     }
     if (!combatControllable && deps.combatSystem.isInCombat(unit.id)) {

@@ -117,7 +117,7 @@ export class TransportJobKind implements JobKindHandler<TransportJobParams>, Tra
         if (sourcePos) {
             sourceWalk.goal = sourcePos;
         }
-        const build = choreo(TRANSPORT_JOB_ID, JobKind.Transport)
+        const build = choreo(TRANSPORT_JOB_ID)
             .addNode(ChoreoTaskType.TRANSPORT_GO_TO_SOURCE, sourceWalk)
             .addNode(ChoreoTaskType.TRANSPORT_PICKUP, { jobPart: 'C_DOWN_NONE', args })
             .addNode(ChoreoTaskType.TRANSPORT_GO_TO_DEST, { jobPart: 'C_WALK', args, goal: destPos })

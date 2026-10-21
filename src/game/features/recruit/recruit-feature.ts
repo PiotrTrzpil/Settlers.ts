@@ -41,7 +41,7 @@ export const RecruitFeature: FeatureDefinition = {
 
     create(ctx: FeatureContext) {
         const { carrierRegistry, idleCarrierPool } = ctx.getFeature<CarrierFeatureExports>('carriers');
-        const { jobRunner, jobs } = ctx.getFeature<SettlerTaskExports>('settler-tasks');
+        const { jobs } = ctx.getFeature<SettlerTaskExports>('settler-tasks');
         const { inventoryManager } = ctx.getFeature<InventoryExports>('inventory');
         const { territoryManager } = ctx.getFeature<TerritoryExports>('territory');
 
@@ -52,7 +52,6 @@ export const RecruitFeature: FeatureDefinition = {
             eventBus: ctx.eventBus,
             carrierRegistry,
             toolSourceResolver,
-            unitReservation: ctx.unitReservation,
         });
         const recruitSegments = new RecruitSegmentsImpl(ctx.gameState, unitTransformer);
         jobs.registerKind(createRecruitJobKind(recruitSegments));
@@ -60,11 +59,9 @@ export const RecruitFeature: FeatureDefinition = {
         const recruitSystem = new RecruitSystem({
             gameState: ctx.gameState,
             idleCarrierPool,
-            unitTransformer,
             toolSourceResolver,
             segments: recruitSegments,
             jobs,
-            assignJob: (unitId, job, moveTo) => jobRunner.assignJob(unitId, job, moveTo),
             territoryCheck: (a, b, player) => territoryManager.areConnected(a, b, player),
         });
 

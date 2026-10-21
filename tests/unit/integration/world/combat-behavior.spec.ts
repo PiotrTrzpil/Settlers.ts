@@ -229,7 +229,7 @@ describe('Combat – attacker freedom during siege', { timeout: 60_000 }, () => 
         });
 
         // Attacker is NOT reserved — player can move it
-        expect(sim.services.unitReservation.isReserved(atkId)).toBe(false);
+        expect(sim.services.unitCommitments.isReserved(atkId)).toBe(false);
         const moveResult = moveUnit(sim, atkId, { x: tower.x + 30, y: tower.y });
         expect(moveResult.success).toBe(true);
 

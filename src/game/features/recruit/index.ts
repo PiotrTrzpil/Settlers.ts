@@ -10,7 +10,6 @@ export {
     type RecruitSystemConfig,
     type DispatchRecruitmentOpts,
     type RecruitSpecBuilder,
-    type RecruitmentCandidate,
     type TileWithPile,
 } from './recruit-system';
 export {
@@ -29,5 +28,4 @@ export {
     type InventorySide,
     type BuildingReservation,
 } from './tool-source-resolver';
-export { createRecruitmentJob } from './recruitment-job';
 export { SPECIALIST_TOOL_MAP } from './specialist-tool-map';

@@ -4,9 +4,8 @@
  * that can be registered on a ChoreoSystem instance.
  */
 
-import type { ChoreoExecutor, ChoreoJobState, ChoreoNode } from '../../systems/choreo';
+import type { ChoreoExecutor } from '../../systems/choreo';
 import { TaskResult } from '../../systems/choreo';
-import type { Entity } from '../../entity';
 import { UnitType } from '../../core/unit-types';
 import type { EventBus } from '../../event-bus';
 import type { GameState } from '../../game-state';
@@ -16,27 +15,6 @@ import { transformArgsOf } from './recruit-segments';
 import { createLogger } from '@/utilities/logger';
 
 const log = createLogger('RecruitmentJob');
-
-/** Target unit type of a TRANSFORM_* node: `node.args.transform` (owned jobs) or legacy metadata. */
-function targetUnitTypeOf(node: ChoreoNode, job: ChoreoJobState): UnitType {
-    if (node.args) {
-        return transformArgsOf(node).unitType;
-    }
-    // TRANSITIONAL (deleted in Cleanup): legacy jobs stash the unit type in metadata.
-    return job.metadata!['unitType'] as UnitType;
-}
-
-/** Tool pile of a TRANSFORM_RECRUIT node: `node.args.transform.sourceId` or the legacy job target. */
-function toolPileOf(settler: Entity, node: ChoreoNode, job: ChoreoJobState): number {
-    if (node.args) {
-        return transformArgsOf(node).sourceId!;
-    }
-    // TRANSITIONAL (deleted in Cleanup): legacy jobs target the pile.
-    if (job.targetId === null) {
-        throw new Error(`TRANSFORM_RECRUIT: settler ${settler.id} has no targetId on job`);
-    }
-    return job.targetId;
-}
 
 /**
  * Create a TRANSFORM_RECRUIT executor.
@@ -50,8 +28,9 @@ export function createTransformRecruitExecutor(
     eventBus: EventBus,
     inventoryManager: BuildingInventoryManager
 ): ChoreoExecutor {
-    return (settler, job, node) => {
-        const pileEntityId = toolPileOf(settler, node, job);
+    return (settler, _job, node) => {
+        const { sourceId, unitType: targetUnitType } = transformArgsOf(node);
+        const pileEntityId = sourceId!;
 
         const slot = inventoryManager.getSlotByEntityId(pileEntityId);
         if (!slot || slot.currentAmount < 1) {
@@ -68,7 +47,6 @@ export function createTransformRecruitExecutor(
 
         inventoryManager.withdraw(slot.id, 1);
 
-        const targetUnitType = targetUnitTypeOf(node, job);
         eventBus.emit('recruitment:completed', {
             unitId: settler.id,
             unitType: settler.subType as UnitType,
@@ -94,11 +72,11 @@ export function createTransformRecruitBuildingExecutor(
     eventBus: EventBus,
     toolSourceResolver: ToolSourceResolver
 ): ChoreoExecutor {
-    return (settler, job, node) => {
-        // Reservations are keyed by the carrier (legacy metadata.reservationId is the carrier id too).
+    return (settler, _job, node) => {
+        // Reservations are keyed by the carrier.
         const reservation = toolSourceResolver.withdrawBuildingReservation(settler.id);
 
-        const targetUnitType = targetUnitTypeOf(node, job);
+        const targetUnitType = transformArgsOf(node).unitType;
         eventBus.emit('recruitment:completed', {
             unitId: settler.id,
             unitType: settler.subType as UnitType,
@@ -120,8 +98,8 @@ export function createTransformRecruitBuildingExecutor(
  * Instant (single-tick) executor.
  */
 export function createTransformDirectExecutor(eventBus: EventBus): ChoreoExecutor {
-    return (settler, job, node) => {
-        const targetUnitType = targetUnitTypeOf(node, job);
+    return (settler, _job, node) => {
+        const targetUnitType = transformArgsOf(node).unitType;
         eventBus.emit('recruitment:completed', {
             unitId: settler.id,
             unitType: settler.subType as UnitType,

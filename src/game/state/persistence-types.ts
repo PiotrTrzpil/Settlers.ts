@@ -52,7 +52,7 @@ export interface SerializedUnitRuntime {
     id: number;
     /** Building assignment */
     home?: { buildingId: number; hasVisited: boolean };
-    /** Who owned the unit at save time. Absent ⇔ idle (or owned by a `persist: false` owner / a legacy job). */
+    /** Who owned the unit at save time. Absent ⇔ idle (or owned by a `persist: false` owner). */
     commitment?: SerializedCommitment;
 }
 

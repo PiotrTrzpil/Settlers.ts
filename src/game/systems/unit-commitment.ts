@@ -9,13 +9,9 @@
  * Read side ({@link UnitCommitmentQuery}) is in every FeatureContext as `ctx.unitCommitments`.
  * Write side ({@link UnitCommitmentWriter}) is claimed exactly once, by settler-tasks' JobService
  * (Invariant 3) — owners change commitments only through `assign` / `cancel` / `hold` / `releaseHold`.
- *
- * TRANSITIONAL (Cleanup removes): `isReserved` / `isIdle` also OR the legacy
- * UnitReservationRegistry, so units reserved by not-yet-migrated owners stay protected.
  */
 
 import type { JobKind } from './choreo/job-kind';
-import type { UnitReservationRegistry } from './unit-reservation';
 
 /** Who owns a committed unit: a job kind, a player move, or the siege system. */
 export type CommitmentOwner = JobKind | 'player-move' | 'siege';
@@ -58,20 +54,17 @@ export class UnitCommitments implements UnitCommitmentQuery {
     private readonly byOwner = new Map<CommitmentOwner, Set<number>>();
     private writerClaimed = false;
 
-    /** @param legacyReservations TRANSITIONAL: OR-ed into isReserved / isIdle until Cleanup. */
-    constructor(private readonly legacyReservations: UnitReservationRegistry) {}
-
     get(unitId: number): UnitCommitment | undefined {
         return this.byUnit.get(unitId);
     }
 
     isIdle(unitId: number): boolean {
-        return !this.byUnit.has(unitId) && !this.legacyReservations.isReserved(unitId);
+        return !this.byUnit.has(unitId);
     }
 
     isReserved(unitId: number): boolean {
         const commitment = this.byUnit.get(unitId);
-        return (commitment !== undefined && commitment.reserved) || this.legacyReservations.isReserved(unitId);
+        return commitment !== undefined && commitment.reserved;
     }
 
     unitsOwnedBy(owner: CommitmentOwner, ref?: number): readonly number[] {

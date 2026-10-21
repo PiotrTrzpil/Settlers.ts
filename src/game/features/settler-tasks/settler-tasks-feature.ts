@@ -40,7 +40,7 @@ export interface SettlerTaskExports {
     settlerTaskSystem: SettlerTaskSystem;
     /** Job ownership: register a JobKind handler / hold owner, assign / cancel / hold units, commitments. */
     jobs: JobService;
-    /** Move-task assignment and TRANSITIONAL legacy assignJob (TaskDispatcher); job-state queries. */
+    /** Move-task assignment (TaskDispatcher); job-state queries. */
     jobRunner: JobRunner;
     /** Home-building assignments, occupant counts, idle-specialist lookup. */
     workerAssignments: WorkerAssignments;
@@ -117,7 +117,7 @@ export const SettlerTaskFeature: FeatureDefinition = {
             state: ctx.gameState,
             taskDispatcher: jobRunner,
             combatSystem,
-            unitReservation: ctx.unitCommitments,
+            unitCommitments: ctx.unitCommitments,
             isCombatControllable: () => ctx.gameplaySettings.combatControllable,
             getOwner: tile => territoryManager.getOwner(tile),
         };

@@ -226,7 +226,7 @@ export interface GameEventsFeatures {
         jobId: string;
         /** Owner kind of the job (see JobKind). */
         kind: JobKind;
-        /** Owner's key (record / demand / tower id); -1 for legacy jobs. */
+        /** Owner's key (record / demand / tower id; Work: home building id or -1). */
         ref: number;
     };
 
@@ -239,7 +239,7 @@ export interface GameEventsFeatures {
         jobId: string;
         /** Owner kind of the job (see JobKind). */
         kind: JobKind;
-        /** Owner's key (record / demand / tower id); -1 for legacy jobs. */
+        /** Owner's key (record / demand / tower id; Work: home building id or -1). */
         ref: number;
         /** Why the job failed. */
         reason: JobFailureReason;
@@ -335,7 +335,7 @@ export interface GameEventsFeatures {
     /**
      * Emitted when a building is destroyed while a settler is approaching it with
      * intent to enter. Features identify whether the settler is theirs via their own
-     * data structures (garrison via UnitReservationRegistry, settler-tasks via runtimes map).
+     * data structures (settler-tasks via runtimes map).
      */
     'settler-location:approachInterrupted': GameEventBase & {
         unitId: number;

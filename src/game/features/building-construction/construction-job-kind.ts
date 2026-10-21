@@ -62,7 +62,7 @@ function constructionJobId(params: ConstructionJobParams): string {
 
 /** The work part of the job: goTo(workPos) + DIG_TILE / BUILD_STEP with node args. */
 function buildWork(params: ConstructionJobParams): JobBuild {
-    const builder = choreo(constructionJobId(params), JobKind.Construction).goTo(params.workPos);
+    const builder = choreo(constructionJobId(params)).goTo(params.workPos);
     if (params.role === 'digger') {
         const args = { task: 'digTile', siteId: params.siteId, tileIndex: params.tileIndex! } as const;
         return builder.addNode(ChoreoTaskType.DIG_TILE, { args }).toJobBuild();

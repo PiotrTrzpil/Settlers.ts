@@ -3,13 +3,12 @@
  *
  * The only place a choreography job is started and advanced node by node; how a job ends
  * (complete / fail / preempt / cancel) is JobOutcomes. Sets the unit's commitment when a job
- * or move starts, and owns `entity.jobId` for live units (TRANSITIONAL, deleted in Cleanup).
- * Move tasks (player / siege moves) run in MoveTaskRunner.
+ * or move starts. Move tasks (player / siege moves) run in MoveTaskRunner.
  *
- * Implements TaskDispatcher (external job and move assignment) and WorkerStateQuery.
+ * Implements TaskDispatcher (move assignment) and WorkerStateQuery.
  * Node execution goes to the kernel ChoreoSystem with an explicit ChoreoExecutionScope
  * (the unit's home building + its work handlers). Never decides *what* to work on —
- * that is WorkerAutonomy (idle search), JobService (owned jobs) or a legacy dispatcher.
+ * that is WorkerAutonomy (idle search) or JobService (owned jobs).
  */
 
 import { UnitType, type Entity, type Tile, type TileWithEntity } from '../../entity';
@@ -119,35 +118,15 @@ export class JobRunner implements TaskDispatcher, WorkerStateQuery {
     }
 
     // ─────────────────────────────────────────────────────────────
-    // External assignment (TaskDispatcher)
+    // Assignment (JobService) and move tasks (TaskDispatcher)
     // ─────────────────────────────────────────────────────────────
-
-    /**
-     * TRANSITIONAL (deleted in Cleanup): assign a legacy job built with `choreo().build()`, ending any
-     * current job first. Legacy jobs have no owner handler — they are routed by the `settler:task*`
-     * broadcast and `onCancel`, and are not persisted. Owned jobs go through `JobService.assign`.
-     * @param numericJobId When set (e.g. transport record id), reused as entity.jobId so the unit
-     *   and domain job share one numeric identity. When omitted, allocates a new id.
-     */
-    assignJob(entityId: number, job: JobState, moveTo?: Tile, numericJobId?: number): boolean {
-        if (!job.synthetic) {
-            throw new Error(`assignJob: job '${job.jobId}' (${job.kind}) is owned — use JobService.assign`);
-        }
-        return this.startAssignedJob(entityId, job, false, moveTo, numericJobId);
-    }
 
     /**
      * Start a job on a unit, preempting whatever owns it now (its owner gets onFailed 'preempted' /
      * onPreempted), and commit the unit to the job's owner. Returns false when `moveTo` is unreachable
      * (the previous job has ended by then).
      */
-    startAssignedJob(
-        entityId: number,
-        job: JobState,
-        reserved: boolean,
-        moveTo?: Tile,
-        numericJobId?: number
-    ): boolean {
+    startAssignedJob(entityId: number, job: JobState, reserved: boolean, moveTo?: Tile): boolean {
         const entity = this.gameState.getEntityOrThrow(entityId, 'unit for job assignment');
         const runtime = this.runtimes.getOrCreate(entityId);
 
@@ -165,10 +144,7 @@ export class JobRunner implements TaskDispatcher, WorkerStateQuery {
         runtime.moveTask = null;
         this.writer.set(entityId, { owner: job.kind, ref: job.ref, reserved, hasJob: true });
 
-        const jobNumericId = numericJobId ?? this.gameState.allocateJobId();
-        entity.jobId = jobNumericId;
-
-        log.debug(`Unit ${entityId} assigned job ${job.jobId} (${job.kind}, numeric id ${jobNumericId})`);
+        log.debug(`Unit ${entityId} assigned job ${job.jobId} (${job.kind}, ref ${job.ref})`);
         return true;
     }
 
@@ -338,7 +314,7 @@ export class JobRunner implements TaskDispatcher, WorkerStateQuery {
     }
 
     private applyChoreoAnimation(settler: Entity, node: ChoreoNode): void {
-        // Empty jobPart is normal for synthetic builder GO_TO nodes — walk animation is
+        // Empty jobPart is normal for builder-made GO_TO nodes — walk animation is
         // owned by UnitVisualSync when the movement controller is moving, not by jobs.
         if (!node.jobPart) {
             return;

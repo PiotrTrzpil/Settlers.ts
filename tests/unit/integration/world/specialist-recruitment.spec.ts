@@ -16,6 +16,7 @@ import { installRealGameData } from '../../helpers/test-game-data';
 import { EntityType, UnitType } from '@/game/entity';
 import { EMaterialType } from '@/game/economy/material-type';
 import { Race } from '@/game/core/race';
+import type { SettlerTaskExports } from '@/game/features/settler-tasks';
 
 installRealGameData();
 
@@ -23,6 +24,15 @@ installRealGameData();
 
 function recruitSpecialist(sim: Simulation, unitType: UnitType, count: number, player = 0) {
     return sim.execute({ type: 'recruit_specialist', unitType, count, player, race: Race.Roman });
+}
+
+/** Commit a carrier to another owner (a player hold) so it is not idle for recruitment. */
+function holdCarrier(sim: Simulation, carrierId: number): void {
+    sim.services.getFeature<SettlerTaskExports>('settler-tasks').jobs.hold(carrierId, 'player-move', -1, true);
+}
+
+function releaseCarrier(sim: Simulation, carrierId: number): void {
+    sim.services.getFeature<SettlerTaskExports>('settler-tasks').jobs.releaseHold(carrierId, 'player-move');
 }
 
 function countPilesOf(sim: Simulation, material: EMaterialType): number {
@@ -220,7 +230,7 @@ describe('Specialist recruitment – reserved carriers & batch', { timeout: 30_0
         sim = createSimulation();
 
         const carrierId = sim.spawnUnit({ x: 64, y: 64 }, UnitType.Carrier);
-        sim.services.unitReservation.reserve(carrierId, { purpose: 'test' });
+        holdCarrier(sim, carrierId);
 
         recruitSpecialist(sim, UnitType.Thief, 1);
         expect(sim.services.recruitSystem.getQueuedCount(UnitType.Thief)).toBe(1);
@@ -231,7 +241,7 @@ describe('Specialist recruitment – reserved carriers & batch', { timeout: 30_0
         expect(sim.countEntities(EntityType.Unit, UnitType.Carrier)).toBe(1);
         expect(sim.services.recruitSystem.getQueuedCount(UnitType.Thief)).toBe(1);
 
-        sim.services.unitReservation.release(carrierId);
+        releaseCarrier(sim, carrierId);
 
         sim.runUntil(() => sim.countEntities(EntityType.Unit, UnitType.Thief) === 1, {
             maxTicks: 3_000,
@@ -249,7 +259,7 @@ describe('Specialist recruitment – reserved carriers & batch', { timeout: 30_0
         const reservedId = sim.spawnUnit({ x: 62, y: 64 }, UnitType.Carrier);
         sim.spawnUnit({ x: 63, y: 64 }, UnitType.Carrier);
         sim.spawnUnit({ x: 64, y: 64 }, UnitType.Carrier);
-        sim.services.unitReservation.reserve(reservedId, { purpose: 'test' });
+        holdCarrier(sim, reservedId);
 
         recruitSpecialist(sim, UnitType.Thief, 3);
 
@@ -271,8 +281,8 @@ describe('Specialist recruitment – reserved carriers & batch', { timeout: 30_0
 
         const id1 = sim.spawnUnit({ x: 63, y: 64 }, UnitType.Carrier);
         const id2 = sim.spawnUnit({ x: 64, y: 64 }, UnitType.Carrier);
-        sim.services.unitReservation.reserve(id1, { purpose: 'test' });
-        sim.services.unitReservation.reserve(id2, { purpose: 'test' });
+        holdCarrier(sim, id1);
+        holdCarrier(sim, id2);
 
         recruitSpecialist(sim, UnitType.Thief, 2);
 

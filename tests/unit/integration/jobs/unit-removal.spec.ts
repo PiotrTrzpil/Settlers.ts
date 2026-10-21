@@ -2,12 +2,9 @@
  * Unit removal reaches the job's owner.
  *
  * `GameState.removeEntity` deletes the entity before emitting `entity:removed`, so before the
- * COMMITMENTS-priority removal handler the job of a killed unit was never interrupted: no
- * `onCancel`, no `settler:taskFailed` — the owners' domain state stayed bound to a dead unit
- * (transport record still claimed, construction / workplace demand still committed).
- *
- * These specs cover the TRANSITIONAL legacy path (owners not migrated yet still learn of the
- * removal through their failure path); owned kinds get `onUnitRemoved` (see each migration's spec).
+ * COMMITMENTS-priority removal handler the job of a killed unit was never interrupted — the owners'
+ * domain state stayed bound to a dead unit (transport record still claimed, construction / workplace
+ * demand still committed). Now the owner's `onUnitRemoved` runs once (see each kind's spec for details).
  */
 
 import { describe, it, expect, afterEach } from 'vitest';
@@ -58,7 +55,7 @@ describe('Unit removal reaches the job owner', { timeout: 60_000 }, () => {
         sim.killUnit(carrier);
 
         expect(sim.services.jobStore.getActiveJobForCarrier(carrier)).toBeUndefined();
-        // Transport is an owned kind: its handler's onUnitRemoved runs, no legacy taskFailed.
+        // The Transport handler's onUnitRemoved runs; removal is not reported as a failure.
         expect(failures.get(carrier)).toBeUndefined();
         expect(aborted).toBe(1);
 

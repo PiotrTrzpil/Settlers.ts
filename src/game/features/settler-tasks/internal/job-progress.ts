@@ -34,7 +34,7 @@ export function createTargetedJobState(
     positionTarget: Tile | null,
     ref: number
 ): JobState {
-    const jobState = createChoreoJobState(selected.id, selected.nodes, false, workJobOwner(selected.id, ref));
+    const jobState = createChoreoJobState(selected.id, selected.nodes, workJobOwner(selected.id, ref));
     if (entityTarget) {
         jobState.targetId = entityTarget.entityId;
         jobState.targetPos = { x: entityTarget.x, y: entityTarget.y };

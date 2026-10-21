@@ -34,7 +34,6 @@ import type { GameState } from '../game-state';
 import type { EventBus, EventHandler, GameEvents } from '../event-bus';
 import type { EntityVisualService } from '../animation/entity-visual-service';
 import type { EntityCleanupRegistry } from '../systems/entity-cleanup-registry';
-import type { UnitReservationRegistry } from '../systems/unit-reservation';
 import type { UnitCommitmentQuery, UnitCommitmentWriter } from '../systems/unit-commitment';
 import type { Command, CommandResult, CommandType, ExecuteCommand } from '../commands';
 import type { Persistable } from '../persistence';
@@ -69,13 +68,6 @@ export interface FeatureContext extends CoreDeps {
      * ctx.cleanupRegistry.onEntityRemoved(entityId => myMap.delete(entityId));
      */
     cleanupRegistry: EntityCleanupRegistry;
-
-    /**
-     * TRANSITIONAL (deleted in Cleanup): legacy registry for units committed to a feature-managed task.
-     * Migrated owners use `JobSpec.reserved` / `JobService.hold(…, reserved)` instead; reads go
-     * through `unitCommitments.isReserved`, which ORs this registry until Cleanup.
-     */
-    unitReservation: UnitReservationRegistry;
 
     /**
      * Who owns each unit (read side). `get(id) === undefined` ⇔ idle — the one idle definition.

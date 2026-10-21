@@ -10,7 +10,7 @@
 import { EMaterialType } from '../../economy';
 import type { Tile, TileWithEntityOpt } from '@/game/core/coordinates';
 import type { UnitType } from '@/game/core/unit-types';
-import { JobKind, type JobParams } from './job-kind';
+import type { JobKind, JobParams } from './job-kind';
 
 export { JobKind } from './job-kind';
 
@@ -128,7 +128,7 @@ export function parseChoreoTaskType(taskString: string): ChoreoTaskType {
 // ─────────────────────────────────────────────────────────────
 
 /**
- * Typed per-node data for synthetic (builder-made) nodes — replaces job.metadata / transportData.
+ * Typed per-node data for builder-made nodes.
  * Ids only. ENTER_BUILDING / TRANSFORM_* are shared by several kinds, so their data belongs to
  * the node, not to any kind's params.
  */
@@ -153,12 +153,12 @@ export interface ChoreoNode {
     entity: string;
     trigger: string;
     /**
-     * Walk goal for synthetic GO_TO_TARGET / TRANSPORT_GO_TO_* nodes — replaces job.waypoints index
-     * counting. Nullable by design: XML nodes never carry one. When set, the GO_TO_TARGET executor
+     * Walk goal for builder-made GO_TO_TARGET / TRANSPORT_GO_TO_* nodes. Nullable by design: XML
+     * nodes never carry one. When set, the GO_TO_TARGET executor
      * sets `job.targetPos = goal` and `job.targetId = goal.entityId ?? null` before walking.
      */
     goal?: TileWithEntityOpt;
-    /** Typed node data (see {@link ChoreoNodeArgs}). Nullable by design: only synthetic nodes carry it. */
+    /** Typed node data (see {@link ChoreoNodeArgs}). Nullable by design: only builder-made nodes carry it. */
     args?: ChoreoNodeArgs;
 }
 
@@ -166,32 +166,6 @@ export interface ChoreoNode {
 export interface ChoreoJob {
     id: string;
     nodes: ChoreoNode[];
-}
-
-// ─────────────────────────────────────────────────────────────
-// TransportData — carrier transport metadata (pure data, no closures)
-// ─────────────────────────────────────────────────────────────
-
-/**
- * Transport metadata on ChoreoJobState for carrier jobs.
- * Lifecycle (pickUp/deliver/cancel) goes through TransportJobStore + TransportJobService
- * via executor context — no per-job ops closures.
- */
-export interface TransportData {
-    /** Transport job record ID — matches entity.jobId and TransportJobStore key. */
-    jobId: number;
-    /** Source building entity ID (pickup location). */
-    sourceBuildingId: number;
-    /** Destination building entity ID (delivery location). */
-    destBuildingId: number;
-    /** Material being transported. */
-    material: EMaterialType;
-    /** Amount to transport (may be reduced after pickup if source had less). */
-    amount: number;
-    /** Pre-resolved source position (output pile / door for pickup). */
-    sourcePos: Tile;
-    /** Pre-resolved destination position (input pile / door for delivery). */
-    destPos: Tile;
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -205,10 +179,10 @@ export interface ChoreoJobState {
     jobId: string;
     /** Owner kind — the JobKindHandler that is called on completion / failure / unit removal. */
     readonly kind: JobKind;
-    /** Owner's key (record / demand / tower id). -1 for legacy jobs. */
+    /** Owner's key (record / demand / tower id; Work: home building id or -1). */
     readonly ref: number;
     /**
-     * Plain params the owner rebuilds the job from (persisted). `{}` for legacy jobs.
+     * Plain params the owner rebuilds the job from (persisted).
      * Mutable only for CHANGE_JOB, which re-targets a Work job to another XML id.
      */
     params: JobParams;
@@ -232,24 +206,10 @@ export interface ChoreoJobState {
     carryingGood: EMaterialType | null;
     /** Whether work was started for current node (for cleanup tracking) */
     workStarted: boolean;
-    /** Transport data for carrier jobs (GET_GOOD / PUT_GOOD transport branches). */
-    transportData?: TransportData;
     /** Ticks to wait before retrying a failed pathfinding attempt (0 = try now). */
     pathRetryCountdown: number;
     /** Number of consecutive pathfinding failures (for exponential backoff). */
     pathRetryCount: number;
-    /** Per-node waypoints for multi-destination jobs. Each GO_TO_TARGET consumes the next entry. */
-    waypoints?: Array<TileWithEntityOpt>;
-    /** Typed metadata bag — replaces carryingGood hacks for stashing domain data. */
-    metadata?: Record<string, number | string>;
-    /** Called when the job is interrupted/cancelled. Feature-provided cleanup hook. */
-    onCancel?: () => void;
-    /**
-     * TRANSITIONAL (deleted in Cleanup): true for legacy jobs built with `choreo().build()` and assigned
-     * via `TaskDispatcher.assignJob` — no owner handler; routed by the `settler:task*` broadcast and
-     * `onCancel`; not persisted. False for owned jobs (JobSpec / Work).
-     */
-    readonly synthetic: boolean;
 }
 
 /** Owner identity of a new job state (see {@link createChoreoJobState}). */
@@ -259,22 +219,9 @@ export interface ChoreoJobOwner {
     readonly params: JobParams;
 }
 
-/** Owner identity of legacy builder jobs — no ref, no params. */
-const LEGACY_OWNER_PARAMS: JobParams = {};
-
-/**
- * Create a fresh ChoreoJobState for starting a job.
- * @param synthetic true ⇔ legacy builder job (see {@link ChoreoJobState.synthetic}).
- * @param owner kind/ref/params; legacy jobs pass only a kind (ref -1, params {}).
- */
-export function createChoreoJobState(
-    jobId: string,
-    nodes: ChoreoNode[],
-    synthetic: boolean,
-    owner: ChoreoJobOwner | JobKind = JobKind.Work
-): ChoreoJobState {
-    const { kind, ref, params } =
-        typeof owner === 'string' ? { kind: owner, ref: -1, params: LEGACY_OWNER_PARAMS } : owner;
+/** Create a fresh ChoreoJobState for starting a job of `owner`. */
+export function createChoreoJobState(jobId: string, nodes: ChoreoNode[], owner: ChoreoJobOwner): ChoreoJobState {
+    const { kind, ref, params } = owner;
     return {
         type: 'choreo',
         jobId,
@@ -282,7 +229,6 @@ export function createChoreoJobState(
         ref,
         params,
         nodes,
-        synthetic,
         nodeIndex: 0,
         progress: -1,
         visible: true,

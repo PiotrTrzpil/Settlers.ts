@@ -1,6 +1,6 @@
 /**
  * Unit removal — the COMMITMENTS-priority cleanup handler (runs before every other cleanup
- * handler except the TRANSITIONAL legacy reservation release).
+ * handler).
  *
  * `GameState.removeEntity` deletes the entity before emitting `entity:removed`, so this handler
  * works from the payload's entity snapshot and the unit runtime — never `getEntity`. In one pass:
@@ -9,10 +9,6 @@
  * 2. the owner learns it once: `JobKindHandler.onUnitRemoved` / `HoldOwnerHandler.onUnitRemoved`;
  * 3. home assignment release, runtime and commitment delete;
  * 4. notification `settler:jobAborted { reason: 'unitRemoved' }`.
- *
- * TRANSITIONAL (until each kind migrates; Cleanup deletes the branch): a legacy job has no owner
- * handler, so its `onCancel` runs and `settler:taskFailed` (reason 'failed') is emitted in step 2,
- * giving the existing broadcast subscribers their failure path for the dead unit.
  */
 
 import { EntityType, type Entity, type UnitType } from '../../../entity';
@@ -25,7 +21,7 @@ import type { WorkerAssignments } from '../worker-assignments';
 import type { IdleSearchCooldowns } from '../idle-search-cooldowns';
 import type { JobOwnerRegistry } from './job-owners';
 import { interruptTargetWork, runAbortHooks, stopActiveTrigger, type JobTeardownDeps } from './job-teardown';
-import { emitJobAborted, emitTaskFailed } from './job-events';
+import { emitJobAborted } from './job-events';
 
 const log = createLogger('UnitRemoval');
 
@@ -83,22 +79,13 @@ export class UnitRemovalHandler {
     /** Steps 1–2 and 4 for a unit that was running a job. */
     private abortJob(unit: Entity, runtime: UnitRuntime, job: JobState): void {
         runtime.job = null;
-        if (job.synthetic) {
-            // TRANSITIONAL legacy kind-level cleanup (e.g. cancel the transport record).
-            job.onCancel?.();
-        }
         stopActiveTrigger(this.teardown, runtime, job);
         interruptTargetWork(this.teardown, unit, job);
         runAbortHooks(this.teardown.choreoSystem, unit.id, job);
         this.clearCommitment(unit.id, job);
 
         log.debug(`Unit ${unit.id} removed during job ${job.jobId} (${job.kind}, ref ${job.ref})`);
-        if (job.synthetic) {
-            // TRANSITIONAL: legacy subscribers clean up through their failure path.
-            emitTaskFailed(this.eventBus, unit, job, 'failed');
-        } else {
-            this.owners.kind(job.kind).onUnitRemoved(unit.id, job.ref, job.params);
-        }
+        this.owners.kind(job.kind).onUnitRemoved(unit.id, job.ref, job.params);
         emitJobAborted(this.eventBus, unit.id, job, 'unitRemoved');
     }
 

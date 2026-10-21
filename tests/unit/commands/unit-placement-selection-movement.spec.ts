@@ -48,11 +48,10 @@ function createTestHarness() {
     const moveDeps: MoveCommandDeps = {
         state,
         taskDispatcher: {
-            assignJob: () => false,
             assignMoveTask: (id: number, target: Tile) => state.movement.moveUnit(id, target),
         },
         combatSystem: { releaseFromCombat: () => {}, isInCombat: () => false, setPassive: () => {} } as any,
-        unitReservation: { isReserved: () => false } as any,
+        unitCommitments: { isReserved: () => false },
         isCombatControllable: () => true,
         getOwner: () => 0,
     };

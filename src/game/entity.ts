@@ -97,18 +97,6 @@ export interface Entity {
     hidden?: boolean;
 
     /**
-     * Numeric job identifier. Set when a job is assigned, cleared when the job
-     * completes or is interrupted. Undefined means the unit is idle.
-     * Persisted with the entity.
-     *
-     * Allocated from GameState.allocateJobId() (or reused from a domain record
-     * such as TransportJobRecord.id so entity.jobId matches the store key).
-     * All job types share one ID space. Only settler-task lifecycle
-     * (completeJob / interruptJob) clears this for live units.
-     */
-    jobId?: number;
-
-    /**
      * Extra depth added during sort. Positive values push the entity in front of others.
      * Used by debug tools (e.g., stack-adjust preview sprites).
      */
@@ -203,13 +191,6 @@ export function setCarrying(entity: Entity, material: EMaterialType, amount: num
  */
 export function clearCarrying(entity: Entity): void {
     entity.carrying = undefined;
-}
-
-/**
- * Clear the job ID on an entity (unit becomes idle).
- */
-export function clearJobId(entity: Entity): void {
-    entity.jobId = undefined;
 }
 
 /**

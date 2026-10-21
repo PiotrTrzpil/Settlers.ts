@@ -2,8 +2,8 @@
  * Event payloads the job runtime emits for job start / completion / failure / abort and the
  * verbose choreography trace (choreo:nodeStarted / nodeCompleted / animationApplied).
  *
- * `settler:task*` and `settler:jobAborted` are notifications (timeline, debug, tests). Owners of
- * owned jobs learn outcomes through their JobKindHandler; only legacy jobs are still routed by them.
+ * `settler:task*` and `settler:jobAborted` are notifications (timeline, debug, tests). Owners learn
+ * outcomes through their JobKindHandler, never through these events.
  */
 
 import type { Entity, UnitType } from '../../../entity';

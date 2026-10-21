@@ -22,7 +22,7 @@ export interface SettlerDebugEntry {
     owner: CommitmentOwner | null;
     /** Owner's key (record / demand / tower id) — null when idle. */
     ownerRef: number | null;
-    /** Player moves rejected (commitment or legacy reservation). */
+    /** Player moves rejected (reserved commitment). */
     reserved: boolean;
 }
 

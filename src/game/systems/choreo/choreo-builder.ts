@@ -1,22 +1,17 @@
 /**
- * Fluent builder for synthetic choreography jobs — ergonomic alternative to verbose node literals.
+ * Fluent builder for code-defined choreography jobs — ergonomic alternative to verbose node literals.
  *
  * Lives in systems/choreo/ (layer 0) so it can be used by both systems and features.
  *
- * Two outputs:
- * - {@link ChoreoBuilder.toJobBuild} — the owned-job path: a {@link JobBuild} for a
- *   `JobKindHandler.build()`. Every `goTo` node carries its walk `goal`; ENTER_BUILDING
- *   carries `args.enterBuilding`. No metadata / waypoints.
- * - {@link ChoreoBuilder.build} — TRANSITIONAL legacy path (deleted in Cleanup): a ready
- *   ChoreoJobState for `TaskDispatcher.assignJob` with waypoints + metadata.
+ * Output: {@link ChoreoBuilder.toJobBuild} — a {@link JobBuild} for a `JobKindHandler.build()`.
+ * Every `goTo` node carries its walk `goal`; ENTER_BUILDING carries `args.enterBuilding`.
  */
 
 import type { GameState } from '@/game/game-state';
 import type { TerrainData } from '@/game/terrain';
 import { findBuildingApproachTile } from '@/game/buildings/approach';
-import { ChoreoTaskType, JobKind, createChoreoJobState, type ChoreoNode, type ChoreoJobState } from './types';
+import { ChoreoTaskType, type ChoreoNode } from './types';
 import type { JobBuild } from './job-kind';
-import type { UnitType } from '@/game/core/unit-types';
 import type { Tile, TileWithEntityOpt } from '@/game/core/coordinates';
 
 // ─────────────────────────────────────────────────────────────
@@ -58,27 +53,13 @@ export function node(task: ChoreoTaskType, overrides?: Partial<ChoreoNode>): Cho
 
 export class ChoreoBuilder {
     private readonly nodes: ChoreoNode[] = [];
-    private readonly waypoints: Array<TileWithEntityOpt> = [];
-    /** Walk goal per GO_TO node index — attached to the nodes only by toJobBuild(). */
+    /** Walk goal per GO_TO node index — attached to the nodes by toJobBuild(). */
     private readonly goals = new Map<number, TileWithEntityOpt>();
     private _targetId: number | null = null;
     private _targetPos: Tile | null = null;
-    private _metadata: Record<string, number | string> | undefined;
     private _goToCount = 0;
-    private _kind: JobKind;
 
-    constructor(
-        private readonly jobId: string,
-        kind: JobKind = JobKind.Work
-    ) {
-        this._kind = kind;
-    }
-
-    /** Override domain JobKind (for demand-system event routing). */
-    kind(kind: JobKind): this {
-        this._kind = kind;
-        return this;
-    }
+    constructor(private readonly jobId: string) {}
 
     /**
      * Add a GO_TO_TARGET node walking to `tile` (or to the entity: building door / next to a map object).
@@ -95,32 +76,7 @@ export class ChoreoBuilder {
                 this._targetId = entityId;
             }
         }
-        this.waypoints.push(goal);
         this._goToCount++;
-        return this;
-    }
-
-    // TRANSITIONAL (deleted in Cleanup): the recruit-specific legacy helpers below stash data in
-    // metadata. Owned jobs get their TRANSFORM_* nodes from the recruit feature's RecruitSegments.
-
-    /** Add a TRANSFORM_RECRUIT node and stash unitType in metadata. */
-    transformRecruit(targetUnitType: UnitType): this {
-        this.nodes.push(node(ChoreoTaskType.TRANSFORM_RECRUIT));
-        this.meta({ unitType: targetUnitType });
-        return this;
-    }
-
-    /** Add a TRANSFORM_RECRUIT_BUILDING node and stash unitType + reservationId in metadata. */
-    transformRecruitBuilding(targetUnitType: UnitType, reservationId: number): this {
-        this.nodes.push(node(ChoreoTaskType.TRANSFORM_RECRUIT_BUILDING));
-        this.meta({ unitType: targetUnitType, reservationId });
-        return this;
-    }
-
-    /** Add a TRANSFORM_DIRECT node and stash unitType in metadata. */
-    transformDirect(targetUnitType: UnitType): this {
-        this.nodes.push(node(ChoreoTaskType.TRANSFORM_DIRECT));
-        this.meta({ unitType: targetUnitType });
         return this;
     }
 
@@ -136,11 +92,10 @@ export class ChoreoBuilder {
 
     /**
      * goToDoor + ENTER_BUILDING — walk to building and go inside.
-     * The ENTER_BUILDING node carries `args.enterBuilding`; the legacy build() also stashes
-     * `metadata.enterBuildingId`.
+     * The ENTER_BUILDING node carries `args.enterBuilding`.
      */
     goToDoorAndEnter(buildingId: number, ctx: ChoreoBuilderContext): this {
-        return this.goToDoor(buildingId, ctx).meta({ enterBuildingId: buildingId }).enterBuilding(buildingId);
+        return this.goToDoor(buildingId, ctx).enterBuilding(buildingId);
     }
 
     /** Add an ENTER_BUILDING node entering `buildingId`. */
@@ -174,18 +129,9 @@ export class ChoreoBuilder {
         return this;
     }
 
-    /** TRANSITIONAL (deleted in Cleanup): merge legacy metadata. Owned jobs use node args. */
-    meta(data: Record<string, number | string>): this {
-        if (!this._metadata) {
-            this._metadata = {};
-        }
-        Object.assign(this._metadata, data);
-        return this;
-    }
-
     /**
-     * Owned-job output for `JobKindHandler.build()`: nodes (GO_TO nodes with their walk goal,
-     * synthetic nodes with their args) + the initial targets. Pure data.
+     * Output for `JobKindHandler.build()`: nodes (GO_TO nodes with their walk goal,
+     * builder-made nodes with their args) + the initial targets. Pure data.
      */
     toJobBuild(): JobBuild {
         const nodes = this.nodes.map((n, i) => {
@@ -194,33 +140,9 @@ export class ChoreoBuilder {
         });
         return { jobId: this.jobId, nodes, targetId: this._targetId, targetPos: this._targetPos };
     }
-
-    /**
-     * TRANSITIONAL (deleted in Cleanup): the legacy ChoreoJobState for `TaskDispatcher.assignJob`
-     * (waypoints + metadata, no node goals, broadcast routing). New code uses {@link toJobBuild}.
-     */
-    build(): ChoreoJobState {
-        const job = createChoreoJobState(this.jobId, this.nodes, true, this._kind);
-        if (this._targetId !== null) {
-            job.targetId = this._targetId;
-        }
-        if (this._targetPos) {
-            job.targetPos = this._targetPos;
-        }
-        if (this.waypoints.length > 1) {
-            job.waypoints = this.waypoints;
-        }
-        if (this._metadata) {
-            job.metadata = this._metadata;
-        }
-        return job;
-    }
 }
 
-/**
- * Start building a synthetic choreography job.
- * @param kind Domain category for demand event routing (defaults to Work).
- */
-export function choreo(jobId: string, kind: JobKind = JobKind.Work): ChoreoBuilder {
-    return new ChoreoBuilder(jobId, kind);
+/** Start building a builder-made choreography job (`jobId` is its display id). */
+export function choreo(jobId: string): ChoreoBuilder {
+    return new ChoreoBuilder(jobId);
 }

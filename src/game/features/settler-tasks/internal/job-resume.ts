@@ -139,7 +139,7 @@ function resumeJob(deps: JobResumeDeps, unitId: number, saved: SerializedJob, co
 
 /** Job state from the fresh build, at the resume index, with the saved targets overlaid. */
 function restoredJobState(saved: SerializedJob, ref: number, build: JobBuild, index: number): JobState {
-    const job = createChoreoJobState(build.jobId, build.nodes, false, { kind: saved.kind, ref, params: saved.params });
+    const job = createChoreoJobState(build.jobId, build.nodes, { kind: saved.kind, ref, params: saved.params });
     job.nodeIndex = index;
     // eslint-disable-next-line no-restricted-syntax -- JobBuild targets are optional by design; absent ⇒ none
     job.targetId = build.targetId ?? null;

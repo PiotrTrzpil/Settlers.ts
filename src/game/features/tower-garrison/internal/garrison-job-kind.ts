@@ -31,9 +31,7 @@ export function createGarrisonJobKind(deps: GarrisonJobKindDeps): JobKindHandler
         persist: true,
         restorable: (_unitId, _ref, params) => manager.getGarrison(params.towerId) !== undefined,
         build: (_unitId, params) =>
-            choreo('WORKER_DISPATCH', JobKind.Garrison)
-                .goToDoorAndEnter(params.towerId, { gameState, terrain })
-                .toJobBuild(),
+            choreo('WORKER_DISPATCH').goToDoorAndEnter(params.towerId, { gameState, terrain }).toJobBuild(),
         onCompleted: (unitId, _ref, params) => manager.finalizeGarrison(unitId, params.towerId),
         onFailed: unitId => manager.releaseEnRoute(unitId),
         // Home assignment and location record of the dead unit are dropped by Core / settler-location;

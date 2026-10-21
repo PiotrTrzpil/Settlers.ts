@@ -21,7 +21,6 @@ import { EventBus, EventSubscriptionManager } from './event-bus';
 import { EntityVisualService } from './animation/entity-visual-service';
 import type { CommandType, ExecuteCommand } from './commands';
 import { EntityCleanupRegistry } from './systems/entity-cleanup-registry';
-import { UnitReservationRegistry } from './systems/unit-reservation';
 import { UnitCommitments } from './systems/unit-commitment';
 import { FeatureRegistry } from './features/feature-registry';
 import type { BoundCommandHandler } from './features/feature';
@@ -129,8 +128,6 @@ export class GameServices {
     private readonly mapObjectBlocking: MapObjectBlockingTracker;
 
     // ===== Shared kernel services =====
-    /** TRANSITIONAL (deleted in Cleanup): legacy reservations; read through `unitCommitments.isReserved`. */
-    public readonly unitReservation: UnitReservationRegistry;
     /** Who owns each unit (idle ⇔ no commitment). Written only by settler-tasks' JobService. */
     public readonly unitCommitments: UnitCommitments;
 
@@ -150,9 +147,8 @@ export class GameServices {
         // Movement is owned by GameState (constructed with terrain); exposed here for consumers.
         this.movement = gameState.movement;
         // 1. Kernel services — created before features, provided via FeatureContext.
-        //    Removal order is declared by CLEANUP_PRIORITY (reservations release first).
-        this.unitReservation = new UnitReservationRegistry(this.cleanupRegistry);
-        this.unitCommitments = new UnitCommitments(this.unitReservation);
+        //    Removal order is declared by CLEANUP_PRIORITY (commitments first).
+        this.unitCommitments = new UnitCommitments();
         this.visualService = new EntityVisualService();
         this.subscriptions.subscribe(eventBus, 'entity:created', ({ entityId, variation }) =>
             this.visualService.init(entityId, variation)
@@ -175,7 +171,6 @@ export class GameServices {
             eventBus,
             visualService: this.visualService,
             cleanupRegistry: this.cleanupRegistry,
-            unitReservation: this.unitReservation,
             unitCommitments: this.unitCommitments,
             executeCommand,
             tickScheduler: this.tickScheduler,

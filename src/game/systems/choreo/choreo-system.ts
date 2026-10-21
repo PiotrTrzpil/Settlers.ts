@@ -40,7 +40,7 @@ export type ChoreoExecutor = (
 
 /**
  * Per-task-type lifecycle hooks, registered next to the executor by the feature that owns the task.
- * Run by the job runtime for every job containing the node (owned and legacy alike).
+ * Run by the job runtime for every job containing the node.
  */
 export interface ChoreoNodeHooks {
     /** The node's side effect is irreversible once it completed — resume never snaps back across it. */

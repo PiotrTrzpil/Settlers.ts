@@ -6,10 +6,6 @@
  * continuation with `segments.prefix(segment, …)`), and RecruitSystem reserves the source and
  * assigns it via `jobs.assign`. The player queue (drained here, camera-center hint supported)
  * dispatches stand-alone `Recruit` jobs.
- *
- * TRANSITIONAL (deleted in Cleanup): without `buildSpec`, the legacy path assigns a
- * `ChoreoJobState` (`opts.buildJob`, or the default AUTO_RECRUIT / BUILDING_RECRUIT job of kind
- * WorkplaceDispatch that building-demand routes by broadcast).
  */
 
 import type { TickSystem } from '../../core/tick-system';
@@ -17,15 +13,11 @@ import type { GameState } from '../../game-state';
 import { EventSubscriptionManager } from '../../event-bus';
 import { UnitType } from '../../core/unit-types';
 import { EMaterialType } from '../../economy/material-type';
-import type { UnitTransformer, TransformSource } from './unit-transformer';
 import type { ToolSourceResolver, MaterialCost, InventorySide } from './tool-source-resolver';
-import { choreo } from '../../systems/choreo/choreo-builder';
-import { JobKind } from '../../systems/choreo/types';
 import type { IdleCarrierPool } from '../carriers';
 import type { JobService } from '../settler-tasks';
 import type { Race } from '../../core/race';
-import type { ChoreoJobState, JobSpec } from '../../systems/choreo';
-import { createRecruitmentJob, createDirectTransformJob } from './recruitment-job';
+import type { JobSpec } from '../../systems/choreo';
 import { recruitJobSpec } from './recruit-job-kind';
 import type { RecruitSegment, RecruitSegments } from './recruit-segments';
 import {
@@ -37,7 +29,7 @@ import {
 import { createLogger } from '@/utilities/logger';
 import type { Tile } from '@/game/core/coordinates';
 
-export type { TileWithPile, RecruitmentCandidate } from './recruit-candidates';
+export type { TileWithPile } from './recruit-candidates';
 
 const log = createLogger('RecruitSystem');
 
@@ -51,16 +43,10 @@ export type RecruitSpecBuilder = (carrierId: number, segment: RecruitSegment) =>
 /** Options for dispatchRecruitment / dispatchRecruitmentFromPile. */
 export interface DispatchRecruitmentOpts extends CandidateSearchOpts {
     /**
-     * Owned-job path: the JobSpec of the caller's kind for the chosen carrier + segment. The
-     * caller's `build` must start with `segments.prefix(segment, …)` (or `segments.nodes(segment)`)
-     * and set `reserved: true`. Mutually exclusive with `buildJob`.
+     * The JobSpec of the caller's kind for the chosen carrier + segment. The caller's `build` must
+     * start with `segments.prefix(segment, …)` (or `segments.nodes(segment)`) and set `reserved: true`.
      */
-    buildSpec?: RecruitSpecBuilder;
-    /**
-     * TRANSITIONAL (deleted in Cleanup): legacy ChoreoJobState with the recruit prefix
-     * (ChoreoBuilder.transformRecruit*), assigned via `assignJob`.
-     */
-    buildJob?: (candidate: RecruitmentCandidate) => ChoreoJobState;
+    buildSpec: RecruitSpecBuilder;
 }
 
 // ─── Queue entry ──────────────────────────────────────────────────────
@@ -79,12 +65,9 @@ interface QueueEntry {
 export interface RecruitSystemConfig {
     gameState: GameState;
     idleCarrierPool: IdleCarrierPool;
-    unitTransformer: UnitTransformer;
     toolSourceResolver: ToolSourceResolver;
     segments: RecruitSegments;
     jobs: JobService;
-    /** TRANSITIONAL (deleted in Cleanup): legacy job assignment. */
-    assignJob: (unitId: number, job: ChoreoJobState, moveTo?: Tile) => boolean;
     /** Rejects carriers in territory pockets disconnected from the reference tile. */
     territoryCheck: (a: Tile, b: Tile, player: number) => boolean;
 }
@@ -94,11 +77,9 @@ export interface RecruitSystemConfig {
 export class RecruitSystem implements TickSystem {
     private readonly gameState: GameState;
     private readonly idleCarrierPool: IdleCarrierPool;
-    private readonly unitTransformer: UnitTransformer;
     private readonly toolSourceResolver: ToolSourceResolver;
     private readonly segments: RecruitSegments;
     private readonly jobs: JobService;
-    private readonly assignJob: RecruitSystemConfig['assignJob'];
     private readonly candidates: RecruitCandidateFinder;
     private readonly subscriptions = new EventSubscriptionManager();
 
@@ -108,11 +89,9 @@ export class RecruitSystem implements TickSystem {
     constructor(config: RecruitSystemConfig) {
         this.gameState = config.gameState;
         this.idleCarrierPool = config.idleCarrierPool;
-        this.unitTransformer = config.unitTransformer;
         this.toolSourceResolver = config.toolSourceResolver;
         this.segments = config.segments;
         this.jobs = config.jobs;
-        this.assignJob = config.assignJob;
         this.candidates = new RecruitCandidateFinder(config);
     }
 
@@ -134,18 +113,15 @@ export class RecruitSystem implements TickSystem {
     }
 
     /**
-     * Full recruitment dispatch — find a candidate, reserve its source, assign the job.
+     * Full recruitment dispatch — find a candidate, reserve its source, assign the caller's job.
      * Returns the carrier id on success, null otherwise (nothing stays reserved).
-     *
-     * With opts.buildSpec the job is the caller's owned kind; otherwise TRANSITIONAL legacy
-     * (opts.buildJob, or the default AUTO_RECRUIT WorkplaceDispatch job).
      */
-    dispatchRecruitment(unitType: UnitType, player: number, opts?: DispatchRecruitmentOpts): number | null {
+    dispatchRecruitment(unitType: UnitType, player: number, opts: DispatchRecruitmentOpts): number | null {
         const candidate = this.candidates.find(unitType, player, opts);
         if (!candidate) {
             return null;
         }
-        return this.dispatchCandidate(candidate, unitType, opts);
+        return this.assignSpec(candidate.carrierId, segmentOf(candidate, unitType), opts.buildSpec);
     }
 
     /**
@@ -156,7 +132,7 @@ export class RecruitSystem implements TickSystem {
         unitType: UnitType,
         player: number,
         pileEntityId: number,
-        opts?: DispatchRecruitmentOpts
+        opts: DispatchRecruitmentOpts
     ): number | null {
         const toolMaterial = toolMaterialOf(unitType);
         if (toolMaterial === null) {
@@ -170,7 +146,7 @@ export class RecruitSystem implements TickSystem {
         if (carrierId === null) {
             return null;
         }
-        return this.dispatchCandidate({ carrierId, toolPile }, unitType, opts);
+        return this.assignSpec(carrierId, segmentOf({ carrierId, toolPile }, unitType), opts.buildSpec);
     }
 
     /**
@@ -197,40 +173,6 @@ export class RecruitSystem implements TickSystem {
             at: found.at,
         };
         return this.assignSpec(found.carrierId, segment, buildSpec);
-    }
-
-    /**
-     * TRANSITIONAL (deleted in Cleanup; owned callers use dispatchBuildingRecruitment): legacy
-     * dispatch consuming `costs` from a building's `side` inventory. The materials are reserved for
-     * the carrier and withdrawn when it arrives; any early end of the job releases them.
-     * `opts.buildJob` gets `candidate.reservationId` (= the carrier id) for transformRecruitBuilding.
-     */
-    dispatchRecruitmentFromBuilding(
-        unitType: UnitType,
-        player: number,
-        buildingId: number,
-        costs: readonly MaterialCost[],
-        opts?: DispatchRecruitmentOpts,
-        side: InventorySide = 'output'
-    ): number | null {
-        const found = this.findBuildingCarrier(player, buildingId, costs, side);
-        if (!found) {
-            return null;
-        }
-        const { carrierId, at } = found;
-        const job = opts?.buildJob
-            ? opts.buildJob({ carrierId, toolPile: null, reservationId: carrierId })
-            : choreo('BUILDING_RECRUIT', JobKind.WorkplaceDispatch)
-                  .goTo(at, buildingId)
-                  .transformRecruitBuilding(unitType, carrierId)
-                  .target(buildingId)
-                  .build();
-        const source: TransformSource = { kind: 'building', buildingId, costs, side };
-        if (!this.assignLegacy(carrierId, unitType, source, job, at)) {
-            return null;
-        }
-        log.debug(`Building recruit: carrier ${carrierId} → ${unitType} from building ${buildingId}`);
-        return carrierId;
     }
 
     // =====================================================================
@@ -332,24 +274,7 @@ export class RecruitSystem implements TickSystem {
     // Internal — recruitment execution
     // =====================================================================
 
-    /** Route a chosen candidate to the owned (buildSpec) or legacy path. */
-    private dispatchCandidate(
-        candidate: RecruitmentCandidate,
-        unitType: UnitType,
-        opts?: DispatchRecruitmentOpts
-    ): number | null {
-        if (opts?.buildSpec) {
-            if (opts.buildJob) {
-                throw new Error(`dispatchRecruitment(${unitType}): buildSpec and buildJob are mutually exclusive`);
-            }
-            return this.assignSpec(candidate.carrierId, segmentOf(candidate, unitType), opts.buildSpec);
-        }
-        return candidate.toolPile
-            ? this.executeLegacyToolRecruitment(candidate, unitType, opts)
-            : this.executeLegacyDirectRecruitment(candidate.carrierId, unitType);
-    }
-
-    /** Owned path: reserve the segment's source, assign the caller's spec; undo the reservation on failure. */
+    /** Reserve the segment's source, assign the caller's spec; undo the reservation on failure. */
     private assignSpec(carrierId: number, segment: RecruitSegment, buildSpec: RecruitSpecBuilder): number | null {
         if (!this.segments.reserve(carrierId, segment)) {
             return null;
@@ -382,47 +307,6 @@ export class RecruitSystem implements TickSystem {
         }
         const carrierId = this.candidates.nearestCarrier(at, player);
         return carrierId === null ? null : { carrierId, at };
-    }
-
-    /** TRANSITIONAL: tool-pile recruitment with a legacy ChoreoJobState. */
-    private executeLegacyToolRecruitment(
-        candidate: RecruitmentCandidate,
-        unitType: UnitType,
-        opts?: DispatchRecruitmentOpts
-    ): number | null {
-        const toolPile = candidate.toolPile!;
-        const job = opts?.buildJob
-            ? opts.buildJob(candidate)
-            : createRecruitmentJob(toolPile.pileEntityId, toolPile.x, toolPile.y, unitType);
-        const source: TransformSource = { kind: 'pile', pileEntityId: toolPile.pileEntityId };
-        const moveTo = { x: toolPile.x, y: toolPile.y };
-        return this.assignLegacy(candidate.carrierId, unitType, source, job, moveTo) ? candidate.carrierId : null;
-    }
-
-    /** TRANSITIONAL: in-place transform (no tool) with the legacy AUTO_RECRUIT job. */
-    private executeLegacyDirectRecruitment(carrierId: number, unitType: UnitType): number | null {
-        // No moveTo — carrier transforms in place; passing own position causes moveUnit to fail
-        const job = createDirectTransformJob(unitType);
-        return this.assignLegacy(carrierId, unitType, { kind: 'direct' }, job) ? carrierId : null;
-    }
-
-    /** TRANSITIONAL: reserve the source (+ legacy unit reservation), assign the legacy job, undo on failure. */
-    private assignLegacy(
-        carrierId: number,
-        unitType: UnitType,
-        source: TransformSource,
-        job: ChoreoJobState,
-        moveTo?: Tile
-    ): boolean {
-        if (!this.unitTransformer.reserveTransform(carrierId, unitType, source, true)) {
-            return false;
-        }
-        if (!this.assignJob(carrierId, job, moveTo)) {
-            this.unitTransformer.abortTransform(carrierId);
-            return false;
-        }
-        log.debug(`Carrier ${carrierId} dispatched (legacy ${job.jobId}) to transform into ${unitType}`);
-        return true;
     }
 }
 

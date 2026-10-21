@@ -13,7 +13,6 @@ import { insertByTickPhase, isPhasedTickSystem, type PhasedTickSystem, type Tick
 import { EventSubscriptionManager } from '../event-bus';
 import type { EntityVisualService } from '../animation/entity-visual-service';
 import type { EntityCleanupRegistry } from '../systems/entity-cleanup-registry';
-import type { UnitReservationRegistry } from '../systems/unit-reservation';
 import type { UnitCommitments } from '../systems/unit-commitment';
 import type { CoreDeps, FeatureDefinition, FeatureInstance, FeatureContext, BoundCommandHandler } from './feature';
 import type { CommandType, ExecuteCommand } from '../commands';
@@ -35,7 +34,6 @@ const log = createLogger('FeatureRegistry');
 export interface FeatureRegistryConfig extends CoreDeps {
     visualService: EntityVisualService;
     cleanupRegistry: EntityCleanupRegistry;
-    unitReservation: UnitReservationRegistry;
     unitCommitments: UnitCommitments;
     executeCommand: ExecuteCommand;
     tickScheduler: TickScheduler;
@@ -342,7 +340,6 @@ export class FeatureRegistry {
             eventBus,
             visualService: this.config.visualService,
             cleanupRegistry: this.config.cleanupRegistry,
-            unitReservation: this.config.unitReservation,
             unitCommitments: this.config.unitCommitments,
             claimUnitCommitmentWriter: () => this.config.unitCommitments.claimWriter(),
             executeCommand: this.config.executeCommand,

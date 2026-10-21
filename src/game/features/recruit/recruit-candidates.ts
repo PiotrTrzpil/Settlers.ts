@@ -21,11 +21,6 @@ export type TileWithPile = Tile & { pileEntityId: number };
 export interface RecruitmentCandidate {
     carrierId: number;
     toolPile: TileWithPile | null;
-    /**
-     * TRANSITIONAL (legacy buildJob of dispatchRecruitmentFromBuilding): the building reservation
-     * key — the carrier id, since reservations are keyed by the carrier.
-     */
-    reservationId?: number;
 }
 
 export interface CandidateSearchOpts {

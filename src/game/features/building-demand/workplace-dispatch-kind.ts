@@ -55,9 +55,7 @@ export function createWorkplaceDispatchKind(deps: WorkplaceDispatchKindDeps): Jo
         // No `restorable`: building removal cancels the job, so a saved job's building always exists
         // (BuildingDemandSystem.restoreCommittedDemands asserts it).
         build: (_unitId, { buildingId, recruit }) => {
-            const door = choreo('WORKER_DISPATCH', JobKind.WorkplaceDispatch)
-                .goToDoorAndEnter(buildingId, { gameState, terrain })
-                .toJobBuild();
+            const door = choreo('WORKER_DISPATCH').goToDoorAndEnter(buildingId, { gameState, terrain }).toJobBuild();
             return recruit ? segments.prefix(recruit, door) : door;
         },
         onCompleted: (unitId, buildingId) => owner.dispatchCompleted(buildingId, unitId),

@@ -16,7 +16,7 @@ import { EntityType, UnitType } from '@/game/entity';
 import { EMaterialType } from '@/game/economy/material-type';
 import { Race } from '@/game/core/race';
 import { TrainingRecipeIndex } from '@/game/features/barracks/training-recipes';
-import { choreo, type SettlerTaskExports } from '@/game/features/settler-tasks';
+import type { SettlerTaskExports } from '@/game/features/settler-tasks';
 import type { RecruitExports } from '@/game/features/recruit';
 
 installRealGameData();
@@ -73,9 +73,10 @@ function expectPickaxeReusable(sim: Simulation): void {
     });
 }
 
-/** Preempt the unit with an unrelated job (its current job fails as 'preempted'). */
+/** Preempt the unit with a move task (its current job fails as 'preempted'). */
 function preempt(sim: Simulation, unitId: number): void {
-    sim.services.jobRunner.assignJob(unitId, choreo('TEST_PREEMPT').wait(1).build());
+    const unit = sim.state.getEntityOrThrow(unitId, 'preempted unit');
+    expect(sim.services.jobRunner.assignMoveTask(unitId, { x: unit.x + 2, y: unit.y })).toBe(true);
 }
 
 describe('Recruit source reservations', { timeout: 60_000 }, () => {

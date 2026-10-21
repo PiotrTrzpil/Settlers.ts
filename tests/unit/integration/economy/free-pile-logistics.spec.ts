@@ -10,6 +10,7 @@ import { describe, it, expect, afterEach } from 'vitest';
 import { BuildingType, EntityType, UnitType } from '@/game/entity';
 import { EMaterialType } from '@/game/economy';
 import { SlotKind } from '@/game/core/pile-kind';
+import { JobKind } from '@/game/systems/choreo';
 import { createSimulation, createScenario, cleanupSimulation, type Simulation } from '../../helpers/test-simulation';
 import { installRealGameData } from '../../helpers/test-game-data';
 
@@ -200,7 +201,7 @@ describe('Free pile logistics (real game data)', { timeout: 30_000 }, () => {
         expect(sim.errors).toHaveLength(0);
     });
 
-    it('transport assign reuses record id as entity.jobId (single numeric job identity)', () => {
+    it('a transport carrier is committed to its record (owner Transport, ref = record id)', () => {
         sim = createSimulation();
         sim.placeBuilding(BuildingType.ResidenceSmall);
         const sawmillId = sim.placeBuilding(BuildingType.Sawmill);
@@ -213,9 +214,9 @@ describe('Free pile logistics (real game data)', { timeout: 30_000 }, () => {
         });
 
         for (const record of sim.services.jobStore.jobs.values()) {
-            const carrier = sim.state.getEntityOrThrow(record.carrierId, 'carrier with transport job');
-            // entity.jobId must match the transport record — not a second allocateJobId() value
-            expect(carrier.jobId).toBe(record.id);
+            const commitment = sim.services.unitCommitments.get(record.carrierId)!;
+            expect(commitment.owner).toBe(JobKind.Transport);
+            expect(commitment.ref).toBe(record.id);
         }
     });
 });

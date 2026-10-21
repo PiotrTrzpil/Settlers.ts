@@ -112,7 +112,7 @@ export function diagnoseUnfulfilledRequest(request: DiagnosticRequest, config: D
 
 /**
  * Mirrors IdleCarrierPool availability (commitments.isIdle) to classify carrier state: idle ⇒ free;
- * reserved without a job (hold, legacy reservation) ⇒ reserved; anything else (job, move) ⇒ busy.
+ * reserved without a job (hold) ⇒ reserved; anything else (job, move) ⇒ busy.
  */
 function diagnoseCarrierAvailability(config: DiagnosticConfig, playerId: number): UnfulfilledReason {
     const { gameState, carrierRegistry, unitCommitments } = config;
@@ -129,9 +129,9 @@ function diagnoseCarrierAvailability(config: DiagnosticConfig, playerId: number)
             hasIdleAndFree = true;
             continue;
         }
-        // Nullable by design: a legacy-reserved unit may have no commitment.
-        const commitment = unitCommitments.get(id);
-        if (unitCommitments.isReserved(id) && !(commitment && commitment.hasJob)) {
+        // Not idle ⇔ committed.
+        const commitment = unitCommitments.get(id)!;
+        if (commitment.reserved && !commitment.hasJob) {
             hasIdleButReserved = true;
         }
     }

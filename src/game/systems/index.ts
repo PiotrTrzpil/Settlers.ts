@@ -103,4 +103,3 @@ export { EntityCleanupRegistry, CLEANUP_PRIORITY, type CleanupPriority } from '.
 // ============================================================================
 // Unit Reservation Registry
 // ============================================================================
-export { UnitReservationRegistry } from './unit-reservation';

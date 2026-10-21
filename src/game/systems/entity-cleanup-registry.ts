@@ -36,26 +36,21 @@ const log = createLogger('EntityCleanupRegistry');
  * equal priority run in registration order (GameServices kernel handlers, then feature load order).
  *
  * Full order of work on `entity:removed`:
- *  1. RESERVATIONS — TRANSITIONAL (deleted in Cleanup): `UnitReservationRegistry` drops the unit's
- *     legacy reservation and fires its `onForcedRelease` callback (not-yet-migrated owners).
- *  2. COMMITMENTS  — settler-tasks tears down the removed unit's job / hold and calls its owner
+ *  1. COMMITMENTS  — settler-tasks tears down the removed unit's job / hold and calls its owner
  *     (`onUnitRemoved`) exactly once, then deletes its runtime and commitment
  *     (see settler-tasks/internal/unit-removal.ts).
- *  3. EARLY        — material-transfer drops a removed carrier's carried material as a free pile.
- *  4. DEFAULT      — all general cleanup: map-object blocking, movement controller, feature state
+ *  2. EARLY        — material-transfer drops a removed carrier's carried material as a free pile.
+ *  3. DEFAULT      — all general cleanup: map-object blocking, movement controller, feature state
  *     (buildings, overlays, carriers, settler locations, …), visual state and pile slots.
- *  5. LOGISTICS    — logistics dispatcher cancels transport jobs / releases inventory reservations
+ *  4. LOGISTICS    — logistics dispatcher cancels transport jobs / releases inventory reservations
  *     for a destroyed building (inventory data must still exist).
- *  6. LATE         — `BuildingInventoryManager.destroySlots` removes the entity's inventory.
+ *  5. LATE         — `BuildingInventoryManager.destroySlots` removes the entity's inventory.
  *
  * Afterwards (separate `entity:removed` bus subscription made by `Game` after GameServices is
  * built), `GameLoop.notifyEntityRemoved` calls `TickSystem.onEntityRemoved` in tick order.
  */
 export const CLEANUP_PRIORITY = {
-    /** TRANSITIONAL (deleted in Cleanup): legacy reservation release (see UnitReservationRegistry). */
-    RESERVATIONS: -110,
-
-    /** Unit removal reaches the job / commitment owner — before every other (non-legacy) handler. */
+    /** Unit removal reaches the job / commitment owner — before every other handler. */
     COMMITMENTS: -100,
 
     /** Early cleanup — for handlers that other systems depend on having run first */

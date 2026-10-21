@@ -69,7 +69,7 @@ export function createBarracksJobKind(deps: BarracksJobKindDeps): JobKindHandler
                 at: { x: door.x, y: door.y },
             };
             const fightJobPart = xmlKey(UNIT_XML_PREFIX[params.unitType]!, 'FIGHT');
-            const training = choreo('BARRACKS_TRAINING', JobKind.Barracks)
+            const training = choreo('BARRACKS_TRAINING')
                 .addNode(ChoreoTaskType.WAIT, { duration: TRAINING_DURATION_FRAMES, jobPart: fightJobPart })
                 .target(params.barracksId)
                 .toJobBuild();
