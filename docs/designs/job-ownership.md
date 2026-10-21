@@ -125,6 +125,10 @@ migration needs a Core change, Core provides it up front, as listed in Shared Co
 
 ## Shared Contracts
 
+> The Core subsystem shipped these contracts with a few small deltas (`JobBuild.jobId`,
+> `JobKindHandler.restorable`, explicit hold owners with `onPreempted`, `ChoreoBuilder.toJobBuild()`).
+> **Read "Core implementation notes" at the end of this doc for the API as actually shipped.**
+
 ```ts
 // ── src/game/systems/choreo/job-kind.ts (new, domain-free) ─────────────────────────
 
@@ -659,3 +663,130 @@ debug composables/CLI.
 - Persisting the recruit queue, siege/assault state, the combat state and pioneer activation (`activated-position-handler.ts`).
 - Changes to DemandLedger, carrier ranking cost, `DestCapacity` (P2 items in `logistics-task-simplification.md`).
 - Re-modelling combat movement as jobs.
+
+## Core implementation notes (as shipped on `refactor/job-ownership-core`)
+
+Everything below is what migrations build on. "TRANSITIONAL" marks code that exists only so legacy
+(not yet migrated) kinds keep working; the Cleanup subsystem deletes it (list at the end).
+
+### Shipped API
+
+| What | Where | Notes |
+|---|---|---|
+| `JobKind`, `JobParamValue`, `JobParams`, `JobSpec`, `JobBuild`, `JobFailureReason`, `JobFailureInfo`, `JobKindHandler` | `systems/choreo/job-kind.ts` (re-exported from `systems/choreo` and, for `JobKind`, from `systems/choreo/types`) | `JobBuild` has an extra **`jobId: string`** (display / XML id — events, debug). `JobKindHandler` has an extra optional **`restorable?(unitId, ref, params): boolean`**, called on restore *before* `build` (false ⇒ `onFailed('restoreFailed')`), so `build` may keep using `getEntityOrThrow` & co. |
+| `ChoreoNode.goal?`, `ChoreoNode.args?`, `ChoreoNodeArgs` | `systems/choreo/types.ts` | As in Shared Contracts. A node `goal` makes GO_TO_TARGET set `job.targetPos = goal` **and** `job.targetId = goal.entityId ?? null` at that node — exactly the legacy waypoint semantics. So pass the entity id to `goTo(tile, entityId)` when the walk must end at a building door / next to a map object; a later `.target(id)` does not survive a goal-carrying GO_TO. |
+| `ChoreoJobState.kind / ref / params` | `systems/choreo/types.ts` | `params` is mutable only for CHANGE_JOB (Work). Legacy jobs: `ref = -1`, `params = {}`. `createChoreoJobState(jobId, nodes, synthetic, owner: ChoreoJobOwner \| JobKind)`. |
+| `ChoreoNodeHooks`, `ChoreoSystem.register(type, executor, hooks?)`, `ChoreoSystem.hooksFor(type)` | `systems/choreo/choreo-system.ts` | Hooks run for **every** job containing the node (owned and legacy). Core marks only ENTER_BUILDING `irreversible` (`ENTER_BUILDING_HOOKS`). Each migration marks its own task types when it registers their executors: TRANSFORM_* (Recruit), DIG_TILE / BUILD_STEP (Construction), TRANSPORT_PICKUP / TRANSPORT_DELIVER (Transport). |
+| `ChoreoBuilder.toJobBuild(): JobBuild` | `systems/choreo/choreo-builder.ts` | The owned-job output: every `goTo` node carries its `goal`; `goToDoorAndEnter(id)` / `enterBuilding(id)` put `args: { task: 'enterBuilding', buildingId }` on ENTER_BUILDING. `build()` (legacy `ChoreoJobState`, waypoints + metadata, no goals) stays until Cleanup. `enterBuilding()` now takes the building id. |
+| `CommitmentOwner`, `UnitCommitment`, `UnitCommitmentQuery`, `UnitReservationQuery`, `UnitCommitmentWriter`, `UnitCommitments` | `systems/unit-commitment.ts` | Kernel store built by `GameServices` (`services.unitCommitments`). `unitsOwnedBy` returns ascending ids. |
+| `ctx.unitCommitments: UnitCommitmentQuery` | `features/feature.ts` | Available to every feature (also those loaded before settler-tasks: combat, carriers). |
+| `ctx.claimUnitCommitmentWriter()` | `features/feature.ts` | Called once, by settler-tasks; a second call throws (Invariant 3). Nobody else calls it. |
+| `FeatureInstance.onRestoreResume?()` | `features/feature.ts`, `FeatureRegistry.notifyRestoreResume`, `GameServices.notifyRestoreResume`, step 8 of `restoreFromSnapshot` | Runs after every `onRestoreComplete`. settler-tasks resumes pending jobs there. |
+| `SettlerTaskExports.jobs: JobService` | `features/settler-tasks/job-service.ts` | `registerKind(handler)`, `registerHoldOwner(handler)`, `assign(unitId, spec, { moveTo }?) → boolean`, `cancel(unitId, owner)`, `hold(unitId, owner, ref, reserved)`, `releaseHold(unitId, owner)`, **`paramsOf(unitId)`** (added: params of the unit's running *or restored-but-not-resumed* owned job — what owners rebuild from in `onRestoreComplete`), `commitments`. Also exported from `features/settler-tasks`: `JobService`, `JobAssignOptions`, `HoldOwnerHandler`, `WorkJobParams`. |
+| `HoldOwnerHandler` | `features/settler-tasks/internal/job-owners.ts` (re-exported) | `{ owner, persist, onUnitRemoved(unitId, ref), onPreempted(unitId, ref) }`. |
+| `TaskDispatcher.assignMoveTask(unitId, target, owner = 'player-move')` | `features/settler-tasks/types.ts` | See "Move commitments". |
+| Events | `event-types-features.ts` | `settler:taskCompleted` gains `ref`; `settler:taskFailed` gains `ref` and `reason: JobFailureReason`; new `settler:jobAborted { unitId, jobId, kind, ref, reason: 'unitRemoved' \| 'cancelled' \| 'restoreFailed' }` (`jobId` is `''` for a restored job that was never rebuilt). |
+| `CLEANUP_PRIORITY.COMMITMENTS = -100` | `systems/entity-cleanup-registry.ts` | TRANSITIONAL: `RESERVATIONS` moved to **-110**, so the legacy forced-release callbacks still run first, exactly as before. |
+| `SNAPSHOT_VERSION = 18`, `SerializedUnitRuntime { id, home?, commitment? }`, `SerializedCommitment`, `SerializedJob` | `state/game-state-persistence.ts`, `state/persistence-types.ts` | As specified. `SerializedJobIntent` and `SerializedUnitRuntime.state` are gone. `entity.jobId` / `nextJobId` are still saved (Cleanup). |
+| `sim.killUnit(id)` | `tests/unit/helpers/simulation-units.ts` (method on `Simulation`) | `remove_entity` through the command pipeline, like combat death. |
+
+### How a migration switches a kind from legacy to owned
+
+1. In the owner feature's `create()`: `const { jobs } = ctx.getFeature<SettlerTaskExports>('settler-tasks');`
+   `jobs.registerKind(handler)` (barracks does not depend on `'settler-tasks'` yet — add it). Holds need
+   `jobs.registerHoldOwner(...)` too — a JobKind handler is **not** implicitly a hold owner (Garrison
+   registers both: its kind handler for en-route jobs and a hold owner for garrisoned units).
+2. Declare params as a **type alias** (`type GarrisonParams = { readonly towerId: number }`): interfaces have
+   no implicit index signature and are not assignable to `JobParams`.
+3. `build(unitId, params)` returns `choreo(jobId).goToDoorAndEnter(...)/goTo(...)/addNode(task, { args }).toJobBuild()`.
+   Executors of migrated nodes read `node.args` / `node.goal`; an executor shared with still-legacy jobs must keep
+   its legacy `metadata` / `transportData` branch until Cleanup (see `enter-building-executor.ts` for the pattern).
+4. Dispatch with `jobs.assign(unitId, { kind, ref, params, reserved }, { moveTo })` instead of
+   `taskDispatcher.assignJob(unitId, choreo(...).build(), moveTo)`; `assignJob` now throws for owned jobs.
+5. In the same change, delete the kind's `settler:taskCompleted` / `settler:taskFailed` subscriptions (owned jobs
+   still emit them as notifications → double handling otherwise) and its `unitReservation.reserve/release`
+   calls (`reserved` replaces them; readers use `ctx.unitCommitments.isReserved`).
+6. Building removed / owner stops: `for (const id of jobs.commitments.unitsOwnedBy(kind, ref)) jobs.cancel(id, kind)`.
+7. Restore: in `onRestoreComplete` rebuild domain state from `jobs.commitments.unitsOwnedBy(kind)` + `jobs.paramsOf(id)`
+   (the job itself is not built yet; holds have no params — use `ref`). Never assign in
+   `onRestoreComplete` to a unit that has a restored commitment: takeover of a not-yet-resumed job throws.
+   Jobs resume by themselves in `onRestoreResume`; use `restorable` / `resumeIndex` / node `onRestore`.
+8. Mark irreversible task types and add `onAbort` / `onRestore` hooks where the executors are registered.
+
+### Semantics as implemented (deviations / refinements)
+
+- **Preemption.** `assign`, `assignMoveTask` and `hold` take a unit over through one path
+  (`JobOutcomes.takeOver`): a running job ends with `onFailed('preempted')` (always, also when the new owner is
+  the same kind); a hold / move of *another* owner gets `HoldOwnerHandler.onPreempted`; a hold of the same owner is
+  replaced silently. A completion handler that re-assigns during a takeover (job had run all nodes) gets that
+  follow-up preempted too; re-assigning again from `onFailed('preempted')` throws.
+- **Owner cancel** (`jobs.cancel`) is a no-op when `owner` does not own the unit (idempotent, like
+  `TransportJobService.cancel`). It runs the same teardown as a failure (drop carried goods, exit the home building,
+  `onWorkInterrupt`, node `onAbort`), sets INTERRUPTED and emits only `settler:jobAborted 'cancelled'` — no
+  `settler:taskFailed`. On a hold / move it just ends it (a running move stops).
+- **Failure order** is the same for owned and legacy jobs: `runtime.job` is nulled first (legacy: then `onCancel`),
+  teardown + `onAbort`, commitment cleared, INTERRUPTED, owner `onFailed` (owned only), `settler:taskFailed`.
+  For legacy jobs this moves INTERRUPTED before the event (a listener that re-assigns now sticks) and stops the
+  re-entrant `carrier:transportCancelled` → second `taskFailed` (the job is already gone when it arrives).
+  `clearInterrupted` no longer clears the job (it is cleared when the job ends).
+- **Move commitments.** `assignMoveTask(id, t)` commits to `'player-move'` (ref -1, unreserved) for the walk; the
+  commitment ends when the walk ends (or the lifecycle drops the move). `assignMoveTask(id, t, 'siege')` requires an
+  existing `'siege'` hold (throws otherwise), keeps its ref / reserved, and the commitment stays as a hold after the
+  walk. `releaseHold` during such a walk lets it finish as an unreserved `'player-move'`. Core registers the
+  `'player-move'` hold owner itself (`persist: true`).
+- **`hold` on a unit running a job of the same owner throws** (cancel first); `releaseHold` on a unit whose
+  `owner` commitment runs a job throws (use `cancel`).
+- **Unit removal** (`internal/unit-removal.ts`, COMMITMENTS): owned job → stop trigger, `onWorkInterrupt`, node
+  `onAbort`, clear commitment, `owner.onUnitRemoved`, `settler:jobAborted 'unitRemoved'`; hold / move → clear,
+  `HoldOwnerHandler.onUnitRemoved`; then position-handler `onSettlerRemoved`, idle-search cooldowns, home release
+  **without** location calls (`WorkerAssignments.releaseRemovedUnit`; settler-location drops its record at DEFAULT),
+  runtime delete. The commitment is cleared before the owner is called, so `unitsOwnedBy` no longer lists the dead unit.
+  The TickSystem `onEntityRemoved` path keeps only the building branch; the dead `cleanupSettlerHandlers` branch and
+  `WorkHandlerRegistry.findEntityHandlerForJob` are deleted.
+- **TRANSITIONAL legacy removal path:** a legacy job of a removed unit runs its `onCancel` and emits
+  `settler:taskFailed` (reason `'failed'`, `wasCarrying` from the snapshot) before the runtime is deleted, then
+  `settler:jobAborted 'unitRemoved'`. This already fixes the dead-unit leaks of the legacy owners (transport record
+  cancelled, construction / workplace demand re-opened) — see `tests/unit/integration/jobs/unit-removal.spec.ts`.
+  When a kind migrates, it gets `onUnitRemoved` instead and must not rely on that `taskFailed`.
+- **Resume snapping refinement:** the floor is the index after the last irreversible node that **completed**
+  (nodes before the saved index), not "at or before i" — the saved node itself has not run yet. A job saved after its
+  last node (completion pending) whose last node is irreversible resumes at `nodes.length` and completes on the next
+  tick. With no irreversible nodes (XML) this is exactly the old `snapToSafeNode`. If any node `onRestore` refuses,
+  the nodes that already restored get `onAbort` before the job is abandoned.
+- **Abandoned restore:** commitment cleared, unit INTERRUPTED, `onFailed(…, { reason: 'restoreFailed', nodeIndex:
+  <saved raw index>, failedStep: 'restore' })`, `settler:jobAborted 'restoreFailed'`.
+- **Work kind:** `ref` = home building id or -1, `params = { choreoJobId }`; CHANGE_JOB updates `params` to the new
+  XML id (as the old intent saved the current `jobId`). Autonomy's `startJob` sets the Work commitment directly.
+- **Startup assertion:** `JobService.assertAllRegistered()` (called by `GameServices`) skips the kinds in
+  TRANSITIONAL `TRANSITIONAL_UNOWNED_KINDS` (`internal/job-owners.ts`). Migrations do **not** edit that set — a
+  registered kind is fine either way; Cleanup deletes it so every kind is asserted.
+- **Idle / reserved during the transition:** `isIdle(id)` = no commitment and not legacy-reserved; `isReserved(id)` =
+  commitment reserved or legacy-reserved. Legacy jobs get a commitment too (`owner = job.kind`, ref -1, unreserved),
+  so `isIdle` is already right for every running job. `findIdleSpecialist` = IDLE state ∧ no home ∧ `isIdle`.
+  Move commands read `ctx.unitCommitments.isReserved`.
+- **Persistence:** legacy jobs (and their commitments) are not saved — their features rebuild them as before;
+  commitments of `persist: false` owners are dropped; a move whose path is blocked on load leaves a
+  `'player-move'` unit idle, any other owner keeps its hold.
+- **Debug:** `SettlerDebugEntry` gains `owner`, `ownerRef`, `reserved`.
+
+### File layout of the split runtime (`features/settler-tasks/`)
+
+`job-runner.ts` (start + node advance, legacy `assignJob`) · `job-service.ts` · `work-job-kind.ts` ·
+`internal/job-outcomes.ts` (complete / fail / takeover / cancel) · `internal/move-tasks.ts` (MoveTaskRunner) ·
+`internal/unit-removal.ts` · `internal/job-resume.ts` (snap, PendingJobResumes, resume) · `internal/job-owners.ts`
+(registry) · `internal/job-teardown.ts` (shared teardown steps) · `internal/job-runtime.ts` (wiring).
+
+### Files Core touched outside its File Map rows
+
+- `features/settler-location/index.ts` — registers ENTER_BUILDING with `ENTER_BUILDING_HOOKS`.
+- `debug/event-formatting.ts` — formatter for `settler:jobAborted` (compile-forced: the map is exhaustive).
+
+### TRANSITIONAL shims Cleanup deletes
+
+`ChoreoJobState.synthetic` (now means "legacy job") and every `synthetic` branch (`JobOutcomes.fail`,
+`internal/unit-removal.ts`, `settler-task-persistence.ts`, `settler-lifecycle.ts#handleTransportCancelled`);
+`JobRunner.assignJob` / `TaskDispatcher.assignJob`; `ChoreoBuilder.build()`, `meta()`, `transformRecruit*()`,
+`transformDirect()`; the waypoint branch of `makeGoToTarget`; the metadata branch of the ENTER_BUILDING executor;
+`TRANSITIONAL_UNOWNED_KINDS`; the legacy-registry OR in `UnitCommitments` (+ its constructor arg);
+`CLEANUP_PRIORITY.RESERVATIONS`; `ctx.unitReservation` / `GameServices.unitReservation`; `entity.jobId`
+(still set by `startAssignedJob`, cleared on job end) and `nextJobId`.
