@@ -4,7 +4,7 @@
  *
  * Direction rule: all direction changes go through MovementController.setDirection()
  * first (source of truth), then to visualService for immediate visual update.
- * Combat units are skipped by the per-tick sync in UnitStateMachine, so this
+ * Combat units are skipped by the per-tick sync in SettlerTaskSystem (UnitVisualSync), so this
  * class handles its own visual propagation.
  *
  * Stationary enforcement: engageFight() and engageShoot() halt the unit's

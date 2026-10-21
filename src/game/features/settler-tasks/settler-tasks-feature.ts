@@ -2,6 +2,9 @@
  * SettlerTask Feature -- wraps SettlerTaskSystem and all work handlers
  * as a self-registering feature.
  *
+ * Exports the system plus its peers that other features use directly:
+ * JobRunner (TaskDispatcher / WorkerStateQuery) and WorkerAssignments.
+ *
  * The water handler (needs terrain) is registered here. Domain features
  * (production-control, trees, stones, crops, ore-signs, pioneer) register their own handlers.
  * Only domain-free choreography executors are registered here (see choreo-executors.ts).
@@ -17,7 +20,10 @@ import type { MaterialTransferExports } from '../material-transfer/material-tran
 import type { CombatExports } from '../combat';
 import type { SettlerLocationExports } from '../settler-location';
 import type { TerritoryExports } from '../territory';
-import { SettlerTaskSystem, SearchType } from './index';
+import { SettlerTaskSystem } from './settler-task-system';
+import type { JobRunner } from './job-runner';
+import type { WorkerAssignments } from './worker-assignments';
+import { SearchType } from './types';
 import { createWaterHandler } from './work-handlers';
 import { createSettlerTaskPersistence } from './settler-task-persistence';
 import { TickPhase } from '../../core/tick-phase';
@@ -26,6 +32,10 @@ import { executeMoveUnit, executeMoveSelectedUnits, type MoveCommandDeps } from 
 
 export interface SettlerTaskExports {
     settlerTaskSystem: SettlerTaskSystem;
+    /** Job / move-task assignment (TaskDispatcher) and job-state queries (WorkerStateQuery). */
+    jobRunner: JobRunner;
+    /** Home-building assignments, occupant counts, idle-specialist lookup. */
+    workerAssignments: WorkerAssignments;
 }
 
 export const SettlerTaskFeature: FeatureDefinition = {
@@ -72,19 +82,19 @@ export const SettlerTaskFeature: FeatureDefinition = {
         // Water handler -- needs terrain to find river tiles
         settlerTaskSystem.registerWorkHandler(SearchType.WATER, createWaterHandler(ctx.terrain));
 
-        const exports: SettlerTaskExports = { settlerTaskSystem };
+        const { jobRunner, assignments: workerAssignments } = settlerTaskSystem;
+        const exports: SettlerTaskExports = { settlerTaskSystem, jobRunner, workerAssignments };
 
         const settlerTaskPersistence = createSettlerTaskPersistence({
             gameState: ctx.gameState,
             runtimes: settlerTaskSystem.runtimes,
-            workerTracker: settlerTaskSystem.workerTracker,
+            assignments: workerAssignments,
             choreographyStore: settlerTaskSystem.getChoreographyStore(),
-            getOrCreateRuntime: id => settlerTaskSystem.getOrCreateRuntime(id),
         });
 
         const moveDeps: MoveCommandDeps = {
             state: ctx.gameState,
-            settlerTaskSystem,
+            taskDispatcher: jobRunner,
             combatSystem,
             unitReservation: ctx.unitReservation,
             isCombatControllable: () => ctx.gameplaySettings.combatControllable,

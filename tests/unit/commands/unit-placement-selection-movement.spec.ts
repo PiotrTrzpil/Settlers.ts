@@ -47,9 +47,10 @@ function createTestHarness() {
     // move_selected_units is owned by the settler-tasks feature — bind it here with stubbed deps.
     const moveDeps: MoveCommandDeps = {
         state,
-        settlerTaskSystem: {
+        taskDispatcher: {
+            assignJob: () => false,
             assignMoveTask: (id: number, target: Tile) => state.movement.moveUnit(id, target),
-        } as any,
+        },
         combatSystem: { releaseFromCombat: () => {}, isInCombat: () => false, setPassive: () => {} } as any,
         unitReservation: { isReserved: () => false } as any,
         isCombatControllable: () => true,

@@ -13,11 +13,11 @@ import type { CombatSystem } from '../combat';
 import type { UnitReservationRegistry } from '../../systems/unit-reservation';
 import { FORMATION_OFFSETS, commandFailed, COMMAND_OK } from '../../commands/command-types';
 import type { MoveUnitCommand, MoveSelectedUnitsCommand, CommandResult } from '../../commands/command-types';
-import type { SettlerTaskSystem } from './settler-task-system';
+import type { TaskDispatcher } from './types';
 
 export interface MoveCommandDeps {
     state: GameState;
-    settlerTaskSystem: SettlerTaskSystem;
+    taskDispatcher: TaskDispatcher;
     combatSystem: CombatSystem;
     unitReservation: UnitReservationRegistry;
     /** Whether units in combat can be redirected by player commands (live game setting). */
@@ -94,7 +94,7 @@ export function executeMoveUnit(deps: MoveCommandDeps, cmd: MoveUnitCommand): Co
         deps.combatSystem.setPassive(cmd.entityId);
     }
 
-    const success = deps.settlerTaskSystem.assignMoveTask(cmd.entityId, target);
+    const success = deps.taskDispatcher.assignMoveTask(cmd.entityId, target);
 
     if (!success) {
         return commandFailed(`Cannot move unit ${cmd.entityId} to (${cmd.targetX}, ${cmd.targetY})`);
@@ -162,5 +162,5 @@ function tryMoveSelectedUnit(
         deps.combatSystem.setPassive(unit.id);
     }
 
-    return deps.settlerTaskSystem.assignMoveTask(unit.id, target);
+    return deps.taskDispatcher.assignMoveTask(unit.id, target);
 }

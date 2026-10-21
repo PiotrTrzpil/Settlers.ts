@@ -135,8 +135,8 @@ function displaceOrKillUnitsOnLostTerritory(
     tm: TerritoryManager,
     affectedPlayers: ReadonlySet<number>
 ): void {
-    const { settlerTaskSystem } = ctx.getFeature<SettlerTaskExports>('settler-tasks');
-    const getAssigned = settlerTaskSystem.getAssignedBuilding.bind(settlerTaskSystem);
+    const { workerAssignments } = ctx.getFeature<SettlerTaskExports>('settler-tasks');
+    const getAssigned = workerAssignments.getAssignedBuilding.bind(workerAssignments);
     const toKill: number[] = [];
 
     for (const player of affectedPlayers) {

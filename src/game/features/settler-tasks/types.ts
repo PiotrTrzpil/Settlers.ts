@@ -4,7 +4,7 @@
 
 import type { ChoreoJobState } from './choreo-types';
 import type { BuildingType } from '../../buildings/building-type';
-import type { UnitType, Tile } from '../../entity';
+import type { Tile } from '../../entity';
 
 /** Search types - what a settler looks for */
 export enum SearchType {
@@ -101,7 +101,10 @@ export enum SettlerState {
     INTERRUPTED = 'INTERRUPTED',
 }
 
-/** Narrow interface for assigning tasks to units. Used by logistics, building-demand, siege, etc. */
+/**
+ * Narrow interface for assigning work to units (logistics, building demand, siege, garrison, …).
+ * Implemented by JobRunner.
+ */
 export interface TaskDispatcher {
     /**
      * Assign a choreography job to a unit.
@@ -109,16 +112,18 @@ export interface TaskDispatcher {
      *   and domain job share one numeric identity. When omitted, a new id is allocated.
      */
     assignJob(entityId: number, job: ChoreoJobState, moveTo?: Tile, numericJobId?: number): boolean;
+    /** Player-style move: drops the current job and home assignment, then walks to `target`. */
     assignMoveTask(entityId: number, target: Tile): boolean;
-    assignWorkerToBuilding(settlerId: number, buildingId: number): void;
-    releaseWorkerAssignment(settlerId: number): void;
-    findIdleSpecialist(unitType: UnitType, player: number, nearX: number, nearY: number): number | null;
 }
 
-/** Narrow read-only interface for querying worker state. Used by logistics diagnostics. */
+/** Narrow read-only interface for querying a unit's job state. Implemented by JobRunner. */
 export interface WorkerStateQuery {
     getActiveJobId(entityId: number): string | null;
     getSettlerState(entityId: number): SettlerState | null;
+}
+
+/** Narrow read-only interface for querying home-building assignments. Implemented by WorkerAssignments. */
+export interface WorkerAssignmentQuery {
     getAssignedBuilding(settlerId: number): number | null;
     getWorkersForBuilding(buildingId: number): ReadonlySet<number>;
 }

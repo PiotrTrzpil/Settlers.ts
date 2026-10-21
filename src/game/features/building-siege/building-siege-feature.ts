@@ -29,7 +29,7 @@ export const BuildingSiegeFeature: FeatureDefinition = {
     create(ctx: FeatureContext): FeatureInstance {
         const { garrisonManager, towerCombatSystem } = ctx.getFeature<TowerGarrisonExports>('tower-garrison');
         const { combatSystem } = ctx.getFeature<CombatExports>('combat');
-        const { settlerTaskSystem } = ctx.getFeature<SettlerTaskExports>('settler-tasks');
+        const { jobRunner, workerAssignments } = ctx.getFeature<SettlerTaskExports>('settler-tasks');
 
         const siegeSystem = new BuildingSiegeSystem({
             gameState: ctx.gameState,
@@ -38,7 +38,8 @@ export const BuildingSiegeFeature: FeatureDefinition = {
             garrisonManager,
             combatSystem,
             unitReservation: ctx.unitReservation,
-            settlerTaskSystem,
+            taskDispatcher: jobRunner,
+            workerAssignments,
             doorDefenderNotifier: towerCombatSystem,
         });
 
@@ -47,7 +48,7 @@ export const BuildingSiegeFeature: FeatureDefinition = {
             eventBus: ctx.eventBus,
             combatSystem,
             unitReservation: ctx.unitReservation,
-            settlerTaskSystem,
+            taskDispatcher: jobRunner,
             garrisonManager,
             executeCommand: ctx.executeCommand,
         });

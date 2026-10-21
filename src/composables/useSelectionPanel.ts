@@ -163,7 +163,7 @@ export function useSelectionPanel(game: Ref<Game>): {
         if (!entity || entity.type !== EntityType.Building) {
             return new Set<number>();
         }
-        return game.value.services.settlerTaskSystem.getWorkersForBuilding(entity.id);
+        return game.value.services.workerAssignments.getWorkersForBuilding(entity.id);
     });
 
     const playerColor = computed(() => {

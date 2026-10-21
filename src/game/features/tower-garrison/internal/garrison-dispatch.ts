@@ -8,7 +8,7 @@
 import type { GameState } from '@/game/game-state';
 import type { TerrainData } from '@/game/terrain';
 import type { UnitReservationRegistry } from '@/game/systems/unit-reservation';
-import type { SettlerTaskSystem } from '@/game/features/settler-tasks';
+import type { TaskDispatcher, WorkerAssignments } from '@/game/features/settler-tasks';
 import { choreo } from '@/game/systems/choreo/choreo-builder';
 import { JobKind } from '@/game/systems/choreo/types';
 import { createLogger } from '@/utilities/logger';
@@ -19,7 +19,8 @@ export interface GarrisonDispatchDeps {
     gameState: GameState;
     terrain: TerrainData;
     unitReservation: UnitReservationRegistry;
-    settlerTaskSystem: SettlerTaskSystem;
+    taskDispatcher: TaskDispatcher;
+    workerAssignments: WorkerAssignments;
 }
 
 /**
@@ -29,7 +30,7 @@ export interface GarrisonDispatchDeps {
  * On failure, all partial state is rolled back (reservation, worker assignment).
  */
 export function dispatchUnitToGarrison(unitId: number, buildingId: number, deps: GarrisonDispatchDeps): boolean {
-    const { gameState, terrain, unitReservation, settlerTaskSystem } = deps;
+    const { gameState, terrain, unitReservation, taskDispatcher, workerAssignments } = deps;
 
     unitReservation.reserve(unitId, {
         purpose: 'garrison-en-route',
@@ -40,18 +41,18 @@ export function dispatchUnitToGarrison(unitId: number, buildingId: number, deps:
         const job = choreo('WORKER_DISPATCH', JobKind.Garrison)
             .goToDoorAndEnter(buildingId, { gameState, terrain })
             .build();
-        const assigned = settlerTaskSystem.assignJob(unitId, job, job.targetPos ?? undefined);
+        const assigned = taskDispatcher.assignJob(unitId, job, job.targetPos ?? undefined);
 
         if (assigned) {
-            settlerTaskSystem.assignWorkerToBuilding(unitId, buildingId);
+            workerAssignments.assignWorker(unitId, buildingId);
             return true;
         }
 
         // Path not found — check if unit is already at the door
         const unit = gameState.getEntityOrThrow(unitId, 'garrison dispatch');
         if (job.targetPos && unit.x === job.targetPos.x && unit.y === job.targetPos.y) {
-            settlerTaskSystem.assignJob(unitId, job);
-            settlerTaskSystem.assignWorkerToBuilding(unitId, buildingId);
+            taskDispatcher.assignJob(unitId, job);
+            workerAssignments.assignWorker(unitId, buildingId);
             return true;
         }
 

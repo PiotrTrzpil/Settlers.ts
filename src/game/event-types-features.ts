@@ -168,7 +168,7 @@ export interface GameEventsFeatures {
 
     // === Settler Task Events ===
 
-    // --- Verbose Choreography Events (gated by WorkerTaskExecutor.verbose) ---
+    // --- Verbose Choreography Events (gated by JobRunner.verbose) ---
 
     /** A choreography node started executing */
     'choreo:nodeStarted': {

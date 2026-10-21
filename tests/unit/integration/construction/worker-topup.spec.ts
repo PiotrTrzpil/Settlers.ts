@@ -140,7 +140,7 @@ describe('Construction worker top-up – idle specialist assignment', { timeout:
 
         sim.runTicks(60);
 
-        expect(sim.services.settlerTaskSystem.isWorking(manualDiggerId)).toBe(true);
+        expect(sim.services.jobRunner.isWorking(manualDiggerId)).toBe(true);
         expect(sim.errors).toHaveLength(0);
     });
 
@@ -173,7 +173,7 @@ describe('Construction worker top-up – idle specialist assignment', { timeout:
 
         sim.runTicks(60);
 
-        expect(sim.services.settlerTaskSystem.isWorking(manualBuilderId)).toBe(true);
+        expect(sim.services.jobRunner.isWorking(manualBuilderId)).toBe(true);
         expect(sim.errors).toHaveLength(0);
     });
 });

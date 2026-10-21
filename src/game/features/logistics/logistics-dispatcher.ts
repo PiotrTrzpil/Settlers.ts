@@ -177,7 +177,7 @@ export class LogisticsDispatcher implements TickSystem {
      */
     registerEvents(eventBus: EventBus, cleanupRegistry: EntityCleanupRegistry): void {
         // Queued follow-up is activated when the carrier's choreography ends.
-        // entity.jobId is already cleared by WorkerJobLifecycle.completeJob before this event —
+        // entity.jobId is already cleared by JobRunner.completeJob before this event —
         // lifecycle owns clearJobId for live units (do not clear here).
         this.subscriptions.subscribe(eventBus, 'settler:taskCompleted', ({ unitId }) => {
             this.flushQueuedAssignment(unitId);

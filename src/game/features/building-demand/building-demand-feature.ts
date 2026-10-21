@@ -23,7 +23,7 @@ export const BuildingDemandFeature: FeatureDefinition = {
     dependencies: ['settler-tasks', 'recruit', 'building-construction'],
 
     create(ctx: FeatureContext) {
-        const { settlerTaskSystem } = ctx.getFeature<SettlerTaskExports>('settler-tasks');
+        const { jobRunner, workerAssignments } = ctx.getFeature<SettlerTaskExports>('settler-tasks');
         const { recruitSystem } = ctx.getFeature<RecruitExports>('recruit');
         const { constructionSiteManager } = ctx.getFeature<BuildingConstructionExports>('building-construction');
 
@@ -32,12 +32,11 @@ export const BuildingDemandFeature: FeatureDefinition = {
             eventBus: ctx.eventBus,
             terrain: ctx.terrain,
             findIdleSpecialist: (unitType, player, nearX, nearY) =>
-                settlerTaskSystem.findIdleSpecialist(unitType, player, nearX, nearY),
-            assignJob: (unitId, job, moveTo) => settlerTaskSystem.assignJob(unitId, job, moveTo),
-            assignWorkerToBuilding: (settlerId, buildingId) =>
-                settlerTaskSystem.assignWorkerToBuilding(settlerId, buildingId),
+                workerAssignments.findIdleSpecialist(unitType, player, nearX, nearY),
+            assignJob: (unitId, job, moveTo) => jobRunner.assignJob(unitId, job, moveTo),
+            assignWorkerToBuilding: (settlerId, buildingId) => workerAssignments.assignWorker(settlerId, buildingId),
             dispatchRecruitment: (unitType, player, opts) => recruitSystem.dispatchRecruitment(unitType, player, opts),
-            getOccupantCount: buildingId => settlerTaskSystem.getOccupantCount(buildingId),
+            getOccupantCount: buildingId => workerAssignments.getOccupantCount(buildingId),
         });
 
         buildingDemandSystem.registerEvents();

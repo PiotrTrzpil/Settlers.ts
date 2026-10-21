@@ -293,7 +293,7 @@ describe('Territory consequences – settler displacement', { timeout: 60_000 },
         // Let the woodcutter leave the building to chop a tree
         sim.runUntil(
             () => {
-                const workers = sim.services.settlerTaskSystem.getWorkersForBuilding(wcId);
+                const workers = sim.services.workerAssignments.getWorkersForBuilding(wcId);
                 for (const wId of workers) {
                     const w = sim.state.getEntity(wId);
                     if (w && !w.hidden) return true;
@@ -304,7 +304,7 @@ describe('Territory consequences – settler displacement', { timeout: 60_000 },
         );
 
         // Find the worker that's outside
-        const workers = sim.services.settlerTaskSystem.getWorkersForBuilding(wcId);
+        const workers = sim.services.workerAssignments.getWorkersForBuilding(wcId);
         let outsideWorkerId: number | undefined;
         for (const wId of workers) {
             const w = sim.state.getEntity(wId);
@@ -320,7 +320,7 @@ describe('Territory consequences – settler displacement', { timeout: 60_000 },
 
         // Worker assigned to surviving building should still exist and remain assigned
         expect(sim.state.getEntity(outsideWorkerId!)).toBeDefined();
-        expect(sim.services.settlerTaskSystem.getAssignedBuilding(outsideWorkerId!)).toBe(wcId);
+        expect(sim.services.workerAssignments.getAssignedBuilding(outsideWorkerId!)).toBe(wcId);
         expect(sim.errors).toHaveLength(0);
     });
 

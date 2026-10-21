@@ -142,12 +142,11 @@ export function moveToPosition(
 // ─────────────────────────────────────────────────────────────
 
 /**
- * Resolve the settler's home/assigned building ID.
- * Uses ctx.getWorkerHomeBuilding for worker settlers.
+ * Resolve the settler's home/assigned building ID from the execution scope.
  * Throws if no building is assigned (contract violation).
  */
-function resolveAssignedBuildingId(settler: Entity, ctx: MovementContext): number {
-    const buildingId = ctx.getWorkerHomeBuilding(settler.id);
+function resolveAssignedBuildingId(settler: Entity, scope: ChoreoExecutionScope): number {
+    const buildingId = scope.homeBuildingId;
     if (buildingId === null) {
         throw new Error(
             `Settler ${settler.id}: no assigned building found. Choreography requires an assigned building.`
@@ -187,6 +186,7 @@ function resolveHomePilePosition(
     settler: Entity,
     job: ChoreoJobState,
     ctx: MovementContext,
+    scope: ChoreoExecutionScope,
     inventoryNode: ChoreoTaskType.GET_GOOD | ChoreoTaskType.PUT_GOOD,
     side: PileSide
 ): Tile {
@@ -197,7 +197,7 @@ function resolveHomePilePosition(
                 `but no following ${ChoreoTaskType[inventoryNode]} node names a material`
         );
     }
-    return ctx.buildingPositionResolver.getPilePosition(resolveAssignedBuildingId(settler, ctx), material, side);
+    return ctx.buildingPositionResolver.getPilePosition(resolveAssignedBuildingId(settler, scope), material, side);
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -295,9 +295,9 @@ export const executeGoToTargetRoughly = makeGoToTarget(ARRIVAL_DIST_ROUGH);
 
 /** GO_TO_POS / GO_TO_POS_ROUGHLY — move to building-relative position. */
 function makeGoToPos(arrivalDist: number): MovementExecutorFn {
-    return (settler, job, node, _dt, ctx) => {
+    return (settler, job, node, _dt, ctx, scope) => {
         if (!job.targetPos) {
-            const buildingId = resolveAssignedBuildingId(settler, ctx);
+            const buildingId = resolveAssignedBuildingId(settler, scope);
             job.targetPos = ctx.buildingPositionResolver.resolvePosition(
                 buildingId,
                 { x: node.x, y: node.y },
@@ -315,11 +315,11 @@ export const executeGoToPosRoughly = makeGoToPos(ARRIVAL_DIST_ROUGH);
 /**
  * GO_HOME — move to the settler's home building door.
  *
- * Resolves the home building via ctx.getWorkerHomeBuilding(settler.id),
+ * Resolves the home building from scope.homeBuildingId,
  * then navigates to its door offset (or building position if door offset is zero).
  */
-export const executeGoHome: MovementExecutorFn = (settler, job, node, _dt, ctx) => {
-    const homeId = ctx.getWorkerHomeBuilding(settler.id);
+export const executeGoHome: MovementExecutorFn = (settler, job, node, _dt, ctx, scope) => {
+    const homeId = scope.homeBuildingId;
     if (homeId === null) {
         log.debug(`executeGoHome: settler ${settler.id} has no home building`);
         return TaskResult.FAILED;
@@ -337,9 +337,9 @@ export const executeGoHome: MovementExecutorFn = (settler, job, node, _dt, ctx) 
  * Walks to the home building's INPUT pile for the material of the next GET_GOOD node
  * (tile fixed on the inventory slot). Carrier transport uses TRANSPORT_GO_TO_SOURCE instead.
  */
-export const executeGoToSourcePile: MovementExecutorFn = (settler, job, node, _dt, ctx) => {
+export const executeGoToSourcePile: MovementExecutorFn = (settler, job, node, _dt, ctx, scope) => {
     if (!job.targetPos) {
-        job.targetPos = resolveHomePilePosition(settler, job, ctx, ChoreoTaskType.GET_GOOD, SlotKind.Input);
+        job.targetPos = resolveHomePilePosition(settler, job, ctx, scope, ChoreoTaskType.GET_GOOD, SlotKind.Input);
     }
     return moveToPosition(settler, job.targetPos.x, job.targetPos.y, node, ctx, ARRIVAL_DIST, job);
 };
@@ -350,9 +350,9 @@ export const executeGoToSourcePile: MovementExecutorFn = (settler, job, node, _d
  * Walks to the home building's OUTPUT pile for the material of the next PUT_GOOD node
  * (tile fixed on the inventory slot). Carrier transport uses TRANSPORT_GO_TO_DEST instead.
  */
-export const executeGoToDestinationPile: MovementExecutorFn = (settler, job, node, _dt, ctx) => {
+export const executeGoToDestinationPile: MovementExecutorFn = (settler, job, node, _dt, ctx, scope) => {
     if (!job.targetPos) {
-        job.targetPos = resolveHomePilePosition(settler, job, ctx, ChoreoTaskType.PUT_GOOD, SlotKind.Output);
+        job.targetPos = resolveHomePilePosition(settler, job, ctx, scope, ChoreoTaskType.PUT_GOOD, SlotKind.Output);
     }
     return moveToPosition(settler, job.targetPos.x, job.targetPos.y, node, ctx, ARRIVAL_DIST, job);
 };
@@ -369,8 +369,7 @@ function searchViaEntityHandler(
         return null;
     }
     const { handlerErrorLogger } = ctx;
-    const homeId = ctx.getWorkerHomeBuilding(settler.id);
-    const area = resolveSearchArea(settler, homeId, ctx.buildingPositionResolver);
+    const area = resolveSearchArea(settler, scope.homeBuildingId, ctx.buildingPositionResolver);
 
     const result = safeCall(
         () => entityHandler.findTarget(area, settler.id, settler.player),
@@ -407,8 +406,7 @@ function searchViaPositionHandler(
         return null;
     }
     const { handlerErrorLogger } = ctx;
-    const homeId = ctx.getWorkerHomeBuilding(settler.id);
-    const area = resolveSearchArea(settler, homeId, ctx.buildingPositionResolver);
+    const area = resolveSearchArea(settler, scope.homeBuildingId, ctx.buildingPositionResolver);
 
     const pos = safeCall(
         () => positionHandler.findPosition(area, settler.id),
@@ -469,8 +467,8 @@ export const executeSearch: MovementExecutorFn = (settler, job, _node, _dt, ctx,
  * If node.dir !== -1, the settler's direction is set to node.dir.
  * Returns DONE immediately after positioning.
  */
-export const executeGoVirtual: MovementExecutorFn = (settler, job, node, _dt, ctx) => {
-    const buildingId = resolveAssignedBuildingId(settler, ctx);
+export const executeGoVirtual: MovementExecutorFn = (settler, job, node, _dt, ctx, scope) => {
+    const buildingId = resolveAssignedBuildingId(settler, scope);
 
     // When working on a target entity with useWork offsets, resolve positions
     // relative to the target (e.g. woodcutter cutting around a tree) rather than

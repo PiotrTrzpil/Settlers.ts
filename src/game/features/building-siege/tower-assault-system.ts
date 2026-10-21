@@ -25,7 +25,7 @@ import { isIdleSwordsman, findNearbyEnemyGarrison, getBuildingPerimeterTiles } f
 import { BUILDING_SEARCH_RADIUS } from './siege-types';
 import { BuildingHealthTracker, getBuildingMaxHealth } from './building-health';
 import type { CombatSystem } from '../combat/combat-system';
-import type { SettlerTaskSystem } from '../settler-tasks';
+import type { TaskDispatcher } from '../settler-tasks';
 import type { TowerGarrisonManager } from '../tower-garrison/tower-garrison-manager';
 import type { UnitReservationRegistry } from '../../systems/unit-reservation';
 import type { CommandExecutor } from '../../commands';
@@ -47,7 +47,7 @@ export interface TowerAssaultSystemConfig {
     eventBus: EventBus;
     combatSystem: CombatSystem;
     unitReservation: UnitReservationRegistry;
-    settlerTaskSystem: SettlerTaskSystem;
+    taskDispatcher: TaskDispatcher;
     garrisonManager: TowerGarrisonManager;
     executeCommand: CommandExecutor;
 }
@@ -60,7 +60,7 @@ export class TowerAssaultSystem implements TickSystem {
     private readonly eventBus: EventBus;
     private readonly combatSystem: CombatSystem;
     private readonly unitReservation: UnitReservationRegistry;
-    private readonly settlerTaskSystem: SettlerTaskSystem;
+    private readonly taskDispatcher: TaskDispatcher;
     private readonly garrisonManager: TowerGarrisonManager;
     private readonly executeCommand: CommandExecutor;
 
@@ -71,7 +71,7 @@ export class TowerAssaultSystem implements TickSystem {
         this.eventBus = cfg.eventBus;
         this.combatSystem = cfg.combatSystem;
         this.unitReservation = cfg.unitReservation;
-        this.settlerTaskSystem = cfg.settlerTaskSystem;
+        this.taskDispatcher = cfg.taskDispatcher;
         this.garrisonManager = cfg.garrisonManager;
         this.executeCommand = cfg.executeCommand;
 
@@ -106,7 +106,7 @@ export class TowerAssaultSystem implements TickSystem {
             if (!this.combatSystem.isInCombat(unit.id)) {
                 const tile = this.findNearestPerimeterTile(unit, target);
                 if (tile) {
-                    this.settlerTaskSystem.assignMoveTask(unit.id, tile);
+                    this.taskDispatcher.assignMoveTask(unit.id, tile);
                 }
             }
         }

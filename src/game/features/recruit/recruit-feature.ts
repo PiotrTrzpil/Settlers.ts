@@ -34,7 +34,7 @@ export const RecruitFeature: FeatureDefinition = {
 
     create(ctx: FeatureContext) {
         const { carrierRegistry, idleCarrierPool } = ctx.getFeature<CarrierFeatureExports>('carriers');
-        const { settlerTaskSystem } = ctx.getFeature<SettlerTaskExports>('settler-tasks');
+        const { jobRunner } = ctx.getFeature<SettlerTaskExports>('settler-tasks');
         const { inventoryManager } = ctx.getFeature<InventoryExports>('inventory');
         const { territoryManager } = ctx.getFeature<TerritoryExports>('territory');
 
@@ -45,7 +45,7 @@ export const RecruitFeature: FeatureDefinition = {
             eventBus: ctx.eventBus,
             carrierRegistry,
             toolSourceResolver,
-            assignJob: (unitId, job, moveTo) => settlerTaskSystem.assignJob(unitId, job, moveTo),
+            assignJob: (unitId, job, moveTo) => jobRunner.assignJob(unitId, job, moveTo),
             unitReservation: ctx.unitReservation,
         });
 
@@ -55,7 +55,7 @@ export const RecruitFeature: FeatureDefinition = {
             idleCarrierPool,
             unitTransformer,
             toolSourceResolver,
-            assignJob: (unitId, job, moveTo) => settlerTaskSystem.assignJob(unitId, job, moveTo),
+            assignJob: (unitId, job, moveTo) => jobRunner.assignJob(unitId, job, moveTo),
             territoryCheck: (a, b, player) => territoryManager.areConnected(a, b, player),
         });
 

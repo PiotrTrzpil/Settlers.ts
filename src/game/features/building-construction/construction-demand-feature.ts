@@ -27,7 +27,7 @@ export const ConstructionDemandFeature: FeatureDefinition = {
     create(ctx: FeatureContext) {
         const { constructionSiteManager } = ctx.getFeature<BuildingConstructionExports>('building-construction');
         const { inventoryManager } = ctx.getFeature<InventoryExports>('inventory');
-        const { settlerTaskSystem } = ctx.getFeature<SettlerTaskExports>('settler-tasks');
+        const { settlerTaskSystem, jobRunner, workerAssignments } = ctx.getFeature<SettlerTaskExports>('settler-tasks');
         const { recruitSystem } = ctx.getFeature<RecruitExports>('recruit');
 
         const constructionDemandSystem = new ConstructionSiteDemandSystem({
@@ -35,8 +35,8 @@ export const ConstructionDemandFeature: FeatureDefinition = {
             eventBus: ctx.eventBus,
             siteManager: constructionSiteManager,
             findIdleSpecialist: (unitType, player, nearX, nearY) =>
-                settlerTaskSystem.findIdleSpecialist(unitType, player, nearX, nearY),
-            assignJob: (unitId, job, moveTo) => settlerTaskSystem.assignJob(unitId, job, moveTo),
+                workerAssignments.findIdleSpecialist(unitType, player, nearX, nearY),
+            assignJob: (unitId, job, moveTo) => jobRunner.assignJob(unitId, job, moveTo),
             dispatchRecruitment: (unitType, player, opts) => recruitSystem.dispatchRecruitment(unitType, player, opts),
         });
 

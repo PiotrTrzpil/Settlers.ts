@@ -424,13 +424,13 @@ describe('Replay persistence – invariants', { timeout: 30_000 }, () => {
         });
 
         // Before restore: exactly 1 worker assigned
-        const workersBefore = sim.services.settlerTaskSystem.getOccupantCount(woodcutterId);
+        const workersBefore = sim.services.workerAssignments.getOccupantCount(woodcutterId);
         expect(workersBefore, 'pre-restore occupant count').toBe(1);
 
         restored = keyframeAndRestore(sim);
 
         // After restore + replay: still exactly 1 worker
-        const workersAfter = restored.services.settlerTaskSystem.getOccupantCount(woodcutterId);
+        const workersAfter = restored.services.workerAssignments.getOccupantCount(woodcutterId);
         expect(workersAfter, 'post-restore occupant count must not exceed 1').toBe(1);
     });
 

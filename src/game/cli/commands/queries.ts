@@ -332,6 +332,8 @@ function buildJsScope(ctx: CliContext): Record<string, unknown> {
         inventory: s.inventoryManager,
         construction: s.constructionSiteManager,
         tasks: s.settlerTaskSystem,
+        jobs: s.jobRunner,
+        assignments: s.workerAssignments,
         combat: s.combatSystem,
         siege: s.siegeSystem,
         garrison: s.garrisonManager,

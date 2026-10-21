@@ -1,172 +1,151 @@
 /**
- * Settler Task System — manages all unit behaviors via tasks.
- * Coordinates WorkHandlerRegistry, UnitStateMachine, WorkerTaskExecutor,
- * IdleAnimationController, and BuildingWorkerTracker.
+ * SettlerTaskSystem — the settler-tasks tick system and composition root.
+ *
+ * Builds the feature's peers (UnitRuntimeStore, WorkerAssignments, JobRunner,
+ * WorkerAutonomy, UnitVisualSync, SettlerLifecycleCoordinator) and runs the per-unit
+ * tick loop that dispatches each unit to them. Owns only the tick, its sub-timings and
+ * the feature-level registration / debug surface.
  */
 
 import type { GameState } from '../../game-state';
 import type { TickSystem } from '../../core/tick-system';
-import { EntityType, UnitType, Tile, getEntityIfType } from '../../entity';
-import type { EventBus } from '../../event-bus';
+import { EntityType, UnitType, type Entity, getEntityIfType } from '../../entity';
 import { isAngelUnitType } from '../../core/unit-types';
 import { createLogger } from '@/utilities/logger';
 import { ThrottledLogger } from '@/utilities/throttled-logger';
-import {
-    SearchType,
-    SettlerState,
-    type JobState,
-    type WorkHandler,
-    type SettlerConfig,
-    type TaskDispatcher,
-    type WorkerStateQuery,
-} from './types';
+import { SearchType, SettlerState, type WorkHandler, type SettlerConfig } from './types';
 import { buildAllSettlerConfigs } from '../../data/settler-data-access';
-import type { BuildingInventoryManager } from '../inventory';
 import { createCarrierHandler } from './work-handlers';
 import { WorkHandlerRegistry } from './work-handler-registry';
 import { IdleAnimationController } from './idle-animation-controller';
-import { WorkerTaskExecutor } from './worker-task-executor';
-import { UnitStateMachine, TickCategory, type UnitRuntime } from './unit-state-machine';
 import { JobChoreographyStore } from './job-choreography-store';
 import { BuildingPositionResolverImpl } from './building-position-resolver';
 import { JobPartResolverImpl } from './job-part-resolver';
-import type { ISettlerBuildingLocationManager } from '../settler-location';
-import { BuildingWorkerTracker } from './building-worker-tracker';
-import { IndexedMap } from '@/game/utils/indexed-map';
-import type { TickScheduler } from '../../systems/tick-scheduler';
-import { type SettlerTaskSystemConfig, type SettlerDebugEntry } from './settler-task-config';
+import { registerCoreExecutors } from './choreo-executors';
+import { IdleSearchCooldowns } from './idle-search-cooldowns';
+import { UnitRuntimeStore, type UnitRuntime } from './unit-runtime';
+import { WorkerAssignments } from './worker-assignments';
+import { JobRunner } from './job-runner';
+import { WorkerAutonomy } from './worker-autonomy';
+import { UnitVisualSync } from './unit-visual-sync';
 import { SettlerLifecycleCoordinator } from './settler-lifecycle';
-import { UnitJobService } from './unit-job-service';
-import { dumpSettlerDebug, dumpWorkerAssignments, type SettlerDebugSource } from './internal/settler-debug';
+import type { SettlerTaskSystemConfig } from './settler-task-config';
+import { dumpSettlerDebug, dumpWorkerAssignments, type SettlerDebugEntry } from './internal/settler-debug';
 export type { SettlerTaskSystemConfig } from './settler-task-config';
 
 const log = createLogger('SettlerTaskSystem');
-const IDLE_SEARCH_COOLDOWN = 10;
-type SettlerConfigs = Map<UnitType, SettlerConfig>;
 
-export class SettlerTaskSystem implements TickSystem, TaskDispatcher, WorkerStateQuery, SettlerDebugSource {
+/** Category of work performed for a unit in one tick — used for the sub-timing breakdown. */
+const enum TickCategory {
+    MOVE_TASK = 0,
+    IDLE_SEARCH = 1,
+    JOB_EXEC = 2,
+    IDLE_ANIM = 3,
+    COMBAT_SKIP = 4,
+    /** Idle settler that skipped search (cooldown, carrier, military) */
+    IDLE_SKIP = 5,
+}
+
+/** Accumulated milliseconds per TickCategory. */
+type CategoryTimes = [number, number, number, number, number, number];
+
+export class SettlerTaskSystem implements TickSystem {
+    readonly runtimes: UnitRuntimeStore;
+    readonly assignments: WorkerAssignments;
+    readonly jobRunner: JobRunner;
+
     private readonly gameState: GameState;
-    private readonly eventBus: EventBus;
-    private readonly inventoryManager: BuildingInventoryManager;
-    private readonly settlerConfigs: SettlerConfigs;
+    private readonly isInCombat: (entityId: number) => boolean;
+    private readonly settlerConfigs: ReadonlyMap<UnitType, SettlerConfig>;
     private readonly choreographyStore: JobChoreographyStore;
     private readonly handlerRegistry: WorkHandlerRegistry;
-    private readonly animController: IdleAnimationController;
     private readonly buildingPositionResolver: BuildingPositionResolverImpl;
-    private readonly workerExecutor: WorkerTaskExecutor;
-    private readonly stateMachine: UnitStateMachine;
-    readonly runtimes = new IndexedMap<number, UnitRuntime>();
-    readonly workerTracker: BuildingWorkerTracker;
-    private readonly tickScheduler: TickScheduler;
-    private lastSubTimings: Record<string, number> = {};
-    private readonly locationManager: ISettlerBuildingLocationManager;
+    private readonly idleCooldowns: IdleSearchCooldowns;
+    private readonly autonomy: WorkerAutonomy;
+    private readonly visualSync: UnitVisualSync;
     private readonly lifecycleCoordinator: SettlerLifecycleCoordinator;
-    private readonly jobService: UnitJobService;
+    private lastSubTimings: Record<string, number> = {};
 
     constructor(config: SettlerTaskSystemConfig) {
         this.gameState = config.gameState;
-        this.eventBus = config.eventBus;
-        this.inventoryManager = config.inventoryManager;
-        this.locationManager = config.locationManager;
-        this.tickScheduler = config.tickScheduler;
-
+        this.isInCombat = config.isInCombat;
         this.settlerConfigs = buildAllSettlerConfigs();
         this.choreographyStore = new JobChoreographyStore();
-
-        // eslint-disable-next-line no-restricted-syntax -- optional chaining; null when source is absent
-        const byBuilding = this.runtimes.addIndex<number>((_id, runtime) => runtime.homeAssignment?.buildingId ?? null);
-
-        this.workerTracker = new BuildingWorkerTracker(
-            this.runtimes,
-            id => this.getOrCreateRuntime(id),
-            this.locationManager,
-            this.gameState,
-            this.eventBus,
-            byBuilding,
-            config.territoryCheck
-        );
-
-        const handlerErrorLogger = new ThrottledLogger(log, 2000);
-        const missingHandlerLogger = new ThrottledLogger(log, 5000);
-
-        const jobPartResolver = new JobPartResolverImpl();
-
-        this.buildingPositionResolver = new BuildingPositionResolverImpl({
-            gameState: this.gameState,
-            inventoryManager: this.inventoryManager,
-            workAreaStore: config.workAreaStore,
-        });
-
         this.handlerRegistry = new WorkHandlerRegistry();
 
-        this.animController = new IdleAnimationController(
+        const handlerErrorLogger = new ThrottledLogger(log, 2000);
+        const animController = new IdleAnimationController(
             config.visualService,
             this.gameState.rng,
             this.gameState.movement
         );
-
-        this.workerExecutor = new WorkerTaskExecutor({
-            choreoSystem: config.choreoSystem,
+        this.buildingPositionResolver = new BuildingPositionResolverImpl({
             gameState: this.gameState,
+            inventoryManager: config.inventoryManager,
+            workAreaStore: config.workAreaStore,
+        });
+
+        this.idleCooldowns = new IdleSearchCooldowns(config.tickScheduler);
+        this.runtimes = new UnitRuntimeStore(animController, this.idleCooldowns);
+        this.assignments = new WorkerAssignments(
+            this.runtimes,
+            config.locationManager,
+            this.gameState,
+            config.eventBus,
+            config.territoryCheck
+        );
+        this.jobRunner = new JobRunner({
+            gameState: this.gameState,
+            eventBus: config.eventBus,
+            choreoSystem: config.choreoSystem,
+            runtimes: this.runtimes,
+            assignments: this.assignments,
+            settlerConfigs: this.settlerConfigs,
+            handlerRegistry: this.handlerRegistry,
+            animController,
+            jobPartResolver: new JobPartResolverImpl(),
+            locationManager: config.locationManager,
+            triggerSystem: config.triggerSystem,
+            materialTransfer: config.materialTransfer,
+            handlerErrorLogger,
+        });
+        this.autonomy = new WorkerAutonomy({
+            gameState: this.gameState,
+            eventBus: config.eventBus,
+            jobRunner: this.jobRunner,
             choreographyStore: this.choreographyStore,
             handlerRegistry: this.handlerRegistry,
-            animController: this.animController,
-            handlerErrorLogger,
-            missingHandlerLogger,
-            eventBus: config.eventBus,
-            inventoryManager: this.inventoryManager,
+            inventoryManager: config.inventoryManager,
             buildingPositionResolver: this.buildingPositionResolver,
-            triggerSystem: config.triggerSystem,
-            getWorkerHomeBuilding: this.getAssignedBuilding.bind(this),
-            jobPartResolver,
-            materialTransfer: config.materialTransfer,
-            locationManager: this.locationManager,
+            locationManager: config.locationManager,
+            animController,
+            idleCooldowns: this.idleCooldowns,
+            handlerErrorLogger,
+            missingHandlerLogger: new ThrottledLogger(log, 5000),
         });
-
-        this.stateMachine = new UnitStateMachine({
-            gameState: this.gameState,
-            visualService: config.visualService,
-            settlerConfigs: this.settlerConfigs,
-            animController: this.animController,
-            workerExecutor: this.workerExecutor,
-            isInCombat: config.isInCombat,
-            tickScheduler: this.tickScheduler,
-        });
-
-        this.jobService = new UnitJobService({
-            gameState: this.gameState,
-            runtimes: this.runtimes,
-            settlerConfigs: this.settlerConfigs,
-            workerExecutor: this.workerExecutor,
-            workerTracker: this.workerTracker,
-            handlerRegistry: this.handlerRegistry,
-            getOrCreateRuntime: id => this.getOrCreateRuntime(id),
-        });
-
+        this.visualSync = new UnitVisualSync(this.gameState, config.visualService, animController);
         this.lifecycleCoordinator = new SettlerLifecycleCoordinator({
             gameState: this.gameState,
-            eventBus: this.eventBus,
-            tickScheduler: this.tickScheduler,
-            workerTracker: this.workerTracker,
-            stateMachine: this.stateMachine,
+            eventBus: config.eventBus,
+            tickScheduler: config.tickScheduler,
             runtimes: this.runtimes,
-            locationManager: this.locationManager,
-            inventoryManager: this.inventoryManager,
+            jobRunner: this.jobRunner,
+            assignments: this.assignments,
+            idleCooldowns: this.idleCooldowns,
             handlerRegistry: this.handlerRegistry,
-            animController: this.animController,
-            interruptJob: (entity, cfg, runtime) => this.jobService.interruptJobForCleanup(entity, cfg, runtime),
-            createRuntime: () => ({
-                state: SettlerState.IDLE,
-                job: null,
-                moveTask: null,
-                lastDirection: 0,
-                idleState: this.animController.createIdleState(),
-                homeAssignment: null,
-                idleSearchReady: false,
-            }),
+            settlerConfigs: this.settlerConfigs,
+        });
+
+        // Domain-free executors only — domain features register their own task types.
+        registerCoreExecutors(config.choreoSystem, {
+            gameState: this.gameState,
+            buildingPositionResolver: this.buildingPositionResolver,
+            triggerSystem: config.triggerSystem,
+            handlerErrorLogger,
         });
 
         this.lifecycleCoordinator.registerEvents();
+        this.visualSync.registerEvents(config.eventBus);
 
         this.handlerRegistry.register(SearchType.GOOD, createCarrierHandler());
 
@@ -175,9 +154,13 @@ export class SettlerTaskSystem implements TickSystem, TaskDispatcher, WorkerStat
         );
     }
 
-    /** Delegate entity removal to the lifecycle coordinator (used by cleanup registry). */
-    onEntityRemoved(entityId: number): void {
-        this.lifecycleCoordinator.onEntityRemoved(entityId);
+    // ─────────────────────────────────────────────────────────────
+    // Feature-level registration and services
+    // ─────────────────────────────────────────────────────────────
+
+    /** Domain features plug in their work handlers (production-control → WORKPLACE, trees → TREE, …). */
+    registerWorkHandler(searchType: SearchType, handler: WorkHandler): void {
+        this.handlerRegistry.register(searchType, handler);
     }
 
     getPositionResolver(): BuildingPositionResolverImpl {
@@ -188,14 +171,7 @@ export class SettlerTaskSystem implements TickSystem, TaskDispatcher, WorkerStat
         return this.choreographyStore;
     }
 
-    get verbose(): boolean {
-        return this.workerExecutor.verbose;
-    }
-
-    set verbose(value: boolean) {
-        this.workerExecutor.verbose = value;
-    }
-
+    /** True for units with a settler config (choreography jobs / idle search). */
     isManaged(entityId: number): boolean {
         const entity = getEntityIfType(this.gameState, entityId, EntityType.Unit);
         if (!entity) {
@@ -204,98 +180,49 @@ export class SettlerTaskSystem implements TickSystem, TaskDispatcher, WorkerStat
         return this.settlerConfigs.has(entity.subType as UnitType);
     }
 
-    isWorking(entityId: number): boolean {
-        const runtime = this.runtimes.get(entityId);
-        if (!runtime) {
-            return false;
-        }
-        return runtime.state === SettlerState.WORKING || runtime.moveTask !== null;
+    // ─────────────────────────────────────────────────────────────
+    // Debug
+    // ─────────────────────────────────────────────────────────────
+
+    /** Verbose choreography trace events (choreo:nodeStarted / nodeCompleted / animationApplied / waitingAtHome). */
+    get verbose(): boolean {
+        return this.jobRunner.verbose;
     }
 
-    hasMoveTask(entityId: number): boolean {
-        const runtime = this.runtimes.get(entityId);
-        return runtime !== undefined && runtime.moveTask !== null;
-    }
-
-    getActiveJobId(entityId: number): string | null {
-        // eslint-disable-next-line no-restricted-syntax -- optional chaining; null when source is absent
-        return this.runtimes.get(entityId)?.job?.jobId ?? null;
-    }
-
-    getSettlerState(entityId: number): SettlerState | null {
-        // eslint-disable-next-line no-restricted-syntax -- Map.get() returns undefined for missing keys
-        return this.runtimes.get(entityId)?.state ?? null;
+    set verbose(value: boolean) {
+        this.jobRunner.verbose = value;
     }
 
     getDebugInfo(): SettlerDebugEntry[] {
-        return dumpSettlerDebug(this);
+        return dumpSettlerDebug(this.runtimes);
     }
 
     dumpWorkerAssignments(): string {
-        return dumpWorkerAssignments(this);
+        return dumpWorkerAssignments(this.runtimes, this.jobRunner);
     }
 
-    registerWorkHandler(searchType: SearchType, handler: WorkHandler): void {
-        this.handlerRegistry.register(searchType, handler);
+    getSubTimings(): Record<string, number> {
+        return this.lastSubTimings;
     }
 
-    getAssignedBuilding(settlerId: number): number | null {
-        return this.workerTracker.getAssignedBuilding(settlerId);
+    // ─────────────────────────────────────────────────────────────
+    // TickSystem
+    // ─────────────────────────────────────────────────────────────
+
+    /** Cleanup registry hook — the lifecycle coordinator releases the unit's or building's state. */
+    onEntityRemoved(entityId: number): void {
+        this.lifecycleCoordinator.onEntityRemoved(entityId);
     }
 
-    getWorkersForBuilding(buildingId: number): ReadonlySet<number> {
-        return this.workerTracker.getWorkersForBuilding(buildingId);
-    }
-
-    relocateUnitsFromFootprints(): void {
-        this.workerTracker.relocateFromFootprints();
-    }
-
-    findIdleSpecialist(unitType: UnitType, player: number, nearX: number, nearY: number): number | null {
-        return this.workerTracker.findIdleSpecialist(unitType, player, nearX, nearY);
-    }
-
-    assignWorkerToBuilding(settlerId: number, buildingId: number): void {
-        this.workerTracker.assignWorker(settlerId, buildingId);
-    }
-
-    getOccupantCount(buildingId: number): number {
-        // eslint-disable-next-line no-restricted-syntax -- occupants map may not have an entry for buildings with no assigned workers; 0 is correct
-        return this.workerTracker.occupants.get(buildingId) ?? 0;
-    }
-
-    assignWorkerInsideBuilding(settlerId: number, buildingId: number): void {
-        this.workerTracker.assignWorkerInside(settlerId, buildingId);
-    }
-
-    releaseWorkerAssignment(settlerId: number): void {
-        this.workerTracker.releaseAssignment(settlerId);
-    }
-
-    assignMoveTask(entityId: number, target: Tile): boolean {
-        return this.jobService.assignMoveTask(entityId, target);
-    }
-
-    cancelMoveTask(entityId: number): void {
-        this.jobService.cancelMoveTask(entityId);
-    }
-
-    /**
-     * Assign a choreography job to a unit.
-     * @param numericJobId When set (e.g. transport record id), reused as entity.jobId so the unit
-     *   and domain job share one numeric identity. When omitted, allocates a new id.
-     */
-    assignJob(entityId: number, job: JobState, moveTo?: Tile, numericJobId?: number): boolean {
-        return this.jobService.assignJob(entityId, job, moveTo, numericJobId);
+    destroy(): void {
+        this.lifecycleCoordinator.destroy();
+        this.visualSync.destroy();
+        this.idleCooldowns.destroy();
     }
 
     tick(dt: number): void {
-        const cats: [number, number, number, number, number, number] = [0, 0, 0, 0, 0, 0];
-        const it = this.workerExecutor.idleTimings;
-        for (const k of Object.keys(it)) {
-            it[k] = 0;
-        }
-        this.workerExecutor.idleSearchCount = 0;
+        const cats: CategoryTimes = [0, 0, 0, 0, 0, 0];
+        this.autonomy.resetTickStats();
 
         const unitIds = this.gameState.entityIndex.idsOfType(EntityType.Unit);
         for (const id of unitIds) {
@@ -309,8 +236,8 @@ export class SettlerTaskSystem implements TickSystem, TaskDispatcher, WorkerStat
 
             const start = performance.now();
             try {
-                const runtime = this.getOrCreateRuntime(entity.id);
-                const cat = this.stateMachine.updateUnit(entity, runtime, dt);
+                const runtime = this.runtimes.getOrCreate(entity.id);
+                const cat = this.updateUnit(entity, runtime, dt);
                 cats[cat] += performance.now() - start;
             } catch (e) {
                 const err = e instanceof Error ? e : new Error(String(e));
@@ -319,41 +246,76 @@ export class SettlerTaskSystem implements TickSystem, TaskDispatcher, WorkerStat
             }
         }
 
+        this.recordSubTimings(cats);
+    }
+
+    /** One unit's tick: move task first, then its job or idle search, else idle animation. */
+    private updateUnit(unit: Entity, runtime: UnitRuntime, dt: number): TickCategory {
+        if (runtime.moveTask) {
+            this.visualSync.syncWithMovement(unit, runtime);
+            this.jobRunner.tickMoveTask(unit, runtime);
+            return TickCategory.MOVE_TASK;
+        }
+
+        const config = this.settlerConfigs.get(unit.subType as UnitType);
+        if (config) {
+            if (runtime.state !== SettlerState.WORKING && !this.isInCombat(unit.id)) {
+                this.visualSync.syncWithMovement(unit, runtime);
+            }
+            return this.updateSettler(unit, config, runtime, dt);
+        }
+
+        // Combat system manages the animation of units actively in combat.
+        if (this.isInCombat(unit.id)) {
+            return TickCategory.COMBAT_SKIP;
+        }
+
+        this.visualSync.syncWithMovement(unit, runtime);
+        this.visualSync.updateIdle(unit, runtime, dt);
+        return TickCategory.IDLE_ANIM;
+    }
+
+    /** State dispatch for a unit with a settler config. */
+    private updateSettler(settler: Entity, config: SettlerConfig, runtime: UnitRuntime, dt: number): TickCategory {
+        switch (runtime.state) {
+            case SettlerState.IDLE: {
+                const didSearch = this.autonomy.tickIdle(settler, config, runtime);
+                // The search may have started a job; combat system manages animation of fighting units.
+                // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- tickIdle mutates runtime.state
+                if (runtime.state === SettlerState.IDLE && !this.isInCombat(settler.id)) {
+                    this.visualSync.updateIdle(settler, runtime, dt);
+                }
+                return didSearch ? TickCategory.IDLE_SEARCH : TickCategory.IDLE_SKIP;
+            }
+
+            case SettlerState.WORKING:
+                this.jobRunner.tickJob(settler, config, runtime, dt);
+                // Sync direction immediately after task execution (FACE_POS sets it mid-tick, avoid one-frame lag)
+                this.visualSync.syncWithMovement(settler, runtime);
+                this.autonomy.afterJobTick(settler, runtime);
+                return TickCategory.JOB_EXEC;
+
+            case SettlerState.INTERRUPTED:
+                // Return to idle after interruption — search immediately on next tick
+                this.jobRunner.clearInterrupted(runtime);
+                this.autonomy.searchImmediately(runtime);
+                return TickCategory.IDLE_SKIP;
+        }
+    }
+
+    private recordSubTimings(cats: Readonly<CategoryTimes>): void {
         const sub: Record<string, number> = {
             'idle-search': cats[TickCategory.IDLE_SEARCH],
-            '  searches': this.workerExecutor.idleSearchCount,
+            '  searches': this.autonomy.idleSearchCount,
             '  runtimes': this.runtimes.size,
             'idle-skip': cats[TickCategory.IDLE_SKIP],
             'job-exec': cats[TickCategory.JOB_EXEC],
             'move-task': cats[TickCategory.MOVE_TASK],
             'idle-anim': cats[TickCategory.IDLE_ANIM],
         };
-        for (const [k, v] of Object.entries(it)) {
+        for (const [k, v] of Object.entries(this.autonomy.idleTimings)) {
             sub[`  ${k}`] = v;
         }
         this.lastSubTimings = sub;
-    }
-
-    getSubTimings(): Record<string, number> {
-        return this.lastSubTimings;
-    }
-
-    getOrCreateRuntime(entityId: number): UnitRuntime {
-        let runtime = this.runtimes.get(entityId);
-        if (!runtime) {
-            runtime = {
-                state: SettlerState.IDLE,
-                job: null,
-                moveTask: null,
-                lastDirection: 0,
-                idleState: this.animController.createIdleState(),
-                homeAssignment: null,
-                idleSearchReady: false,
-            };
-            this.runtimes.set(entityId, runtime);
-            const stagger = Math.max(1, entityId % IDLE_SEARCH_COOLDOWN);
-            this.lifecycleCoordinator.scheduleIdleCooldown(entityId, stagger);
-        }
-        return runtime;
     }
 }

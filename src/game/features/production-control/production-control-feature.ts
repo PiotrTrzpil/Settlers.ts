@@ -39,7 +39,7 @@ export const ProductionControlFeature: FeatureDefinition = {
     dependencies: ['settler-tasks', 'inventory', 'ore-veins'],
 
     create(ctx: FeatureContext) {
-        const { settlerTaskSystem } = ctx.getFeature<SettlerTaskExports>('settler-tasks');
+        const { settlerTaskSystem, workerAssignments } = ctx.getFeature<SettlerTaskExports>('settler-tasks');
         const { inventoryManager } = ctx.getFeature<InventoryExports>('inventory');
         const { oreVeinData } = ctx.getFeature<OreVeinExports>('ore-veins');
         const productionControlManager = new ProductionControlManager();
@@ -52,7 +52,7 @@ export const ProductionControlFeature: FeatureDefinition = {
                 productionControlManager,
                 oreVeinData,
                 getAssignedWorkplace: settlerId => {
-                    const buildingId = settlerTaskSystem.getAssignedBuilding(settlerId);
+                    const buildingId = workerAssignments.getAssignedBuilding(settlerId);
                     // eslint-disable-next-line no-restricted-syntax -- value is nullable by API contract; null coercion
                     return buildingId === null ? null : (ctx.gameState.getEntity(buildingId) ?? null);
                 },

@@ -186,7 +186,7 @@ export class GameCore {
 
     /** RECONCILE — move units off building footprints before lifecycle events block them. */
     private reconcile(): void {
-        this.services.settlerTaskSystem.relocateUnitsFromFootprints();
+        this.services.workerAssignments.relocateFromFootprints();
     }
 
     /** ACTIVATE — emit building:completed for each map building. Listeners see correct occupancy. */

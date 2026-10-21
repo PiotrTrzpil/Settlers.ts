@@ -47,7 +47,6 @@ export interface CoreExecutorDeps {
     buildingPositionResolver: BuildingPositionResolver;
     triggerSystem: TriggerSystem;
     handlerErrorLogger: ThrottledLogger;
-    getWorkerHomeBuilding: (settlerId: number) => number | null;
 }
 
 function registerMovementExecutors(choreoSystem: ChoreoSystem, movCtx: MovementContext): void {
@@ -101,7 +100,6 @@ export function registerCoreExecutors(choreoSystem: ChoreoSystem, deps: CoreExec
     const movCtx: MovementContext = {
         gameState: deps.gameState,
         buildingPositionResolver: deps.buildingPositionResolver,
-        getWorkerHomeBuilding: deps.getWorkerHomeBuilding,
         handlerErrorLogger: deps.handlerErrorLogger,
     };
     const workCtx: WorkContext = {

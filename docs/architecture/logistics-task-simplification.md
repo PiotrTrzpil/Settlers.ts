@@ -24,10 +24,10 @@ ConstructionRequestSystem┤──► DemandLedger
                         │                   ▼
                         │         TransportJobBuilder → ChoreoJobState
                         │                   │
-                        └──────────────────► SettlerTaskSystem.assignJob()
+                        └──────────────────► JobRunner.assignJob()
                                               │
                                               ▼
-                                    WorkerTaskExecutor / transport executors
+                                    JobRunner → ChoreoSystem (transport executors)
                                               │
                                     MaterialTransfer + BuildingInventory
 ```
@@ -90,7 +90,7 @@ These are keepers — don’t re-architect them away:
 
 Who clears busy state?
 
-- `WorkerJobLifecycle.completeJob` / `interruptJob` → `clearJobId`
+- `JobRunner.completeJob` / `interruptJob` → `clearJobId` (was `WorkerJobLifecycle`)
 - `TransportJobService.cancel` → `clearJobId` (non-queued)
 - `LogisticsDispatcher` on `settler:taskCompleted` → **again** `clearJobId`, then flush queued follow-up
 
@@ -157,6 +157,10 @@ Prefer a discriminated union with explicit reasons.
 ### 8. Settler-task still a wide facade
 
 Further extract **`UnitJobService`** (`assignJob` / `assignMoveTask` / interrupt) vs **`WorkerAutonomy`** (idle search + handlers). Unify `JobAssigner` with `TaskDispatcher.assignJob` (no `as unknown as` cast).
+
+*Status:* done — settler-tasks is split by concept into `JobRunner` (job lifecycle, `entity.jobId`, implements
+`TaskDispatcher`), `WorkerAutonomy` (idle search), `WorkerAssignments` (home buildings) and `UnitVisualSync`;
+`JobRunner` and `WorkerAssignments` are exported directly in `SettlerTaskExports`.
 
 ### 9. Storage capacity math is dense but local
 

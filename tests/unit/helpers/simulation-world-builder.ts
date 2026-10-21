@@ -438,7 +438,7 @@ export function populateMapData(
     });
     const settlerCount = populateMapSettlers(state, settlers, eventBus);
 
-    services.settlerTaskSystem.relocateUnitsFromFootprints();
+    services.workerAssignments.relocateFromFootprints();
 
     for (const { buildingId, buildingType, race } of mapBuildings) {
         eventBus.emit('building:completed', { buildingId, buildingType, race });

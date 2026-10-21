@@ -28,7 +28,7 @@ import { createLogger } from '@/utilities/logger';
 import type { TowerGarrisonManager } from '../tower-garrison/tower-garrison-manager';
 import type { CombatSystem } from '../combat/combat-system';
 import type { UnitReservationRegistry } from '../../systems/unit-reservation';
-import type { SettlerTaskSystem } from '../settler-tasks';
+import type { TaskDispatcher, WorkerAssignments } from '../settler-tasks';
 import type { TowerAssaultSystem } from './tower-assault-system';
 import {
     type BuildingSiegeSystemConfig,
@@ -61,7 +61,8 @@ export class BuildingSiegeSystem implements TickSystem {
     private readonly garrisonManager: TowerGarrisonManager;
     private readonly combatSystem: CombatSystem;
     private readonly unitReservation: UnitReservationRegistry;
-    private readonly settlerTaskSystem: SettlerTaskSystem;
+    private readonly taskDispatcher: TaskDispatcher;
+    private readonly workerAssignments: WorkerAssignments;
     private readonly doorDefenderNotifier: DoorDefenderNotifier;
 
     /** Tower assault system for Dark Tribe direct-destruction attacks. Set after construction. */
@@ -76,7 +77,8 @@ export class BuildingSiegeSystem implements TickSystem {
         this.garrisonManager = cfg.garrisonManager;
         this.combatSystem = cfg.combatSystem;
         this.unitReservation = cfg.unitReservation;
-        this.settlerTaskSystem = cfg.settlerTaskSystem;
+        this.taskDispatcher = cfg.taskDispatcher;
+        this.workerAssignments = cfg.workerAssignments;
         this.doorDefenderNotifier = cfg.doorDefenderNotifier;
     }
 
@@ -369,7 +371,7 @@ export class BuildingSiegeSystem implements TickSystem {
         if (doorDist === 0 || doorDist > DOOR_ARRIVAL_DISTANCE) {
             if (!this.combatSystem.isInCombat(unit.id)) {
                 const tile = this.garrisonManager.getApproachTile(target);
-                this.settlerTaskSystem.assignMoveTask(unit.id, tile);
+                this.taskDispatcher.assignMoveTask(unit.id, tile);
                 if (hasThreats) {
                     // Mark passive so the combat system won't divert to farther enemies en route
                     this.combatSystem.setPassive(unit.id);
@@ -488,7 +490,8 @@ export class BuildingSiegeSystem implements TickSystem {
             gameState: this.gameState,
             terrain: this.terrain,
             unitReservation: this.unitReservation,
-            settlerTaskSystem: this.settlerTaskSystem,
+            taskDispatcher: this.taskDispatcher,
+            workerAssignments: this.workerAssignments,
         });
     }
 

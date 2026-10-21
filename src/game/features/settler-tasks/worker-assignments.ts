@@ -1,9 +1,10 @@
 /**
- * BuildingWorkerTracker — manages building↔worker assignment state.
+ * WorkerAssignments — which unit works at which building.
  *
- * Extracted from SettlerTaskSystem to keep that file focused on task execution.
- * Tracks which workers are assigned to which buildings, handles occupancy counts,
- * and provides the push-based worker assignment API used by RecruitSystem.
+ * Owns the home-building assignment of every unit (`UnitRuntime.homeAssignment`),
+ * per-building occupant counts and the by-building index. Provides the push-based
+ * assignment API (building demand, recruit, garrison) and idle-specialist lookup.
+ * Consumers use it directly via `SettlerTaskExports.workerAssignments`.
  */
 
 import type { GameState } from '../../game-state';
@@ -11,34 +12,34 @@ import type { BuildingType } from '../../buildings/types';
 import type { EventBus } from '../../event-bus';
 import { UnitType, type Tile } from '../../entity';
 import { createLogger } from '@/utilities/logger';
-import { SettlerState } from './types';
-import type { UnitRuntime } from './unit-state-machine';
+import { SettlerState, type WorkerAssignmentQuery } from './types';
+import type { UnitRuntime, UnitRuntimeStore } from './unit-runtime';
 import { relocateUnitsFromFootprints } from './initial-worker-assignment';
 import { SettlerBuildingStatus, type ISettlerBuildingLocationManager } from '../settler-location';
-import type { IndexedMap, Index } from '@/game/utils/indexed-map';
+import type { Index } from '@/game/utils/indexed-map';
 import { distSq } from '@/game/core/distance';
 
-const log = createLogger('BuildingWorkerTracker');
+const log = createLogger('WorkerAssignments');
 
 /** Checks if two territory tiles are reachable through contiguous same-player territory. */
 export type TerritoryConnectivityCheck = (a: Tile, b: Tile, player: number) => boolean;
 
-export class BuildingWorkerTracker {
+export class WorkerAssignments implements WorkerAssignmentQuery {
     /** Tracks how many workers are assigned to each building (for occupancy limits). */
-    readonly occupants = new Map<number, number>();
+    private readonly occupants = new Map<number, number>();
 
+    /** Settler ids by home building id. */
     private readonly byBuilding: Index<number, number>;
 
     constructor(
-        private readonly runtimes: IndexedMap<number, UnitRuntime>,
-        private readonly getOrCreateRuntime: (entityId: number) => UnitRuntime,
+        private readonly runtimes: UnitRuntimeStore,
         private readonly locationManager: ISettlerBuildingLocationManager,
         private readonly gameState: GameState,
         private readonly eventBus: EventBus,
-        byBuilding: Index<number, number>,
         private readonly territoryCheck: TerritoryConnectivityCheck
     ) {
-        this.byBuilding = byBuilding;
+        // eslint-disable-next-line no-restricted-syntax -- optional chaining; null when source is absent
+        this.byBuilding = runtimes.addIndex<number>((_id, runtime) => runtime.homeAssignment?.buildingId ?? null);
     }
 
     /** Get the assigned building ID for a settler, or null if unassigned. */
@@ -52,12 +53,23 @@ export class BuildingWorkerTracker {
         return this.byBuilding.get(buildingId);
     }
 
+    /** Number of workers assigned to a building (occupancy limit checks). */
+    getOccupantCount(buildingId: number): number {
+        // eslint-disable-next-line no-restricted-syntax -- buildings with no assigned workers have no entry; 0 is correct
+        return this.occupants.get(buildingId) ?? 0;
+    }
+
+    /** True while at least one worker is assigned to the building. */
+    hasOccupants(buildingId: number): boolean {
+        return this.occupants.has(buildingId);
+    }
+
     /**
      * Assign a building to a worker, incrementing its occupant count.
      * Pure assignment — does NOT register location tracking.
      * Callers are responsible for calling markApproaching / enterBuilding separately.
      */
-    claim(settlerId: number, runtime: UnitRuntime, buildingId: number): void {
+    private claim(settlerId: number, runtime: UnitRuntime, buildingId: number): void {
         runtime.homeAssignment = { buildingId, hasVisited: false };
         this.runtimes.reindex(settlerId);
         // eslint-disable-next-line no-restricted-syntax -- occupants map starts empty; absent entry means 0 current occupants
@@ -72,7 +84,7 @@ export class BuildingWorkerTracker {
         const buildingId = runtime.homeAssignment.buildingId;
         const count = this.occupants.get(buildingId);
         if (count === undefined) {
-            throw new Error(`No occupant count for building ${buildingId} in BuildingWorkerTracker.release`);
+            throw new Error(`No occupant count for building ${buildingId} in WorkerAssignments.release`);
         }
         if (count <= 1) {
             this.occupants.delete(buildingId);
@@ -119,7 +131,7 @@ export class BuildingWorkerTracker {
     }
 
     // ─────────────────────────────────────────────────────────────
-    // Push-based worker assignment API (for RecruitSystem)
+    // Push-based worker assignment API (building demand, recruit, garrison)
     // ─────────────────────────────────────────────────────────────
 
     /**
@@ -168,7 +180,7 @@ export class BuildingWorkerTracker {
 
     /** Assign a settler to a building externally (from recruit system). */
     assignWorker(settlerId: number, buildingId: number): void {
-        const runtime = this.getOrCreateRuntime(settlerId);
+        const runtime = this.runtimes.getOrCreate(settlerId);
         this.claim(settlerId, runtime, buildingId);
         if (!this.locationManager.isCommitted(settlerId)) {
             this.locationManager.markApproaching(settlerId, buildingId);
@@ -181,7 +193,7 @@ export class BuildingWorkerTracker {
      * skip enterBuilding in that case to avoid a duplicate-entry throw.
      */
     assignWorkerInside(settlerId: number, buildingId: number): void {
-        const runtime = this.getOrCreateRuntime(settlerId);
+        const runtime = this.runtimes.getOrCreate(settlerId);
         this.claim(settlerId, runtime, buildingId);
         runtime.homeAssignment!.hasVisited = true;
         if (!this.locationManager.isInside(settlerId, buildingId)) {
@@ -195,7 +207,7 @@ export class BuildingWorkerTracker {
      * and the settler task system no longer tracks them as a building worker.
      */
     releaseAssignment(settlerId: number): void {
-        const runtime = this.getOrCreateRuntime(settlerId);
+        const runtime = this.runtimes.getOrCreate(settlerId);
         if (!runtime.homeAssignment) {
             return;
         }
@@ -214,6 +226,15 @@ export class BuildingWorkerTracker {
                 this.occupants.set(buildingId, count - 1);
             }
         }
+        runtime.homeAssignment = null;
+        this.runtimes.reindex(settlerId);
+    }
+
+    /**
+     * Drop a settler's home assignment without occupant or location bookkeeping —
+     * used when the building is gone or the location manager already ended the approach.
+     */
+    forgetHome(settlerId: number, runtime: UnitRuntime): void {
         runtime.homeAssignment = null;
         this.runtimes.reindex(settlerId);
     }

@@ -42,7 +42,7 @@ export function useCarrierDebugInfo(
         // eslint-disable-next-line no-restricted-syntax -- movement controller is absent for idle/unmoving carriers; 0 is correct display default
         const pathProgress = movement?.pathIndex ?? 0;
 
-        const activeJobId = game.value.services.settlerTaskSystem.getActiveJobId(entity.id);
+        const activeJobId = game.value.services.jobRunner.getActiveJobId(entity.id);
         const hasJob = activeJobId !== null;
 
         return {

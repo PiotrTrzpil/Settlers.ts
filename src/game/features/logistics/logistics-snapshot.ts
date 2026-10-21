@@ -10,7 +10,7 @@ import type { DemandLedger, DemandTarget } from './demand-ledger';
 import { computeDeficit } from './demand-deficit';
 import type { CarrierRegistry } from '../carriers';
 import type { LogisticsDispatcher } from './logistics-dispatcher';
-import type { WorkerStateQuery } from '../settler-tasks';
+import type { WorkerStateQuery, WorkerAssignmentQuery } from '../settler-tasks';
 import type { BuildingInventoryManager } from '../inventory';
 import type { UnitReservationRegistry } from '../../systems/unit-reservation';
 import type { ConstructionSiteManager } from '../building-construction/construction-site-manager';
@@ -35,6 +35,7 @@ export interface SnapshotConfig {
     carrierRegistry: CarrierRegistry;
     logisticsDispatcher: LogisticsDispatcher;
     workerStateQuery: WorkerStateQuery;
+    workerAssignments: WorkerAssignmentQuery;
     inventoryManager: BuildingInventoryManager;
     unitReservation: UnitReservationRegistry;
     constructionSiteManager: ConstructionSiteManager;
@@ -364,7 +365,7 @@ export function gatherProductionBuildings(
     player: number,
     options?: { limit?: number }
 ): ProductionBuildingSummary[] {
-    const { gameState, inventoryManager, workerStateQuery, constructionSiteManager } = config;
+    const { gameState, inventoryManager, workerAssignments, constructionSiteManager } = config;
     const result: ProductionBuildingSummary[] = [];
 
     for (const entity of gameState.entityIndex.query(EntityType.Building, player)) {
@@ -385,7 +386,7 @@ export function gatherProductionBuildings(
             inputs,
             outputs,
             outputFull: outputs.length > 0 && outputs.every(s => s.current >= s.max),
-            workerCount: workerStateQuery.getWorkersForBuilding(entity.id).size,
+            workerCount: workerAssignments.getWorkersForBuilding(entity.id).size,
             isConstructing: constructionSiteManager.hasSite(entity.id),
         });
     }
@@ -460,7 +461,7 @@ export function gatherWorkers(
     player: number,
     options?: { limit?: number; stateFilter?: string }
 ): WorkerSummary[] {
-    const { gameState, workerStateQuery } = config;
+    const { gameState } = config;
     const stateFilter = options?.stateFilter?.toUpperCase();
     const result: WorkerSummary[] = [];
 
@@ -471,8 +472,7 @@ export function gatherWorkers(
         const workerSummary = buildWorkerSummary(
             entity.id,
             entity as { subType: UnitType; x: number; y: number },
-            workerStateQuery,
-            gameState,
+            config,
             stateFilter
         );
         if (workerSummary) {
@@ -488,10 +488,10 @@ export function gatherWorkers(
 function buildWorkerSummary(
     entityId: number,
     entity: { subType: UnitType; x: number; y: number },
-    workerStateQuery: WorkerStateQuery,
-    gameState: GameState,
+    config: SnapshotConfig,
     stateFilter: string | undefined
 ): WorkerSummary | null {
+    const { gameState, workerStateQuery, workerAssignments } = config;
     const state = workerStateQuery.getSettlerState(entityId);
     if (!state) {
         return null;
@@ -500,7 +500,7 @@ function buildWorkerSummary(
         return null;
     }
 
-    const assignedBuilding = workerStateQuery.getAssignedBuilding(entityId);
+    const assignedBuilding = workerAssignments.getAssignedBuilding(entityId);
     let assignedBuildingType: string | null = null;
     if (assignedBuilding !== null) {
         const bldg = gameState.getEntityOrThrow(assignedBuilding, 'worker assigned building in logistics snapshot');

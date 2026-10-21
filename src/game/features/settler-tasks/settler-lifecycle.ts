@@ -1,99 +1,69 @@
 /**
- * Settler Lifecycle Coordinator — handles entity creation/removal,
- * building completion/destruction, orphan detection, and idle cooldowns.
+ * SettlerLifecycleCoordinator — how settler-task state reacts when the world changes
+ * under a unit: the unit or its workplace is removed, its transport is cancelled, its
+ * approach to the workplace is interrupted, it is dismissed to carrier, a worker is
+ * spawned inside a building, and the periodic orphan-runtime sweep.
  *
- * Extracted from SettlerTaskSystem to separate "what happens when
- * entities come and go" from "how settlers pick and execute tasks."
+ * Ends jobs through JobRunner and changes assignments through WorkerAssignments.
  */
 
 import type { GameState } from '../../game-state';
 import type { EventBus } from '../../event-bus';
 import { EventSubscriptionManager } from '../../event-bus';
-import { EntityType, UnitType, getEntityIfType, type Entity } from '../../entity';
+import { UnitType, type Entity } from '../../entity';
 import { createLogger } from '@/utilities/logger';
 import { sortedEntries } from '@/utilities/collections';
+import { seconds } from '../../core/tick-rate';
 import { SettlerState, type SettlerConfig } from './types';
-import type { BuildingInventoryManager } from '../inventory';
-import type { ISettlerBuildingLocationManager } from '../settler-location';
-import { BuildingWorkerTracker } from './building-worker-tracker';
-import type { UnitStateMachine, UnitRuntime } from './unit-state-machine';
-import type { IndexedMap } from '@/game/utils/indexed-map';
+import type { WorkerAssignments } from './worker-assignments';
+import type { JobRunner } from './job-runner';
+import type { UnitRuntime, UnitRuntimeStore } from './unit-runtime';
 import { type TickScheduler, type ScheduleHandle, NO_HANDLE } from '../../systems/tick-scheduler';
 import type { WorkHandlerRegistry } from './work-handler-registry';
-import type { IdleAnimationController } from './idle-animation-controller';
-import { buildAllSettlerConfigs } from '../../data/settler-data-access';
+import type { IdleSearchCooldowns } from './idle-search-cooldowns';
 
 const log = createLogger('SettlerLifecycleCoordinator');
 
-import { seconds } from '../../core/tick-rate';
-
 const ORPHAN_CHECK_INTERVAL = seconds(2);
-const IDLE_SEARCH_COOLDOWN = 10;
-
-/** Callback for interrupting or completing a settler job during cleanup. */
-export type InterruptJobCallback = (entity: Entity, config: SettlerConfig, runtime: UnitRuntime) => void;
-
-/** Create initial UnitRuntime for a newly registered settler. */
-export type CreateRuntimeCallback = () => UnitRuntime;
 
 export interface SettlerLifecycleConfig {
     gameState: GameState;
     eventBus: EventBus;
     tickScheduler: TickScheduler;
-    workerTracker: BuildingWorkerTracker;
-    stateMachine: UnitStateMachine;
-    runtimes: IndexedMap<number, UnitRuntime>;
-    locationManager: ISettlerBuildingLocationManager;
-    inventoryManager: BuildingInventoryManager;
+    runtimes: UnitRuntimeStore;
+    jobRunner: JobRunner;
+    assignments: WorkerAssignments;
+    idleCooldowns: IdleSearchCooldowns;
     handlerRegistry: WorkHandlerRegistry;
-    animController: IdleAnimationController;
-    /**
-     * Callback to interrupt or complete a settler job during cleanup.
-     * Called when a settler is removed while a job is in progress.
-     */
-    interruptJob: InterruptJobCallback;
-    /** Factory for creating UnitRuntime for newly seen settler entities. */
-    createRuntime: CreateRuntimeCallback;
+    settlerConfigs: ReadonlyMap<UnitType, SettlerConfig>;
 }
 
-type SettlerConfigs = Map<UnitType, SettlerConfig>;
-
-/**
- * Handles settler lifecycle events — entity creation/removal,
- * building completion/destruction, orphan detection, idle cooldowns.
- *
- * Extracted from SettlerTaskSystem to separate "what happens when
- * entities come and go" from "how settlers pick and execute tasks."
- */
 export class SettlerLifecycleCoordinator {
     private readonly gameState: GameState;
     private readonly eventBus: EventBus;
     private readonly tickScheduler: TickScheduler;
-    private readonly workerTracker: BuildingWorkerTracker;
-    private readonly runtimes: IndexedMap<number, UnitRuntime>;
+    private readonly runtimes: UnitRuntimeStore;
+    private readonly jobRunner: JobRunner;
+    private readonly assignments: WorkerAssignments;
+    private readonly idleCooldowns: IdleSearchCooldowns;
     private readonly handlerRegistry: WorkHandlerRegistry;
-    private readonly animController: IdleAnimationController;
-    private readonly interruptJob: InterruptJobCallback;
-    private readonly createRuntime: CreateRuntimeCallback;
-    private readonly settlerConfigs: SettlerConfigs;
+    private readonly settlerConfigs: ReadonlyMap<UnitType, SettlerConfig>;
     private readonly subscriptions = new EventSubscriptionManager();
     private orphanHandle: ScheduleHandle = NO_HANDLE;
-    private readonly idleCooldownHandles = new Map<number, ScheduleHandle>();
 
     constructor(config: SettlerLifecycleConfig) {
         this.gameState = config.gameState;
         this.eventBus = config.eventBus;
         this.tickScheduler = config.tickScheduler;
-        this.workerTracker = config.workerTracker;
         this.runtimes = config.runtimes;
+        this.jobRunner = config.jobRunner;
+        this.assignments = config.assignments;
+        this.idleCooldowns = config.idleCooldowns;
         this.handlerRegistry = config.handlerRegistry;
-        this.animController = config.animController;
-        this.interruptJob = config.interruptJob;
-        this.createRuntime = config.createRuntime;
-        this.settlerConfigs = buildAllSettlerConfigs();
+        this.settlerConfigs = config.settlerConfigs;
     }
 
-    /** Subscribe to all lifecycle events. Call once during feature init. */
+    /** Subscribe to all lifecycle events and start the orphan sweep. Call once during feature init. */
     registerEvents(): void {
         this.subscriptions.subscribe(this.eventBus, 'carrier:transportCancelled', ({ unitId: carrierId }) => {
             this.handleTransportCancelled(carrierId);
@@ -108,19 +78,11 @@ export class SettlerLifecycleCoordinator {
         );
 
         this.subscriptions.subscribe(this.eventBus, 'building:workerSpawned', ({ buildingId, unitId: settlerId }) => {
-            this.workerTracker.assignWorkerInside(settlerId, buildingId);
+            this.assignments.assignWorkerInside(settlerId, buildingId);
         });
 
         this.subscriptions.subscribe(this.eventBus, 'unit:dismissed', ({ unitId }) => {
             this.handleUnitDismissed(unitId);
-        });
-
-        // Walk animation follows movement — any path start, regardless of who issued it.
-        this.subscriptions.subscribe(this.eventBus, 'unit:movementStarted', ({ unitId }) => {
-            const unit = getEntityIfType(this.gameState, unitId, EntityType.Unit);
-            if (unit) {
-                this.animController.ensureWalkAnimation(unit);
-            }
         });
 
         this.orphanHandle = this.tickScheduler.schedule(ORPHAN_CHECK_INTERVAL, () => this.orphanCheckAndReschedule());
@@ -131,7 +93,7 @@ export class SettlerLifecycleCoordinator {
      * Called by the cleanup registry when any entity is removed.
      */
     onEntityRemoved(entityId: number): void {
-        if (this.workerTracker.occupants.has(entityId)) {
+        if (this.assignments.hasOccupants(entityId)) {
             this.onBuildingRemoved(entityId);
         }
 
@@ -155,54 +117,10 @@ export class SettlerLifecycleCoordinator {
             }
         }
 
-        const idleHandle = this.idleCooldownHandles.get(entityId);
-        if (idleHandle !== undefined) {
-            this.tickScheduler.cancel(idleHandle);
-            this.idleCooldownHandles.delete(entityId);
-        }
+        this.idleCooldowns.cancelAll(entityId);
 
-        this.workerTracker.release(entityId, runtime);
+        this.assignments.release(entityId, runtime);
         this.runtimes.delete(entityId);
-    }
-
-    /**
-     * Mark an entity as ready for an idle work search.
-     * Clears any pending idle cooldown handle.
-     */
-    markReadyForSearch(entityId: number): void {
-        const runtime = this.runtimes.get(entityId);
-        if (runtime) {
-            runtime.idleSearchReady = true;
-        }
-        this.idleCooldownHandles.delete(entityId);
-    }
-
-    /**
-     * Schedule a deferred idle search cooldown for a settler.
-     * Replaces any existing cooldown for the same entity.
-     */
-    scheduleIdleCooldown(entityId: number, delay: number): void {
-        const existingHandle = this.idleCooldownHandles.get(entityId);
-        if (existingHandle !== undefined) {
-            this.tickScheduler.cancel(existingHandle);
-        }
-        const handle = this.tickScheduler.schedule(delay, () => this.markReadyForSearch(entityId));
-        this.idleCooldownHandles.set(entityId, handle);
-    }
-
-    /**
-     * Get or create a UnitRuntime for the given entity ID.
-     * New runtimes are scheduled with a staggered idle cooldown.
-     */
-    getOrCreateRuntime(entityId: number): UnitRuntime {
-        let runtime = this.runtimes.get(entityId);
-        if (!runtime) {
-            runtime = this.createRuntime();
-            this.runtimes.set(entityId, runtime);
-            const stagger = Math.max(1, entityId % IDLE_SEARCH_COOLDOWN);
-            this.scheduleIdleCooldown(entityId, stagger);
-        }
-        return runtime;
     }
 
     /** Unsubscribe from all events and cancel the scheduled orphan check. */
@@ -210,10 +128,6 @@ export class SettlerLifecycleCoordinator {
         this.subscriptions.unsubscribeAll();
         this.tickScheduler.cancel(this.orphanHandle);
         this.orphanHandle = NO_HANDLE;
-        for (const handle of this.idleCooldownHandles.values()) {
-            this.tickScheduler.cancel(handle);
-        }
-        this.idleCooldownHandles.clear();
     }
 
     // ─────────────────────────────────────────────────────────────
@@ -236,7 +150,7 @@ export class SettlerLifecycleCoordinator {
             return;
         }
 
-        this.interruptJob(entity, unitConfig, runtime);
+        this.jobRunner.endJobForTakeover(entity, unitConfig, runtime);
         runtime.job = null;
     }
 
@@ -250,14 +164,13 @@ export class SettlerLifecycleCoordinator {
             return;
         }
 
-        runtime.homeAssignment = null;
-        this.runtimes.reindex(settlerId);
+        this.assignments.forgetHome(settlerId, runtime);
 
         if (runtime.job) {
             const entity = this.gameState.getEntityOrThrow(settlerId, 'settler whose approach was interrupted');
             const unitConfig = this.settlerConfigs.get(entity.subType as UnitType);
             if (unitConfig) {
-                this.interruptJob(entity, unitConfig, runtime);
+                this.jobRunner.endJobForTakeover(entity, unitConfig, runtime);
             }
             runtime.job = null;
         }
@@ -276,31 +189,30 @@ export class SettlerLifecycleCoordinator {
         if (runtime.job) {
             const unitConfig = this.settlerConfigs.get(UnitType.Carrier);
             if (unitConfig) {
-                this.interruptJob(entity, unitConfig, runtime);
+                this.jobRunner.endJobForTakeover(entity, unitConfig, runtime);
             }
             runtime.job = null;
         }
-        this.workerTracker.release(unitId, runtime);
+        this.assignments.release(unitId, runtime);
         runtime.state = SettlerState.IDLE;
         runtime.moveTask = null;
     }
 
     private onBuildingRemoved(buildingId: number): void {
-        this.workerTracker.clearBuilding(buildingId);
-        for (const [settlerId, runtime] of sortedEntries(this.runtimes.raw as Map<number, UnitRuntime>)) {
+        this.assignments.clearBuilding(buildingId);
+        for (const [settlerId, runtime] of sortedEntries(this.runtimes)) {
             if (runtime.homeAssignment?.buildingId !== buildingId) {
                 continue;
             }
 
-            runtime.homeAssignment = null;
-            this.runtimes.reindex(settlerId);
+            this.assignments.forgetHome(settlerId, runtime);
 
             if (runtime.job) {
                 const entity = this.gameState.getEntity(settlerId);
                 if (entity) {
                     const config = this.settlerConfigs.get(entity.subType as UnitType);
                     if (config) {
-                        this.interruptJob(entity, config, runtime);
+                        this.jobRunner.endJobForTakeover(entity, config, runtime);
                     }
                 }
                 runtime.job = null;
@@ -317,7 +229,7 @@ export class SettlerLifecycleCoordinator {
             return;
         }
         if (runtime.job) {
-            this.interruptJob(entity, config, runtime);
+            this.jobRunner.endJobForTakeover(entity, config, runtime);
         }
         const posHandler = this.handlerRegistry.getPositionHandler(config.plantSearch ?? config.search);
         posHandler?.onSettlerRemoved?.(entityId);

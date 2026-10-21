@@ -190,7 +190,7 @@ describe('Building worker auto-recruitment (integration)', { timeout: 30_000 }, 
         // The idle woodcutter should be assigned directly (no carrier needed)
         sim.runUntil(
             () => {
-                const assigned = sim.services.settlerTaskSystem.getAssignedBuilding(findUnit(sim, UnitType.Woodcutter));
+                const assigned = sim.services.workerAssignments.getAssignedBuilding(findUnit(sim, UnitType.Woodcutter));
                 return assigned !== null;
             },
             {
@@ -223,7 +223,7 @@ describe('Building worker auto-recruitment (integration)', { timeout: 30_000 }, 
         });
 
         const bakerId = findUnit(sim, UnitType.Baker);
-        expect(sim.services.settlerTaskSystem.getAssignedBuilding(bakerId)).toBe(buildingId);
+        expect(sim.services.workerAssignments.getAssignedBuilding(bakerId)).toBe(buildingId);
 
         // Spawn a spare carrier for re-recruitment
         sim.spawnUnit({ x: 64, y: 60 }, UnitType.Carrier);

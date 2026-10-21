@@ -30,8 +30,8 @@ export const LogisticsDispatcherFeature: FeatureDefinition = {
 
     create(ctx: FeatureContext) {
         const { carrierRegistry, idleCarrierPool } = ctx.getFeature<CarrierFeatureExports>('carriers');
-        const { settlerTaskSystem } = ctx.getFeature<SettlerTaskExports>('settler-tasks');
-        const taskDispatcher: TaskDispatcher = settlerTaskSystem;
+        const { settlerTaskSystem, jobRunner } = ctx.getFeature<SettlerTaskExports>('settler-tasks');
+        const taskDispatcher: TaskDispatcher = jobRunner;
         const { demandLedger, jobStore } = ctx.getFeature<DemandLedgerExports>('logistics');
         const { inventoryManager, storageFilterManager } = ctx.getFeature<InventoryExports>('inventory');
         const { materialTransfer } = ctx.getFeature<MaterialTransferExports>('material-transfer');
@@ -42,7 +42,6 @@ export const LogisticsDispatcherFeature: FeatureDefinition = {
         const movementCtx: MovementContext = {
             gameState: ctx.gameState,
             buildingPositionResolver: settlerTaskSystem.getPositionResolver(),
-            getWorkerHomeBuilding: () => null,
             handlerErrorLogger,
         };
 

@@ -103,12 +103,11 @@ export function resolveSearchArea(
 
 /**
  * Context required by movement-phase executors (GO_TO_TARGET, GO_HOME, SEARCH, …).
- * Stable services only — per-unit state (work handlers) arrives via ChoreoExecutionScope.
+ * Stable services only — per-unit state (home building, work handlers) arrives via ChoreoExecutionScope.
  */
 export interface MovementContext {
     gameState: GameState;
     buildingPositionResolver: BuildingPositionResolver;
-    getWorkerHomeBuilding: (settlerId: number) => number | null;
     handlerErrorLogger: ThrottledLogger;
 }
 

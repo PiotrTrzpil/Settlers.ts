@@ -85,7 +85,7 @@ import type { TowerGarrisonManager } from './features/tower-garrison';
 import type { TreeSystem } from './features/trees';
 import type { StoneSystem } from './features/stones';
 import type { CombatSystem } from './features/combat';
-import type { SettlerTaskSystem } from './features/settler-tasks';
+import type { SettlerTaskSystem, JobRunner, WorkerAssignments } from './features/settler-tasks';
 import type { VictoryConditionsSystem } from './features/victory-conditions';
 
 export class GameServices {
@@ -106,6 +106,8 @@ export class GameServices {
     public readonly constructionSiteManager: ConstructionSiteManager;
     public readonly workAreaStore: WorkAreaStore;
     public readonly settlerTaskSystem: SettlerTaskSystem;
+    public readonly jobRunner: JobRunner;
+    public readonly workerAssignments: WorkerAssignments;
     public readonly logisticsDispatcher: LogisticsDispatcher;
     public readonly garrisonManager: TowerGarrisonManager;
     public readonly treeSystem: TreeSystem;
@@ -272,7 +274,10 @@ export class GameServices {
         const constrExports = this.getFeature<BuildingConstructionExports>('building-construction');
         this.constructionSiteManager = constrExports.constructionSiteManager;
         this.workAreaStore = this.getFeature<WorkAreaExports>('work-areas').workAreaStore;
-        this.settlerTaskSystem = this.getFeature<SettlerTaskExports>('settler-tasks').settlerTaskSystem;
+        const settlerTaskExports = this.getFeature<SettlerTaskExports>('settler-tasks');
+        this.settlerTaskSystem = settlerTaskExports.settlerTaskSystem;
+        this.jobRunner = settlerTaskExports.jobRunner;
+        this.workerAssignments = settlerTaskExports.workerAssignments;
         this.logisticsDispatcher =
             this.getFeature<LogisticsDispatcherExports>('logistics-dispatcher').logisticsDispatcher;
         this.garrisonManager = this.getFeature<TowerGarrisonExports>('tower-garrison').garrisonManager;

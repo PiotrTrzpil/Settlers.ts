@@ -51,7 +51,7 @@ export interface BuildingDemandSystemConfig {
     assignWorkerToBuilding: (settlerId: number, buildingId: number) => void;
     /** Full recruitment dispatch — find candidate, build choreo, assign job, register transform. */
     dispatchRecruitment: (unitType: UnitType, player: number, opts?: DispatchRecruitmentOpts) => number | null;
-    /** Current assigned worker count for a building (from BuildingWorkerTracker.occupants). */
+    /** Current assigned worker count for a building (from WorkerAssignments.getOccupantCount). */
     getOccupantCount: (buildingId: number) => number;
 }
 

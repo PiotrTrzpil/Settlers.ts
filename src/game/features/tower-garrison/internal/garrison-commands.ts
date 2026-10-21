@@ -11,7 +11,7 @@ import { EntityType, getUnitLevel } from '@/game/entity';
 import type { GameState } from '@/game/game-state';
 import type { TerrainData } from '@/game/terrain';
 import type { EventBus } from '@/game/event-bus';
-import type { SettlerTaskSystem } from '@/game/features/settler-tasks';
+import type { TaskDispatcher, WorkerAssignments } from '@/game/features/settler-tasks';
 import { BuildingType } from '@/game/buildings/building-type';
 import { UnitType } from '@/game/core/unit-types';
 import { createLogger } from '@/utilities/logger';
@@ -25,7 +25,8 @@ import type { GarrisonRole } from '../types';
 /** Shared context for garrison command execution. */
 export interface GarrisonCommandContext {
     manager: TowerGarrisonManager;
-    settlerTaskSystem: SettlerTaskSystem;
+    taskDispatcher: TaskDispatcher;
+    workerAssignments: WorkerAssignments;
     gameState: GameState;
     terrain: TerrainData;
     unitReservation: UnitReservationRegistry;
@@ -99,7 +100,7 @@ function filterAcceptedUnits(
  * 7. Return true.
  */
 export function executeGarrisonUnitsCommand(cmd: GarrisonUnitsCommand, ctx: GarrisonCommandContext): boolean {
-    const { manager, settlerTaskSystem, gameState, terrain, unitReservation, locationManager } = ctx;
+    const { manager, taskDispatcher, workerAssignments, gameState, terrain, unitReservation, locationManager } = ctx;
     const building = gameState.getEntity(cmd.buildingId);
     if (!building) {
         log.warn(`garrison_units: building ${cmd.buildingId} not found`);
@@ -152,7 +153,7 @@ export function executeGarrisonUnitsCommand(cmd: GarrisonUnitsCommand, ctx: Garr
         return false;
     }
 
-    const dispatchDeps = { gameState, terrain, unitReservation, settlerTaskSystem };
+    const dispatchDeps = { gameState, terrain, unitReservation, taskDispatcher, workerAssignments };
     let anyDispatched = false;
 
     for (const unitId of acceptedUnitIds) {

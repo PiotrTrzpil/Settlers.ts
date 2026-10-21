@@ -59,7 +59,7 @@ export const TowerGarrisonFeature: FeatureDefinition = {
     dependencies: ['settler-tasks', 'settler-location', 'combat', 'building-construction'],
 
     create(ctx: FeatureContext): FeatureInstance {
-        const { settlerTaskSystem } = ctx.getFeature<SettlerTaskExports>('settler-tasks');
+        const { jobRunner, workerAssignments } = ctx.getFeature<SettlerTaskExports>('settler-tasks');
         const { locationManager } = ctx.getFeature<SettlerLocationExports>('settler-location');
         const { combatSystem } = ctx.getFeature<CombatExports>('combat');
         const { constructionSiteManager } = ctx.getFeature<BuildingConstructionExports>('building-construction');
@@ -70,7 +70,7 @@ export const TowerGarrisonFeature: FeatureDefinition = {
             terrain: ctx.terrain,
             unitReservation: ctx.unitReservation,
             locationManager,
-            releaseWorkerAssignment: (settlerId: number) => settlerTaskSystem.releaseWorkerAssignment(settlerId),
+            releaseWorkerAssignment: (settlerId: number) => workerAssignments.releaseAssignment(settlerId),
         });
 
         const autoSystem = new AutoGarrisonSystem({
@@ -104,7 +104,7 @@ export const TowerGarrisonFeature: FeatureDefinition = {
             for (const unitId of cancelled) {
                 ctx.unitReservation.release(unitId);
                 locationManager.cancelApproach(unitId);
-                settlerTaskSystem.releaseWorkerAssignment(unitId);
+                workerAssignments.releaseAssignment(unitId);
             }
         });
 
@@ -113,7 +113,7 @@ export const TowerGarrisonFeature: FeatureDefinition = {
             if (manager.isEnRoute(unitId)) {
                 ctx.unitReservation.release(unitId);
                 locationManager.cancelApproach(unitId);
-                settlerTaskSystem.releaseWorkerAssignment(unitId);
+                workerAssignments.releaseAssignment(unitId);
             }
         });
 
@@ -180,7 +180,7 @@ export const TowerGarrisonFeature: FeatureDefinition = {
                     const building = ctx.gameState.getEntity(towerId);
                     if (!building) {
                         ctx.unitReservation.release(unitId);
-                        settlerTaskSystem.releaseWorkerAssignment(unitId);
+                        workerAssignments.releaseAssignment(unitId);
                         continue;
                     }
                     ctx.unitReservation.reserve(unitId, {
@@ -192,14 +192,15 @@ export const TowerGarrisonFeature: FeatureDefinition = {
                     const job = choreo('WORKER_DISPATCH', JobKind.Garrison)
                         .goToDoorAndEnter(towerId, { gameState: ctx.gameState, terrain: ctx.terrain })
                         .build();
-                    settlerTaskSystem.assignJob(unitId, job);
+                    jobRunner.assignJob(unitId, job);
                 }
             },
             commands: {
                 garrison_units: cmd => {
                     const cmdCtx: GarrisonCommandContext = {
                         manager,
-                        settlerTaskSystem,
+                        taskDispatcher: jobRunner,
+                        workerAssignments,
                         locationManager,
                         gameState: ctx.gameState,
                         terrain: ctx.terrain,
@@ -212,7 +213,8 @@ export const TowerGarrisonFeature: FeatureDefinition = {
                 garrison_selected_units: cmd => {
                     const cmdCtx: GarrisonCommandContext = {
                         manager,
-                        settlerTaskSystem,
+                        taskDispatcher: jobRunner,
+                        workerAssignments,
                         locationManager,
                         gameState: ctx.gameState,
                         terrain: ctx.terrain,

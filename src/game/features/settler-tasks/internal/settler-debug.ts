@@ -1,35 +1,55 @@
 /**
- * Settler debug extractor — pure diagnostic functions for the settler task system.
- *
- * Extracted from SettlerTaskSystem to separate diagnostics from task orchestration.
- * All functions are pure — they take a SettlerDebugSource and return data with no side effects.
+ * Settler debug extractors — pure diagnostic views over unit runtimes
+ * (debug panel entries, worker-assignment summary). No side effects.
  */
 
-import type { BuildingWorkerTracker } from '../building-worker-tracker';
-import type { UnitRuntime } from '../unit-state-machine';
-import type { SettlerState } from '../types';
-import { type SettlerDebugEntry, buildDebugEntry } from '../settler-task-config';
+import type { EMaterialType } from '../../../economy';
+import type { WorkerStateQuery } from '../types';
+import type { UnitRuntime } from '../unit-runtime';
 
-export type { SettlerDebugEntry };
+export interface SettlerDebugEntry {
+    entityId: number;
+    state: string;
+    jobId: string | null;
+    jobType: string | null;
+    taskIndex: number | null;
+    progress: number | null;
+    targetId: number | null;
+    carryingGood: EMaterialType | null;
+    assignedBuilding: number | null;
+}
 
-/**
- * Read-only view of the settler task system required for debug output.
- * SettlerTaskSystem implements this interface directly.
- */
-export interface SettlerDebugSource {
-    readonly runtimes: Iterable<[number, UnitRuntime]>;
-    readonly workerTracker: BuildingWorkerTracker;
-    getActiveJobId(entityId: number): string | null;
-    getSettlerState(entityId: number): SettlerState | null;
+type RuntimeEntries = Iterable<[number, UnitRuntime]>;
+
+function buildDebugEntry(entityId: number, runtime: UnitRuntime): SettlerDebugEntry {
+    const job = runtime.job;
+    return {
+        entityId,
+        state: runtime.state,
+        // eslint-disable-next-line no-restricted-syntax -- optional chaining; null when source is absent
+        jobId: job?.jobId ?? null,
+        // eslint-disable-next-line no-restricted-syntax -- optional chaining; null when source is absent
+        jobType: job?.type ?? null,
+        // eslint-disable-next-line no-restricted-syntax -- optional chaining; null when source is absent
+        taskIndex: job?.nodeIndex ?? null,
+        // eslint-disable-next-line no-restricted-syntax -- optional chaining; null when source is absent
+        progress: job?.progress ?? null,
+        // eslint-disable-next-line no-restricted-syntax -- optional chaining; null when source is absent
+        targetId: job?.targetId ?? null,
+        // eslint-disable-next-line no-restricted-syntax -- optional chaining; null when source is absent
+        carryingGood: job?.carryingGood ?? null,
+        // eslint-disable-next-line no-restricted-syntax -- optional chaining; null when source is absent
+        assignedBuilding: runtime.homeAssignment?.buildingId ?? null,
+    };
 }
 
 /**
  * Build a debug entry array for all active settlers.
  * Returns one SettlerDebugEntry per runtime, in iteration order.
  */
-export function dumpSettlerDebug(source: SettlerDebugSource): SettlerDebugEntry[] {
+export function dumpSettlerDebug(runtimes: RuntimeEntries): SettlerDebugEntry[] {
     const result: SettlerDebugEntry[] = [];
-    for (const [entityId, runtime] of source.runtimes) {
+    for (const [entityId, runtime] of runtimes) {
         result.push(buildDebugEntry(entityId, runtime));
     }
     return result;
@@ -44,11 +64,11 @@ export function dumpSettlerDebug(source: SettlerDebugSource): SettlerDebugEntry[
  *   Building 55: settlers [21] (working)
  *   Unassigned: 3 settlers
  */
-export function dumpWorkerAssignments(source: SettlerDebugSource): string {
+export function dumpWorkerAssignments(runtimes: RuntimeEntries, stateQuery: WorkerStateQuery): string {
     const byBuilding = new Map<number, number[]>();
     let unassigned = 0;
 
-    for (const [entityId, runtime] of source.runtimes) {
+    for (const [entityId, runtime] of runtimes) {
         // eslint-disable-next-line no-restricted-syntax -- optional chaining; null when source is absent
         const buildingId = runtime.homeAssignment?.buildingId ?? null;
         if (buildingId === null) {
@@ -67,7 +87,7 @@ export function dumpWorkerAssignments(source: SettlerDebugSource): string {
 
     for (const [buildingId, settlers] of byBuilding) {
         // eslint-disable-next-line no-restricted-syntax -- nullable field with display/config default
-        const stateList = settlers.map(id => source.getSettlerState(id)?.toLowerCase() ?? 'unknown').join(', ');
+        const stateList = settlers.map(id => stateQuery.getSettlerState(id)?.toLowerCase() ?? 'unknown').join(', ');
         lines.push(`Building ${buildingId}: settlers [${settlers.join(', ')}] (${stateList})`);
     }
 

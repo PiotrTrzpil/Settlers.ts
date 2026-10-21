@@ -6,7 +6,7 @@
  * Stateless service — caller provides the per-unit idle state.
  *
  * Direction rule: all direction changes go through MovementController.setDirection().
- * The per-tick sync in UnitStateMachine.updateDirectionTracking() propagates to the
+ * The per-tick sync in UnitVisualSync.syncWithMovement() propagates to the
  * visual service — this class never calls visualService.setDirection() directly.
  */
 
@@ -100,7 +100,7 @@ export class IdleAnimationController {
 
     /**
      * Apply animation from a choreography node's resolved job part.
-     * Called by WorkerTaskExecutor when advancing to a new node.
+     * Called by JobRunner on the first tick of a node.
      */
     applyChoreoAnimation(settler: Entity, resolution: JobPartResolution): void {
         this.visualService.applyIntent(settler.id, {
@@ -115,7 +115,7 @@ export class IdleAnimationController {
      * Ensure the unit has a looping walk sequence for its type / carried material.
      *
      * Callers that issue movement should NOT set animation themselves — the per-tick
-     * movement visual sync (updateDirectionTracking / updateIdleUnit) owns this.
+     * movement visual sync (UnitVisualSync) owns this.
      * Does not require `playing` so blocked (isWaiting) units keep the walk sequence
      * without restarting every freeze tick.
      */

@@ -17,9 +17,8 @@ import { createLogger } from '@/utilities/logger';
 import type { Persistable } from '../../persistence/types';
 import type { SerializedUnitRuntime, SerializedJobIntent } from '../../state/persistence-types';
 import type { GameState } from '../../game-state';
-import type { IndexedMap } from '../../utils/indexed-map';
-import type { UnitRuntime } from './unit-state-machine';
-import type { BuildingWorkerTracker } from './building-worker-tracker';
+import type { UnitRuntime, UnitRuntimeStore } from './unit-runtime';
+import type { WorkerAssignments } from './worker-assignments';
 import type { JobChoreographyStore } from './job-choreography-store';
 import { SettlerState } from './types';
 import { ChoreoTaskType, createChoreoJobState } from './choreo-types';
@@ -138,10 +137,9 @@ function buildSerializedRuntime(entityId: number, runtime: UnitRuntime): Seriali
 
 interface RestoreContext {
     gameState: GameState;
-    runtimes: IndexedMap<number, UnitRuntime>;
-    workerTracker: BuildingWorkerTracker;
+    runtimes: UnitRuntimeStore;
+    assignments: WorkerAssignments;
     choreographyStore: JobChoreographyStore;
-    getOrCreateRuntime: (entityId: number) => UnitRuntime;
 }
 
 function restoreHomeAssignment(
@@ -159,9 +157,9 @@ function restoreHomeAssignment(
     // restore it as Inside so the location manager matches entity.hidden state.
     const entity = ctx.gameState.getEntity(entityId);
     if (entity?.hidden && home.hasVisited) {
-        ctx.workerTracker.assignWorkerInside(entityId, home.buildingId);
+        ctx.assignments.assignWorkerInside(entityId, home.buildingId);
     } else {
-        ctx.workerTracker.assignWorker(entityId, home.buildingId);
+        ctx.assignments.assignWorker(entityId, home.buildingId);
         const runtime = ctx.runtimes.get(entityId);
         if (runtime?.homeAssignment) {
             runtime.homeAssignment.hasVisited = home.hasVisited;
@@ -176,7 +174,7 @@ function restoreMoveTask(entityId: number, target: Tile, ctx: RestoreContext): v
         return;
     }
 
-    const runtime = ctx.getOrCreateRuntime(entityId);
+    const runtime = ctx.runtimes.getOrCreate(entityId);
 
     const moveSuccess = ctx.gameState.movement.moveUnit(entityId, target);
     if (!moveSuccess) {
@@ -202,7 +200,7 @@ function restoreJobIntent(entityId: number, intent: SerializedJobIntent, ctx: Re
         return;
     }
 
-    const runtime = ctx.getOrCreateRuntime(entityId);
+    const runtime = ctx.runtimes.getOrCreate(entityId);
 
     const raceId = raceToRaceId(entity.race);
     const choreoJob = ctx.choreographyStore.getJob(raceId, intent.jobId);
@@ -236,7 +234,7 @@ function restoreUnitRuntime(serialized: SerializedUnitRuntime, ctx: RestoreConte
         return;
     }
 
-    // Step 1: restore home assignment (sets workerTracker index + occupant count)
+    // Step 1: restore home assignment (sets assignment index + occupant count)
     if (serialized.home) {
         restoreHomeAssignment(id, serialized.home, ctx);
     }
@@ -255,19 +253,12 @@ function restoreUnitRuntime(serialized: SerializedUnitRuntime, ctx: RestoreConte
 
 export interface SettlerTaskPersistenceConfig {
     gameState: GameState;
-    runtimes: IndexedMap<number, UnitRuntime>;
-    workerTracker: BuildingWorkerTracker;
+    runtimes: UnitRuntimeStore;
+    assignments: WorkerAssignments;
     choreographyStore: JobChoreographyStore;
-    getOrCreateRuntime: (entityId: number) => UnitRuntime;
 }
 
-/**
- * Create the Persistable for settler task runtimes.
- *
- * Takes references to SettlerTaskSystem internals so that the persistable
- * can be created in the feature file without needing to subclass
- * SettlerTaskSystem (which already implements multiple interfaces).
- */
+/** Create the Persistable for settler task runtimes (created by the feature from the system's peers). */
 export function createSettlerTaskPersistence(
     config: SettlerTaskPersistenceConfig
 ): Persistable<SerializedUnitRuntime[]> {
@@ -289,9 +280,8 @@ export function createSettlerTaskPersistence(
             const ctx: RestoreContext = {
                 gameState: config.gameState,
                 runtimes: config.runtimes,
-                workerTracker: config.workerTracker,
+                assignments: config.assignments,
                 choreographyStore: config.choreographyStore,
-                getOrCreateRuntime: config.getOrCreateRuntime,
             };
             for (const serialized of data) {
                 try {
