@@ -2,8 +2,9 @@
 /**
  * Unit tests for TransportJobService — stateless lifecycle operations
  * for TransportJobRecord (supply accounting, queued activation, phase
- * transitions, terminal removal). entity.jobId is owned by settler-task
- * lifecycle (completeJob / interruptJob), not by this service.
+ * transitions, terminal removal). Cancelling an active record stops the
+ * carrier's Transport job through `jobs.cancel` (owner-initiated, no call-back);
+ * the carrier's job lifecycle itself belongs to the job runtime.
  */
 
 import { describe, it, expect, beforeEach } from 'vitest';
@@ -15,7 +16,7 @@ import { TransportJobStore } from '@/game/features/logistics/transport-job-store
 import { EMaterialType } from '@/game/economy';
 import type { BuildingInventoryManager } from '@/game/features/inventory';
 import { EventBus } from '@/game/event-bus';
-import type { GameState } from '@/game/game-state';
+import { JobKind } from '@/game/systems/choreo';
 
 // ─── Minimal BuildingInventoryManager stub ──────────────────────────
 // activate() only reads getOutputAmount(); everything else (withdrawal,
@@ -29,25 +30,15 @@ function createInventoryStub(outputAmount: number) {
     };
 }
 
-// ─── Minimal GameState stub ─────────────────────────────────────────
+// ─── Minimal job-runtime stub: records `jobs.cancel` calls ──────────
 
-interface CarrierStub {
-    id: number;
-    jobId?: number;
-}
-
-function createGameStateStub() {
-    let nextJobId = 1;
-    const carriers = new Map<number, CarrierStub>();
+function createJobsStub() {
+    const cancelled: { unitId: number; owner: string }[] = [];
     return {
-        carriers,
-        addCarrier(id: number): CarrierStub {
-            const carrier: CarrierStub = { id };
-            carriers.set(id, carrier);
-            return carrier;
+        cancelled,
+        cancel: (unitId: number, owner: string) => {
+            cancelled.push({ unitId, owner });
         },
-        getEntity: (id: number) => carriers.get(id),
-        allocateJobId: () => nextJobId++,
     };
 }
 
@@ -57,7 +48,7 @@ function createGameStateStub() {
 let demandLedger: DemandLedger;
 let jobStore: TransportJobStore;
 let eventBus: EventBus;
-let gameState: ReturnType<typeof createGameStateStub>;
+let jobs: ReturnType<typeof createJobsStub>;
 let deps: TransportJobDeps;
 
 const SOURCE = 100;
@@ -71,7 +62,7 @@ function makeDeps(outputAmount: number): TransportJobDeps {
         demandLedger,
         eventBus,
         inventoryManager: createInventoryStub(outputAmount) as unknown as BuildingInventoryManager,
-        gameState: gameState as unknown as GameState,
+        jobs,
     };
 }
 
@@ -79,8 +70,7 @@ beforeEach(() => {
     jobStore = new TransportJobStore();
     eventBus = new EventBus();
     demandLedger = new DemandLedger();
-    gameState = createGameStateStub();
-    gameState.addCarrier(CARRIER);
+    jobs = createJobsStub();
     deps = makeDeps(5);
 });
 
@@ -215,16 +205,13 @@ describe('TransportJobService.deliver', () => {
         expect(fulfilled).toEqual([{ buildingId: DEST, materialType: MATERIAL }]);
     });
 
-    it('does not clear the carrier jobId (lifecycle completeJob owns that)', () => {
-        const carrier = gameState.carriers.get(CARRIER)!;
+    it("does not stop the carrier's job (its completion after the stand-up frees the carrier)", () => {
         const record = activate()!;
-        // Simulates assignJob(reusing record.id) so entity.jobId === record.id
-        carrier.jobId = record.id;
 
         TransportJobService.pickUp(record, deps);
         TransportJobService.deliver(record, deps);
 
-        expect(carrier.jobId).toBe(record.id);
+        expect(jobs.cancelled).toEqual([]);
     });
 
     it('throws if called when still Reserved (not picked up)', () => {
@@ -244,52 +231,54 @@ describe('TransportJobService.deliver', () => {
 // ─── cancel ─────────────────────────────────────────────────────────
 
 describe('TransportJobService.cancel', () => {
-    it('removes the record and emits carrier:transportCancelled without clearing jobId', () => {
+    it("removes the record, stops the carrier's Transport job and notifies", () => {
         const events: { unitId: number; jobId: number; reason: string }[] = [];
         eventBus.on('carrier:transportCancelled', ({ unitId, jobId, reason }) =>
             events.push({ unitId, jobId, reason })
         );
 
-        const carrier = gameState.carriers.get(CARRIER)!;
         const record = activate()!;
-        carrier.jobId = record.id;
 
         TransportJobService.cancel(record, 'building destroyed', deps);
 
         expect(record.phase).toBe(TransportPhase.Cancelled);
         expect(jobStore.get(record.id)).toBeUndefined();
         expect(jobStore.getReservedAmount(SOURCE, MATERIAL)).toBe(0);
-        // jobId is cleared by settler-task lifecycle on carrier:transportCancelled, not here.
-        expect(carrier.jobId).toBe(record.id);
+        expect(jobs.cancelled).toEqual([{ unitId: CARRIER, owner: JobKind.Transport }]);
         expect(events).toEqual([{ unitId: CARRIER, jobId: record.id, reason: 'building destroyed' }]);
     });
 
-    it('does NOT emit transportCancelled or touch jobId when cancelling a Queued record', () => {
+    it("does NOT notify or touch the carrier's job when cancelling a Queued record", () => {
         const events: unknown[] = [];
         eventBus.on('carrier:transportCancelled', payload => events.push(payload));
 
-        const carrier = gameState.carriers.get(CARRIER)!;
         const active = activate()!;
-        carrier.jobId = active.id;
         const queued = activate(1, CARRIER, { queued: true })!;
 
         TransportJobService.cancel(queued, 'rerouted', deps);
 
         expect(queued.phase).toBe(TransportPhase.Cancelled);
         expect(jobStore.get(queued.id)).toBeUndefined();
-        // Active job + entity.jobId stay intact; lifecycle must not be asked to interrupt.
-        expect(carrier.jobId).toBe(active.id);
+        // The active job stays intact; the carrier's running job is not stopped.
         expect(jobStore.getActiveJobForCarrier(CARRIER)).toBe(active);
+        expect(jobs.cancelled).toEqual([]);
         expect(events).toHaveLength(0);
     });
 
-    it('allocates a stable record id that assignJob can reuse as entity.jobId', () => {
+    it('allocates record ids from the store counter', () => {
+        const first = activate()!;
+        const second = activate(1, 2)!;
+        expect(second.id).toBe(first.id + 1);
+        expect(jobStore.nextIdStore.get()).toBe(second.id + 1);
+    });
+
+    it("discard removes the record without stopping the carrier's job (it already ended)", () => {
         const record = activate()!;
-        const carrier = gameState.carriers.get(CARRIER)!;
-        // Mimic CarrierAssigner: assignJob(..., record.id)
-        carrier.jobId = record.id;
-        expect(carrier.jobId).toBe(record.id);
-        expect(typeof record.id).toBe('number');
+
+        TransportJobService.discard(record, 'carrier died', deps);
+
+        expect(jobStore.get(record.id)).toBeUndefined();
+        expect(jobs.cancelled).toEqual([]);
     });
 
     it('cancels a PickedUp record (no stock claim to release)', () => {
@@ -300,14 +289,6 @@ describe('TransportJobService.cancel', () => {
 
         expect(record.phase).toBe(TransportPhase.Cancelled);
         expect(jobStore.getInFlightAmount(DEST, MATERIAL)).toBe(0);
-    });
-
-    it('tolerates an already-removed carrier (entity-removal cleanup)', () => {
-        const record = activate()!;
-        gameState.carriers.delete(CARRIER);
-
-        expect(() => TransportJobService.cancel(record, 'carrier died', deps)).not.toThrow();
-        expect(jobStore.get(record.id)).toBeUndefined();
     });
 
     it('is a no-op if already cancelled (emits only once)', () => {

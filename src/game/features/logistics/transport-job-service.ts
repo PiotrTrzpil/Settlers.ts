@@ -14,14 +14,18 @@ import { TransportPhase, type TransportJobRecord } from './transport-job-record'
 import type { TransportJobStore } from './transport-job-store';
 import type { DemandLedger } from './demand-ledger';
 import type { BuildingInventoryManager } from '../inventory';
-import type { GameState } from '../../game-state';
+import { JobKind } from '../../systems/choreo';
+import type { JobService } from '../settler-tasks';
+
+/** The part of the job runtime a record cancel needs: stop the carrier's running Transport job. */
+export type TransportJobControl = Pick<JobService, 'cancel'>;
 
 export interface TransportJobDeps {
     jobStore: TransportJobStore;
     demandLedger: DemandLedger;
     eventBus: EventBus;
     inventoryManager: BuildingInventoryManager;
-    gameState: GameState;
+    jobs: TransportJobControl;
 }
 
 /**
@@ -48,7 +52,7 @@ export function activate(
     }
 
     const record: TransportJobRecord = {
-        id: deps.gameState.allocateJobId(),
+        id: deps.jobStore.allocateId(),
         sourceBuilding,
         destBuilding,
         material,
@@ -77,8 +81,8 @@ export function promoteQueued(record: TransportJobRecord, deps: TransportJobDeps
 /**
  * Advance phase from Reserved → PickedUp.
  *
- * Does NOT withdraw inventory — the choreography handles material movement
- * via MaterialTransfer.pickUpOutput() immediately after this call. This
+ * Does NOT withdraw inventory — the TRANSPORT_PICKUP executor handles material
+ * movement via MaterialTransfer.pickUpOutput() immediately after this call. This
  * separation ensures material is withdrawn exactly once and the carrier's
  * entity.carrying is set atomically with the withdrawal.
  */
@@ -94,9 +98,8 @@ export function pickUp(record: TransportJobRecord, deps: TransportJobDeps): void
  * Mark the transport job as delivered, remove it from the store, and emit
  * the fulfillment event. Asserts phase===PickedUp.
  *
- * Does NOT clear entity.jobId — the carrier's choreography is still running
- * (delivery animation / stand-up). Settler-task lifecycle clears jobId in
- * completeJob when the choreo finishes.
+ * Does NOT end the carrier's job — the choreography is still running (delivery
+ * animation / stand-up); the carrier becomes free when its job completes.
  */
 export function deliver(record: TransportJobRecord, deps: TransportJobDeps): void {
     if (record.phase !== TransportPhase.PickedUp) {
@@ -111,26 +114,33 @@ export function deliver(record: TransportJobRecord, deps: TransportJobDeps): voi
 }
 
 /**
- * Cancel a transport job and remove it from the store.
- * Safe to call multiple times — subsequent calls are no-ops.
- * The deficit re-opens automatically on the next dispatch tick.
+ * Cancel a transport job: remove the record and, for an active (non-queued) record, stop the
+ * carrier's running Transport job (`jobs.cancel` — owner-initiated, so the Transport handler is
+ * not called back). Safe to call multiple times — subsequent calls are no-ops. The deficit
+ * re-opens automatically on the next dispatch tick.
  *
- * Does NOT clear entity.jobId. For active (non-queued) jobs, emits
- * `carrier:transportCancelled` so settler-task lifecycle can interrupt the
- * choreography and clear jobId there (single ownership of clearJobId).
- * Queued jobs were never the carrier's running task — entity.jobId belongs
- * to the active record and must stay intact.
+ * Queued follow-ups never owned the running job, so cancelling one leaves the carrier alone.
  */
 export function cancel(record: TransportJobRecord, reason: string, deps: TransportJobDeps): void {
+    const wasActive = record.phase === TransportPhase.Reserved || record.phase === TransportPhase.PickedUp;
+    discard(record, reason, deps);
+    if (wasActive) {
+        deps.jobs.cancel(record.carrierId, JobKind.Transport);
+    }
+}
+
+/**
+ * Remove a record whose carrier no longer runs it — its job already ended (Transport handler
+ * onFailed / onUnitRemoved) or was never restored (orphan on load). Idempotent like `cancel`.
+ * Emits `carrier:transportCancelled` for active records — a notification only (timeline, tests).
+ */
+export function discard(record: TransportJobRecord, reason: string, deps: TransportJobDeps): void {
     if (record.phase === TransportPhase.Cancelled || record.phase === TransportPhase.Delivered) {
         return;
     }
     const wasQueued = record.phase === TransportPhase.Queued;
     record.phase = TransportPhase.Cancelled;
     deps.jobStore.remove(record.id);
-
-    // Queued follow-ups never owned the running choreo — do not ask lifecycle to interrupt.
-    // Active jobs: emit so settler-task lifecycle interrupts the choreo and clears entity.jobId.
     if (!wasQueued) {
         deps.eventBus.emit('carrier:transportCancelled', {
             unitId: record.carrierId,

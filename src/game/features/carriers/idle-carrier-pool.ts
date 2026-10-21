@@ -1,8 +1,9 @@
 /**
  * IdleCarrierPool — nearest-available-carrier queries.
  *
- * "Available" means: not busy (entity.jobId == null), not reserved by another
- * feature (barracks, auto-recruit, garrison), and passes an optional filter.
+ * "Available" means idle by the one definition — no unit commitment (no job, no
+ * hold, no player move; `UnitCommitmentQuery.isIdle`) — and passes an optional filter.
+ * A carrier walking on a player move is therefore never picked.
  *
  * Spatial index: rebuilds idle carriers into a SpatialHash (same cell model as
  * SpatialGrid, without territory — carriers move, so the hash is rebuilt each
@@ -12,7 +13,7 @@
 
 import type { GameState } from '../../game-state';
 import type { CarrierRegistry } from './carrier-registry';
-import type { UnitReservationRegistry } from '../../systems/unit-reservation';
+import type { UnitCommitmentQuery } from '../../systems/unit-commitment';
 import { SpatialHash } from '../../spatial-hash';
 import { query } from '../../ecs';
 import { distSq } from '../../core/distance';
@@ -23,7 +24,7 @@ export type CarrierEligibilityFilter = (entityId: number) => boolean;
 export interface IdleCarrierPoolConfig {
     gameState: GameState;
     carrierRegistry: CarrierRegistry;
-    unitReservation: UnitReservationRegistry;
+    unitCommitments: UnitCommitmentQuery;
 }
 
 /** Cap expand-radius search (tiles) so empty results do not run forever. */
@@ -32,7 +33,7 @@ const MAX_SEARCH_RADIUS = 4096;
 export class IdleCarrierPool {
     private readonly gameState: GameState;
     private readonly carrierRegistry: CarrierRegistry;
-    private readonly unitReservation: UnitReservationRegistry;
+    private readonly unitCommitments: UnitCommitmentQuery;
 
     /**
      * Idle carriers only, rebuilt each beginFrame().
@@ -46,7 +47,7 @@ export class IdleCarrierPool {
     constructor(config: IdleCarrierPoolConfig) {
         this.gameState = config.gameState;
         this.carrierRegistry = config.carrierRegistry;
-        this.unitReservation = config.unitReservation;
+        this.unitCommitments = config.unitCommitments;
     }
 
     /** Expose carrier ComponentStore for external iteration (e.g. RecruitSystem scan). */
@@ -63,10 +64,10 @@ export class IdleCarrierPool {
         this.indexReady = false;
     }
 
-    /** Check if a carrier is idle (no active job, not reserved). */
+    /** Check if a carrier is idle (no commitment). */
     isIdle(carrierId: number): boolean {
-        const entity = this.gameState.getEntityOrThrow(carrierId, 'IdleCarrierPool.isIdle');
-        return entity.jobId == null && !this.unitReservation.isReserved(carrierId);
+        this.gameState.getEntityOrThrow(carrierId, 'IdleCarrierPool.isIdle');
+        return this.unitCommitments.isIdle(carrierId);
     }
 
     /**
@@ -128,7 +129,7 @@ export class IdleCarrierPool {
 
         for (const id of this.hash.nearbyIds(center, radius)) {
             const entity = this.gameState.getEntity(id);
-            if (!entity || !this.isAvailable(id, entity.player, entity.jobId, player, filter)) {
+            if (!entity || !this.isAvailable(id, entity.player, player, filter)) {
                 continue;
             }
             const d = distSq(entity, center);
@@ -154,7 +155,7 @@ export class IdleCarrierPool {
         this.hash.clear();
 
         for (const [id, , entity] of query(this.carrierRegistry.store, this.gameState.store)) {
-            if (entity.jobId != null || this.unitReservation.isReserved(id)) {
+            if (!this.unitCommitments.isIdle(id)) {
                 continue;
             }
             this.hash.add(id, entity);
@@ -163,18 +164,7 @@ export class IdleCarrierPool {
         this.indexReady = true;
     }
 
-    private isAvailable(
-        id: number,
-        entityPlayer: number,
-        entityJobId: number | undefined,
-        player: number,
-        filter?: CarrierEligibilityFilter
-    ): boolean {
-        return (
-            entityPlayer === player &&
-            entityJobId == null &&
-            !this.unitReservation.isReserved(id) &&
-            (!filter || filter(id))
-        );
+    private isAvailable(id: number, entityPlayer: number, player: number, filter?: CarrierEligibilityFilter): boolean {
+        return entityPlayer === player && this.unitCommitments.isIdle(id) && (!filter || filter(id));
     }
 }

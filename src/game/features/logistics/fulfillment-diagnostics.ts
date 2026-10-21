@@ -15,6 +15,7 @@ import type { TransportJobStore } from './transport-job-store';
 import type { EMaterialType } from '../../economy/material-type';
 import { getAvailableSupplies } from './resource-supply';
 import { query } from '../../ecs';
+import type { UnitCommitmentQuery } from '../../systems/unit-commitment';
 
 /**
  * Minimal interface for a demand/request being diagnosed.
@@ -58,10 +59,8 @@ export interface DiagnosticConfig {
     inventoryManager: BuildingInventoryManager;
     carrierRegistry: CarrierRegistry;
     jobStore: TransportJobStore;
-    /** Returns the active job ID for an entity, or null if idle. */
-    getActiveJobId: (entityId: number) => string | null;
-    /** Returns true if the carrier is reserved by a feature (barracks, garrison, etc.). */
-    isReserved: (entityId: number) => boolean;
+    /** Who owns each unit — the one "idle" definition (no commitment). */
+    unitCommitments: UnitCommitmentQuery;
 }
 
 /**
@@ -111,9 +110,12 @@ export function diagnoseUnfulfilledRequest(request: DiagnosticRequest, config: D
     return diagnoseCarrierAvailability(config, playerId);
 }
 
-/** Mirrors IdleCarrierPool.isAvailable checks to classify carrier state. */
+/**
+ * Mirrors IdleCarrierPool availability (commitments.isIdle) to classify carrier state: idle ⇒ free;
+ * reserved without a job (hold, legacy reservation) ⇒ reserved; anything else (job, move) ⇒ busy.
+ */
 function diagnoseCarrierAvailability(config: DiagnosticConfig, playerId: number): UnfulfilledReason {
-    const { gameState, carrierRegistry, getActiveJobId, isReserved } = config;
+    const { gameState, carrierRegistry, unitCommitments } = config;
     let hasCarrier = false;
     let hasIdleAndFree = false;
     let hasIdleButReserved = false;
@@ -123,13 +125,14 @@ function diagnoseCarrierAvailability(config: DiagnosticConfig, playerId: number)
             continue;
         }
         hasCarrier = true;
-        if (getActiveJobId(id) !== null) {
+        if (unitCommitments.isIdle(id)) {
+            hasIdleAndFree = true;
             continue;
         }
-        if (isReserved(id)) {
+        // Nullable by design: a legacy-reserved unit may have no commitment.
+        const commitment = unitCommitments.get(id);
+        if (unitCommitments.isReserved(id) && !(commitment && commitment.hasJob)) {
             hasIdleButReserved = true;
-        } else {
-            hasIdleAndFree = true;
         }
     }
 

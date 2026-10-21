@@ -12,6 +12,8 @@
  * records remove themselves on terminal transitions (TransportJobService).
  * The dispatcher's role is limited to: coordinating the sub-systems and
  * cancelling jobs when external events require it (building destroyed, etc.).
+ * Carrier job outcomes (completion → queued follow-up, failure / death → records
+ * discarded) are owned by the Transport JobKind handler (transport-job-kind.ts).
  */
 
 import type { TickSystem } from '../../core/tick-system';
@@ -19,7 +21,7 @@ import type { CoreDeps } from '../feature';
 import { type EventBus, EventSubscriptionManager } from '../../event-bus';
 import { CLEANUP_PRIORITY } from '../../systems/entity-cleanup-registry';
 import type { EntityCleanupRegistry } from '../../systems/entity-cleanup-registry';
-import type { CarrierRegistry, IdleCarrierPool } from '../carriers';
+import type { IdleCarrierPool } from '../carriers';
 import type { DemandLedger, DemandTarget } from './demand-ledger';
 import { computeDeficit } from './demand-deficit';
 import { TransportPhase, type TransportJobRecord } from './transport-job-record';
@@ -27,20 +29,16 @@ import * as TransportJobService from './transport-job-service';
 import type { TransportJobDeps } from './transport-job-service';
 import type { TransportJobStore } from './transport-job-store';
 import type { BuildingInventoryManager, StorageFilterManager } from '../inventory';
-import type { MaterialTransfer } from '../material-transfer/material-transfer';
 import { RequestMatcher } from './request-matcher';
 import type { LogisticsMatchFilter, CarrierFilter } from './logistics-filter';
 import { CarrierAssigner } from './carrier-assigner';
-import type { TaskDispatcher } from '../settler-tasks';
 import { StallDetector } from './stall-detector';
 import { MatchDiagnostics } from './match-diagnostics';
 import { ThrottledEmitter } from './throttled-emitter';
-import { TransportJobBuilder } from './transport-job-builder';
-import { clearJobId } from '../../entity';
+import type { TransportJobAssigner } from './transport-job-kind';
+import { JobKind } from '../../systems/choreo';
+import type { UnitCommitmentQuery } from '../../systems/unit-commitment';
 import { createLogger } from '@/utilities/logger';
-
-// clearJobId is only used in restore orphan cleanup. Live units clear jobId via
-// settler-task lifecycle (completeJob / interruptJob) — see docs/architecture/logistics-task-simplification.md.
 
 const log = createLogger('LogisticsDispatcher');
 
@@ -52,14 +50,15 @@ const EVENT_COOLDOWN_SEC = 5;
 
 /** Configuration for LogisticsDispatcher dependencies */
 export interface LogisticsDispatcherConfig extends CoreDeps {
-    carrierRegistry: CarrierRegistry;
     idleCarrierPool: IdleCarrierPool;
-    /** Settler job assignment (TaskDispatcher.assignJob). */
-    taskDispatcher: Pick<TaskDispatcher, 'assignJob'>;
+    /** Starts a record's Transport job (the Transport JobKind handler). */
+    transportJobs: TransportJobAssigner;
+    /** Who owns each unit — restore keeps only records whose carrier runs their job. */
+    unitCommitments: UnitCommitmentQuery;
+    transportJobDeps: TransportJobDeps;
     demandLedger: DemandLedger;
     jobStore: TransportJobStore;
     inventoryManager: BuildingInventoryManager;
-    materialTransfer: MaterialTransfer;
     storageFilterManager?: StorageFilterManager;
     matchFilter?: LogisticsMatchFilter;
     carrierFilter?: CarrierFilter;
@@ -77,7 +76,7 @@ export class LogisticsDispatcher implements TickSystem {
 
     private readonly demandLedger: DemandLedger;
     private readonly inventoryManager: BuildingInventoryManager;
-    private readonly materialTransfer: MaterialTransfer;
+    private readonly unitCommitments: UnitCommitmentQuery;
     private readonly requestMatcher: RequestMatcher;
     private readonly carrierAssigner: CarrierAssigner;
     private readonly idleCarrierPool: IdleCarrierPool;
@@ -94,32 +93,14 @@ export class LogisticsDispatcher implements TickSystem {
     /** Event subscription manager for cleanup */
     private readonly subscriptions = new EventSubscriptionManager();
 
-    /** Job assignment for flushing queued follow-ups and restoring jobs. */
-    private readonly taskDispatcher: Pick<TaskDispatcher, 'assignJob'>;
-
-    /** Builder for creating transport choreographies (assignment, flush, and restore). */
-    private readonly transportJobBuilder: TransportJobBuilder;
-
-    /** Carrier registry for scanning all carrier entities during restore. */
-    private readonly carrierRegistry: CarrierRegistry;
-
     constructor(config: LogisticsDispatcherConfig) {
         this.eventBus = config.eventBus;
         this.demandLedger = config.demandLedger;
         this.jobStore = config.jobStore;
-        this.taskDispatcher = config.taskDispatcher;
-        this.carrierRegistry = config.carrierRegistry;
         this.idleCarrierPool = config.idleCarrierPool;
         this.inventoryManager = config.inventoryManager;
-        this.materialTransfer = config.materialTransfer;
-
-        this.transportJobDeps = {
-            jobStore: config.jobStore,
-            demandLedger: config.demandLedger,
-            eventBus: config.eventBus,
-            inventoryManager: config.inventoryManager,
-            gameState: config.gameState,
-        };
+        this.unitCommitments = config.unitCommitments;
+        this.transportJobDeps = config.transportJobDeps;
 
         this.requestMatcher = new RequestMatcher({
             gameState: config.gameState,
@@ -129,18 +110,11 @@ export class LogisticsDispatcher implements TickSystem {
             matchFilter: config.matchFilter,
         });
 
-        this.transportJobBuilder = new TransportJobBuilder({
-            gameState: config.gameState,
-            inventoryManager: config.inventoryManager,
-            transportJobDeps: this.transportJobDeps,
-        });
-
         this.carrierAssigner = new CarrierAssigner({
             gameState: config.gameState,
             eventBus: config.eventBus,
             idleCarrierPool: config.idleCarrierPool,
-            taskDispatcher: config.taskDispatcher,
-            transportJobBuilder: this.transportJobBuilder,
+            transportJobs: config.transportJobs,
             transportJobDeps: this.transportJobDeps,
             carrierFilter: config.carrierFilter,
         });
@@ -176,21 +150,6 @@ export class LogisticsDispatcher implements TickSystem {
      * before inventory removal (inventory data must exist while cancelling jobs).
      */
     registerEvents(eventBus: EventBus, cleanupRegistry: EntityCleanupRegistry): void {
-        // Queued follow-up is activated when the carrier's choreography ends.
-        // entity.jobId is already cleared by JobRunner.completeJob before this event —
-        // lifecycle owns clearJobId for live units (do not clear here).
-        this.subscriptions.subscribe(eventBus, 'settler:taskCompleted', ({ unitId }) => {
-            this.flushQueuedAssignment(unitId);
-        });
-
-        this.subscriptions.subscribe(eventBus, 'carrier:pickupFailed', ({ unitId }) => {
-            const record = this.jobStore.getActiveJobForCarrier(unitId);
-            if (record) {
-                TransportJobService.cancel(record, 'pickup_failed', this.transportJobDeps);
-            }
-            this.cancelQueuedJob(unitId, 'pickup_failed');
-        });
-
         // When a construction site completes, cancel all in-flight jobs targeting it.
         // The inventory is swapped from construction → production, so carriers
         // can no longer deposit construction materials there.
@@ -214,69 +173,30 @@ export class LogisticsDispatcher implements TickSystem {
     }
 
     /**
-     * Rebuild carrier choreographies from persisted job records after keyframe
-     * restore / hot reload. Records survive save/load (TransportJobStore is
-     * persisted); only the choreographies are transient.
-     *
-     * - Queued: cancelled — the deficit re-opens and the dispatcher re-plans.
-     * - Reserved: rebuild the full transport choreography (walk to source again).
-     * - PickedUp: rebuild a delivery-only choreography from the carried material.
+     * After keyframe restore / hot reload (`onRestoreComplete`): records are persisted, and each
+     * active record's carrier job is restored by the job runtime under its Transport commitment
+     * (rebuilt from the record by the Transport handler in `onRestoreResume`). Here only:
+     * - Queued follow-ups are cancelled — the deficit re-opens and the dispatcher re-plans;
+     * - orphans (active records whose carrier is gone or has no Transport commitment for them)
+     *   are discarded, releasing their stock claims.
+     * Never touches the carriers' jobs: they are not resumed yet.
      */
     restoreJobs(): void {
-        const gameState = this.transportJobDeps.gameState;
-
-        // oxlint-disable-next-line unicorn/no-useless-spread -- restoreJob removes records; iterate a copy
+        // oxlint-disable-next-line unicorn/no-useless-spread -- discard removes records; iterate a copy
         for (const record of [...this.jobStore.jobs.values()]) {
-            this.restoreJob(record);
-        }
-
-        // Orphan jobId with no live transport record (and no choreo to run lifecycle):
-        // restore is the only path allowed to clearJobId outside settler-task lifecycle.
-        for (const carrierId of this.carrierRegistry) {
-            const entity = gameState.getEntityOrThrow(carrierId, 'restoreJobs carrier scan');
-            if (entity.jobId == null || this.jobStore.getActiveJobForCarrier(carrierId)) {
-                continue;
+            if (record.phase === TransportPhase.Queued) {
+                TransportJobService.discard(record, 'restore', this.transportJobDeps);
+            } else if (!this.runsRecord(record)) {
+                log.warn(`Job #${record.id}: carrier ${record.carrierId} does not run it after restore — discarding`);
+                TransportJobService.discard(record, 'restore_orphan', this.transportJobDeps);
             }
-            if (entity.carrying) {
-                this.materialTransfer.drop(carrierId);
-            }
-            clearJobId(entity);
         }
     }
 
-    /** Restore a single persisted job record — rebuild its choreography or cancel it. */
-    private restoreJob(record: TransportJobRecord): void {
-        const carrier = this.transportJobDeps.gameState.getEntity(record.carrierId);
-        if (!carrier) {
-            this.jobStore.remove(record.id);
-            return;
-        }
-
-        if (record.phase === TransportPhase.Queued) {
-            TransportJobService.cancel(record, 'restore', this.transportJobDeps);
-            return;
-        }
-
-        if (record.phase === TransportPhase.PickedUp && carrier.carrying?.material !== record.material) {
-            log.warn(`Job #${record.id}: carrier ${record.carrierId} no longer carries ${record.material}`);
-            TransportJobService.cancel(record, 'restore_carrying_mismatch', this.transportJobDeps);
-            return;
-        }
-
-        const job =
-            record.phase === TransportPhase.PickedUp
-                ? this.transportJobBuilder.buildDeliveryOnly(record)
-                : this.transportJobBuilder.build(record);
-
-        if (this.taskDispatcher.assignJob(record.carrierId, job, job.targetPos!, record.id)) {
-            log.info(`Restored ${record.phase} job #${record.id} for carrier ${record.carrierId}`);
-        } else {
-            log.warn(`Failed to restore job #${record.id} for carrier ${record.carrierId} — cancelling`);
-            if (record.phase === TransportPhase.PickedUp) {
-                this.materialTransfer.drop(record.carrierId);
-            }
-            TransportJobService.cancel(record, 'restore_failed', this.transportJobDeps);
-        }
+    /** The record's carrier holds the Transport commitment for exactly this record. */
+    private runsRecord(record: TransportJobRecord): boolean {
+        const commitment = this.unitCommitments.get(record.carrierId);
+        return commitment !== undefined && commitment.owner === JobKind.Transport && commitment.ref === record.id;
     }
 
     /**
@@ -361,40 +281,6 @@ export class LogisticsDispatcher implements TickSystem {
             materialType: entry.materialType,
             sourceBuilding,
         });
-    }
-
-    /**
-     * Activate the queued follow-up job for a carrier that just finished its task.
-     * The choreography is built now (not at queue time), so positions reflect the
-     * current world state.
-     */
-    private flushQueuedAssignment(carrierId: number): void {
-        const record = this.jobStore.getQueuedJobForCarrier(carrierId);
-        if (!record) {
-            return;
-        }
-
-        TransportJobService.promoteQueued(record, this.transportJobDeps);
-        const job = this.transportJobBuilder.build(record);
-        const success = this.taskDispatcher.assignJob(carrierId, job, job.targetPos!, record.id);
-        if (!success) {
-            // Assignment failed (e.g. movement blocked) — cancel; the deficit re-opens.
-            TransportJobService.cancel(record, 'assignment_failed', this.transportJobDeps);
-        }
-        this.eventBus.emit('logistics:preAssignFlushed', {
-            carrierId,
-            jobId: record.id,
-            success,
-            reason: success ? undefined : 'assignment_failed',
-        });
-    }
-
-    /** Cancel a carrier's queued follow-up job, if any. */
-    private cancelQueuedJob(carrierId: number, reason: string): void {
-        const queued = this.jobStore.getQueuedJobForCarrier(carrierId);
-        if (queued) {
-            TransportJobService.cancel(queued, reason, this.transportJobDeps);
-        }
     }
 
     /**

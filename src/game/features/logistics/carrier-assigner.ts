@@ -18,8 +18,7 @@ import type { TransportJobRecord } from './transport-job-record';
 import * as TransportJobService from './transport-job-service';
 import type { TransportJobDeps } from './transport-job-service';
 import type { RequestMatchResult } from './request-matcher';
-import type { TransportJobBuilder } from './transport-job-builder';
-import type { TaskDispatcher } from '../settler-tasks';
+import type { TransportJobAssigner } from './transport-job-kind';
 import type { CarrierFilter } from './logistics-filter';
 import type { IdleCarrierPool } from '../carriers';
 import { TransportPhase } from './transport-job-record';
@@ -43,9 +42,8 @@ export interface CarrierAssignerConfig {
     gameState: GameState;
     eventBus: EventBus;
     idleCarrierPool: IdleCarrierPool;
-    /** Same assignJob surface as TaskDispatcher (merged JobAssigner). */
-    taskDispatcher: Pick<TaskDispatcher, 'assignJob'>;
-    transportJobBuilder: TransportJobBuilder;
+    /** Starts the carrier's Transport job for a record (the Transport JobKind handler). */
+    transportJobs: TransportJobAssigner;
     transportJobDeps: TransportJobDeps;
     carrierFilter?: CarrierFilter;
 }
@@ -65,8 +63,7 @@ export class CarrierAssigner {
     private readonly gameState: GameState;
     private readonly eventBus: EventBus;
     private readonly idleCarrierPool: IdleCarrierPool;
-    private readonly taskDispatcher: Pick<TaskDispatcher, 'assignJob'>;
-    private readonly transportJobBuilder: TransportJobBuilder;
+    private readonly transportJobs: TransportJobAssigner;
     private readonly transportJobDeps: TransportJobDeps;
     carrierFilter: CarrierFilter | null;
 
@@ -74,8 +71,7 @@ export class CarrierAssigner {
         this.gameState = config.gameState;
         this.eventBus = config.eventBus;
         this.idleCarrierPool = config.idleCarrierPool;
-        this.taskDispatcher = config.taskDispatcher;
-        this.transportJobBuilder = config.transportJobBuilder;
+        this.transportJobs = config.transportJobs;
         this.transportJobDeps = config.transportJobDeps;
         // eslint-disable-next-line no-restricted-syntax -- optional config/prop with sensible default
         this.carrierFilter = config.carrierFilter ?? null;
@@ -171,9 +167,7 @@ export class CarrierAssigner {
         }
 
         try {
-            const job = this.transportJobBuilder.build(record);
-            // Reuse transport record id so entity.jobId === record.id (single numeric job identity).
-            const success = this.taskDispatcher.assignJob(carrierId, job, job.targetPos!, record.id);
+            const success = this.transportJobs.assign(record);
 
             if (success) {
                 this.emitAssigned(record);

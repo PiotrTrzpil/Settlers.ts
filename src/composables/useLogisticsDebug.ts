@@ -32,7 +32,7 @@ function buildSnapshotConfig(game: Game): SnapshotConfig {
         workerStateQuery: svc.jobRunner,
         workerAssignments: svc.workerAssignments,
         inventoryManager: svc.inventoryManager,
-        unitReservation: svc.unitReservation,
+        unitCommitments: svc.unitCommitments,
         constructionSiteManager: svc.constructionSiteManager,
     };
 }

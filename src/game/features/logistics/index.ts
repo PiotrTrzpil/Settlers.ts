@@ -34,7 +34,7 @@ export {
 // Transport job record + service (flat data + stateless lifecycle)
 export { TransportPhase, type TransportJobRecord, claimsSourceStock, isIncoming } from './transport-job-record';
 export * as TransportJobService from './transport-job-service';
-export type { TransportJobDeps } from './transport-job-service';
+export type { TransportJobDeps, TransportJobControl } from './transport-job-service';
 
 // Transport job store (single source of truth for all active jobs)
 export { TransportJobStore } from './transport-job-store';
@@ -50,8 +50,14 @@ export {
     type TransportDemand,
 } from './carrier-assigner';
 
-// Transport job builder (constructs ChoreoJobState for carrier transport)
-export { TransportJobBuilder, type TransportJobBuilderConfig } from './transport-job-builder';
+// Transport JobKind handler (owner of carrier transport jobs: build from the record, outcomes)
+export {
+    TransportJobKind,
+    TRANSPORT_JOB_ID,
+    type TransportJobKindConfig,
+    type TransportJobParams,
+    type TransportJobAssigner,
+} from './transport-job-kind';
 
 // Stall detector (diagnostic only — logs stalled carriers, does not cancel)
 export { StallDetector, type StallDetectorConfig } from './stall-detector';

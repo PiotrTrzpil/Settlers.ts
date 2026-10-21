@@ -6,8 +6,8 @@
  * Creates the DemandLedger and TransportJobStore. Uses id='logistics' so
  * downstream features access these via ctx.getFeature('logistics').
  *
- * Persistence: transport job records are persisted directly (they are flat);
- * choreographies are rebuilt from them on restore (LogisticsDispatcher).
+ * Persistence: transport job records and their id counter are persisted directly
+ * (records are flat); carrier jobs are rebuilt from them on restore (Transport JobKind).
  * The ledger is NOT persisted — standing orders are re-seeded from world
  * state on first tick by the scanner systems.
  */
@@ -31,7 +31,7 @@ export const DemandLedgerFeature: FeatureDefinition = {
 
         return {
             exports: { demandLedger, jobStore } satisfies DemandLedgerExports,
-            persistence: [jobStore.jobs],
+            persistence: [jobStore.jobs, jobStore.nextIdStore],
         };
     },
 };

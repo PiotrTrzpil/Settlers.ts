@@ -40,7 +40,7 @@ export const CarrierFeature: FeatureDefinition = {
         const idleCarrierPool = new IdleCarrierPool({
             gameState: ctx.gameState,
             carrierRegistry,
-            unitReservation: ctx.unitReservation,
+            unitCommitments: ctx.unitCommitments,
         });
 
         return {

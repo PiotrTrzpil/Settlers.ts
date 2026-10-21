@@ -50,10 +50,17 @@ describe('Unit removal reaches the job owner', { timeout: 60_000 }, () => {
         const carrier = carrierId!;
         expect(sim.services.jobStore.getActiveJobForCarrier(carrier)).toBeDefined();
 
+        let aborted = 0;
+        sim.eventBus.on('settler:jobAborted', ({ unitId, reason }) => {
+            aborted += unitId === carrier && reason === 'unitRemoved' ? 1 : 0;
+        });
+
         sim.killUnit(carrier);
 
         expect(sim.services.jobStore.getActiveJobForCarrier(carrier)).toBeUndefined();
-        expect(failures.get(carrier)).toBe(1);
+        // Transport is an owned kind: its handler's onUnitRemoved runs, no legacy taskFailed.
+        expect(failures.get(carrier)).toBeUndefined();
+        expect(aborted).toBe(1);
 
         sim.waitForConstructionComplete(scenario.siteId, 80_000);
         expect(sim.services.constructionSiteManager.hasSite(scenario.siteId)).toBe(false);

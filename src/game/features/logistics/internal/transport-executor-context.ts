@@ -2,7 +2,7 @@
  * Transport executor context — dependencies for TRANSPORT_* choreography executors.
  */
 
-import type { ChoreoSystem } from '../../../systems/choreo';
+import type { ChoreoNodeHooks, ChoreoSystem } from '../../../systems/choreo';
 import { ChoreoTaskType } from '../../../systems/choreo';
 import type { EventBus } from '../../../event-bus';
 import type { BuildingInventoryManager } from '../../inventory';
@@ -33,6 +33,9 @@ export interface TransportExecutorContext {
     transportJobDeps: TransportJobDeps;
 }
 
+/** Pickup / delivery move material — a restored job never snaps back across a completed one. */
+const IRREVERSIBLE: ChoreoNodeHooks = { irreversible: true };
+
 /**
  * Register all TRANSPORT_* choreography executors on the given ChoreoSystem.
  */
@@ -47,11 +50,15 @@ export function registerTransportExecutors(
     choreoSystem.register(ChoreoTaskType.TRANSPORT_GO_TO_DEST, (s, j, n, dt) =>
         executeTransportGoToDest(s, j, n, dt, movementCtx)
     );
-    choreoSystem.register(ChoreoTaskType.TRANSPORT_PICKUP, (s, j, n, dt) =>
-        executeTransportPickup(s, j, n, dt, transportCtx)
+    choreoSystem.register(
+        ChoreoTaskType.TRANSPORT_PICKUP,
+        (s, j, n, dt) => executeTransportPickup(s, j, n, dt, transportCtx),
+        IRREVERSIBLE
     );
-    choreoSystem.register(ChoreoTaskType.TRANSPORT_DELIVER, (s, j, n, dt) =>
-        executeTransportDeliver(s, j, n, dt, transportCtx)
+    choreoSystem.register(
+        ChoreoTaskType.TRANSPORT_DELIVER,
+        (s, j, n, dt) => executeTransportDeliver(s, j, n, dt, transportCtx),
+        IRREVERSIBLE
     );
     choreoSystem.register(ChoreoTaskType.TRANSPORT_STAND_UP, (s, j, n, dt) => executeTransportStandUp(s, j, n, dt));
 }
