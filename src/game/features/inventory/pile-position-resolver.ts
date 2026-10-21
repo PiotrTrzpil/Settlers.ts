@@ -1,10 +1,19 @@
 /**
- * Pile Position Resolver
+ * Pile Position Resolver — decides pile tiles at slot creation time.
  *
- * Dispatches pile position resolution to the correct strategy based on slotKind:
- * - 'input' (construction) → ConstructionSiteManager.getConstructionPilePosition (when hasSite)
- * - 'output' / 'input'     → BuildingPileRegistry (XML-defined, always present)
- * - 'storage'              → BuildingPileRegistry.getStoragePileWorldPositions (first free slot)
+ * This is the ONLY place pile tiles are computed. The result is stored on
+ * PileSlot.position (persisted with the slot) and read back at runtime through
+ * BuildingInventoryManager.findPileSlot / getPilePosition (see pile-lookup.ts).
+ *
+ * Two layouts, one per slot-creation phase:
+ * - operational  — completed buildings, from buildingInfo.xml (BuildingPileRegistry):
+ *     'input' / 'output' → XML pile offset for (type, race, side, material);
+ *                          no XML entry → warn, slot skipped
+ *     'storage'          → next XML storage pile offset not taken by another slot of this
+ *                          building nor by an existing pile entity on the ground
+ * - construction — construction sites, door-adjacent staging tiles
+ *     (assignConstructionPilePositions): one tile per pile of ≤ SLOT_CAPACITY items,
+ *     piles of one material take consecutive tiles; out of tiles → slot skipped
  */
 
 import type { Tile } from '../../core/coordinates';
@@ -15,107 +24,100 @@ import type { EMaterialType } from '../../economy/material-type';
 import type { GameState } from '../../game-state';
 import { LogHandler } from '@/utilities/log-handler';
 import type { BuildingPileRegistry } from './building-pile-registry';
-import type { LinkedSlotKind } from '../../core/pile-kind';
 import { SlotKind } from '../../core/pile-kind';
-import { getConstructionCandidates } from './construction-pile-positions';
-import type { ConstructionSiteManager } from '../building-construction/construction-site-manager';
+import { assignConstructionPilePositions } from './construction-pile-positions';
+import type { SlotPositionResolver } from './building-inventory';
+
+type SlotRequest = { materialType: EMaterialType; kind: SlotKind };
 
 export class PilePositionResolver {
     private readonly log = new LogHandler('PilePositionResolver');
     private readonly gameState: GameState;
     private readonly pileRegistry: BuildingPileRegistry;
-    private readonly constructionSiteManager: ConstructionSiteManager;
 
-    constructor(gameState: GameState, buildingPileRegistry: BuildingPileRegistry, csm: ConstructionSiteManager) {
+    constructor(gameState: GameState, buildingPileRegistry: BuildingPileRegistry) {
         this.gameState = gameState;
         this.pileRegistry = buildingPileRegistry;
-        this.constructionSiteManager = csm;
     }
 
-    /**
-     * Resolve the tile coordinate where a pile for the given material and slotKind should be placed.
-     *
-     * - 'input' on a construction site: returns door-adjacent tile, or null when all occupied.
-     * - 'output' / 'input': XML must define a position; warns and returns null if absent.
-     * - 'storage': picks first XML-defined storage slot not in use; throws if all occupied
-     *   (inventory constraint guarantees a free slot exists).
-     */
-    resolvePosition(params: {
-        buildingId: number;
-        building: Entity;
-        material: EMaterialType;
-        slotKind: LinkedSlotKind;
-        usedPositions: ReadonlySet<string>;
-        /** For construction piles: which pile index (when a material has multiple piles). Default 0. */
-        pileIndex?: number;
-    }): Tile | null {
-        const { building, material, slotKind, usedPositions } = params;
-        const bt = building.subType as BuildingType;
+    /** Slot positions for a completed building's operational inventory (XML pile layout). */
+    readonly operational: SlotPositionResolver = (_buildingId, building, configs) => {
+        const usedPositions = new Set<string>();
+        return configs.map(cfg => {
+            const position = this.resolveOperational(building, cfg, usedPositions);
+            if (position) {
+                usedPositions.add(tileKey(position));
+            }
+            return position;
+        });
+    };
 
-        switch (slotKind) {
+    /** Slot positions for a construction site's material piles (door-adjacent layout). */
+    readonly construction: SlotPositionResolver = (_buildingId, building, configs) => {
+        const layout = assignConstructionPilePositions(
+            building.subType as BuildingType,
+            building.race,
+            building.x,
+            building.y
+        );
+        const nextPileIndex = new Map<EMaterialType, number>();
+        return configs.map(cfg => {
+            if (cfg.kind !== SlotKind.Input) {
+                throw new Error(`Construction slot for building ${building.id} must be input, got ${cfg.kind}`);
+            }
+            // eslint-disable-next-line no-restricted-syntax -- first pile of a material has no entry yet; index 0 is the correct start
+            const pileIndex = nextPileIndex.get(cfg.materialType) ?? 0;
+            nextPileIndex.set(cfg.materialType, pileIndex + 1);
+            // Out of staging tiles (already warned by assignConstructionPilePositions) → slot skipped.
+            // eslint-disable-next-line no-restricted-syntax -- layout may legitimately lack a tile for this pile; null = skip slot
+            return layout.get(cfg.materialType)?.[pileIndex] ?? null;
+        });
+    };
+
+    private resolveOperational(building: Entity, cfg: SlotRequest, usedPositions: ReadonlySet<string>): Tile | null {
+        const bt = building.subType as BuildingType;
+        switch (cfg.kind) {
             case SlotKind.Output:
             case SlotKind.Input: {
-                // Construction sites: use door-adjacent positions instead of XML
-                if (slotKind === SlotKind.Input && this.constructionSiteManager.hasSite(params.buildingId)) {
-                    return (
-                        this.constructionSiteManager.getConstructionPilePosition(
-                            params.buildingId,
-                            material,
-                            // eslint-disable-next-line no-restricted-syntax -- pileIndex is an optional param; absent means first pile (index 0)
-                            params.pileIndex ?? 0
-                            // eslint-disable-next-line no-restricted-syntax -- value is nullable by API contract; null coercion
-                        ) ?? null
-                    );
-                }
                 const pos = this.pileRegistry.getPilePositionForSlot(
                     bt,
                     building.race,
-                    slotKind,
-                    material,
+                    cfg.kind,
+                    cfg.materialType,
                     building.x,
                     building.y
                 );
                 if (!pos) {
                     this.log.warn(
-                        `No XML ${slotKind} pile position for material ${material} ` +
+                        `No XML ${cfg.kind} pile position for material ${cfg.materialType} ` +
                             `on building ${building.id} (${bt}); slot skipped`
                     );
                 }
-                // eslint-disable-next-line no-restricted-syntax -- value is nullable by API contract; null coercion
-                return pos ?? null;
+                return pos;
             }
-
-            case SlotKind.Storage: {
-                const positions = this.pileRegistry.getStoragePileWorldPositions(
-                    bt,
-                    building.race,
-                    building.x,
-                    building.y
-                );
-                for (const pos of positions) {
-                    const key = tileKey(pos);
-                    if (usedPositions.has(key)) {
-                        continue;
-                    }
-                    const occupant = this.gameState.getGroundEntityAt(pos);
-                    if (occupant?.type === EntityType.StackedPile) {
-                        continue;
-                    }
-                    return pos;
-                }
-                throw new Error(
-                    `PilePositionResolver: no free storage pile position for building ${building.id} ` +
-                        `(${bt}); inventory constraint violated`
-                );
-            }
+            case SlotKind.Storage:
+                return this.nextFreeStoragePosition(building, usedPositions);
+            case SlotKind.Free:
+                throw new Error(`Free pile slots are not created from building configs (building ${building.id})`);
         }
     }
 
-    /**
-     * Returns the ordered list of candidate staging tiles for construction piles.
-     * Exposed primarily for tests.
-     */
-    getConstructionCandidates(building: Entity): Tile[] {
-        return getConstructionCandidates(building.subType as BuildingType, building.race, building.x, building.y);
+    private nextFreeStoragePosition(building: Entity, usedPositions: ReadonlySet<string>): Tile {
+        const bt = building.subType as BuildingType;
+        const positions = this.pileRegistry.getStoragePileWorldPositions(bt, building.race, building.x, building.y);
+        for (const pos of positions) {
+            if (usedPositions.has(tileKey(pos))) {
+                continue;
+            }
+            const occupant = this.gameState.getGroundEntityAt(pos);
+            if (occupant?.type === EntityType.StackedPile) {
+                continue;
+            }
+            return pos;
+        }
+        throw new Error(
+            `PilePositionResolver: no free storage pile position for building ${building.id} ` +
+                `(${bt}); inventory constraint violated`
+        );
     }
 }

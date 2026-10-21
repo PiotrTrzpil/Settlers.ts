@@ -8,8 +8,8 @@
  * Each pile holds at most SLOT_CAPACITY (8) items. Materials needing more than 8
  * units get multiple pile positions (ceil(count/SLOT_CAPACITY) tiles).
  *
- * Pile positions are assigned once at construction site creation and stored on
- * the ConstructionSite for the entire construction lifecycle.
+ * Input to slot creation only: PilePositionResolver.construction stores these tiles on
+ * the construction-site inventory slots (PileSlot.position) when the site is placed.
  */
 
 import type { Tile } from '../../core/coordinates';
@@ -90,30 +90,11 @@ function getCandidateTiles(
 }
 
 /**
- * Returns an ordered list of candidate staging tiles adjacent to the building door.
- * Count equals the total number of inventory slots needed (one per pile of ≤SLOT_CAPACITY items).
- * Exported for tests.
- */
-export function getConstructionCandidates(
-    buildingType: BuildingType,
-    race: Race,
-    tileX: number,
-    tileY: number
-): Tile[] {
-    const costs = getConstructionCosts(buildingType, race);
-    let totalSlots = 0;
-    for (const cost of costs) {
-        totalSlots += Math.ceil(cost.count / SLOT_CAPACITY);
-    }
-    return getCandidateTiles(buildingType, race, tileX, tileY, totalSlots);
-}
-
-/**
  * Assign pile positions for all construction materials.
  * Each material gets ceil(count / SLOT_CAPACITY) positions.
  * Positions are door-adjacent tiles outside the building block area, sorted by proximity.
  *
- * Called once at construction site creation.
+ * Called once per construction site, when its inventory slots are created.
  */
 export function assignConstructionPilePositions(
     buildingType: BuildingType,

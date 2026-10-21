@@ -51,11 +51,7 @@ export {
 } from './carrier-assigner';
 
 // Transport job builder (constructs ChoreoJobState for carrier transport)
-export {
-    TransportJobBuilder,
-    type TransportJobBuilderConfig,
-    type TransportPositionResolver,
-} from './transport-job-builder';
+export { TransportJobBuilder, type TransportJobBuilderConfig } from './transport-job-builder';
 
 // Stall detector (diagnostic only — logs stalled carriers, does not cancel)
 export { StallDetector, type StallDetectorConfig } from './stall-detector';

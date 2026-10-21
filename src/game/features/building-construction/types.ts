@@ -7,7 +7,6 @@ import { BuildingType } from '../../buildings/types';
 import { Race } from '../../core/race';
 import type { TerrainData } from '../../terrain';
 import { UnitType } from '../../core/unit-types';
-import type { EMaterialType } from '../../economy/material-type';
 import type { ConstructionCost } from '../../economy/building-production';
 import type { Tile } from '../../core/coordinates';
 
@@ -136,8 +135,6 @@ export interface ConstructionSite {
     materials: MaterialsData;
     /** Building construction phase data (builder slots, progress) */
     building: BuildingPhase;
-    /** Pre-computed pile positions per material — multiple positions when count > 8 (one pile per 8 items). */
-    pilePositions: ReadonlyMap<EMaterialType, readonly Tile[]>;
 }
 
 /**

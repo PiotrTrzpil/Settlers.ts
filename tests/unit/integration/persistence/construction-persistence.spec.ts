@@ -30,6 +30,13 @@ function countDeliveredMaterials(sim: Simulation, siteId: number): number {
         .reduce((sum, s) => s.currentAmount + sum, 0);
 }
 
+function constructionPileTiles(sim: Simulation, siteId: number) {
+    return sim.services.inventoryManager
+        .getSlots(siteId)
+        .filter(s => s.kind === SlotKind.Input)
+        .map(s => ({ material: s.materialType, x: s.position.x, y: s.position.y }));
+}
+
 // ─── Tests ───────────────────────────────────────────────────────
 
 describe('Construction persistence', { timeout: 60_000 }, () => {
@@ -49,6 +56,7 @@ describe('Construction persistence', { timeout: 60_000 }, () => {
 
         sim.waitForPhase(siteId, BuildingConstructionPhase.WaitingForBuilders, 30_000);
         const before = getSiteOrFail(sim, siteId);
+        const pilesBefore = constructionPileTiles(sim, siteId);
 
         restored = sim.saveAndRestore(10);
 
@@ -62,7 +70,8 @@ describe('Construction persistence', { timeout: 60_000 }, () => {
         expect(after.materials.costs.length).toBe(before.materials.costs.length);
         expect(after.terrain.slots.required).toBe(before.terrain.slots.required);
         expect(after.building.slots.required).toBe(before.building.slots.required);
-        expect(after.pilePositions.size).toBe(before.pilePositions.size);
+        // Construction pile tiles persist on the inventory slots
+        expect(constructionPileTiles(restored, siteId)).toEqual(pilesBefore);
         // Completes
         restored.waitForConstructionComplete(siteId, 80_000);
         expect(restored.services.constructionSiteManager.hasSite(siteId)).toBe(false);

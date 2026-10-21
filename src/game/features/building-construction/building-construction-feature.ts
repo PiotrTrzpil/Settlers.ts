@@ -8,7 +8,7 @@
  * - ResidenceSpawnerSystem (carrier spawning from residences)
  * - ConstructionRequestSystem (material delivery demands for construction)
  * - BuildingLifecycleHandler (event-driven domain handlers)
- * - BuildingPileRegistry + PilePositionResolver (XML pile positions)
+ * - BuildingPileRegistry + PilePositionResolver (pile tiles, fixed at slot creation)
  *
  * Commands: spawn_building_units (issued by BuildingConstructionSystem on completion).
  */
@@ -72,7 +72,7 @@ export const BuildingConstructionFeature: FeatureDefinition = {
 
         // Pile positions from XML game data (always loaded before a game is created).
         const pileRegistry = new BuildingPileRegistry(getGameDataLoader().getData());
-        const pilePositionResolver = new PilePositionResolver(ctx.gameState, pileRegistry, constructionSiteManager);
+        const pilePositionResolver = new PilePositionResolver(ctx.gameState, pileRegistry);
 
         // BuildingLifecycleHandler manages construction site registration,
         // inventory swaps on completion, and material delivery tracking.

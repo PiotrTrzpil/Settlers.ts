@@ -10,6 +10,9 @@
  *
  * Destination binding is late: walk-target pile resolved up front; landing slot
  * chosen at delivery time (depositDelivery).
+ *
+ * Walk targets are read from inventory slots (PileSlot.position, fixed at slot
+ * creation) — never re-derived from pile layout data here.
  */
 
 import { EntityType, Tile } from '../../entity';
@@ -25,19 +28,8 @@ import type { TransportJobDeps } from './transport-job-service';
 import type { GameState } from '../../game-state';
 import type { BuildingInventoryManager } from '../inventory';
 
-/**
- * Resolves pile positions for carrier transport.
- * Pickup walks to the source building's OUTPUT pile (not the worker input pile).
- * Injected at construction so the builder has no direct dependency on settler-tasks internals.
- */
-export interface TransportPositionResolver {
-    /** Output / storage pile position used as the carrier pickup walk target. */
-    getDestinationPilePosition(buildingId: number, material: string): Tile | null;
-}
-
 export interface TransportJobBuilderConfig {
     gameState: GameState;
-    positionResolver: TransportPositionResolver;
     inventoryManager: BuildingInventoryManager;
     transportJobDeps: TransportJobDeps;
 }
@@ -47,13 +39,11 @@ export interface TransportJobBuilderConfig {
  */
 export class TransportJobBuilder {
     private readonly gameState: GameState;
-    private readonly positionResolver: TransportPositionResolver;
     private readonly inventoryManager: BuildingInventoryManager;
     private readonly transportJobDeps: TransportJobDeps;
 
     constructor(config: TransportJobBuilderConfig) {
         this.gameState = config.gameState;
-        this.positionResolver = config.positionResolver;
         this.inventoryManager = config.inventoryManager;
         this.transportJobDeps = config.transportJobDeps;
     }
@@ -98,12 +88,17 @@ export class TransportJobBuilder {
         return job;
     }
 
-    /** Pickup walk target: source output/storage pile, else the entity or door. */
+    /**
+     * Pickup walk target: the source's OUTPUT-side pile of the material (production output,
+     * or storage / free pile holding it). When no pile currently holds it — a storage source
+     * already emptied, e.g. delivery-only rebuild after pickup — walk to the door instead.
+     */
     private resolveSourcePos(record: TransportJobRecord): Tile {
-        return this.resolvePilePos(
-            record.sourceBuilding,
-            this.positionResolver.getDestinationPilePosition(record.sourceBuilding, record.material)
-        );
+        const pile = this.inventoryManager.findPileSlot(record.sourceBuilding, record.material, SlotKind.Output);
+        if (pile) {
+            return pile.position;
+        }
+        return this.doorOrEntityPos(record.sourceBuilding);
     }
 
     /**
@@ -124,6 +119,8 @@ export class TransportJobBuilder {
         if (slot) {
             return slot.position;
         }
+        // Game rule: no pile with space for this material (all full, or none defined for it) —
+        // carriers deliver at the door; depositDelivery picks the landing slot or drops a free pile.
         return getBuildingDoorPos(entity, entity.race, entity.subType as BuildingType);
     }
 
@@ -150,10 +147,8 @@ export class TransportJobBuilder {
         };
     }
 
-    private resolvePilePos(buildingId: number, pile: Tile | null): Tile {
-        if (pile) {
-            return pile;
-        }
+    /** Door of a building, or the entity's own tile for non-building sources (free piles). */
+    private doorOrEntityPos(buildingId: number): Tile {
         const entity = this.gameState.getEntityOrThrow(buildingId, 'transport building/pile');
         if (entity.type !== EntityType.Building) {
             return entity;

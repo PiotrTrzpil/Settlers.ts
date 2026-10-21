@@ -1,9 +1,8 @@
 /**
  * Carrier pickup walk target must be the source building's OUTPUT pile.
  *
- * TransportPositionResolver.getSourcePilePosition is the worker INPUT pile.
- * Using it for carrier pickup sent carriers to the door (or the wrong pile),
- * crowding door occupancy.
+ * The INPUT-side pile is where workers take their inputs. Using it for carrier
+ * pickup sent carriers to the door (or the wrong pile), crowding door occupancy.
  */
 
 import { describe, it, expect } from 'vitest';
@@ -15,10 +14,13 @@ import { TransportPhase, type TransportJobRecord } from '@/game/features/logisti
 import type { GameState } from '@/game/game-state';
 import type { BuildingInventoryManager } from '@/game/features/inventory/building-inventory';
 import type { TransportJobDeps } from '@/game/features/logistics/transport-job-service';
+import { SlotKind } from '@/game/core/pile-kind';
+import type { PileSide } from '@/game/features/inventory';
 
 const SOURCE = 10;
 const DEST = 20;
 const OUTPUT_PILE: Tile = { x: 12, y: 8 };
+const INPUT_PILE: Tile = { x: 8, y: 12 };
 
 function building(id: number, type: BuildingType, tile: Tile): Entity {
     return {
@@ -43,10 +45,9 @@ describe('TransportJobBuilder pickup walk target', () => {
             gameState: {
                 getEntityOrThrow: (id: number) => entities.get(id)!,
             } as unknown as GameState,
-            positionResolver: {
-                getDestinationPilePosition: () => OUTPUT_PILE,
-            },
             inventoryManager: {
+                findPileSlot: (_id: number, _m: EMaterialType, side: PileSide) =>
+                    side === SlotKind.Output ? { position: OUTPUT_PILE } : { position: INPUT_PILE },
                 findSlot: () => ({ position: { x: 21, y: 10 } }),
             } as unknown as BuildingInventoryManager,
             transportJobDeps: {

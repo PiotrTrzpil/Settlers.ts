@@ -30,6 +30,7 @@ import {
     getOutputSlotsForMaterial,
 } from './building-inventory-helpers';
 import { PileStatesView } from './pile-states-view';
+import { findPileSlot as findPileSlotFn, requirePileSlot, type PileSide } from './pile-lookup';
 import {
     canStartProduction as canStartProductionFn,
     consumeProductionInputs as consumeProductionInputsFn,
@@ -531,6 +532,18 @@ export class BuildingInventoryManager {
 
     findOutputSlot(buildingId: number, material: EMaterialType): PileSlot | undefined {
         return findOutputSlot(this.inventorySlots, this.slotStore, buildingId, material);
+    }
+
+    // ─── Pile lookup (see pile-lookup.ts) — positions were fixed at slot creation ──
+
+    /** The pile slot for material M on the given side of building B, or undefined when B has none. */
+    findPileSlot(buildingId: number, material: EMaterialType, side: PileSide): PileSlot | undefined {
+        return findPileSlotFn(this.getSlots(buildingId), material, side);
+    }
+
+    /** Tile of the pile for material M on the given side of building B. Throws if B has no such pile. */
+    getPilePosition(buildingId: number, material: EMaterialType, side: PileSide): Tile {
+        return requirePileSlot(this.getSlots(buildingId), buildingId, material, side).position;
     }
 
     private emitChanged(slot: PileSlot, previousAmount: number): void {
