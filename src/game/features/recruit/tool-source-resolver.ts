@@ -29,24 +29,33 @@ export interface MaterialCost {
 /** Which inventory side to reserve from. */
 export type InventorySide = 'input' | 'output';
 
-/** Opaque handle returned by reserveBuildingMaterials, used to withdraw or release. */
-export interface BuildingReservationHandle {
-    readonly id: number;
+/** Materials reserved on a building for one carrier's transform (keyed by the carrier). */
+export interface BuildingReservation {
+    readonly carrierId: number;
     readonly buildingId: number;
     readonly costs: readonly MaterialCost[];
     readonly side: InventorySide;
 }
 
+/**
+ * Tool sources for carrier transforms and their reservations.
+ *
+ * Every reservation is keyed by the carrier that will consume it (not by a transient handle),
+ * so a reservation is derivable from the carrier's job and can be re-made on restore. A carrier
+ * holds at most one pile or one building reservation at a time.
+ */
 export class ToolSourceResolver {
     private readonly gameState: GameState;
     private readonly inventoryManager: BuildingInventoryManager;
-    private readonly reservedPiles = new Set<number>();
+    /** Reserved tool piles: pile entity id → carrier id. */
+    private readonly pileReservedBy = new Map<number, number>();
+    /** carrier id → reserved pile entity id. */
+    private readonly pileOfCarrier = new Map<number, number>();
 
     /** Per-building withdrawal reservations: buildingId → material → total reserved count. */
     private readonly buildingReservations = new Map<number, Map<EMaterialType, number>>();
-    /** All active reservation handles by ID, for release on carrier death. */
-    private readonly reservationHandles = new Map<number, BuildingReservationHandle>();
-    private nextReservationId = 1;
+    /** Building reservations by carrier id. */
+    private readonly buildingReservationOfCarrier = new Map<number, BuildingReservation>();
 
     constructor(gameState: GameState, inventoryManager: BuildingInventoryManager) {
         this.gameState = gameState;
@@ -58,7 +67,7 @@ export class ToolSourceResolver {
         let bestDistSq = Infinity;
 
         for (const entity of this.gameState.entityIndex.query(EntityType.StackedPile, player, material)) {
-            if (this.reservedPiles.has(entity.id)) {
+            if (this.pileReservedBy.has(entity.id)) {
                 continue;
             }
 
@@ -96,7 +105,7 @@ export class ToolSourceResolver {
         if (entity.type !== EntityType.StackedPile || entity.subType !== material || entity.player !== player) {
             return null;
         }
-        if (this.reservedPiles.has(pileEntityId)) {
+        if (this.pileReservedBy.has(pileEntityId)) {
             return null;
         }
         const slot = this.inventoryManager.getSlotByEntityId(pileEntityId);
@@ -130,12 +139,29 @@ export class ToolSourceResolver {
 
     // ─── Pile-level reservation (single-tool recruitment) ────────────────
 
-    reserve(pileEntityId: number): void {
-        this.reservedPiles.add(pileEntityId);
+    /** Reserve a tool pile for `carrierId`. The pile must be free and the carrier hold no pile. */
+    reservePile(carrierId: number, pileEntityId: number): void {
+        const holder = this.pileReservedBy.get(pileEntityId);
+        if (holder !== undefined) {
+            throw new Error(
+                `Tool pile ${pileEntityId} is already reserved by carrier ${holder} (wanted by ${carrierId})`
+            );
+        }
+        if (this.pileOfCarrier.has(carrierId)) {
+            throw new Error(`Carrier ${carrierId} already holds tool pile ${this.pileOfCarrier.get(carrierId)}`);
+        }
+        this.pileReservedBy.set(pileEntityId, carrierId);
+        this.pileOfCarrier.set(carrierId, pileEntityId);
     }
 
-    release(pileEntityId: number): void {
-        this.reservedPiles.delete(pileEntityId);
+    /** Release the tool pile `carrierId` holds. */
+    releasePile(carrierId: number): void {
+        const pileEntityId = this.pileOfCarrier.get(carrierId);
+        if (pileEntityId === undefined) {
+            throw new Error(`releasePile: carrier ${carrierId} holds no tool pile`);
+        }
+        this.pileOfCarrier.delete(carrierId);
+        this.pileReservedBy.delete(pileEntityId);
     }
 
     // ─── Building-level reservation (multi-material recruitment) ───────
@@ -165,23 +191,22 @@ export class ToolSourceResolver {
     }
 
     /**
-     * Reserve materials on a building for future withdrawal.
-     * Returns a handle used to withdraw or release. Returns null if insufficient stock.
-     *
-     * @param side — 'output' reserves from output inventory (default), 'input' from input inventory.
+     * Reserve materials on a building for `carrierId`'s future withdrawal.
+     * Returns false (nothing reserved) if the building lacks unreserved stock.
      */
     reserveBuildingMaterials(
+        carrierId: number,
         buildingId: number,
         costs: readonly MaterialCost[],
-        side: InventorySide = 'output'
-    ): BuildingReservationHandle | null {
-        if (!this.hasBuildingMaterials(buildingId, costs, side)) {
-            return null;
+        side: InventorySide
+    ): boolean {
+        if (this.buildingReservationOfCarrier.has(carrierId)) {
+            throw new Error(`Carrier ${carrierId} already holds a building material reservation`);
         }
-
-        const id = this.nextReservationId++;
-        const handle: BuildingReservationHandle = { id, buildingId, costs, side };
-        this.reservationHandles.set(id, handle);
+        if (!this.hasBuildingMaterials(buildingId, costs, side)) {
+            return false;
+        }
+        this.buildingReservationOfCarrier.set(carrierId, { carrierId, buildingId, costs, side });
 
         let reserved = this.buildingReservations.get(buildingId);
         if (!reserved) {
@@ -194,61 +219,54 @@ export class ToolSourceResolver {
         }
 
         const costSummary = costs.map(c => c.count + '×' + c.material).join(', ');
-        log.debug(`Reserved building ${buildingId} materials [${costSummary}] (handle ${id})`);
-        return handle;
-    }
-
-    /**
-     * Withdraw all reserved materials from the building inventory and release the reservation.
-     * Called by the choreo executor when the carrier arrives.
-     * Uses the side recorded on the handle (input or output).
-     */
-    withdrawBuildingReservation(handle: BuildingReservationHandle): boolean {
-        const withdraw =
-            handle.side === 'input'
-                ? (mat: EMaterialType, amt: number) => this.inventoryManager.withdrawInput(handle.buildingId, mat, amt)
-                : (mat: EMaterialType, amt: number) =>
-                      this.inventoryManager.withdrawOutput(handle.buildingId, mat, amt);
-
-        for (const { material, count } of handle.costs) {
-            const withdrawn = withdraw(material, count);
-            if (withdrawn < count) {
-                log.warn(
-                    `Building ${handle.buildingId}: expected ${count} of ${material}, got ${withdrawn} ` +
-                        `(handle ${handle.id}) — withdrawing what's available`
-                );
-            }
-        }
-        this.releaseReservationBookkeeping(handle);
+        log.debug(`Reserved building ${buildingId} materials [${costSummary}] for carrier ${carrierId}`);
         return true;
     }
 
+    /** The building reservation `carrierId` holds. Nullable by design: most carriers hold none. */
+    getBuildingReservation(carrierId: number): BuildingReservation | undefined {
+        return this.buildingReservationOfCarrier.get(carrierId);
+    }
+
     /**
-     * Release a building reservation without withdrawing (carrier died, job cancelled).
+     * Withdraw `carrierId`'s reserved materials from the building inventory and end the reservation.
+     * Called by the TRANSFORM_RECRUIT_BUILDING executor when the carrier arrives.
      */
-    releaseBuildingReservation(reservationId: number): void {
-        const handle = this.reservationHandles.get(reservationId);
-        if (!handle) {
-            return;
+    withdrawBuildingReservation(carrierId: number): BuildingReservation {
+        const reservation = this.takeBuildingReservation(carrierId);
+        const { buildingId } = reservation;
+        const withdraw =
+            reservation.side === 'input'
+                ? (mat: EMaterialType, amt: number) => this.inventoryManager.withdrawInput(buildingId, mat, amt)
+                : (mat: EMaterialType, amt: number) => this.inventoryManager.withdrawOutput(buildingId, mat, amt);
+
+        for (const { material, count } of reservation.costs) {
+            const withdrawn = withdraw(material, count);
+            if (withdrawn < count) {
+                log.warn(
+                    `Building ${buildingId}: expected ${count} of ${material}, got ${withdrawn} ` +
+                        `(carrier ${carrierId}) — withdrawing what's available`
+                );
+            }
         }
-        this.releaseReservationBookkeeping(handle);
-        log.debug(`Released building reservation (handle ${reservationId}) without withdrawal`);
+        return reservation;
     }
 
-    getReservationHandle(reservationId: number): BuildingReservationHandle | undefined {
-        return this.reservationHandles.get(reservationId);
+    /** Release `carrierId`'s building reservation without withdrawing (job aborted, carrier died). */
+    releaseBuildingReservation(carrierId: number): void {
+        const reservation = this.takeBuildingReservation(carrierId);
+        log.debug(`Released building ${reservation.buildingId} reservation of carrier ${carrierId} without withdrawal`);
     }
 
-    private releaseReservationBookkeeping(handle: BuildingReservationHandle): void {
-        this.reservationHandles.delete(handle.id);
-        const reserved = this.buildingReservations.get(handle.buildingId);
-        if (!reserved) {
-            return;
+    private takeBuildingReservation(carrierId: number): BuildingReservation {
+        const reservation = this.buildingReservationOfCarrier.get(carrierId);
+        if (!reservation) {
+            throw new Error(`Carrier ${carrierId} holds no building material reservation`);
         }
-        for (const { material, count } of handle.costs) {
-            // eslint-disable-next-line no-restricted-syntax -- Map.get returns undefined for missing keys; 0 is correct default
-            const current = reserved.get(material) ?? 0;
-            const next = current - count;
+        this.buildingReservationOfCarrier.delete(carrierId);
+        const reserved = this.buildingReservations.get(reservation.buildingId)!;
+        for (const { material, count } of reservation.costs) {
+            const next = reserved.get(material)! - count;
             if (next <= 0) {
                 reserved.delete(material);
             } else {
@@ -256,7 +274,8 @@ export class ToolSourceResolver {
             }
         }
         if (reserved.size === 0) {
-            this.buildingReservations.delete(handle.buildingId);
+            this.buildingReservations.delete(reservation.buildingId);
         }
+        return reservation;
     }
 }

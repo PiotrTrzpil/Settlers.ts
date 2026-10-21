@@ -1,64 +1,61 @@
 /**
- * UnitTransformer — orchestrates the full carrier-to-specialist transformation lifecycle.
+ * UnitTransformer — owns the carrier-to-specialist transform state, keyed by carrier.
  *
- * Two usage modes:
+ * Lifecycle of one transform (every path — owned RecruitSegments jobs and the TRANSITIONAL legacy
+ * dispatch — goes through the same three calls):
  *
- * 1. assignAndRegisterTransform() — caller provides the pre-built choreo job and the
- *    tool pile. This method assigns the job, reserves carrier + pile, and registers
- *    the pending state. Used by RecruitSystem (player-queued).
+ *   reserveTransform(carrier, …)     before the job is assigned: reserves the source (tool pile /
+ *                                    building materials, keyed by the carrier) + pending record
+ *   recruitment:completed            TRANSFORM_* executor consumed the source → type mutation,
+ *                                    pending dropped, unit:recruited
+ *   abortTransform(carrier)          TRANSFORM_* node `onAbort` hook (job failed / preempted /
+ *                                    cancelled / unit removed before the transform) or
+ *                                    recruitment:failed (pile empty on arrival) → source released
  *
- * 2. registerTransform() + caller-assigned job — caller builds their own combined
- *    choreo (e.g. RECRUIT_DIGGER = walk-to-pile → TRANSFORM_RECRUIT → walk-to-site → DIG),
- *    assigns it, then calls registerTransform() to register the pending state.
- *    Used by ConstructionSiteDemandSystem and BuildingDemandSystem.
- *
- * Both paths converge on the same completion flow:
- *
- *   recruitment:completed (from TRANSFORM_RECRUIT choreo node)
- *     → release carrier reservation + tool pile reservation
- *     → mutate entity subType, remove from carrier registry
- *     → emit unit:recruited
- *     → choreo continues with remaining nodes (caller's continuation)
- *
- *   recruitment:failed / settler:taskFailed (any job with pending carrier)
- *     → release carrier + tool reservations
- *     → drop pending record (carrier returns to idle pool)
- *
- *   entity:removed while pending
- *     → UnitReservationRegistry.onForcedRelease → tool pile released, record dropped
+ * After a load, the node `onRestore` hook calls reserveTransform again (reservations and pending
+ * records are not persisted — they are derived from the restored job).
  */
 
 import type { GameState } from '../../game-state';
 import type { EventBus } from '../../event-bus';
 import { EventSubscriptionManager } from '../../event-bus';
-import type { ChoreoJobState } from '../../systems/choreo';
-import { EntityType, EXTENDED_OFFSETS, Tile } from '../../entity';
+import { EntityType, EXTENDED_OFFSETS } from '../../entity';
 
 import { UnitType } from '../../core/unit-types';
 import { EMaterialType } from '../../economy/material-type';
 import type { CarrierRegistry } from '../carriers';
 import type { UnitReservationRegistry } from '../../systems/unit-reservation';
 import { createLogger } from '@/utilities/logger';
-import { createDirectTransformJob } from './recruitment-job';
-import { ToolSourceResolver } from './tool-source-resolver';
-import type { TileWithPile } from './recruit-system';
+import type { InventorySide, MaterialCost, ToolSourceResolver } from './tool-source-resolver';
+import { SPECIALIST_TOOL_MAP } from './specialist-tool-map';
 
 const log = createLogger('UnitTransformer');
+
+/** A transform source resolved to what gets reserved. */
+export type TransformSource =
+    | { readonly kind: 'pile'; readonly pileEntityId: number }
+    | {
+          readonly kind: 'building';
+          readonly buildingId: number;
+          readonly costs: readonly MaterialCost[];
+          readonly side: InventorySide;
+      }
+    | { readonly kind: 'direct' };
 
 export interface UnitTransformerConfig {
     gameState: GameState;
     eventBus: EventBus;
     carrierRegistry: CarrierRegistry;
     toolSourceResolver: ToolSourceResolver;
-    assignJob: (unitId: number, job: ChoreoJobState, moveTo?: Tile) => boolean;
+    /** TRANSITIONAL (deleted in Cleanup): reserves legacy-dispatched carriers against player moves. */
     unitReservation: UnitReservationRegistry;
 }
 
 interface PendingTransform {
-    carrierId: number;
-    targetUnitType: UnitType;
-    toolMaterial: EMaterialType | null;
-    pileEntityId: number;
+    readonly targetUnitType: UnitType;
+    readonly source: TransformSource['kind'];
+    /** TRANSITIONAL: the carrier runs a legacy job and holds a legacy unit reservation. */
+    readonly legacyReserved: boolean;
 }
 
 export class UnitTransformer {
@@ -66,11 +63,10 @@ export class UnitTransformer {
     private readonly eventBus: EventBus;
     private readonly carrierRegistry: CarrierRegistry;
     private readonly toolSourceResolver: ToolSourceResolver;
-    private readonly assignJob: (unitId: number, job: ChoreoJobState, moveTo?: Tile) => boolean;
     private readonly unitReservation: UnitReservationRegistry;
     private readonly subscriptions = new EventSubscriptionManager();
 
-    /** Carriers currently walking to a tool pile to transform. carrierId → record. */
+    /** Carriers on their way to transform, keyed by carrier id. */
     private readonly pending = new Map<number, PendingTransform>();
 
     constructor(config: UnitTransformerConfig) {
@@ -78,159 +74,83 @@ export class UnitTransformer {
         this.eventBus = config.eventBus;
         this.carrierRegistry = config.carrierRegistry;
         this.toolSourceResolver = config.toolSourceResolver;
-        this.assignJob = config.assignJob;
         this.unitReservation = config.unitReservation;
     }
 
     // =========================================================================
-    // Public API
+    // Transform lifecycle
     // =========================================================================
 
     /**
-     * Assign a pre-built recruitment job and register the pending transform.
-     *
-     * The caller has already found the best (carrier, toolPile) pair and built
-     * the choreo job. This method assigns the job to the carrier, reserves both
-     * the carrier and the tool pile, and registers the pending state.
-     *
-     * Returns true if the job was successfully assigned.
+     * Reserve `source` for `carrierId`'s transform into `targetUnitType` and record it as pending.
+     * False (nothing reserved) when the source is gone or already taken.
+     * `legacyReserved` (TRANSITIONAL): also hold a legacy unit reservation for a legacy job.
      */
-    assignAndRegisterTransform(
+    reserveTransform(
         carrierId: number,
-        job: ChoreoJobState,
         targetUnitType: UnitType,
-        toolMaterial: EMaterialType,
-        toolPile: TileWithPile
+        source: TransformSource,
+        legacyReserved = false
     ): boolean {
-        const assigned = this.assignJob(carrierId, job, { x: toolPile.x, y: toolPile.y });
-        if (!assigned) {
+        if (this.pending.has(carrierId)) {
+            throw new Error(`Carrier ${carrierId} already has a pending transform`);
+        }
+        if (!this.reserveSource(carrierId, targetUnitType, source)) {
             return false;
         }
-
-        this.registerTransform(carrierId, targetUnitType, toolMaterial, toolPile.pileEntityId);
-
-        log.debug(
-            `Carrier ${carrierId} dispatched to transform into ${targetUnitType} (pile ${toolPile.pileEntityId})`
-        );
+        this.pending.set(carrierId, { targetUnitType, source: source.kind, legacyReserved });
+        if (legacyReserved) {
+            this.unitReservation.reserve(carrierId, { purpose: 'unit-transform' });
+        }
+        log.debug(`Pending transform: carrier ${carrierId} → ${targetUnitType} (${source.kind})`);
         return true;
     }
 
-    /**
-     * Attempt to initiate a carrier → specialist transformation without requiring a tool pile.
-     *
-     * Assigns a TRANSFORM_DIRECT choreography job to the carrier and reserves it.
-     * Used when the specialist type requires no tool (e.g. promoted via UI).
-     *
-     * Returns true if the transformation was successfully initiated.
-     * Returns false if the job could not be assigned.
-     */
-    requestDirectTransform(carrierId: number, targetUnitType: UnitType, _player: number): boolean {
-        const job = createDirectTransformJob(targetUnitType);
-        // No moveTo — carrier transforms in place; passing own position causes moveUnit to fail
-        const assigned = this.assignJob(carrierId, job);
-        if (!assigned) {
-            return false;
+    /** The transform will not happen: release the carrier's source reservation and pending record. */
+    abortTransform(carrierId: number): void {
+        const p = this.takePending(carrierId);
+        if (p.source === 'pile') {
+            this.toolSourceResolver.releasePile(carrierId);
+        } else if (p.source === 'building') {
+            this.toolSourceResolver.releaseBuildingReservation(carrierId);
         }
-
-        const record: PendingTransform = {
-            carrierId,
-            targetUnitType,
-            toolMaterial: null,
-            pileEntityId: -1,
-        };
-        this.pending.set(carrierId, record);
-        this.unitReservation.reserve(carrierId, {
-            purpose: 'unit-transform',
-            onForcedRelease: unitId => {
-                const p = this.pending.get(unitId);
-                if (!p) {
-                    return;
-                }
-                if (p.pileEntityId !== -1) {
-                    this.toolSourceResolver.release(p.pileEntityId);
-                }
-                this.pending.delete(unitId);
-                log.debug(`Carrier ${unitId} removed during direct transform, reservation auto-released`);
-            },
-        });
-
-        log.debug(`Carrier ${carrierId} dispatched for direct transform into ${targetUnitType}`);
-        return true;
+        log.debug(`Transform aborted for carrier ${carrierId}`);
     }
 
-    /**
-     * Register a pending direct (no tool pile) transformation without assigning a choreo job.
-     *
-     * The caller builds and assigns its own choreo job (which must include a TRANSFORM_DIRECT
-     * node with unitType metadata). This method only registers the pending state and reserves
-     * the carrier. Used by BarracksTrainingManager which has its own multi-step choreo.
-     *
-     * @param onForcedRelease — optional callback invoked when the carrier is killed mid-transform.
-     */
-    registerDirectTransform(
-        carrierId: number,
-        targetUnitType: UnitType,
-        onForcedRelease?: (unitId: number) => void
-    ): void {
-        const record: PendingTransform = {
-            carrierId,
-            targetUnitType,
-            toolMaterial: null,
-            pileEntityId: -1,
-        };
-        this.pending.set(carrierId, record);
-        this.unitReservation.reserve(carrierId, {
-            purpose: 'unit-transform',
-            onForcedRelease: unitId => {
-                const p = this.pending.get(unitId);
-                if (!p) {
-                    return;
+    private reserveSource(carrierId: number, targetUnitType: UnitType, source: TransformSource): boolean {
+        switch (source.kind) {
+            case 'pile': {
+                const carrier = this.gameState.getEntityOrThrow(carrierId, 'carrier reserving a tool pile');
+                const material = SPECIALIST_TOOL_MAP[targetUnitType]!;
+                if (!this.toolSourceResolver.validatePile(source.pileEntityId, material, carrier.player)) {
+                    return false;
                 }
-                this.pending.delete(unitId);
-                onForcedRelease?.(unitId);
-                log.debug(`Carrier ${unitId} removed during direct transform, reservation auto-released`);
-            },
-        });
-        log.debug(`Registered pending direct transform: carrier ${carrierId} → ${targetUnitType}`);
+                this.toolSourceResolver.reservePile(carrierId, source.pileEntityId);
+                return true;
+            }
+            case 'building':
+                return this.toolSourceResolver.reserveBuildingMaterials(
+                    carrierId,
+                    source.buildingId,
+                    source.costs,
+                    source.side
+                );
+            case 'direct':
+                return true;
+        }
     }
 
-    /**
-     * Register a pending carrier → specialist transformation without building or assigning
-     * a choreo job. The caller is responsible for building the combined choreo job (which
-     * must include a TRANSFORM_RECRUIT node) and assigning it before calling this method.
-     *
-     * Reserves the carrier and tool pile so they can't be grabbed by other systems.
-     * When the TRANSFORM_RECRUIT node fires `recruitment:completed`, this class handles
-     * the type mutation as usual.
-     */
-    registerTransform(
-        carrierId: number,
-        targetUnitType: UnitType,
-        toolMaterial: EMaterialType,
-        pileEntityId: number
-    ): void {
-        const record: PendingTransform = {
-            carrierId,
-            targetUnitType,
-            toolMaterial,
-            pileEntityId,
-        };
-        this.pending.set(carrierId, record);
-        this.toolSourceResolver.reserve(pileEntityId);
-        this.unitReservation.reserve(carrierId, {
-            purpose: 'unit-transform',
-            onForcedRelease: unitId => {
-                const p = this.pending.get(unitId);
-                if (!p) {
-                    return;
-                }
-                this.toolSourceResolver.release(p.pileEntityId);
-                this.pending.delete(unitId);
-                log.debug(`Carrier ${unitId} removed during transform, reservation auto-released`);
-            },
-        });
-
-        log.debug(`Registered pending transform: carrier ${carrierId} → ${targetUnitType} (pile ${pileEntityId})`);
+    /** Remove and return the carrier's pending record (and its legacy unit reservation). */
+    private takePending(carrierId: number): PendingTransform {
+        const p = this.pending.get(carrierId);
+        if (!p) {
+            throw new Error(`Carrier ${carrierId} has no pending transform`);
+        }
+        this.pending.delete(carrierId);
+        if (p.legacyReserved) {
+            this.unitReservation.release(carrierId);
+        }
+        return p;
     }
 
     isPending(carrierId: number): boolean {
@@ -299,17 +219,7 @@ export class UnitTransformer {
         );
 
         this.subscriptions.subscribe(this.eventBus, 'recruitment:failed', ({ unitId: carrierId }) => {
-            this.handleFailed(carrierId);
-        });
-
-        this.subscriptions.subscribe(this.eventBus, 'settler:taskFailed', payload => {
-            if (this.pending.has(payload.unitId)) {
-                this.eventBus.emit('recruitment:failed', {
-                    unitId: payload.unitId,
-                    reason: payload.failedStep,
-                    level: 'warn',
-                });
-            }
+            this.abortTransform(carrierId);
         });
     }
 
@@ -321,18 +231,12 @@ export class UnitTransformer {
     // Event handlers
     // =========================================================================
 
+    /** The TRANSFORM_* executor consumed the source: finish the pile reservation, mutate the unit. */
     private handleCompleted(carrierId: number, targetUnitType: UnitType): void {
-        const p = this.pending.get(carrierId);
-        if (!p) {
-            log.warn(`recruitment:completed for unknown carrier ${carrierId}`);
-            return;
+        const p = this.takePending(carrierId);
+        if (p.source === 'pile') {
+            this.toolSourceResolver.releasePile(carrierId);
         }
-
-        this.unitReservation.release(carrierId);
-        if (p.pileEntityId !== -1) {
-            this.toolSourceResolver.release(p.pileEntityId);
-        }
-        this.pending.delete(carrierId);
 
         const entity = this.gameState.getEntityOrThrow(carrierId, 'UnitTransformer.handleCompleted');
         const fromType = entity.subType as UnitType;
@@ -342,20 +246,5 @@ export class UnitTransformer {
 
         this.eventBus.emit('unit:recruited', { unitId: carrierId, fromType, toType: targetUnitType, level: 'info' });
         log.debug(`Carrier ${carrierId} transformed from ${fromType} to ${targetUnitType}`);
-    }
-
-    private handleFailed(carrierId: number): void {
-        const p = this.pending.get(carrierId);
-        if (!p) {
-            return;
-        }
-
-        this.unitReservation.release(carrierId);
-        if (p.pileEntityId !== -1) {
-            this.toolSourceResolver.release(p.pileEntityId);
-        }
-        this.pending.delete(carrierId);
-
-        log.debug(`Transform failed for carrier ${carrierId}`);
     }
 }

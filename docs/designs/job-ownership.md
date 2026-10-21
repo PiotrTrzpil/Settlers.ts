@@ -818,3 +818,117 @@ Everything below is what migrations build on. "TRANSITIONAL" marks code that exi
 - **For Readers & siege / Cleanup**: combat (`combat-feature.ts`) and siege (`isIdleSwordsman`, `findSwordsmanAtDoor`,
   `hasDoorCloserThan`) still read the legacy `ctx.unitReservation`, which no longer contains garrison units — they must
   switch to `ctx.unitCommitments.isReserved` (garrisoned units are hidden, so only en-route units are affected).
+
+## Recruit migration notes (as shipped on `refactor/jobs-recruit`)
+
+### Shipped API (`features/recruit`, all exported from its `index.ts`)
+
+```ts
+// recruit-segments.ts — flat on purpose: JobParams allows one nesting level, so the design's
+// nested `source: RecruitSource` union cannot be a param value. The segment IS a valid param value.
+type RecruitSourceKind = 'pile' | 'building' | 'direct';
+type RecruitSegment = {
+    readonly targetUnitType: UnitType;
+    readonly source: RecruitSourceKind;
+    readonly sourceId: number | null;                        // pile entity id / building id; null for 'direct'
+    readonly at: { readonly x: number; readonly y: number } | null; // walk goal; null for 'direct'
+};
+interface BuildingRecruitCharge { readonly costs: readonly MaterialCost[]; readonly side: InventorySide }
+type BuildingRecruitChargeFn = (buildingId: number, targetUnitType: UnitType) => BuildingRecruitCharge;
+
+interface RecruitSegments {                                    // RecruitExports.recruitSegments
+    nodes(segment): ChoreoNode[];                              // [GO_TO_TARGET goal{at, entityId: sourceId}] + TRANSFORM_* { args: transform }
+    prefix(segment, continuation: JobBuild): JobBuild;         // nodes(segment) ++ continuation.nodes; targets = source (or continuation's for 'direct')
+    reserve(carrierId, segment): boolean;                      // false ⇒ source gone/taken, do not assign
+    release(carrierId): void;                                  // ONLY to undo reserve() when assign failed
+    registerBuildingCharge(buildingType, charge: BuildingRecruitChargeFn): void;
+    chargeFor(buildingId, targetUnitType): BuildingRecruitCharge; // throws if the type registered none
+}
+
+// recruit-system.ts
+type RecruitSpecBuilder = (carrierId: number, segment: RecruitSegment) => JobSpec;
+interface DispatchRecruitmentOpts { target?: Tile; hint?: Tile; buildSpec?: RecruitSpecBuilder; buildJob?: /* legacy */ }
+RecruitSystem.dispatchRecruitment(unitType, player, opts?): number | null
+RecruitSystem.dispatchRecruitmentFromPile(unitType, player, pileEntityId, opts?): number | null
+RecruitSystem.dispatchBuildingRecruitment(unitType, player, buildingId, buildSpec): number | null   // new, owned only
+
+// recruit-job-kind.ts
+type RecruitJobParams = { readonly segment: RecruitSegment };
+recruitJobSpec(segment): JobSpec<RecruitJobParams>             // { kind: Recruit, ref: 0, params: { segment }, reserved: true }
+```
+
+With `opts.buildSpec` the dispatcher picks (carrier, source), builds the segment, calls
+`segments.reserve(carrier, segment)`, then `buildSpec(carrier, segment)` and
+`jobs.assign(carrier, spec, { moveTo: segment.at })` (no `moveTo` for 'direct'); a failed assign
+releases the reservation. `buildSpec` and `buildJob` together throw.
+
+**Reservation ownership.** `ToolSourceResolver` pile and building-material reservations are keyed by
+the carrier id (`reservePile/releasePile`, `reserveBuildingMaterials(carrierId, …)`,
+`withdrawBuildingReservation(carrierId)`, `releaseBuildingReservation(carrierId)`,
+`getBuildingReservation(carrierId)`); handle ids are gone. `UnitTransformer.pending` is keyed by unit
+(`reserveTransform(carrierId, unitType, source, legacyReserved?)` / `abortTransform(carrierId)`) and
+ends only through: the TRANSFORM_* executor (`recruitment:completed`), the TRANSFORM_* `onAbort` hook,
+or `recruitment:failed` (pile empty on arrival). Its `settler:taskFailed` subscription, the
+`onForcedRelease` callbacks, `registerTransform`, `registerDirectTransform`,
+`assignAndRegisterTransform` and `requestDirectTransform` are deleted. Release and consume are strict
+(throw when the carrier holds nothing), so a double release fails loudly.
+
+**Node hooks** (TRANSFORM_RECRUIT, TRANSFORM_RECRUIT_BUILDING, TRANSFORM_DIRECT, one shared
+object): `irreversible: true`; `onAbort` → `abortTransform(unitId)` (runs for legacy jobs too — it is
+the only release path for them now, which fixes the leaked barracks building reservation on job
+failure and the leaked pile on owner cancel); `onRestore` → re-resolve the source from
+`node.args.transform` + task type and `reserveTransform` (false when the pile is gone / reserved /
+in an input slot, or the building is gone / short of unreserved stock). Reservations are never
+persisted; they are derived from the restored job.
+
+**Building sources need a registered charge.** The TRANSFORM_RECRUIT_BUILDING args carry only the
+building id (`ChoreoNodeArgs.transform` is Core's), so the hooks re-resolve costs + side with
+`segments.chargeFor(buildingId, unitType)`, from the charge the building type registered.
+
+**Player queue** dispatches stand-alone `Recruit` jobs (`recruitJobSpec`, job ids `AUTO_RECRUIT` /
+`BUILDING_RECRUIT` kept). The Recruit handler (`persist: true`) has no domain state to clean up, so
+its callbacks only log. Behaviour change (Decision 4): queued recruits are reserved
+(`commitments.isReserved`) until the job ends.
+
+### How the next migrations consume it
+
+- **Workplace-dispatch** (`params { buildingId, recruit: RecruitSegment | null }`): replace the default
+  `dispatchRecruitment(type, player, { target })` with `{ target, buildSpec: (c, seg) => ({ kind:
+  WorkplaceDispatch, ref: buildingId, params: { buildingId, recruit: seg }, reserved: true }) }`. In
+  `build`: `recruit ? segments.prefix(recruit, door) : door`, where `door = choreo('WORKER_DISPATCH')
+  .goToDoorAndEnter(buildingId, ctx).toJobBuild()`. `unit:recruited` still fires at the transform;
+  find the demand via `commitments.get(unit).ref`. Do not release anything on failure / removal.
+- **Construction** (`params { siteId, role, tileIndex, workPos, recruit }`):
+  `dispatchRecruitment(Digger|Builder, player, { target: site, buildSpec })`; `build` =
+  `segments.prefix(recruit, choreo('RECRUIT_DIGGER').goTo(tile).addNode(DIG_TILE, { args }).toJobBuild())`
+  (or without prefix when `recruit === null`). Job ids RECRUIT_DIGGER/BUILDER can stay as the
+  continuation's `jobId`. Saved after the transform, the job resumes past it (no second transform).
+- **Barracks** (`params { barracksId, recipeIndex, unitType }`): in `create()`
+  `recruitSegments.registerBuildingCharge(BuildingType.Barrack, (id, type) => ({ costs: recipe(id,
+  type).inputs, side: 'input' }))` (the recipe must be derivable from building + target type — it is,
+  per race), then `recruitSystem.dispatchBuildingRecruitment(target, player, barracksId, buildSpec)`.
+  `build` re-creates the segment `{ targetUnitType, source: 'building', sourceId: barracksId, at: door }`
+  (replace `at` with the door to keep today's walk) and appends WAIT(FIGHT):
+  `segments.prefix(segment, choreo('BARRACKS_TRAINING').addNode(WAIT, …).target(barracksId).toJobBuild())`.
+  The material reservation is released by the node hook — the manager only clears `activeTrainings`.
+
+### TRANSITIONAL compat kept (Cleanup deletes)
+
+- `DispatchRecruitmentOpts.buildJob` and the no-`buildSpec` default of `dispatchRecruitment` (legacy
+  AUTO_RECRUIT job of kind WorkplaceDispatch — building-demand relies on it until it migrates).
+- `dispatchRecruitmentFromBuilding(unitType, player, buildingId, costs, opts?, side)` (barracks);
+  `candidate.reservationId` is now the carrier id.
+- `createRecruitmentJob`, `createDirectTransformJob` (`recruitment-job.ts`), the metadata branch of
+  the TRANSFORM_* executors, `ChoreoBuilder.transformRecruit*/transformDirect`.
+- `UnitTransformerConfig.unitReservation` + `reserveTransform(…, legacyReserved = true)`: legacy
+  recruit jobs still hold a legacy unit reservation (released with the pending record).
+- `RecruitmentCandidate.reservationId`.
+
+### Tests
+
+`tests/unit/integration/jobs/recruit-reservations.spec.ts` (fail / kill / owner-cancel before the
+transform release the pile and the building materials — the barracks-failure and owner-cancel cases
+failed before the fix) and `recruit-restore.spec.ts` (saved on the way: same owner, pile still
+reserved, transforms once; pile gone on load: abandoned, carrier idles; resume never crosses a
+completed transform; building source saved on the way re-reserves and withdraws once; killed
+releases).
