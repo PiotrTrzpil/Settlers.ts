@@ -75,6 +75,12 @@ export class ConstructionSiteManager {
     private readonly inventoryManager: BuildingInventoryManager;
     private readonly listener: ConstructionSiteListener;
 
+    /**
+     * BUILD_STEP cycles since the last consumed material, per site. Transient (not persisted): a load
+     * restarts the current material's cycles, so progress after a load can differ by < 1 material.
+     */
+    private readonly buildCycles = new Map<number, number>();
+
     constructor(
         eventBus: EventBus,
         rng: SeededRng,
@@ -181,6 +187,29 @@ export class ConstructionSiteManager {
     /** Remove the construction site record. No-op if it doesn't exist. */
     removeSite(buildingId: number): void {
         this.persistentStore.delete(buildingId);
+        this.buildCycles.delete(buildingId);
+    }
+
+    /**
+     * Count one BUILD_STEP cycle at the site. True (and the count restarts) when the cycle that
+     * consumes the next material unit is reached.
+     */
+    advanceBuildCycle(buildingId: number, cyclesPerMaterial: number): boolean {
+        const count = this.getBuildCycle(buildingId) + 1;
+        const due = count >= cyclesPerMaterial;
+        this.buildCycles.set(buildingId, due ? 0 : count);
+        return due;
+    }
+
+    /** BUILD_STEP cycles since the site's last consumed material. */
+    getBuildCycle(buildingId: number): number {
+        // eslint-disable-next-line no-restricted-syntax -- counter starts absent for a site that never hammered; 0 cycles
+        return this.buildCycles.get(buildingId) ?? 0;
+    }
+
+    /** Number of sites holding a BUILD_STEP cycle counter (diagnostics). */
+    get buildCycleSiteCount(): number {
+        return this.buildCycles.size;
     }
 
     /** Return the site for `buildingId`, or undefined if not registered. */

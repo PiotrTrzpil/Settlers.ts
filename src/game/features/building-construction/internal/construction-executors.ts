@@ -56,8 +56,6 @@ export function createBuildStepExecutor(
     constructionSiteManager: ConstructionSiteManager,
     inventoryManager: BuildingInventoryManager
 ): ChoreoExecutor {
-    const cycleCounters = new Map<number, number>();
-
     return (_settler, _job, node) => {
         const siteId = buildStepSiteId(node);
         const site = constructionSiteManager.getSite(siteId);
@@ -70,9 +68,7 @@ export function createBuildStepExecutor(
 
         // Consume one material unit every BUILD_CYCLES_PER_MATERIAL cycles.
         // Progress only advances when materials are available — no empty hammering.
-        // eslint-disable-next-line no-restricted-syntax -- counter starts absent for new sites; 0 is the correct initial cycle count
-        const count = (cycleCounters.get(siteId) ?? 0) + 1;
-        if (count >= BUILD_CYCLES_PER_MATERIAL) {
+        if (constructionSiteManager.advanceBuildCycle(siteId, BUILD_CYCLES_PER_MATERIAL)) {
             const material = constructionSiteManager.consumeNextMaterial(siteId);
             if (material !== null) {
                 const withdrawn = inventoryManager.withdrawInput(siteId, material, 1);
@@ -82,9 +78,6 @@ export function createBuildStepExecutor(
                     );
                 }
             }
-            cycleCounters.set(siteId, 0);
-        } else {
-            cycleCounters.set(siteId, count);
         }
 
         // Advance progress based on consumed materials (totalOut sum across all cost materials).
@@ -93,8 +86,7 @@ export function createBuildStepExecutor(
             0
         );
         const targetProgress =
-            // eslint-disable-next-line no-restricted-syntax -- counter just reset to 0 above; absent entry on first tick is equivalent to 0
-            consumedAmount * progressPerMaterial + (cycleCounters.get(siteId) ?? 0) * progressPerCycle;
+            consumedAmount * progressPerMaterial + constructionSiteManager.getBuildCycle(siteId) * progressPerCycle;
         constructionSiteManager.setConstructionProgress(siteId, targetProgress);
 
         return TaskResult.DONE;

@@ -118,6 +118,18 @@ describe('Building construction: full flow', { timeout: 30_000 }, () => {
         expect(sim.errors).toHaveLength(0);
     });
 
+    it('completed site drops its transient BUILD_STEP cycle counter', () => {
+        const s = createScenario.constructionSite(BuildingType.WoodcutterHut);
+        sim = s;
+        const sites = sim.services.constructionSiteManager;
+        sim.runUntil(() => sites.buildCycleSiteCount > 0, { maxTicks: 50_000, label: 'builder hammers' });
+
+        sim.waitForConstructionComplete(s.siteId);
+
+        expect(sites.buildCycleSiteCount).toBe(0);
+        expect(sim.errors).toHaveLength(0);
+    });
+
     it('WoodcutterHut: carriers auto-recruit into digger+builders and complete construction', () => {
         sim = createSimulation();
 
@@ -246,9 +258,12 @@ describe('Building construction: edge cases', { timeout: 30_000 }, () => {
 
         const unitsBefore = sim.countEntities(EntityType.Unit);
 
+        expect(sim.services.constructionSiteManager.buildCycleSiteCount).toBe(1);
+
         sim.removeBuilding(s.siteId);
 
         expect(sim.services.constructionSiteManager.hasSite(s.siteId)).toBe(false);
+        expect(sim.services.constructionSiteManager.buildCycleSiteCount).toBe(0);
         expect(sim.countEntities(EntityType.Unit)).toBe(unitsBefore);
         expect(sim.countEntities(EntityType.Unit, UnitType.Woodcutter)).toBe(0);
 
