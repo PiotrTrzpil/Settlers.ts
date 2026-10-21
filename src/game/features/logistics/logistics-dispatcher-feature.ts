@@ -2,7 +2,8 @@
  * LogisticsDispatcher Feature — wraps LogisticsDispatcher as a self-registering feature.
  *
  * Connects demand queue to carriers for material delivery.
- * Registers the TRANSPORT_* choreography executors on the kernel ChoreoSystem.
+ * Registers the TRANSPORT_* choreography executors on the kernel ChoreoSystem and the
+ * Transport JobKind handler (the owner of carrier transport jobs) with the job runtime.
  */
 
 import type { FeatureDefinition, FeatureContext } from '../feature';
@@ -11,13 +12,14 @@ import type { DemandLedgerExports } from './demand-ledger-feature';
 import type { InventoryExports } from '../inventory';
 import type { MaterialTransferExports } from '../material-transfer/material-transfer-feature';
 import type { BuildingConstructionExports } from '../building-construction';
-import type { TaskDispatcher } from '../settler-tasks';
 import type { SettlerTaskExports } from '../settler-tasks';
 import type { MovementContext } from '../settler-tasks';
 import { ThrottledLogger } from '@/utilities/throttled-logger';
 import { createLogger } from '@/utilities/logger';
 import { LogisticsDispatcher } from './logistics-dispatcher';
 import { registerTransportExecutors, type TransportExecutorContext } from './internal/transport-executor-context';
+import { TransportJobKind } from './transport-job-kind';
+import type { TransportJobDeps } from './transport-job-service';
 import { TickPhase } from '../../core/tick-phase';
 
 export interface LogisticsDispatcherExports {
@@ -29,9 +31,8 @@ export const LogisticsDispatcherFeature: FeatureDefinition = {
     dependencies: ['carriers', 'settler-tasks', 'logistics', 'inventory', 'building-construction', 'material-transfer'],
 
     create(ctx: FeatureContext) {
-        const { carrierRegistry, idleCarrierPool } = ctx.getFeature<CarrierFeatureExports>('carriers');
-        const { settlerTaskSystem, jobRunner } = ctx.getFeature<SettlerTaskExports>('settler-tasks');
-        const taskDispatcher: TaskDispatcher = jobRunner;
+        const { idleCarrierPool } = ctx.getFeature<CarrierFeatureExports>('carriers');
+        const { settlerTaskSystem, jobs } = ctx.getFeature<SettlerTaskExports>('settler-tasks');
         const { demandLedger, jobStore } = ctx.getFeature<DemandLedgerExports>('logistics');
         const { inventoryManager, storageFilterManager } = ctx.getFeature<InventoryExports>('inventory');
         const { materialTransfer } = ctx.getFeature<MaterialTransferExports>('material-transfer');
@@ -45,12 +46,12 @@ export const LogisticsDispatcherFeature: FeatureDefinition = {
             handlerErrorLogger,
         };
 
-        const transportJobDeps = {
+        const transportJobDeps: TransportJobDeps = {
             jobStore,
             demandLedger,
             eventBus: ctx.eventBus,
             inventoryManager,
-            gameState: ctx.gameState,
+            jobs,
         };
 
         const transportCtx: TransportExecutorContext = {
@@ -64,16 +65,26 @@ export const LogisticsDispatcherFeature: FeatureDefinition = {
 
         registerTransportExecutors(ctx.choreoSystem, movementCtx, transportCtx);
 
+        const transportJobs = new TransportJobKind({
+            gameState: ctx.gameState,
+            eventBus: ctx.eventBus,
+            inventoryManager,
+            jobStore,
+            transportJobDeps,
+            jobs,
+        });
+        jobs.registerKind(transportJobs);
+
         const logisticsDispatcher = new LogisticsDispatcher({
             gameState: ctx.gameState,
             eventBus: ctx.eventBus,
-            carrierRegistry,
             idleCarrierPool,
-            taskDispatcher,
+            transportJobs,
+            unitCommitments: jobs.commitments,
+            transportJobDeps,
             demandLedger,
             jobStore,
             inventoryManager,
-            materialTransfer,
             storageFilterManager,
         });
         logisticsDispatcher.registerEvents(ctx.eventBus, ctx.cleanupRegistry);
@@ -84,8 +95,8 @@ export const LogisticsDispatcherFeature: FeatureDefinition = {
             persistence: [],
             exports: { logisticsDispatcher } satisfies LogisticsDispatcherExports,
             onRestoreComplete() {
-                // Job records are persisted; choreographies are transient.
-                // Rebuild carrier choreographies from the restored records.
+                // Records are persisted; carrier jobs resume by themselves (onRestoreResume).
+                // Drop queued follow-ups and records no carrier runs any more.
                 logisticsDispatcher.restoreJobs();
             },
         };

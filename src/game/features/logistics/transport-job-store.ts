@@ -11,11 +11,12 @@
  * reservation/in-flight state.
  *
  * Records are flat and serializable; the store persists them directly
- * (persistKey 'transportJobs'). After restore, LogisticsDispatcher rebuilds
- * the carrier choreographies from the records.
+ * (persistKey 'transportJobs') together with its own record-id counter
+ * ('transportJobNextId'). After restore, each carrier's Transport job is rebuilt
+ * from its record by the Transport JobKind handler (transport-job-kind.ts).
  */
 
-import { PersistentIndexedMap } from '@/game/persistence/persistent-store';
+import { PersistentIndexedMap, PersistentValue } from '@/game/persistence/persistent-store';
 import type { Index } from '@/game/utils/indexed-map';
 import { TransportPhase, claimsSourceStock, isIncoming, type TransportJobRecord } from './transport-job-record';
 import type { EMaterialType } from '../../economy/material-type';
@@ -23,6 +24,9 @@ import type { EMaterialType } from '../../economy/material-type';
 export class TransportJobStore {
     /** Primary store: jobId → TransportJobRecord. Persisted. */
     readonly jobs = new PersistentIndexedMap<TransportJobRecord>('transportJobs');
+
+    /** Next record id. Persisted with the records, so ids stay unique across save / load. */
+    readonly nextIdStore = new PersistentValue<number>('transportJobNextId', 1);
 
     /** Index: building ID → job IDs (both source and dest). */
     readonly byBuilding: Index<number, number>;
@@ -37,6 +41,13 @@ export class TransportJobStore {
         this.byBuilding = this.jobs.addIndex((_jobId, job) => [job.sourceBuilding, job.destBuilding]);
         this.byPhase = this.jobs.addIndex((_jobId, job) => job.phase);
         this.byCarrier = this.jobs.addIndex((_jobId, job) => job.carrierId);
+    }
+
+    /** Allocate a fresh record id. */
+    allocateId(): number {
+        const id = this.nextIdStore.get();
+        this.nextIdStore.set(id + 1);
+        return id;
     }
 
     add(record: TransportJobRecord): void {
@@ -140,7 +151,7 @@ export class TransportJobStore {
         return result;
     }
 
-    private getOrThrow(jobId: number, context: string): TransportJobRecord {
+    getOrThrow(jobId: number, context: string): TransportJobRecord {
         const job = this.jobs.get(jobId);
         if (!job) {
             throw new Error(`No job for id ${jobId} in TransportJobStore.${context}`);

@@ -112,7 +112,9 @@ describe('Commitment lifecycle', { timeout: 60_000 }, () => {
 
         sim.killUnit(carrierId!);
 
-        expect(log).toEqual(['failed:failed', 'aborted:unitRemoved', 'pile']);
+        // Transport is owned: onUnitRemoved (no legacy taskFailed), then material-transfer drops the goods.
+        expect(log).toEqual(['aborted:unitRemoved', 'pile']);
+        expect(sim.services.jobStore.byCarrier.get(carrierId!).size).toBe(0);
         expect(sim.services.unitCommitments.get(carrierId!)).toBeUndefined();
         expect(sim.services.settlerTaskSystem.runtimes.has(carrierId!)).toBe(false);
     });

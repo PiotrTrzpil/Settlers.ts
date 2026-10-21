@@ -12,8 +12,7 @@ import { DemandLedger } from '@/game/features/logistics/demand-ledger';
 import { TransportJobStore } from '@/game/features/logistics/transport-job-store';
 import { TransportPhase, type TransportJobRecord } from '@/game/features/logistics/transport-job-record';
 import type { IdleCarrierPool } from '@/game/features/carriers';
-import type { TransportJobBuilder } from '@/game/features/logistics/transport-job-builder';
-import type { TaskDispatcher } from '@/game/features/settler-tasks';
+import type { TransportJobAssigner } from '@/game/features/logistics/transport-job-kind';
 import type { BuildingInventoryManager } from '@/game/features/inventory';
 import type { GameState } from '@/game/game-state';
 import type { Entity } from '@/game/entity';
@@ -32,14 +31,12 @@ describe('CarrierAssigner busy-carrier filter', () => {
     let jobStore: TransportJobStore;
     let eventBus: EventBus;
     let demandLedger: DemandLedger;
-    let nextJobId: number;
     const entities = new Map<number, Entity>();
 
     beforeEach(() => {
         jobStore = new TransportJobStore();
         eventBus = new EventBus();
         demandLedger = new DemandLedger();
-        nextJobId = 100;
         entities.clear();
         entities.set(SOURCE, entity(SOURCE, 50, 50));
         entities.set(DEST, entity(DEST, 55, 50));
@@ -68,7 +65,6 @@ describe('CarrierAssigner busy-carrier filter', () => {
                 }
                 return e;
             },
-            allocateJobId: () => nextJobId++,
         } as unknown as GameState;
 
         return new CarrierAssigner({
@@ -77,8 +73,7 @@ describe('CarrierAssigner busy-carrier filter', () => {
             idleCarrierPool: {
                 findNearestWithCost: () => null,
             } as unknown as IdleCarrierPool,
-            taskDispatcher: { assignJob: () => true } as unknown as Pick<TaskDispatcher, 'assignJob'>,
-            transportJobBuilder: {} as TransportJobBuilder,
+            transportJobs: { assign: () => true } satisfies TransportJobAssigner,
             transportJobDeps: {
                 jobStore,
                 demandLedger,
@@ -86,7 +81,7 @@ describe('CarrierAssigner busy-carrier filter', () => {
                 inventoryManager: {
                     getOutputAmount: () => 8,
                 } as unknown as BuildingInventoryManager,
-                gameState,
+                jobs: { cancel: () => {} },
             },
             carrierFilter: (carrier, _player, _nearX, _nearY) => filter(carrier.id),
         });
@@ -120,11 +115,10 @@ describe('CarrierAssigner busy-carrier filter', () => {
 });
 
 describe('CarrierAssigner reservation on assign failure', () => {
-    it('releases the source reservation if assignJob throws', () => {
+    it('releases the source reservation if the job assignment throws', () => {
         const jobStore = new TransportJobStore();
         const eventBus = new EventBus();
         const demandLedger = new DemandLedger();
-        let nextJobId = 100;
         const idleCarrierId = 7;
         const entities = new Map<number, Entity>([
             [SOURCE, entity(SOURCE, 50, 50)],
@@ -140,7 +134,6 @@ describe('CarrierAssigner reservation on assign failure', () => {
                 }
                 return e;
             },
-            allocateJobId: () => nextJobId++,
         } as unknown as GameState;
 
         const assigner = new CarrierAssigner({
@@ -149,14 +142,11 @@ describe('CarrierAssigner reservation on assign failure', () => {
             idleCarrierPool: {
                 findNearestWithCost: () => ({ carrierId: idleCarrierId, distSq: 1 }),
             } as unknown as IdleCarrierPool,
-            taskDispatcher: {
-                assignJob: () => {
+            transportJobs: {
+                assign: () => {
                     throw new Error('pathfinding exploded');
                 },
-            } as unknown as Pick<TaskDispatcher, 'assignJob'>,
-            transportJobBuilder: {
-                build: () => ({ targetPos: { x: 50, y: 50 } }),
-            } as unknown as TransportJobBuilder,
+            } satisfies TransportJobAssigner,
             transportJobDeps: {
                 jobStore,
                 demandLedger,
@@ -164,7 +154,7 @@ describe('CarrierAssigner reservation on assign failure', () => {
                 inventoryManager: {
                     getOutputAmount: () => 8,
                 } as unknown as BuildingInventoryManager,
-                gameState,
+                jobs: { cancel: () => {} },
             },
         });
 

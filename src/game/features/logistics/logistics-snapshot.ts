@@ -12,7 +12,7 @@ import type { CarrierRegistry } from '../carriers';
 import type { LogisticsDispatcher } from './logistics-dispatcher';
 import type { WorkerStateQuery, WorkerAssignmentQuery } from '../settler-tasks';
 import type { BuildingInventoryManager } from '../inventory';
-import type { UnitReservationRegistry } from '../../systems/unit-reservation';
+import type { UnitCommitmentQuery } from '../../systems/unit-commitment';
 import type { ConstructionSiteManager } from '../building-construction/construction-site-manager';
 import { DemandPriority } from './demand-ledger';
 import { EMaterialType } from '../../economy/material-type';
@@ -37,7 +37,7 @@ export interface SnapshotConfig {
     workerStateQuery: WorkerStateQuery;
     workerAssignments: WorkerAssignmentQuery;
     inventoryManager: BuildingInventoryManager;
-    unitReservation: UnitReservationRegistry;
+    unitCommitments: UnitCommitmentQuery;
     constructionSiteManager: ConstructionSiteManager;
 }
 
@@ -195,8 +195,7 @@ function buildDiagConfig(config: SnapshotConfig): DiagnosticConfig {
         inventoryManager: config.inventoryManager,
         carrierRegistry: config.carrierRegistry,
         jobStore: config.logisticsDispatcher.jobStore,
-        getActiveJobId: config.workerStateQuery.getActiveJobId.bind(config.workerStateQuery),
-        isReserved: config.unitReservation.isReserved.bind(config.unitReservation),
+        unitCommitments: config.unitCommitments,
     };
 }
 
@@ -266,18 +265,18 @@ export function gatherDemands(
 function buildCarrierSummary(
     id: number,
     entity: { x: number; y: number; carrying?: { material: EMaterialType; amount: number } },
-    workerStateQuery: WorkerStateQuery,
-    logisticsDispatcher: LogisticsDispatcher
+    config: SnapshotConfig
 ): CarrierSummary {
     const carrying = entity.carrying;
-    const activeJobId = workerStateQuery.getActiveJobId(id);
-    const job = logisticsDispatcher.jobStore.getActiveJobForCarrier(id);
+    const activeJobId = config.workerStateQuery.getActiveJobId(id);
+    const job = config.logisticsDispatcher.jobStore.getActiveJobForCarrier(id);
 
     return {
         entityId: id,
         x: entity.x,
         y: entity.y,
-        status: activeJobId !== null ? 'Busy' : 'Idle',
+        // One idle definition: no commitment (a carrier on a player move or held is busy).
+        status: config.unitCommitments.isIdle(id) ? 'Idle' : 'Busy',
         carryingMaterial: carrying ? formatMaterial(carrying.material) : null,
         carryingAmount: carrying ? carrying.amount : 0,
         hasJob: activeJobId !== null,
@@ -298,17 +297,17 @@ export function gatherCarriers(
     stats: LogisticsStats,
     options?: { limit?: number }
 ): CarrierSummary[] {
-    const { gameState, carrierRegistry, logisticsDispatcher, workerStateQuery } = config;
+    const { gameState, carrierRegistry } = config;
     const carriers: CarrierSummary[] = [];
 
     for (const [id, , entity] of query(carrierRegistry.store, gameState.store)) {
         if (entity.player !== player) {
             continue;
         }
-        const summary = buildCarrierSummary(id, entity, workerStateQuery, logisticsDispatcher);
+        const summary = buildCarrierSummary(id, entity, config);
         carriers.push(summary);
         stats.carrierCount++;
-        if (summary.hasJob) {
+        if (summary.status === 'Busy') {
             stats.busyCarriers++;
         } else {
             stats.idleCarriers++;

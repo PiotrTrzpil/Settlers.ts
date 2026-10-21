@@ -1,19 +1,23 @@
 /**
- * Transport-specific choreography executors for carrier delivery jobs.
+ * Transport-specific choreography executors for carrier delivery jobs (JobKind.Transport).
  *
- * Lifecycle uses TransportJobStore + TransportJobService via context (pure transportData).
+ * Nodes carry `args: { task: 'transport', recordId }`; walks carry their `goal`. Everything else
+ * (buildings, material, amount, phase) is read from the TransportJobRecord. While a Transport job
+ * runs, its record exists: every record cancel ends the job first (TransportJobService.cancel),
+ * so a missing record here is a bug and throws.
  */
 
 import type { Entity } from '../../../entity';
 import { clearCarrying } from '../../../entity';
 import { createLogger } from '@/utilities/logger';
 import { TaskResult, framesToSeconds, tickDuration } from '../../../systems/choreo/types';
-import type { ChoreoJobState, ChoreoNode, TransportData } from '../../../systems/choreo/types';
+import type { ChoreoJobState, ChoreoNode } from '../../../systems/choreo/types';
+import type { Tile } from '../../../core/coordinates';
 import type { MovementContext } from '../../settler-tasks';
 import type { TransportExecutorContext } from './transport-executor-context';
 import { moveToPosition } from '../../settler-tasks/internal/movement-executors';
 import * as TransportJobService from '../transport-job-service';
-import { TransportPhase } from '../transport-job-record';
+import { TransportPhase, type TransportJobRecord } from '../transport-job-record';
 
 const log = createLogger('TransportExecutors');
 
@@ -30,18 +34,25 @@ function resolveInventoryDuration(node: ChoreoNode): number {
     return framesToSeconds(node.duration);
 }
 
-function requireTransportData(job: ChoreoJobState, context: string): TransportData {
-    if (!job.transportData) {
-        throw new Error(
-            `${context}: job '${job.jobId}' has no transportData — only use TRANSPORT_* nodes in carrier jobs`
-        );
+/** Record id from the node args — only TRANSPORT_* nodes built by the Transport handler run here. */
+function recordIdOf(node: ChoreoNode, context: string): number {
+    const args = node.args;
+    if (!args || args.task !== 'transport') {
+        throw new Error(`${context}: node has no transport args — only use TRANSPORT_* nodes in Transport jobs`);
     }
-    return job.transportData;
+    return args.recordId;
 }
 
-/** True when the transport record still exists in the store. */
-function isJobLive(ctx: TransportExecutorContext, jobId: number): boolean {
-    return ctx.jobStore.get(jobId) !== undefined;
+/** The node's transport record (exists while its Transport job runs — see file header). */
+function recordOf(ctx: TransportExecutorContext, node: ChoreoNode, context: string): TransportJobRecord {
+    return ctx.jobStore.getOrThrow(recordIdOf(node, context), context);
+}
+
+function goalOf(node: ChoreoNode, context: string): Tile {
+    if (!node.goal) {
+        throw new Error(`${context}: walk node has no goal (record #${recordIdOf(node, context)})`);
+    }
+    return node.goal;
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -55,8 +66,8 @@ export function executeTransportGoToSource(
     _dt: number,
     ctx: MovementContext
 ): TaskResult {
-    const td = requireTransportData(job, 'TRANSPORT_GO_TO_SOURCE');
-    return moveToPosition(settler, td.sourcePos.x, td.sourcePos.y, node, ctx, ARRIVAL_DIST_EXACT, job);
+    const goal = goalOf(node, 'TRANSPORT_GO_TO_SOURCE');
+    return moveToPosition(settler, goal.x, goal.y, node, ctx, ARRIVAL_DIST_EXACT, job);
 }
 
 export function executeTransportGoToDest(
@@ -66,8 +77,8 @@ export function executeTransportGoToDest(
     _dt: number,
     ctx: MovementContext
 ): TaskResult {
-    const td = requireTransportData(job, 'TRANSPORT_GO_TO_DEST');
-    return moveToPosition(settler, td.destPos.x, td.destPos.y, node, ctx, ARRIVAL_DIST_EXACT, job);
+    const goal = goalOf(node, 'TRANSPORT_GO_TO_DEST');
+    return moveToPosition(settler, goal.x, goal.y, node, ctx, ARRIVAL_DIST_EXACT, job);
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -85,54 +96,41 @@ export function executeTransportPickup(
     dt: number,
     ctx: TransportExecutorContext
 ): TaskResult {
-    if (!job.workStarted) {
-        job.workStarted = true;
-        const td = requireTransportData(job, 'TRANSPORT_PICKUP');
-        if (!isJobLive(ctx, td.jobId)) {
-            log.debug(`Carrier ${settler.id}: transport job ${td.jobId} no longer exists, aborting pickup`);
-            return TaskResult.FAILED;
-        }
+    job.workStarted = true;
+    const result = tickDuration(job, dt, resolveInventoryDuration(node));
+    if (result !== TaskResult.DONE) {
+        return result;
     }
 
-    const result = tickDuration(job, dt, resolveInventoryDuration(node));
+    const record = recordOf(ctx, node, 'TRANSPORT_PICKUP');
+    if (record.phase !== TransportPhase.Reserved) {
+        throw new Error(`TRANSPORT_PICKUP: record #${record.id} is '${record.phase}', expected 'reserved'`);
+    }
+    TransportJobService.pickUp(record, ctx.transportJobDeps);
 
-    if (result === TaskResult.DONE) {
-        const td = requireTransportData(job, 'TRANSPORT_PICKUP');
-        const record = ctx.jobStore.get(td.jobId);
-        if (!record || record.phase !== TransportPhase.Reserved) {
-            log.debug(`Carrier ${settler.id}: transport job ${td.jobId} cancelled during pickup animation`);
-            return TaskResult.FAILED;
-        }
-
-        TransportJobService.pickUp(record, ctx.transportJobDeps);
-
-        const { material, sourceBuildingId, amount: requestedAmount } = td;
-        const withdrawn = ctx.materialTransfer.pickUpOutput(settler.id, sourceBuildingId, material, requestedAmount);
-
-        if (withdrawn === 0) {
-            log.warn(`Carrier ${settler.id}: pickup failed at building ${sourceBuildingId}`);
-            ctx.eventBus.emit('carrier:pickupFailed', {
-                unitId: settler.id,
-                material,
-                fromBuilding: sourceBuildingId,
-                requestedAmount,
-                level: 'warn',
-            });
-            return TaskResult.FAILED;
-        }
-        job.carryingGood = material;
-        td.amount = withdrawn;
-
-        log.debug(`Carrier ${settler.id} picked up ${withdrawn} of ${material} from building ${sourceBuildingId}`);
-
-        ctx.eventBus.emit('carrier:pickupComplete', {
+    const { material, sourceBuilding, amount: requestedAmount } = record;
+    const withdrawn = ctx.materialTransfer.pickUpOutput(settler.id, sourceBuilding, material, requestedAmount);
+    if (withdrawn === 0) {
+        // The job fails; the Transport handler's onFailed discards the record (nothing is carried).
+        log.warn(`Carrier ${settler.id}: pickup failed at building ${sourceBuilding}`);
+        ctx.eventBus.emit('carrier:pickupFailed', {
             unitId: settler.id,
             material,
-            amount: withdrawn,
-            fromBuilding: sourceBuildingId,
+            fromBuilding: sourceBuilding,
+            requestedAmount,
+            level: 'warn',
         });
+        return TaskResult.FAILED;
     }
+    job.carryingGood = material;
 
+    log.debug(`Carrier ${settler.id} picked up ${withdrawn} of ${material} from building ${sourceBuilding}`);
+    ctx.eventBus.emit('carrier:pickupComplete', {
+        unitId: settler.id,
+        material,
+        amount: withdrawn,
+        fromBuilding: sourceBuilding,
+    });
     return result;
 }
 
@@ -167,67 +165,54 @@ export function executeTransportDeliver(
 ): TaskResult {
     if (!job.workStarted) {
         job.workStarted = true;
-        const td = requireTransportData(job, 'TRANSPORT_DELIVER');
-
-        if (!isJobLive(ctx, td.jobId)) {
-            log.debug(`Carrier ${settler.id}: transport job ${td.jobId} no longer exists, dropping material`);
-            ctx.materialTransfer.drop(settler.id);
-            return TaskResult.FAILED;
-        }
-
         if (!settler.carrying) {
             throw new Error(
                 `Carrier ${settler.id}: TRANSPORT_DELIVER called but settler is not carrying anything ` +
-                    `(job: material=${td.material})`
+                    `(record #${recordIdOf(node, 'TRANSPORT_DELIVER')})`
             );
         }
     }
 
     const result = tickDuration(job, dt, resolveInventoryDuration(node));
-
-    if (result === TaskResult.DONE) {
-        const td = requireTransportData(job, 'TRANSPORT_DELIVER');
-        const { destBuildingId, material } = td;
-
-        const amount = settler.carrying!.amount;
-        const deposited = depositIntoBuilding(settler, destBuildingId, ctx);
-
-        const record = ctx.jobStore.get(td.jobId);
-        if (record && record.phase === TransportPhase.PickedUp) {
-            TransportJobService.deliver(record, ctx.transportJobDeps);
-        }
-
-        const overflow = amount - deposited;
-        if (overflow > 0) {
-            log.warn(`Carrier ${settler.id}: ${overflow} of ${material} overflow at building ${destBuildingId}`);
-            ctx.eventBus.emit('construction:materialOverflowed', {
-                buildingId: destBuildingId,
-                material,
-                amount: overflow,
-                level: 'warn',
-            });
-        }
-
-        job.carryingGood = null;
-
-        log.debug(`Carrier ${settler.id} delivered ${deposited} of ${material} to building ${destBuildingId}`);
-
-        ctx.eventBus.emit('carrier:deliveryComplete', {
-            unitId: settler.id,
-            material,
-            amount: deposited,
-            toBuilding: destBuildingId,
-            overflow,
-        });
-
-        if (deposited > 0 && ctx.constructionSiteManager.getSite(destBuildingId)) {
-            ctx.eventBus.emit('construction:materialDelivered', {
-                buildingId: destBuildingId,
-                material,
-            });
-        }
+    if (result !== TaskResult.DONE) {
+        return result;
     }
 
+    const record = recordOf(ctx, node, 'TRANSPORT_DELIVER');
+    const { destBuilding, material } = record;
+    const amount = settler.carrying!.amount;
+    const deposited = depositIntoBuilding(settler, destBuilding, ctx);
+    TransportJobService.deliver(record, ctx.transportJobDeps);
+
+    const overflow = amount - deposited;
+    if (overflow > 0) {
+        log.warn(`Carrier ${settler.id}: ${overflow} of ${material} overflow at building ${destBuilding}`);
+        ctx.eventBus.emit('construction:materialOverflowed', {
+            buildingId: destBuilding,
+            material,
+            amount: overflow,
+            level: 'warn',
+        });
+    }
+
+    job.carryingGood = null;
+
+    log.debug(`Carrier ${settler.id} delivered ${deposited} of ${material} to building ${destBuilding}`);
+
+    ctx.eventBus.emit('carrier:deliveryComplete', {
+        unitId: settler.id,
+        material,
+        amount: deposited,
+        toBuilding: destBuilding,
+        overflow,
+    });
+
+    if (deposited > 0 && ctx.constructionSiteManager.getSite(destBuilding)) {
+        ctx.eventBus.emit('construction:materialDelivered', {
+            buildingId: destBuilding,
+            material,
+        });
+    }
     return result;
 }
 

@@ -9,11 +9,14 @@ import { describe, it, expect } from 'vitest';
 import { EntityType, BuildingType, type Entity, type Tile } from '@/game/entity';
 import { Race } from '@/game/core/race';
 import { EMaterialType } from '@/game/economy';
-import { TransportJobBuilder } from '@/game/features/logistics/transport-job-builder';
+import { TransportJobKind } from '@/game/features/logistics/transport-job-kind';
+import { TransportJobStore } from '@/game/features/logistics/transport-job-store';
 import { TransportPhase, type TransportJobRecord } from '@/game/features/logistics/transport-job-record';
 import type { GameState } from '@/game/game-state';
+import type { EventBus } from '@/game/event-bus';
 import type { BuildingInventoryManager } from '@/game/features/inventory/building-inventory';
 import type { TransportJobDeps } from '@/game/features/logistics/transport-job-service';
+import { ChoreoTaskType } from '@/game/systems/choreo';
 import { SlotKind } from '@/game/core/pile-kind';
 import type { PileSide } from '@/game/features/inventory';
 
@@ -34,26 +37,12 @@ function building(id: number, type: BuildingType, tile: Tile): Entity {
     } as Entity;
 }
 
-describe('TransportJobBuilder pickup walk target', () => {
+describe('Transport job pickup walk target', () => {
     it('walks to the output pile, not the input pile or door', () => {
         const entities = new Map<number, Entity>([
             [SOURCE, building(SOURCE, BuildingType.WoodcutterHut, { x: 10, y: 10 })],
             [DEST, building(DEST, BuildingType.Sawmill, { x: 20, y: 10 })],
         ]);
-
-        const builder = new TransportJobBuilder({
-            gameState: {
-                getEntityOrThrow: (id: number) => entities.get(id)!,
-            } as unknown as GameState,
-            inventoryManager: {
-                findPileSlot: (_id: number, _m: EMaterialType, side: PileSide) =>
-                    side === SlotKind.Output ? { position: OUTPUT_PILE } : { position: INPUT_PILE },
-                findSlot: () => ({ position: { x: 21, y: 10 } }),
-            } as unknown as BuildingInventoryManager,
-            transportJobDeps: {
-                jobStore: { get: () => undefined },
-            } as unknown as TransportJobDeps,
-        });
 
         const record: TransportJobRecord = {
             id: 1,
@@ -66,9 +55,27 @@ describe('TransportJobBuilder pickup walk target', () => {
             createdAt: 0,
         };
 
-        const job = builder.build(record);
+        const jobStore = new TransportJobStore();
+        jobStore.add(record);
+        const handler = new TransportJobKind({
+            gameState: {
+                getEntityOrThrow: (id: number) => entities.get(id)!,
+            } as unknown as GameState,
+            eventBus: {} as EventBus,
+            inventoryManager: {
+                findPileSlot: (_id: number, _m: EMaterialType, side: PileSide) =>
+                    side === SlotKind.Output ? { position: OUTPUT_PILE } : { position: INPUT_PILE },
+                findSlot: () => ({ position: { x: 21, y: 10 } }),
+            } as unknown as BuildingInventoryManager,
+            jobStore,
+            transportJobDeps: {} as TransportJobDeps,
+            jobs: { assign: () => true },
+        });
 
-        expect(job.transportData!.sourcePos).toEqual(OUTPUT_PILE);
+        const job = handler.build(record.carrierId, { recordId: record.id });
+        const sourceWalk = job.nodes.find(n => n.task === ChoreoTaskType.TRANSPORT_GO_TO_SOURCE)!;
+
+        expect(sourceWalk.goal).toEqual(OUTPUT_PILE);
         expect(job.targetPos).toEqual(OUTPUT_PILE);
     });
 });
