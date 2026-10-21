@@ -35,7 +35,7 @@ import type { TaskDispatcher } from '../settler-tasks';
 import { StallDetector } from './stall-detector';
 import { MatchDiagnostics } from './match-diagnostics';
 import { ThrottledEmitter } from './throttled-emitter';
-import { TransportJobBuilder, type TransportPositionResolver } from './transport-job-builder';
+import { TransportJobBuilder } from './transport-job-builder';
 import { clearJobId } from '../../entity';
 import { createLogger } from '@/utilities/logger';
 
@@ -56,7 +56,6 @@ export interface LogisticsDispatcherConfig extends CoreDeps {
     idleCarrierPool: IdleCarrierPool;
     /** Settler job assignment (TaskDispatcher.assignJob). */
     taskDispatcher: Pick<TaskDispatcher, 'assignJob'>;
-    positionResolver: TransportPositionResolver;
     demandLedger: DemandLedger;
     jobStore: TransportJobStore;
     inventoryManager: BuildingInventoryManager;
@@ -132,7 +131,6 @@ export class LogisticsDispatcher implements TickSystem {
 
         this.transportJobBuilder = new TransportJobBuilder({
             gameState: config.gameState,
-            positionResolver: config.positionResolver,
             inventoryManager: config.inventoryManager,
             transportJobDeps: this.transportJobDeps,
         });

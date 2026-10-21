@@ -7,7 +7,7 @@
  * Public API:
  * - InventoryFeature / InventoryExports (BuildingInventoryManager + StorageFilterManager)
  * - FreePilesFeature (free pile registration + place_pile command)
- * - Slot helpers, inventory configs, pile registries, pile position resolution
+ * - Slot helpers, inventory configs, pile registries, slot-creation pile positions, pile lookup
  */
 
 // Feature definitions
@@ -35,8 +35,9 @@ export type { BuildingInventoryView, BuildingInventoryDeps, SlotPositionResolver
 export type { MaterialThroughput, SerializedBuildingInventory, SerializedPileSlot } from './building-inventory-helpers';
 export { BuildingInventoryManager } from './building-inventory';
 
-// Unified slot+pile type
+// Unified slot+pile type and pile lookup side
 export type { PileSlot } from './pile-slot';
+export type { PileSide } from './pile-lookup';
 
 export type { Recipe } from '@/game/economy/building-production';
 
@@ -51,7 +52,8 @@ export {
     consumesMaterials,
 } from './inventory-configs';
 
-// Building pile registry (XML-derived pile positions) and construction pile positions
+// Pile tile inputs to slot creation: XML pile registry, construction layout, and the resolver
+// that fixes PileSlot.position when slots are created
 export { BuildingPileRegistry } from './building-pile-registry';
 export type { PileSlot as BuildingRegistryPileSlot, StoragePilePosition } from './building-pile-registry';
 export { assignConstructionPilePositions } from './construction-pile-positions';

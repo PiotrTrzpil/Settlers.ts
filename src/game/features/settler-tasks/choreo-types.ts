@@ -9,6 +9,7 @@ import type { Entity, Tile } from '../../entity';
 import type { GameState } from '../../game-state';
 import type { EventBus } from '../../event-bus';
 import type { BuildingInventoryManager } from '../inventory';
+import type { PileSide } from '../inventory';
 import type { ThrottledLogger } from '@/utilities/throttled-logger';
 import type { EntityWorkHandler, PositionWorkHandler } from './types';
 import type { MaterialTransfer } from '../material-transfer';
@@ -56,10 +57,12 @@ export interface JobPartResolver {
 export interface BuildingPositionResolver {
     /** Resolve (buildingId, offset, useWork) → world hex position. */
     resolvePosition(buildingId: number, offset: Tile, useWork: boolean): Tile;
-    /** Get the source (input) pile position for a material at a building. */
-    getSourcePilePosition(buildingId: number, material: string): Tile | null;
-    /** Get the destination (output) pile position for a material at a building. */
-    getDestinationPilePosition(buildingId: number, material: string): Tile | null;
+    /**
+     * Tile of a building's pile for a jobInfo.xml material ('GOOD_LOG') on the given side.
+     * Pass-through to the inventory: pile tiles are fixed on the slots at slot creation.
+     * Throws if the building has no such pile.
+     */
+    getPilePosition(buildingId: number, material: string, side: PileSide): Tile;
     /** Check whether this building type has a work area. */
     hasWorkArea(buildingId: number): boolean;
     /** Get the work area center (absolute world tile) for a building. */

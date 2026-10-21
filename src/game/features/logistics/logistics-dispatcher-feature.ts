@@ -38,13 +38,11 @@ export const LogisticsDispatcherFeature: FeatureDefinition = {
         const { materialTransfer } = ctx.getFeature<MaterialTransferExports>('material-transfer');
         const { constructionSiteManager } = ctx.getFeature<BuildingConstructionExports>('building-construction');
 
-        const positionResolver = settlerTaskSystem.getPositionResolver();
-
         const handlerErrorLogger = new ThrottledLogger(createLogger('LogisticsTransportExecutors'), 2000);
 
         const movementCtx: MovementContext = {
             gameState: ctx.gameState,
-            buildingPositionResolver: positionResolver,
+            buildingPositionResolver: settlerTaskSystem.getPositionResolver(),
             getWorkerHomeBuilding: () => null,
             handlerErrorLogger,
         };
@@ -74,7 +72,6 @@ export const LogisticsDispatcherFeature: FeatureDefinition = {
             carrierRegistry,
             idleCarrierPool,
             taskDispatcher,
-            positionResolver,
             demandLedger,
             jobStore,
             inventoryManager,

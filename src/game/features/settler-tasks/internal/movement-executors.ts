@@ -18,6 +18,8 @@ import { TaskResult } from '../types';
 import type { ChoreoNode, MovementExecutorFn, ChoreoJobState, MovementContext } from '../choreo-types';
 import { ChoreoTaskType, resolveSearchArea } from '../choreo-types';
 import { safeCall } from '../safe-call';
+import { SlotKind } from '../../../core/pile-kind';
+import type { PileSide } from '../../inventory';
 
 const log = createLogger('MovementExecutors');
 
@@ -170,6 +172,28 @@ function findMaterialInAdjacentNode(job: ChoreoJobState, taskType: ChoreoTaskTyp
     return undefined;
 }
 
+/**
+ * Pile tile at the settler's home building for the material named by the next
+ * GET_GOOD / PUT_GOOD node. Throws if the choreography names no material or the
+ * building has no such pile.
+ */
+function resolveHomePilePosition(
+    settler: Entity,
+    job: ChoreoJobState,
+    ctx: MovementContext,
+    inventoryNode: ChoreoTaskType.GET_GOOD | ChoreoTaskType.PUT_GOOD,
+    side: PileSide
+): Tile {
+    const material = findMaterialInAdjacentNode(job, inventoryNode);
+    if (material === undefined) {
+        throw new Error(
+            `Settler ${settler.id}: ${job.jobId} node ${job.nodeIndex} walks to a ${side} pile ` +
+                `but no following ${ChoreoTaskType[inventoryNode]} node names a material`
+        );
+    }
+    return ctx.buildingPositionResolver.getPilePosition(resolveAssignedBuildingId(settler, ctx), material, side);
+}
+
 // ─────────────────────────────────────────────────────────────
 // Helper: move adjacent to a map-object entity
 // ─────────────────────────────────────────────────────────────
@@ -304,14 +328,12 @@ export const executeGoHome: MovementExecutorFn = (settler, job, node, _dt, ctx) 
 /**
  * GO_TO_SOURCE_PILE — move to a source pile position for pickup (regular workers only).
  *
- * Resolves from the pile registry using the material from the next GET_GOOD node.
- * Carrier transport uses TRANSPORT_GO_TO_SOURCE instead.
+ * Walks to the home building's INPUT pile for the material of the next GET_GOOD node
+ * (tile fixed on the inventory slot). Carrier transport uses TRANSPORT_GO_TO_SOURCE instead.
  */
 export const executeGoToSourcePile: MovementExecutorFn = (settler, job, node, _dt, ctx) => {
     if (!job.targetPos) {
-        const material = findMaterialInAdjacentNode(job, ChoreoTaskType.GET_GOOD)!;
-        const buildingId = resolveAssignedBuildingId(settler, ctx);
-        job.targetPos = ctx.buildingPositionResolver.getSourcePilePosition(buildingId, material)!;
+        job.targetPos = resolveHomePilePosition(settler, job, ctx, ChoreoTaskType.GET_GOOD, SlotKind.Input);
     }
     return moveToPosition(settler, job.targetPos.x, job.targetPos.y, node, ctx, ARRIVAL_DIST, job);
 };
@@ -319,14 +341,12 @@ export const executeGoToSourcePile: MovementExecutorFn = (settler, job, node, _d
 /**
  * GO_TO_DESTINATION_PILE — move to a destination pile position for delivery (regular workers only).
  *
- * Resolves from the pile registry using the settler's carried material.
- * Carrier transport uses TRANSPORT_GO_TO_DEST instead.
+ * Walks to the home building's OUTPUT pile for the material of the next PUT_GOOD node
+ * (tile fixed on the inventory slot). Carrier transport uses TRANSPORT_GO_TO_DEST instead.
  */
 export const executeGoToDestinationPile: MovementExecutorFn = (settler, job, node, _dt, ctx) => {
     if (!job.targetPos) {
-        const material = findMaterialInAdjacentNode(job, ChoreoTaskType.PUT_GOOD)!;
-        const buildingId = resolveAssignedBuildingId(settler, ctx);
-        job.targetPos = ctx.buildingPositionResolver.getDestinationPilePosition(buildingId, material)!;
+        job.targetPos = resolveHomePilePosition(settler, job, ctx, ChoreoTaskType.PUT_GOOD, SlotKind.Output);
     }
     return moveToPosition(settler, job.targetPos.x, job.targetPos.y, node, ctx, ARRIVAL_DIST, job);
 };

@@ -101,9 +101,7 @@ export class SettlerTaskSystem implements TickSystem, TaskDispatcher, WorkerStat
         this.buildingPositionResolver = new BuildingPositionResolverImpl({
             gameState: this.gameState,
             inventoryManager: this.inventoryManager,
-            pileRegistry: config.pileRegistry,
             workAreaStore: config.workAreaStore,
-            constructionSiteManager: config.constructionSiteManager,
         });
 
         this.handlerRegistry = new WorkHandlerRegistry();

@@ -8,23 +8,19 @@
  *
  * Registers entity cleanup for construction site removal.
  *
- * Position resolution is provided by PilePositionResolver, injected at construction time.
- * The handler builds a SlotPositionResolver callback from it, which is passed to the
- * inventory manager on each slot-creation call.
+ * Pile tiles are decided here, once, at slot creation: construction slots use the
+ * PilePositionResolver's door-adjacent construction layout, operational slots its XML
+ * pile layout. Runtime consumers read PileSlot.position via the inventory lookup.
  */
 
 import { type EventBus, EventSubscriptionManager, type GameEvents } from '../../event-bus';
 import type { CoreDeps } from '../feature';
 import type { ConstructionSiteManager } from './construction-site-manager';
-import type { BuildingInventoryManager, SlotPositionResolver } from '../inventory';
+import type { BuildingInventoryManager } from '../inventory';
 import { getConstructionInventoryConfig } from '../inventory';
 import type { GameState } from '../../game-state';
 import type { EntityCleanupRegistry } from '../../systems/entity-cleanup-registry';
-import type { PilePositionResolver } from '../inventory/pile-position-resolver';
-import { tileKey, type Entity } from '../../entity';
-import type { EMaterialType } from '../../economy/material-type';
-import { SlotKind } from '../../core/pile-kind';
-import type { LinkedSlotKind } from '../../core/pile-kind';
+import type { PilePositionResolver } from '../inventory';
 
 export interface BuildingLifecycleConfig extends CoreDeps {
     constructionSiteManager: ConstructionSiteManager;
@@ -40,7 +36,7 @@ export class BuildingLifecycleHandler {
     private readonly constructionSiteManager: ConstructionSiteManager;
     private readonly inventoryManager: BuildingInventoryManager;
     private readonly cleanupRegistry: EntityCleanupRegistry;
-    private readonly positionResolver: SlotPositionResolver;
+    private readonly pilePositions: PilePositionResolver;
 
     constructor(config: BuildingLifecycleConfig) {
         this.gameState = config.gameState;
@@ -48,7 +44,7 @@ export class BuildingLifecycleHandler {
         this.constructionSiteManager = config.constructionSiteManager;
         this.inventoryManager = config.inventoryManager;
         this.cleanupRegistry = config.cleanupRegistry;
-        this.positionResolver = this.buildPositionResolver(config.pilePositionResolver);
+        this.pilePositions = config.pilePositionResolver;
     }
 
     registerEvents(): void {
@@ -64,46 +60,15 @@ export class BuildingLifecycleHandler {
         this.subscriptions.unsubscribeAll();
     }
 
-    private buildPositionResolver(resolver: PilePositionResolver): SlotPositionResolver {
-        return (
-            buildingId: number,
-            building: Entity,
-            configs: ReadonlyArray<{ materialType: EMaterialType; kind: SlotKind }>
-        ) => {
-            const usedPositions = new Set<string>();
-            const pileIndexByMaterial = new Map<EMaterialType, number>();
-
-            return configs.map(cfg => {
-                // eslint-disable-next-line no-restricted-syntax -- map starts empty; first lookup for a material type legitimately returns undefined, 0 is the correct initial index
-                const pileIndex = pileIndexByMaterial.get(cfg.materialType) ?? 0;
-                pileIndexByMaterial.set(cfg.materialType, pileIndex + 1);
-
-                const position = resolver.resolvePosition({
-                    buildingId,
-                    building,
-                    material: cfg.materialType,
-                    slotKind: cfg.kind as LinkedSlotKind,
-                    usedPositions,
-                    pileIndex,
-                });
-                if (position) {
-                    usedPositions.add(tileKey(position));
-                }
-                return position;
-            });
-        };
-    }
-
     private onBuildingPlaced({ buildingId, buildingType, x, y, player }: GameEvents['building:placed']): void {
         const entity = this.gameState.getEntityOrThrow(buildingId, 'building placed event target');
         this.constructionSiteManager.registerSite(buildingId, buildingType, entity.race, player, x, y);
-        const constructionConfig = getConstructionInventoryConfig(buildingType, entity.race);
-        if (constructionConfig.inputSlots.length > 0) {
-            this.inventoryManager.createSlotsFromConfig(
+        if (getConstructionInventoryConfig(buildingType, entity.race).inputSlots.length > 0) {
+            this.inventoryManager.createConstructionSlots(
                 buildingId,
                 buildingType,
-                constructionConfig,
-                this.positionResolver
+                entity.race,
+                this.pilePositions.construction
             );
         }
     }
@@ -121,6 +86,6 @@ export class BuildingLifecycleHandler {
         }
 
         this.inventoryManager.destroySlots(buildingId);
-        this.inventoryManager.createSlots(buildingId, buildingType, race, this.positionResolver);
+        this.inventoryManager.createSlots(buildingId, buildingType, race, this.pilePositions.operational);
     }
 }

@@ -11,7 +11,6 @@ import { getBuildingInfo } from '../../data/game-data-access';
 import { getBuildingFootprintFromInfo } from '@/resources/game-data';
 import { BuildingConstructionPhase, type ConstructionSite } from './types';
 import type { StoreSerializer } from '@/game/persistence/persistent-store';
-import { assignConstructionPilePositions } from '../inventory';
 
 // ── Serialization types ──
 
@@ -39,7 +38,8 @@ type PersistedConstructionSite = SerializedConstructionSite & { buildingId: numb
 /**
  * StoreSerializer for ConstructionSite.
  * Converts between the full in-memory ConstructionSite and the lean PersistedConstructionSite.
- * Derived fields (constructionCosts, workerCount, pilePositions) are recomputed on deserialize.
+ * Derived fields (constructionCosts, workerCount) are recomputed on deserialize.
+ * Construction pile tiles live on the site's inventory slots (persisted by the inventory).
  */
 export function makeConstructionSiteSerializer(): StoreSerializer<ConstructionSite> {
     return {
@@ -63,7 +63,6 @@ export function makeConstructionSiteSerializer(): StoreSerializer<ConstructionSi
             const constructionCosts = getConstructionCosts(data.buildingType, data.race);
             const totalCost = constructionCosts.reduce((sum, c) => sum + c.count, 0);
             const workerCount = getWorkerCount(data.buildingType, data.race);
-            const pilePositions = assignConstructionPilePositions(data.buildingType, data.race, data.tileX, data.tileY);
             return {
                 buildingId: data.buildingId,
                 buildingType: data.buildingType,
@@ -98,7 +97,6 @@ export function makeConstructionSiteSerializer(): StoreSerializer<ConstructionSi
                     },
                     progress: data.constructionProgress,
                 },
-                pilePositions,
             };
         },
     };

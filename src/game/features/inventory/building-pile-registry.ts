@@ -80,22 +80,6 @@ export class BuildingPileRegistry {
         return offsets.map(p => ({ x: buildingX + p.dx, y: buildingY + p.dy }));
     }
 
-    /** Get the tile position for a specific material at a building */
-    getPilePosition(
-        buildingType: BuildingType,
-        race: Race,
-        material: EMaterialType,
-        buildingX: number,
-        buildingY: number
-    ): Tile | null {
-        const slots = this.getPileSlots(buildingType, race);
-        const slot = slots.find(s => s.material === material);
-        if (!slot) {
-            return null;
-        }
-        return { x: buildingX + slot.dx, y: buildingY + slot.dy };
-    }
-
     /** Get the tile position for a specific material on a specific side (input/output) */
     getPilePositionForSlot(
         buildingType: BuildingType,

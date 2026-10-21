@@ -2,7 +2,10 @@
  * PileSlot — unified inventory + pile data model.
  *
  * Merges the old InventorySlot (data) with PileRegistry (entity mapping)
- * and PilePositionResolver (position) into one flat record.
+ * and the pile position into one flat record. The position is decided once, at slot
+ * creation (PilePositionResolver), and is the single source of truth for where the
+ * pile lives — runtime consumers read it via BuildingInventoryManager.findPileSlot /
+ * getPilePosition.
  *
  * A building's inventory = Map<slotId, PileSlot>.
  * Free piles are standalone PileSlots with kind='free' and buildingId=null.
@@ -29,7 +32,7 @@ export interface PileSlot {
     currentAmount: number;
     /** Maximum capacity (typically SLOT_CAPACITY = 8). */
     maxCapacity: number;
-    /** World tile position where the pile entity is placed. */
+    /** World tile where the pile entity is placed — fixed at slot creation, never re-derived. */
     position: Tile;
     /** Pile entity ID (created when amount > 0, removed when amount reaches 0). null = no entity. */
     entityId: number | null;
