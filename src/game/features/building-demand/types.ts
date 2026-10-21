@@ -12,6 +12,6 @@ export interface BuildingDemand {
     toolMaterial: EMaterialType | null;
     player: number;
     race: Race;
-    /** null = no candidate yet. Set when choreo job is assigned. */
+    /** The unit running this building's WorkplaceDispatch job; null = none (yet / again). */
     committedUnitId: number | null;
 }

@@ -958,3 +958,39 @@ releases).
 - **Tests**: `tests/unit/integration/jobs/siege-holds.spec.ts` — holds shape, defender removed outside combat frees the
   attackers, attacker removed leaves the siege, building removed releases everyone, holds not saved, a swordsman
   walking to garrison its own tower is ignored by siege and combat.
+
+## Workplace-dispatch migration notes (as shipped on `refactor/jobs-workplace`)
+
+- **Kind** in `features/building-demand/workplace-dispatch-kind.ts`, registered in the feature's `create()`.
+  `workplaceDispatchSpec(buildingId, recruit)` = `{ kind: WorkplaceDispatch, ref: buildingId, params: { buildingId,
+  recruit: RecruitSegment | null }, reserved: recruit !== null }`; build = `recruit ? segments.prefix(recruit, door) :
+  door` with `door = choreo('WORKER_DISPATCH').goToDoorAndEnter(buildingId).toJobBuild()`. No `restorable`: building
+  removal cancels the job, so a saved job's building exists (asserted on restore). `onCompleted` deletes the demand;
+  `onFailed` / `onUnitRemoved` reset `committedUnitId` (fixes the dead-unit leak). Both go through
+  `committedDemandOrThrow` (the demand of `ref` must be committed to that unit) — the `findByUnit` scan is gone.
+- **Both paths are owned**: specialists via `jobs.assign(unit, spec)` (+ `assignWorker` at dispatch, as before);
+  recruits via `dispatchRecruitment(type, player, { target, buildSpec })`. Behaviour change: the recruit job now
+  continues to the door and enters (before, the AUTO_RECRUIT job ended at the transform and the home assignment
+  walked the worker in), and the demand stays committed until that job completes (before: deleted at
+  `unit:recruited`). `unit:recruited` still assigns the home, found via `commitments.get(unit).ref` (only for
+  `WorkplaceDispatch` owners).
+- **Staffed demands are dropped**: the drain deletes an uncommitted demand whose building is already at max
+  occupants — a dispatch that failed after the home assignment (specialist: at dispatch; recruit: at the transform)
+  leaves its unit as the worker, so no second unit is sent.
+- **Building removed**: `jobs.cancel` for `unitsOwnedBy(WorkplaceDispatch, buildingId)` (pile reservation released by
+  the TRANSFORM_* `onAbort` hook — a carrier walking to the axe no longer transforms for a gone building), then the
+  demand is deleted.
+- **Restore**: `onRestoreComplete` first calls `restoreCommittedDemands()` (demand per WorkplaceDispatch commitment,
+  from `paramsOf`, committed to its unit, occupancy check bypassed), then replays `forEachCompletedBuilding` as before.
+- **Removed**: the `settler:taskCompleted` / `settler:taskFailed` subscriptions, `UnitDemandJobHandlers` use,
+  `assignJob` / `terrain` in `BuildingDemandSystemConfig` (now `jobs: JobService`). `IntervalDrain` is still
+  imported from `systems/unit-demand-loop.ts` (moves in Cleanup).
+- **Outside scope (Core fix)**: `JobService.paramsOf` read `runtimes.get(id)!.job` before the pending resumes and threw
+  for a restored job of a unit without a runtime (a carrier with no home); it now checks the pending resume first.
+- **For Cleanup**: the legacy no-`buildSpec`/no-`buildJob` default of `dispatchRecruitment` (`createRecruitmentJob`
+  AUTO_RECRUIT of kind WorkplaceDispatch) has no caller any more; `executeLegacyDirectRecruitment` /
+  `createDirectTransformJob` are reachable only through Construction's legacy `buildJob`.
+- **Tests**: `tests/unit/integration/jobs/workplace-dispatch.spec.ts` — commitments of both paths; specialist and
+  recruit saved mid-walk resume and fill the building once (no second unit; failed before: the jobs were lost on
+  load); specialist / recruit killed mid-walk → new dispatch; building removed mid-walk cancels the job
+  (recruit case failed before: the carrier kept walking and transformed).

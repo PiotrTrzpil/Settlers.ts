@@ -1,15 +1,16 @@
 /**
  * BuildingDemandSystem — orchestrates "building needs a worker".
  *
- * Owns a Map<buildingId, BuildingDemand>. On each tick, iterates
- * pending (uncommitted) demands and tries to fulfill them:
- *   1. Find idle specialist → WORKER_DISPATCH choreo job
- *   2. Find idle carrier → RECRUIT_TO_WORKPLACE or
- *      DIRECT_RECRUIT_TO_WORKPLACE choreo job
- *   3. No candidate → retry next tick
+ * Owns a Map<buildingId, BuildingDemand>. On each drain, iterates pending (uncommitted) demands
+ * and tries to fulfill them with an owned `WorkplaceDispatch` job (ref = building id):
+ *   1. Idle specialist → walks to the door and enters
+ *   2. Idle carrier → recruit segment (tool pile / in place) + walk to the door and enter
+ *   3. No candidate → retry next drain
  *
- * Listens to building:completed, building:workerLost, building:removed
- * and settler:taskCompleted / settler:taskFailed for lifecycle management.
+ * The demand stays committed to its unit until the job ends: completion fulfills it; failure,
+ * preemption and unit removal re-open it (direct handler calls — see workplace-dispatch-kind.ts).
+ * Building removal cancels the unit's job. Listens to building:completed, building:workerLost,
+ * building:removed and unit:recruited (a recruit gets its home assignment at the transform).
  */
 
 import type { TickSystem } from '../../core/tick-system';
@@ -21,20 +22,17 @@ import type { BuildingType } from '../../buildings/building-type';
 import { getBuildingMaxOccupants } from '../../buildings/types';
 import type { UnitType } from '../../core/unit-types';
 import type { Race } from '../../core/race';
-import type { ChoreoJobState } from '../../systems/choreo';
+import { JobKind } from '../../systems/choreo';
 import type { DispatchRecruitmentOpts } from '../recruit';
-import { choreo, type ChoreoBuilderContext } from '../../systems/choreo/choreo-builder';
-import type { TerrainData } from '../../terrain';
+import type { JobService } from '../settler-tasks';
 import { getBuildingWorkerInfo } from '../../data/game-data-access';
 import { createLogger } from '@/utilities/logger';
-import type { Tile } from '@/game/core/coordinates';
+import { IntervalDrain } from '../../systems/unit-demand-loop';
 import {
-    IntervalDrain,
-    handleDemandJobCompleted,
-    handleDemandJobFailed,
-    type UnitDemandJobHandlers,
-} from '../../systems/unit-demand-loop';
-import { JobKind } from '../../systems/choreo/types';
+    workplaceDispatchSpec,
+    type WorkplaceDispatchOwner,
+    type WorkplaceDispatchParams,
+} from './workplace-dispatch-kind';
 
 const log = createLogger('BuildingDemand');
 
@@ -45,24 +43,22 @@ const TICK_INTERVAL = 1.0; // seconds between demand scans
 export interface BuildingDemandSystemConfig {
     gameState: GameState;
     eventBus: EventBus;
-    terrain: TerrainData;
+    jobs: JobService;
     findIdleSpecialist: (unitType: UnitType, player: number, nearX: number, nearY: number) => number | null;
-    assignJob: (unitId: number, job: ChoreoJobState, moveTo?: Tile) => boolean;
     assignWorkerToBuilding: (settlerId: number, buildingId: number) => void;
-    /** Full recruitment dispatch — find candidate, build choreo, assign job, register transform. */
-    dispatchRecruitment: (unitType: UnitType, player: number, opts?: DispatchRecruitmentOpts) => number | null;
+    /** Recruitment dispatch — find a carrier + source, reserve it, assign the spec built by `opts.buildSpec`. */
+    dispatchRecruitment: (unitType: UnitType, player: number, opts: DispatchRecruitmentOpts) => number | null;
     /** Current assigned worker count for a building (from WorkerAssignments.getOccupantCount). */
     getOccupantCount: (buildingId: number) => number;
 }
 
 // ─── System ──────────────────────────────────────────────────
 
-export class BuildingDemandSystem implements TickSystem {
+export class BuildingDemandSystem implements TickSystem, WorkplaceDispatchOwner {
     private readonly gameState: GameState;
     private readonly eventBus: EventBus;
-    private readonly choreoCtx: ChoreoBuilderContext;
+    private readonly jobs: JobService;
     private readonly findIdleSpecialist: BuildingDemandSystemConfig['findIdleSpecialist'];
-    private readonly assignJob: BuildingDemandSystemConfig['assignJob'];
     private readonly assignWorkerToBuilding: BuildingDemandSystemConfig['assignWorkerToBuilding'];
     private readonly dispatchRecruitment: BuildingDemandSystemConfig['dispatchRecruitment'];
     private readonly getOccupantCount: BuildingDemandSystemConfig['getOccupantCount'];
@@ -71,32 +67,11 @@ export class BuildingDemandSystem implements TickSystem {
     private readonly demands = new Map<number, BuildingDemand>();
     private readonly drain = new IntervalDrain(TICK_INTERVAL);
 
-    private readonly jobHandlers: UnitDemandJobHandlers<BuildingDemand> = {
-        ownsKind: kind => kind === JobKind.WorkplaceDispatch,
-        findByUnit: unitId => {
-            for (const demand of this.demands.values()) {
-                if (demand.committedUnitId === unitId) {
-                    return demand;
-                }
-            }
-            return undefined;
-        },
-        onJobCompleted: (demand, unitId) => {
-            this.demands.delete(demand.buildingId);
-            log.debug(`Demand fulfilled: unit ${unitId} entered building ${demand.buildingId}`);
-        },
-        onJobFailed: (demand, unitId) => {
-            demand.committedUnitId = null;
-            log.debug(`Dispatch failed: unit ${unitId}, will retry building ${demand.buildingId}`);
-        },
-    };
-
     constructor(config: BuildingDemandSystemConfig) {
         this.gameState = config.gameState;
         this.eventBus = config.eventBus;
-        this.choreoCtx = { gameState: config.gameState, terrain: config.terrain };
+        this.jobs = config.jobs;
         this.findIdleSpecialist = config.findIdleSpecialist;
-        this.assignJob = config.assignJob;
         this.assignWorkerToBuilding = config.assignWorkerToBuilding;
         this.dispatchRecruitment = config.dispatchRecruitment;
         this.getOccupantCount = config.getOccupantCount;
@@ -139,22 +114,12 @@ export class BuildingDemandSystem implements TickSystem {
         });
 
         this.subscriptions.subscribe(this.eventBus, 'building:removed', ({ buildingId }) => {
-            this.demands.delete(buildingId);
+            this.removeBuilding(buildingId);
         });
 
-        // When a carrier transforms into a specialist, assign the new worker to its building.
-        // The carrier recruitment path (dispatchCarrier) doesn't call assignWorkerToBuilding
-        // at dispatch time — the assignment happens here after the transformation completes.
+        // A recruiting carrier becomes the building's worker at its transform (the job then walks it in).
         this.subscriptions.subscribe(this.eventBus, 'unit:recruited', ({ unitId }) => {
             this.handleUnitTransformed(unitId);
-        });
-
-        this.subscriptions.subscribe(this.eventBus, 'settler:taskCompleted', ({ unitId, kind }) => {
-            handleDemandJobCompleted(this.jobHandlers, unitId, kind);
-        });
-
-        this.subscriptions.subscribe(this.eventBus, 'settler:taskFailed', ({ unitId, kind }) => {
-            handleDemandJobFailed(this.jobHandlers, unitId, kind);
         });
     }
 
@@ -173,7 +138,22 @@ export class BuildingDemandSystem implements TickSystem {
     }
 
     // ================================================================
-    // Internal — demand creation
+    // WorkplaceDispatch outcomes (called by the kind handler)
+    // ================================================================
+
+    dispatchCompleted(buildingId: number, unitId: number): void {
+        this.committedDemandOrThrow(buildingId, unitId);
+        this.demands.delete(buildingId);
+        log.debug(`Demand fulfilled: unit ${unitId} entered building ${buildingId}`);
+    }
+
+    dispatchEnded(buildingId: number, unitId: number): void {
+        this.committedDemandOrThrow(buildingId, unitId).committedUnitId = null;
+        log.debug(`Dispatch of unit ${unitId} ended early, will retry building ${buildingId}`);
+    }
+
+    // ================================================================
+    // Demand creation
     // ================================================================
 
     addDemandFromBuilding(buildingId: number, buildingType: BuildingType, race: Race): void {
@@ -181,20 +161,48 @@ export class BuildingDemandSystem implements TickSystem {
             return;
         } // already pending
 
-        const entity = this.gameState.getEntityOrThrow(buildingId, 'building requesting worker demand');
+        // Skip if building already has its maximum number of workers assigned
+        if (this.isStaffed(buildingId, buildingType)) {
+            return;
+        }
 
+        const demand = this.createDemand(buildingId, buildingType, race);
+        if (demand) {
+            this.demands.set(buildingId, demand);
+            log.debug(`Demand added: building ${buildingId} needs unit type ${demand.unitType}`);
+        }
+    }
+
+    /**
+     * Restore: re-create the committed demand of every restored WorkplaceDispatch job (from its
+     * commitment + params; the job itself resumes later, in onRestoreResume). Run before the
+     * completed buildings' demands are replayed, so those see the demand and do not dispatch twice.
+     */
+    restoreCommittedDemands(): void {
+        for (const unitId of this.jobs.commitments.unitsOwnedBy(JobKind.WorkplaceDispatch)) {
+            const { buildingId } = this.jobs.paramsOf(unitId)! as WorkplaceDispatchParams;
+            if (this.demands.has(buildingId)) {
+                throw new Error(`Building ${buildingId} has two restored WorkplaceDispatch jobs (unit ${unitId})`);
+            }
+            // Building removal cancels the job, so a saved job's building exists.
+            const building = this.gameState.getEntityOrThrow(buildingId, 'building of a restored workplace dispatch');
+            const demand = this.createDemand(buildingId, building.subType as BuildingType, building.race);
+            if (!demand) {
+                throw new Error(`Building ${buildingId} of restored dispatch (unit ${unitId}) needs no worker`);
+            }
+            demand.committedUnitId = unitId;
+            this.demands.set(buildingId, demand);
+        }
+    }
+
+    /** The demand of a building type that has workers; null for buildings without one. */
+    private createDemand(buildingId: number, buildingType: BuildingType, race: Race): BuildingDemand | null {
+        const entity = this.gameState.getEntityOrThrow(buildingId, 'building requesting worker demand');
         const workerInfo = getBuildingWorkerInfo(race, buildingType);
         if (!workerInfo) {
-            return;
+            return null;
         }
-
-        // Skip if building already has its maximum number of workers assigned
-        const currentOccupants = this.getOccupantCount(buildingId);
-        if (currentOccupants >= getBuildingMaxOccupants(buildingType)) {
-            return;
-        }
-
-        const demand: BuildingDemand = {
+        return {
             buildingId,
             unitType: workerInfo.unitType,
             // eslint-disable-next-line no-restricted-syntax -- value is nullable by API contract; null coercion
@@ -203,13 +211,14 @@ export class BuildingDemandSystem implements TickSystem {
             race,
             committedUnitId: null,
         };
+    }
 
-        this.demands.set(buildingId, demand);
-        log.debug(`Demand added: building ${buildingId} needs` + ` unit type ${demand.unitType}`);
+    private isStaffed(buildingId: number, buildingType: BuildingType): boolean {
+        return this.getOccupantCount(buildingId) >= getBuildingMaxOccupants(buildingType);
     }
 
     // ================================================================
-    // Internal — demand fulfillment
+    // Demand fulfillment
     // ================================================================
 
     private drainDemands(): void {
@@ -220,7 +229,15 @@ export class BuildingDemandSystem implements TickSystem {
             }
 
             // Discard if building no longer exists
-            if (!this.gameState.getEntity(buildingId)) {
+            const building = this.gameState.getEntity(buildingId);
+            if (!building) {
+                this.demands.delete(buildingId);
+                continue;
+            }
+
+            // A dispatch that ended early may have left its unit with the home assignment (specialists are
+            // assigned at dispatch, recruits at the transform) — that unit fills the building.
+            if (this.isStaffed(buildingId, building.subType as BuildingType)) {
                 this.demands.delete(buildingId);
                 continue;
             }
@@ -240,9 +257,10 @@ export class BuildingDemandSystem implements TickSystem {
             return;
         }
 
-        // 2. Try carrier recruitment — RecruitSystem handles everything
+        // 2. Try carrier recruitment — RecruitSystem picks the carrier + source and assigns our spec
         const carrierId = this.dispatchRecruitment(demand.unitType, demand.player, {
             target: { x: building.x, y: building.y },
+            buildSpec: (_carrierId, segment) => workplaceDispatchSpec(demand.buildingId, segment),
         });
         if (carrierId === null) {
             return;
@@ -253,33 +271,46 @@ export class BuildingDemandSystem implements TickSystem {
     }
 
     private dispatchSpecialist(unitId: number, demand: BuildingDemand): void {
-        const job = choreo('WORKER_DISPATCH', JobKind.WorkplaceDispatch)
-            .goToDoorAndEnter(demand.buildingId, this.choreoCtx)
-            .build();
-
-        const assigned = this.assignJob(unitId, job);
-        if (!assigned) {
+        if (!this.jobs.assign(unitId, workplaceDispatchSpec(demand.buildingId, null))) {
             return;
         }
 
         this.assignWorkerToBuilding(unitId, demand.buildingId);
         demand.committedUnitId = unitId;
 
-        log.debug(`Specialist ${unitId} dispatched to` + ` building ${demand.buildingId}`);
+        log.debug(`Specialist ${unitId} dispatched to building ${demand.buildingId}`);
     }
 
     // ================================================================
-    // Internal — job lifecycle callbacks
+    // Lifecycle
     // ================================================================
 
-    private handleUnitTransformed(entityId: number): void {
-        for (const [buildingId, demand] of this.demands) {
-            if (demand.committedUnitId === entityId) {
-                this.assignWorkerToBuilding(entityId, buildingId);
-                this.demands.delete(buildingId);
-                log.debug(`Recruited unit ${entityId} assigned` + ` to building ${buildingId}`);
-                return;
-            }
+    /** Building gone: cancel its dispatched unit's job (owner cancel — no callback) and drop the demand. */
+    private removeBuilding(buildingId: number): void {
+        for (const unitId of this.jobs.commitments.unitsOwnedBy(JobKind.WorkplaceDispatch, buildingId)) {
+            this.jobs.cancel(unitId, JobKind.WorkplaceDispatch);
         }
+        this.demands.delete(buildingId);
+    }
+
+    private handleUnitTransformed(unitId: number): void {
+        // Nullable by design: unit:recruited fires for every transform (recruit queue, construction, barracks).
+        const commitment = this.jobs.commitments.get(unitId);
+        if (commitment?.owner !== JobKind.WorkplaceDispatch) {
+            return;
+        }
+        const buildingId = commitment.ref;
+        this.committedDemandOrThrow(buildingId, unitId);
+        this.assignWorkerToBuilding(unitId, buildingId);
+        log.debug(`Recruited unit ${unitId} assigned to building ${buildingId}`);
+    }
+
+    private committedDemandOrThrow(buildingId: number, unitId: number): BuildingDemand {
+        const demand = this.demands.get(buildingId);
+        if (!demand || demand.committedUnitId !== unitId) {
+            const found = demand ? `committed to ${demand.committedUnitId}` : 'missing';
+            throw new Error(`WorkplaceDispatch of unit ${unitId}: demand of building ${buildingId} is ${found}`);
+        }
+        return demand;
     }
 }
