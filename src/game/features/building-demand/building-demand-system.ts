@@ -27,7 +27,7 @@ import type { DispatchRecruitmentOpts } from '../recruit';
 import type { JobService } from '../settler-tasks';
 import { getBuildingWorkerInfo } from '../../data/game-data-access';
 import { createLogger } from '@/utilities/logger';
-import { IntervalDrain } from '../../systems/unit-demand-loop';
+import { IntervalDrain } from '../../systems/interval-drain';
 import {
     workplaceDispatchSpec,
     type WorkplaceDispatchOwner,

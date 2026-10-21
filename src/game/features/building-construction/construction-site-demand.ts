@@ -16,7 +16,7 @@ import { EventSubscriptionManager } from '../../event-bus';
 import { UnitType } from '../../core/unit-types';
 import { EntityType } from '../../entity';
 import { JobKind } from '../../systems/choreo';
-import { IntervalDrain } from '../../systems/unit-demand-loop';
+import { IntervalDrain } from '../../systems/interval-drain';
 import type { DispatchRecruitmentOpts } from '../recruit';
 import type { JobService } from '../settler-tasks';
 import type { ConstructionSiteManager, IndexedTile } from './construction-site-manager';
