@@ -29,6 +29,7 @@ export const AiPlayerFeature: FeatureDefinition = {
             gameState: ctx.gameState,
             terrain: ctx.terrain,
             executeCommand: ctx.executeCommand,
+            unitCommitments: ctx.unitCommitments,
             isGameOver: () => victoryExports.victorySystem.getResult().ended,
             hasSite: id => constructionExports.constructionSiteManager.hasSite(id),
             getPlacementFilter: () => createTerritoryPlacementFilter(territoryManager, ctx.gameState.playerRaces),

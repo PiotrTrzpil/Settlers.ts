@@ -13,6 +13,7 @@ import type { Entity } from '@/game/entity';
 import type { GameState } from '@/game/game-state';
 import type { Race } from '@/game/core/race';
 import type { Command } from '@/game/commands/command-types';
+import type { UnitCommitmentQuery } from '@/game/systems/unit-commitment';
 import {
     getPlayerBuildings,
     getPlayerMilitaryUnits,
@@ -27,6 +28,7 @@ export class MilitaryPlanner {
     private readonly gameState: GameState;
     private readonly hasSite: (buildingId: number) => boolean;
     private readonly executeCommand: (cmd: Command) => void;
+    private readonly unitCommitments: UnitCommitmentQuery;
     private readonly player: number;
     private readonly race: Race;
 
@@ -37,12 +39,14 @@ export class MilitaryPlanner {
         gameState: GameState;
         hasSite: (buildingId: number) => boolean;
         executeCommand: (cmd: Command) => void;
+        unitCommitments: UnitCommitmentQuery;
         player: number;
         race: Race;
     }) {
         this.gameState = deps.gameState;
         this.hasSite = deps.hasSite;
         this.executeCommand = deps.executeCommand;
+        this.unitCommitments = deps.unitCommitments;
         this.player = deps.player;
         this.race = deps.race;
     }
@@ -116,19 +120,12 @@ export class MilitaryPlanner {
     }
 
     /**
-     * Get idle military units — soldiers not currently moving.
-     * A unit is idle when it has no active path in the movement system.
+     * Get idle military units — soldiers with no commitment (not walking under a move command,
+     * not garrisoned, not held by a siege) and not hidden inside a building.
      */
     private getIdleMilitaryUnits(): readonly Entity[] {
-        const allMilitary = getPlayerMilitaryUnits(this.gameState, this.player);
-        const idle: Entity[] = [];
-        for (const unit of allMilitary) {
-            const unitState = this.gameState.unitStates.get(unit.id);
-            // No movement state or empty path means the unit is idle
-            if (!unitState || unitState.path.length === 0) {
-                idle.push(unit);
-            }
-        }
-        return idle;
+        return getPlayerMilitaryUnits(this.gameState, this.player).filter(
+            unit => this.unitCommitments.isIdle(unit.id) && !unit.hidden
+        );
     }
 }
