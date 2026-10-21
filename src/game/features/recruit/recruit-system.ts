@@ -1,33 +1,43 @@
 /**
- * RecruitSystem — player-queued carrier-to-specialist transformation.
+ * RecruitSystem — carrier-to-specialist recruitment dispatch + the player-queued recruit queue.
  *
- * Drains a per-type queue populated via enqueue() (from the
- * recruit_specialist command). Supports a camera-center hint so the
- * nearest carrier / tool pile to the current view is chosen first;
- * without a hint the carrier closest to any available tool pile wins.
+ * Dispatch picks (carrier, source) and hands the caller a {@link RecruitSegment}; with
+ * `opts.buildSpec` the caller returns the JobSpec of its own JobKind (whose `build` prefixes its
+ * continuation with `segments.prefix(segment, …)`), and RecruitSystem reserves the source and
+ * assigns it via `jobs.assign`. The player queue (drained here, camera-center hint supported)
+ * dispatches stand-alone `Recruit` jobs.
  *
- * Construction worker recruitment is handled by ConstructionSiteDemandSystem.
- * Building-worker demands (specialist → workplace) are handled by
- * BuildingDemandSystem.
+ * TRANSITIONAL (deleted in Cleanup): without `buildSpec`, the legacy path assigns a
+ * `ChoreoJobState` (`opts.buildJob`, or the default AUTO_RECRUIT / BUILDING_RECRUIT job of kind
+ * WorkplaceDispatch that building-demand routes by broadcast).
  */
 
 import type { TickSystem } from '../../core/tick-system';
 import type { GameState } from '../../game-state';
-import { EventSubscriptionManager, type EventBus } from '../../event-bus';
+import { EventSubscriptionManager } from '../../event-bus';
 import { UnitType } from '../../core/unit-types';
 import { EMaterialType } from '../../economy/material-type';
-import type { UnitTransformer } from './unit-transformer';
+import type { UnitTransformer, TransformSource } from './unit-transformer';
 import type { ToolSourceResolver, MaterialCost, InventorySide } from './tool-source-resolver';
 import { choreo } from '../../systems/choreo/choreo-builder';
 import { JobKind } from '../../systems/choreo/types';
 import type { IdleCarrierPool } from '../carriers';
+import type { JobService } from '../settler-tasks';
 import type { Race } from '../../core/race';
-import type { ChoreoJobState } from '../../systems/choreo';
-import { SPECIALIST_TOOL_MAP } from './specialist-tool-map';
-import { createRecruitmentJob } from './recruitment-job';
+import type { ChoreoJobState, JobSpec } from '../../systems/choreo';
+import { createRecruitmentJob, createDirectTransformJob } from './recruitment-job';
+import { recruitJobSpec } from './recruit-job-kind';
+import type { RecruitSegment, RecruitSegments } from './recruit-segments';
+import {
+    RecruitCandidateFinder,
+    toolMaterialOf,
+    type CandidateSearchOpts,
+    type RecruitmentCandidate,
+} from './recruit-candidates';
 import { createLogger } from '@/utilities/logger';
-import { query } from '../../ecs';
 import type { Tile } from '@/game/core/coordinates';
+
+export type { TileWithPile, RecruitmentCandidate } from './recruit-candidates';
 
 const log = createLogger('RecruitSystem');
 
@@ -35,26 +45,20 @@ const QUEUE_DRAIN_INTERVAL = 0.5; // seconds
 
 // ─── Public types ─────────────────────────────────────────────────────
 
-export type TileWithPile = Tile & { pileEntityId: number };
+/** Builds the JobSpec that runs `segment` (and the caller's continuation) on the chosen carrier. */
+export type RecruitSpecBuilder = (carrierId: number, segment: RecruitSegment) => JobSpec;
 
-/** Result of findRecruitmentCandidate — carrier + optional tool pile. */
-export interface RecruitmentCandidate {
-    carrierId: number;
-    toolPile: TileWithPile | null;
-    /** Present when dispatched via dispatchRecruitmentFromBuilding with a custom buildJob. */
-    reservationId?: number;
-}
-
-/** Options for dispatchRecruitment. */
-export interface DispatchRecruitmentOpts {
-    /** Destination after recruitment (optimizes carrier→tool→target distance). */
-    target?: Tile;
-    /** Camera-center hint (for player-queued recruitment from UI). */
-    hint?: Tile;
+/** Options for dispatchRecruitment / dispatchRecruitmentFromPile. */
+export interface DispatchRecruitmentOpts extends CandidateSearchOpts {
     /**
-     * Additional choreo steps appended after the recruitment prefix.
-     * Receives the ChoreoBuilder with walk-to-tool + transform already added,
-     * and should return the extended ChoreoJobState.
+     * Owned-job path: the JobSpec of the caller's kind for the chosen carrier + segment. The
+     * caller's `build` must start with `segments.prefix(segment, …)` (or `segments.nodes(segment)`)
+     * and set `reserved: true`. Mutually exclusive with `buildJob`.
+     */
+    buildSpec?: RecruitSpecBuilder;
+    /**
+     * TRANSITIONAL (deleted in Cleanup): legacy ChoreoJobState with the recruit prefix
+     * (ChoreoBuilder.transformRecruit*), assigned via `assignJob`.
      */
     buildJob?: (candidate: RecruitmentCandidate) => ChoreoJobState;
 }
@@ -74,10 +78,12 @@ interface QueueEntry {
 
 export interface RecruitSystemConfig {
     gameState: GameState;
-    eventBus: EventBus;
     idleCarrierPool: IdleCarrierPool;
     unitTransformer: UnitTransformer;
     toolSourceResolver: ToolSourceResolver;
+    segments: RecruitSegments;
+    jobs: JobService;
+    /** TRANSITIONAL (deleted in Cleanup): legacy job assignment. */
     assignJob: (unitId: number, job: ChoreoJobState, moveTo?: Tile) => boolean;
     /** Rejects carriers in territory pockets disconnected from the reference tile. */
     territoryCheck: (a: Tile, b: Tile, player: number) => boolean;
@@ -87,44 +93,27 @@ export interface RecruitSystemConfig {
 
 export class RecruitSystem implements TickSystem {
     private readonly gameState: GameState;
-    private readonly eventBus: EventBus;
     private readonly idleCarrierPool: IdleCarrierPool;
     private readonly unitTransformer: UnitTransformer;
     private readonly toolSourceResolver: ToolSourceResolver;
+    private readonly segments: RecruitSegments;
+    private readonly jobs: JobService;
     private readonly assignJob: RecruitSystemConfig['assignJob'];
+    private readonly candidates: RecruitCandidateFinder;
     private readonly subscriptions = new EventSubscriptionManager();
-    private readonly territoryCheck: RecruitSystemConfig['territoryCheck'];
 
     private readonly queue = new Map<UnitType, QueueEntry>();
     private queueTimer = 0;
 
     constructor(config: RecruitSystemConfig) {
         this.gameState = config.gameState;
-        this.eventBus = config.eventBus;
         this.idleCarrierPool = config.idleCarrierPool;
         this.unitTransformer = config.unitTransformer;
         this.toolSourceResolver = config.toolSourceResolver;
+        this.segments = config.segments;
+        this.jobs = config.jobs;
         this.assignJob = config.assignJob;
-        this.territoryCheck = config.territoryCheck;
-    }
-
-    /**
-     * Build a carrier eligibility filter that rejects carriers in disconnected
-     * territory pockets. Returns undefined if no reference point is available.
-     */
-    private buildTerritoryFilter(ref: Tile | undefined, player: number): ((entityId: number) => boolean) | undefined {
-        if (!ref) {
-            return undefined;
-        }
-        const check = this.territoryCheck;
-        const gs = this.gameState;
-        return (entityId: number) => {
-            const e = gs.getEntity(entityId);
-            if (!e) {
-                return false;
-            }
-            return check(e, ref, player);
-        };
+        this.candidates = new RecruitCandidateFinder(config);
     }
 
     // =====================================================================
@@ -132,83 +121,36 @@ export class RecruitSystem implements TickSystem {
     // =====================================================================
 
     /**
-     * Find the best carrier to recruit as the given specialist type.
-     *
-     * Derives tool material from SPECIALIST_TOOL_MAP internally — callers
-     * never need to know about tool piles or tool sources.
-     *
-     * opts.target — destination after recruitment (building, construction site).
-     *   Optimizes total carrier→tool + tool→target distance.
-     * opts.hint — camera-center or reference point for "nearest" when no target
-     *   is known (e.g. player-queued recruitment from UI).
-     *
-     * When neither target nor hint is given, finds the carrier+tool pair with
-     * the shortest carrier→tool distance.
+     * Find the best carrier to recruit as the given specialist type (tool pile included when the
+     * type needs one). opts.target optimizes carrier→tool→target; opts.hint picks the tool nearest
+     * the hint; neither minimizes carrier→tool.
      */
     findRecruitmentCandidate(
         unitType: UnitType,
         player: number,
-        opts?: {
-            target?: Tile;
-            hint?: Tile;
-        }
+        opts?: CandidateSearchOpts
     ): RecruitmentCandidate | null {
-        // eslint-disable-next-line no-restricted-syntax -- index access returns undefined for missing keys
-        const toolMaterial = SPECIALIST_TOOL_MAP[unitType] ?? null;
-
-        if (toolMaterial !== null) {
-            const ref = opts?.target ?? opts?.hint;
-            return this.findToolBasedCandidate(toolMaterial, player, opts, this.buildTerritoryFilter(ref, player));
-        }
-
-        // No tool needed — find nearest idle carrier
-        const ref = opts?.target ?? opts?.hint;
-        const filter = this.buildTerritoryFilter(ref, player);
-        if (ref) {
-            const carrierId = this.idleCarrierPool.findNearest(ref.x, ref.y, player, filter);
-            return carrierId !== null ? { carrierId, toolPile: null } : null;
-        }
-
-        // No reference point — find any idle carrier
-        const carrierId = this.idleCarrierPool.findNearest(0, 0, player, filter);
-        return carrierId !== null ? { carrierId, toolPile: null } : null;
+        return this.candidates.find(unitType, player, opts);
     }
 
     /**
-     * Full recruitment dispatch — find candidate, build choreo, assign job,
-     * register transform. Returns carrierId on success, null on failure.
+     * Full recruitment dispatch — find a candidate, reserve its source, assign the job.
+     * Returns the carrier id on success, null otherwise (nothing stays reserved).
      *
-     * Callers provide opts.buildJob to customize the choreo (e.g. append
-     * walk-to-site → DIG_TILE after the recruitment prefix). If omitted,
-     * the default AUTO_RECRUIT job is used.
-     *
-     * This is the primary API for demand systems — they never need to touch
-     * UnitTransformer, tool piles, or choreo building directly.
+     * With opts.buildSpec the job is the caller's owned kind; otherwise TRANSITIONAL legacy
+     * (opts.buildJob, or the default AUTO_RECRUIT WorkplaceDispatch job).
      */
     dispatchRecruitment(unitType: UnitType, player: number, opts?: DispatchRecruitmentOpts): number | null {
-        const candidate = this.findRecruitmentCandidate(unitType, player, opts);
+        const candidate = this.candidates.find(unitType, player, opts);
         if (!candidate) {
             return null;
         }
-
-        // eslint-disable-next-line no-restricted-syntax -- index access returns undefined for missing keys
-        const toolMaterial = SPECIALIST_TOOL_MAP[unitType] ?? null;
-
-        if (toolMaterial !== null) {
-            return this.executeToolRecruitment(candidate, unitType, toolMaterial, opts);
-        }
-
-        return this.executeDirectRecruitment(candidate.carrierId, unitType, player);
+        return this.dispatchCandidate(candidate, unitType, opts);
     }
 
     /**
-     * Dispatch recruitment using a specific pile as the tool source.
-     *
-     * Unlike dispatchRecruitment() which scans for the nearest available tool pile,
-     * this targets a known pile entity — e.g. a weapon on a barracks output slot.
-     * The tool material is derived from the pile entity's subType.
-     *
-     * Returns carrierId on success, null on failure.
+     * Dispatch recruitment using a specific pile as the tool source (e.g. a weapon on a barracks
+     * output slot). Returns the carrier id on success, null otherwise.
      */
     dispatchRecruitmentFromPile(
         unitType: UnitType,
@@ -216,38 +158,52 @@ export class RecruitSystem implements TickSystem {
         pileEntityId: number,
         opts?: DispatchRecruitmentOpts
     ): number | null {
-        // eslint-disable-next-line no-restricted-syntax -- index access returns undefined for missing keys
-        const toolMaterial = SPECIALIST_TOOL_MAP[unitType] ?? null;
+        const toolMaterial = toolMaterialOf(unitType);
         if (toolMaterial === null) {
             throw new Error(`dispatchRecruitmentFromPile: ${unitType} requires no tool — use dispatchRecruitment`);
         }
-
         const toolPile = this.toolSourceResolver.validatePile(pileEntityId, toolMaterial, player);
         if (!toolPile) {
             return null;
         }
-
-        const ref: Tile = toolPile;
-        const filter = this.buildTerritoryFilter(ref, player);
-        const carrierId = this.idleCarrierPool.findNearest(toolPile.x, toolPile.y, player, filter);
+        const carrierId = this.candidates.nearestCarrier(toolPile, player);
         if (carrierId === null) {
             return null;
         }
-
-        return this.executeToolRecruitment({ carrierId, toolPile }, unitType, toolMaterial, opts);
+        return this.dispatchCandidate({ carrierId, toolPile }, unitType, opts);
     }
 
     /**
-     * Dispatch recruitment consuming multiple materials from a specific building's inventory.
-     *
-     * Materials are reserved at dispatch time and withdrawn when the carrier arrives.
-     * If the carrier dies, reservations are released (no materials lost).
-     *
-     * The carrier walks to the first matching pile on the building, then the
-     * TRANSFORM_RECRUIT_BUILDING executor withdraws all costs and triggers the transform.
-     *
-     * @param side — 'output' (default) or 'input' — which inventory side to reserve from.
-     * Returns carrierId on success, null on failure.
+     * Owned-job dispatch consuming materials from a building's inventory (barracks training). The
+     * costs and side come from the charge the building's type registered
+     * (`segments.registerBuildingCharge`), so the TRANSFORM_RECRUIT_BUILDING hooks can re-resolve
+     * them after a load. The carrier walks to the first slot holding a cost material.
+     */
+    dispatchBuildingRecruitment(
+        unitType: UnitType,
+        player: number,
+        buildingId: number,
+        buildSpec: RecruitSpecBuilder
+    ): number | null {
+        const { costs, side } = this.segments.chargeFor(buildingId, unitType);
+        const found = this.findBuildingCarrier(player, buildingId, costs, side);
+        if (!found) {
+            return null;
+        }
+        const segment: RecruitSegment = {
+            targetUnitType: unitType,
+            source: 'building',
+            sourceId: buildingId,
+            at: found.at,
+        };
+        return this.assignSpec(found.carrierId, segment, buildSpec);
+    }
+
+    /**
+     * TRANSITIONAL (deleted in Cleanup; owned callers use dispatchBuildingRecruitment): legacy
+     * dispatch consuming `costs` from a building's `side` inventory. The materials are reserved for
+     * the carrier and withdrawn when it arrives; any early end of the job releases them.
+     * `opts.buildJob` gets `candidate.reservationId` (= the carrier id) for transformRecruitBuilding.
      */
     dispatchRecruitmentFromBuilding(
         unitType: UnitType,
@@ -257,52 +213,23 @@ export class RecruitSystem implements TickSystem {
         opts?: DispatchRecruitmentOpts,
         side: InventorySide = 'output'
     ): number | null {
-        // 1. Reserve all materials on the building
-        const handle = this.toolSourceResolver.reserveBuildingMaterials(buildingId, costs, side);
-        if (!handle) {
+        const found = this.findBuildingCarrier(player, buildingId, costs, side);
+        if (!found) {
             return null;
         }
-
-        // 2. Find a walk-to position (first slot with stock on the correct side)
-        const walkTo = this.toolSourceResolver.findBuildingSlotPosition(buildingId, costs, side);
-        if (!walkTo) {
-            this.toolSourceResolver.releaseBuildingReservation(handle.id);
-            return null;
-        }
-
-        // 3. Find nearest idle carrier
-        const filter = this.buildTerritoryFilter(walkTo, player);
-        const carrierId = this.idleCarrierPool.findNearest(walkTo.x, walkTo.y, player, filter);
-        if (carrierId === null) {
-            this.toolSourceResolver.releaseBuildingReservation(handle.id);
-            return null;
-        }
-
-        // 4. Build choreo: walk to building → withdraw + transform
+        const { carrierId, at } = found;
         const job = opts?.buildJob
-            ? opts.buildJob({ carrierId, toolPile: null, reservationId: handle.id })
+            ? opts.buildJob({ carrierId, toolPile: null, reservationId: carrierId })
             : choreo('BUILDING_RECRUIT', JobKind.WorkplaceDispatch)
-                  .goTo(walkTo, buildingId)
-                  .transformRecruitBuilding(unitType, handle.id)
+                  .goTo(at, buildingId)
+                  .transformRecruitBuilding(unitType, carrierId)
                   .target(buildingId)
                   .build();
-
-        // 5. Assign job and register transform with reservation release on death
-        const assigned = this.assignJob(carrierId, job, walkTo);
-        if (!assigned) {
-            this.toolSourceResolver.releaseBuildingReservation(handle.id);
+        const source: TransformSource = { kind: 'building', buildingId, costs, side };
+        if (!this.assignLegacy(carrierId, unitType, source, job, at)) {
             return null;
         }
-
-        const reservationId = handle.id;
-        this.unitTransformer.registerDirectTransform(carrierId, unitType, () => {
-            this.toolSourceResolver.releaseBuildingReservation(reservationId);
-        });
-
-        log.debug(
-            `Building recruit: carrier ${carrierId} → ${unitType} from building ${buildingId} ` +
-                `(reservation ${reservationId})`
-        );
+        log.debug(`Building recruit: carrier ${carrierId} → ${unitType} from building ${buildingId}`);
         return carrierId;
     }
 
@@ -325,19 +252,9 @@ export class RecruitSystem implements TickSystem {
                 existing.near = near;
             }
         } else {
-            this.queue.set(unitType, {
-                toolMaterial,
-                player,
-                race,
-                count,
-                near,
-            });
+            this.queue.set(unitType, { toolMaterial, player, race, count, near });
         }
-        const enqueued = this.queue.get(unitType);
-        if (!enqueued) {
-            throw new Error(`No queue entry for ${unitType} in RecruitSystem.enqueue`);
-        }
-        log.debug(`Enqueued ${count}× ${unitType}` + ` (total: ${enqueued.count})`);
+        log.debug(`Enqueued ${count}× ${unitType}` + ` (total: ${this.queue.get(unitType)!.count})`);
     }
 
     dequeue(unitType: UnitType, count: number): void {
@@ -384,18 +301,17 @@ export class RecruitSystem implements TickSystem {
     }
 
     // =====================================================================
-    // Queue drain (player-initiated)
+    // Queue drain (player-initiated) — stand-alone Recruit jobs
     // =====================================================================
 
     private drainQueue(): void {
         const justDispatched: number[] = [];
 
         for (const [unitType, entry] of this.queue) {
-            const carrierId = this.dispatchRecruitment(
-                unitType,
-                entry.player,
-                entry.near ? { hint: entry.near } : undefined
-            );
+            const carrierId = this.dispatchRecruitment(unitType, entry.player, {
+                ...(entry.near ? { hint: entry.near } : {}),
+                buildSpec: (_carrierId, segment) => recruitJobSpec(segment),
+            });
 
             if (carrierId !== null) {
                 entry.count--;
@@ -416,130 +332,105 @@ export class RecruitSystem implements TickSystem {
     // Internal — recruitment execution
     // =====================================================================
 
-    private executeToolRecruitment(
+    /** Route a chosen candidate to the owned (buildSpec) or legacy path. */
+    private dispatchCandidate(
         candidate: RecruitmentCandidate,
         unitType: UnitType,
-        toolMaterial: EMaterialType,
+        opts?: DispatchRecruitmentOpts
+    ): number | null {
+        if (opts?.buildSpec) {
+            if (opts.buildJob) {
+                throw new Error(`dispatchRecruitment(${unitType}): buildSpec and buildJob are mutually exclusive`);
+            }
+            return this.assignSpec(candidate.carrierId, segmentOf(candidate, unitType), opts.buildSpec);
+        }
+        return candidate.toolPile
+            ? this.executeLegacyToolRecruitment(candidate, unitType, opts)
+            : this.executeLegacyDirectRecruitment(candidate.carrierId, unitType);
+    }
+
+    /** Owned path: reserve the segment's source, assign the caller's spec; undo the reservation on failure. */
+    private assignSpec(carrierId: number, segment: RecruitSegment, buildSpec: RecruitSpecBuilder): number | null {
+        if (!this.segments.reserve(carrierId, segment)) {
+            return null;
+        }
+        const spec = buildSpec(carrierId, segment);
+        const assigned = segment.at
+            ? this.jobs.assign(carrierId, spec, { moveTo: segment.at })
+            : this.jobs.assign(carrierId, spec);
+        if (!assigned) {
+            this.segments.release(carrierId);
+            return null;
+        }
+        log.debug(`Carrier ${carrierId} dispatched (${spec.kind}) to transform into ${segment.targetUnitType}`);
+        return carrierId;
+    }
+
+    /** Nearest idle carrier for a building recruit + its walk goal; null if stock or carriers lack. */
+    private findBuildingCarrier(
+        player: number,
+        buildingId: number,
+        costs: readonly MaterialCost[],
+        side: InventorySide
+    ): { carrierId: number; at: Tile } | null {
+        if (!this.toolSourceResolver.hasBuildingMaterials(buildingId, costs, side)) {
+            return null;
+        }
+        const at = this.toolSourceResolver.findBuildingSlotPosition(buildingId, costs, side);
+        if (!at) {
+            return null;
+        }
+        const carrierId = this.candidates.nearestCarrier(at, player);
+        return carrierId === null ? null : { carrierId, at };
+    }
+
+    /** TRANSITIONAL: tool-pile recruitment with a legacy ChoreoJobState. */
+    private executeLegacyToolRecruitment(
+        candidate: RecruitmentCandidate,
+        unitType: UnitType,
         opts?: DispatchRecruitmentOpts
     ): number | null {
         const toolPile = candidate.toolPile!;
-
-        // Build choreo: either caller-provided or default AUTO_RECRUIT
         const job = opts?.buildJob
             ? opts.buildJob(candidate)
             : createRecruitmentJob(toolPile.pileEntityId, toolPile.x, toolPile.y, unitType);
-
-        const assigned = this.unitTransformer.assignAndRegisterTransform(
-            candidate.carrierId,
-            job,
-            unitType,
-            toolMaterial,
-            toolPile
-        );
-        return assigned ? candidate.carrierId : null;
+        const source: TransformSource = { kind: 'pile', pileEntityId: toolPile.pileEntityId };
+        const moveTo = { x: toolPile.x, y: toolPile.y };
+        return this.assignLegacy(candidate.carrierId, unitType, source, job, moveTo) ? candidate.carrierId : null;
     }
 
-    private executeDirectRecruitment(carrierId: number, unitType: UnitType, player: number): number | null {
-        const ok = this.unitTransformer.requestDirectTransform(carrierId, unitType, player);
-        return ok ? carrierId : null;
+    /** TRANSITIONAL: in-place transform (no tool) with the legacy AUTO_RECRUIT job. */
+    private executeLegacyDirectRecruitment(carrierId: number, unitType: UnitType): number | null {
+        // No moveTo — carrier transforms in place; passing own position causes moveUnit to fail
+        const job = createDirectTransformJob(unitType);
+        return this.assignLegacy(carrierId, unitType, { kind: 'direct' }, job) ? carrierId : null;
     }
 
-    // =====================================================================
-    // Internal — tool-based candidate search
-    // =====================================================================
-
-    /**
-     * Find the best (carrier, toolPile) pair for a tool-based recruitment.
-     *
-     * With hint: find tool nearest to hint, then carrier nearest to that tool.
-     * With target (no hint): iterate all idle carriers, find tool nearest to each,
-     *   minimize carrier→tool + tool→target.
-     * Neither: iterate all idle carriers, find tool nearest to each,
-     *   minimize carrier→tool distance only.
-     */
-    private findToolBasedCandidate(
-        toolMaterial: EMaterialType,
-        player: number,
-        opts?: { target?: Tile; hint?: Tile },
-        carrierFilter?: (entityId: number) => boolean
-    ): RecruitmentCandidate | null {
-        // Hint mode: find tool nearest to hint, then carrier nearest to tool
-        if (opts?.hint) {
-            return this.resolveToolWithHint(toolMaterial, opts.hint, player, carrierFilter);
+    /** TRANSITIONAL: reserve the source (+ legacy unit reservation), assign the legacy job, undo on failure. */
+    private assignLegacy(
+        carrierId: number,
+        unitType: UnitType,
+        source: TransformSource,
+        job: ChoreoJobState,
+        moveTo?: Tile
+    ): boolean {
+        if (!this.unitTransformer.reserveTransform(carrierId, unitType, source, true)) {
+            return false;
         }
-
-        // Iterate carriers, find best (carrier, tool) pair
-        return this.resolveToolByScan(toolMaterial, player, opts?.target, carrierFilter);
-    }
-
-    private resolveToolWithHint(
-        toolMaterial: EMaterialType,
-        hint: Tile,
-        player: number,
-        carrierFilter?: (entityId: number) => boolean
-    ): RecruitmentCandidate | null {
-        const toolPile = this.toolSourceResolver.findNearestToolPile(toolMaterial, hint.x, hint.y, player);
-        if (!toolPile) {
-            return null;
+        if (!this.assignJob(carrierId, job, moveTo)) {
+            this.unitTransformer.abortTransform(carrierId);
+            return false;
         }
-        const carrierId = this.idleCarrierPool.findNearest(toolPile.x, toolPile.y, player, carrierFilter);
-        if (carrierId === null) {
-            return null;
-        }
-        return { carrierId, toolPile };
-    }
-
-    /**
-     * Scan all idle carriers. For each, find the nearest tool pile and compute
-     * total trip cost: carrier→tool + (tool→target if target given).
-     */
-    private resolveToolByScan(
-        toolMaterial: EMaterialType,
-        player: number,
-        target?: Tile,
-        carrierFilter?: (entityId: number) => boolean
-    ): RecruitmentCandidate | null {
-        let best: RecruitmentCandidate | null = null;
-        let bestCost = Infinity;
-
-        const store = this.idleCarrierPool.carrierStore;
-
-        for (const [id, , entity] of query(store, this.gameState.store)) {
-            if (entity.player !== player) {
-                continue;
-            }
-            if (!this.idleCarrierPool.isIdle(id)) {
-                continue;
-            }
-            if (carrierFilter && !carrierFilter(id)) {
-                continue;
-            }
-
-            const toolPile = this.toolSourceResolver.findNearestToolPile(toolMaterial, entity.x, entity.y, player);
-            if (!toolPile) {
-                continue;
-            }
-
-            const cost = tripCost(entity.x, entity.y, toolPile.x, toolPile.y, target);
-            if (cost < bestCost) {
-                bestCost = cost;
-                best = { carrierId: id, toolPile };
-            }
-        }
-
-        return best;
+        log.debug(`Carrier ${carrierId} dispatched (legacy ${job.jobId}) to transform into ${unitType}`);
+        return true;
     }
 }
 
-/** Squared distance for carrier→tool leg, plus optional tool→target leg. */
-function tripCost(carrierX: number, carrierY: number, toolX: number, toolY: number, target?: Tile): number {
-    const cdx = carrierX - toolX;
-    const cdy = carrierY - toolY;
-    let cost = cdx * cdx + cdy * cdy;
-    if (target) {
-        const tdx = toolX - target.x;
-        const tdy = toolY - target.y;
-        cost += tdx * tdx + tdy * tdy;
+/** The segment of a found candidate: its tool pile, or a direct transform. */
+function segmentOf(candidate: RecruitmentCandidate, unitType: UnitType): RecruitSegment {
+    const pile = candidate.toolPile;
+    if (!pile) {
+        return { targetUnitType: unitType, source: 'direct', sourceId: null, at: null };
     }
-    return cost;
+    return { targetUnitType: unitType, source: 'pile', sourceId: pile.pileEntityId, at: { x: pile.x, y: pile.y } };
 }
