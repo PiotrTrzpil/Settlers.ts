@@ -8,6 +8,7 @@ import type { LuaRuntime } from '../lua-runtime';
 import type { IMapLandscape } from '@/resources/map/imap-landscape';
 import { isInMapBounds } from '@/game/core/coordinates';
 import { isPassable, isBuildable } from '@/game/systems/placement';
+import type { TerritoryQuery } from './territory-query';
 
 const log = new LogHandler('MapAPI');
 
@@ -20,6 +21,8 @@ export interface MapAPIContext {
     groundHeight?: Uint8Array;
     /** Ground type array for direct access */
     groundType?: Uint8Array;
+    /** Territory ownership lookup (absent when the territory feature is not wired in) */
+    territory?: TerritoryQuery;
 }
 
 /**
@@ -170,9 +173,9 @@ export function registerMapAPI(runtime: LuaRuntime, context: MapAPIContext): voi
     });
 
     // Map.GetOwner(x, y) - Returns player who owns territory at position
-    runtime.registerFunction('Map', 'GetOwner', (_x: number, _y: number) => {
-        // TODO: Implement territory ownership lookup
-        return -1; // -1 means no owner
+    runtime.registerFunction('Map', 'GetOwner', (x: number, y: number) => {
+        // -1 means no owner
+        return context.territory ? context.territory.getOwner({ x, y }) : -1;
     });
 
     // Map.FlattenGround(x, y, range) - Flatten terrain in area

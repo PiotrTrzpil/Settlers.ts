@@ -239,6 +239,7 @@ export class Game extends GameCore {
                     landscape: this.mapLoader.landscape,
                     playerRaces: this.playerRaces,
                     executeCommand: this.execute.bind(this),
+                    territory: this.services.territoryManager,
                 });
                 await service.initialize();
                 this._gameLoop.registerSystem(service, TickPhase.Scripting);
