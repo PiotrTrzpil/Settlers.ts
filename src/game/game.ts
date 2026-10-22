@@ -3,7 +3,8 @@ import { IMapLoader } from '@/resources/map/imap-loader';
 import { BuildingType } from './entity';
 import { GameCore } from './game-core';
 import { GameLoop } from './game-loop';
-import { SoundManager } from './audio';
+import { SoundManager, WorldSounds, AmbientSounds, loadJobSoundList } from './audio';
+import { createAmbientWorld } from './ambient-world';
 import { loadSavedRace } from './core/race';
 import { toastError } from './ui/toast-notifications';
 import { GameViewState } from './ui/game-view-state';
@@ -55,6 +56,11 @@ export class Game extends GameCore {
 
     /** Stop handle for the pathStraightness watcher — must be called in destroy() */
     private readonly _stopPathWatcher: () => void;
+    private readonly _stopSfxWatcher: () => void;
+    /** Positional sound effects for map activity (driven from the frame update callback) */
+    public readonly worldSounds: WorldSounds;
+    /** Background sounds picked from the terrain and buildings around the camera */
+    public readonly ambientSounds: AmbientSounds;
 
     /** Timeline capture instance (dev-only, null in production). */
     private _timelineCapture: TimelineCapture | null = null;
@@ -130,6 +136,33 @@ export class Game extends GameCore {
             .catch((err: unknown) => {
                 console.warn('Game: SoundManager initialization failed:', err);
             });
+
+        this.worldSounds = new WorldSounds({
+            eventBus: this.eventBus,
+            visualService: this.services.visualService,
+            getEntity: id => this.state.getEntity(id),
+            play: (name, gain, pan) => this.soundManager.playSound(name, gain, pan),
+        });
+        this.ambientSounds = new AmbientSounds({
+            ...createAmbientWorld({
+                state: this.state,
+                terrain: this.terrain,
+                isUnderConstruction: id => this.services.constructionSiteManager.hasSite(id),
+            }),
+            play: (name, gain, pan) => this.soundManager.playSound(name, gain, pan),
+        });
+        // eslint-disable-next-line sonarjs/no-async-constructor -- fire-and-forget like audio init; without the list, work sounds just stay silent
+        loadJobSoundList()
+            .then(jobSounds => this.worldSounds.setJobSounds(jobSounds))
+            .catch((err: unknown) => console.warn('Game: failed to load jobSoundList.xml:', err));
+        this._stopSfxWatcher = watch(
+            () => [this.settings.state.sfxEnabled, this.settings.state.sfxVolume] as const,
+            ([enabled, volume]) => {
+                this.soundManager.setSfxEnabled(enabled);
+                this.soundManager.setSfxVolume(volume);
+            },
+            { immediate: true }
+        );
 
         // Debug helper (typed via env.d.ts)
         window.debugSound = () => {
@@ -334,6 +367,8 @@ export class Game extends GameCore {
     public override destroy(): void {
         this._timelineCapture?.stop();
         this._stopPathWatcher();
+        this._stopSfxWatcher();
+        this.worldSounds.destroy();
         this.soundManager.unload();
         this.scriptService?.destroy();
         this._gameLoop.destroy();

@@ -1,88 +1,54 @@
 import { BinaryReader } from '../file/binary-reader';
 import { LogHandler } from '@/utilities/log-handler';
-import { ResourceFile } from './resource-file';
 import { SilFileReader } from './sil-file-reader';
 
+const RIFF_MAGIC = [0x52, 0x49, 0x46, 0x46];
+
 /**
- * Reads .snd files which contain concatenated WAV files.
+ * Reads .snd sound archives (sound effects). Used by `pnpm sounds:extract`.
+ *
+ * Each slot listed in the companion .sil file points to an entry of the form:
+ *   int32 count (always 1 in the shipped archive)
+ *   int32 size
+ *   `size` bytes of a complete WAV file (RIFF header included)
  */
-export class SndFileReader extends ResourceFile {
+export class SndFileReader {
     private static log = new LogHandler('SndFileReader');
-    private data: BinaryReader | null = null;
-    private sil: SilFileReader | null = null;
+    private readonly data: BinaryReader;
+    private readonly sil: SilFileReader;
 
-    /** Cache of blob URLs to prevent memory leaks from repeated createObjectURL calls */
-    private blobUrlCache: Map<number, string> = new Map();
-
-    constructor(resourceReader: BinaryReader, sil: SilFileReader) {
-        super();
+    constructor(sndFile: BinaryReader, sil: SilFileReader) {
+        this.data = sndFile;
         this.sil = sil;
-        this.data = this.readResource(resourceReader);
     }
 
-    /**
-     * Release all cached blob URLs to free memory.
-     * Call this when unloading the sound archive.
-     */
-    public dispose(): void {
-        for (const url of this.blobUrlCache.values()) {
-            URL.revokeObjectURL(url);
+    /** Extract the raw WAV bytes of a slot, or null if the slot is empty/invalid. */
+    public getWav(slot: number): Uint8Array | null {
+        if (slot < 0 || slot >= this.sil.offsets.length) {
+            return null;
         }
-        this.blobUrlCache.clear();
-        this.data = null;
-        this.sil = null;
-        SndFileReader.log.debug('Disposed SndFileReader and revoked blob URLs');
-    }
-
-    /**
-     * Extract a specific sound index as a Blob URL (for Howler).
-     * URLs are cached to prevent memory leaks.
-     */
-    public getSound(index: number): string | null {
-        if (!this.data || !this.sil || index < 0 || index >= this.sil.offsets.length) {
+        const offset = this.sil.offsets[slot]!;
+        if (offset === 0) {
             return null;
         }
 
-        // Return cached URL if available
-        const cached = this.blobUrlCache.get(index);
-        if (cached) {
-            return cached;
-        }
-
-        // Determine Start and End
-        // First file starts at 28 (header of .snd)
-        // Subsequent files start where the previous one ended.
-        let start = 28;
-        if (index > 0) {
-            start = this.sil.offsets[index - 1]!;
-        }
-
-        const end = this.sil.offsets[index]!;
-        const length = end - start;
-
-        if (length <= 0) {
-            SndFileReader.log.warn(`Invalid length for sound ${index}: ${length} (Start: ${start}, End: ${end})`);
+        this.data.setOffset(offset + 4);
+        const size = this.data.readInt();
+        if (size <= 0 || offset + 8 + size > this.data.length) {
+            SndFileReader.log.warn(`Invalid sound slot ${slot}: size ${size} at offset ${offset}`);
             return null;
         }
 
-        const buffer = this.data.getBuffer(start, length);
-
-        // The buffer should already be a valid WAV file including RIFF header
-        // We verify the header "RIFF" just in case
-        if (buffer[0] === 0x52 && buffer[1] === 0x49 && buffer[2] === 0x46 && buffer[3] === 0x46) {
-            const blob = new Blob([buffer.slice(0)], { type: 'audio/wav' });
-            const url = URL.createObjectURL(blob);
-            this.blobUrlCache.set(index, url);
-            return url;
-        } else {
-            SndFileReader.log.warn(`Sound ${index} does not have RIFF header`);
+        const wav = this.data.getBuffer(offset + 8, size);
+        if (!RIFF_MAGIC.every((b, i) => wav[i] === b)) {
+            SndFileReader.log.warn(`Sound slot ${slot} does not have a RIFF header`);
             return null;
         }
+        return wav;
     }
 
-    /** Get the number of sounds in the archive */
+    /** Number of slots in the archive (including empty ones) */
     public get count(): number {
-        // eslint-disable-next-line no-restricted-syntax -- sil is null when SND file has no SIL section; 0 sounds is correct
-        return this.sil?.offsets.length ?? 0;
+        return this.sil.offsets.length;
     }
 }

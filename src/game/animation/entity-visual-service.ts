@@ -395,6 +395,15 @@ export class EntityVisualService {
         }
     }
 
+    /** Visit every entity that currently has an animation (playing or stopped). Read-only. */
+    forEachAnimation(visit: (entityId: number, animation: Readonly<AnimationPlayback>) => void): void {
+        for (const [entityId, state] of this.states) {
+            if (state.animation) {
+                visit(entityId, state.animation);
+            }
+        }
+    }
+
     // -------------------------------------------------------------------------
     // Cleanup
     // -------------------------------------------------------------------------
