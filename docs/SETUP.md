@@ -57,6 +57,14 @@ This looks for `settlers4-assets.zip` (required) and `settlers4-hd-assets.zip` (
 node scripts/generate-file-list.js
 ```
 
+## Sound effects (optional)
+
+Sound effects are extracted from the game folder by a separate job — see [SOUND.md](SOUND.md):
+
+```sh
+pnpm sounds:extract /path/to/thesettlers4
+```
+
 ## Verifying the setup
 
 After setup, your `public/` directory should look like:

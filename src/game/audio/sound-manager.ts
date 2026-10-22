@@ -2,10 +2,10 @@ import { Howl, Howler } from 'howler';
 import { LogHandler } from '@/utilities/log-handler';
 import { SoundConfig, SoundType, SOUND_LIBRARY, IAudioManager } from './audio-definitions';
 import { FileManager } from '@/utilities/file-manager';
-import { SilFileReader } from '@/resources/gfx/sil-file-reader';
-import { SndFileReader } from '@/resources/gfx/snd-file-reader';
 import { MusicController } from './music-controller';
 import { SfxPoolManager } from './sfx-pool';
+import { SoundEffectPlayer } from './sound-effect-player';
+import type { SoundName } from './sound-manifest';
 import { Race } from '@/game/renderer/sprite-metadata';
 
 /**
@@ -14,7 +14,7 @@ import { Race } from '@/game/renderer/sprite-metadata';
  * - Background music with cross-fading (delegated to MusicController)
  * - 2D Spatial audio (panning based on screen position)
  * - Volume control groups (Master, SFX, Music)
- * - Loading .snd archives for SFX
+ * - Sound effects extracted by `pnpm sounds:extract` (see docs/SOUND.md)
  */
 export class SoundManager implements IAudioManager {
     private static log = new LogHandler('SoundManager');
@@ -24,15 +24,13 @@ export class SoundManager implements IAudioManager {
     private soundConfigs: Map<string, SoundConfig> = new Map();
     private musicController: MusicController;
     private sfxPoolManager: SfxPoolManager;
+    private sfxPlayer: SoundEffectPlayer;
+    private sfxEnabled = true;
 
     private musicVolume = 0.5;
     private sfxVolume = 1.0;
     private masterVolume = 1.0;
     private fileManager: FileManager | null = null;
-
-    // Snd file readers
-    private silReader: SilFileReader | null = null;
-    private sndReader: SndFileReader | null = null;
 
     /** Guard: setupAudioUnlock() must only add DOM listeners once per SoundManager instance */
     private audioUnlockSetup = false;
@@ -43,6 +41,7 @@ export class SoundManager implements IAudioManager {
             this.createHowlForConfig.bind(this),
             () => this.sfxVolume * this.masterVolume
         );
+        this.sfxPlayer = new SoundEffectPlayer();
     }
 
     /**
@@ -95,12 +94,8 @@ export class SoundManager implements IAudioManager {
         // Setup global unlock for AudioContext
         this.setupAudioUnlock();
 
-        // Try to load 0.sil and 0.snd
-        try {
-            await this.loadSndArchive('Siedler4/Snd/0.sil', 'Siedler4/Snd/0.snd');
-        } catch (e) {
-            SoundManager.log.warn('Failed to load default sound archive: ' + e);
-        }
+        // Sound effects extracted from the player's game files (missing until `pnpm sounds:extract` is run)
+        await this.sfxPlayer.load();
 
         // Preload sounds marked for preloading and register pools
         this.preloadConfiguredSounds();
@@ -251,33 +246,11 @@ export class SoundManager implements IAudioManager {
 
         // Unload SFX pools
         this.sfxPoolManager.unload();
-
-        // Dispose SndReader to revoke blob URLs and free memory
-        this.sndReader?.dispose();
+        this.sfxPlayer.unload();
 
         this.fileManager = null;
-        this.silReader = null;
-        this.sndReader = null;
         this.initPromise = null; // Allow re-initialization on next game load
         SoundManager.log.debug('SoundManager unloaded');
-    }
-
-    private async loadSndArchive(silPath: string, sndPath: string): Promise<void> {
-        if (!this.fileManager) {
-            return;
-        }
-
-        const silReader = await this.fileManager.readFile(silPath);
-        const sndReader = await this.fileManager.readFile(sndPath);
-
-        if (silReader && sndReader) {
-            this.silReader = new SilFileReader(silReader);
-
-            // sndReader is already a BinaryReader, so we pass it directly
-            this.sndReader = new SndFileReader(sndReader, this.silReader);
-
-            SoundManager.log.debug(`Loaded sound archive. ${this.silReader.offsets.length} sounds available.`);
-        }
     }
 
     /**
@@ -301,29 +274,9 @@ export class SoundManager implements IAudioManager {
             return this.sounds.get(config.id)!; // OK: has() check above guarantees entry exists
         }
 
-        let src: string | string[] = [config.path];
-        let format: string[] | undefined;
-
-        // Special handling for SFX from .snd
-        if (config.type === SoundType.SFX && config.path.startsWith('Snd:')) {
-            if (!this.sndReader) {
-                return null;
-            }
-            const index = parseInt(config.path.split(':')[1]!, 10);
-            const blobUrl = this.sndReader.getSound(index);
-
-            if (blobUrl) {
-                src = [blobUrl];
-                format = ['wav'];
-            } else {
-                return null;
-            }
-        }
-
         // Create with neutral volume - apply config/category/master volume at play time
         const sound = new Howl({
-            src: src,
-            format: format,
+            src: [config.path],
             loop: config.loop,
             volume: 1.0,
             autoplay: false,
@@ -370,25 +323,8 @@ export class SoundManager implements IAudioManager {
      * Create a Howl instance without caching (used for SFX pools).
      */
     private createHowlForConfig(config: SoundConfig): Howl | null {
-        let src: string | string[] = [config.path];
-        let format: string[] | undefined;
-
-        if (config.type === SoundType.SFX && config.path.startsWith('Snd:')) {
-            if (!this.sndReader) {
-                return null;
-            }
-            const index = parseInt(config.path.split(':')[1]!, 10);
-            const blobUrl = this.sndReader.getSound(index);
-            if (!blobUrl) {
-                return null;
-            }
-            src = [blobUrl];
-            format = ['wav'];
-        }
-
         return new Howl({
-            src,
-            format,
+            src: [config.path],
             loop: config.loop,
             // eslint-disable-next-line no-restricted-syntax -- optional config/prop with sensible default
             volume: (config.volume ?? 1.0) * this.sfxVolume * this.masterVolume,
@@ -435,11 +371,10 @@ export class SoundManager implements IAudioManager {
      * @param soundId The ID of the sound to play (from SOUND_LIBRARY)
      * @param x World X position
      * @param y World Y position
-     * @param index Optional direct index for testing raw sounds from archive
      */
-    public playSfx(soundId: string, x?: number, y?: number, index?: number): void {
+    public playSfx(soundId: string, x?: number, y?: number): void {
         // Check for pooled sound first (for rapid-fire sounds)
-        if (soundId && index === undefined && this.sfxPoolManager.play(soundId, x, y)) {
+        if (this.sfxPoolManager.play(soundId, x, y)) {
             return; // Played via pool
         }
 
@@ -452,20 +387,6 @@ export class SoundManager implements IAudioManager {
             if (config) {
                 sound = this.loadSound(config);
                 effectiveVol = this.getEffectiveVolume(config);
-            }
-        }
-
-        // Allow playing by direct index (override) — one-shot, unload after playback
-        if (index !== undefined && this.sndReader) {
-            const blobUrl = this.sndReader.getSound(index);
-            if (blobUrl) {
-                const oneShot = new Howl({
-                    src: [blobUrl],
-                    format: ['wav'],
-                    volume: 1.0, // Neutral, we set volume below
-                    onend: () => oneShot.unload(),
-                });
-                sound = oneShot;
             }
         }
 
@@ -490,6 +411,29 @@ export class SoundManager implements IAudioManager {
         } else {
             sound.pos(0, 0, 0, id);
         }
+    }
+
+    /**
+     * Play a random variant of an extracted game sound effect.
+     * @param gain Extra attenuation in [0, 1], e.g. from distance to the camera
+     * @param pan Stereo pan in [-1, 1]
+     * @returns Length of the variant played in seconds, or null if nothing played
+     */
+    public playSound(name: SoundName, gain = 1, pan = 0): number | null {
+        if (!this.sfxEnabled || gain <= 0) {
+            return null;
+        }
+        // Master volume is applied globally via Howler.volume()
+        return this.sfxPlayer.play(name, gain * this.sfxVolume, pan);
+    }
+
+    /** Whether extracted sound effects are available (see `pnpm sounds:extract`). */
+    public get hasSoundEffects(): boolean {
+        return this.sfxPlayer.isLoaded;
+    }
+
+    public setSfxEnabled(enabled: boolean): void {
+        this.sfxEnabled = enabled;
     }
 
     public setMasterVolume(vol: number): void {

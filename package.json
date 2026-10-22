@@ -31,6 +31,7 @@
     "analyze:utils": "tsx scripts/analyze-utils.ts",
     "analyze": "pnpm analyze:circular && pnpm analyze:deps && pnpm analyze:unused && pnpm analyze:duplication && pnpm analyze:utils",
     "gfx:export": "tsx --tsconfig tsconfig.json scripts/gfx-export/cli.ts",
+    "sounds:extract": "tsx --tsconfig tsconfig.json scripts/extract-sounds/cli.ts",
     "prepare": "husky"
   },
   "dependencies": {

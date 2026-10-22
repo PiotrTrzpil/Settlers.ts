@@ -200,21 +200,4 @@ export const SOUND_LIBRARY: SoundConfig[] = [
     // Dark Tribe Music
     { id: 'MUSIC_DARK_01', path: '/Siedler4/Snd/dark_tribe_01.MP3', type: SoundType.Music, volume: 0.6, loop: false },
     { id: 'MUSIC_DARK_02', path: '/Siedler4/Snd/dark_tribe_02.mp3', type: SoundType.Music, volume: 0.6, loop: false },
-
-    // Placeholder SFX reusing MP3
-    {
-        id: 'SFX_TEST', // Placeholder
-        path: '/Siedler4/Snd/romans_settle_01.MP3',
-        type: SoundType.SFX,
-        volume: 1.0,
-        loop: false,
-    },
-    // Real SFX from 0.snd (Index 0)
-    {
-        id: 'SFX_TEST_SND',
-        path: 'Snd:0',
-        type: SoundType.SFX,
-        volume: 1.0,
-        loop: false,
-    },
 ];

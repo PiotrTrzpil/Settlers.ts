@@ -26,6 +26,7 @@ import { computeWorkAreaColoredRings } from '@/game/features/work-areas/work-are
 import { debugStats } from '@/game/debug/debug-stats';
 import { resolveBuildingOverlays } from './overlay-resolution';
 import { updatePlacementModeState, clearPlacementModeState } from './placement-state';
+import { updateWorldSounds } from './world-sound-update';
 
 /** Context object for render callback — avoids excessive callback parameters */
 export interface CallbackContext {
@@ -215,7 +216,7 @@ export function createUpdateCallback(
         // Debug stats + sound
         if (g) {
             debugStats.updateFromGame(g, g.settings);
-            g.soundManager.updateListener(renderer.viewPoint.x, renderer.viewPoint.y);
+            updateWorldSounds(g, er, renderer);
         }
 
         debugStats.state.cameraX = Math.round(renderer.viewPoint.x * 10) / 10;

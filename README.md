@@ -90,6 +90,14 @@ pnpm dev
 
 Open http://localhost:5173. Add `?testMap=true` to load a synthetic test map without game assets.
 
+### Extract sound effects (optional)
+
+Sound effects are extracted from your own game folder; no game audio is stored in this repository. See [docs/SOUND.md](docs/SOUND.md).
+
+```sh
+pnpm sounds:extract /path/to/thesettlers4
+```
+
 ## Development
 
 ```sh
@@ -114,7 +122,7 @@ npx playwright test   # E2E tests
 - **Dark Tribe specifics** — unique Dark Tribe mechanics (e.g. conversion, mushroom-based economy) are not implemented
 - **AI players** — a behavior tree framework and basic decision logic exist but are untested and not yet playable
 - **Multiplayer** — no networking layer
-- **Sound** — music playback is complete with race-specific playlists and crossfading; sound effects are not yet integrated into gameplay
+- **Sound** — music playback is complete with race-specific playlists and crossfading; positional sound effects play for work and combat animations (timed per frame from `jobSoundList.xml`), deaths, falling trees and tower archers, plus ambient sounds picked from the terrain in view (sea, river, birds, wind, desert, swamp, farm animals). UI sounds are not yet wired up
 - **Map editor** — no in-browser map creation tool, apart from some dev tools
 
 ## Acknowledgments
