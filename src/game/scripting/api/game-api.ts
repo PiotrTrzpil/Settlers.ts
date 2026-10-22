@@ -7,6 +7,7 @@ import { LogHandler } from '@/utilities/log-handler';
 import type { LuaRuntime } from '../lua-runtime';
 import type { GameState } from '@/game/game-state';
 import { raceToS4Tribe, type Race } from '@/game/core/race';
+import { isAreaOwned, type TerritoryQuery } from './territory-query';
 
 const log = new LogHandler('GameAPI');
 
@@ -38,6 +39,8 @@ export interface GameAPIContext {
     mapHeight: number;
     /** Per-player race mapping (player index → Race) */
     playerRaces?: Map<number, Race>;
+    /** Territory ownership lookup (absent when the territory feature is not wired in) */
+    territory?: TerritoryQuery;
 }
 
 /**
@@ -97,10 +100,13 @@ export function registerGameAPI(runtime: LuaRuntime, context: GameAPIContext): v
     });
 
     // Game.IsAreaOwned(player, x, y, range) - Check if player owns area
-    runtime.registerFunction('Game', 'IsAreaOwned', (_player: number, _x: number, _y: number, _range: number) => {
-        // TODO: Implement territory ownership check
-        // For now, always return false
-        return false;
+    // Returns 1/0 (not a boolean): original map scripts compare with `== 1`.
+    runtime.registerFunction('Game', 'IsAreaOwned', (player: number, x: number, y: number, range: number) => {
+        if (!context.territory) {
+            return 0;
+        }
+        const area = { x, y, range };
+        return isAreaOwned(context.territory, player, area, context.mapWidth, context.mapHeight) ? 1 : 0;
     });
 
     // Game.PlayerRace(player) - Get player's race/tribe

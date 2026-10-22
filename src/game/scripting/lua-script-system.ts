@@ -34,6 +34,7 @@ import type { IMapLandscape } from '@/resources/map/imap-landscape';
 import type { ConstructionSiteManager } from '@/game/features/building-construction';
 import type { ExecuteCommand } from '@/game/commands';
 import type { Race } from '@/game/core/race';
+import type { TerritoryQuery } from './api/territory-query';
 
 const log = new LogHandler('LuaScriptSystem');
 
@@ -65,6 +66,8 @@ export interface LuaScriptSystemConfig {
     playerRaces?: Map<number, Race>;
     /** Command executor for routing mutations through the command pipeline */
     executeCommand?: ExecuteCommand;
+    /** Territory ownership lookup for Game.IsAreaOwned / Map.GetOwner */
+    territory?: TerritoryQuery;
 }
 
 /**
@@ -137,6 +140,7 @@ export class LuaScriptSystem {
             mapWidth: this.config.mapWidth,
             mapHeight: this.config.mapHeight,
             playerRaces: this.config.playerRaces,
+            territory: this.config.territory,
             onPlayerWon: player => {
                 log.info(`Player ${player} won!`);
                 // TODO: Trigger victory screen
@@ -172,6 +176,7 @@ export class LuaScriptSystem {
             landscape: this.config.landscape,
             groundType: this.config.groundType,
             groundHeight: this.config.groundHeight,
+            territory: this.config.territory,
         };
         registerMapAPI(this.runtime, mapContext);
 
